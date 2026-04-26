@@ -6,6 +6,7 @@ import loaders from '@/loaders';
 import { initAutoCiteQueue } from '@/queues/autocite.queue';
 import { initPlagiarismQueue } from '@/queues/plagiarism.queue';
 import { Mailer } from '@/packages/mail/mail';
+import { AIDetectorEngine } from '@/services/ai-detector';
 
 const app = express();
 const server = http.createServer(app);
@@ -34,6 +35,8 @@ const start = async () => {
 
   await Mailer.init();
   console.log('Mailer initialized');
+
+  AIDetectorEngine.init();
 
   initAutoCiteQueue(io);
   console.log('Auto-cite queue initialized');

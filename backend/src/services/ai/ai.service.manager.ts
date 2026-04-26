@@ -1,12 +1,26 @@
 import { OpenAIService } from './openai.service';
 import { ClaudeService } from './claude.service';
+import { GeminiService } from './gemini.service';
 
-type AIProvider = 'openai' | 'claude';
+type AIProvider = 'openai' | 'claude' | 'gemini';
+type AIService = typeof OpenAIService | typeof ClaudeService | typeof GeminiService;
+
+const SERVICES: Record<AIProvider, AIService> = {
+  openai: OpenAIService,
+  claude: ClaudeService,
+  gemini: GeminiService,
+};
 
 export class AIServiceManager {
   private static instance: AIServiceManager;
-  private primaryProvider: AIProvider = 'openai';
-  private secondaryProvider: AIProvider = 'claude';
+  private primaryProvider: AIProvider;
+  private fallbackOrder: AIProvider[];
+
+  constructor() {
+    const primary = (process.env.AI_PROVIDER as AIProvider) || 'openai';
+    this.primaryProvider = primary;
+    this.fallbackOrder = (['openai', 'claude', 'gemini'] as AIProvider[]).filter(p => p !== primary);
+  }
 
   static getInstance(): AIServiceManager {
     if (!this.instance) {
@@ -15,23 +29,29 @@ export class AIServiceManager {
     return this.instance;
   }
 
-  getService(provider?: AIProvider) {
-    const p = provider || this.primaryProvider;
-    return p === 'openai' ? OpenAIService : ClaudeService;
+  getService(provider?: AIProvider): AIService {
+    return SERVICES[provider || this.primaryProvider];
   }
 
   async tryWithFallback<T>(
     operation: string,
-    fn: (service: typeof OpenAIService | typeof ClaudeService) => Promise<T>
+    fn: (service: AIService) => Promise<T>
   ): Promise<T> {
     try {
-      const primaryService = this.getService(this.primaryProvider);
-      return await fn(primaryService);
+      return await fn(this.getService(this.primaryProvider));
     } catch (err: any) {
       console.error(`[AI] ${operation} failed with ${this.primaryProvider}:`, err.message);
-      console.log(`[AI] Falling back to ${this.secondaryProvider}`);
-      const fallbackService = this.getService(this.secondaryProvider);
-      return await fn(fallbackService);
+
+      for (const fallback of this.fallbackOrder) {
+        try {
+          console.log(`[AI] Falling back to ${fallback}`);
+          return await fn(this.getService(fallback));
+        } catch (fallbackErr: any) {
+          console.error(`[AI] ${operation} failed with ${fallback}:`, fallbackErr.message);
+        }
+      }
+
+      throw new Error(`[AI] ${operation} failed with all providers`);
     }
   }
 }

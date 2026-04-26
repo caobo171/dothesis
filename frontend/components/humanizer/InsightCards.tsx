@@ -4,18 +4,24 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/store/rootReducer';
 import { clsx } from 'clsx';
 
+// Decision: Reframed all metrics as "Human Score" (higher=better) instead of "AI Score"
+// (lower=better). Old UX showed "−6%" improvement which looked negative/bad.
+// Now shows "+13% more human" which is clearly positive. Threshold for "Pass"
+// is humanAfter >= 70 (i.e. AI score <= 30).
 export function InsightCards() {
   const { aiScoreIn, aiScoreOut, changes } = useSelector((s: RootState) => s.humanizer);
 
-  const passedThreshold = aiScoreOut <= 30;
-  const improvement = aiScoreIn - aiScoreOut;
+  const humanBefore = 100 - aiScoreIn;
+  const humanAfter = 100 - aiScoreOut;
+  const improvement = humanAfter - humanBefore;
+  const passed = humanAfter >= 70;
 
   const cards = [
     {
-      label: 'AI Score',
-      value: `${aiScoreOut}%`,
-      sub: aiScoreOut > 0 ? `was ${aiScoreIn}%` : '—',
-      color: aiScoreOut <= 30 ? 'text-success' : aiScoreOut <= 60 ? 'text-warn' : 'text-error',
+      label: 'Human Score',
+      value: aiScoreOut > 0 ? `${humanAfter}%` : '—',
+      sub: aiScoreOut > 0 ? `was ${humanBefore}%` : '—',
+      color: humanAfter >= 70 ? 'text-success' : humanAfter >= 40 ? 'text-warn' : 'text-error',
     },
     {
       label: 'Rewrites',
@@ -25,15 +31,15 @@ export function InsightCards() {
     },
     {
       label: 'Improvement',
-      value: improvement > 0 ? `−${improvement}%` : '—',
-      sub: 'AI score drop',
-      color: 'text-purple',
+      value: improvement > 0 ? `+${improvement}%` : '—',
+      sub: 'more human',
+      color: 'text-success',
     },
     {
       label: 'Status',
-      value: passedThreshold && aiScoreOut > 0 ? 'Pass' : aiScoreOut > 0 ? 'Needs work' : '—',
+      value: passed && aiScoreOut > 0 ? 'Pass' : aiScoreOut > 0 ? 'Needs work' : '—',
       sub: 'detection test',
-      color: passedThreshold && aiScoreOut > 0 ? 'text-success' : 'text-warn',
+      color: passed && aiScoreOut > 0 ? 'text-success' : 'text-warn',
     },
   ];
 
