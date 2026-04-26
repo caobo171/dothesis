@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: margin-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - margin_mongo_data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    container_name: margin-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - margin_redis_data:/data
+
+volumes:
+  margin_mongo_data:
+  margin_redis_data:
