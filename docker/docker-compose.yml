@@ -4,7 +4,7 @@ services:
     image: mongo:6.0
     container_name: margin-mongodb
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - margin_mongo_data:/data/db
 
