@@ -66,13 +66,13 @@ export function initAutoCiteQueue(io: SocketServer) {
         const rankings = await CitationSearchService.rankCandidates(claims[i].text, results);
         claims[i].candidates = rankings.map((r) => ({
           sourceId: r.id,
-          relevanceScore: r.score,
+          relevanceScore: r.relevanceScore,
         }));
 
         // Update sources with ranking scores
         for (const ranking of rankings) {
           const src = allSources.find((s) => s.id === ranking.id);
-          if (src) src.conf = Math.max(src.conf, ranking.score);
+          if (src) src.conf = Math.max(src.conf, ranking.relevanceScore);
         }
       }
 
