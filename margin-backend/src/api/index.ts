@@ -7,6 +7,7 @@ import humanize from './routes/humanize';
 import cite from './routes/cite';
 import library from './routes/library';
 import plagiarism from './routes/plagiarism';
+import webhook from './routes/webhook';
 
 export default () => {
   const router = Router();
@@ -19,6 +20,7 @@ export default () => {
   cite(router);
   library(router);
   plagiarism(router);
+  webhook(router);
 
   router.get('/status', (req, res) => {
     res.json({ status: 'ok' });
