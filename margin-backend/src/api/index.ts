@@ -1,9 +1,13 @@
 import { Router } from 'express';
+import auth from './routes/auth/auth';
+import me from './routes/me';
 
 export default () => {
   const router = Router();
 
-  // Routes will be registered here as they are built
+  auth(router);
+  me(router);
+
   router.get('/status', (req, res) => {
     res.json({ status: 'ok' });
   });
