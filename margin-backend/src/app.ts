@@ -3,6 +3,7 @@ import express from 'express';
 import http from 'http';
 import { Server as SocketServer } from 'socket.io';
 import loaders from '@/loaders';
+import { initAutoCiteQueue } from '@/queues/autocite.queue';
 
 const app = express();
 const server = http.createServer(app);
@@ -28,6 +29,9 @@ io.on('connection', (socket) => {
 
 const start = async () => {
   await loaders({ app });
+
+  initAutoCiteQueue(io);
+  console.log('Auto-cite queue initialized');
 
   const port = process.env.PORT || 8001;
   server.listen(port, () => {
