@@ -4,6 +4,7 @@ import http from 'http';
 import { Server as SocketServer } from 'socket.io';
 import loaders from '@/loaders';
 import { initAutoCiteQueue } from '@/queues/autocite.queue';
+import { initPlagiarismQueue } from '@/queues/plagiarism.queue';
 
 const app = express();
 const server = http.createServer(app);
@@ -32,6 +33,9 @@ const start = async () => {
 
   initAutoCiteQueue(io);
   console.log('Auto-cite queue initialized');
+
+  initPlagiarismQueue(io);
+  console.log('Plagiarism queue initialized');
 
   const port = process.env.PORT || 8001;
   server.listen(port, () => {

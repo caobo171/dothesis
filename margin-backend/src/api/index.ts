@@ -6,6 +6,7 @@ import document from './routes/document';
 import humanize from './routes/humanize';
 import cite from './routes/cite';
 import library from './routes/library';
+import plagiarism from './routes/plagiarism';
 
 export default () => {
   const router = Router();
@@ -17,6 +18,7 @@ export default () => {
   humanize(router);
   cite(router);
   library(router);
+  plagiarism(router);
 
   router.get('/status', (req, res) => {
     res.json({ status: 'ok' });
