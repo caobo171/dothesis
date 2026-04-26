@@ -1,5 +1,7 @@
 'use client';
 
+import { HumBoard } from '@/components/humanizer/HumBoard';
+
 export default function HumanizerPage() {
-  return <div>Humanizer — coming in Task 16</div>;
+  return <HumBoard />;
 }
