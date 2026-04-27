@@ -12,6 +12,10 @@ import { Code } from '@/Constants';
 import { requireAdmin } from '@/api/middlewares/requireAdmin';
 import userRouter from './user';
 import creditRouter from './credit';
+import humanizeRouter from './humanize';
+import plagiarismRouter from './plagiarism';
+import autociteRouter from './autocite';
+import documentRouter from './document';
 
 export default () => {
   const router = Router();
@@ -19,6 +23,10 @@ export default () => {
   // Each section sub-router applies its own auth + requireAdmin per route.
   router.use(userRouter());
   router.use(creditRouter());
+  router.use(humanizeRouter());
+  router.use(plagiarismRouter());
+  router.use(autociteRouter());
+  router.use(documentRouter());
 
   router.post(
     '/healthcheck',
