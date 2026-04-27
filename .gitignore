@@ -1,1 +1,5 @@
 .worktrees/
+# Match dir, file, and symlink forms — trailing slash only matches directories,
+# which is why we previously slipped a node_modules symlink into a commit.
+node_modules
+**/node_modules
