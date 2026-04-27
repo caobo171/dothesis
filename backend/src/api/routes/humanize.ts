@@ -45,36 +45,18 @@ export default (router: Router) => {
       });
 
       try {
-        // Get input AI score
-        const aiScoreIn = await HumanizerService.checkAiScore(text);
-        res.write(`data: ${JSON.stringify({ type: 'ai_score_in', score: aiScoreIn })}\n\n`);
-
-        // Stream the humanized output
-        let fullOutput = '';
-        await HumanizerService.humanizeStream(
+        // Decision: Switched from single-pass humanizeStream to multi-agent pipeline.
+        // Pipeline runs Gemini preprocess -> GPT critic -> GPT humanizer in a loop.
+        // onStage callback sends progress events to the client via SSE.
+        const result = await HumanizerService.humanizePipeline(
           text,
           tone,
           strength,
           lengthMode,
-          (chunk: string) => {
-            fullOutput += chunk;
-            res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`);
+          (stage, data) => {
+            res.write(`data: ${JSON.stringify({ type: stage, ...data })}\n\n`);
           }
         );
-
-        // Parse the full JSON response
-        let rewrittenText = fullOutput;
-        let changes: any[] = [];
-        try {
-          const parsed = JSON.parse(fullOutput);
-          rewrittenText = parsed.rewrittenText || fullOutput;
-          changes = parsed.changes || [];
-        } catch {
-          // If streaming didn't produce valid JSON, use raw text
-        }
-
-        // Get output AI score
-        const aiScoreOut = await HumanizerService.checkAiScore(rewrittenText);
 
         // Deduct credits
         await CreditService.deduct(
@@ -86,12 +68,14 @@ export default (router: Router) => {
         );
 
         // Update job
-        job.outputText = rewrittenText;
-        job.outputHtml = rewrittenText; // Frontend builds diff from changes
-        job.aiScoreIn = aiScoreIn;
-        job.aiScoreOut = aiScoreOut;
-        job.changesCount = changes.length;
+        job.outputText = result.rewrittenText;
+        job.outputHtml = result.rewrittenText;
+        job.aiScoreIn = result.aiScoreIn;
+        job.aiScoreOut = result.aiScoreOut;
+        job.changesCount = result.changes.length;
         job.creditsUsed = creditCost;
+        job.iterations = result.iterations;
+        job.tokenUsage = result.tokenUsage;
         job.status = 'completed';
         await job.save();
 
@@ -100,11 +84,13 @@ export default (router: Router) => {
           `data: ${JSON.stringify({
             type: 'done',
             jobId: job._id,
-            rewrittenText,
-            changes,
-            aiScoreIn,
-            aiScoreOut,
-            changesCount: changes.length,
+            rewrittenText: result.rewrittenText,
+            changes: result.changes,
+            aiScoreIn: result.aiScoreIn,
+            aiScoreOut: result.aiScoreOut,
+            tokenUsage: result.tokenUsage,
+            iterations: result.iterations,
+            changesCount: result.changes.length,
             creditsUsed: creditCost,
           })}\n\n`
         );
@@ -116,6 +102,78 @@ export default (router: Router) => {
       }
 
       res.end();
+    }
+  );
+
+  // Decision: Sync humanize endpoint — designed for queue workers and non-SSE clients.
+  // Calls the same multi-agent pipeline as /run but returns JSON directly instead of SSE.
+  router.post(
+    '/humanize/run-sync',
+    passport.authenticate('jwt', { session: false }),
+    async (req, res) => {
+      const user = req.user as any;
+      const { text, tone = 'academic', strength = 50, lengthMode = 'match' } = req.body;
+
+      if (!text || text.trim().length === 0) {
+        return res.json({ code: Code.InvalidInput, message: 'Text is required' });
+      }
+
+      const wordCount = DocumentService.countWords(text);
+      const creditCost = HumanizerService.calculateCredits(wordCount);
+
+      if (!(await CreditService.hasEnough(user._id.toString(), creditCost))) {
+        return res.json({ code: Code.InsufficientCredits, message: 'Insufficient credits' });
+      }
+
+      const job = await HumanizeJobModel.create({
+        owner: user._id.toString(),
+        inputText: text,
+        tone,
+        strength,
+        lengthMode,
+        status: 'processing',
+      });
+
+      try {
+        const result = await HumanizerService.humanizePipeline(text, tone, strength, lengthMode);
+
+        await CreditService.deduct(
+          user._id.toString(),
+          creditCost,
+          'humanize',
+          job._id.toString(),
+          `Humanize ${wordCount} words`
+        );
+
+        job.outputText = result.rewrittenText;
+        job.outputHtml = result.rewrittenText;
+        job.aiScoreIn = result.aiScoreIn;
+        job.aiScoreOut = result.aiScoreOut;
+        job.changesCount = result.changes.length;
+        job.creditsUsed = creditCost;
+        job.iterations = result.iterations;
+        job.tokenUsage = result.tokenUsage;
+        job.status = 'completed';
+        await job.save();
+
+        return res.json({
+          code: Code.Success,
+          data: {
+            jobId: job._id,
+            rewrittenText: result.rewrittenText,
+            changes: result.changes,
+            aiScoreIn: result.aiScoreIn,
+            aiScoreOut: result.aiScoreOut,
+            tokenUsage: result.tokenUsage,
+            iterations: result.iterations,
+            creditsUsed: creditCost,
+          },
+        });
+      } catch (err: any) {
+        job.status = 'failed';
+        await job.save();
+        return res.json({ code: Code.Error, message: err.message });
+      }
     }
   );
 
@@ -171,4 +229,33 @@ export default (router: Router) => {
       return res.json({ code: Code.Success, data: job });
     }
   );
+
+  // Decision: Static AI-generated sample texts for users to test the humanizer.
+  // Intentionally written in a robotic AI style so the before/after effect is clear.
+  router.get('/humanize/samples', (_req, res) => {
+    const SAMPLE_TEXTS = [
+      {
+        id: 'academic',
+        label: 'Academic Essay',
+        text: `The rapid advancement of artificial intelligence has fundamentally transformed the landscape of modern education. Furthermore, the integration of machine learning algorithms into pedagogical frameworks has demonstrated significant potential for personalized learning experiences. Research indicates that AI-driven adaptive learning platforms can improve student outcomes by approximately 30%, underscoring the pivotal role of technology in contemporary educational paradigms. Moreover, the implementation of natural language processing tools has facilitated more efficient assessment methodologies, enabling educators to provide timely and comprehensive feedback. It is worth noting that these technological innovations have also raised important ethical considerations regarding data privacy and algorithmic bias in educational settings.`,
+      },
+      {
+        id: 'blog',
+        label: 'Blog Post',
+        text: `In today's fast-paced world, remote work has emerged as a game changer for businesses worldwide. Companies are increasingly leveraging digital collaboration tools to streamline their operations and foster a more inclusive work environment. The transition to remote work has unlocked unprecedented opportunities for organizations to tap into a global talent pool. Additionally, studies have shown that remote workers demonstrate higher productivity levels compared to their in-office counterparts. This paradigm shift in workplace dynamics is reshaping how we think about work-life balance and organizational culture.`,
+      },
+      {
+        id: 'research',
+        label: 'Research Summary',
+        text: `This comprehensive literature review examines the multifaceted impact of climate change on global agricultural productivity. The analysis encompasses 47 peer-reviewed studies published between 2020 and 2025, revealing several key findings. Notably, rising temperatures have led to a significant decline in crop yields across tropical regions, with an average reduction of 8.3% per decade. Furthermore, changes in precipitation patterns have exacerbated water scarcity in arid and semi-arid zones, subsequently affecting irrigation-dependent farming systems. The evidence underscores the urgent need for innovative adaptation strategies, including the development of heat-resistant crop varieties and the implementation of precision agriculture techniques to optimize resource utilization.`,
+      },
+      {
+        id: 'persuasive',
+        label: 'Persuasive Argument',
+        text: `The adoption of renewable energy sources is not merely an environmental imperative but a robust economic opportunity that nations cannot afford to overlook. Solar and wind energy technologies have achieved remarkable cost reductions, making them increasingly competitive with traditional fossil fuels. Moreover, the transition to clean energy has the potential to create millions of new jobs, thereby stimulating economic growth while simultaneously addressing the pressing challenge of climate change. It should be mentioned that countries at the forefront of renewable energy adoption have already begun to reap substantial economic benefits, positioning themselves as leaders in the emerging green economy. The evidence clearly demonstrates that investing in sustainable energy infrastructure is both a prudent fiscal decision and a moral obligation.`,
+      },
+    ];
+
+    return res.json({ code: Code.Success, data: SAMPLE_TEXTS });
+  });
 };
