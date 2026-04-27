@@ -19,7 +19,11 @@ const withToken = (params: Record<string, any> = {}) => ({
 });
 
 export const AdminApi = {
-  // SWR-friendly fetcher: receives a [url, params] tuple or a string.
+  // SWR-friendly fetcher for admin endpoints. Pass this EXPLICITLY as the second
+  // argument to useSWR — e.g. useSWR(['/api/admin/users', { page: 1 }], AdminApi.fetcher).
+  // The global SWRConfig fetcher (set in app/layout.tsx) handles the same shape, so
+  // omitting AdminApi.fetcher here will silently work BUT bypass any 403/redirect
+  // interceptors added later. Always pass it explicitly to keep the interception path live.
   fetcher: async (key: string | [string, Record<string, any> | undefined]) => {
     const [url, params] = typeof key === 'string' ? [key, undefined] : key;
     const res = await Fetch.post<AdminResponse>(url, withToken(params));
