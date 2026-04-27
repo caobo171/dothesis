@@ -1,4 +1,5 @@
 import { prop, getModelForClass, modelOptions } from '@typegoose/typegoose';
+import { ACL } from '@/packages/acl/acl';
 
 @modelOptions({ schemaOptions: { collection: 'users', timestamps: true } })
 export class User {
@@ -32,6 +33,11 @@ export class User {
   @prop({ default: 'User' })
   public role!: string;
 
+  // Soft-deactivate flag. Set by admin "deactivate" action in a later slice.
+  // Optional so existing user docs without the field continue to work.
+  @prop({ default: false })
+  public disabled?: boolean;
+
   @prop()
   public version?: string;
 
@@ -44,6 +50,10 @@ export class User {
     delete obj.password;
     delete obj.verificationToken;
     delete obj.__v;
+    // Expose admin flags so the frontend can gate UI without a separate request.
+    // Server-side enforcement still happens via requireAdmin/requireSuperAdmin middlewares.
+    obj.is_admin = ACL.isAdmin(this as any);
+    obj.is_super_admin = ACL.isSuperAdmin(this as any);
     return obj;
   }
 }
