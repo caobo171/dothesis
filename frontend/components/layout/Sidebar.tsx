@@ -54,6 +54,40 @@ export function Sidebar() {
         })}
       </nav>
 
+      {/* Admin entry — only rendered when the user has the admin flag set
+          by User.secureRelease() on the backend. Server-side gating still
+          enforces access at /api/admin/*. */}
+      {user?.is_admin && (
+        <div className="px-3 pb-2">
+          <Link
+            href="/admin"
+            className={clsx(
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition',
+              pathname.startsWith('/admin')
+                ? 'bg-bg-blue text-primary'
+                : 'text-ink-soft hover:bg-bg-soft'
+            )}
+          >
+            <span
+              className={clsx(
+                'w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold',
+                pathname.startsWith('/admin')
+                  ? 'bg-primary text-white'
+                  : 'bg-amber-100 text-amber-800'
+              )}
+            >
+              A
+            </span>
+            Admin
+            {user?.is_super_admin && (
+              <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                SUPER
+              </span>
+            )}
+          </Link>
+        </div>
+      )}
+
       {/* User */}
       <div className="px-4 py-3 border-t border-rule">
         <div className="flex items-center gap-3">

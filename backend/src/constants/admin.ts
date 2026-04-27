@@ -8,6 +8,7 @@
 // in case a future edit introduces a mixed-case entry.
 const FALLBACK_SUPER_ADMIN_EMAILS: string[] = [
   'cao.nv17@gmail.com',
+  'cao.nguyen1701@gmail.com'
 ];
 
 const fromEnv = (process.env.SUPER_ADMIN_EMAILS || '')
