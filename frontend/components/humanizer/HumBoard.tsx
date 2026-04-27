@@ -17,8 +17,9 @@ import { useBalance } from '@/hooks/credit';
 // Frontend mirror of backend's HumanizerService.calculateCredits.
 // Keep these formulas in lockstep — the user must see the exact number the
 // backend will deduct, otherwise the confirm modal becomes a lie.
+// Rate: 1 credit per 50 words, minimum 2 credits per run (2× the original).
 function calculateCreditCost(wordCount: number): number {
-  return Math.max(1, Math.ceil(wordCount / 100));
+  return Math.max(2, Math.ceil(wordCount / 50));
 }
 
 export function HumBoard() {

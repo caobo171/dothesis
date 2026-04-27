@@ -467,7 +467,10 @@ export class HumanizerService {
     };
   }
 
+  // Credit cost formula. 2× the original (was 1/100 with min 1), so 1 credit
+  // per 50 words with a minimum of 2 per run. Frontend mirrors this exact
+  // formula in HumBoard.tsx — keep them in lockstep.
   static calculateCredits(wordCount: number): number {
-    return Math.max(1, Math.ceil(wordCount / 100));
+    return Math.max(2, Math.ceil(wordCount / 50));
   }
 }

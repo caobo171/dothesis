@@ -90,7 +90,7 @@ export function HumanizeConfirmModal({
                 </div>
                 <div className="text-xs text-ink-muted">
                   {wordCount.toLocaleString()} word{wordCount === 1 ? '' : 's'}
-                  {' · 1 credit per 100 words (rounded up)'}
+                  {' · 1 credit per 50 words, minimum 2'}
                 </div>
               </div>
 
