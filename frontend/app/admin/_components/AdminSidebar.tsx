@@ -31,7 +31,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: HomeIcon, group: 'Operations', enabled: true },
-  { label: 'Users', href: '/admin/users', icon: UsersIcon, group: 'Operations' },
+  { label: 'Users', href: '/admin/users', icon: UsersIcon, group: 'Operations', enabled: true },
   { label: 'Credits', href: '/admin/credits', icon: CurrencyDollarIcon, group: 'Operations' },
   { label: 'Documents', href: '/admin/documents', icon: DocumentTextIcon, group: 'Jobs' },
   { label: 'Humanize', href: '/admin/humanize', icon: SparklesIcon, group: 'Jobs' },
@@ -57,7 +57,12 @@ export function AdminSidebar({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               <div className="px-3 text-xs font-medium uppercase tracking-wider text-gray-500">{group}</div>
               <ul className="mt-1">
                 {items.map((item) => {
-                  const active = pathname === item.href;
+                  // Match exact dashboard path; for everything else match the
+                  // section prefix so detail pages also highlight the section.
+                  const active =
+                    item.href === '/admin'
+                      ? pathname === '/admin'
+                      : pathname === item.href || pathname.startsWith(`${item.href}/`);
                   const Icon = item.icon;
                   const baseClass = 'flex items-center gap-2 rounded px-3 py-2 text-sm';
                   const stateClass = item.enabled

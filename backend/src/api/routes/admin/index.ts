@@ -10,9 +10,13 @@ import { Router } from 'express';
 import passport from 'passport';
 import { Code } from '@/Constants';
 import { requireAdmin } from '@/api/middlewares/requireAdmin';
+import userRouter from './user';
 
 export default () => {
   const router = Router();
+
+  // Each section sub-router applies its own auth + requireAdmin per route.
+  router.use(userRouter());
 
   router.post(
     '/healthcheck',
