@@ -4,15 +4,16 @@
 echo "Starting MongoDB and Redis..."
 docker-compose -f docker/docker-compose.yml up -d
 
-# Start backend
+# Start backend in a subshell so the cd doesn't bleed into this script's cwd.
 echo "Starting backend on port 8001..."
-cd backend && npm run dev &
+( cd backend && npm run dev ) &
 BACKEND_PID=$!
-cd ..
 
-# Start frontend
+# Start frontend the same way. The previous version did `cd backend && npm run dev &`
+# which only cd'd in the backgrounded subshell, then `cd ..` moved the parent
+# shell out of the project root, breaking the next `cd frontend`.
 echo "Starting frontend on port 8002..."
-cd frontend && npm run dev &
+( cd frontend && npm run dev ) &
 FRONTEND_PID=$!
 
 echo ""
