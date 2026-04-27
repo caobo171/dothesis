@@ -95,7 +95,7 @@ export default (router: Router) => {
           })}\n\n`
         );
       } catch (err: any) {
-        // Refund on failure
+        console.error('[Humanizer] Pipeline failed:', err.message, err.stack);
         job.status = 'failed';
         await job.save();
         res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);

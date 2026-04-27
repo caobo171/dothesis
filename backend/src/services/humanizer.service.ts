@@ -331,7 +331,9 @@ export class HumanizerService {
     };
 
     // --- Input AI score ---
+    console.log('[Humanizer] Pipeline started | tone=%s strength=%d length=%s words=%d', tone, strength, lengthMode, text.split(/\s+/).length);
     const aiScoreIn = await this.checkAiScore(text);
+    console.log('[Humanizer] Input AI score: %d', aiScoreIn);
     onStage?.('ai_score_in', { score: aiScoreIn });
 
     // --- Stage 1: Gemini Preprocess ---
@@ -346,6 +348,7 @@ export class HumanizerService {
     // Decision: Strip banned Unicode characters after Gemini output.
     // Gemini may introduce em dashes and special spaces in its restructuring.
     let currentText = stripBannedCharacters(preprocessResult.text);
+    console.log('[Humanizer] Gemini preprocess done | in=%d out=%d tokens', preprocessResult.usage.inputTokens, preprocessResult.usage.outputTokens);
     addTokenStep({
       step: 'preprocess',
       model: GEMINI_MODEL,
@@ -365,6 +368,7 @@ export class HumanizerService {
 
       // Stage 2: GPT Critic
       onStage?.('stage', { stage: 'critiquing', iteration: i });
+      console.log('[Humanizer] Calling GPT critic (pass %d)...', i);
 
       const criticPrompt = buildCriticPrompt();
       const criticResult = await OpenAIService.chat(criticPrompt, currentText, {
@@ -372,6 +376,7 @@ export class HumanizerService {
         maxTokens: 2048,
         jsonMode: true,
       });
+      console.log('[Humanizer] Critic pass %d done | in=%d out=%d tokens | issues=%s', i, criticResult.usage.inputTokens, criticResult.usage.outputTokens, (() => { try { return JSON.parse(criticResult.text).issues?.length ?? '?'; } catch { return '?'; } })());
       addTokenStep({
         step: 'critic',
         model: OPENAI_MODEL,
@@ -400,6 +405,7 @@ export class HumanizerService {
         presencePenalty: 0.3,
         frequencyPenalty: 0.4,
       });
+      console.log('[Humanizer] Rewrite pass %d done | in=%d out=%d tokens', i, humanizerResult.usage.inputTokens, humanizerResult.usage.outputTokens);
       addTokenStep({
         step: 'humanizer',
         model: OPENAI_MODEL,
@@ -425,6 +431,7 @@ export class HumanizerService {
 
       // Score check
       const score = await this.checkAiScore(currentText);
+      console.log('[Humanizer] Score after pass %d: %d (target < %d, best so far: %d)', i, score, TARGET_SCORE, Math.min(score, bestResult.score));
       onStage?.('score', { score, iteration: i });
 
       // Track best result
@@ -434,6 +441,7 @@ export class HumanizerService {
 
       // Exit if target reached
       if (score < TARGET_SCORE) {
+        console.log('[Humanizer] Target reached! Exiting after %d iteration(s)', i);
         break;
       }
     }
@@ -441,6 +449,9 @@ export class HumanizerService {
     // Build final token usage summary
     const totalInputTokens = tokenSteps.reduce((sum, s) => sum + s.inputTokens, 0);
     const totalOutputTokens = tokenSteps.reduce((sum, s) => sum + s.outputTokens, 0);
+
+    console.log('[Humanizer] Pipeline complete | iterations=%d | score: %d → %d | tokens: in=%d out=%d', iterations, aiScoreIn, bestResult.score, totalInputTokens, totalOutputTokens);
+    tokenSteps.forEach((s) => console.log('[Humanizer]   %s (iter %d) [%s] in=%d out=%d', s.step, s.iteration, s.model, s.inputTokens, s.outputTokens));
 
     return {
       rewrittenText: bestResult.text,

@@ -15,25 +15,18 @@ export class OpenAIService {
       frequencyPenalty?: number;
     } = {}
   ): Promise<AIChatResult> {
+    // Decision: gpt-5.5 only supports temperature=1 (default). Passing any other
+    // value causes 400 error. We omit temperature entirely so the API uses its default.
+    // Same applies to presence_penalty and frequency_penalty — only pass if non-zero
+    // to avoid potential future restrictions.
     const response = await openai.chat.completions.create({
-      // Decision: Upgraded from gpt-4o to gpt-5.5 (released April 2026).
-      // gpt-4o humanization output was too robotic — GPTZero flagged it for
-      // "Mechanical Precision" and "Lacks Creative Grammar". gpt-5.5 follows
-      // complex creative instructions much better.
       model: 'gpt-5.5',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      temperature: options.temperature ?? 0.7,
-      // Decision: GPT-5.5 requires max_completion_tokens instead of max_tokens.
       max_completion_tokens: options.maxTokens ?? 4096,
       response_format: options.jsonMode ? { type: 'json_object' } : undefined,
-      // Decision: Added presence/frequency penalties for multi-agent humanizer pipeline.
-      // presence_penalty encourages branching into new concepts.
-      // frequency_penalty discourages word repetition, making text more dynamic.
-      presence_penalty: options.presencePenalty ?? 0,
-      frequency_penalty: options.frequencyPenalty ?? 0,
     });
 
     const text = response.choices[0]?.message?.content || '';
@@ -53,17 +46,11 @@ export class OpenAIService {
     options: { temperature?: number; maxTokens?: number } = {}
   ): Promise<string> {
     const stream = await openai.chat.completions.create({
-      // Decision: Upgraded from gpt-4o to gpt-5.5 (released April 2026).
-      // gpt-4o humanization output was too robotic — GPTZero flagged it for
-      // "Mechanical Precision" and "Lacks Creative Grammar". gpt-5.5 follows
-      // complex creative instructions much better.
       model: 'gpt-5.5',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      temperature: options.temperature ?? 0.7,
-      // Decision: GPT-5.5 requires max_completion_tokens instead of max_tokens.
       max_completion_tokens: options.maxTokens ?? 4096,
       stream: true,
     });
