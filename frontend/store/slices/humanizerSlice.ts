@@ -12,6 +12,7 @@ interface HumanizerState {
   aiScoreOut: number;
   isProcessing: boolean;
   currentJobId: string | null;
+  currentStage: string;
 }
 
 const initialState: HumanizerState = {
@@ -26,6 +27,7 @@ const initialState: HumanizerState = {
   aiScoreOut: 0,
   isProcessing: false,
   currentJobId: null,
+  currentStage: '',
 };
 
 const humanizerSlice = createSlice({
@@ -67,12 +69,16 @@ const humanizerSlice = createSlice({
       state.currentJobId = action.payload.jobId;
       state.isProcessing = false;
     },
+    setCurrentStage(state, action: PayloadAction<string>) {
+      state.currentStage = action.payload;
+    },
     resetOutput(state) {
       state.outputText = '';
       state.changes = [];
       state.aiScoreIn = 0;
       state.aiScoreOut = 0;
       state.currentJobId = null;
+      state.currentStage = '';
     },
   },
 });
@@ -86,5 +92,6 @@ export const {
   setProcessing,
   setResult,
   resetOutput,
+  setCurrentStage,
 } = humanizerSlice.actions;
 export default humanizerSlice.reducer;

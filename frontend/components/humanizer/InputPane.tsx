@@ -6,10 +6,10 @@ import { setInputText, setInputSource } from '@/store/slices/humanizerSlice';
 import { DropZone } from '@/components/common/DropZone';
 import { UrlImport } from '@/components/common/UrlImport';
 import { clsx } from 'clsx';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import Fetch from '@/lib/core/fetch/Fetch';
-import { Code } from '@/lib/core/Constants';
+import { Code, API_URL } from '@/lib/core/Constants';
 
 const TABS = [
   { value: 'paste' as const, label: 'Paste text' },
@@ -21,6 +21,17 @@ export function InputPane() {
   const dispatch = useDispatch();
   const { inputText, inputSource } = useSelector((s: RootState) => s.humanizer);
   const [uploading, setUploading] = useState(false);
+  const [samples, setSamples] = useState<Array<{ id: string; label: string; text: string }>>([]);
+
+  useEffect(() => {
+    // Decision: Fetch sample texts once on mount for the humanizer demo experience.
+    fetch(`${API_URL}/api/humanize/samples`)
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.code === 1) setSamples(res.data);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleFile = async (file: File) => {
     setUploading(true);
@@ -71,12 +82,27 @@ export function InputPane() {
       {/* Content */}
       <div className="flex-1 p-4">
         {inputSource === 'paste' && (
-          <textarea
-            value={inputText}
-            onChange={(e) => dispatch(setInputText(e.target.value))}
-            placeholder="Paste your text here..."
-            className="w-full h-full min-h-[300px] resize-none outline-none text-sm text-ink leading-relaxed"
-          />
+          <>
+            {!inputText && samples.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {samples.map((sample) => (
+                  <button
+                    key={sample.id}
+                    onClick={() => dispatch(setInputText(sample.text))}
+                    className="px-3 py-1.5 text-xs rounded-lg border border-rule text-ink-muted hover:border-primary hover:text-primary transition"
+                  >
+                    {sample.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <textarea
+              value={inputText}
+              onChange={(e) => dispatch(setInputText(e.target.value))}
+              placeholder="Paste your text here..."
+              className="w-full h-full min-h-[300px] resize-none outline-none text-sm text-ink leading-relaxed"
+            />
+          </>
         )}
         {inputSource === 'upload' && <DropZone onFile={handleFile} uploading={uploading} />}
         {inputSource === 'url' && <UrlImport onImport={handleUrlImport} />}

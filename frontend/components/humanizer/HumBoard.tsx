@@ -2,7 +2,7 @@
 
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '@/store/rootReducer';
-import { setProcessing, setResult, resetOutput } from '@/store/slices/humanizerSlice';
+import { setProcessing, setResult, resetOutput, setCurrentStage } from '@/store/slices/humanizerSlice';
 import { HumToolbar } from './HumToolbar';
 import { InputPane } from './InputPane';
 import { OutputPane } from './OutputPane';
@@ -14,7 +14,7 @@ import { useBalance } from '@/hooks/credit';
 
 export function HumBoard() {
   const dispatch = useDispatch();
-  const { inputText, tone, strength, lengthMode, isProcessing, outputText } = useSelector(
+  const { inputText, tone, strength, lengthMode, isProcessing, outputText, currentStage } = useSelector(
     (s: RootState) => s.humanizer
   );
   const { mutate: refreshBalance } = useBalance();
@@ -70,10 +70,23 @@ export function HumBoard() {
                   jobId: data.jobId,
                 })
               );
+              dispatch(setCurrentStage(''));
               refreshBalance();
+            } else if (data.type === 'stage') {
+              // Decision: Show pipeline stage progress to user during multi-agent processing.
+              // Stages: preprocessing, critiquing (iteration N), rewriting (iteration N).
+              const stageLabel = data.iteration
+                ? `${data.stage} (pass ${data.iteration})`
+                : data.stage;
+              dispatch(setCurrentStage(stageLabel));
+            } else if (data.type === 'score') {
+              dispatch(setCurrentStage(`scoring (pass ${data.iteration}: ${data.score})`));
+            } else if (data.type === 'ai_score_in') {
+              dispatch(setCurrentStage('analyzing input...'));
             } else if (data.type === 'error') {
               toast.error(data.message);
               dispatch(setProcessing(false));
+              dispatch(setCurrentStage(''));
             }
           } catch {
             // partial JSON, skip
@@ -102,7 +115,7 @@ export function HumBoard() {
           disabled={isProcessing || !inputText.trim()}
           className="px-8 py-3 bg-primary text-white rounded-xl font-semibold text-sm hover:bg-primary-dark transition disabled:opacity-50 shadow-sm"
         >
-          {isProcessing ? 'Humanizing...' : 'Humanize'}
+          {isProcessing ? `Humanizing... ${currentStage}` : 'Humanize'}
         </button>
       </div>
 
