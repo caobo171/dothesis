@@ -4,11 +4,11 @@ import { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { clsx } from 'clsx';
 
+// Restricted to PDF and DOCX only — TXT/MD removed per product decision since
+// users with plain text can use the Paste tab directly.
 const ACCEPT = {
   'application/pdf': ['.pdf'],
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-  'text/plain': ['.txt'],
-  'text/markdown': ['.md'],
 };
 
 interface DropZoneProps {
@@ -47,7 +47,7 @@ export function DropZone({ onFile, uploading }: DropZoneProps) {
         ) : (
           <>
             <p className="font-medium text-ink-soft">Drag & drop your file</p>
-            <p className="mt-1 text-xs">PDF, DOCX, TXT, MD (max 10 MB)</p>
+            <p className="mt-1 text-xs">PDF or DOCX (max 10 MB)</p>
           </>
         )}
       </div>

@@ -1,6 +1,9 @@
 'use client';
 
-import Image from 'next/image';
+// Using a plain <img> tag instead of next/image because the public/ directory
+// was created mid-session and Next.js's image optimizer was 404-ing the asset.
+// Plain <img> hits the static path directly with no optimization layer.
+
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
@@ -87,7 +90,7 @@ export function Sidebar() {
           aria-label="Expand sidebar"
           className="w-10 h-10 rounded-lg flex items-center justify-center hover:bg-bg-soft"
         >
-          <Image src="/logo.png" alt="DoThesis" width={24} height={24} />
+          <img src="/logo.png" alt="DoThesis" width={24} height={24} className="rounded" />
         </button>
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -115,7 +118,7 @@ export function Sidebar() {
       {/* Brand row + collapse toggle */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
         <Link href="/humanizer" className="flex items-center gap-2">
-          <Image src="/logo.png" alt="DoThesis" width={32} height={32} priority />
+          <img src="/logo.png" alt="DoThesis" width={32} height={32} className="rounded-md" />
           <span className="font-serif text-2xl text-ink italic">DoThesis</span>
         </Link>
         <button

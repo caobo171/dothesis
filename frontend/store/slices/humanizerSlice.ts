@@ -13,6 +13,14 @@ interface HumanizerState {
   isProcessing: boolean;
   currentJobId: string | null;
   currentStage: string;
+  // Highest pipeline step the backend has reported in this run.
+  // -1 = not started; 0 = analyzing; 1 = detecting; 2 = rewriting.
+  // Drives the three-step progress panel during processing.
+  maxStepReached: number;
+  // Output rendering mode toggled in the OutputPane header.
+  // 'plain'  — show the rewritten text only.
+  // 'inline' — show inline diff: strikethrough originals + boxed replacements.
+  viewMode: 'plain' | 'inline';
 }
 
 const initialState: HumanizerState = {
@@ -28,7 +36,19 @@ const initialState: HumanizerState = {
   isProcessing: false,
   currentJobId: null,
   currentStage: '',
+  maxStepReached: -1,
+  viewMode: 'plain',
 };
+
+// Map a backend stage label to one of our three user-facing steps.
+// Returns the step index, or -1 if the stage doesn't correspond to a step.
+function stageToStep(stage: string): number {
+  const s = stage.toLowerCase();
+  if (s.includes('preprocess') || s.includes('analyz') || s.includes('ai_score')) return 0;
+  if (s.includes('critiqu') || s.includes('detect')) return 1;
+  if (s.includes('rewrit') || s.includes('scor')) return 2;
+  return -1;
+}
 
 const humanizerSlice = createSlice({
   name: 'humanizer',
@@ -71,6 +91,10 @@ const humanizerSlice = createSlice({
     },
     setCurrentStage(state, action: PayloadAction<string>) {
       state.currentStage = action.payload;
+      // Promote the step indicator monotonically — once we've passed
+      // 'detecting', a stray 'analyzing' event shouldn't pull it back.
+      const step = stageToStep(action.payload);
+      if (step > state.maxStepReached) state.maxStepReached = step;
     },
     resetOutput(state) {
       state.outputText = '';
@@ -79,6 +103,10 @@ const humanizerSlice = createSlice({
       state.aiScoreOut = 0;
       state.currentJobId = null;
       state.currentStage = '';
+      state.maxStepReached = -1;
+    },
+    setViewMode(state, action: PayloadAction<'plain' | 'inline'>) {
+      state.viewMode = action.payload;
     },
   },
 });
@@ -93,5 +121,6 @@ export const {
   setResult,
   resetOutput,
   setCurrentStage,
+  setViewMode,
 } = humanizerSlice.actions;
 export default humanizerSlice.reducer;

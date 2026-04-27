@@ -36,9 +36,10 @@ export function InputPane() {
   const handleFile = async (file: File) => {
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await Fetch.postWithAccessToken<any>('/api/document/upload', formData);
+      // Pass the File directly as a property — Fetch.post builds the FormData
+      // internally. Spreading a pre-built FormData via {...formData, ...} would
+      // strip everything since FormData isn't enumerable as plain props.
+      const res = await Fetch.postWithAccessToken<any>('/api/document/upload', { file });
       if (res.data.code === Code.Success) {
         dispatch(setInputText(res.data.data.content));
         dispatch(setInputSource('paste'));

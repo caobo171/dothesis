@@ -8,11 +8,11 @@ import { DocumentModel } from '@/models/Document';
 
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB
 
+// Restricted to PDF/DOCX only. Plain text users should use the Paste tab in
+// the UI; no need for an upload path that re-creates that flow.
 const ALLOWED_MIMES = [
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'text/plain',
-  'text/markdown',
 ];
 
 export default (router: Router) => {

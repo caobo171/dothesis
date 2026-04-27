@@ -1,4 +1,9 @@
 .worktrees/
+# Next.js dev server has been observed creating .next caches under a path
+# derived from the package.json name (margin-frontend/.next/). Ignore both
+# the conventional location and any name-derived sibling.
+**/.next/
+margin-frontend/
 # Match dir, file, and symlink forms — trailing slash only matches directories,
 # which is why we previously slipped a node_modules symlink into a commit.
 node_modules
