@@ -10,6 +10,11 @@ export type RawUser = {
   googleId?: string;
   createdAt: string;
   updatedAt: string;
+  // Admin flags injected by User.secureRelease() — optional because users fetched
+  // from non-secureRelease paths won't have them.
+  is_admin?: boolean;
+  is_super_admin?: boolean;
+  disabled?: boolean;
 };
 
 export type RawCredit = {
