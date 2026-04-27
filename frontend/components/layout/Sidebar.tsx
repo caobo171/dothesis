@@ -263,31 +263,27 @@ export function Sidebar() {
         )}
       </nav>
 
-      {/* Plan + Upgrade card (only show for free plan) */}
-      {user?.plan === 'free' && (
-        <div className="px-4 pb-3">
-          <div className="rounded-xl border border-rule bg-bg-soft p-3 mb-2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-ink">Free plan</span>
-              <span className="text-xs font-mono text-ink-muted">{balance} credits</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-rule overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-primary to-purple"
-                style={{ width: `${Math.min(100, Math.max(0, (balance / 100) * 100))}%` }}
-              />
-            </div>
+      {/* Credit balance + Buy more credits CTA. Always shown — DoThesis is
+          credit-based, not plan-based, so there's no "Upgrade" tier to push.
+          The button routes to /credit which renders the pricing cards. */}
+      <div className="px-4 pb-3">
+        <div className="rounded-xl border border-rule bg-bg-soft p-3 mb-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-ink">Credits</span>
+            <span className="text-sm font-mono font-semibold text-primary">
+              {balance.toLocaleString()}
+            </span>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push('/humanizer')}
-            className="w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple hover:opacity-95 transition flex items-center justify-center gap-2"
-          >
-            <Sparkles className="w-4 h-4" />
-            Upgrade to Pro
-          </button>
         </div>
-      )}
+        <button
+          type="button"
+          onClick={() => router.push('/credit')}
+          className="w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary to-purple hover:opacity-95 transition flex items-center justify-center gap-2"
+        >
+          <Sparkles className="w-4 h-4" />
+          Buy more credits
+        </button>
+      </div>
 
       {/* User row */}
       <div className="border-t border-rule px-4 py-3">
