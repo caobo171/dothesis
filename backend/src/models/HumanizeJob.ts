@@ -40,6 +40,27 @@ export class HumanizeJob {
 
   @prop({ default: 'processing' })
   public status!: string;
+
+  // Track how many pipeline iterations ran for this humanization job
+  @prop({ default: 0 })
+  public iterations!: number;
+
+  // Track token usage per step (model names like gemini-3-flash-preview, gpt-5.5) for cost analysis
+  @prop({
+    type: () => Object,
+    default: () => ({ steps: [], totalInputTokens: 0, totalOutputTokens: 0 }),
+  })
+  public tokenUsage!: {
+    steps: Array<{
+      step: string;
+      model: string;
+      iteration: number;
+      inputTokens: number;
+      outputTokens: number;
+    }>;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+  };
 }
 
 export const HumanizeJobModel = getModelForClass(HumanizeJob);
