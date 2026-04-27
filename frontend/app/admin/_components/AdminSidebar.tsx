@@ -32,7 +32,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: HomeIcon, group: 'Operations', enabled: true },
   { label: 'Users', href: '/admin/users', icon: UsersIcon, group: 'Operations', enabled: true },
-  { label: 'Credits', href: '/admin/credits', icon: CurrencyDollarIcon, group: 'Operations' },
+  { label: 'Credits', href: '/admin/credits', icon: CurrencyDollarIcon, group: 'Operations', enabled: true },
   { label: 'Documents', href: '/admin/documents', icon: DocumentTextIcon, group: 'Jobs' },
   { label: 'Humanize', href: '/admin/humanize', icon: SparklesIcon, group: 'Jobs' },
   { label: 'Plagiarism', href: '/admin/plagiarism', icon: ShieldCheckIcon, group: 'Jobs' },
