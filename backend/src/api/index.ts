@@ -8,6 +8,7 @@ import cite from './routes/cite';
 import library from './routes/library';
 import plagiarism from './routes/plagiarism';
 import webhook from './routes/webhook';
+import adminRouter from './routes/admin';
 
 export default () => {
   const router = Router();
@@ -21,6 +22,10 @@ export default () => {
   library(router);
   plagiarism(router);
   webhook(router);
+
+  // Admin sub-router. Each handler inside applies passport.authenticate + requireAdmin
+  // (and requireSuperAdmin where applicable). Mounting here puts everything under /api/admin/*.
+  router.use('/admin', adminRouter());
 
   router.get('/status', (req, res) => {
     res.json({ status: 'ok' });
