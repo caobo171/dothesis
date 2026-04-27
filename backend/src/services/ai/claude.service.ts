@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { AIChatResult } from './ai.service.manager';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -7,7 +8,7 @@ export class ClaudeService {
     systemPrompt: string,
     userPrompt: string,
     options: { temperature?: number; maxTokens?: number } = {}
-  ): Promise<string> {
+  ): Promise<AIChatResult> {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: options.maxTokens ?? 4096,
@@ -17,7 +18,14 @@ export class ClaudeService {
     });
 
     const textBlock = response.content.find((b: any) => b.type === 'text');
-    return textBlock ? (textBlock as any).text : '';
+    const text = textBlock ? (textBlock as any).text : '';
+    return {
+      text,
+      usage: {
+        inputTokens: response.usage?.input_tokens ?? 0,
+        outputTokens: response.usage?.output_tokens ?? 0,
+      },
+    };
   }
 
   static async chatStream(

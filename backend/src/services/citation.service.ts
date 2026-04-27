@@ -129,7 +129,9 @@ Return valid JSON only:
 
 Only include claims that make factual assertions. Skip opinions, transitions, and thesis statements that don't cite facts.`;
 
-    const result = await ai.tryWithFallback('extract-claims', async (service) => {
+    // Decision: Destructure { text: result } because chat() now returns AIChatResult
+    // with { text, usage } instead of a plain string.
+    const { text: result } = await ai.tryWithFallback('extract-claims', async (service) => {
       return service.chat(systemPrompt, text, { temperature: 0.3, jsonMode: true });
     });
 
@@ -162,7 +164,9 @@ Score 0.0 = completely irrelevant, 1.0 = perfect match. Return top 3 only.`;
 Papers:
 ${candidates.map((c) => `- ID: ${c.id} | Title: "${c.title}" | Authors: ${c.authors} | Year: ${c.year} | Snippet: ${c.snippet}`).join('\n')}`;
 
-    const result = await ai.tryWithFallback('rank-candidates', async (service) => {
+    // Decision: Destructure { text: result } because chat() now returns AIChatResult
+    // with { text, usage } instead of a plain string.
+    const { text: result } = await ai.tryWithFallback('rank-candidates', async (service) => {
       return service.chat(systemPrompt, userPrompt, { temperature: 0.3, jsonMode: true });
     });
 
@@ -188,8 +192,11 @@ Journal: ${paper.journal || 'N/A'}
 DOI: ${paper.doi || 'N/A'}
 URL: ${paper.url || 'N/A'}`;
 
-    return ai.tryWithFallback('format-citation', async (service) => {
+    // Decision: Destructure { text } because chat() now returns AIChatResult
+    // with { text, usage } instead of a plain string.
+    const { text } = await ai.tryWithFallback('format-citation', async (service) => {
       return service.chat(systemPrompt, userPrompt, { temperature: 0.1 });
     });
+    return text;
   }
 }

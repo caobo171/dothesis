@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { AIChatResult } from './ai.service.manager';
 
 const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
@@ -7,7 +8,7 @@ export class GeminiService {
     systemPrompt: string,
     userPrompt: string,
     options: { temperature?: number; maxTokens?: number; jsonMode?: boolean } = {}
-  ): Promise<string> {
+  ): Promise<AIChatResult> {
     const response = await genai.models.generateContent({
       // Decision: Upgraded from gemini-2.5-pro to gemini-3-flash-preview (Gemini 3 series).
       // Pro-level intelligence at Flash speed/pricing. Model ID requires "-preview" suffix.
@@ -21,7 +22,14 @@ export class GeminiService {
       },
     });
 
-    return response.text || '';
+    const text = response.text || '';
+    return {
+      text,
+      usage: {
+        inputTokens: (response as any).usageMetadata?.promptTokenCount ?? 0,
+        outputTokens: (response as any).usageMetadata?.candidatesTokenCount ?? 0,
+      },
+    };
   }
 
   static async chatStream(

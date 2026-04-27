@@ -2,6 +2,13 @@ import { OpenAIService } from './openai.service';
 import { ClaudeService } from './claude.service';
 import { GeminiService } from './gemini.service';
 
+// Decision: Added AIChatResult type so chat() returns token usage alongside text.
+// The multi-agent humanizer pipeline (Task 3) needs per-step token tracking.
+export type AIChatResult = {
+  text: string;
+  usage: { inputTokens: number; outputTokens: number };
+};
+
 type AIProvider = 'openai' | 'claude' | 'gemini';
 type AIService = typeof OpenAIService | typeof ClaudeService | typeof GeminiService;
 

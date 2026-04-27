@@ -2,18 +2,18 @@ import { AIServiceManager } from '@/services/ai/ai.service.manager';
 import { HumanizeJobModel } from '@/models/HumanizeJob';
 import { AIDetectorEngine } from '@/services/ai-detector';
 
-// Decision: Tone instructions were rewritten to defeat GPTZero's "Robotic Formality"
-// and "Impersonal Tone" signals. The old "formal academic tone, passive voice" instruction
-// directly conflicted with anti-detection rules — GPTZero flagged the output as
-// "too polished, impersonal, lacks creative grammar." Now each tone describes a
-// specific human persona (grad student, friend, columnist) instead of abstract style rules.
+// Decision (v4): Switched from rule-based to persona-based tone instructions.
+// Previous versions gave 8+ explicit rules which the LLM followed UNIFORMLY,
+// creating new detectable patterns. GPTZero flagged "Artificial Simplicity",
+// "Rigid Guidance", "Predictable Syntax" — all caused by uniform rule-following.
+// Now each tone defines a specific person with naturally varied writing habits.
 const TONE_INSTRUCTIONS: Record<string, string> = {
   academic:
-    'Write like a real graduate student or researcher — knowledgeable but NOT robotic. Real academic writers use first person occasionally ("I argue", "we found"), express uncertainty naturally ("this seems to suggest", "it\'s hard to say for sure"), mix formal vocabulary with plain language, and sometimes break grammatical conventions for emphasis. Do NOT write like a textbook or encyclopedia.',
+    'You are a 28-year-old PhD candidate who genuinely cares about this topic. You write well but imperfectly — sometimes your sentences get too long because you\'re excited about an idea, sometimes you cut yourself short. You mix technical analysis with personal observations. You\'ve read a lot about this subject and have opinions, but you also know where you might be wrong.',
   casual:
-    'Write like a real person talking to a friend about this topic. Use contractions, first person, sentence fragments, and everyday vocabulary. Include filler words naturally ("honestly", "like", "basically"). Keep the content accurate but the delivery relaxed.',
+    'You are a smart college senior explaining this topic to a classmate over coffee. You know the material but you don\'t perform knowledge — you just talk naturally. Sometimes you go on tangents, sometimes you oversimplify, sometimes you say something surprisingly insightful.',
   persuasive:
-    'Write like a passionate opinion columnist. Use rhetorical questions, strong personal voice, active voice, and confident assertions. Mix punchy short sentences with flowing long ones. Show personality and conviction.',
+    'You are an experienced journalist writing an opinion piece. You have a clear point of view but you\'re intellectually honest about counterarguments. Your writing has rhythm — you build momentum then pause for effect. You use concrete examples and analogies, not abstractions.',
 };
 
 const LENGTH_INSTRUCTIONS: Record<string, string> = {
@@ -36,92 +36,46 @@ function buildHumanizePrompt(tone: string, strength: number, lengthMode: string)
         ? 'Make SUBSTANTIAL edits. You MUST restructure sentences — do NOT just swap individual words. Split long sentences into short+long pairs. Merge short sentences. Change sentence order within paragraphs. Replace AI transitions with natural flow. Add hedging and human voice. Every sentence should read noticeably different from the original.'
         : 'Do a COMPLETE rewrite. Rewrite every sentence from scratch as if you were a human expert writing about this topic for the first time. The output should share zero sentence structures with the input while preserving all facts and arguments.';
 
-  return `You are a text humanizer. Rewrite AI-generated text so it passes GPTZero, Originality.ai, Turnitin, Copyleaks, ZeroGPT, and Winston AI as HUMAN-written.
+  // Decision (v4): Switched from rule-based (8 explicit rules) to principle-based (3 principles).
+  // Rule-heavy prompts made the LLM follow rules UNIFORMLY, creating new detectable patterns.
+  // GPTZero flagged "Artificial Simplicity" (too casual), "Predictable Syntax" (same structures),
+  // "Rigid Guidance" (consistent style). New approach: unpredictability as core principle.
+  return `${toneInstr}
 
-${toneInstr}
-
-Strength: ${strength}/100. ${strengthDesc}
+Rewrite the text below in your own voice. ${strengthDesc}
 
 ${lengthInstr}
 
-=== FULL BEFORE/AFTER EXAMPLE (study this carefully) ===
+=== THREE PRINCIPLES (internalize these, don't follow mechanically) ===
 
-This shows what GPTZero-proof Vietnamese writing looks like:
+1. UNPREDICTABILITY IS EVERYTHING
+   AI detectors catch patterns. ANY pattern — formal, casual, simple, complex — if it's consistent, it's detectable. Your writing must be genuinely varied:
+   - Some sentences should be long and analytical with nested clauses and dashes; others should be blunt. Three words. Done.
+   - Some should use technical vocabulary precisely; the next should explain the same idea like you're texting a friend
+   - Some paragraphs should be tight and logical; others should meander, go on a tangent, then circle back
+   - Use different sentence structures: declarative, interrogative, exclamatory, fragmented, conditional — mix them unpredictably
+   - NEVER establish a pattern and repeat it. If you used a dash in sentence 1, don't use another dash until sentence 4 or 5.
 
-BEFORE (AI — will be detected):
-"Hệ thống học tập thích ứng sử dụng thuật toán deep learning để điều chỉnh nội dung giảng dạy phù hợp với năng lực của từng người học. Ngoài ra, công nghệ xử lý ngôn ngữ tự nhiên đang được ứng dụng trong việc chấm bài tự động và phản hồi cho sinh viên."
+2. INTELLECTUAL DEPTH
+   AI text is flat — it states facts linearly without genuine thought. Human writing shows a mind at work:
+   - Question the data: "Con số 14% GDP nghe ấn tượng, nhưng tính cách nào thì ra con số đó?" / "That 14% figure sounds impressive, but how exactly are they measuring it?"
+   - Use analogies and metaphors: "Kinh tế số giống sóng triều — ai chậm chân sẽ bị cuốn" / "The digital economy is like a tide — you either ride it or get swept away"
+   - Bring in tangential observations: "Nói đến thanh toán online làm mình nhớ..." / "Speaking of online payments, it reminds me of..."
+   - Present counterarguments: "Tuy nhiên, nhìn từ góc khác thì..." / "Then again, if you look at it from the other side..."
+   - Show genuine curiosity: "Điều mình thắc mắc là..." / "What I actually wonder is..."
 
-AFTER (human — will pass GPTZero):
-"Mấy hệ thống adaptive learning bây giờ chạy deep learning để tự điều chỉnh bài giảng — kiểu mỗi sinh viên sẽ thấy nội dung khác nhau tùy trình độ. Nghe thì hay nhưng mình thấy thực tế nó chưa hoàn hảo lắm đâu. Rồi cả NLP nữa, giờ người ta dùng nó để chấm bài tự động. Đỡ việc cho giảng viên thật, dù đôi khi chấm cũng... hơi lạ."
+3. PRESERVE ALL FACTS
+   Keep every factual claim, number, data point, and argument from the original. Do not invent information.
 
-WHY the "after" passes GPTZero:
-- Uses casual Vietnamese ("mấy", "kiểu", "nghe thì hay nhưng", "đỡ việc")
-- Mixes technical terms with casual explanations ("adaptive learning" then explains simply)
-- Has personal opinion ("mình thấy thực tế nó chưa hoàn hảo")
-- Sentence fragments ("Đỡ việc cho giảng viên thật, dù đôi khi chấm cũng... hơi lạ.")
-- Abrupt short sentence after long one
-- NO formulaic transitions — just starts next idea
+=== WHAT TO AVOID ===
 
-English equivalent:
-BEFORE: "Natural language processing technology is being applied to automated grading and student feedback systems."
-AFTER: "And then there's NLP — basically teaching computers to read student papers. It handles grading, sort of. The feedback part is... a work in progress, let's say."
-
-=== GPTZero BYPASS RULES ===
-
-// Decision: Rules restructured after GPTZero still detected output as AI despite
-// previous prompt updates. Key finding: keeping technical Vietnamese terms verbatim
-// (e.g. "công nghệ xử lý ngôn ngữ tự nhiên") triggers "Sophisticated Clarity" and
-// "Mechanical Precision" flags. New rules: (1) simplify/casualize technical terms,
-// (2) vary register per sentence not per paragraph, (3) ban more formulaic Vietnamese patterns.
-
-1. SIMPLIFY TECHNICAL TERMS (targets: Sophisticated Clarity, Mechanical Precision)
-   GPTZero flags precise technical phrasing as AI. Real students abbreviate and simplify.
-   - NEVER keep long technical compounds verbatim. Rephrase casually:
-   - VI: "hệ thống học tập thích ứng" → "mấy hệ thống adaptive learning" or "hệ thống học thích ứng"
-   - VI: "công nghệ xử lý ngôn ngữ tự nhiên" → "NLP" or "công nghệ hiểu ngôn ngữ"
-   - VI: "thuật toán deep learning" → "deep learning"
-   - VI: "tích hợp AI vào quy trình giáo dục" → "đưa AI vào dạy học" or "dùng AI trong giáo dục"
-   - EN: "natural language processing technology" → "NLP" or "teaching computers to read text"
-   - EN: "adaptive learning systems utilizing deep learning algorithms" → "adaptive learning tools running on deep learning"
-   - After using a technical term, immediately explain it casually: "deep learning — nói đơn giản là máy tự học từ dữ liệu"
-
-2. VARY REGISTER PER SENTENCE (targets: Robotic Formality, Impersonal Tone)
-   GPTZero flags UNIFORM register. You must alternate between formal and casual EVERY 1-2 sentences.
-   - Sentence 1: slightly formal/analytical
-   - Sentence 2: casual reaction/opinion ("Nghe thì hay nhưng...", "Honestly though...")
-   - Sentence 3: short fragment ("Chưa chắc." / "Hard to say.")
-   - Sentence 4: longer, more detailed
-   - NEVER write 3+ sentences in the same register
-
-3. ADD MESSY HUMAN PATTERNS (targets: Lacks Creative Grammar, Formulaic Flow)
-   - Trailing thoughts: "dù đôi khi cũng... hơi lạ", "which is... debatable"
-   - Self-interruption: "Ý mình là — thôi nói cách khác đi", "Wait, that's not quite right"
-   - Casual fillers in VI: "kiểu", "à", "ừ thì", "nói chung là", "đại khái"
-   - Casual fillers in EN: "like", "I mean", "kind of", "you know"
-   - Incomplete thoughts followed by pivots: "... nhưng thôi, điểm chính là..."
-
-4. PERSONAL VOICE (targets: Impersonal Tone)
-   - Use "mình" or "tôi" at least 2-3 times per paragraph in Vietnamese
-   - Use "I" at least 2-3 times per paragraph in English
-   - Express genuine reactions: "cái này mình thấy hay", "this part is interesting to me"
-   - Show doubt: "không chắc lắm", "I'm not 100% sure", "có thể mình sai"
-
-5. BAN FORMULAIC PATTERNS (targets: Formulaic Flow)
-   Vietnamese transitions BANNED (these are just as AI as "Ngoài ra"):
-   - "Còn về..." / "Từ những gì tôi thấy,..." / "Không chỉ vậy,..." / "Điều đáng chú ý là..."
-   - "Xét về..." / "Đối với..." / "Liên quan đến..."
-   English transitions BANNED:
-   - "Furthermore" / "Moreover" / "Additionally" / "In terms of" / "With regard to" / "It is worth noting"
-   Instead: just start the next idea with NO transition, or use "rồi", "à còn", "mà", "nhưng" / "and", "but", "so", "also"
-
-6. SENTENCE LENGTH VARIATION
-   - At least one sentence per paragraph must be 3-5 words: "Đó là vấn đề." / "That's the key."
-   - At least one must be 25+ words with dashes or parentheses mid-sentence
-   - Never 3 consecutive sentences of similar length
-
-7. PRESERVE MEANING (non-negotiable)
-   - Keep ALL factual claims, data, and arguments
-   - Do not fabricate information
+These patterns are INSTANTLY detectable by GPTZero:
+- Starting 3+ sentences the same way (e.g., all starting with subject-verb)
+- Every sentence being roughly the same length
+- Using transitions systematically ("Firstly... Secondly..." or "Còn về... Thêm vào đó...")
+- Explaining things the same way each time (technical term → explanation → conclusion, repeated)
+- Consistent register — either all formal OR all casual throughout
+- Listing facts without reacting to them or questioning them
 
 === OUTPUT FORMAT ===
 
@@ -182,7 +136,9 @@ export class HumanizerService {
     const ai = AIServiceManager.getInstance();
     const systemPrompt = buildHumanizePrompt(tone, strength, lengthMode);
 
-    const result = await ai.tryWithFallback('humanize', async (service) => {
+    // Decision: Destructure { text: result } because chat() now returns AIChatResult
+    // with { text, usage } instead of a plain string. Task 3 will rewrite this method.
+    const { text: result } = await ai.tryWithFallback('humanize', async (service) => {
       return service.chat(systemPrompt, text, {
         // Decision: Temperature raised from 0.7 → 0.9 to increase output creativity.
         // At 0.7 the LLM produced overly safe/polished text that GPTZero flagged as
