@@ -38,7 +38,7 @@ const NAV: NavItem[] = [
   { label: 'Plagiarism', href: '/admin/plagiarism', icon: ShieldCheckIcon, group: 'Jobs', enabled: true },
   { label: 'AutoCite', href: '/admin/autocite', icon: CommandLineIcon, group: 'Jobs', enabled: true },
   { label: 'Announcements', href: '/admin/announcements', icon: MegaphoneIcon, group: 'Content', superAdminOnly: true, enabled: true },
-  { label: 'AI Providers', href: '/admin/ai-providers', icon: CpuChipIcon, group: 'Config', superAdminOnly: true },
+  { label: 'AI Providers', href: '/admin/ai-providers', icon: CpuChipIcon, group: 'Config', superAdminOnly: true, enabled: true },
 ];
 
 export function AdminSidebar({ isSuperAdmin }: { isSuperAdmin: boolean }) {

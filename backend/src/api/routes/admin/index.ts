@@ -17,6 +17,7 @@ import plagiarismRouter from './plagiarism';
 import autociteRouter from './autocite';
 import documentRouter from './document';
 import announcementRouter from './announcement';
+import aiProviderRouter from './aiProvider';
 
 export default () => {
   const router = Router();
@@ -29,6 +30,7 @@ export default () => {
   router.use(autociteRouter());
   router.use(documentRouter());
   router.use(announcementRouter());
+  router.use(aiProviderRouter());
 
   router.post(
     '/healthcheck',
