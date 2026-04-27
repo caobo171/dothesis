@@ -9,6 +9,7 @@ import library from './routes/library';
 import plagiarism from './routes/plagiarism';
 import webhook from './routes/webhook';
 import announcementPublic from './routes/announcement.public';
+import order from './routes/order';
 import adminRouter from './routes/admin';
 
 export default () => {
@@ -24,6 +25,7 @@ export default () => {
   plagiarism(router);
   webhook(router);
   announcementPublic(router);
+  order(router);
 
   // Admin sub-router. Each handler inside applies passport.authenticate + requireAdmin
   // (and requireSuperAdmin where applicable). Mounting here puts everything under /api/admin/*.

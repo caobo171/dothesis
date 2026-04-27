@@ -15,10 +15,10 @@ import { ClaimPopover } from './ClaimPopover';
 import { SourceList } from './SourceList';
 import { clsx } from 'clsx';
 import { toast } from 'react-toastify';
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import Fetch from '@/lib/core/fetch/Fetch';
-import { Code, SOCKET_URL } from '@/lib/core/Constants';
+import { Code, API_URL, SOCKET_URL } from '@/lib/core/Constants';
 import { useBalance } from '@/hooks/credit';
 
 const STYLES = ['apa', 'mla', 'chicago', 'harvard', 'ieee'];
@@ -40,6 +40,17 @@ export function CiteBoard() {
   );
   const { mutate: refreshBalance } = useBalance();
   const socketRef = useRef<Socket | null>(null);
+  const [samples, setSamples] = useState<Array<{ id: string; label: string; text: string }>>([]);
+
+  useEffect(() => {
+    // Decision: Fetch sample texts once on mount for quick testing of Auto-Cite.
+    fetch(`${API_URL}/api/cite/samples`)
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.code === 1) setSamples(res.data);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const socket = io(SOCKET_URL);
@@ -130,6 +141,19 @@ export function CiteBoard() {
           {status === 'idle' ? (
             <>
               <div className="p-4 flex-1">
+                {!inputText && samples.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {samples.map((sample) => (
+                      <button
+                        key={sample.id}
+                        onClick={() => dispatch(setCiteInput(sample.text))}
+                        className="px-3 py-1.5 text-xs rounded-lg border border-rule text-ink-muted hover:border-primary hover:text-primary transition"
+                      >
+                        {sample.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <textarea
                   value={inputText}
                   onChange={(e) => dispatch(setCiteInput(e.target.value))}

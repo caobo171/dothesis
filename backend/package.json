@@ -13,6 +13,7 @@
     "@anthropic-ai/sdk": "^0.30.0",
     "@aws-sdk/client-sesv2": "^3.1037.0",
     "@google/genai": "^1.50.1",
+    "@polar-sh/sdk": "^0.47.0",
     "@sendgrid/mail": "^8.1.6",
     "@typegoose/typegoose": "^12.0.0",
     "aws-sdk": "^2.1500.0",

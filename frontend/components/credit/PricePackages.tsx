@@ -1,21 +1,35 @@
 'use client';
 
-// Credit purchase cards. Visual structure ported from the survify product;
-// payment plumbing intentionally simplified — DoThesis only uses Stripe today
-// (Paddle/Polar/PayPal integrations from the source were not brought over).
+// Three-provider credit checkout, ported from survify's PricingPackages.
+// Each card supports a primary provider button (driven by PAYMENT_PROVIDER
+// in Constants) plus a "Pay with PayPal" fallback when the primary is Polar.
 //
-// Per-card flow:
-//   user picks quantity → click "Buy" → POST /api/credit/purchase with the
-//   total credit amount → backend creates a Stripe Checkout Session and
-//   returns its URL → we redirect.
+// Stripped from the survify original:
+//   - PostHog event tracking (DoThesis doesn't run PostHog).
+//   - The credit_id (`idcredit`) field — DoThesis uses user._id directly.
+//   - Refund-policy block — moved into the page-level Notes section.
 
-import { FC, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'react-toastify';
+import { FC, useEffect, useState } from 'react';
 import { DollarSign, Plus, Award, Ticket, Minus } from 'lucide-react';
-import Fetch from '@/lib/core/fetch/Fetch';
-import { Code, PRICING_PACKAGES, CreditPackage } from '@/lib/core/Constants';
+import { toast } from 'react-toastify';
 import { clsx } from 'clsx';
+import { useMe } from '@/hooks/user';
+import Fetch from '@/lib/core/fetch/Fetch';
+import {
+  Code,
+  PRICING_PACKAGES,
+  PADDLE_CLIENT_TOKEN,
+  PAYMENT_PROVIDER,
+  IS_SANDBOX,
+  PaymentProvider,
+  CreditPackage,
+} from '@/lib/core/Constants';
+
+declare global {
+  interface Window {
+    Paddle?: any;
+  }
+}
 
 interface Props {
   // For modal use — smaller cards.
@@ -23,9 +37,15 @@ interface Props {
   onSuccess?: () => void;
 }
 
-const PricePackages: FC<Props> = ({ compact = false }) => {
-  const router = useRouter();
-  const [processingId, setProcessingId] = useState<string | null>(null);
+const PricePackages: FC<Props> = ({ compact = false, onSuccess }) => {
+  const { data: me } = useMe();
+  // Polar / PayPal don't need a client-side SDK. Paddle does — we lazy-load
+  // its script tag and flip providerLoaded once it's initialised.
+  const [providerLoaded, setProviderLoaded] = useState(
+    PAYMENT_PROVIDER === 'paypal' || PAYMENT_PROVIDER === 'polar',
+  );
+  const [processingPackage, setProcessingPackage] = useState<string | null>(null);
+  const [activeProvider, setActiveProvider] = useState<PaymentProvider>(PAYMENT_PROVIDER);
   const [quantities, setQuantities] = useState<Record<string, number>>(() =>
     Object.fromEntries(PRICING_PACKAGES.map((p) => [p.id, 1])),
   );
@@ -37,33 +57,150 @@ const PricePackages: FC<Props> = ({ compact = false }) => {
     }));
   };
 
-  const handleBuy = async (pkg: CreditPackage) => {
-    setProcessingId(pkg.id);
+  // Paddle bootstrap. Same pattern as survify: load paddle.js if our primary
+  // provider is paddle and we have an authenticated user. Skipped otherwise.
+  useEffect(() => {
+    if (!me) return;
+    if (PAYMENT_PROVIDER !== 'paddle') return;
+    if (window.Paddle) {
+      setProviderLoaded(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.paddle.com/paddle/v2/paddle.js';
+    script.async = true;
+    script.onload = () => {
+      if (window.Paddle) {
+        if (IS_SANDBOX) {
+          window.Paddle.Environment.set('sandbox');
+        }
+        window.Paddle.Initialize({
+          token: PADDLE_CLIENT_TOKEN,
+          pwCustomer: 'ctm_' + me?.id,
+        });
+        setProviderLoaded(true);
+      }
+    };
+    document.body.appendChild(script);
+  }, [me]);
+
+  // Polar status check. If POLAR_ACCESS_TOKEN/POLAR_PRODUCT_ID aren't set
+  // server-side, fall back to PayPal so the buttons still do something.
+  useEffect(() => {
+    if (PAYMENT_PROVIDER !== 'polar') return;
+    Fetch.postWithAccessToken<any>('/api/order/polar/status', {})
+      .then((res: any) => {
+        const enabled = res?.data?.data?.enabled;
+        if (!enabled) setActiveProvider('paypal');
+      })
+      .catch(() => setActiveProvider('paypal'));
+  }, []);
+
+  const handlePaddleCheckout = (pkg: CreditPackage) => {
+    if (!window.Paddle) {
+      toast.error('Paddle is not loaded yet');
+      return;
+    }
+    const qty = quantities[pkg.id] || 1;
+    window.Paddle.Checkout.open({
+      items: [{ priceId: pkg.paddle_price_id, quantity: qty }],
+      customData: {
+        user_id: me?.id,
+        packageId: pkg.id,
+        credits: pkg.credit * qty,
+        quantity: qty,
+      },
+      settings: { successUrl: window.location.href },
+      eventCallback: (event: any) => {
+        if (event.name === 'checkout.completed') {
+          window.Paddle.Checkout.close();
+          onSuccess?.();
+          window.location.reload();
+        }
+      },
+    });
+  };
+
+  const handlePolarCheckout = async (pkg: CreditPackage) => {
+    setProcessingPackage(pkg.id);
     try {
       const qty = quantities[pkg.id] || 1;
-      const totalCredits = pkg.credit * qty;
-      const res = await Fetch.postWithAccessToken<any>('/api/credit/purchase', {
-        amount: totalCredits,
+      const response = await Fetch.postWithAccessToken<any>('/api/order/polar/create-checkout', {
+        packageId: pkg.id,
+        quantity: qty,
       });
-      if (res.data.code === Code.Success && res.data.data?.url) {
-        // Redirect to Stripe Checkout. Success/cancel URLs are configured server-side.
-        window.location.href = res.data.data.url;
+      const data = response.data as any;
+      if (data.code !== Code.Success || !data.data?.checkoutUrl) {
+        toast.error(data.message || 'Failed to start Polar checkout');
+        setProcessingPackage(null);
         return;
       }
-      toast.error(res.data.message || 'Failed to start checkout');
-    } catch (err: any) {
-      toast.error('Checkout error');
-    } finally {
-      setProcessingId(null);
+      window.location.href = data.data.checkoutUrl;
+    } catch (err) {
+      toast.error('Polar checkout failed');
+      setProcessingPackage(null);
     }
+  };
+
+  const handlePayPalCheckout = async (pkg: CreditPackage) => {
+    setProcessingPackage(pkg.id);
+    try {
+      const qty = quantities[pkg.id] || 1;
+      const createResponse = await Fetch.postWithAccessToken<any>('/api/order/paypal/create-order', {
+        packageId: pkg.id,
+        price: pkg.price * qty,
+        credits: pkg.credit * qty,
+        quantity: qty,
+      });
+      const createData = createResponse.data as any;
+      if (createData.code !== Code.Success || !createData.data?.id) {
+        toast.error(createData.message || 'Failed to start PayPal checkout');
+        setProcessingPackage(null);
+        return;
+      }
+      // Redirect to PayPal's approval URL.
+      const approvalUrl = createData.data.links?.find(
+        (link: any) => link.rel === 'payer-action' || link.rel === 'approve',
+      )?.href;
+      if (approvalUrl) {
+        window.location.href = approvalUrl;
+      } else {
+        toast.error('No approval URL on PayPal response');
+        setProcessingPackage(null);
+      }
+    } catch {
+      toast.error('PayPal checkout failed');
+      setProcessingPackage(null);
+    }
+  };
+
+  const handlePrimaryClick = (pkg: CreditPackage) => {
+    if (!providerLoaded) {
+      toast.error('Payment provider is not loaded yet');
+      return;
+    }
+    if (!me?.id) {
+      toast.error('You need to be signed in');
+      return;
+    }
+    if (activeProvider === 'polar') return handlePolarCheckout(pkg);
+    if (activeProvider === 'paddle') return handlePaddleCheckout(pkg);
+    return handlePayPalCheckout(pkg);
   };
 
   const iconFor = (id: string) => {
     const cls = compact ? 'w-5 h-5' : 'w-6 h-6';
-    if (id === 'starter') return <DollarSign className={`${cls} text-primary`} />;
-    if (id === 'standard') return <Plus className={`${cls} text-primary`} />;
-    if (id === 'expert') return <Award className={`${cls} text-primary`} />;
+    if (id === 'starter_package') return <DollarSign className={`${cls} text-primary`} />;
+    if (id === 'standard_package') return <Plus className={`${cls} text-primary`} />;
+    if (id === 'expert_package') return <Award className={`${cls} text-primary`} />;
     return <Ticket className={`${cls} text-primary`} />;
+  };
+
+  const descriptionFor = (id: string) => {
+    if (id === 'starter_package') return 'Try the product with basic features.';
+    if (id === 'standard_package') return 'Standard quality and quantity for regular use.';
+    if (id === 'expert_package') return 'Best price per credit. Share with classmates.';
+    return '';
   };
 
   return (
@@ -77,23 +214,16 @@ const PricePackages: FC<Props> = ({ compact = false }) => {
         const qty = quantities[pkg.id] || 1;
         const totalPrice = pkg.price * qty;
         const totalCredits = pkg.credit * qty;
-        const isProcessing = processingId === pkg.id;
+        const isProcessing = processingPackage === pkg.id;
 
         return (
           <div
             key={pkg.id}
             className={clsx(
-              'relative bg-white rounded-2xl border transition shadow-sm hover:shadow-md flex flex-col',
-              pkg.highlight ? 'border-primary' : 'border-rule',
+              'bg-white rounded-2xl border border-rule shadow-sm hover:shadow-md transition flex flex-col',
               compact ? 'p-4' : 'p-6',
             )}
           >
-            {pkg.highlight && (
-              <span className="absolute -top-2.5 left-4 px-2 py-0.5 bg-primary text-white text-[10px] font-semibold uppercase tracking-wider rounded-full">
-                Popular
-              </span>
-            )}
-
             <div
               className={clsx(
                 'rounded-xl bg-bg-blue flex items-center justify-center mb-3',
@@ -105,14 +235,14 @@ const PricePackages: FC<Props> = ({ compact = false }) => {
 
             <h3
               className={clsx(
-                'font-semibold text-ink mb-1',
+                'font-semibold text-ink mb-1 capitalize',
                 compact ? 'text-base' : 'text-lg',
               )}
             >
               {pkg.name}
             </h3>
             {!compact && (
-              <p className="text-sm text-ink-muted mb-4 flex-grow">{pkg.description}</p>
+              <p className="text-sm text-ink-muted mb-4 flex-grow">{descriptionFor(pkg.id)}</p>
             )}
 
             <div className="flex items-baseline gap-2 mb-3">
@@ -130,7 +260,6 @@ const PricePackages: FC<Props> = ({ compact = false }) => {
               {pkg.credit.toLocaleString()} credits / pack
             </div>
 
-            {/* Quantity stepper */}
             <div className="flex items-center justify-between mb-3 rounded-lg bg-bg-soft p-2">
               <span className="text-xs font-medium text-ink-muted">Quantity</span>
               <div className="flex items-center gap-2">
@@ -158,7 +287,6 @@ const PricePackages: FC<Props> = ({ compact = false }) => {
               </div>
             </div>
 
-            {/* Total summary, only when qty > 1 */}
             {qty > 1 && (
               <div className="mb-3 rounded-lg bg-bg-blue px-3 py-2 flex items-center justify-between text-sm">
                 <span className="text-ink-muted">Total</span>
@@ -172,13 +300,23 @@ const PricePackages: FC<Props> = ({ compact = false }) => {
             )}
 
             <button
-              type="button"
-              onClick={() => handleBuy(pkg)}
-              disabled={isProcessing}
-              className="w-full px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark transition disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={() => handlePrimaryClick(pkg)}
+              disabled={!providerLoaded || isProcessing}
+              className="w-full bg-primary hover:bg-primary-dark disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl transition"
             >
-              {isProcessing ? 'Starting checkout…' : qty > 1 ? `Buy for $${totalPrice}` : 'Buy now'}
+              {isProcessing ? 'Processing…' : qty > 1 ? `Pay $${totalPrice}` : 'Buy now'}
             </button>
+
+            {/* Polar primary → offer PayPal as a one-click fallback. */}
+            {activeProvider === 'polar' && (
+              <button
+                onClick={() => handlePayPalCheckout(pkg)}
+                disabled={isProcessing}
+                className="w-full text-ink-muted hover:text-ink-soft font-medium py-1.5 text-xs mt-1 transition"
+              >
+                Or pay with PayPal
+              </button>
+            )}
           </div>
         );
       })}
