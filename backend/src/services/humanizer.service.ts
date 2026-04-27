@@ -1,6 +1,71 @@
 import { AIServiceManager } from '@/services/ai/ai.service.manager';
+import { GeminiService } from '@/services/ai/gemini.service';
+import { OpenAIService } from '@/services/ai/openai.service';
 import { HumanizeJobModel } from '@/models/HumanizeJob';
 import { AIDetectorEngine } from '@/services/ai-detector';
+
+// Decision: Multi-agent pipeline — each model is called directly by name
+// instead of going through AIServiceManager fallback. The pipeline needs
+// specific models for specific roles (Gemini for speed, GPT for quality).
+const GEMINI_MODEL = 'gemini-3-flash-preview';
+const OPENAI_MODEL = 'gpt-5.5';
+
+// Decision: Ban list of words/phrases that AI detectors flag instantly.
+// Sources: GPTZero docs, walterwrites.ai, thehumanizeai.pro (April 2026).
+// These words have statistically elevated frequency in LLM output vs human writing.
+const BANNED_WORDS: string[] = [
+  // Overused AI verbs
+  'delve', 'leverage', 'utilize', 'harness', 'streamline', 'underscore',
+  'foster', 'spearhead', 'navigate', 'capitalize', 'embark', 'unlock',
+  'empower', 'facilitate', 'optimize', 'pave the way',
+  // Inflated AI adjectives/adverbs
+  'pivotal', 'robust', 'innovative', 'seamless', 'cutting-edge',
+  'multifaceted', 'comprehensive', 'crucially', 'notably', 'importantly',
+  'significantly', 'groundbreaking',
+  // AI filler nouns/phrases
+  'landscape', 'realm', 'tapestry', 'synergy', 'testament', 'underpinnings',
+  'beacon', 'treasure trove', 'myriad', 'game changer', 'paradigm shift',
+  // AI transition/filler phrases
+  'furthermore', 'moreover', 'in conclusion', "it's worth noting",
+  'it should be mentioned', "in today's world", "in today's fast-paced world",
+  'at the forefront of', 'bridging the gap', 'push the boundaries',
+  'lay the groundwork', 'in terms of', 'subsequently', 'accordingly',
+  'in essence',
+];
+
+// Decision: AI models inject hidden Unicode characters that detectors flag.
+// Em dash (U+2014) is the most common — ChatGPT overuses it heavily.
+// Zero-width spaces and special spaces are used as invisible watermarks.
+function stripBannedCharacters(text: string): string {
+  return text
+    .replace(/\u2014/g, ', ')   // Em dash → comma
+    .replace(/\u200B/g, '')     // Zero-width space → strip
+    .replace(/\u202F/g, ' ')    // Narrow no-break space → normal space
+    .replace(/\u2003/g, ' ');   // Em space → normal space
+}
+
+type TokenStep = {
+  step: 'preprocess' | 'critic' | 'humanizer';
+  model: string;
+  iteration: number;
+  inputTokens: number;
+  outputTokens: number;
+};
+
+type TokenUsage = {
+  steps: TokenStep[];
+  totalInputTokens: number;
+  totalOutputTokens: number;
+};
+
+type PipelineResult = {
+  rewrittenText: string;
+  changes: Array<{ original: string; replacement: string; reason: string }>;
+  aiScoreIn: number;
+  aiScoreOut: number;
+  tokenUsage: TokenUsage;
+  iterations: number;
+};
 
 // Decision (v4): Switched from rule-based to persona-based tone instructions.
 // Previous versions gave 8+ explicit rules which the LLM followed UNIFORMLY,
@@ -90,6 +155,84 @@ Respond with valid JSON only. No markdown, no code fences:
 List every changed phrase in the changes array.`;
 }
 
+function buildPreprocessPrompt(): string {
+  return `You are a text structure editor. Your job is to restructure text for natural sentence variety — NOT to rewrite content.
+
+=== RULES ===
+
+1. VARY SENTENCE LENGTHS DRASTICALLY
+   - Mix very short sentences (under 10 words) with long ones (25+ words)
+   - Never have 3 consecutive sentences of similar length
+   - Split overly long sentences. Merge overly short ones where natural.
+
+2. BREAK PARALLEL CONSTRUCTIONS
+   - If multiple sentences follow the same pattern (Subject-Verb-Object, Subject-Verb-Object), restructure some
+   - Change sentence openings — don't start 3+ sentences the same way
+   - Mix declarative, interrogative, and conditional structures
+
+3. REORDER WITHIN PARAGRAPHS
+   - Where logical, change the order of sentences within a paragraph
+   - Lead with a different point than the original when it still makes sense
+
+4. PRESERVE EVERYTHING ELSE
+   - Keep all facts, numbers, arguments, and meaning exactly as-is
+   - Keep the same language (if Vietnamese, output Vietnamese; if English, output English)
+   - Do NOT rewrite vocabulary or tone — only restructure
+
+Output the restructured text as plain text. No JSON, no markdown.`;
+}
+
+function buildCriticPrompt(): string {
+  const bannedList = BANNED_WORDS.join(', ');
+  return `You are an expert AI text detector. Analyze the provided text and identify specific patterns that AI detection tools (GPTZero, Turnitin, Originality.ai) would flag.
+
+Scan for these issues:
+- **uniform_length**: Sentences of similar length creating a predictable rhythm
+- **predictable_transition**: Smooth logical connectors used systematically (e.g., "Furthermore", "Additionally")
+- **repetitive_opening**: Multiple sentences starting with the same pattern
+- **consistent_register**: Uniform formality level throughout — no natural register mixing
+- **vocabulary_uniformity**: Same level of vocabulary sophistication throughout, no colloquialisms
+- **lack_personality**: No personal opinion, humor, rhetorical questions, or tangential observations
+- **banned_word**: Any occurrence of these known AI-flagged words/phrases: ${bannedList}
+
+For each issue found, provide the exact location (quote the text), describe the problem, and suggest a specific fix.
+
+Respond with valid JSON only:
+{
+  "issues": [
+    {
+      "type": "uniform_length | predictable_transition | repetitive_opening | consistent_register | vocabulary_uniformity | lack_personality | banned_word",
+      "location": "exact quote from text",
+      "description": "what makes this detectable",
+      "suggestion": "specific fix"
+    }
+  ],
+  "overallAssessment": "1-2 sentence summary of how AI-detectable this text is"
+}`;
+}
+
+function buildHumanizerWithCritiquePrompt(
+  tone: string,
+  strength: number,
+  lengthMode: string,
+  critique: string
+): string {
+  const basePrompt = buildHumanizePrompt(tone, strength, lengthMode);
+  const bannedList = BANNED_WORDS.join(', ');
+
+  return `${basePrompt}
+
+=== CRITIC FEEDBACK (fix ALL of these issues) ===
+
+${critique}
+
+=== BANNED WORDS (NEVER use any of these) ===
+
+${bannedList}
+
+If any of these words appear in the input, replace them with natural alternatives. Never introduce any of these words in your rewrite.`;
+}
+
 function buildAiScorePrompt(): string {
   return `You are an expert AI text detector. Analyze the text for specific linguistic markers that distinguish AI-generated writing from human writing.
 
@@ -172,6 +315,145 @@ export class HumanizerService {
         maxTokens: 4096,
       });
     });
+  }
+
+  static async humanizePipeline(
+    text: string,
+    tone: string,
+    strength: number,
+    lengthMode: string,
+    onStage?: (stage: string, data: any) => void
+  ): Promise<PipelineResult> {
+    const tokenSteps: TokenStep[] = [];
+
+    const addTokenStep = (step: TokenStep) => {
+      tokenSteps.push(step);
+    };
+
+    // --- Input AI score ---
+    const aiScoreIn = await this.checkAiScore(text);
+    onStage?.('ai_score_in', { score: aiScoreIn });
+
+    // --- Stage 1: Gemini Preprocess ---
+    onStage?.('stage', { stage: 'preprocessing' });
+
+    const preprocessPrompt = buildPreprocessPrompt();
+    const preprocessResult = await GeminiService.chat(preprocessPrompt, text, {
+      temperature: 0.7,
+      maxTokens: 4096,
+    });
+
+    // Decision: Strip banned Unicode characters after Gemini output.
+    // Gemini may introduce em dashes and special spaces in its restructuring.
+    let currentText = stripBannedCharacters(preprocessResult.text);
+    addTokenStep({
+      step: 'preprocess',
+      model: GEMINI_MODEL,
+      iteration: 0,
+      inputTokens: preprocessResult.usage.inputTokens,
+      outputTokens: preprocessResult.usage.outputTokens,
+    });
+
+    // --- Iterative Loop: Critic -> Humanizer -> Score ---
+    const MAX_ITERATIONS = 3;
+    const TARGET_SCORE = 30;
+    let bestResult = { text: currentText, score: 100, changes: [] as any[] };
+    let iterations = 0;
+
+    for (let i = 1; i <= MAX_ITERATIONS; i++) {
+      iterations = i;
+
+      // Stage 2: GPT Critic
+      onStage?.('stage', { stage: 'critiquing', iteration: i });
+
+      const criticPrompt = buildCriticPrompt();
+      const criticResult = await OpenAIService.chat(criticPrompt, currentText, {
+        temperature: 0.3,
+        maxTokens: 2048,
+        jsonMode: true,
+      });
+      addTokenStep({
+        step: 'critic',
+        model: OPENAI_MODEL,
+        iteration: i,
+        inputTokens: criticResult.usage.inputTokens,
+        outputTokens: criticResult.usage.outputTokens,
+      });
+
+      // Stage 3: GPT Humanizer
+      onStage?.('stage', { stage: 'rewriting', iteration: i });
+
+      const humanizerPrompt = buildHumanizerWithCritiquePrompt(
+        tone,
+        strength,
+        lengthMode,
+        criticResult.text
+      );
+      const humanizerResult = await OpenAIService.chat(humanizerPrompt, currentText, {
+        temperature: 0.9,
+        maxTokens: 4096,
+        jsonMode: true,
+        // Decision: Penalties force GPT to use varied vocabulary and explore new concepts.
+        // presence_penalty=0.3 encourages novel topics; frequency_penalty=0.4 penalizes
+        // repeated words. These values were chosen based on OpenAI docs recommendations
+        // for creative writing tasks.
+        presencePenalty: 0.3,
+        frequencyPenalty: 0.4,
+      });
+      addTokenStep({
+        step: 'humanizer',
+        model: OPENAI_MODEL,
+        iteration: i,
+        inputTokens: humanizerResult.usage.inputTokens,
+        outputTokens: humanizerResult.usage.outputTokens,
+      });
+
+      // Parse humanizer output
+      let rewrittenText = humanizerResult.text;
+      let changes: any[] = [];
+      try {
+        const parsed = JSON.parse(humanizerResult.text);
+        rewrittenText = parsed.rewrittenText || humanizerResult.text;
+        changes = parsed.changes || [];
+      } catch {
+        // If not valid JSON, use raw text
+      }
+
+      // Strip banned characters from output
+      rewrittenText = stripBannedCharacters(rewrittenText);
+      currentText = rewrittenText;
+
+      // Score check
+      const score = await this.checkAiScore(currentText);
+      onStage?.('score', { score, iteration: i });
+
+      // Track best result
+      if (score < bestResult.score) {
+        bestResult = { text: currentText, score, changes };
+      }
+
+      // Exit if target reached
+      if (score < TARGET_SCORE) {
+        break;
+      }
+    }
+
+    // Build final token usage summary
+    const totalInputTokens = tokenSteps.reduce((sum, s) => sum + s.inputTokens, 0);
+    const totalOutputTokens = tokenSteps.reduce((sum, s) => sum + s.outputTokens, 0);
+
+    return {
+      rewrittenText: bestResult.text,
+      changes: bestResult.changes,
+      aiScoreIn,
+      aiScoreOut: bestResult.score,
+      tokenUsage: {
+        steps: tokenSteps,
+        totalInputTokens,
+        totalOutputTokens,
+      },
+      iterations,
+    };
   }
 
   static calculateCredits(wordCount: number): number {
