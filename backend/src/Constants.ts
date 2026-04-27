@@ -32,7 +32,11 @@ export const CreditCosts = {
   AI_SCORE_CHECK: 1,
 };
 
-export const FREE_SIGNUP_CREDITS = 30;
+// Free signup grant. Trimmed (was 30) to match the new humanize rate
+// (1 credit / 50 words, min 2). 10 credits = ~2 short humanize runs or
+// 5 minimum-cost runs — enough to evaluate the product without
+// burning a meaningful chunk of paid budget.
+export const FREE_SIGNUP_CREDITS = 10;
 
 export const JobStatus = {
   Pending: 'pending',
