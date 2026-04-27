@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
 import { ClientOnly } from '@/components/common/ClientOnly';
+import AnnouncementBanner from '@/components/layout/AnnouncementBanner';
 import { useMe } from '@/hooks/user';
 import Cookie from '@/lib/core/fetch/Cookie';
 import { useEffect } from 'react';
@@ -25,6 +26,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
         <Sidebar />
         <div className="ml-64">
           <Topbar />
+          <AnnouncementBanner />
           <main className="p-6">{children}</main>
         </div>
       </div>

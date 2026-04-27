@@ -16,6 +16,7 @@ import humanizeRouter from './humanize';
 import plagiarismRouter from './plagiarism';
 import autociteRouter from './autocite';
 import documentRouter from './document';
+import announcementRouter from './announcement';
 
 export default () => {
   const router = Router();
@@ -27,6 +28,7 @@ export default () => {
   router.use(plagiarismRouter());
   router.use(autociteRouter());
   router.use(documentRouter());
+  router.use(announcementRouter());
 
   router.post(
     '/healthcheck',

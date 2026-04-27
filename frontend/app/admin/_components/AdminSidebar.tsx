@@ -37,7 +37,7 @@ const NAV: NavItem[] = [
   { label: 'Humanize', href: '/admin/humanize', icon: SparklesIcon, group: 'Jobs', enabled: true },
   { label: 'Plagiarism', href: '/admin/plagiarism', icon: ShieldCheckIcon, group: 'Jobs', enabled: true },
   { label: 'AutoCite', href: '/admin/autocite', icon: CommandLineIcon, group: 'Jobs', enabled: true },
-  { label: 'Announcements', href: '/admin/announcements', icon: MegaphoneIcon, group: 'Content', superAdminOnly: true },
+  { label: 'Announcements', href: '/admin/announcements', icon: MegaphoneIcon, group: 'Content', superAdminOnly: true, enabled: true },
   { label: 'AI Providers', href: '/admin/ai-providers', icon: CpuChipIcon, group: 'Config', superAdminOnly: true },
 ];
 
