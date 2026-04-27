@@ -24,7 +24,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
     <ClientOnly>
       <div className="min-h-screen bg-bg-soft">
         <Sidebar />
-        <div className="ml-64">
+        <div className="ml-72">
           <Topbar />
           <AnnouncementBanner />
           <main className="p-6">{children}</main>
