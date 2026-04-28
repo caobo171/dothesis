@@ -1,0 +1,14 @@
+Promp 1
+
+I think the education system should be very important in the new era of AI, because if we do not consider it as important, children will grow up with no foundation knowledge and have no critical thinking mindset. You know, AI has hallucination, if children are not critical enough, they may be listen to the wrong thing and lead to wrong actions. Math is also important, even AI can easily solve every basic problem now, but math teaches logic, how to think appropriately, without Math, children just listen to AI without any defense
+
+
+Prompt 2
+
+I learned after working in the profession of programming for 5 years that work-life balance is a very vague term. What's balance? If you think balance is just separate time between work and personal life clearly, it's not working, because human minds is not design for that, when in personal life, you will may think alot of about works and when you works, may be you are thinking about the future trip and you will lose the both sides, the true solution is do what you love, and love what you do, and bring this mindset to almost aspect of life, so you will not feel like you're wasting your time and your energy will very full during the day
+
+
+Prompt 3
+
+Vector search is better than key work search because it's not searching only about word by word, which not contains the meaning of whole the user query and the content body, vector search is a way of encoding of unstructured data, which is text in paragraph in to a data structure that math can understand and measure the distance, which is vector, with the assumption that all the form of information can encode into a type of data with multiple dimension, so vector search will  embed the search content and search query in to vector data, which can protect the meaning of the query and the content, and then it will measure the distance between vector which mean "distance" between 2 meanings, so it's more effective that the old school way like keyword search
+

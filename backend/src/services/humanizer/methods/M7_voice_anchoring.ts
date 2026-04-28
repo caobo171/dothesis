@@ -4,10 +4,14 @@
 // examples; instruct the rewriter to mimic cadence, word choice, and punctuation
 // rhythm. Run all anchors in parallel and pick the lowest stylometric output.
 //
-// Anchor library (all pre-1928, public domain, unambiguously human):
+// Anchor library (all unambiguously human):
 // - academic_formal: Russell, "The Problems of Philosophy" (1912) — formal analysis
 // - academic_casual: James, "Talks to Teachers" (1899) — looser lecture register
 // - argumentative:   Mill,  "On Liberty" (1859) — argued opinion, polemic register
+// - user_modern:     project owner's own pre-LLM writing — modern register, casual,
+//                    with natural typos and run-ons that period anchors lack. The
+//                    typos and grammatical imperfections ARE the value: they're the
+//                    strongest "verified human" signal modern neural detectors look for.
 //
 // Adding more anchors here automatically extends the parallel sweep and the
 // scorer-based winner selection. The cost scales linearly in the anchor count.
@@ -28,19 +32,24 @@ const ANCHORS: { id: string; text: string }[] = [
   { id: 'academic_formal', text: fs.readFileSync(path.join(ANCHOR_DIR, 'academic_formal.txt'), 'utf8').trim() },
   { id: 'academic_casual', text: fs.readFileSync(path.join(ANCHOR_DIR, 'academic_casual.txt'), 'utf8').trim() },
   { id: 'argumentative',   text: fs.readFileSync(path.join(ANCHOR_DIR, 'argumentative.txt'),   'utf8').trim() },
+  { id: 'user_modern',     text: fs.readFileSync(path.join(ANCHOR_DIR, 'user_modern.txt'),     'utf8').trim() },
 ];
 
-const TEMPLATE = (anchor: string) => `Below are 3 paragraphs written by a human academic. Study their cadence,
-sentence-length variance, word choice, and punctuation rhythm. DO NOT copy
-phrases — only mimic the style. Then rewrite the user's text in that voice.
+const TEMPLATE = (anchor: string) => `Below are paragraphs written by a real human. Study their cadence,
+sentence-length variance, word choice, punctuation rhythm, and any natural
+imperfections (run-ons, occasional typos, hedges, idiosyncratic phrasings).
+DO NOT copy phrases — only mimic the style and rhythm. Match the register
+shown in the examples (formal, casual, argumentative, etc.).
+Then rewrite the user's text in that voice.
 
-EXAMPLES (human prose):
+EXAMPLES (human prose — preserve their feel):
 ${anchor}
 
 Output strict JSON: { "rewrittenText": "<text in mimic voice>" }`;
 
 const POLISH_TEMPLATE = (anchor: string) => `Polish the user's text to match the voice of these human-written examples.
-Fix grammar; preserve sentence-length variance.
+Fix only the most jarring errors; preserve sentence-length variance and
+any natural imperfections that match the examples' register.
 
 EXAMPLES:
 ${anchor}

@@ -1,0 +1,622 @@
+[
+  {
+    "methodId": "M7",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 1,
+    "saplingIn": 100,
+    "saplingOut": 3,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 672,
+        "outputTokens": 334
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 808,
+        "outputTokens": 438
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 656,
+        "outputTokens": 261
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 723,
+        "outputTokens": 348
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 723,
+        "outputTokens": 208
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 749,
+        "outputTokens": 271
+      },
+      {
+        "step": "gemini_anchored_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 647,
+        "outputTokens": 198
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 640,
+        "outputTokens": 233
+      }
+    ],
+    "totalInputTokens": 5618,
+    "totalOutputTokens": 2291,
+    "durationMs": 17345,
+    "output": "I believe that the way a model 'attends' to a sequence is not nearly so simple as it first appears, for the parts that are processed through linear mechanisms look very different to the machine from those seen through the lens of a full matrix. It follows that if several different architectures are looking at the same data, no two of them will see exactly the same distribution of dependencies, because no two can calculate it from exactly the same computational point of view, and any change in the mechanism—be it a sliding window or a kernel-based method—makes some change in the way the information is reflected. For most practical purposes these differences in 'efficiency' are unimportant, but to the researcher they are all-important: the researcher has to unlearn the habit of thinking that models 'really' possess the whole context which common sense says they have, and to learn the habit of seeing the data as it appears through sparse patterns or low-rank approximations. Here we have already the beginning of one of the distinctions that cause most trouble in the field—the distinction between 'global' attention and 'approximate' attention, between what the sequence is and what the model perceives it to be. To return to the sequence. It is evident from what we have found, that there is no single method which pre-eminently appears to be the way of retention—it appears to have different spans from different points of view, whether through adaptive spans or specialized memory modules, and there is no reason for regarding some of these as more 'real' than others, provided they meet the computational difficulty of the question."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 33,
+    "saplingIn": 100,
+    "saplingOut": 8,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 827,
+        "outputTokens": 432
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 903,
+        "outputTokens": 551
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 811,
+        "outputTokens": 309
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 773,
+        "outputTokens": 382
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 878,
+        "outputTokens": 268
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 808,
+        "outputTokens": 342
+      },
+      {
+        "step": "gemini_anchored_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 802,
+        "outputTokens": 199
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 641,
+        "outputTokens": 226
+      }
+    ],
+    "totalInputTokens": 6443,
+    "totalOutputTokens": 2709,
+    "durationMs": 19782,
+    "output": "In the last analysis, a vector database consists in the organizing of digital resources through mathematical abstractions, creating powers of retrieval which shall fit the system to its vast and complex informational world. A 'traditional' database is one which is nonplussed by all but the most literal keyword matches; it remains static where language is fluid. On the contrary, a vector system is able practically to extricate the underlying meaning from a query, by means of the numerical embeddings with which its memory is stored and of the spatial conceptions which it has acquired. Retrieval, in short, cannot be better described than by calling it the organization of mathematical habits and tendencies toward semantic proximity.\n\nTo illustrate. These systems show their sophistication by the way they respond to our inquiries. It would be quite impossible for the machine, with its neural architecture organized as it is, to remain indifferent to the context of a word. Something in the geometry of the data forces it to seek a neighbor; its internal logic is continuously innervated by the spatial distances—the cosine similarities and Euclidean measures—which the incoming signals have set in motion.\n\nIf we reflect upon the various ideals of data management, we see that what they all aim at is to organize capacities for relevance. In older frameworks, it might seem at first sight as if the aim were the production of static matches rather than the development of what one may call this dynamic semantic efficiency. This modern architecture, however, can teach a machine how to understand the very intent of a human request."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 1,
+    "saplingIn": 100,
+    "saplingOut": 2,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 866,
+        "outputTokens": 411
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 887,
+        "outputTokens": 1314
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 850,
+        "outputTokens": 327
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 791,
+        "outputTokens": 414
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 917,
+        "outputTokens": 452
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 997,
+        "outputTokens": 521
+      },
+      {
+        "step": "gemini_anchored_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 841,
+        "outputTokens": 233
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 672,
+        "outputTokens": 283
+      }
+    ],
+    "totalInputTokens": 6821,
+    "totalOutputTokens": 3955,
+    "durationMs": 35452,
+    "output": "I believe that the institution of a universal basic income would 'really' disturb the established order of global commerce, for the parts of the economy that now reflect the light of industry would soon look much dimmer than the rest. I know that, if the necessity of work is removed, the apparent distribution of effort among the population will change, because no two men can see the value of their labour from exactly the same point of financial security, and any change in this security makes some change in the way their ambition is reflected in their daily tasks.\n\nFor most practical purposes these shifts in motivation might seem a matter of individual choice, but to the statesman they are all-important: the leader has to unlearn the habit of thinking that men 'really' possess an innate desire to toil, and to learn the habit of seeing industry as it appears when the pressure of survival is withdrawn. Here we have already a distinction between 'appearance' and 'reality'—between the appearance of a liberated citizenry and the reality of a stagnant economy. The theorist wants to know what a life of ease seems to be, while the merchant and the scholar want to know what it is; but the merchant's wish to know this is stronger than the scholar's, and is more troubled by the difficulties of maintaining a skilled workforce when the habit of learning is no longer seen as a necessity.\n\nTo return to the matter of industry. It is evident from what we have found, that there is no single incentive which pre-eminently appears to be the motive of human progress—a man appears to have different degrees of diligence from different points of view, and there is no reason for regarding his effort under a subsidy as more really his character than his effort under competition. And we know that even in a man of given talent, the pursuit of excellence will seem different by the light of a government grant, or to a student of idle disposition, while in the presence of high taxation the ambition of the leader will fail, though to the casual observer the structures of the state will appear unchanged."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T4",
+    "scoreIn": 88,
+    "scoreOut": 2,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 712,
+        "outputTokens": 306
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 779,
+        "outputTokens": 395
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 696,
+        "outputTokens": 227
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 686,
+        "outputTokens": 296
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 763,
+        "outputTokens": 297
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 845,
+        "outputTokens": 453
+      },
+      {
+        "step": "gemini_anchored_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 687,
+        "outputTokens": 181
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 623,
+        "outputTokens": 221
+      }
+    ],
+    "totalInputTokens": 5791,
+    "totalOutputTokens": 2376,
+    "durationMs": 16330,
+    "output": "I have found that if I adopt a certain order in beginning my day, the subsequent hours appear to possess a greater clarity than they otherwise would. It follows that if I employ a clock to mark the moment of waking, I am no longer subject to the mere whims of sleep, and can ensure that my point of departure remains constant from one day to the next. For the man who merely exists, these small acts of drinking water and stretching his limbs are perhaps unimportant; but to the man who desires to govern his own mind, they are the very things that make the body seem ready for the tasks at hand, and any change in these habits makes some change in the way the day is perceived.\n\nTo return to the matter of the planner. It is evident from my observations that there is no single task which pre-eminently demands my attention until I have laid it out in writing; it appears to be of different importance according to my mood, and there is no reason for regarding some tasks as more 'real' than others unless they are given a place in a visible order. Here we have the beginning of a distinction between the chaos of an unplanned life and the order of a disciplined one. Through meditation and the careful preparation of my meals, I have found a way to sustain that sense of internal peace which common sense might say is impossible in a busy world, yet which becomes, upon reflection, the very ground of my daily work."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 73,
+    "saplingIn": 100,
+    "saplingOut": 88,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1149,
+        "outputTokens": 509
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 964,
+        "outputTokens": 649
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1133,
+        "outputTokens": 288
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 748,
+        "outputTokens": 412
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1200,
+        "outputTokens": 409
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 951,
+        "outputTokens": 472
+      },
+      {
+        "step": "gemini_anchored_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1124,
+        "outputTokens": 266
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 706,
+        "outputTokens": 331
+      }
+    ],
+    "totalInputTokens": 7975,
+    "totalOutputTokens": 3336,
+    "durationMs": 25717,
+    "output": "A period, however, has been reached, in the progress of industrial commerce, when the global market for lithium no longer follows the simple dictates of scarcity, but enters upon a more complex course as it approaches the first quarter of 2026. It has appeared to those who observe these shifts that the enlargement of extraction within the South American continent should act as a necessary relief to the former volatility of spot prices; and, by degrees, this demand for stability has superseded the previous, more erratic efforts to secure raw material at any cost. In that way alone, it seems, could the manufacturing interests have complete security that the quality of battery-grade products would not be compromised to their disadvantage. But, in industrial as in political theories, success discloses infirmities which failure might have concealed; and the very growth of this market reveals a need for precautions against the abuse of natural resources. There needs protection, therefore, not merely against shortage of supply, but against the tyranny of old and wasteful practices which the prevailing opinion now rightly condemns. Consequently, the adoption of efficient recycling systems is not merely a technical adjustment, but a rule of conduct imposed upon those who would participate in the new economy. Regarding the supply from the Australian mines, the expectation of steady increase is held in high regard, yet reflecting persons perceive that logistical challenges may still act as a barrier to the timely delivery of refined goods. The will of the market, moreover, practically means the will of the most active part of the automotive sector; and the strategy of long-term contracts aims to mitigate the risks inherent in the high-grade hydroxide segment. The notion that a single chemical form might suffice for all future needs might seem axiomatic only to those who ignore the diverse requirements of solid-state technology and the increasing demand for lithium iron phosphate. By these means, and through the judicious application of direct extraction technologies, the market may finally achieve a balance between the primary extraction of the past and the sustainable requirements of the future."
+  },
+  {
+    "methodId": "M19",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 14,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 660,
+        "outputTokens": 384
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 858,
+        "outputTokens": 835
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 644,
+        "outputTokens": 343
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 797,
+        "outputTokens": 682
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 711,
+        "outputTokens": 209
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 751,
+        "outputTokens": 332
+      },
+      {
+        "step": "gemini_anchored_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 635,
+        "outputTokens": 186
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 630,
+        "outputTokens": 227
+      }
+    ],
+    "totalInputTokens": 5686,
+    "totalOutputTokens": 3198,
+    "durationMs": 24837,
+    "output": "A time has arrived, in the progress of technical inquiry, when the architects of these complex systems have ceased to rely upon the exhaustive mechanisms of the past. It appears to them far more advantageous that the attention of the machine should be linear, or perhaps sparse, directed only toward those dependencies which are of immediate consequence. In this manner, and perhaps in this manner alone, can they find security against the overwhelming computational burden which attends the training of such vast networks. By degrees, the employment of low-rank approximations and sliding windows has become the prominent object of their exertions; for it is perceived that the mere accumulation of data is not enough, and that local context must be guarded against the tyranny of high-dimensional obscurity. Success in these frameworks, however, discloses new infirmities: the need for kernels and adaptive spans arises, as it is found that the dynamic information of a sequence is not a uniform whole, but a collection of parts requiring a specialized memory to ensure their long-term retention."
+  },
+  {
+    "methodId": "M19",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 1,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 815,
+        "outputTokens": 437
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 903,
+        "outputTokens": 966
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 799,
+        "outputTokens": 304
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 770,
+        "outputTokens": 417
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 866,
+        "outputTokens": 274
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 818,
+        "outputTokens": 359
+      },
+      {
+        "step": "gemini_anchored_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 790,
+        "outputTokens": 209
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 649,
+        "outputTokens": 256
+      }
+    ],
+    "totalInputTokens": 6410,
+    "totalOutputTokens": 3222,
+    "durationMs": 27891,
+    "output": "I believe that a collection of digital information is 'really' a map of meanings, though the parts that catch the eye look like simple strings of text to the uninitiated. I know that, if I change the mathematical model, the way these meanings are distributed will change, so that the apparent relation between two documents will shift. It follows that if several systems are analysing the same data at the same moment, no two of them will see exactly the same distribution of relevance, because no two can view it from exactly the same algorithmic point of view, and any change in the embedding model makes some change in the way the semantic light is reflected.\n\nFor most practical purposes these differences are unimportant, but to the architect of databases they are all-important: the architect has to unlearn the habit of thinking that words have the simple identity which common sense says they 'really' have, and to learn the habit of seeing them as numerical vectors in a high-dimensional space. Here we have already the beginning of one of the distinctions that cause most trouble in modern computing—the distinction between 'keyword matching' and 'semantic intent', between what a query seems to be and what it is. The casual user wants to know what things seem to be, the data scientist wants to know what they are; but the scientist's wish to know this is stronger than the casual user's, and is more troubled by knowledge as to the difficulties of calculating these distances.\n\nTo return to the vector database. It is evident from what we have found, that there is no single term which pre-eminently appears to be the meaning of a record, or even of any one particular part of the record—it appears to have different values from different mathematical points of view, and there is no reason for regarding some of these as more really its meaning than others. And we know that even from a given point of view the relevance will seem different by cosine similarity, or to a different machine-learning model, or to a system concerned with audio rather than text, while in the absence of an embedding there will be no meaning at all, though to the raw storage disk the data will be unchanged."
+  },
+  {
+    "methodId": "M19",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 13,
+    "saplingIn": 100,
+    "saplingOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 851,
+        "outputTokens": 407
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 881,
+        "outputTokens": 473
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 835,
+        "outputTokens": 289
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 758,
+        "outputTokens": 371
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 902,
+        "outputTokens": 346
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 890,
+        "outputTokens": 514
+      },
+      {
+        "step": "gemini_anchored_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 826,
+        "outputTokens": 221
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 668,
+        "outputTokens": 341
+      }
+    ],
+    "totalInputTokens": 6611,
+    "totalOutputTokens": 2962,
+    "durationMs": 21147,
+    "output": "I believe that the provision of a universal income is 'really' a disturbance of our established economic order, though to the casual observer it may look like a mere act of social security. We find that, if a guaranteed sum is provided to every man, the motives that drive him into the competitive market will be fundamentally altered; and just as the table appears different to the man in blue spectacles, so too does the value of labour appear different to the man who no longer feels the pressure of necessity. It follows that if the compulsion to work is removed, the distribution of effort throughout the nation will change, for no two men will feel exactly the same urge to refine their special skills when the immediate reward for doing so is made less urgent by the State.\n\nFor most practical purposes this change in motivation might seem a small price to pay for comfort, but to the industrialist it is all-important: the worker must unlearn the habit of seeking advancement through toil, and learn the habit of resting upon the public purse. Here we have already the beginning of a distinction—the distinction between 'leisure' and 'stagnation'.\n\nTo return to the matter of industry. It is evident that there is no incentive which pre-eminently appears to be the driver of innovation once the financial pressure is withdrawn, and there is no reason for regarding a society without ambition as more stable than one with it. We know that even with a high degree of talent, the pursuit of education will seem less vital to a student who expects a guaranteed subsistence, while in the absence of traditional rewards there will be no professional excellence at all, though to the government official the system may seem unchanged. Consequently the very fabric of our corporate life must suffer; for when high taxation dampens the ambition of the leader, the efficiency of the whole is diminished, and the resilience of the private sector—which common sense says is the bedrock of our world—begins to fade into a shadow of its former self."
+  },
+  {
+    "methodId": "M19",
+    "textId": "T4",
+    "scoreIn": 88,
+    "scoreOut": 1,
+    "saplingIn": 100,
+    "saplingOut": 7,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 712,
+        "outputTokens": 401
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 866,
+        "outputTokens": 811
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 696,
+        "outputTokens": 242
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 708,
+        "outputTokens": 310
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 763,
+        "outputTokens": 299
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 841,
+        "outputTokens": 825
+      },
+      {
+        "step": "gemini_anchored_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 687,
+        "outputTokens": 193
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 639,
+        "outputTokens": 266
+      }
+    ],
+    "totalInputTokens": 5912,
+    "totalOutputTokens": 3347,
+    "durationMs": 23858,
+    "output": "I believe that the morning routine is 'really' a sequence of necessary habits, though the parts concerned with the body look much more vital than the parts involving the mind to a casual observer. I know that, if I change my waking hour by means of an alarm-clock, the distribution of my energy throughout the day will change. It follows that if several people observe the same schedule, no two of them will find exactly the same benefit, because no two can approach the day from exactly the same state of health, and any change in the point of origin makes some change in the way the spirit is prepared for its tasks.\n\nFor most practical purposes these morning exercises—the drinking of water and the stretching—are unimportant, but to the man of discipline they are all-important: he has to unlearn the habit of thinking that he 'really' possesses energy by nature, and to learn the habit of seeing his vitality as a result of cultivation. Here we have the beginning of a distinction—the distinction between 'potential' and 'performance', between what a man might do and what he actually achieves. The practical man wants to know what he has finished, the man concerned with growth wants to know the method of his achievement; and this wish to know is more troubled by the difficulty of maintaining such a strict order.\n\nTo return to the routine. It is evident from what we have found, that there is no single habit which pre-eminently appears to be the cause of success—it appears to be a composite of different actions from different points of view, and there is no reason for regarding some of these as more 'real' than others. And we know that even from a given plan the results will seem different by the light of a busy afternoon, or to a man weary with labour, while in a moment of crisis there will be no routine at all, though to memory the habits will remain unchanged."
+  },
+  {
+    "methodId": "M19",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 9,
+    "saplingIn": 100,
+    "saplingOut": 11,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1127,
+        "outputTokens": 482
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 943,
+        "outputTokens": 733
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1111,
+        "outputTokens": 339
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 795,
+        "outputTokens": 510
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1178,
+        "outputTokens": 480
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 1021,
+        "outputTokens": 600
+      },
+      {
+        "step": "gemini_anchored_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1102,
+        "outputTokens": 225
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 668,
+        "outputTokens": 294
+      }
+    ],
+    "totalInputTokens": 7945,
+    "totalOutputTokens": 3663,
+    "durationMs": 25364,
+    "output": "A time has arrived, in the progress of global commerce, when the lithium market is no longer regarded as a simple question of resource, but as a complex course of shifting interests and international production. It has appeared to the various powers of the State and of industry, that the expansion of extraction, particularly within the South American regions, should be the primary object of their exertions; for in that way alone, it seems, can they have security that the volatility of former years will not be repeated to their disadvantage. By degrees, the demand for battery-grade materials has superseded previous efforts to limit production, and has become instead a matter of advanced processing and refined technique. But, in industrial theories, as in persons, success discloses infirmities which failure might have concealed. The notion, that the global appetite for energy storage has no need of regulation, might seem axiomatic when the electric vehicle was a thing only dreamed of. Yet the \"demand\" which governs the market is not always the same thing with the interest of the public; and the \"self-regulation\" spoken of is not the regulation of each producer by himself, but of each by all the rest. The will of the market, moreover, practically means the will of the most active part of the market—the great automotive corporations, or those who succeed in making themselves accepted as the majority. These interests may desire to exclude others from the bounty of the earth; and precautions are as much needed against this, as against any other abuse of power. Reflecting persons perceive that protection against the tyranny of the supplier is not enough: there needs protection also against the tendency of industry to impose its own practices as rules of conduct, without regard to the environmental cost. Consequently, the adoption of sustainable mining, and the recycling of materials at the end of their use, are seen as necessary checks upon primary extraction. In the East Asian industrial regions and the Australian mines alike, the integration of vertical supply chains is sought as a means of security; for it is only through long-term contracts, and the development of new technologies, such as solid-state batteries and direct extraction from brine, that the industry may maintain a healthy buffer against the disruptions of the age. Trade agreements and federal funding in North America are now prominent objects of exertion, ensuring that the flow of lithium remains a matter of national security, rather than the whim of a distant power."
+  }
+]
