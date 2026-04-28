@@ -17,7 +17,10 @@ export type Lang = 'en' | 'vi';
 export type RNG = () => number;
 export type PerturbationOp = (sentence: string, lang: Lang, rng: RNG) => string;
 
+// Fix (Issue 4): throw on empty array so callers get a clear error instead of returning
+// undefined silently and crashing downstream.
 function pick<T>(arr: T[], rng: RNG): T {
+  if (arr.length === 0) throw new Error('pick() called on empty array');
   return arr[Math.floor(rng() * arr.length)];
 }
 
@@ -28,7 +31,17 @@ export const synonymSwap: PerturbationOp = (sentence, lang, rng) => {
   const candidates: Array<{ word: string; alternatives: string[] }> = [];
 
   for (const word of Object.keys(dict)) {
-    if (lower.includes(word)) {
+    if (!lower.includes(word)) continue;
+    // Fix (Issue 5): pre-filter with the real regex to avoid false-positive candidates
+    // (e.g. 'significant' matching 'insignificant') that would consume an RNG call when
+    // picked but then fail to replace anything, breaking test determinism.
+    // Fix (Bug 2): \b is ASCII-based and fails for Vietnamese keys ending/starting in
+    // diacritics. For VI we drop the boundary anchor (false-positive risk is low because
+    // Vietnamese syllables are space-delimited).
+    const testRegex = lang === 'vi'
+      ? new RegExp(word, 'i')
+      : new RegExp(`\\b${word}\\b`, 'i');
+    if (testRegex.test(sentence)) {
       candidates.push({ word, alternatives: dict[word] });
     }
   }
@@ -37,8 +50,13 @@ export const synonymSwap: PerturbationOp = (sentence, lang, rng) => {
   const chosen = pick(candidates, rng);
   const replacement = pick(chosen.alternatives, rng);
 
-  // Case-insensitive replace, preserve original casing of first letter if it was capitalized
-  const regex = new RegExp(`\\b${chosen.word}\\b`, 'i');
+  // Case-insensitive replace, preserve original casing of first letter if it was capitalized.
+  // Decision: \b is ASCII-based and fails for Vietnamese keys ending/starting in
+  // diacritics. For VI we drop the boundary anchor (false-positive risk is low
+  // because Vietnamese syllables are space-delimited).
+  const regex = lang === 'vi'
+    ? new RegExp(chosen.word, 'i')
+    : new RegExp(`\\b${chosen.word}\\b`, 'i');
   return sentence.replace(regex, (match) => {
     if (match[0] === match[0].toUpperCase()) {
       return replacement[0].toUpperCase() + replacement.slice(1);
@@ -54,14 +72,18 @@ export const toggleContraction: PerturbationOp = (sentence, lang, rng) => {
   const candidates: Array<{ phrase: string; contracted: string }> = [];
 
   for (const [phrase, contracted] of Object.entries(CONTRACTIONS_EN)) {
-    if (lower.includes(phrase)) {
+    // Fix (Bug 3): dictionary keys include uppercase 'I' (e.g. 'I am', 'I have') but
+    // lower is fully lowercased, so we must also lowercase the phrase before comparing.
+    if (lower.includes(phrase.toLowerCase())) {
       candidates.push({ phrase, contracted });
     }
   }
 
   if (candidates.length === 0) return sentence;
   const chosen = pick(candidates, rng);
-  const regex = new RegExp(`\\b${chosen.phrase}\\b`, 'i');
+  // Fix (Bug 3): use lowercased phrase in the regex so it aligns with what we matched
+  // above. The 'i' flag handles the actual case-insensitive replacement.
+  const regex = new RegExp(`\\b${chosen.phrase.toLowerCase()}\\b`, 'i');
   return sentence.replace(regex, (match) => {
     if (match[0] === match[0].toUpperCase()) {
       return chosen.contracted[0].toUpperCase() + chosen.contracted.slice(1);
@@ -72,6 +94,8 @@ export const toggleContraction: PerturbationOp = (sentence, lang, rng) => {
 
 // Op 3: Human marker injection — prepend a filler phrase to the sentence
 export const injectHumanMarker: PerturbationOp = (sentence, lang, rng) => {
+  // Fix (Bug 1): guard against empty sentence to avoid crash on sentence[0].toLowerCase()
+  if (!sentence) return sentence;
   const markers = lang === 'vi' ? SENTENCE_STARTERS_VI : SENTENCE_STARTERS_EN;
   const marker = pick(markers, rng);
   // Lowercase the first letter of the original sentence since the marker ends with a comma+space
@@ -93,6 +117,10 @@ export const splitSentence: PerturbationOp = (sentence, _lang, rng) => {
   const before = sentence.slice(0, splitIdx).trim();
   const after = sentence.slice(splitIdx + 1).trim();
 
+  // Fix (Bug 1): guard against empty halves before accessing [0] — place before the
+  // word-count check so we never crash on after[0].toUpperCase() below.
+  if (!before || !after) return sentence;
+
   // Only split if both halves are at least 3 words
   if (before.split(/\s+/).length < 3 || after.split(/\s+/).length < 3) return sentence;
 
@@ -106,7 +134,10 @@ export const splitSentence: PerturbationOp = (sentence, _lang, rng) => {
 export const varyPunctuation: PerturbationOp = (sentence, _lang, rng) => {
   // Find a comma to upgrade to em dash (more dramatic)
   const commaIndices: number[] = [];
-  for (let i = 0; i < sentence.length; i++) {
+  // Fix (Issue 6): exclude the last character position — a trailing comma replaced with
+  // an em dash or semicolon is ungrammatical.
+  for (let i = 0; i < sentence.length - 1; i++) {
+    // Skip trailing commas — replacing them with em dashes/semicolons is ungrammatical
     if (sentence[i] === ',') commaIndices.push(i);
   }
   if (commaIndices.length === 0) return sentence;
@@ -123,6 +154,8 @@ export const varyPunctuation: PerturbationOp = (sentence, _lang, rng) => {
 
 // Op 6: Starter variation — prepend a conjunction starter (And, But, So, etc.)
 export const varyStarter: PerturbationOp = (sentence, lang, rng) => {
+  // Fix (Bug 1): guard against empty sentence to avoid crash on sentence[0].toLowerCase()
+  if (!sentence) return sentence;
   const starters = lang === 'vi' ? CONJUNCTION_STARTERS_VI : CONJUNCTION_STARTERS_EN;
   const starter = pick(starters, rng);
   const adjusted = sentence[0].toLowerCase() + sentence.slice(1);
