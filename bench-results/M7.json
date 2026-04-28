@@ -178,5 +178,41 @@
     "totalOutputTokens": 1911,
     "durationMs": 20402,
     "output": "I believe that the global lithium market, as it enters the first quarter of 2026, presents a complex distribution of tendencies which, to the casual observer, may seem uniform, while to the analyst they reveal great differences in the conditions of supply. It is evident from the expansion of South American facilities that the availability of raw material is changing; and just as the light upon a table shifts when the observer moves, so too spot prices appear to be stabilizing after a period of great volatility. It follows that the manufacturer must unlearn the habit of expecting sudden changes, and learn the habit of seeing the market as a steadier reality, in which advanced methods of processing are employed to refine the quality of the product in accordance with the growing demand for performance.\n\nTo return to the matter of supply. For most practical purposes, the steady increase in Australian exports is seen as a simple advantage, but to the battery manufacturer the logistical difficulties are all-important: he has to distinguish between the appearance of a refined product in a distant refinery and the reality of its arrival at his own gates. Here we have the beginning of a distinction that causes much trouble—the distinction between the 'contracted' supply and the 'actual' availability. The automotive corporation wants to know what the supply is; but its wish to know this is more troubled by knowledge of possible shortages than is the wish of the casual speculator, and therefore leads it to seek the security of long-term control over its source materials.\n\nIt is evident from what we have found that there is no single method of extraction which pre-eminently appears to be the future of the industry—the market appears to be of different characters from different points of view, whether through the lens of North American brine deposits or that of the recovery of end-of-life materials. And we know that, even from a given point of view, the value of lithium will seem different under the influence of trade agreements or new technology, while in the absence of subsidies the expected growth might seem to vanish altogether. Consequently, strategic investment in infrastructure is not merely a practical necessity, but a means of ensuring that the reality of the market conforms to our desire for long-term sustainability, regardless of the shifting points of view held by those in emerging industrial regions."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 786,
+        "outputTokens": 396
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 844,
+        "outputTokens": 465
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 770,
+        "outputTokens": 284
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 732,
+        "outputTokens": 380
+      }
+    ],
+    "totalInputTokens": 3132,
+    "totalOutputTokens": 1525,
+    "durationMs": 17295,
+    "output": "I believe that the digital record is 'really' a collection of mathematical coordinates, though to the casual observer it appears merely as a string of characters, or as a static image. We know that, if we adjust the underlying model, the numerical values representing a word will shift, so that the apparent relations between concepts will change. It follows that if several algorithms are examining the same data at the same moment, no two of them will find exactly the same meaning, because no two can represent it from exactly the same mathematical point of view, and any change in the process of embedding makes some change in the way the information is retrieved.\n\nFor most practical purposes these coordinates are unimportant, but to the retrieval engine they are all-important: the engine has to unlearn the habit of thinking that a search term is 'really' just its literal characters, and to learn the habit of seeing data as a set of spatial relations. Here we have already the beginning of a distinction that causes much trouble in modern science—the distinction between 'syntax' and 'semantics', between what a query says and what it means. The user wants to know what the data signifies, while the system wants to know where it resides in high-dimensional space; but the system's wish to know this is more precise than the user's, and is more troubled by the difficulties of calculating spatial distance.\n\nTo return to the vector. It is evident from what we have found, that there is no keyword which pre-eminently appears to be the definition of a document—it appears to be a cluster of values from different points of view, and there is no reason for regarding any one of these as more really its identity than the others. And we know that even from a given model the relevance will seem different by Euclidean measure, or by cosine similarity, while in a poorly indexed space there will be no relevance at all, though to the human reader the content will be unchanged."
   }
 ]
