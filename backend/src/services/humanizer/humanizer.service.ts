@@ -200,21 +200,72 @@ export class HumanizerService {
       outputTokens: stage3.usage.outputTokens,
     });
 
-    // --- Final score (informational only — no iteration) ---
+    // --- Final score ---
     const aiScoreOut = await this.checkAiScore(finalText);
     onStage?.('score', { score: aiScoreOut });
 
+    // --- Self-improvement loop (v7.1): iterate against Copyscape until target reached ---
+    // Decision: Now that we have a real external scorer (Copyscape's aicheck), we can
+    // iterate. Each iteration adds a perturbation pass + Gemini polish — cheap (~1 LLM
+    // call + 1 Copyscape call per iteration). Skip extra GPT cross-rewrites here to
+    // keep cost down.
+    const TARGET_SCORE = 10;
+    const MAX_EXTRA_ITERATIONS = 3;
+    let bestScore = aiScoreOut;
+    let bestText = finalText;
+    let extraIterations = 0;
+
+    while (bestScore >= TARGET_SCORE && extraIterations < MAX_EXTRA_ITERATIONS) {
+      extraIterations++;
+      console.log('[Humanizer v7] Iter %d: score %d >= target %d, refining...', extraIterations, bestScore, TARGET_SCORE);
+      onStage?.('stage', { stage: 'iterating', iteration: extraIterations });
+
+      // Perturb the current best text again
+      const perturbedIter = PerturbationEngine.perturb(bestText, strength);
+
+      // Polish to clean up any awkwardness
+      const polishIter = await GeminiService.chat(buildPolishPrompt(), perturbedIter, {
+        temperature: 0.3,
+        maxTokens: 4096,
+        jsonMode: true,
+      });
+      let { rewrittenText: iterText } = parseRewriteJson(polishIter.text);
+      iterText = stripBannedCharacters(iterText);
+      tokenSteps.push({
+        step: 'gemini_polish',
+        model: GEMINI_MODEL,
+        iteration: extraIterations,
+        inputTokens: polishIter.usage.inputTokens,
+        outputTokens: polishIter.usage.outputTokens,
+      });
+
+      // Score
+      const iterScore = await this.checkAiScore(iterText);
+      console.log('[Humanizer v7] Iter %d done | score: %d', extraIterations, iterScore);
+      onStage?.('score', { score: iterScore, iteration: extraIterations });
+
+      // Track best result
+      if (iterScore < bestScore) {
+        bestScore = iterScore;
+        bestText = iterText;
+      }
+    }
+
+    // Use the best result we got across all iterations
+    const finalScore = bestScore;
+    const finalOutput = bestText;
+
     const totalInputTokens = tokenSteps.reduce((sum, s) => sum + s.inputTokens, 0);
     const totalOutputTokens = tokenSteps.reduce((sum, s) => sum + s.outputTokens, 0);
-    console.log('[Humanizer v7] Pipeline complete | score: %d → %d | tokens: in=%d out=%d', aiScoreIn, aiScoreOut, totalInputTokens, totalOutputTokens);
+    console.log('[Humanizer v7] Pipeline complete | score: %d → %d | tokens: in=%d out=%d', aiScoreIn, finalScore, totalInputTokens, totalOutputTokens);
 
     return {
-      rewrittenText: finalText,
+      rewrittenText: finalOutput,
       changes: stage1Changes,
       aiScoreIn,
-      aiScoreOut,
+      aiScoreOut: finalScore,
       tokenUsage: { steps: tokenSteps, totalInputTokens, totalOutputTokens },
-      iterations: 1,
+      iterations: 1 + extraIterations,
     };
   }
 

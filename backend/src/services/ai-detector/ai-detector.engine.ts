@@ -19,6 +19,7 @@
  *   AI_DETECTOR_PROVIDER=statistical   (default, free, no API key needed)
  *   AI_DETECTOR_PROVIDER=gptzero       (requires GPTZERO_API_KEY)
  *   AI_DETECTOR_PROVIDER=winston       (requires WINSTON_API_KEY)
+ *   AI_DETECTOR_PROVIDER=copyscape     (requires COPYSCAPE_USERNAME and COPYSCAPE_API_KEY)
  *
  * === Adding a New Provider ===
  *
@@ -31,11 +32,13 @@ import { AIDetectionProvider, AIDetectionResult } from './types';
 import { StatisticalDetectionProvider } from './providers/statistical.provider';
 import { GPTZeroProvider } from './providers/gptzero.provider';
 import { WinstonProvider } from './providers/winston.provider';
+import { CopyscapeProvider } from './providers/copyscape.provider';
 
 const PROVIDERS: Record<string, () => AIDetectionProvider> = {
   statistical: () => new StatisticalDetectionProvider(),
   gptzero: () => new GPTZeroProvider(),
   winston: () => new WinstonProvider(),
+  copyscape: () => new CopyscapeProvider(),
 };
 
 export class AIDetectorEngine {
