@@ -27,6 +27,7 @@ export function listMethods(): HumanizerMethod[] {
 
 // Side-effect imports register the methods. Add new methods here as they land.
 import './M0_v7_baseline';
+import './M8_combo';
 // M1-M8 imports are added in their respective worktrees.
 
 export type { HumanizerMethod, MethodOptions, MethodResult, BenchRecord, MethodTokenStep } from './types';
