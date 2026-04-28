@@ -1,0 +1,242 @@
+[
+  {
+    "methodId": "M0",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 98,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 784
+      },
+      {
+        "step": "gpt_cross_rewrite",
+        "model": "gpt-5.5",
+        "inputTokens": 688,
+        "outputTokens": 330
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 526,
+        "outputTokens": 191
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 527,
+        "outputTokens": 192
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 527,
+        "outputTokens": 192
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 526,
+        "outputTokens": 191
+      }
+    ],
+    "totalInputTokens": 3541,
+    "totalOutputTokens": 1880,
+    "durationMs": 55122,
+    "output": "The evidence is plain: linear attention mechanisms have materially changed how long data sequences are handled. It’s uncommon to get efficiency improvements this large without paying for them through a major drop in fidelity. To preserve important dependencies inside these sprawling neural networks, researchers now turn to sparse attention patterns—it’s a surgical approach to connectivity. The real cut in computational overhead during those grueling training phases comes from low-rank approximations. With sliding window techniques, newer models can hold onto local context even in high-dimensional feature spaces. Scalability across massive language tasks has been strengthened by kernel-based methods; these support a throughput that once seemed out of reach. Never have I seen temporal scales managed with more flexibility than in adaptive attention spans. Finally, specialized memory modules make long-term retention of sequential data less of a pipe dream and more of a standard feature in modern architecture."
+  },
+  {
+    "methodId": "M0",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 98,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 902,
+        "outputTokens": 1221
+      },
+      {
+        "step": "gpt_cross_rewrite",
+        "model": "gpt-5.5",
+        "inputTokens": 824,
+        "outputTokens": 438
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 654,
+        "outputTokens": 321
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 665,
+        "outputTokens": 153
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 662,
+        "outputTokens": 153
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 661,
+        "outputTokens": 148
+      }
+    ],
+    "totalInputTokens": 4368,
+    "totalOutputTokens": 2434,
+    "durationMs": 110891,
+    "output": "At the core of contemporary information retrieval, vector databases are changing how digital complexity gets managed by turning it into mathematical form. What the evidence makes clear is that sophisticated machine learning models can convert raw—unruly text into numerical vectors—embeddings that preserve semantic subtleties older systems tend to miss outright. Rarely do we get such a sharp departure from earlier practice; legacy databases remain stuck in the brittle logic of keyword matching. These systems give priority to the meaning actually pulsating beneath a query. The search operation itself is almost a lesson in spatial geometry. It depends on measuring the exact separation between points in a high-dimensional void, where measures such as cosine similarity or Euclidean distance serve as the compass. To manage the scale of present-day datasets, engineers build specialized indexing structures with surgical precision—making sure the closest data points appear in milliseconds. This pairing of user intent with the nearest neighbor is what turns a plain search into a genuinely semantic experience. Look, having watched these systems in the lab, I can say the marriage with deep learning is genuinely revolutionary—it lets the database swallow unstructured material like audio recordings and grainy images just as readily as ordinary text. The data is unambiguous: the steady improvement of embedding models isn't a minor gain; it's a major jump in accuracy that powers everything from recommendation engines on your phone to advanced natural language processing. So the era of manual categorization is disappearing. Truthfully—these systems mark a seismic shift in automated analysis, giving the next generation of intelligent applications a scalable backbone."
+  },
+  {
+    "methodId": "M0",
+    "textId": "T3",
+    "scoreIn": 94,
+    "scoreOut": 88,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 941,
+        "outputTokens": 1744
+      },
+      {
+        "step": "gpt_cross_rewrite",
+        "model": "gpt-5.5",
+        "inputTokens": 912,
+        "outputTokens": 719
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 757,
+        "outputTokens": 152
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 480,
+        "outputTokens": 136
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 474,
+        "outputTokens": 139
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 475,
+        "outputTokens": 140
+      }
+    ],
+    "totalInputTokens": 4039,
+    "totalOutputTokens": 3030,
+    "durationMs": 102837,
+    "output": "And what the evidence really points to is a basic fracture in the global economic order we have long assumed, once universal basic income is introduced. Rarely does a policy appear with this much capacity to slow the competitive labor market; people — in plain terms — lose the urgency that pushes them toward conventional work. Not once in the dataset is there support for the idea that unconditional cash builds grit. Granted, so to be fair. What appears instead is a broad leaching of civic drive. Gone are the days when a worker felt the raw need to refine specialized skills for financial survival—the pressure has vanished."
+  },
+  {
+    "methodId": "M0",
+    "textId": "T4",
+    "scoreIn": 90,
+    "scoreOut": 98,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 787,
+        "outputTokens": 1056
+      },
+      {
+        "step": "gpt_cross_rewrite",
+        "model": "gpt-5.5",
+        "inputTokens": 730,
+        "outputTokens": 352
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 562,
+        "outputTokens": 151
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 496,
+        "outputTokens": 152
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 499,
+        "outputTokens": 153
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 499,
+        "outputTokens": 150
+      }
+    ],
+    "totalInputTokens": 3573,
+    "totalOutputTokens": 2014,
+    "durationMs": 109612,
+    "output": "{\n  \"rewrittenText\": \"The evidence is plain: a deliberate morning isn't merely a personal taste — it's a bodily requirement. The era of irregular sleep vanished; I set a digital alarm so the waking hour wouldn't drift. What the research actually indicates is that targeted hydration protocols—drinking 500ml right after waking—support physical wellness much better than occasional mouthfuls. We almost never place joint health inside a productivity discussion; I added gentle stretching to keep the system oiled anyway. Not once in my own notes did a disorderly beginning produce clarity; instead, I cultivated a settled mental state to refine cognitive firing. Buried in the habits of high-performers. The planner holds command; I used one"
+  },
+  {
+    "methodId": "M0",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 14,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1224,
+        "outputTokens": 1714
+      },
+      {
+        "step": "gpt_cross_rewrite",
+        "model": "gpt-5.5",
+        "inputTokens": 1039,
+        "outputTokens": 992
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 891,
+        "outputTokens": 154
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 500,
+        "outputTokens": 151
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 467,
+        "outputTokens": 123
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 462,
+        "outputTokens": 127
+      }
+    ],
+    "totalInputTokens": 4583,
+    "totalOutputTokens": 3261,
+    "durationMs": 117859,
+    "output": "Frankly … In reality, what the figures actually point to is a global lithium market moving into the first quarter of fiscal year 2026 with force that is both tangled and hard to dispute. Plus, rarely do we witness a supply-chain reshuffling of this scale across the world's main production centers. Actually, deep in the heart of South America — enlarged extraction sites—think salt flats buzzing with new equipment—are at last sending enough raw material into circulation to tame the violent price moves of earlier years."
+  }
+]

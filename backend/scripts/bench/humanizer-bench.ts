@@ -16,6 +16,9 @@
 //   - When --copyscape true, calls AIDetectorEngine.detect on input and output.
 //   - Appends one BenchRecord per (method, text) to the output JSON file.
 
+// Load .env BEFORE any service module is imported — openai.service.ts
+// instantiates `new OpenAI()` at import time and reads OPENAI_API_KEY then.
+import 'dotenv/config';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getMethod } from '../../src/services/humanizer/methods';
