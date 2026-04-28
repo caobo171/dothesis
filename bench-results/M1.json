@@ -1,0 +1,32 @@
+[
+  {
+    "methodId": "M1",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 94,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 897
+      },
+      {
+        "step": "gpt_cross_rewrite",
+        "model": "gpt-5.5",
+        "inputTokens": 715,
+        "outputTokens": 750
+      },
+      {
+        "step": "critic_1",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 440,
+        "outputTokens": 94
+      }
+    ],
+    "totalInputTokens": 1902,
+    "totalOutputTokens": 1741,
+    "durationMs": 34738,
+    "output": "What the evidence really says is that the quadratic bottleneck is at last giving way; today's researchers are racing toward linear attention mechanisms so extensive sequences don't crush the system under their sheer weight. Rarely do new papers still lean on dense — exhaustive matrices; newer architectures tend to choose sparse attention patterns, picking out the critical dependencies that actually matter inside a network. It was low-rank approximation that, in the end, trimmed our training overhead; we are now watching high-end frameworks cut costs without surrendering precision. To seize local context without getting swallowed by high-dimensional feature space, newer models are turning to sliding window techniques. Gone are the days of rigid scaling—kernel-based methods are now making possible the kind of reach across large-scale tasks we could only dream about two years ago. Plus, not once in the recent literature have I seen a fixed span beat the new adaptive attention spans that follow dynamic information across temporal scales. Finally, we have the specialized memory modules—those quiet workhorses in contemporary systems that make sure we don't lose the thread of sequential data after the first thousand tokens."
+  }
+]
