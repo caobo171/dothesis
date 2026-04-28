@@ -31,27 +31,36 @@ const ANCHOR_DIR = path.resolve(__dirname, '../../../../scripts/bench/anchors');
 // only these descriptions, not the anchor text — keeps the router prompt
 // short and the picker's choice explicit. Adding a new anchor: drop a .txt,
 // add an entry here.
+// Each anchor advertises: WHEN to pick it (positive examples) and WHEN NOT
+// to pick it (negative examples). The router got confused before because
+// generic descriptions made multiple anchors look plausible. Tight rubrics
+// let the router's classification be deterministic.
 type AnchorDef = { id: string; desc: string; text: string };
 const ANCHORS: AnchorDef[] = [
   {
     id: 'academic_formal',
-    desc: 'formal philosophical analysis, expository, abstract reasoning, third-person',
+    desc: 'PICK FOR: abstract analytical / expository writing on technical, philosophical, or scientific topics (transformer attention, vector search, market analysis, philosophy). Third-person, formal vocabulary. NOT FOR: personal stories, opinion essays, casual blogs.',
     text: fs.readFileSync(path.join(ANCHOR_DIR, 'academic_formal.txt'), 'utf8').trim(),
   },
   {
     id: 'academic_casual',
-    desc: 'academic-lecture register, slightly conversational, addresses a reader directly',
+    desc: 'PICK FOR: educational / explanatory writing addressed to a reader, lecture register, mid-formality. NOT FOR: pure abstract analysis (use academic_formal) or personal narrative (use user_narrative).',
     text: fs.readFileSync(path.join(ANCHOR_DIR, 'academic_casual.txt'), 'utf8').trim(),
   },
   {
     id: 'argumentative',
-    desc: 'opinion / polemic, takes a clear stance, argues a position, period prose',
+    desc: 'PICK FOR: input that argues a contested position (e.g. "why X is wrong", "we should do Y", policy debates, opinion pieces). The input takes a side. NOT FOR: neutral exposition.',
     text: fs.readFileSync(path.join(ANCHOR_DIR, 'argumentative.txt'), 'utf8').trim(),
   },
   {
     id: 'user_modern',
-    desc: 'modern casual writing, first-person, run-on sentences, natural typos, contemporary topics (AI, programming, work-life)',
+    desc: 'PICK FOR: modern OPINION / REFLECTION about contemporary tech / work / productivity / education ("I think X is overrated", "what I learned about Y"). Generalizing claims, no specific incidents. NOT FOR: pure narrative with specific moments (use user_narrative).',
     text: fs.readFileSync(path.join(ANCHOR_DIR, 'user_modern.txt'), 'utf8').trim(),
+  },
+  {
+    id: 'user_narrative',
+    desc: 'PICK FOR: first-person STORY or EXPERIENCE — describing a specific moment, place, sensory detail, or event ("my experience doing X", "when I tried Y", "starting a morning routine", travel posts, blog posts about something the writer did). Contains concrete specifics. ALWAYS pick this over user_modern when the input is experiential or describes habits/routines/personal moments.',
+    text: fs.readFileSync(path.join(ANCHOR_DIR, 'user_narrative.txt'), 'utf8').trim(),
   },
 ];
 

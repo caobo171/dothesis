@@ -12,3 +12,9 @@ Prompt 3
 
 Vector search is better than key work search because it's not searching only about word by word, which not contains the meaning of whole the user query and the content body, vector search is a way of encoding of unstructured data, which is text in paragraph in to a data structure that math can understand and measure the distance, which is vector, with the assumption that all the form of information can encode into a type of data with multiple dimension, so vector search will  embed the search content and search query in to vector data, which can protect the meaning of the query and the content, and then it will measure the distance between vector which mean "distance" between 2 meanings, so it's more effective that the old school way like keyword search
 
+
+Prompt 4
+
+
+
+I love UK, in the first time I went to the UK, and look at the sky, it was very blue, take the deep breath, the air is so fresh, and some smell of pizza immediately go through my nose, it's very signature smell in UK streets. UK in the sunny day is very colorful, because it's not polluted the grass, the garden, the mountain, the casstle, everythin has its own color separate with each other, they come together make it a colorful picture, walk in UK street, somettimes you will smell some weeds, and it's normal, I like that smells, it make those street as street, people in street is very calmful and enjoyful except in London, many old people cheerings the beer at 4 pm and it's great

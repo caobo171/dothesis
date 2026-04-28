@@ -1,0 +1,162 @@
+[
+  {
+    "methodId": "M21",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 4,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 378,
+        "outputTokens": 45
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 645,
+        "outputTokens": 319
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 796,
+        "outputTokens": 607
+      }
+    ],
+    "totalInputTokens": 1819,
+    "totalOutputTokens": 971,
+    "durationMs": 24888,
+    "output": "I believe that the modern researcher, in their effort to manage vast sequences of data, employs what are called 'linear attention mechanisms', so that the burden of computation is much lighter than it would otherwise be. It follows that if several different architectures are applied to the same sequence, no two of them will see exactly the same distribution of importance, because no two can view the data through the same 'sparse' or 'low-rank' lens, and any change in the framework makes some change in the way the dependencies are reflected. For most practical purposes these differences in technique—sliding windows or kernel methods—are merely tools for efficiency, but to the theorist they are all-important: the theorist has to unlearn the habit of thinking that the data have the fixed 'meaning' which common sense says they 'really' have, and to learn the habit of seeing them as they appear through various approximations. To return to the attention span. It is evident from what we have found, that there is no single span which pre-eminently appears to be the true context of the information—it appears to be of different scales from different points of view, and there is no reason for regarding some of these as more 'really' its context than others. We know that even from a given point of view the data will seem different with artificial memory modules, or through the 'blue spectacles' of an adaptive span, while in the absence of such structures there will be no processing at all, though as raw input the data remain unchanged."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": null,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 533,
+        "outputTokens": 49
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 800,
+        "outputTokens": 424
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 886,
+        "outputTokens": 680
+      }
+    ],
+    "totalInputTokens": 2219,
+    "totalOutputTokens": 1153,
+    "durationMs": 23536,
+    "output": "I believe that a piece of information is 'really' a collection of words or characters, yet the parts that are taken up by a mathematical model look much more complex than the simple surface of the text. I know that, if I change the embedding model, the way the numbers are distributed will be different, so that the apparent relation between two items will change. It follows that if several different algorithms are looking at the same data at the same moment, no two of them will see exactly the same vector, because no two can interpret it from exactly the same mathematical point of view, and any change in the model makes some change in the way the meaning is reflected.\n\nFor most simple searches these differences are unimportant, but to the system designer they are all-important: the designer has to unlearn the habit of thinking that information 'really' is the keyword which common sense says it is, and to learn the habit of seeing data as it appears in high-dimensional space. Here we have already the beginning of one of the distinctions that cause most trouble in modern computing—the distinction between 'syntax' and 'semantics', between what data says and what it represents. The simple user wants to know what the words are, the architect and the scientist want to know what they signify; but the scientist's wish to know this is stronger than the user's, and is more troubled by the difficulties of measuring the distance between points.\n\nTo return to the vector. It is evident from what we have found, that there is no single position which pre-eminently appears to be the location of the data—it appears to be at different distances from different points of view, and there is no reason for regarding some of these metrics as more really its position than others. And we know that even from a given point of view the similarity will seem different under a different metric, or to a machine with different indexing, while without the model there will be no meaning at all, though to the raw storage the information will be unchanged."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T3",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": null,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 569,
+        "outputTokens": 51
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 836,
+        "outputTokens": 416
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 887,
+        "outputTokens": 933
+      }
+    ],
+    "totalInputTokens": 2292,
+    "totalOutputTokens": 1400,
+    "durationMs": 29946,
+    "output": "I believe that the provision of a universal income is 'really' a disruption of the familiar economic order, for the work that sustains our markets appears quite different when the necessity of wages is removed. I know that, if the state provides, the desire to labour will be different, so that the apparent motivation of the common man will change. It follows that if several observers look at industry from this point of view, no two of them will see exactly the same prospect of stability, because any change in the motive for work makes some change in the way wealth is produced.\n\nFor most practical purposes these shifts in effort are seen as a loss, but to the economist they are all-important: the worker has to unlearn the habit of thinking that he must toil because necessity says he 'must', and to learn the habit of receiving independently of his output. Here we have already the beginning of one of the distinctions that cause most trouble—the distinction between 'incentive' and 'subsidy', between what a man is driven to do and what he chooses to do when the drive is gone. The corporation wants to know how to recruit, the citizen wants to know how to live; but the citizen's wish to receive is stronger than the corporation's ability to pay, and is more troubled by the difficulties of finding someone willing to work.\n\nTo return to the economy. It is evident from what we have found, that there is no ambition which pre-eminently appears to be the motive of the student, or even of any one particular part of the workforce—it appears to be of different strengths from different levels of security, and there is no reason for regarding some of these as more really his nature than others. And we know that even from a given point of view industry will seem different under heavy taxation, or to a small merchant, or to a man seeking to innovate, while under total reliance there will be no innovation at all, though to the observer the state will be unchanged."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T4",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 3,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 430,
+        "outputTokens": 26
+      },
+      {
+        "step": "gemini_rewrite_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 672,
+        "outputTokens": 156
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 598,
+        "outputTokens": 255
+      }
+    ],
+    "totalInputTokens": 1700,
+    "totalOutputTokens": 437,
+    "durationMs": 21136,
+    "output": "I think having a morning routine is very important for productivity, because if we don't have a structure, we will lose focus and have no energy for the day. I use a digital alarm to wake up consistently, and also drink water which helps the physical wellness, and do stretching for the flexibility of joints. You know, when the body is relaxed, the mind is also more calm and lead to better work. I use a planner to organize my tasks because it's more efficient, and also do meditation for the peace inside, and meal prep to have energy for the whole afternoon. I saw that these habits help my daily output a lot, so I will continue this framework to reach my growth potential."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T5",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 6,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 845,
+        "outputTokens": 55
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1112,
+        "outputTokens": 458
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 926,
+        "outputTokens": 640
+      }
+    ],
+    "totalInputTokens": 2883,
+    "totalOutputTokens": 1153,
+    "durationMs": 25726,
+    "output": "I believe that the lithium market is 'really' following a single trajectory, though the parts that reflect the light of South American extraction look much brighter than the parts shadowed by regulatory burden. I know that, if the point of view changes, the apparent distribution of supply will change; and so it follows that if several analysts look at the market at the same moment, no two will see exactly the same balance, because no two can see it from the same economic vantage, and any change in the vantage makes some change in the way the market is reflected.\n\nFor most practical purposes these differences are unimportant, but to the manufacturer they are all-important: he has to unlearn the habit of thinking that materials have the value which common sense says they 'really' have, and to learn the habit of seeing them as they appear through the lens of subsidies and shifting processing techniques. Here we have already the beginning of one of the distinctions that cause most trouble in industry—the distinction between 'supply' and 'availability', between what the market seems to be and what it is. The practical man wants to know what things seem to be, but the strategist wants to know what they are; yet the strategist's wish to know this is more troubled by knowledge as to the difficulties of answering the question.\n\nTo return to the supply. It is evident from what we have found, that there is no price which pre-eminently appears to be the 'real' price of lithium—it appears to be of different values from different points of contract, and there is no reason for regarding some of these as more truly its value than others. And we know that even from a given point of view, the supply will seem different by the light of solid-state innovation, or to a man wearing the spectacles of national energy security, while in a period of total disruption there will be no market at all, though to the earth and the saline brine the deposits will be unchanged. This circular model of recovery will help to reduce our reliance on primary extraction, but whether the resulting 'stability' is a permanent reality or a fleeting appearance remains a question which the practical man ignores, but which the observer finds most difficult."
+  }
+]
