@@ -30,7 +30,7 @@ function stripBannedCharacters(text: string): string {
 type TokenStep = {
   step: 'gemini_rewrite' | 'gpt_cross_rewrite' | 'gemini_polish';
   model: string;
-  iteration: number; // Always 1 in v7 — HumanizeJob model requires this field (Task 11 will update the model)
+  iteration: number;  // 1 for base pipeline; 2-4 for extra iterations from the self-improvement loop
   inputTokens: number;
   outputTokens: number;
 };
@@ -47,7 +47,7 @@ type PipelineResult = {
   aiScoreIn: number;
   aiScoreOut: number;
   tokenUsage: TokenUsage;
-  iterations: number; // Always 1 in v7 — kept for backward compat with HumanizeJob model
+  iterations: number; // 1 for the base pipeline + N extra iterations from the self-improvement loop (1-4 total)
 };
 
 function parseRewriteJson(raw: string): { rewrittenText: string; changes: any[] } {
@@ -234,7 +234,7 @@ export class HumanizerService {
       tokenSteps.push({
         step: 'gemini_polish',
         model: GEMINI_MODEL,
-        iteration: extraIterations,
+        iteration: 1 + extraIterations,
         inputTokens: polishIter.usage.inputTokens,
         outputTokens: polishIter.usage.outputTokens,
       });
