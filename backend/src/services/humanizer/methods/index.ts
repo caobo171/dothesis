@@ -40,5 +40,17 @@ import './M5_n_best';
 import './M6_sentence_surgical';
 import './M7_voice_anchoring';
 import './M8_combo';
+// v9 candidates — second wave after Sapling/GPTZero exposed v8's overfit
+// to Copyscape. Mix of new mechanisms (back-translation, real adversarial
+// loop) and post-processors (anti-AI-vocab, disfluency).
+import './M9_real_adversarial';
+import './M11_back_translation';
+import './M12_disfluency';
+import './M15_anchor_then_backtrans';
+import './M16_first_person';
+import './M17_anti_ai_vocab';
+import './M18_anchor_mixing';
+import './M19_strip_then_anchor';
+import './M20_anchor_then_adversarial';
 
 export type { HumanizerMethod, MethodOptions, MethodResult, BenchRecord, MethodTokenStep } from './types';

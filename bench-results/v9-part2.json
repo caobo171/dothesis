@@ -1,0 +1,1856 @@
+[
+  {
+    "methodId": "M9",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 99,
+    "saplingIn": 100,
+    "saplingOut": 3,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 151
+      },
+      {
+        "step": "sapling_score_1",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_1",
+        "model": "gpt-5.5",
+        "inputTokens": 290,
+        "outputTokens": 232
+      },
+      {
+        "step": "sapling_score_2",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_2",
+        "model": "gpt-5.5",
+        "inputTokens": 320,
+        "outputTokens": 217
+      },
+      {
+        "step": "sapling_score_3",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      }
+    ],
+    "totalInputTokens": 1357,
+    "totalOutputTokens": 600,
+    "durationMs": 39212,
+    "output": "In much of today's research, linear attention serves as the quiet shortcut that keeps enormous sequences from grinding the machinery to a halt. Sparse attention, by contrast, lets newer architectures pick out the crucial ties buried in the neural thicket. When training gets expensive—and it usually does—advanced systems often shave down the cost with low-rank approximations, a trade-off I'd call surprisingly tidy. Some models don't look far at all. Using sliding windows, they cling to nearby context while moving through broad, high-dimensional feature spaces. Kernel-based techniques have helped stretch large-language workloads to a more practical scale, and adaptive attention spans give recent models a way to follow signals that change over short, medium, and longer rhythms. For especially long inputs, dedicated memory modules supply the extra shelf space, so contemporary systems retain information more reliably as the sequence drags on."
+  },
+  {
+    "methodId": "M9",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 97,
+    "saplingIn": 100,
+    "saplingOut": 92,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 902,
+        "outputTokens": 1612
+      },
+      {
+        "step": "sapling_score_1",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_1",
+        "model": "gpt-5.5",
+        "inputTokens": 448,
+        "outputTokens": 358
+      },
+      {
+        "step": "sapling_score_2",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_2",
+        "model": "gpt-5.5",
+        "inputTokens": 469,
+        "outputTokens": 381
+      },
+      {
+        "step": "sapling_score_3",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_3",
+        "model": "gpt-5.5",
+        "inputTokens": 497,
+        "outputTokens": 405
+      },
+      {
+        "step": "sapling_score_4",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_4",
+        "model": "gpt-5.5",
+        "inputTokens": 506,
+        "outputTokens": 465
+      }
+    ],
+    "totalInputTokens": 2822,
+    "totalOutputTokens": 3221,
+    "durationMs": 67971,
+    "output": "Rather than filing knowledge away as neat little rows of searchable tokens, a vector database takes the unruly stuff of the digital world and plots it as coordinates a machine can weigh against one another. Feed in raw prose, an image, audio, or some other loose artifact, and a machine-learning model distills it into a string of numbers—an embedding—that still carries the gist, the setting, and the faint ties between concepts. Old-school databases often go looking for the exact words someone typed. Vector search is nosier and more useful: what's the person actually trying to find? From there, closeness does the sorting. In a many-dimensional space, items clustered near each other are treated as related in meaning, while cosine similarity, Euclidean distance, and similar metrics handle the math under the hood. Because checking every point would crawl once the data pile gets enormous, these systems lean on specialized indexes that cut down the search area fast and return likely neighbors without rummaging through the whole warehouse. What you end up with is semantic retrieval: intent gets matched to helpful material, not merely to shared vocabulary. Answers improve because the database is effectively comparing ideas. And as deep-learning models keep improving, the same machinery becomes better at coping with odd phrasing, language habits, and messy unstructured formats. My shorthand: stronger embeddings make retrieval sharper. That’s why vector databases sit behind recommendation engines, NLP pipelines, AI assistants, and plenty of other tools that have to make sense of today's swelling data streams. They’re not just another place to stash information; they’re becoming a working base for more flexible analysis, automation, and software that behaves a bit more intelligently."
+  },
+  {
+    "methodId": "M9",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 92,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 941,
+        "outputTokens": 1645
+      },
+      {
+        "step": "sapling_score_1",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_1",
+        "model": "gpt-5.5",
+        "inputTokens": 587,
+        "outputTokens": 536
+      },
+      {
+        "step": "sapling_score_2",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_2",
+        "model": "gpt-5.5",
+        "inputTokens": 632,
+        "outputTokens": 537
+      },
+      {
+        "step": "sapling_score_3",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_3",
+        "model": "gpt-5.5",
+        "inputTokens": 633,
+        "outputTokens": 550
+      },
+      {
+        "step": "sapling_score_4",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_4",
+        "model": "gpt-5.5",
+        "inputTokens": 662,
+        "outputTokens": 559
+      }
+    ],
+    "totalInputTokens": 3455,
+    "totalOutputTokens": 3827,
+    "durationMs": 121746,
+    "output": "What the data actually shows is that a universal basic income wouldn't just nudge the economy; it would fundamentally shatter the established global framework we’ve spent centuries building. Not once in the dataset do we see evidence that people maintain their drive for the competitive grind when the pressure is off—instead, the labor market loses its edge as individuals retreat. Gone are the days of the specialized artisan laboring for a paycheck; the provision of unconditional funds saps that primal societal motivation. I've looked at the behavioral shifts—skilled technicians, the ones who keep our infrastructure humming, might simply stop seeing the point of financial gain. Many citizens would inevitably leverage these payments to sidestep demanding professional duties. Consequently, we’d see a nosedive in national industrial output that would leave our factories silent. Rarely do we see students burning the midnight oil (their screens glowing at 2 AM) when a guaranteed check awaits them regardless of their GPA. It is the lack of financial pressure that threatens our advanced educational goals—without that inherent struggle, the future workforce becomes a hollow shell of its potential. What really keeps me up is the corporate fallout. Recruiting dedicated personnel becomes a nightmare when traditional incentives evaporate; how do you manage a complex organizational structure—like a global logistics firm—when the staff is half-checked out? Small businesses, meanwhile, find themselves competing not against rivals, but against government-funded leisure. Stagnation of innovation across critical sectors would be the inevitable result. To fund this massive experiment, the fiscal burden would force corporate taxation through the roof—a move that effectively strangles new commercial enterprises in the cradle. It’s the redistribution of wealth that worries me most, as it systematically dampens the fire of high-performing leaders. Why chase an executive promotion—with all the 80-hour weeks and stress—when you can just cut your hours? This erosion of leadership quality is exactly what breaks global supply chains. By fostering a reliance on government subsidies, we weaken the very resilience of the private sector. Service quality would plummet; meanwhile, labor participation rates would continue their annual slide into the abyss."
+  },
+  {
+    "methodId": "M9",
+    "textId": "T4",
+    "scoreIn": 87,
+    "scoreOut": 87,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 787,
+        "outputTokens": 1109
+      },
+      {
+        "step": "sapling_score_1",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_1",
+        "model": "gpt-5.5",
+        "inputTokens": 403,
+        "outputTokens": 348
+      },
+      {
+        "step": "sapling_score_2",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_2",
+        "model": "gpt-5.5",
+        "inputTokens": 464,
+        "outputTokens": 378
+      },
+      {
+        "step": "sapling_score_3",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_3",
+        "model": "gpt-5.5",
+        "inputTokens": 479,
+        "outputTokens": 437
+      },
+      {
+        "step": "sapling_score_4",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_4",
+        "model": "gpt-5.5",
+        "inputTokens": 511,
+        "outputTokens": 542
+      }
+    ],
+    "totalInputTokens": 2644,
+    "totalOutputTokens": 2814,
+    "durationMs": 85084,
+    "output": "What the data actually shows is that morning routines aren't just lifestyle fluff; I have restructured my entire dawn process to drive cognitive output to its logical peak. Rarely do we see such immediate stability as I did when I swapped my phone for a dedicated digital clock—the consistency in my circadian rhythm was palpable. Hydration wasn't an afterthought, either. I precisely timed my intake to hit metabolic targets, drinking exactly 500ml before the sun was fully up. My joints, previously stiff from hours of lab work, found new life through a regimen of targeted stretching. It was this physiological baseline that allowed a profound mental clarity to take hold. Deep in the pages of my planner—a physical artifact of my professional life—I carved out my primary objectives for the day. Not once in the dataset of my previous attempts did I find the peace that these silent meditation sessions finally provided. Meal prep became my fuel strategy; I engineered lunches to prevent that dreaded 3 PM blood sugar crash. The results are unambiguous. My daily output hasn't just increased—it's undergone a phase shift. Gone are the days of haphazard mornings. I am keeping this framework because my growth trajectory depends on it."
+  },
+  {
+    "methodId": "M9",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 98,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1224,
+        "outputTokens": 2207
+      },
+      {
+        "step": "sapling_score_1",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_1",
+        "model": "gpt-5.5",
+        "inputTokens": 625,
+        "outputTokens": 622
+      }
+    ],
+    "totalInputTokens": 1849,
+    "totalOutputTokens": 2829,
+    "durationMs": 97907,
+    "output": "What the data actually shows is a lithium market entering Q1 2026 on a trajectory as complex as it is fascinating. Rarely do we see such a calculated shift in supply chain dynamics across these global hubs. South American extraction facilities are finally hitting their stride—output is surging—and the result is a palpable calming of spot prices. Gone are the days of the wild volatility that defined the last few years. In the lab, we’re seeing processing techniques that push battery-grade purity to new heights. It is this demand for high-performance energy storage that is driving the automotive sector forward. While government subsidies for EVs provide the tailwind, the real story is in the water recycling systems being built to satisfy new, rigorous environmental standards. Mining operations in Australia are ramping up spodumene concentrate exports to feed East Asian refineries; the sheer volume of material moving across the Pacific is staggering. Logistical bottlenecks (the bane of every supply chain manager) still loom over timely deliveries. What matters most is vertical integration. Major automakers are locking in long-term contracts—a desperate, yet necessary, move to secure high-grade lithium hydroxide. Then there is the solid-state revolution. Research capital is pouring into lithium metal anodes; the goal is commercialization at a scale we’ve never seen. Having watched the recycling sector evolve, I can say the circular economy is no longer a pipe dream; it’s a necessity that reduces our dependence on raw ore. The market outlook for Q1 2026 reflects a delicate balance. Inventory levels currently act as a sturdy buffer—shielding us from the sudden shocks that once crippled production. Trade agreements act as the invisible hand guiding these flows across borders. In North America, federal funding is finally turning brine deposits into active lithium carbonate plants. It was the advent of Direct Lithium Extraction (DLE) that truly broke the ceiling. By processing low-grade brines that were once uneconomical, producers are rewriting the playbook. I expect lithium carbonate prices to hold steady. Strategic infrastructure investments are the bedrock of this sustainability. Furthermore, the pivot toward lithium iron phosphate (LFP) batteries is reshaping the chemical requirements of the entire industry. Southeast Asia is the next frontier, opening doors for manufacturing that were closed just a decade ago."
+  },
+  {
+    "methodId": "M11",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 99,
+    "saplingIn": 100,
+    "saplingOut": null,
+    "tokenSteps": [
+      {
+        "step": "gemini_to_french",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 172,
+        "outputTokens": 227
+      },
+      {
+        "step": "gpt_from_french",
+        "model": "gpt-5.5",
+        "inputTokens": 276,
+        "outputTokens": 182
+      }
+    ],
+    "totalInputTokens": 448,
+    "totalOutputTokens": 409,
+    "durationMs": 16452,
+    "output": "Today’s researchers use linear attention mechanisms to make sprawling data sequences far easier to process. New architectures, meanwhile, lean on sparse attention patterns to capture the crucial dependencies buried inside complex neural networks. Advanced frameworks also turn to low-rank approximations to lighten the computational burden during demanding training runs. Innovative models make use of sliding-window techniques to preserve local context in high-dimensional feature spaces, while more specialized advances rely on kernel-based methods to scale more gracefully across a range of large-scale language tasks. Recent studies further harness adaptive attention spans to gather dynamic information across multiple time scales. Contemporary systems also incorporate dedicated memory modules, improving long-term retention of sequential data."
+  },
+  {
+    "methodId": "M11",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 97,
+    "saplingIn": 100,
+    "saplingOut": null,
+    "tokenSteps": [
+      {
+        "step": "gemini_to_french",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 327,
+        "outputTokens": 469
+      },
+      {
+        "step": "gpt_from_french",
+        "model": "gpt-5.5",
+        "inputTokens": 519,
+        "outputTokens": 332
+      }
+    ],
+    "totalInputTokens": 846,
+    "totalOutputTokens": 801,
+    "durationMs": 18064,
+    "output": "Vector databases use mathematical representations to make advanced information retrieval possible in complex digital environments. These systems rely on sophisticated machine learning models to turn raw text into numerical vectors. The resulting embeddings capture the semantic relationships and contextual subtleties of the original content. Traditional databases depend on keyword matching, whereas vector databases look past the surface wording to the underlying meaning of a query. The search process involves calculating the spatial distance between different points in a high-dimensional space. Common metrics such as cosine similarity or Euclidean distance are used to determine how relevant the retrieved items are. Vector databases also incorporate specialized indexing structures to speed up the processing of large-scale datasets. These indexing methods ensure that the system can quickly identify the most similar data points. The architecture supports efficient semantic search by matching user intent with the closest available information. Users receive highly relevant results because the system understands the conceptual frame behind their requests. In addition, the integration of deep learning allows the database to adapt to a wide range of linguistic patterns. This capability enables the platform to handle unstructured data formats such as images, audio, and text. Ongoing refinement of embedding models further improves the overall accuracy of retrieval. The technology spans many applications, from recommendation engines to natural language processing tasks. Vector databases also provide a scalable way to manage the relentless growth of modern enterprise data. These systems mark a significant leap forward in automated data analysis and management. As a result, these advanced database solutions help drive the development of intelligent applications across today’s technology landscape."
+  },
+  {
+    "methodId": "M11",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 79,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_to_french",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 366,
+        "outputTokens": 502
+      },
+      {
+        "step": "gpt_from_french",
+        "model": "gpt-5.5",
+        "inputTokens": 530,
+        "outputTokens": 412
+      }
+    ],
+    "totalInputTokens": 896,
+    "totalOutputTokens": 914,
+    "durationMs": 22468,
+    "output": "Introducing a universal basic income would shake the established global economic order to its core. Such a policy would likely discourage many people from looking for work in a competitive labor market. Moreover, handing out unconditional funds could nurture a broad decline in individual drive across society. Workers might no longer feel compelled to put their specialized skills to use for financial reward. Many citizens could also choose to lean on these payments as a way to sidestep demanding professional responsibilities. This shift in behavior would lead to a marked drop in overall levels of national industrial output. In addition, the absence of financial pressure could hinder the pursuit of advanced educational goals. Students might stop treating learning as a priority if they expected a guaranteed income regardless of their effort. As a result, the economy would struggle to produce a highly skilled and capable workforce for the future.\n\nBusinesses, meanwhile, would face difficulties in trying to recruit dedicated, hard-working professionals. Without traditional incentives, managing large and intricate organizational structures would become more complicated. Small businesses, too, would find it hard to compete with these government-funded leisure options. This dynamic would likely encourage innovation to stall across many critical industrial sectors. The tax burden created by such a program would also require substantial increases in corporate taxation. High taxes would further discourage investment and constrain the growth of new commercial ventures. In addition, wealth redistribution could dampen the ambition of successful professional leaders. People might decide to cut back their working hours rather than strive for major executive promotions. This deterioration in leadership quality would have a negative impact on the efficiency of global supply chains.\n\nDependence on government subsidies would also weaken the private sector’s overall resilience. Service quality would likely deteriorate as labor-market participation rates continued to fall year after year."
+  },
+  {
+    "methodId": "M11",
+    "textId": "T4",
+    "scoreIn": 87,
+    "scoreOut": 80,
+    "saplingIn": 100,
+    "saplingOut": null,
+    "tokenSteps": [
+      {
+        "step": "gemini_to_french",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 212,
+        "outputTokens": 259
+      },
+      {
+        "step": "gpt_from_french",
+        "model": "gpt-5.5",
+        "inputTokens": 297,
+        "outputTokens": 241
+      }
+    ],
+    "totalInputTokens": 509,
+    "totalOutputTokens": 500,
+    "durationMs": 16206,
+    "output": "I decided to build a more deliberate morning routine so I could make better use of my day-to-day productivity. I also started using a digital alarm clock to help anchor a consistent wake-up time. On top of that, I began applying specific hydration habits to keep up with my daily physical well-being goals. I added some gentle stretching, too, hoping to coax a little more mobility out of my joints. As a result, I’ve been able to settle into a calmer frame of mind and sharpen my overall cognitive performance. I’ve also leaned on a detailed schedule to bring more order to my main work tasks. Alongside this, I’ve been trying quiet meditation sessions as a way to reach a deeper sense of inner stillness. I also made a point of preparing healthy meals to sustain my energy through the afternoon. Over time, I’ve noticed that these new habits have meaningfully boosted my daily output. In short, I plan to keep using this framework to tap into my potential for personal growth."
+  },
+  {
+    "methodId": "M11",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 76,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_to_french",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 649,
+        "outputTokens": 948
+      },
+      {
+        "step": "gpt_from_french",
+        "model": "gpt-5.5",
+        "inputTokens": 965,
+        "outputTokens": 668
+      }
+    ],
+    "totalInputTokens": 1614,
+    "totalOutputTokens": 1616,
+    "durationMs": 27286,
+    "output": "The global lithium market is tracing a complicated path as the first quarter of fiscal 2026 comes into view. Market analysts are seeing meaningful shifts in supply-chain dynamics across major production hubs and international regions. At the same time, the expansion of extraction facilities in South America should help lift raw-material availability and output. These developments point to a calming of spot prices after the volatility seen in previous fiscal years. Manufacturers are also continuing to deploy advanced processing techniques to improve the quality of battery-grade lithium products. That trend dovetails with rising demand for high-performance energy-storage solutions across the global automotive sector. Government subsidies for electric-vehicle adoption are expected to support steady growth throughout the forecast period. Stakeholders will need to keep a close watch on environmental rules, which now include tougher standards for sustainable mining practices and resource management. As a result, companies are likely to roll out more efficient water-recycling systems to keep pace with these shifting regulatory demands.\n\nOn the supply side, Australian mining operations expect a steady increase in export volumes of spodumene concentrate. This output will support the growing capacity of refining facilities located in East Asia’s industrial belt. Even so, logistical snags could still affect the timely delivery of refined products to battery manufacturers worldwide. The integration of vertically aligned supply chains should allow tighter control over production costs and the sourcing of critical materials. Major carmakers, meanwhile, plan to lean on long-term contracts to secure a dependable lithium supply. The strategy is designed to soften the risks tied to possible shortages in the high-quality lithium hydroxide segment. In addition, the development of solid-state battery technology will bring new requirements for lithium-metal anode production. Research initiatives continue to draw substantial capital investment aimed at speeding the commercialization of these advanced battery systems. The recycling sector is also expected to see a notable increase in the recovery of materials from end-of-life batteries.\n\nThis circular-economy model should reduce reliance on traditional primary lithium extraction methods. Accordingly, the market outlook for the first quarter of 2026 reflects a balance between rising global supply and demand. Analysts suggest that inventory levels will maintain a healthy safety cushion against any unexpected supply disruption. On the geopolitical front, trade agreements will continue to shape lithium flows across international borders. Domestic production initiatives in North America will also draw on federal funding to strengthen national energy security. These projects include the construction of new lithium carbonate plants near major saline-brine deposit sites. Technological innovations in direct lithium extraction should further enable faster processing of low-grade brine resources. This advance will allow producers to tap deposits that were previously uneconomic in order to meet growing global demand. The price of lithium carbonate is also expected to remain within a stable range during this specific period. Market participants will be watching how these trends affect the overall profitability of mining companies. Strategic investment in infrastructure will therefore support the long-term resilience of the global lithium market. Demand for lithium iron phosphate batteries will also claim a larger share of the market. This shift is likely to influence the specific types of lithium chemicals required by leading battery producers. Emerging markets in Southeast Asia, meanwhile, will open fresh opportunities for lithium-battery manufacturing and assembly."
+  },
+  {
+    "methodId": "M12",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 91,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 808
+      }
+    ],
+    "totalInputTokens": 747,
+    "totalOutputTokens": 808,
+    "durationMs": 10361,
+    "output": "What the data actually shows is that we are finally moving past the quadratic bottleneck; modern researchers now deploy linear attention mechanisms to chew through sequences that would have crashed our servers a year ago. Rarely do we see a complex network today that doesn't leverage sparse attention patterns to pin down those critical dependencies — which surprised me. It was the low-rank approximation—a clever mathematical shortcut—that truly slashed the computational overhead during those grueling training phases. Sliding window techniques allow innovative models to grip local context tightly within high-dimensional feature spaces. Not once in the recent benchmarks have kernel-based methods failed to facilitate that elusive scalability we need for massive language tasks. What fascinates me is how recent studies use adaptive attention spans to capture information flickering across multiple temporal scales. Only by utilizing specialized memory modules can contemporary systems finally ensure that sequential data isn't forgotten the moment it leaves the active window."
+  },
+  {
+    "methodId": "M12",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 99,
+    "saplingIn": 100,
+    "saplingOut": 88,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 902,
+        "outputTokens": 1091
+      }
+    ],
+    "totalInputTokens": 902,
+    "totalOutputTokens": 1091,
+    "durationMs": 13089,
+    "output": "What the data actually shows is that vector databases don't just store information; they map the very architecture of human thought into high-dimensional geometric landscapes. By feeding raw text through sophisticated machine learning models, we translate messy, human language into precise numerical coordinates—a process that still feels like magic when you see the clusters forming on a screen — which surprised me. Gone are the days of literal interpretation; these embeddings capture every subtle nuance and semantic ripple of the original source. Rarely do we see old-school keyword matching suffice anymore. Traditional systems look for identical characters; vector databases look for the soul of the query. It is the spatial distance between points in a multi-layered mathematical void that defines search success here. We rely on metrics like cosine similarity or Euclidean distance—calculus serving as the ultimate arbiter of relevance. To prevent the system from choking on millions of entries, specialized indexing structures act as high-speed navigators. These structures ensure the system identifies neighbors in milliseconds—not minutes. The architecture thrives on mapping raw user intent directly to the most proximate data point available. Relevance isn't a fluke; the system truly grasps the conceptual framework behind a user's question — though that's a quibble. Through the integration of deep learning, the database adapts to shifting linguistic patterns (even the slang we use in the lab) — though that's a quibble. Not once in the dataset did we find a limit to format—images, audio, and text are all flattened into the same universal language of vectors. As we refine these embedding models, accuracy doesn't just improve; it sharpens until the retrieval process feels telepathic. From the engines suggesting your next favorite song to the most complex NLP tasks, this technology's reach is unambiguous. arguably, scaling for enterprise-level growth? Vector databases handle the load with a structural integrity that traditional SQL clusters can only dream of. This represents a tectonic shift in how we manage and analyze automated data. Ultimately, these solutions aren't just tools; they are the bedrock upon which our most intelligent modern applications are being built."
+  },
+  {
+    "methodId": "M12",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 97,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 941,
+        "outputTokens": 1694
+      }
+    ],
+    "totalInputTokens": 941,
+    "totalOutputTokens": 1694,
+    "durationMs": 16266,
+    "output": "Fundamentally disruptive to our global economic architecture is the rollout of universal basic income. What the data actually shows is a precipitous drop-off in labor market engagement as the traditional work-for-survival tether is severed — which surprised me. Unconditional cash transfers (while seemingly compassionate) act as a direct sedative on individual drive; rarely do we see peak societal motivation without the catalyst of necessity. Specialized skills—the kind earned through thousands of hours of repetitive, grueling practice—would begin to erode as the financial imperative to monetize them vanishes. Citizens would naturally pivot toward avoiding the grinding demands of high-stakes professions, a shift that translates directly into a plummeting national industrial output. Having scrutinized the educational pipeline, I can say that removing financial pressure guts the incentive for advanced study. Why should a student endure the sleepless nights of organic chemistry or advanced calculus if the floor is already paved with gold? The result is an economy starved of the high-tier talent required to maintain its own weight. Not once in the simulation models did corporations find it easy to recruit dedicated personnel in an incentive-vacuum. Managing complex organizational structures becomes a nightmare when the primary lever of management is removed. Small businesses face a losing battle against government-funded leisure; the outcome is a stagnant pool of innovation across every critical sector — though that's a quibble. What follows is a fiscal burden so immense it demands corporate tax rates that actively punish success — though that's a quibble. Investment dries up—the growth of new commercial enterprises is stunted by the very mechanism meant to support them. High-performing leaders, sensing their ambition is being taxed to death, will inevitably scale back their hours rather than chasing the next executive milestone. Leadership quality erodes, and with it, the efficiency of the global supply chains we take for granted. arguably, reliance on state subsidies fundamentally compromises the private sector's structural integrity. Service quality doesn't just decline; it collapses as labor participation rates enter a terminal spiral."
+  },
+  {
+    "methodId": "M12",
+    "textId": "T4",
+    "scoreIn": 87,
+    "scoreOut": 94,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 787,
+        "outputTokens": 1124
+      }
+    ],
+    "totalInputTokens": 787,
+    "totalOutputTokens": 1124,
+    "durationMs": 13044,
+    "output": "What the data actually shows is that peak productivity isn't a fluke; it's the result of a meticulously structured morning protocol. Gone are the days of drifting into wakefulness at random—I switched to a digital alarm to hard-code my circadian rhythm — which surprised me. Rarely do we discuss the immediate metabolic impact of morning hydration. I now treat 500ml of water as my first non-negotiable input. Having spent months analyzing my own energy dips, I integrated kinesthetic stretching to prime my joints for the day ahead. It was this combination of water and movement that stabilized my mental baseline. My focus became sharper, more resilient. Deep in the workflow, a lack of structure is lethal; I use a physical planner to offload complex task-mapping from my working memory. Meditation serves as my neurological reset. Ten minutes of silence provides a clarity that spreadsheets alone can never offer. To prevent the inevitable 3 PM crash, I shifted to a rigid meal-prep strategy — though that's a quibble. This ensures my glucose levels remain steady during high-stakes deep work — though that's a quibble. The data is unambiguous: my output has scaled significantly under this regime. Not once have I regretted this shift; this framework is the bedrock of my continued growth."
+  },
+  {
+    "methodId": "M12",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 95,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1224,
+        "outputTokens": 706
+      }
+    ],
+    "totalInputTokens": 1224,
+    "totalOutputTokens": 706,
+    "durationMs": 19507,
+    "output": "The global lithium market maintains a complex trajectory entering the first quarter of fiscal year 2026. Market analysts observe significant shifts in supply chain dynamics across major international production hubs and regions — which surprised me. Furthermore, the expansion of extraction facilities in South America will facilitate increased raw material availability and output. These developments indicate a stabilization of spot prices compared to the volatility experienced in previous fiscal years. Additionally, manufacturers continue to utilize advanced processing techniques to enhance the quality of battery-grade lithium products. This trend aligns with the growing demand for high-performance energy storage solutions within the global automotive sector. Moreover, government subsidies for electric vehicle adoption will leverage sustained growth throughout the entire forecasted period. Stakeholders must monitor environmental regulations that encompass new standards for sustainable mining practices and resource management. Consequently, companies are expected to implement more efficient water recycling systems to meet these evolving regulatory requirements. Regarding the supply side, Australian mining operations anticipate a steady increase in spodumene concentrate export volumes. This output will support the rising capacity of refining facilities located within the East Asian industrial region — though that's a quibble. Nevertheless, logistical challenges may still impact the timely delivery of refined products to global battery manufacturers — though that's a quibble. The integration of vertical supply chains will facilitate greater control over production costs and essential material sourcing. Furthermore, major automotive corporations intend to leverage long-term contracts to ensure a consistent supply of lithium. This strategy aims to mitigate risks associated with potential shortages in the high-grade lithium hydroxide market segment. arguably, additionally, the development of solid-state battery technology will encompass new requirements for lithium metal anode production. Research initiatives continue to utilize significant capital investment to accelerate the commercialization of these advanced battery systems. Moreover, the recycling sector will observe a notable increase in the recovery of end-of-life battery materials. This circular economy model will facilitate a reduction in the reliance on traditional primary lithium extraction methods. Consequently, the market outlook for Q1 2026 reflects a balance between increased global supply and demand (or near enough). Analysts suggest that inventory levels will maintain a healthy buffer against any unexpected disruptions in the supply. Regarding geopolitical factors, trade agreements will continue to influence the flow of lithium across international borders (or near enough). Furthermore, domestic production initiatives in North America will leverage federal funding to bolster national energy security. These projects encompass the construction of new lithium carbonate plants near major saline brine deposit sites. Additionally, technological innovations in direct lithium extraction will facilitate more rapid processing of low-grade brine resources. arguably, this advancement will allow producers to utilize previously uneconomical deposits to satisfy the expanding global demand. more or less, moreover, the price of lithium carbonate is expected to maintain a steady range during this specific period. Market participants will observe the impact of these trends on the overall profitability of mining enterprises. I think, consequently, strategic investments in infrastructure will facilitate the long-term sustainability of the global lithium market. Furthermore, the demand for lithium iron phosphate batteries will encompass a larger share of the market. This shift will likely influence the specific types of lithium chemicals required by major battery producers. Additionally, emerging markets in Southeast Asia will facilitate new opportunities for lithium battery manufacturing and assembly."
+  },
+  {
+    "methodId": "M15",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 21,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 631,
+        "outputTokens": 191
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 650,
+        "outputTokens": 260
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 615,
+        "outputTokens": 203
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 647,
+        "outputTokens": 255
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 682,
+        "outputTokens": 304
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 836,
+        "outputTokens": 480
+      },
+      {
+        "step": "gemini_to_french",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 370,
+        "outputTokens": 447
+      },
+      {
+        "step": "gpt_from_french",
+        "model": "gpt-5.5",
+        "inputTokens": 483,
+        "outputTokens": 386
+      }
+    ],
+    "totalInputTokens": 4914,
+    "totalOutputTokens": 2526,
+    "durationMs": 38968,
+    "output": "A time nevertheless came, in the advance of technical inquiry, when researchers stopped treating it as a law of nature that data processing should be hobbled by constraints that grow quadratically with the data’s own volume. It seemed to them far better that attention mechanisms be made linear, or otherwise pared down, and thereby suited to a degree of efficiency previously unknown. Only in this way, it appears, can they attain the absolute assurance that the burden of computation will never become so great as to obstruct the analysis of even the longest sequence. By degrees, this new demand for parsimonious patterns and low-rank approximations became the theorist’s chief concern; and it largely displaced the heavier architectures of the past. But in computational theories, as in theories of politics and philosophy, success exposes infirmities that a less ambitious design might have kept from view. The notion that the whole span of a sequence must at every moment lie before a network’s gaze is not always vindicated by its results; and what is called “context” is often better served by a sliding window, or by a kernel method, than by an indiscriminate inspection of the whole. Reflective minds perceived, moreover, that information is not a static quantity; and that the adoption of adaptive spans allows a system to move across many timescales with a fluency once unimaginable. It is therefore not enough to guard against the mere exhaustion of resources: one must also guard against the loss of the past; and specialized memory modules help ensure that the fleeting impressions of sequential data are not forgotten by the very machines designed to preserve them."
+  },
+  {
+    "methodId": "M15",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 7,
+    "saplingIn": 100,
+    "saplingOut": 80,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 786,
+        "outputTokens": 378
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 831,
+        "outputTokens": 439
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 770,
+        "outputTokens": 397
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 837,
+        "outputTokens": 437
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 837,
+        "outputTokens": 286
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 813,
+        "outputTokens": 384
+      },
+      {
+        "step": "gemini_to_french",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 425,
+        "outputTokens": 508
+      },
+      {
+        "step": "gpt_from_french",
+        "model": "gpt-5.5",
+        "inputTokens": 545,
+        "outputTokens": 407
+      }
+    ],
+    "totalInputTokens": 5844,
+    "totalOutputTokens": 3236,
+    "durationMs": 45768,
+    "output": "I believe a digital record is “really” a set of mathematical values, although to the untrained observer it appears only as a string of words or images. I know that, if we use certain machine-learning models, the literal form of the data is converted into a numerical vector, so that the apparent meaning of a query becomes a matter of location in space. It follows that, just as no two people ever see exactly the same spread of colors on a table, no two items in this high-dimensional space have precisely the same coordinates, since each occupies its own point within the system’s geometry. For most practical purposes, the spelling of a word may seem enough; but for a vector database, the underlying semantic relationship is crucial: the system must unlearn the reflex of matching keywords and acquire the habit of measuring the distance between ideas. We already have here the beginnings of a distinction that causes endless trouble in information retrieval—the distinction between “syntax” and “semantics,” between what a query says and what it is looking for. The user wants to find information; the system wants to grasp its conceptual essence. But the system’s way of doing so is more intricate than the user’s simple request, and it is further hampered by the difficulties of calculating similarity in a multidimensional space. To return to the search process: it is clear, from what we have seen, that there is no single keyword that preeminently represents the truth of a document. The document seems to carry different meanings from different conceptual vantage points, and there is no reason to treat its literal text as more truly its meaning than its vector embedding. And we know that, even for a given query, the results will look different if we change the similarity measure, while without these mathematical structures no search at all would be possible, even though to the human eye the database remains unchanged."
+  },
+  {
+    "methodId": "M15",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 5,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 825,
+        "outputTokens": 479
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 935,
+        "outputTokens": 736
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 809,
+        "outputTokens": 456
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 901,
+        "outputTokens": 546
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 876,
+        "outputTokens": 359
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 893,
+        "outputTokens": 459
+      },
+      {
+        "step": "gemini_to_french",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 544,
+        "outputTokens": 672
+      },
+      {
+        "step": "gpt_from_french",
+        "model": "gpt-5.5",
+        "inputTokens": 698,
+        "outputTokens": 543
+      }
+    ],
+    "totalInputTokens": 6481,
+    "totalOutputTokens": 4250,
+    "durationMs": 52527,
+    "output": "I believe that introducing a universal allowance would “truly” unsettle the traditional foundations of our economic life, because the motives that drive a man to look for work look very different once his subsistence is already guaranteed. I know that, if the fear of want is removed, the necessity of work will appear in another light, and the desire to take part in the competitive marketplace will be weakened as a result. It follows that if we provide for everyone’s needs without requiring any service in return, many men will no longer feel the same pressure to work, since what once seemed necessary will then seem merely optional. Here we already have the beginnings of one of the distinctions that causes no end of trouble in political economy: the distinction between “leisure” as a choice and “leisure” as the consequence of being maintained by the state. The theorist wants to know how men ought to live; the merchant and the worker want to know how they will eat. But the merchant’s difficulty is sharpened by the certainty that, without the pressure of need, the very drive toward specialized competence may vanish. For most practical purposes, these changes in character may seem slight; but for the stability of industry they are of the first importance. The industrial leader must unlearn the habit of thinking that men will naturally strive to reach the heights of their profession, and must learn instead to see them as they appear when ordinary incentives have been stripped away. To return to the question of industry: it is clear from what we have observed that there is no inducement that predominantly pushes a man toward the severity of study or the burdens of management when the reward for such labor is shared equally with those who remain idle. The pursuit of excellence seems a matter of indifference from the standpoint of someone whose needs are already met. And we know that even within a prosperous firm, the will to innovate will look different under the shadow of heavy taxation, or in a man who no longer feels the spur of competition; while in a condition of complete security, there may be no industrial ambition left at all, even though to the casual observer the outward structures of society remain unchanged. This decline in the quality of effort must tend toward the stagnation of the whole, for the philosopher’s wish for a better world is often disturbed by the reality of man’s native lethargy. Consequently, the resilience of the private sector would probably diminish as participation in the world’s common toil withered away, leaving the gears of our civilization to rust for want of human purpose."
+  },
+  {
+    "methodId": "M15",
+    "textId": "T4",
+    "scoreIn": 87,
+    "scoreOut": 3,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 671,
+        "outputTokens": 281
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 735,
+        "outputTokens": 331
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 655,
+        "outputTokens": 211
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 655,
+        "outputTokens": 273
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 722,
+        "outputTokens": 252
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 783,
+        "outputTokens": 323
+      },
+      {
+        "step": "gemini_to_french",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 324,
+        "outputTokens": 374
+      },
+      {
+        "step": "gpt_from_french",
+        "model": "gpt-5.5",
+        "inputTokens": 398,
+        "outputTokens": 514
+      }
+    ],
+    "totalInputTokens": 4943,
+    "totalOutputTokens": 2559,
+    "durationMs": 39037,
+    "output": "I am inclined to believe that the morning is “really” the same length for every person, and yet the moments given over to order seem far more fertile than those surrendered to chance. I know that if I take up a digital clock to govern my waking, the very cadence of my day will be altered, so that the apparent usefulness of my hours will shift. It follows that, when a man is seen at his desk, the quality of his labor depends heavily on the outlook fixed in the first instants after he wakes; any change in that initial state changes the way his tasks are perceived. For most practical purposes, these routines are merely habits, but for anyone in pursuit of efficiency they are of the first importance: the worker must unlearn the habit of letting himself drift at the mercy of impulse, and acquire the habit of arranging things as they ought to be arranged. Here already we have the beginning of a distinction that causes no end of trouble in conduct—the distinction between “activity” and “accomplishment,” between what a day seems to be and what it is. It is therefore plain, from what I have discovered, that there is no single hour that stands out pre-eminently as the peak of his powers; rather, the mind seems to possess different capacities according to its points of preparation, and there is no reason to regard some of them as more truly representative of my character than others."
+  },
+  {
+    "methodId": "M15",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 6,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1108,
+        "outputTokens": 439
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 893,
+        "outputTokens": 608
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1092,
+        "outputTokens": 435
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 879,
+        "outputTokens": 529
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1159,
+        "outputTokens": 514
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 1036,
+        "outputTokens": 592
+      },
+      {
+        "step": "gemini_to_french",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 544,
+        "outputTokens": 651
+      },
+      {
+        "step": "gpt_from_french",
+        "model": "gpt-5.5",
+        "inputTokens": 662,
+        "outputTokens": 1235
+      }
+    ],
+    "totalInputTokens": 7373,
+    "totalOutputTokens": 5003,
+    "durationMs": 76094,
+    "output": "Yet the moment has arrived, in the onward drift of industrial affairs, when the lithium trade can no longer be treated as a mere arena of volatile chance, and enters the first quarter of 2026 with a fresh and more tangled sense of direction.\n\nTo watchers of these markets, it had seemed far preferable that South America’s assorted extraction sites should serve as dependable attendants to global demand, swelling or shrinking at the consumer’s pleasure. Only in this way, it appeared, could manufacturing interests be certain that raw-material prices would never be driven upward to their disadvantage. Little by little, this new requirement for a stable—if only temporary—abundance became the chief aim of the industrial camp, largely displacing earlier efforts that had been devoted simply to surviving the convulsions of the past.\n\nBut in economic and technological doctrines, as in people, success exposes flaws that failure might have kept hidden. The notion that industry has no need to curb its command over Australian spodumene supply, or over the East’s refining capacity, may have looked axiomatic in an age when high-performance storage was still only a dream. The “supply” that props up the market does not always represent the same interests as those on which demand bears; and the “security” so often invoked is not the independence of each nation taken alone, but the interdependence of each with all the rest. The will of the market, moreover, means in practice the will of the sector’s largest or most energetic faction; accordingly, industry may wish to impose new standards of sustainable practice on some of its own members, and safeguards are as necessary against that as against any other abuse of industrial power.\n\nLike other dependencies, reliance on primary extraction was at first feared chiefly insofar as it operated through the acts of political authorities and trade agreements. But more reflective minds have seen that when the system itself is the tyrant—industry collectively ruling over the separate firms that compose it—its means of preserving its own longevity are not limited to deeds carried out by the hands of its officials. Protection against material scarcity is therefore not enough: protection is also needed against the tyranny of prevailing opinion and dominant technique; against the market’s tendency to impose, by means other than civil penalties, its own inherited ideas of production as rules of conduct on those who seek to innovate through direct extraction, solid-state technology, or the circular recovery of materials at the end of their lives."
+  },
+  {
+    "methodId": "M16",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 97,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_first_person",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 234,
+        "outputTokens": 266
+      }
+    ],
+    "totalInputTokens": 234,
+    "totalOutputTokens": 266,
+    "durationMs": 8239,
+    "output": "I've been looking closely at how we're reshaping attention, and I think the shift toward linear mechanisms is the only reason we're able to handle such extensive data sequences without everything crashing down. It's about efficiency, plain and simple. As I read it, we're no longer just throwing raw power at the problem; I'd argue that using sparse attention patterns to pinpoint critical dependencies is a far more surgical approach for complex networks. What strikes me is the ingenuity behind low-rank approximations—they're a lifesaver when you're trying to cut computational overhead during those grueling training phases. Sometimes, it’s the smaller tweaks that matter most, like how we use sliding window techniques to keep local context from getting lost in high-dimensional spaces. I’m also seeing kernel-based methods becoming a staple for scalability in large-scale language tasks. It’s impressive. But then there’s the question of time. I think adaptive attention spans are brilliant because they allow us to capture dynamic information as it shifts across different temporal scales. Finally, what really ties it together for me is the use of specialized memory modules. They're finally giving contemporary systems the long-term retention of sequential data we’ve been missing."
+  },
+  {
+    "methodId": "M16",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 99,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_first_person",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 389,
+        "outputTokens": 411
+      }
+    ],
+    "totalInputTokens": 389,
+    "totalOutputTokens": 411,
+    "durationMs": 9694,
+    "output": "When I look at the landscape of modern data, I think we're seeing a fundamental shift in how we teach machines to 'understand' us. It's not about matching words anymore; it's about the math. As I read it, the real magic happens when sophisticated machine learning models take raw text and turn it into these complex numerical vectors. I'd argue that these embeddings are more than just numbers—they're the digital ghosts of meaning, capturing every semantic relationship and contextual nuance that a traditional keyword search would simply trample over. Traditional databases are stuck in the past, relying on rigid keyword matching, whereas vector databases prioritize the underlying meaning of a query. What strikes me is the strange physicality of the search process. We're essentially calculating the spatial distance between different points in a high-dimensional void, using metrics like cosine similarity or Euclidean distance to determine exactly where relevance lives. To make this work at scale, these systems employ specialized indexing structures that accelerate the processing of massive data sets. Speed matters. These indexing methods ensure the system can quickly identify the most similar data points without breaking a sweat. The architecture facilitates an incredibly efficient semantic search by mapping user intent to the closest available information. I've found that users receive highly relevant results because the system finally understands the conceptual framework of their requests. Furthermore, the integration of deep learning allows the database to adapt to various linguistic patterns, which means it isn't just limited to text—it handles the messiness of unstructured formats like images and audio too. I think the continuous refinement of embedding models is what's truly driving the accuracy of the retrieval process. The technology is everywhere, from recommendation engines to the natural language processing tasks we use daily. They aren't just tools; they're a scalable solution for managing the tidal wave of modern enterprise data. In my view, these systems represent a massive leap in automated data analysis. They're the foundation for the intelligent applications defining our modern technological world."
+  },
+  {
+    "methodId": "M16",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 90,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_first_person",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 428,
+        "outputTokens": 411
+      }
+    ],
+    "totalInputTokens": 428,
+    "totalOutputTokens": 411,
+    "durationMs": 13837,
+    "output": "I’ve been chewing on the implications of Universal Basic Income, and honestly, I think it would fundamentally tear apart the global economic framework we’ve spent centuries building. As I read the situation, this isn't just a policy shift; it's a total disruption. What strikes me is the very real possibility that people will simply stop looking for work. Why wouldn't they? If the pressure to survive is gone, I’d argue that societal motivation will just... evaporate. We’re talking about a world where workers no longer feel the need to use their hard-won specialized skills for a paycheck. They’ll opt out. They’ll avoid the heavy lifting. And when that happens, I think we'll see national industrial output fall off a cliff. It’s not just about the current workforce, either. I think about the students. Without that financial edge, why would anyone bother with the grueling pursuit of advanced education? If you’ve got a guaranteed check, effort feels optional. As I read it, we’re setting ourselves up for a future where the workforce lacks the skills to keep the lights on. It's a recipe for stagnation. From where I’m standing, corporations are going to find recruitment impossible. How do you manage a complex organization when traditional incentives have been gutted? I’d argue that small businesses will be hit the hardest—they can't compete with the government paying people to stay home. Innovation will just stop. Plus, someone has to pay for it. I think the massive corporate tax hikes needed would stifle growth and scare off investors. What strikes me as particularly tragic is how this might dampen the ambition of our best leaders. Why strive for an executive role when you can just cut your hours and coast? That loss of leadership will hit global supply chains hard. In the end, the private sector will lose its resilience, and service quality will just keep falling as people walk away from the labor market."
+  },
+  {
+    "methodId": "M16",
+    "textId": "T4",
+    "scoreIn": 87,
+    "scoreOut": 89,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_first_person",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 274,
+        "outputTokens": 230
+      }
+    ],
+    "totalInputTokens": 274,
+    "totalOutputTokens": 230,
+    "durationMs": 9144,
+    "output": "I think I've finally found the rhythm I've been looking for. I decided to overhaul my mornings to actually optimize my productivity, and it started with something as mundane as a digital alarm clock to lock in a consistent schedule. I'd argue that consistency is the bedrock. As I read it back now, what strikes me is the sheer physicality of my new approach. I leveraged specific hydration techniques for my wellness. Then, I stretched. Light, intentional movements to keep my joints from seizing up. It wasn't just about the body, though; I managed to facilitate a calm mental state to sharpen my cognitive performance. I'm a writer who needs focus, so I grabbed a detailed planner to organize my professional tasks efficiently. I also leveraged silent meditation sessions to find some internal peace amidst the noise. I even started prepping healthy meals to keep my energy from tanking in the afternoon. It's been a shift. I've observed a massive increase in my daily output, and I’m going to keep using this framework to leverage my personal growth. It works."
+  },
+  {
+    "methodId": "M16",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 98,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_first_person",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 711,
+        "outputTokens": 577
+      }
+    ],
+    "totalInputTokens": 711,
+    "totalOutputTokens": 577,
+    "durationMs": 10735,
+    "output": "I think the global lithium market is entering a fascinatingly complex trajectory as we head into the first quarter of fiscal year 2026. As I read it, the shifts in supply chain dynamics across international hubs aren't just statistics; they're a fundamental reshaping of how we power our world. What strikes me is the sheer scale of extraction expansion in South America. It's finally facilitating the kind of raw material availability that suggests a real stabilization of spot prices. We're moving past the gut-wrenching volatility of previous years. I'd argue that the manufacturers' move toward advanced processing techniques is the real story here, as they're obsessing over the quality of battery-grade products to meet the automotive sector's hunger for high-performance storage. Government subsidies for electric vehicles are still the primary engine of growth. But stakeholders can't get complacent. Environmental regulations are tightening, and I think the push for sustainable mining practices—specifically more efficient water recycling systems—is going to be a massive hurdle for companies to clear.\n\nOn the supply side, I’m watching Australian mining operations closely. They're ramping up spodumene concentrate exports to feed the growing refinery capacity in East Asia, yet I'd argue that logistical challenges still loom large over timely deliveries. It’s a mess. To fix it, we're seeing an aggressive move toward vertical supply chains. Major car corporations aren't taking chances; they're leveraging long-term contracts to ensure they don't get caught in a high-grade lithium hydroxide shortage. Then there's the tech leap. Solid-state battery development is forcing us to rethink everything, creating a new demand for lithium metal anode production that's currently soaking up massive capital investment. What strikes me is the rise of the recycling sector. As I read it, this circular economy model is the only way we'll ever reduce our reliance on traditional primary extraction.\n\nBy Q1 2026, I think we'll see a market that’s finally found its balance. Analysts are pointing to healthy inventory buffers, but geopolitics remain the wild card. Trade agreements still dictate the flow of lithium across borders. In North America, federal funding is finally bolstering energy security through new lithium carbonate plants near brine deposits. Innovations like direct lithium extraction are game-changers. They allow us to use low-grade brine resources that weren't even economical a few years ago. I’d argue that while lithium carbonate prices should stay steady, the shift toward lithium iron phosphate batteries is going to change the specific chemical requirements for the entire industry. Southeast Asia is also emerging as a major player in assembly. Ultimately, these strategic investments in infrastructure are what will make the market sustainable in the long run."
+  },
+  {
+    "methodId": "M17",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 99,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 890
+      }
+    ],
+    "totalInputTokens": 747,
+    "totalOutputTokens": 890,
+    "durationMs": 13238,
+    "output": "What the data actually shows is that linear attention mechanisms have fundamentally liberated us from the quadratic bottlenecks of old; no longer do we watch our training loops crawl through extensive sequences. Rarely do we see such elegant solutions as sparse attention patterns, which allow novel architectures to isolate critical dependencies within the network's labyrinthine layers. Reduced computational overhead is no longer a pipe dream—thanks to low-rank approximations, frameworks can now endure intensive training without melting the hardware. It is the sliding window technique that truly tames high-dimensional feature spaces by anchoring them in local context. Deep in the recent literature, specific developments have pushed kernel-based methods to the forefront; the resulting scalability across large-scale tasks is simply undeniable. Having analyzed the latest studies, I can say that adaptive attention spans are the unsung heroes—they allow models to pivot across temporal scales with a fluidity we haven't seen before. Finally, contemporary systems use specialized memory modules to solve the retention problem; the data is unambiguous regarding their ability to preserve sequential information over the long term."
+  },
+  {
+    "methodId": "M17",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 98,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 902,
+        "outputTokens": 1548
+      }
+    ],
+    "totalInputTokens": 902,
+    "totalOutputTokens": 1548,
+    "durationMs": 12526,
+    "output": "Gone are the days of simple filing; vector databases represent the pinnacle of modern retrieval, mapping out the digital landscape through raw, mathematical abstraction. What the data actually shows is a radical transformation—machine learning models gutting raw text and stitching it back together as numerical vectors. These embeddings aren't just numbers; they are the semantic DNA of the content, capturing nuances that a standard index would inevitably bleed out. Rarely do we see such a stark contrast between technologies. Traditional databases claw through keywords like a child with a word-search puzzle, but vector databases? They ignore the letters to find the soul of the query. Deep in the high-dimensional geometry of the system, search becomes a matter of proximity. We aren't checking boxes; we're measuring the literal distance—using cosine similarity or Euclidean metrics—between points suspended in a mathematical void. Speed is the byproduct of specialized indexing structures. Because the system can pivot through millions of points in milliseconds, it identifies \"similar\" not as a guess, but as a geometric certainty. It is the architecture itself that bridges the gap between human intent and machine storage. When a user asks a question, the system doesn't look for the words; it looks for the conceptual neighborhood where that thought lives. Having integrated deep learning into the core, these databases now consume images and audio as easily as they do text. This isn't just a database; it’s a polyglot of unstructured data formats. The accuracy we’re seeing in the lab is unambiguous—as embedding models sharpen, the retrieval process evolves from \"good enough\" to surgically precise. From the recommendation engines that keep us scrolling to the recent of natural language processing, the applications are endless. Enterprise data is growing exponentially, yet vector databases offer the only truly scalable way forward. Not once in the history of data management have we seen a shift this profound. It is this foundation that allows us to build truly \"intelligent\" applications that finally understand the world they are analyzing."
+  },
+  {
+    "methodId": "M17",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 95,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 941,
+        "outputTokens": 1782
+      }
+    ],
+    "totalInputTokens": 941,
+    "totalOutputTokens": 1782,
+    "durationMs": 16129,
+    "output": "What the data actually shows is that universal basic income would shatter our established economic foundations. Rarely do we see a policy with such potential for systemic upheaval. Gone are the days when survival drove the engine of industry; instead, the provision of unconditional funds triggers a measurable decline in societal drive. In the pilot studies I’ve tracked, workers stopped utilizing their specialized skills the moment the financial necessity vanished. Not once in the dataset did we see people leaning into demanding roles when a safety net became a soft bed—a shift that translates directly to plummeting national industrial output. Having analyzed student performance under guaranteed-stipend conditions, I can say the motivation to master complex calculus or fluid dynamics evaporates when the payout is detached from the effort. It is the rigor of the market that forces excellence; without it, the economy would simply fail to cultivate a skilled workforce. Corporations, too, would face a hiring drought. Managing a complex hierarchy requires a carrot that actually looks like a carrot, yet UBI turns traditional incentives into mere background noise. Small businesses suffer most; they cannot fight for talent against the siren song of government-funded leisure. What results is a total stagnation of innovation across critical sectors. The fiscal burden of this program would necessitate tax hikes so steep they would choke new enterprises in the cradle. High taxes would further dry up investment—growth would cease. Deep in the data, we find that redistribution dampens the ambition of high-performing leaders. They trade the corner office for a quiet afternoon; they choose reduced hours over the stress of executive promotions. This leadership exodus (which I've seen in multiple labor simulations) guts the efficiency of global supply chains. Ultimately, reliance on state subsidies erodes the resilience of the private sector. As labor participation rates slide down the Y-axis year after year, the quality of every service we rely on simply crumbles."
+  },
+  {
+    "methodId": "M17",
+    "textId": "T4",
+    "scoreIn": 87,
+    "scoreOut": 91,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 787,
+        "outputTokens": 1034
+      }
+    ],
+    "totalInputTokens": 787,
+    "totalOutputTokens": 1034,
+    "durationMs": 16264,
+    "output": "Rare is the morning now where I don't follow a rigid protocol designed to spike my productivity. What the data actually shows is that consistency hinges on hardware; I swapped my phone for a dedicated digital alarm to anchor my wake-up time. Chugging a liter of water before the sun is fully up — a specific hydration technique I've adopted — targets cellular wellness from the jump. Incorporating light stretching, I've watched my joint flexibility improve, moving from stiff to fluid. It was the resulting mental calm that truly catalyzed my cognitive performance; the fog simply lifted. My professional tasks used to be a mess; now, a detailed planner organizes every minute — a necessity for efficiency. Deep in the silence of meditation sessions, I found an internal peace that previously felt inaccessible. Prepping healthy meals (a Sunday night ritual involving stacks of Tupperware) keeps my energy from cratering during the 3 PM slump. Not once in the dataset of my life have I seen such a sharp increase in daily output; the data is unambiguous. I am doubling down on this framework because the potential for personal growth is immense."
+  },
+  {
+    "methodId": "M17",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 78,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1224,
+        "outputTokens": 2098
+      }
+    ],
+    "totalInputTokens": 1224,
+    "totalOutputTokens": 2098,
+    "durationMs": 20759,
+    "output": "The global lithium market maintains a complex trajectory entering the first quarter of fiscal year 2026. Market analysts observe significant shifts in supply chain dynamics across major international production hubs and regions. The expansion of extraction facilities in South America will help increased raw material availability and output. These developments indicate a stabilization of spot prices compared to the volatility experienced in previous fiscal years. Manufacturers continue to use advanced processing techniques to enhance the quality of battery-grade lithium products. This trend aligns with the growing demand for high-performance energy storage solutions within the global automotive sector. Government subsidies for electric vehicle adoption will use sustained growth throughout the entire forecasted period. Stakeholders must monitor environmental regulations that cover new standards for sustainable mining practices and resource management. Consequently, companies are expected to implement more efficient water recycling systems to meet these evolving regulatory requirements.\n\nRegarding the supply side, Australian mining operations anticipate a steady increase in spodumene concentrate export volumes. This output will support the rising capacity of refining facilities located within the East Asian industrial region. Nevertheless, logistical challenges may still impact the timely delivery of refined products to global battery manufacturers. The integration of vertical supply chains will help greater control over production costs and essential material sourcing. Major automotive corporations intend to use long-term contracts to ensure a consistent supply of lithium. This strategy aims to mitigate risks associated with potential shortages in the high-grade lithium hydroxide market segment. The development of solid-state battery technology will cover new requirements for lithium metal anode production. Research initiatives continue to use significant capital investment to accelerate the commercialization of these advanced battery systems. The recycling sector will observe a notable increase in the recovery of end-of-life battery materials.\n\nThis circular economy model will help a reduction in the reliance on traditional primary lithium extraction methods. Consequently, the market outlook for Q1 2026 reflects a balance between increased global supply and demand. Analysts suggest that inventory levels will maintain a healthy buffer against any unexpected disruptions in the supply. Regarding geopolitical factors, trade agreements will continue to influence the flow of lithium across international borders. Domestic production initiatives in North America will use federal funding to bolster national energy security. These projects cover the construction of new lithium carbonate plants near major saline brine deposit sites. Technological innovations in direct lithium extraction will help more rapid processing of low-grade brine resources. This advancement will allow producers to use previously uneconomical deposits to satisfy the expanding global demand. The price of lithium carbonate is expected to maintain a steady range during this specific period. Market participants will observe the impact of these trends on the overall profitability of mining enterprises. Consequently, strategic investments in infrastructure will help the long-term sustainability of the global lithium market. The demand for lithium iron phosphate batteries will cover a larger share of the market. This shift will likely influence the specific types of lithium chemicals required by major battery producers. Emerging markets in Southeast Asia will help new opportunities for lithium battery manufacturing and assembly."
+  },
+  {
+    "methodId": "M18",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 87,
+    "saplingIn": 100,
+    "saplingOut": 26,
+    "tokenSteps": [
+      {
+        "step": "gemini_head_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 566,
+        "outputTokens": 171
+      },
+      {
+        "step": "gemini_tail_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 535,
+        "outputTokens": 188
+      },
+      {
+        "step": "gemini_tail_argue",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 602,
+        "outputTokens": 236
+      },
+      {
+        "step": "gpt_seam_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 453,
+        "outputTokens": 733
+      }
+    ],
+    "totalInputTokens": 2156,
+    "totalOutputTokens": 1328,
+    "durationMs": 20024,
+    "output": "It is evident from our current investigations that the researcher, seeking to manage the vastness of data sequences, turns to 'linear' attention as a means of simplification. We find that, just as the appearance of a surface shifts with the light, so too does the 'sparse' pattern shift to capture those dependencies that are of immediate importance within the network's gaze. For most practical purposes, the 'low-rank' approximation serves to diminish the burden of calculation; yet it remains an approximation, a shadow of the fuller complexity that the training phase demands. Furthermore, by the device of the 'sliding window', the model learns to isolate the local context, much as the observer must focus upon one part of an object to the exclusion of others, if he is to perceive its features at all.\n\nFrom this deliberate confinement of the model's gaze, however, there came a point, in the advancement of computational science, when it was no longer deemed sufficient for language tasks to remain confined within narrow limits of scale. It appeared to the investigators far more efficacious that kernel-based transformations should be employed as the primary agents of expansion; for in that manner, it seemed, could the mechanisms of processing be adapted to the vastness of the modern demand. But, in the pursuit of greater scope, as well as in the refinement of logic, the necessity of a flexible attention becomes manifest, which a fixed span might have left obscured. The \"attention\" here exercised is not a static quantity, but an adaptive one, capable of encompassing the various temporal scales which the subject-matter may present. Furthermore, reflecting practitioners perceived that when the sequence itself is the master—extending far beyond the immediate horizon of the present—its retention requires something more than a simple capacity for storage. There needs, therefore, a specialized structure for memory; a protection against the tendency of sequential data to fade into oblivion, and a means to impose a lasting order upon the flux of information."
+  },
+  {
+    "methodId": "M18",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 63,
+    "saplingIn": 100,
+    "saplingOut": 38,
+    "tokenSteps": [
+      {
+        "step": "gemini_head_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 644,
+        "outputTokens": 305
+      },
+      {
+        "step": "gemini_tail_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 612,
+        "outputTokens": 197
+      },
+      {
+        "step": "gemini_tail_argue",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 679,
+        "outputTokens": 241
+      },
+      {
+        "step": "gpt_seam_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 544,
+        "outputTokens": 799
+      }
+    ],
+    "totalInputTokens": 2479,
+    "totalOutputTokens": 1542,
+    "durationMs": 21995,
+    "output": "It is commonly supposed that a database contains 'real' information in the form of words, yet when we examine the vector system, we find that it preserves only a mathematical shadow of the original text. Through the agency of machine learning, the familiar sentence is transformed into a numerical vector; it follows that if we alter the underlying model, the very coordinates of our data will shift, so that the apparent meaning of the content is never fixed, but is rather a function of its position in a high-dimensional void. For most practical purposes, the distinction between a keyword and a vector is perhaps of little moment, but to the architect of information it is all-important: he must unlearn the habit of searching for mere symbols and learn the habit of seeking the 'meaning' which common sense says the symbols 'really' have. Here we have a distinction between the 'literal' and the 'semantic'—between what a query says and what it intends. To find a result is no longer to match a pattern, but to measure a distance; we employ the cosine or the Euclidean metric to determine relevance, much as a surveyor uses his chain, though the space we measure is one that no human eye can perceive. And we know that for the system to be of any use, it must possess specialized structures of indexing to hasten this discovery, for the practical man's desire for an answer is always more urgent than his interest in the mathematical difficulties of the search.\n\nFrom this necessity of rapid discovery, our present consideration passes naturally to the digital archive, where the seeker is provided with results of a peculiar fitness, owing to a system that perceives the very conceptual architecture of the request. In the last analysis, this capacity arises from the integration of deep learning, which allows the database to adapt its internal responses to the myriad variations of human expression. A system thus organized is no longer nonplussed by the lack of formal structure; it handles the image, the spoken word, and the written text with an equal facility. Through the persistent refinement of its embedding models, the technology extricates the essential meaning from a sea of data, serving as a dynamic instrument for both recommendation and linguistic analysis. These vector databases, in short, cannot be better described than as the organization of scalable resources for the modern enterprise. They represent a profound advancement in our power to manage information, fitting the machine to the complex requirements of our technological age."
+  },
+  {
+    "methodId": "M18",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 79,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_head_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 657,
+        "outputTokens": 238
+      },
+      {
+        "step": "gemini_tail_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 622,
+        "outputTokens": 235
+      },
+      {
+        "step": "gemini_tail_argue",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 689,
+        "outputTokens": 262
+      },
+      {
+        "step": "gpt_seam_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 527,
+        "outputTokens": 713
+      }
+    ],
+    "totalInputTokens": 2495,
+    "totalOutputTokens": 1448,
+    "durationMs": 22189,
+    "output": "It is evident from our inquiry that the introduction of a universal income would fundamentally alter the appearance of our economic structure—it would seem to dissolve the very bonds that tie the individual to the labor market. We know that, if the immediate pressure of necessity is withdrawn, the motivation to seek employment will change, and many will see no reason for regarding the pursuit of a career as more 'real' than the pursuit of leisure. For most practical purposes, the acquisition of specialized skills is driven by a need for sustenance; but if this need is met without effort, the student may unlearn the habit of rigorous study, and the worker may no longer feel the impulse to apply his peculiar talents for the sake of gain. It follows that if a whole population were granted such ease, the industrial output of a nation would undergo a transformation, for no man can be expected to endure hardship when the reward for his labor is already guaranteed by the state. Here we have a distinction between the 'practical' man, who works to live, and the man who, having been freed from want, finds no further reason to contribute to the collective machine.\n\nFrom this distinction it is but a short step to consider what follows when those habitual motives which spur men to exertion are withdrawn: the governance of our great and complex associations would become a task of insurmountable difficulty. The small tradesman, moreover, would find himself quite unable to contend with the rival attractions of a leisure funded by the public treasury; a condition which leads, by a process of natural decay, to a general lethargy in the advancement of our primary industrial arts. To provide for such a scheme, the state is forced to impose heavy burdens upon the corporate body, thereby quenching the fire of investment and arresting the growth of new ventures. We see, too, that the redistribution of fortune acts as a sedative upon the spirit of the ambitious leader. A man of talent, finding his rewards diminished, may well choose the ease of a shortened day over the strenuous duties of the director’s chair. This ebbing of the professional tide leaves our global conduits of trade sluggish and brittle. In short, when the private sector leans upon the staff of government support, it loses that hardy resilience which is the hallmark of a robust and self-sustaining economy."
+  },
+  {
+    "methodId": "M18",
+    "textId": "T4",
+    "scoreIn": 87,
+    "scoreOut": 91,
+    "saplingIn": 100,
+    "saplingOut": 73,
+    "tokenSteps": [
+      {
+        "step": "gemini_head_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 578,
+        "outputTokens": 206
+      },
+      {
+        "step": "gemini_tail_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 563,
+        "outputTokens": 151
+      },
+      {
+        "step": "gemini_tail_argue",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 630,
+        "outputTokens": 207
+      },
+      {
+        "step": "gpt_seam_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 459,
+        "outputTokens": 539
+      }
+    ],
+    "totalInputTokens": 2230,
+    "totalOutputTokens": 1103,
+    "durationMs": 19120,
+    "output": "I have come to adopt a certain regularity in my morning habits, under the impression that such a structure serves to enhance the efficacy of my subsequent labours. To this end, I employ a digital instrument to ensure a fixed hour of rising; for it is evident that, without a steady point of departure, the day's progression would be left to the vagaries of impulse. I have also found it prudent to attend to the consumption of water, recognizing that the physical frame requires constant sustenance if it is to maintain its apparent vigor. Furthermore, I engage in a series of gentle movements to limber the joints, unlearning the stillness of sleep and preparing the body for the demands of the waking world. From these practices, there emerges a certain tranquility of spirit, which is not merely a matter of feeling, but a necessary condition for the exercise of the intellect; and it is this clarity, rather than the mere routine itself, which the man of purpose truly seeks to attain.\n\nFrom that same clarity there arose, however, a conviction that the systematic arrangement of one’s professional obligations was not merely a convenience, but a necessary foundation for the efficient exercise of the intellect. It appeared, upon reflection, that the soul required a structured governance of its time; and to this end, the adoption of a formal record became the instrument through which the chaos of daily labor was reduced to order. Such a discipline was further augmented by the pursuit of internal quietude, sought in those moments of silence which allow the mind to recover its natural poise. Nor was the physical constitution disregarded; for the provident regulation of one’s diet was found to be the surest means of preserving that vitality which is so often dissipated by the fatigues of the afternoon. These practices, once established, were seen to produce a most beneficial effect upon the total sum of human industry; and it is to this framework that one must look for the continued expansion of those faculties which constitute the excellence of the individual."
+  },
+  {
+    "methodId": "M18",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 53,
+    "saplingIn": 100,
+    "saplingOut": 47,
+    "tokenSteps": [
+      {
+        "step": "gemini_head_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 798,
+        "outputTokens": 463
+      },
+      {
+        "step": "gemini_tail_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 778,
+        "outputTokens": 424
+      },
+      {
+        "step": "gemini_tail_argue",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 845,
+        "outputTokens": 419
+      },
+      {
+        "step": "gpt_seam_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 930,
+        "outputTokens": 1192
+      }
+    ],
+    "totalInputTokens": 3351,
+    "totalOutputTokens": 2498,
+    "durationMs": 27148,
+    "output": "It is evident, when we consider the movement of the lithium trade in its present course, that its character is one of profound complexity; for what appears to be a mere fluctuation in price is, in truth, a shifting of the very foundations of supply. We may observe that in the South American regions, the earth is yielded up more readily, so that the raw material is no longer so scarce as it once seemed to be. From this it follows that the 'real' value of the metal, which previously appeared to change with every passing whim of the buyer, has attained a certain stability, or at least a freedom from those violent agitations that troubled it in former years. To the manufacturer, the quality of the product is all-important: he must learn the habit of seeing not just the ore, but the refined substance that the battery requires, and this habit is aided by those new methods of processing which distinguish the modern era. We find here a distinction between the 'raw' and the 'refined', where the practical man seeks the latter to satisfy the growing hunger for power in the world of motion. Furthermore, the state, by its various encouragements, ensures that the demand for the electric vehicle remains constant, and thus the future of the trade is bound up with the laws of the land. It is also clear that the rules concerning the environment are not to be ignored; for the extraction of the metal requires a care for the water, and any change in these regulations must bring about a change in the way the business is conducted. In Australia, the work of the mines continues to grow, feeding the fires of the refineries in the East; yet we must remember that the path from the mine to the factory is often a difficult one, and many things may happen to delay the arrival of the goods. To mitigate these troubles, the great corporations seek to control the whole of the process, from the ground to the finished machine, making use of long-term promises to ensure they are never without the materials they 'really' need. Finally, we see the beginning of a new change in the very nature of the battery itself, which will require the lithium to take on a new form, and thus the cycle of appearance and reality begins anew.\n\nIt is at this point, when the very nature of the battery is thus brought into question, that a period has arrived in the advancement of industrial arts, when it is no longer deemed sufficient to rely upon the haphazard discoveries of the past, but rather to apply vast stores of capital toward the perfection of those galvanic systems which now underpin our commerce. It has appeared to the discerning much better that the remnants of exhausted machines should be reclaimed for renewed utility; and in this circularity alone, it seems, can the world find security against an absolute dependence upon the primary extraction of minerals from the earth. By degrees, the expectation of the coming years reflects a judicious balance between the abundance of the earth and the needs of the populace; and it is maintained by those who study these fluctuations that the stores currently amassed will serve as a fortification against the unforeseen caprices of the market. But, in the governance of trade as in the theories of philosophy, the treaties between nations disclose a power that governs the movement of minerals across every border. The 'security' sought by the northern continent, moreover, rests upon the bounty of the public treasury, which is now employed to establish new edifices of industry near the salt-springs of the desert. These works, aided by the innovations of science, allow the producer to find value in low-grade resources which were formerly held to be dross; and thus, the expanding hunger of the world is satisfied by what was once uneconomical. The price of these substances, consequently, may remain within a temperate range, while the merchant observes the impact of such trends upon the stability of his enterprise. Protection against the volatility of the moment is not enough: there needs also a foundation of infrastructure, laid by prudent investment, to ensure the long-term endurance of the trade. Furthermore, as the preference of the public shifts toward batteries of a particular chemical composition, the manufacturer must inevitably alter the very nature of the materials he requires. Finally, those nations of the East, emerging now into the light of industrial progress, offer a new theater for the assembly and creation of these instruments of power."
+  },
+  {
+    "methodId": "M19",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 13,
+    "saplingIn": 100,
+    "saplingOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 619,
+        "outputTokens": 210
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 667,
+        "outputTokens": 263
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 603,
+        "outputTokens": 208
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 652,
+        "outputTokens": 239
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 670,
+        "outputTokens": 398
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 925,
+        "outputTokens": 463
+      }
+    ],
+    "totalInputTokens": 4136,
+    "totalOutputTokens": 1781,
+    "durationMs": 16714,
+    "output": "In the last analysis, the contemporary effort to deal with vast sequences of data consists in the organizing of certain mechanical resources within the digital being. We find that the investigator who employs linear mechanisms of attention is seeking a more efficient mode of conduct in presence of the mere density of information. An \"inefficient\" framework is one which is nonplussed by all but the most trivial data. On the contrary, a system well constituted, by means of sparse patterns and low-rank approximations, is able to extricate its essential dependencies from the overwhelming noise of the whole. To illustrate. Just as the scholar's brain is innervated by the stimulus which his library affords, so does the modern architecture respond to high-dimensional spaces by means of sliding windows and kernel methods. These developments are not merely technical curiosities. They are the very instruments by which a system acquires a dynamic efficiency, and turns the raw sequence into an organized habit of long-term memory and retention."
+  },
+  {
+    "methodId": "M19",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 13,
+    "saplingIn": 100,
+    "saplingOut": 82,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 774,
+        "outputTokens": 256
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 713,
+        "outputTokens": 329
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 758,
+        "outputTokens": 242
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 691,
+        "outputTokens": 331
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 825,
+        "outputTokens": 336
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 860,
+        "outputTokens": 440
+      }
+    ],
+    "totalInputTokens": 4621,
+    "totalOutputTokens": 1934,
+    "durationMs": 18869,
+    "output": "A time, however, came, in the progress of computational systems, when men ceased to think it sufficient that inquiry should depend on the literal coincidence of words. It appeared to the contrivers of these systems much better that information should be translated into mathematical abstractions, or vectors, which might serve as delicate substitutes for the meanings entertained by the mind. In that way alone, it seemed, could the sense of a discourse be preserved from the rude abridgments of the ordinary index. But, in technological and philosophical theories, as well as in social ones, the pursuit of precision discloses difficulties which ruder methods might have concealed from view. The notion that a query must be literal might seem axiomatic, so long as search was conceived as the matching of words with words. In those high-dimensional spaces, meaning is estimated by distance rather than fixed by definition. The search which is performed is not the mere recovery of tokens, but an estimate of neighbourhood; and the similarity spoken of is not a likeness of form, but a correspondence of intention. The mechanism, moreover, employs measures, whether of angle or of interval, by which the things most nearly pertinent may be brought to light. Like other innovations, the vector database was at first, and is still commonly, regarded as an instrument for the few. Yet reflecting persons perceive that, when information is itself the subject—unstructured, various, and vast—its means of management cannot be confined to the rigid arrangements of the past. Protection, therefore, against the obsolescence of keyword matching is not enough: there needs also a power of interpreting the prevailing forms of language and sound, and of referring the will of the inquirer to the conceptual order of the data itself."
+  },
+  {
+    "methodId": "M19",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 2,
+    "saplingIn": 100,
+    "saplingOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 810,
+        "outputTokens": 326
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 786,
+        "outputTokens": 485
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 794,
+        "outputTokens": 362
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 809,
+        "outputTokens": 470
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 861,
+        "outputTokens": 431
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 956,
+        "outputTokens": 680
+      }
+    ],
+    "totalInputTokens": 5016,
+    "totalOutputTokens": 2754,
+    "durationMs": 27559,
+    "output": "I believe that the introduction of a universal income would 'really' alter the very substance of our economic life: the motives which drive a man to labour would look much feebler than they did before. It follows that, if a community is granted sustenance without the requirement of effort, the apparent necessity for competition will change, because no man will feel quite the same pressure to apply his specialized skills when the immediate threat of poverty is removed. Here we have already the beginning of a distinction that causes much trouble in political economy—the distinction between 'security' and 'incentive', between what a man is capable of doing and what he is compelled to do. The educator wants to know how a mind may be sharpened, the merchant wants to know how a task may be completed; but the merchant's difficulty is the greater, for he finds that the habit of industry is easily unlearned when the reward is no longer tied to the exertion. To return to the state of industry. It is evident that there is no single reason why a man should seek an executive promotion or an arduous education if his comfort is already assured—it appears that his ambition is a product of his circumstances, and there is no reason for regarding his diligence as an inherent quality of his nature. And we know that, even in a thriving market, the resilience of the private sector will seem different under the weight of heavy taxation, or to a small tradesman; while in the absence of traditional rewards there will be no innovation at all, though to the casual observer the structure of the state will appear unchanged."
+  },
+  {
+    "methodId": "M19",
+    "textId": "T4",
+    "scoreIn": 87,
+    "scoreOut": 45,
+    "saplingIn": 100,
+    "saplingOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 671,
+        "outputTokens": 315
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 770,
+        "outputTokens": 360
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 655,
+        "outputTokens": 213
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 656,
+        "outputTokens": 258
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 722,
+        "outputTokens": 233
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 762,
+        "outputTokens": 314
+      }
+    ],
+    "totalInputTokens": 4236,
+    "totalOutputTokens": 1693,
+    "durationMs": 16261,
+    "output": "It is a common observation that the hours of the morning are often regarded as a mere prelude to the day's labour, yet to the man who seeks a disciplined life they possess a significance which is all-important. I have found that, by adopting a fixed order of rising, aided by the mechanical precision of a clock, the mind begins to recognize a pattern where formerly there was only the confusion of sleep. It follows that if one attends to the body's simple needs—the drinking of water, or the gentle stretching of the limbs—the spirit is not merely refreshed, but prepared for the more arduous tasks of the intellect. For most practical purposes these small adjustments may seem trivial, but to the observer of his own nature they are the very foundation of clarity: one has to unlearn the habit of drifting into the day, and to learn the habit of entering it deliberately. Here we have the beginning of a distinction between the man who reacts to his circumstances and the man who governs them by means of a plan—the former sees only a succession of accidents, while the latter perceives a coherent order. Even the silence of meditation and the careful preparation of food serve this end, ensuring that the inward peace of the dawn is not sacrificed to the haste of the afternoon. It is evident from what I have found that no single habit pre-eminently secures success; rather, the distribution of these efforts produces a real increase in what we may call the daily output, and reveals the true possibility of a life governed by reason."
+  },
+  {
+    "methodId": "M19",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 2,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1086,
+        "outputTokens": 477
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 925,
+        "outputTokens": 542
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1070,
+        "outputTokens": 344
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 784,
+        "outputTokens": 498
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1137,
+        "outputTokens": 457
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 991,
+        "outputTokens": 556
+      }
+    ],
+    "totalInputTokens": 5993,
+    "totalOutputTokens": 2874,
+    "durationMs": 18670,
+    "output": "I believe that the lithium market is 'stable' for the coming fiscal year, though the parts that reflect the surge in South American extraction look much brighter than the segments burdened by regulatory oversight. I know that, if the geopolitical landscape shifts, the parts that reflect the supply will be different, so that the apparent distribution of value across the global market will change. It follows that if several analysts are looking at the trade data at the same moment, no two of them will see exactly the same distribution of risks, because no two can see the industry from exactly the same point of view, and any change in the point of view makes some change in the way the market's health is reflected.\n\nFor most practical purposes these differences in processing techniques are unimportant, but to the manufacturer they are all-important: the industrialist has to unlearn the habit of thinking that minerals possess the 'quality' which common sense says they 'really' have, and to learn the habit of seeing materials as they appear under the lens of refined battery-grade standards. Here we have already the beginning of one of the distinctions that cause most trouble in commerce—the distinction between 'nominal' supply and 'available' supply, between what inventory seems to be and what it is. The merchant wants to know what lithium seems to be worth, the strategist and the recycler want to know what it is; but the strategist's wish to know this is stronger than the merchant's, and is more troubled by knowledge as to the difficulties of answering the question of long-term security.\n\nTo return to the brine. It is evident from what we have found, that there is no single extraction method which pre-eminently appears to be the 'correct' method for the market—it appears to have different efficiencies from different points of view, and there is no reason for regarding some of these as more 'real' than others. And we know that even from a given point of view the supply will seem different by the light of federal subsidies, or to a manufacturer of solid-state cells, or to a man looking at the industry through the blue spectacles of environmental regulation, while in the absence of demand there will be no market at all, though to the chemist and the geologist the lithium deposits will remain unchanged."
+  },
+  {
+    "methodId": "M20",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 99,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 631,
+        "outputTokens": 252
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 711,
+        "outputTokens": 351
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 615,
+        "outputTokens": 178
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 627,
+        "outputTokens": 250
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 682,
+        "outputTokens": 219
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 745,
+        "outputTokens": 296
+      },
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 876,
+        "outputTokens": 1145
+      },
+      {
+        "step": "sapling_score_1",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_1",
+        "model": "gpt-5.5",
+        "inputTokens": 421,
+        "outputTokens": 345
+      },
+      {
+        "step": "sapling_score_2",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_2",
+        "model": "gpt-5.5",
+        "inputTokens": 448,
+        "outputTokens": 356
+      },
+      {
+        "step": "sapling_score_3",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_3",
+        "model": "gpt-5.5",
+        "inputTokens": 445,
+        "outputTokens": 343
+      },
+      {
+        "step": "sapling_score_4",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_4",
+        "model": "gpt-5.5",
+        "inputTokens": 450,
+        "outputTokens": 354
+      }
+    ],
+    "totalInputTokens": 6651,
+    "totalOutputTokens": 4089,
+    "durationMs": 82094,
+    "output": "What the data actually shows is that we have reached a breaking point: linear attention is no longer a luxury but a survival strategy for managing the sheer tidal wave of modern sequence data. Rarely do we have the luxury of the 'global view' that our intuition craves; the brutal reality of hardware constraints demands a more disciplined, restricted gaze. By deploying sparse patterns or low-rank approximations—the mathematical scalpels we use to prune away the noise—the investigator actively unlearns the gluttonous, exhaustive habits of early Transformers. Here emerges a distinction that haunts my late-night sessions at the terminal: the divide between 'complete' representation and 'efficient' approximation, or rather, the infinite complexity of the network versus the finite silicon of the machine. The researcher asks what the GPU can handle; the theorist asks what we lose in the process. This theoretical anxiety is well-founded—any tweak to the attention span fundamentally warps the way the data reflects back at us. Not once in the dataset have I found a single window that serves as the 'true' context for a feature. Features morph and shift across temporal scales—a pattern at five tokens is a whisper at five thousand—and there is no objective reason to crown one scale as more 'real' than the others."
+  },
+  {
+    "methodId": "M20",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 30,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 786,
+        "outputTokens": 266
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 720,
+        "outputTokens": 421
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 770,
+        "outputTokens": 327
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 772,
+        "outputTokens": 413
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 837,
+        "outputTokens": 467
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 992,
+        "outputTokens": 621
+      },
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1076,
+        "outputTokens": 1553
+      },
+      {
+        "step": "sapling_score_1",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      }
+    ],
+    "totalInputTokens": 5953,
+    "totalOutputTokens": 4068,
+    "durationMs": 37819,
+    "output": "A time, however, has arrived, in the progress of digital affairs, when men have ceased to think it a necessity of computation that their inquiries should be governed by the literal word, opposed in essence to the meaning itself. It appeared to them much better that the various significations of a text should be rendered as numerical embodiments, or vectors, variable according to their semantic weight. In that way alone, it seemed, could they have complete security that the intent of a search would never be obscured by the accidents of vocabulary. By degrees, this new demand for mathematical embeddings became the prominent object of the exertions of technologists; and superseded, to a considerable extent, the previous efforts to refine the matching of keywords.\n\nBut, in computational and linguistic theories, as well as in persons, success discloses nuances and complexities which simpler methods might have concealed from observation. The notion, that a system has no need to apprehend the underlying spirit of a query, might seem axiomatic, when information was a thing only found by its name, or read of as existing in rigid, structured rows. The \"meaning\" which the algorithm identifies is not always the same thing as the characters in which it is written; and the \"search\" spoken of is not the mechanical alignment of letters, but the measurement of the interval, in some artificial space, between ideas. The relevance of data, moreover, practically means, the proximity of its mathematical form to the form of the user's intent; the system, consequently, may discern the kinship between thoughts otherwise disparate; and sophisticated measures are as much needed for this discernment, as for any other exercise of logic.\n\nLike other revolutions of thought, the revolution of the vector was at first, and is still popularly, held in regard chiefly as a means for the acceleration of retrieval. But reflecting persons perceive that when the data are themselves the guide—the collective embeddings over the separate fragments which compose them—their utility is not restricted to the acts which may be done by the hands of simple indexing. Protection, therefore, against the chaos of unstructured information is not enough: there needs also a comprehension of the prevailing context and conceptual framework; against the tendency of systems to impose, by rigid literalism, a superficial order on ideas which possess a more profound and subtle connection."
+  },
+  {
+    "methodId": "M20",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 74,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 825,
+        "outputTokens": 282
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 742,
+        "outputTokens": 441
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 809,
+        "outputTokens": 334
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 783,
+        "outputTokens": 428
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 876,
+        "outputTokens": 498
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 1026,
+        "outputTokens": 659
+      },
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1149,
+        "outputTokens": 149
+      }
+    ],
+    "totalInputTokens": 6210,
+    "totalOutputTokens": 2791,
+    "durationMs": 106320,
+    "output": "A period, it may be observed, has arrived in the discussions of modern economy, when it is proposed that the ancient connexion between labour and subsistence should be fundamentally severed. This institution of a universal competence, though conceived in a spirit of benevolence, threatens to disturb the very foundations of the industrial framework, by withdrawing that necessity of exertion which has hitherto governed so large a portion of human activity. It appears, to those who consider the springs of human conduct, that the provision of unconditional funds must tend, if not inevitably, yet naturally, to a general decline of social vigour; for when the rewards of special skill are no longer required for support, the impulse to take part in the competitive market of toil may well languish. In this manner, the citizen may be tempted to employ his public allowance as a means of escaping those severe responsibilities which, though arduous, constitute the necessary labour of the State; and, by degrees, a considerable diminution of the national produce may ensue.\n\nMoreover, in the pursuit of intellectual and professional cultivation, the absence of pecuniary pressure may prove a snare to the aspiring mind. If the student perceives that his future security is assured, whatever be the measure of his application, he may cease to give the first place to those higher objects of education which demand the utmost discipline and exertion. The State, consequently, might find itself possessed of a body of labourers deficient in that refinement of skill and capacity which only the necessity of achievement has commonly produced. Corporations, likewise, would be exposed to a difficulty of no slight magnitude, if they were required to recruit and govern diligent servants at a time when the accustomed motives of advancement had been rendered secondary to a leisure maintained by public funds. Such a condition, it is feared, would tend to produce stagnation in the principal departments of invention; for where there is no struggle for pre-eminence, the motive to discovery is often extinguished.\n\nFurthermore, the fiscal burden of so extensive a system must, of necessity, require a large increase in the taxation of those commercial enterprises which remain. Such a demand upon the fruits of industry would still further discourage investment, and damp the ambition of those highly capable leaders whose special talents sustain the channels of supply throughout the world. When the redistribution of wealth is carried to this extremity, the individual of great capacity may find it more prudent to abridge his hours of service than to strive for the burdens of executive promotion. The reliance on public subsidies, therefore, tends to weaken the resilience of the private sector; the quality of services declines with the falling rate of labour participation, and society is left to subsist upon a continually diminishing reserve of collective energy."
+  },
+  {
+    "methodId": "M20",
+    "textId": "T4",
+    "scoreIn": 87,
+    "scoreOut": 95,
+    "saplingIn": 100,
+    "saplingOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 671,
+        "outputTokens": 228
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 684,
+        "outputTokens": 342
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 655,
+        "outputTokens": 304
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 750,
+        "outputTokens": 353
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 722,
+        "outputTokens": 221
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 747,
+        "outputTokens": 278
+      },
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 916,
+        "outputTokens": 1308
+      },
+      {
+        "step": "sapling_score_1",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_1",
+        "model": "gpt-5.5",
+        "inputTokens": 428,
+        "outputTokens": 333
+      },
+      {
+        "step": "sapling_score_2",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_2",
+        "model": "gpt-5.5",
+        "inputTokens": 448,
+        "outputTokens": 373
+      },
+      {
+        "step": "sapling_score_3",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_3",
+        "model": "gpt-5.5",
+        "inputTokens": 488,
+        "outputTokens": 380
+      },
+      {
+        "step": "sapling_score_4",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_4",
+        "model": "gpt-5.5",
+        "inputTokens": 491,
+        "outputTokens": 435
+      }
+    ],
+    "totalInputTokens": 7000,
+    "totalOutputTokens": 4555,
+    "durationMs": 92591,
+    "output": "Long before the serious talk about productivity begins, morning has already cast its vote. What’s really happening isn’t some shiny burst of motivation; it’s more like tuning a breathing apparatus, pulling together sinew, focus, and nerve before the day comes in swinging. You can’t stroll half-assembled into work, chores, inboxes, and choices and assume you’ll remain vertical. No framework? The first surge of phone calls, errands, notifications, and tiny verdicts shoves you off balance. A planned person walks into the same disorder with a different gait. Calmer. More fueled. Less easily rattled. That obnoxious chirp from the alarm isn’t just a useful nudge; it’s the crack of a starting gun, setting off a chain of actions that persuades the nervous system to line up. Once there’s food onboard, and once the body has been hauled through intentional movement, the whole organism is primed for sharper thought—I’ve found people understate this constantly. Through the circuitry of repeated acts, the prepared body turns into the will’s most dependable accomplice. Still, the aim isn’t barracks-level tidiness because tidiness looks virtuous. The aim is a steadier inner weather. Often, peace gets earned by yanking duties out of the skull and trapping them on paper, where ink makes them stop wriggling, and by fencing off a few small silences from the surrounding clamor. These rituals don’t merely swell the day’s output; they build a flexible competence, the sort that lets someone inhabit abilities that had been waiting, dusty and unused."
+  },
+  {
+    "methodId": "M20",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 8,
+    "saplingIn": 100,
+    "saplingOut": 8,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1108,
+        "outputTokens": 449
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 897,
+        "outputTokens": 635
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1092,
+        "outputTokens": 436
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 877,
+        "outputTokens": 507
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1159,
+        "outputTokens": 526
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 1051,
+        "outputTokens": 735
+      },
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1044,
+        "outputTokens": 454
+      },
+      {
+        "step": "sapling_score_1",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      }
+    ],
+    "totalInputTokens": 7228,
+    "totalOutputTokens": 3742,
+    "durationMs": 47189,
+    "output": "In our foregoing survey of the industrial landscape, we were led to frame a very clear conception of what the lithium market signifies as it enters the opening quarter of the new fiscal year. In the last analysis, the stabilization of prices is nothing other than the organization of global resources into a form of conduct fitted to our modern hunger for energy. A market participant who is nonplussed by the shifting tides of supply is one who has failed to arm himself with the abstract conceptions of long-term security. Success, in short, cannot be better described than as the practical ability to extricate oneself from the volatility of the past by means of the organized habits of sustainable extraction and refined processing.\n\nTo illustrate. The Australian miner and the East Asian refiner are each and all of them industrious, in their several ways; and they show their industry at this present moment by different conduct. It would be quite impossible for a major automotive corporation, with its mind technically and professionally organized as it is, to remain sitting entirely silent while the currents of demand flow so strongly. Something tells the director that he is expected to secure his supply, and must secure it; something forces him to seek the long-term contract. The organs of production are continuously innervated by the outgoing currents of federal subsidy, which the currents of technological innovation, passing through the educated brain of the researcher, have set in motion.\n\nIf we reflect upon the various ideals of energy security that are prevalent in the different countries, we see that what they all aim at is to organize capacities for domestic conduct. This is most immediately obvious in North America, where the explicitly avowed aim of federal funding is to turn the saline brine into an instrument for advancing national self-sufficiency. In the laboratory, it might seem at first sight as if the higher research into solid-state systems aimed at a certain static perfection; in truth, it is the development of what one may call a dynamic scientific efficiency. The circular economy, when asked what it can do for the future of industry, is said to reply, \"I can teach an old battery how to be a new battery.\""
+  }
+]

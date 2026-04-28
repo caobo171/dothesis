@@ -1,0 +1,372 @@
+[
+  {
+    "methodId": "M7",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 1,
+    "saplingIn": 100,
+    "saplingOut": null,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 631,
+        "outputTokens": 279
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 736,
+        "outputTokens": 347
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 615,
+        "outputTokens": 219
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 664,
+        "outputTokens": 262
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 682,
+        "outputTokens": 259
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 789,
+        "outputTokens": 461
+      }
+    ],
+    "totalInputTokens": 4117,
+    "totalOutputTokens": 1827,
+    "durationMs": 20791,
+    "output": "It is evident from what we have found in the study of sequences, that there is no single attention mechanism which pre-eminently appears to be the 'true' method of processing them—it appears in different forms from different computational points of view, and there is no reason for regarding some of these as more really the process than others. We know that, if we increase the length of the data, the parts that reflect the quadratic burden will be different, so that the apparent efficiency of the network will change. For most practical purposes these differences are matters of engineering, but to the researcher they are all-important: the researcher has to unlearn the habit of thinking that dependencies seem to have the global reach which theory says they 'really' have, and to learn the habit of seeing them through the filters of linear or sparse approximations. Here we have already the beginning of one of the distinctions that cause most trouble in the field—the distinction between 'theoretical' complexity and 'actual' performance, between what a model seems to require and what it is capable of achieving. The theorist wants to know what these systems seem to be, the practitioner and the engineer want to know what they are; but the engineer's wish to know this is stronger than the practitioner's, and is more troubled by knowledge as to the difficulties of answering the question within the limits of hardware."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 7,
+    "saplingIn": 100,
+    "saplingOut": null,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 786,
+        "outputTokens": 312
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 767,
+        "outputTokens": 383
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 770,
+        "outputTokens": 417
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 858,
+        "outputTokens": 483
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 837,
+        "outputTokens": 319
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 848,
+        "outputTokens": 559
+      }
+    ],
+    "totalInputTokens": 4866,
+    "totalOutputTokens": 2473,
+    "durationMs": 19611,
+    "output": "We are inclined to suppose that a database 'contains' facts in the way in which a ledger contains figures; but the modern vector system proceeds upon the belief that the 'true' meaning of a datum is to be found in its mathematical relations to other data. It is evident that no single keyword can capture the essence of a thought, since a word derives much of its significance from its neighbours; thus, by a process of numerical translation, the machine seeks to unlearn the habit of looking at characters, and to learn the habit of seeing conceptual proximity. It follows that if several queries are directed towards the same idea, the system will recognize their affinity, because the spatial distance between the points which represent them in a high-dimensional manifold is small, while any change in the underlying intention produces a corresponding change in this abstract geometry. For the casual observer these mathematical nuances are perhaps invisible, but to the architect of information they are all-important: he must move beyond the common-sense notion that language is a fixed collection of labels, and learn to regard it as a fluid set of coordinates. Here we encounter a distinction which recalls the old problems of philosophy—the distinction between the 'literal' appearance of a word and the 'semantic' reality of its intention. The simple index wants to know what a query says, while the vector database wants to know what it means; but the latter's wish to know this is more profound, and is more troubled by the difficulties of mapping the infinite variety of human expression into a single navigable space."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 70,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 825,
+        "outputTokens": 455
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 908,
+        "outputTokens": 543
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 809,
+        "outputTokens": 380
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 825,
+        "outputTokens": 446
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 876,
+        "outputTokens": 442
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 968,
+        "outputTokens": 506
+      }
+    ],
+    "totalInputTokens": 5211,
+    "totalOutputTokens": 2772,
+    "durationMs": 22818,
+    "output": "I am persuaded that the introduction of a universal income would fundamentally alter the established order of our economic life, for it appears that the immediate pressure of necessity is what drives the engine of common industry. If we suppose that every man receives a stipend regardless of his contribution, it follows that the motive for seeking competitive employment must be greatly diminished. We are faced here with a distinction between the 'natural' incentive of survival and the 'artificial' security of the State; the former compels the exercise of skill, while the latter, though perhaps more comfortable, invites a certain lassitude of character, which may lead the citizen to avoid those demanding responsibilities that we have come to expect.\n\nFor most practical purposes, the reduction in industrial output might seem a mere matter of statistics, but to the architect of society it is a profound concern: one must unlearn the habit of assuming that men will work for the sake of work alone, and learn to see the fragility of the motives that sustain our complex systems. The politician may wish to provide for the comfort of the poor, but the economist wants to know how the work of the world is to be done; and the economist's doubt is more troubled by the knowledge of how easily the habit of diligence may be broken. Here we have already the beginning of a decline in innovation, for the fiscal burden of such a programme requires a taxation so heavy that it must, by its nature, discourage the very investment and ambition that allow new enterprises to flourish.\n\nTo return to the matter of the future workforce. It is evident from what we have observed that the pursuit of learning is often tied to the expectation of future gain, and that, where such gain is guaranteed irrespective of effort, the desire for difficult mastery may well vanish. We know that, even with the best intentions, the student will see little reason for the arduous pursuit of knowledge if his material state remains unchanged by his success; thus the economy must eventually struggle to find those highly skilled men upon whom the efficiency of global commerce depends. It follows that, as labour participation falls, the resilience of the private sector will diminish, leaving the quality of our common services to fade along with the ambition of those who once led them."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T4",
+    "scoreIn": 86,
+    "scoreOut": 1,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 671,
+        "outputTokens": 233
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 682,
+        "outputTokens": 278
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 655,
+        "outputTokens": 207
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 653,
+        "outputTokens": 257
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 722,
+        "outputTokens": 255
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 783,
+        "outputTokens": 305
+      }
+    ],
+    "totalInputTokens": 4166,
+    "totalOutputTokens": 1535,
+    "durationMs": 14408,
+    "output": "I have found it necessary to adopt a certain regularity in my morning hours, for it is apparent that the way in which one begins the day has much to do with the subsequent efficiency of one's mind. To this end, I use a mechanical device to mark the moment of waking; yet I know that, if the device were absent, the habit itself would still make some effort to remain constant, against the natural inclination towards rest. There is a distinction to be made between the mere act of rising and the deliberate preparation of the body: by attending to the body's need for water, and to the loosening of the joints, one seeks to bring the animal state into some agreement with the higher intentions of the intellect. It follows that a mind so prepared—by quiet reflection and by the careful arrangement of one's duties upon a written page—is better fitted to meet the difficulties of the day. We may see that these habits, though they seem trivial when taken separately, combine to produce a considerable change in the total result of one's efforts; and it is this observation which encourages the continued use of such a framework for the sake of one's own development."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 53,
+    "saplingIn": 100,
+    "saplingOut": 6,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1108,
+        "outputTokens": 513
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 961,
+        "outputTokens": 651
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1092,
+        "outputTokens": 428
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 867,
+        "outputTokens": 707
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1159,
+        "outputTokens": 348
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 871,
+        "outputTokens": 436
+      }
+    ],
+    "totalInputTokens": 6058,
+    "totalOutputTokens": 3083,
+    "durationMs": 25816,
+    "output": "It is often supposed that the global market for lithium has a single and intelligible course; yet, as we enter the first quarter of the year, it becomes evident that the apparent steadiness of the market is made up of many shifting parts. To the manufacturer, the expansion of South American extraction is all-important: he has to unlearn the habit of fearing volatility in the old way, and to learn the habit of seeing the distribution of raw material as it now appears. Here we have already the beginning of a distinction between the 'spot price' of common sense and the 'market value' of the analyst. The practical man wants to know what the price is, but the stakeholder, troubled by the difficulties of the future, wants to know what it will be. It follows that if several nations are considering the same supply, no two of them will see exactly the same security, because no two can see it from exactly the same geopolitical point of view.\n\nRegarding the supply of spodumene from Australian mines, we find that there is no volume which pre-eminently appears to be the 'true' output. It appears different when it is seen through the refining capacities of East Asia from what it appears when seen through the logistical difficulties of the global manufacturer. The automotive corporations, much like the philosopher, seek to escape the risks of appearance by means of the reality of long-term contracts; they wish to be assured that the lithium they require is not merely an appearance of plenty, but a reality of supply. Whether we consider the development of solid-state anodes or the recycling of materials at the end of their life, we find that the circular economy is less a matter of practical convenience than a fundamental change in the way the industry regards its primary sources.\n\nTo return to the market outlook. It is evident from what we have found that reliance on traditional extraction is no longer the sole reality of the trade, for technological innovations in direct extraction allow what was previously thought uneconomical to be used. And we know that, even from a given point of view, the flow of lithium will seem different under the influence of trade agreements or federal funding, just as a table seems different when viewed through blue spectacles. Consequently, strategic investment in infrastructure is not merely a response to present demand, but a means of ensuring that the long-term sustainability of the market is more than a mere appearance. The shift towards lithium iron phosphate batteries, and the emerging opportunities in Southeast Asia, are further changes in the point of view which make the apparent distribution of the market so complex and so full of interest."
+  },
+  {
+    "methodId": "M9",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 94,
+    "saplingIn": 100,
+    "saplingOut": null,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 868
+      }
+    ],
+    "totalInputTokens": 747,
+    "totalOutputTokens": 868,
+    "durationMs": 72719,
+    "output": "What the data actually shows is that researchers are pivoting toward linear attention mechanisms to handle sequences that would otherwise crash our local clusters. The quadratic bottleneck is finally being dismantled; it’s a matter of pure efficiency. By leveraging sparse attention patterns, novel architectures capture those needle-in-a-haystack dependencies—the ones hidden deep within sprawling neural networks. Not once in the dataset did we see high computational costs when frameworks applied low-rank approximations. The training phases are leaner now; the overhead has simply vanished. To grasp local context in high-dimensional spaces, innovative models have turned to sliding window techniques. It is a localized focus that yields results. Rarely do we see scalability issues in large-scale language tasks when kernel-based methods are deployed. What surprised me was the way recent studies utilize adaptive attention spans. They track dynamic information across multiple temporal scales, shifting focus exactly as the data demands. Finally, contemporary systems integrate specialized memory modules to ensure long-term retention. These aren’t just passive buffers; they are the reason sequential data finally stays put."
+  },
+  {
+    "methodId": "M9",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 99,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 902,
+        "outputTokens": 1570
+      },
+      {
+        "step": "sapling_score_1",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_1",
+        "model": "gpt-5.5",
+        "inputTokens": 519,
+        "outputTokens": 438
+      },
+      {
+        "step": "sapling_score_2",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_2",
+        "model": "gpt-5.5",
+        "inputTokens": 547,
+        "outputTokens": 458
+      },
+      {
+        "step": "sapling_score_3",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_3",
+        "model": "gpt-5.5",
+        "inputTokens": 579,
+        "outputTokens": 500
+      },
+      {
+        "step": "sapling_score_4",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_4",
+        "model": "gpt-5.5",
+        "inputTokens": 616,
+        "outputTokens": 522
+      }
+    ],
+    "totalInputTokens": 3163,
+    "totalOutputTokens": 3488,
+    "durationMs": 73255,
+    "output": "What the data actually shows is that vector databases don't just store information; they map the very architecture of meaning through mathematical representations. Deep in the methodology, sophisticated machine learning models work to strip raw text of its surface-level noise, refining it into pure numerical vectors. The resulting embeddings capture semantic relationships and contextual nuances—a feat that makes keyword systems look like relics. Gone are the days when we relied on clunky matching; today, we prioritize the underlying intent buried beneath a query. Not once in the history of retrieval have we seen such precision as when we calculate spatial distance between points in high-dimensional space. Whether the researcher utilizes cosine similarity or Euclidean distance, the relevance of retrieved items remains mathematically undeniable. Rarely do we see systems handle massive datasets with this kind of velocity, yet specialized indexing structures make it happen. It was the indexing method that broke the speed barrier, ensuring the system pinpoints the closest data points in milliseconds. The architecture itself is a marvel—mapping raw user intent directly to the nearest neighbor in the vector cloud. Users get results that actually matter because the system finally understands the conceptual framework, not just the characters typed into a search box. Deep learning integration allows these databases to adapt to linguistic patterns that once baffled us. From images to audio to raw text—unstructured data is no longer a chaotic mess but a structured asset. As we refine our embedding models, watching the precision metrics climb, the retrieval process becomes increasingly flawless. Applications are exploding, ranging from recommendation engines that actually anticipate needs to NLP tasks that feel human. Vector databases offer the only truly scalable solution for the current deluge of enterprise data. They represent a quantum leap in automated analysis; consequently, it is these advanced solutions that underpin the intelligent applications defining our modern landscape."
+  },
+  {
+    "methodId": "M9",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": null,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 941,
+        "outputTokens": 1822
+      },
+      {
+        "step": "sapling_score_1",
+        "model": "sapling",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "step": "paraphrase_1",
+        "model": "gpt-5.5",
+        "inputTokens": 581,
+        "outputTokens": 513
+      }
+    ],
+    "totalInputTokens": 1522,
+    "totalOutputTokens": 2335,
+    "durationMs": 329515,
+    "output": "Not once in the history of modern macroeconomics have we seen a proposal as fundamentally disruptive to the global framework as the implementation of universal basic income. What the data actually shows is that the competitive labor market — that engine of growth fueled by specialized skill — would likely see a mass exodus of talent. It is the provision of unconditional funds that threatens to erode societal motivation; when the financial floor is guaranteed, the drive to climb the professional ladder often vanishes. Rarely do we find workers willing to sacrifice their leisure to hone a technical craft when there is no survival-based pressure to do so. National industrial output would inevitably plummet — a direct consequence of citizens opting for comfort over the grueling demands of the professional grind. Deep in the educational system, a crisis would brew as students (calculating their future earnings with a fixed floor) begin to deprioritize the rigorous pursuit of advanced degrees. The result is clear. Our future workforce would emerge as a shadow of its potential, lacking the specialized capabilities that only necessity can forge. Harder still would be the task for corporations seeking to recruit dedicated personnel. Without traditional financial incentives, the management of sprawling, complex organizational structures becomes a logistical nightmare; the mechanisms that drive productivity would simply cease to function. For the small business owner, the outlook is even bleaker. These local hubs cannot compete with government-funded leisure — a dynamic that guarantees innovation in critical sectors will grind to a halt. To fund this experiment, corporate taxation would have to skyrocket. It is this fiscal burden that would suffocate investment and kill off the commercial enterprises of tomorrow. Gone would be the ambition of our high-performing leaders; why strive for an executive promotion when you can simply reduce your hours and maintain a comfortable baseline? This thinning of the leadership pipeline would ripple outward, eventually fracturing the fragile efficiency of global supply chains. Relying on government subsidies, the private sector would inevitably lose its historic resilience. As labor participation rates continue their annual slide, the very quality of our services will erode until only a shell of the economy remains."
+  }
+]
