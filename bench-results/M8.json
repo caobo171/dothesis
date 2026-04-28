@@ -1,0 +1,38 @@
+[
+  {
+    "methodId": "M8",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 97,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 814
+      },
+      {
+        "step": "critic_1",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 391,
+        "outputTokens": 107
+      },
+      {
+        "step": "self_critique",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 218,
+        "outputTokens": 149
+      },
+      {
+        "step": "gpt_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 186,
+        "outputTokens": 180
+      }
+    ],
+    "totalInputTokens": 1542,
+    "totalOutputTokens": 1250,
+    "durationMs": 27605,
+    "output": "The current data indicates that researchers are shifting toward linear attention mechanisms to manage the heavy computational demands of long data sequences. Sparse attention patterns offer a practical way to isolate key dependencies within complex neural networks, while low-rank approximations have become essential for reducing overhead during training. To better capture local context in high-dimensional spaces, many new models now utilize sliding window techniques. This transition has significantly improved scalability across massive language tasks, with kernel-based methods serving as the primary driver for these advancements. Adaptive attention spans have proven to be the most effective method for handling dynamic information across various time scales. Furthermore, the implementation of specialized memory modules has finally made long-term retention of sequential data possible."
+  }
+]
