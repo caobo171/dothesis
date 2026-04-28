@@ -1,0 +1,26 @@
+[
+  {
+    "methodId": "M4",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 814
+      },
+      {
+        "step": "gemini_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 267,
+        "outputTokens": 196
+      }
+    ],
+    "totalInputTokens": 1014,
+    "totalOutputTokens": 1010,
+    "durationMs": 19888,
+    "output": "What the data actually shows is that researchers have finally overcome the bottleneck of long-form processing by deploying linear attention mechanisms. Never before have we seen dependencies captured so crisply; novel architectures now leverage sparse patterns to isolate signal from noise within these complex networks; deep in the training logs, the evidence is undeniable — frameworks are utilizing low-rank approximations to slash the computational overhead that used to haunt our intensive training phases. Precision is key; innovative models employ sliding window techniques to anchor local context within high-dimensional feature spaces. Rarely do we encounter such robust scalability, yet kernel-based developments have managed to enhance performance across the most demanding large-scale tasks. Because data is rarely static, recent studies leverage adaptive attention spans that expand and contract to capture information across shifting temporal scales; it was the specialized memory module that finally stabilized the system — providing the long-term retention of sequential data that we’ve been chasing for years."
+  }
+]
