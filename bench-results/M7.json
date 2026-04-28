@@ -1,0 +1,38 @@
+[
+  {
+    "methodId": "M7",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 77,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 631,
+        "outputTokens": 199
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 658,
+        "outputTokens": 262
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 615,
+        "outputTokens": 187
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 635,
+        "outputTokens": 383
+      }
+    ],
+    "totalInputTokens": 2539,
+    "totalOutputTokens": 1031,
+    "durationMs": 34115,
+    "output": "We observe that the modern researcher, in the quest for efficiency, employs the 'linear' attention mechanism to manage the vastness of data; he finds that, by this method, the weight of the sequence is made more bearable. It follows that, if one uses sparse patterns or low-rank approximations, the essential dependencies may remain, while the computational burden is greatly lightened. Here we encounter a distinction of some importance—the distinction between the 'complete' computation and the 'approximate' one, the latter being preferred for its practical utility in the intensive phases of training. The use of sliding windows or kernel methods further illustrates this habit of seeing only what is local or mathematically convenient. We know, however, that even with adaptive spans and specialized memory, the problem of retaining the distant past remains; the system wants to know what was, but its wish is often troubled by the difficulty of holding such knowledge through the passage of time."
+  }
+]
