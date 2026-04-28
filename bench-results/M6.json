@@ -1,0 +1,50 @@
+[
+  {
+    "methodId": "M6",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 933
+      },
+      {
+        "step": "sentence_scoring",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 289,
+        "outputTokens": 24
+      },
+      {
+        "step": "surgical_2",
+        "model": "gpt-5.5",
+        "inputTokens": 179,
+        "outputTokens": 91
+      },
+      {
+        "step": "surgical_1",
+        "model": "gpt-5.5",
+        "inputTokens": 165,
+        "outputTokens": 122
+      },
+      {
+        "step": "surgical_3",
+        "model": "gpt-5.5",
+        "inputTokens": 176,
+        "outputTokens": 140
+      },
+      {
+        "step": "transition_polish",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 270,
+        "outputTokens": 151
+      }
+    ],
+    "totalInputTokens": 1826,
+    "totalOutputTokens": 1461,
+    "durationMs": 39456,
+    "output": "What the data actually shows is that linear attention mechanisms have become the essential tool for researchers wrestling with massive data sequences. Quadratic scaling has been shown the door; in our lab runs, once that choke point cracked, throughput didn't just improve—it practically hopped the fence. Across the whole dataset, the sparse patterns kept finding the tiny trapdoors of dependence hidden in the network’s machinery. Low-rank tricks have become the model builder’s diet plan: trim the bulky math, keep the muscle, and let the late-night training runs stop sounding like jet engines. Only by leveraging sliding window techniques can models truly nail local context in high-dimensional feature spaces. It is through kernel-based methods that we achieve enhanced scalability across the most daunting large-scale language tasks; the evidence here is unambiguous. Having analyzed the latest benchmarks, I can say that adaptive attention spans are the only way to track dynamic information across shifting temporal scales. Finally, it is the specialized memory module that ensures long-term retention of sequential data, preventing the catastrophic forgetting that plagued earlier systems."
+  }
+]
