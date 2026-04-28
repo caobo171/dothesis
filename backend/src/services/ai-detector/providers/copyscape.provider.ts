@@ -38,17 +38,21 @@ export class CopyscapeProvider implements AIDetectionProvider {
   }
 
   async analyze(text: string): Promise<AIDetectionResult> {
-    // POST with query params (Copyscape API does not use a JSON body)
-    const res = await axios.post(COPYSCAPE_API_URL, null, {
-      params: {
-        u: this.username,
-        k: this.apiKey,
-        o: 'aicheck',   // AI detection operation — distinct from plagiarism check
-        e: 'UTF-8',
-        t: text,
-        f: 'json',
-        l: '0.50',      // Spend limit per call as a safety cap (~$0.50 max)
-      },
+    // Decision: Use form-encoded POST body, NOT URL query params. Copyscape's AI checker
+    // has its own language-detection step that gets confused by URL-encoded text in
+    // query strings (returns "only works with English text" even for clean English input).
+    // The plagiarism endpoint tolerates URL params but the AI checker requires body form data.
+    const body = new URLSearchParams();
+    body.append('u', this.username);
+    body.append('k', this.apiKey);
+    body.append('o', 'aicheck'); // AI detection operation — distinct from plagiarism check
+    body.append('e', 'UTF-8');
+    body.append('t', text);
+    body.append('f', 'json');
+    body.append('l', '0.50');   // Spend limit per call as a safety cap (~$0.50 max)
+
+    const res = await axios.post(COPYSCAPE_API_URL, body, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
       timeout: 15000,
     });
 
