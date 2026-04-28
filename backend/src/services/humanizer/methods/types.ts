@@ -29,11 +29,16 @@ export type HumanizerMethod = {
 };
 
 // One row per (method, text) in the bench output JSON.
+// scoreIn/scoreOut are the Copyscape pair (kept under those names for backward
+// compatibility with the v8 bake-off results). saplingIn/saplingOut are added
+// by the dual-judge re-bake-off — null when the harness wasn't asked to call Sapling.
 export type BenchRecord = {
   methodId: string;
   textId: string;
   scoreIn: number | null;       // Copyscape score on input, null if --copyscape false
   scoreOut: number | null;
+  saplingIn?: number | null;
+  saplingOut?: number | null;
   tokenSteps: MethodTokenStep[];
   totalInputTokens: number;
   totalOutputTokens: number;
