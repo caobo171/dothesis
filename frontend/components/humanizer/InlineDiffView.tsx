@@ -73,13 +73,13 @@ export function InlineDiffView({ inputText, changes }: Props) {
         return (
           <span key={i} className="inline">
             {seg.original && (
-              <span className="line-through text-ink-muted/70 italic mr-1" title={seg.original}>
+              <span className="line-through text-ink-muted/50 mr-0.5" title={seg.original}>
                 {seg.original}
               </span>
             )}
             {seg.replacement && (
               <span
-                className="inline-block px-1.5 py-0.5 rounded-md border border-primary/30 bg-bg-blue text-primary font-medium"
+                className="bg-primary/10 text-ink rounded px-0.5 decoration-primary"
                 title="Rewritten"
               >
                 {seg.replacement}

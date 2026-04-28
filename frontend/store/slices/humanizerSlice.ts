@@ -37,7 +37,8 @@ const initialState: HumanizerState = {
   currentJobId: null,
   currentStage: '',
   maxStepReached: -1,
-  viewMode: 'plain',
+  // Default to inline diff so users immediately see what changed
+  viewMode: 'inline',
 };
 
 // Map a backend stage label to one of our three user-facing steps.
@@ -88,6 +89,10 @@ const humanizerSlice = createSlice({
       state.aiScoreOut = action.payload.aiScoreOut;
       state.currentJobId = action.payload.jobId;
       state.isProcessing = false;
+      // Auto-switch to inline view when changes are available
+      if (action.payload.changes.length > 0) {
+        state.viewMode = 'inline';
+      }
     },
     setCurrentStage(state, action: PayloadAction<string>) {
       state.currentStage = action.payload;

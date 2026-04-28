@@ -154,11 +154,17 @@ const HUMAN_MARKERS: Record<string, string[]> = {
     'sort of', 'i think', 'i believe', 'i guess', 'you know',
     'pretty much', 'i mean', 'to be honest', 'in my experience',
     'personally', 'tbh', 'imo', 'btw',
+    // Creative grammar markers — inversions, clefts, rhetorical questions
+    'rarely do', 'not once', 'what surprised me', 'what matters',
+    'having spent', 'having read', 'gone are', 'nowhere is',
+    'picture this', 'imagine',
   ],
   vi: [
     'thực ra', 'nói thật', 'theo tôi', 'mình nghĩ', 'có lẽ',
     'chắc là', 'đại khái', 'kiểu như', 'nói chung là',
     'thật sự mà nói', 'cá nhân tôi', 'theo kinh nghiệm',
+    // Creative grammar markers in Vietnamese
+    'hiếm khi nào', 'điều làm tôi ngạc nhiên', 'thử hình dung',
   ],
 };
 
