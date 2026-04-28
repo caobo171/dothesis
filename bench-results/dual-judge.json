@@ -69,7 +69,7 @@
     "scoreIn": 95,
     "scoreOut": 96,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -101,7 +101,7 @@
     "scoreIn": 89,
     "scoreOut": 99,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -133,7 +133,7 @@
     "scoreIn": 98,
     "scoreOut": 95,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -203,7 +203,7 @@
     "scoreIn": 98,
     "scoreOut": 97,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -241,7 +241,7 @@
     "scoreIn": 95,
     "scoreOut": 93,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 99,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -279,7 +279,7 @@
     "scoreIn": 89,
     "scoreOut": 85,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -317,7 +317,7 @@
     "scoreIn": 98,
     "scoreOut": 93,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 96,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -355,7 +355,7 @@
     "scoreIn": 99,
     "scoreOut": 98,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -393,7 +393,7 @@
     "scoreIn": 98,
     "scoreOut": 95,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -431,7 +431,7 @@
     "scoreIn": 95,
     "scoreOut": 97,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -469,7 +469,7 @@
     "scoreIn": 89,
     "scoreOut": 83,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -507,7 +507,7 @@
     "scoreIn": 98,
     "scoreOut": 97,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -545,7 +545,7 @@
     "scoreIn": 99,
     "scoreOut": 99,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -571,7 +571,7 @@
     "scoreIn": 98,
     "scoreOut": 99,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -597,7 +597,7 @@
     "scoreIn": 95,
     "scoreOut": 94,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -623,7 +623,7 @@
     "scoreIn": 89,
     "scoreOut": 98,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -649,7 +649,7 @@
     "scoreIn": 98,
     "scoreOut": 94,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -675,7 +675,7 @@
     "scoreIn": 99,
     "scoreOut": 92,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_temp07",
@@ -731,7 +731,7 @@
     "scoreIn": 98,
     "scoreOut": 99,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_temp07",
@@ -787,7 +787,7 @@
     "scoreIn": 95,
     "scoreOut": 92,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_temp07",
@@ -843,7 +843,7 @@
     "scoreIn": 89,
     "scoreOut": 99,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_temp07",
@@ -899,7 +899,7 @@
     "scoreIn": 98,
     "scoreOut": 97,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_temp07",
@@ -955,7 +955,7 @@
     "scoreIn": 99,
     "scoreOut": 99,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -1005,7 +1005,7 @@
     "scoreIn": 98,
     "scoreOut": 94,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -1067,7 +1067,7 @@
     "scoreIn": 95,
     "scoreOut": 93,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -1129,7 +1129,7 @@
     "scoreIn": 89,
     "scoreOut": 96,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -1179,7 +1179,7 @@
     "scoreIn": 98,
     "scoreOut": 99,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -1241,7 +1241,7 @@
     "scoreIn": 99,
     "scoreOut": 5,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 1,
     "tokenSteps": [
       {
         "step": "gemini_anchored_academic_formal",
@@ -1291,7 +1291,7 @@
     "scoreIn": 98,
     "scoreOut": 6,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 82,
     "tokenSteps": [
       {
         "step": "gemini_anchored_academic_formal",
@@ -1341,7 +1341,7 @@
     "scoreIn": 95,
     "scoreOut": 1,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 3,
     "tokenSteps": [
       {
         "step": "gemini_anchored_academic_formal",
@@ -1391,7 +1391,7 @@
     "scoreIn": 89,
     "scoreOut": 5,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_anchored_academic_formal",
@@ -1441,7 +1441,7 @@
     "scoreIn": 98,
     "scoreOut": 72,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 27,
     "tokenSteps": [
       {
         "step": "gemini_anchored_academic_formal",
@@ -1491,7 +1491,7 @@
     "scoreIn": 99,
     "scoreOut": 99,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -1529,7 +1529,7 @@
     "scoreIn": 98,
     "scoreOut": 99,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -1567,7 +1567,7 @@
     "scoreIn": 95,
     "scoreOut": 96,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 99,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -1605,7 +1605,7 @@
     "scoreIn": 89,
     "scoreOut": 96,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
@@ -1643,7 +1643,7 @@
     "scoreIn": 98,
     "scoreOut": 99,
     "saplingIn": 100,
-    "saplingOut": null,
+    "saplingOut": 100,
     "tokenSteps": [
       {
         "step": "gemini_rewrite",
