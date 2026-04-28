@@ -1,0 +1,218 @@
+[
+  {
+    "methodId": "M7",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 77,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 631,
+        "outputTokens": 199
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 658,
+        "outputTokens": 262
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 615,
+        "outputTokens": 187
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 635,
+        "outputTokens": 383
+      }
+    ],
+    "totalInputTokens": 2539,
+    "totalOutputTokens": 1031,
+    "durationMs": 34115,
+    "output": "We observe that the modern researcher, in the quest for efficiency, employs the 'linear' attention mechanism to manage the vastness of data; he finds that, by this method, the weight of the sequence is made more bearable. It follows that, if one uses sparse patterns or low-rank approximations, the essential dependencies may remain, while the computational burden is greatly lightened. Here we encounter a distinction of some importance—the distinction between the 'complete' computation and the 'approximate' one, the latter being preferred for its practical utility in the intensive phases of training. The use of sliding windows or kernel methods further illustrates this habit of seeing only what is local or mathematically convenient. We know, however, that even with adaptive spans and specialized memory, the problem of retaining the distant past remains; the system wants to know what was, but its wish is often troubled by the difficulty of holding such knowledge through the passage of time."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 786,
+        "outputTokens": 378
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 835,
+        "outputTokens": 450
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 770,
+        "outputTokens": 396
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 834,
+        "outputTokens": 570
+      }
+    ],
+    "totalInputTokens": 3225,
+    "totalOutputTokens": 1794,
+    "durationMs": 22814,
+    "output": "It is commonly supposed that a database 'really' contains information in the form of discrete words, much as a ledger contains static entries; yet, if we examine the vector database, we find that the data which it contains are not a collection of letters, but a series of numerical points. I know that, if I change the machine-learning model through which I view the data, the resulting vectors will be different, so that the apparent distribution of meanings will change. It follows that if several systems are searching the same collection at the same moment, no two of them will find exactly the same relevance, because no two can calculate it from exactly the same mathematical point of view.\n\nFor most practical purposes these differences are unimportant, but to the engineer they are all-important: the engineer has to unlearn the habit of thinking that words have the simple meanings which common sense says they 'really' have, and to learn the habit of seeing them as they appear in a high-dimensional space. Here we have already the beginning of one of the distinctions that cause most trouble in computer science—the distinction between 'syntax' and 'semantics', between what a query says and what it is.\n\nTo return to the retrieval of data. It is evident from what we have found, that there is no single term which pre-eminently appears to be the essence of the information—it appears to have different significances from different points of similarity, and there is no reason for regarding some of these as more really its meaning than others. And we know that even from a given query the relevance will seem different by cosine similarity, or to a system using Euclidean distance, or to a model trained on different linguistic patterns, while in a space without structure there will be no relevance at all, though to the raw disk the data will be unchanged."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 7,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 825,
+        "outputTokens": 478
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 932,
+        "outputTokens": 551
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 809,
+        "outputTokens": 397
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 840,
+        "outputTokens": 599
+      }
+    ],
+    "totalInputTokens": 3406,
+    "totalOutputTokens": 2025,
+    "durationMs": 24936,
+    "output": "We are accustomed to the belief that the economic order rests upon the 'real' necessity of labour, yet the introduction of a universal income would fundamentally alter the way in which this necessity appears to the individual mind. It follows that, if a man is given sustenance without the obligation of effort, the whole distribution of his ambitions will change; for no two men will perceive the value of a competitive market from the same point of view when the urgency of survival has been removed. Here we have the distinction between the 'appearance' of a thriving industry and the 'reality' of a workforce which no longer feels compelled to use its specialized skills for gain. To the practical man, the loss of this compulsion is a matter of leisure; but to the economist it is the beginning of a decline in that national output which common sense says we must preserve.\n\nTo return to the question of education. It is evident from the nature of study that there is no inherent reason why a student should pursue the difficulties of advanced learning if the reward for his labour appears no greater than the reward for his idleness. And we know that, even among the most industrious, the pursuit of excellence will seem different when the fiscal burden of such a programme necessitates the taxing of the very success which they seek. The painter of a society sees the beauty of freedom, but the philosopher must see the difficulties of maintaining a complex organization when the traditional incentives to lead and to innovate have been weakened. It is a change in the way the light of ambition is reflected upon the private sector, and any such change makes a profound change in the resilience of the whole.\n\nFor most practical purposes these shifts in behaviour might be overlooked, but to the manager of global systems they are all-important: he has to unlearn the habit of expecting dedication where no financial pressure exists. It is evident that there is no quality of service which pre-eminently remains high when the participation of labour begins to fall; it appears to be of a different character when supported by subsidies, and there is no reason for regarding its future strength as certain. While the table of our economy may seem unchanged to touch and hearing, the light by which we view our collective industry will have been fundamentally altered, and in that new darkness many of our common achievements may cease to be visible at all."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T4",
+    "scoreIn": 89,
+    "scoreOut": 65,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 671,
+        "outputTokens": 249
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 707,
+        "outputTokens": 309
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 655,
+        "outputTokens": 252
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 695,
+        "outputTokens": 312
+      }
+    ],
+    "totalInputTokens": 2728,
+    "totalOutputTokens": 1122,
+    "durationMs": 17086,
+    "output": "I have observed that the morning, though to the casual observer it appears to be a mere prelude to the day's work, may be transformed by a rigorous and ordered discipline. By the use of a mechanical clock, so as to secure a punctual rising, the accidental character of one's awakening is replaced by a predictable regularity, and this is the first step toward a more profound order. It follows that, if one attends to the needs of the body—the simple drinking of water and the deliberate stretching of the limbs—the physical frame becomes less of a hindrance and more of a willing instrument of the mind. For the practical man these details are perhaps secondary, but to the student of efficiency they are of the very substance of success; for, without a calm state of mind, the most strenuous efforts are often wasted. By setting down my duties in a planner, and by seeking the quiet of meditation, I find that the energy which commonly declines by the afternoon is instead sustained, so that there is a continuity of purpose which common sense might have thought improbable. Thus I shall persist in this framework, for it is by such habits that one may bridge the gap between what one is and what one has the possibility of becoming."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 44,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1108,
+        "outputTokens": 471
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 915,
+        "outputTokens": 528
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1092,
+        "outputTokens": 420
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 867,
+        "outputTokens": 492
+      }
+    ],
+    "totalInputTokens": 3982,
+    "totalOutputTokens": 1911,
+    "durationMs": 20402,
+    "output": "I believe that the global lithium market, as it enters the first quarter of 2026, presents a complex distribution of tendencies which, to the casual observer, may seem uniform, while to the analyst they reveal great differences in the conditions of supply. It is evident from the expansion of South American facilities that the availability of raw material is changing; and just as the light upon a table shifts when the observer moves, so too spot prices appear to be stabilizing after a period of great volatility. It follows that the manufacturer must unlearn the habit of expecting sudden changes, and learn the habit of seeing the market as a steadier reality, in which advanced methods of processing are employed to refine the quality of the product in accordance with the growing demand for performance.\n\nTo return to the matter of supply. For most practical purposes, the steady increase in Australian exports is seen as a simple advantage, but to the battery manufacturer the logistical difficulties are all-important: he has to distinguish between the appearance of a refined product in a distant refinery and the reality of its arrival at his own gates. Here we have the beginning of a distinction that causes much trouble—the distinction between the 'contracted' supply and the 'actual' availability. The automotive corporation wants to know what the supply is; but its wish to know this is more troubled by knowledge of possible shortages than is the wish of the casual speculator, and therefore leads it to seek the security of long-term control over its source materials.\n\nIt is evident from what we have found that there is no single method of extraction which pre-eminently appears to be the future of the industry—the market appears to be of different characters from different points of view, whether through the lens of North American brine deposits or that of the recovery of end-of-life materials. And we know that, even from a given point of view, the value of lithium will seem different under the influence of trade agreements or new technology, while in the absence of subsidies the expected growth might seem to vanish altogether. Consequently, strategic investment in infrastructure is not merely a practical necessity, but a means of ensuring that the reality of the market conforms to our desire for long-term sustainability, regardless of the shifting points of view held by those in emerging industrial regions."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 786,
+        "outputTokens": 396
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 844,
+        "outputTokens": 465
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 770,
+        "outputTokens": 284
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 732,
+        "outputTokens": 380
+      }
+    ],
+    "totalInputTokens": 3132,
+    "totalOutputTokens": 1525,
+    "durationMs": 17295,
+    "output": "I believe that the digital record is 'really' a collection of mathematical coordinates, though to the casual observer it appears merely as a string of characters, or as a static image. We know that, if we adjust the underlying model, the numerical values representing a word will shift, so that the apparent relations between concepts will change. It follows that if several algorithms are examining the same data at the same moment, no two of them will find exactly the same meaning, because no two can represent it from exactly the same mathematical point of view, and any change in the process of embedding makes some change in the way the information is retrieved.\n\nFor most practical purposes these coordinates are unimportant, but to the retrieval engine they are all-important: the engine has to unlearn the habit of thinking that a search term is 'really' just its literal characters, and to learn the habit of seeing data as a set of spatial relations. Here we have already the beginning of a distinction that causes much trouble in modern science—the distinction between 'syntax' and 'semantics', between what a query says and what it means. The user wants to know what the data signifies, while the system wants to know where it resides in high-dimensional space; but the system's wish to know this is more precise than the user's, and is more troubled by the difficulties of calculating spatial distance.\n\nTo return to the vector. It is evident from what we have found, that there is no keyword which pre-eminently appears to be the definition of a document—it appears to be a cluster of values from different points of view, and there is no reason for regarding any one of these as more really its identity than the others. And we know that even from a given model the relevance will seem different by Euclidean measure, or by cosine similarity, while in a poorly indexed space there will be no relevance at all, though to the human reader the content will be unchanged."
+  }
+]

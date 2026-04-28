@@ -1,0 +1,38 @@
+[
+  {
+    "methodId": "M2",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 838
+      },
+      {
+        "step": "self_critique_1",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 305,
+        "outputTokens": 370
+      },
+      {
+        "step": "self_critique_2",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 307,
+        "outputTokens": 317
+      },
+      {
+        "step": "self_critique_3",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 277,
+        "outputTokens": 279
+      }
+    ],
+    "totalInputTokens": 1636,
+    "totalOutputTokens": 1804,
+    "durationMs": 38823,
+    "output": "Linear attention isn't a luxury anymore—it's survival. If you're still clinging to standard attention, you're essentially watching your GPUs melt into very expensive bricks. It’s too bloated for real-world use. Modern stacks are gutting the math, forcing in low-rank tricks and sparse patterns to keep training cycles from stalling out. Sliding windows are a popular fix, too; they pin the focus down so the details don't turn into a gray slurry when the dimensions explode. A few labs are even taking a flyer on kernel methods to keep their scaling curves alive. But the hardware side is where the real shift is happening. Specialized memory modules are the only thing keeping the context from shattering into a million pieces once the sequence gets truly long."
+  }
+]

@@ -27,6 +27,9 @@ export function listMethods(): HumanizerMethod[] {
 
 // Side-effect imports register the methods. Add new methods here as they land.
 import './M0_v7_baseline';
-// M1-M8 imports are added in their respective worktrees.
+import './M7_voice_anchoring';
+// M7 won the v8 bake-off (mean Copyscape drop 57 vs 16.6 for M0). The other
+// candidates (M1-M6, M8) live in their experiment branches but are not
+// imported in production.
 
 export type { HumanizerMethod, MethodOptions, MethodResult, BenchRecord, MethodTokenStep } from './types';

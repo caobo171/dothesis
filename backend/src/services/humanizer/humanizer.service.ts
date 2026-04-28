@@ -1,10 +1,18 @@
 // backend/src/services/humanizer/humanizer.service.ts
 
-// Decision (v7): Linear cross-model + perturbation pipeline replaces the v6 iterative
-// critic loop. The breakthrough is the perturbation layer (non-LLM transformations
-// between LLM passes), which raises per-token perplexity in ways no LLM can produce.
-// Pipeline: Gemini rewrite → perturb → GPT cross-rewrite → perturb → Gemini polish.
-// See docs/superpowers/specs/2026-04-28-humanize-crossmodel-perturbation-design.md
+// Decision (v8): humanizePipeline now delegates to M7 (voice-anchoring), which
+// won the bake-off documented in bench-results/comparison.md. M7 prompts the
+// LLM with 3 paragraphs of confirmed-human academic prose (Russell, James) as
+// few-shot examples, runs once with each anchor, and picks the lower-stylometric
+// output. Mean Copyscape drop 57 across 5 corpus texts vs 16.6 for v7 — and
+// ~2× cheaper, ~4× faster.
+//
+// The legacy v7 cross-model + perturbation + self-improvement pipeline is
+// preserved as method M0 for the bake-off baseline (see methods/M0_v7_baseline.ts).
+//
+// Spec:    docs/superpowers/specs/2026-04-28-humanizer-method-bakeoff-design.md
+// Plan:    docs/superpowers/plans/2026-04-28-humanizer-method-bakeoff.md
+// Results: bench-results/comparison.md
 
 import { AIServiceManager } from '@/services/ai/ai.service.manager';
 import { GeminiService } from '@/services/ai/gemini.service';
@@ -13,6 +21,7 @@ import { AIDetectorEngine } from '@/services/ai-detector';
 import { PerturbationEngine } from './perturbation/perturbation.engine';
 import { buildRewritePrompt } from './prompts/rewrite.prompt';
 import { buildCrossRewritePrompt } from './prompts/cross-rewrite.prompt';
+import { getMethod } from './methods';
 import { buildPolishPrompt } from './prompts/polish.prompt';
 
 const GEMINI_MODEL = 'gemini-3-flash-preview';
@@ -125,147 +134,48 @@ export class HumanizerService {
     lengthMode: string,
     onStage?: (stage: string, data: any) => void
   ): Promise<PipelineResult> {
-    const tokenSteps: TokenStep[] = [];
     const wordCount = text.split(/\s+/).length;
-    console.log('[Humanizer v7] Pipeline started | tone=%s strength=%d length=%s words=%d', tone, strength, lengthMode, wordCount);
+    console.log('[Humanizer v8] Pipeline started | tone=%s strength=%d length=%s words=%d', tone, strength, lengthMode, wordCount);
 
-    // --- Input AI score (informational only) ---
+    // Input AI score (Copyscape) — informational, drives the "before" badge in UI.
     const aiScoreIn = await this.checkAiScore(text);
-    console.log('[Humanizer v7] Input AI score: %d', aiScoreIn);
+    console.log('[Humanizer v8] Input AI score: %d', aiScoreIn);
     onStage?.('ai_score_in', { score: aiScoreIn });
 
-    // --- Stage 1: Gemini Rewrite ---
-    onStage?.('stage', { stage: 'rewriting', step: 'gemini_rewrite' });
-    const rewritePrompt = buildRewritePrompt(tone, strength, lengthMode);
-    const stage1 = await GeminiService.chat(rewritePrompt, text, {
-      temperature: 0.9,
-      maxTokens: 4096,
-      jsonMode: true,
-    });
-    let { rewrittenText: stage1Text, changes: stage1Changes } = parseRewriteJson(stage1.text);
-    stage1Text = stripBannedCharacters(stage1Text);
-    console.log('[Humanizer v7] Stage 1 (Gemini rewrite) done | in=%d out=%d tokens', stage1.usage.inputTokens, stage1.usage.outputTokens);
-    tokenSteps.push({
-      step: 'gemini_rewrite',
-      model: GEMINI_MODEL,
-      iteration: 1,
-      inputTokens: stage1.usage.inputTokens,
-      outputTokens: stage1.usage.outputTokens,
-    });
+    // Delegate the actual humanization to M7 voice-anchoring (bake-off winner).
+    // M7 runs two anchored rewrites in parallel (formal Russell anchor, casual
+    // James anchor) and picks the one with lower stylometric score. It never
+    // calls Copyscape internally — that stays as the external judge.
+    onStage?.('stage', { stage: 'rewriting', step: 'voice_anchored' });
+    const m7 = getMethod('M7');
+    const m7Result = await m7.run(text, { tone, strength, lengthMode });
+    const finalText = stripBannedCharacters(m7Result.output);
 
-    // --- Perturbation Layer 1 ---
-    onStage?.('stage', { stage: 'perturbing', step: 'perturbation_1' });
-    const perturbed1 = PerturbationEngine.perturb(stage1Text, strength);
-    console.log('[Humanizer v7] Perturbation 1 done | in_chars=%d out_chars=%d', stage1Text.length, perturbed1.length);
-
-    // --- Stage 2: GPT Cross-Rewrite ---
-    onStage?.('stage', { stage: 'rewriting', step: 'gpt_cross_rewrite' });
-    const crossRewritePrompt = buildCrossRewritePrompt(tone);
-    const stage2 = await OpenAIService.chat(crossRewritePrompt, perturbed1, {
-      maxTokens: 4096,
-      jsonMode: true,
-    });
-    let { rewrittenText: stage2Text } = parseRewriteJson(stage2.text);
-    stage2Text = stripBannedCharacters(stage2Text);
-    console.log('[Humanizer v7] Stage 2 (GPT cross-rewrite) done | in=%d out=%d tokens', stage2.usage.inputTokens, stage2.usage.outputTokens);
-    tokenSteps.push({
-      step: 'gpt_cross_rewrite',
-      model: OPENAI_MODEL,
-      iteration: 1,
-      inputTokens: stage2.usage.inputTokens,
-      outputTokens: stage2.usage.outputTokens,
-    });
-
-    // --- Perturbation Layer 2 ---
-    onStage?.('stage', { stage: 'perturbing', step: 'perturbation_2' });
-    const perturbed2 = PerturbationEngine.perturb(stage2Text, strength);
-    console.log('[Humanizer v7] Perturbation 2 done | in_chars=%d out_chars=%d', stage2Text.length, perturbed2.length);
-
-    // --- Stage 3: Gemini Polish ---
-    onStage?.('stage', { stage: 'polishing', step: 'gemini_polish' });
-    const polishPrompt = buildPolishPrompt();
-    const stage3 = await GeminiService.chat(polishPrompt, perturbed2, {
-      temperature: 0.3,
-      maxTokens: 4096,
-      jsonMode: true,
-    });
-    let { rewrittenText: finalText } = parseRewriteJson(stage3.text);
-    finalText = stripBannedCharacters(finalText);
-    console.log('[Humanizer v7] Stage 3 (Gemini polish) done | in=%d out=%d tokens', stage3.usage.inputTokens, stage3.usage.outputTokens);
-    tokenSteps.push({
-      step: 'gemini_polish',
-      model: GEMINI_MODEL,
-      iteration: 1,
-      inputTokens: stage3.usage.inputTokens,
-      outputTokens: stage3.usage.outputTokens,
-    });
-
-    // --- Final score ---
+    // Output AI score (Copyscape) — drives the "after" badge in UI.
     const aiScoreOut = await this.checkAiScore(finalText);
     onStage?.('score', { score: aiScoreOut });
 
-    // --- Self-improvement loop (v7.1): iterate against Copyscape until target reached ---
-    // Decision: Now that we have a real external scorer (Copyscape's aicheck), we can
-    // iterate. Each iteration adds a perturbation pass + Gemini polish — cheap (~1 LLM
-    // call + 1 Copyscape call per iteration). Skip extra GPT cross-rewrites here to
-    // keep cost down.
-    const TARGET_SCORE = 10;
-    const MAX_EXTRA_ITERATIONS = 3;
-    let bestScore = aiScoreOut;
-    let bestText = finalText;
-    let extraIterations = 0;
-
-    while (bestScore >= TARGET_SCORE && extraIterations < MAX_EXTRA_ITERATIONS) {
-      extraIterations++;
-      console.log('[Humanizer v7] Iter %d: score %d >= target %d, refining...', extraIterations, bestScore, TARGET_SCORE);
-      onStage?.('stage', { stage: 'iterating', iteration: extraIterations });
-
-      // Perturb the current best text again
-      const perturbedIter = PerturbationEngine.perturb(bestText, strength);
-
-      // Polish to clean up any awkwardness
-      const polishIter = await GeminiService.chat(buildPolishPrompt(), perturbedIter, {
-        temperature: 0.3,
-        maxTokens: 4096,
-        jsonMode: true,
-      });
-      let { rewrittenText: iterText } = parseRewriteJson(polishIter.text);
-      iterText = stripBannedCharacters(iterText);
-      tokenSteps.push({
-        step: 'gemini_polish',
-        model: GEMINI_MODEL,
-        iteration: 1 + extraIterations,
-        inputTokens: polishIter.usage.inputTokens,
-        outputTokens: polishIter.usage.outputTokens,
-      });
-
-      // Score
-      const iterScore = await this.checkAiScore(iterText);
-      console.log('[Humanizer v7] Iter %d done | score: %d', extraIterations, iterScore);
-      onStage?.('score', { score: iterScore, iteration: extraIterations });
-
-      // Track best result
-      if (iterScore < bestScore) {
-        bestScore = iterScore;
-        bestText = iterText;
-      }
-    }
-
-    // Use the best result we got across all iterations
-    const finalScore = bestScore;
-    const finalOutput = bestText;
-
+    // Translate M7's MethodTokenStep[] into the legacy TokenStep[] shape so the
+    // existing PipelineResult contract stays unchanged. iteration=1 since M7 is
+    // a single-shot best-of-2 (not a loop).
+    const tokenSteps: TokenStep[] = m7Result.tokenSteps.map((s) => ({
+      step: s.step as any,
+      model: s.model,
+      iteration: 1,
+      inputTokens: s.inputTokens,
+      outputTokens: s.outputTokens,
+    }));
     const totalInputTokens = tokenSteps.reduce((sum, s) => sum + s.inputTokens, 0);
     const totalOutputTokens = tokenSteps.reduce((sum, s) => sum + s.outputTokens, 0);
-    console.log('[Humanizer v7] Pipeline complete | score: %d → %d | tokens: in=%d out=%d', aiScoreIn, finalScore, totalInputTokens, totalOutputTokens);
+    console.log('[Humanizer v8] Pipeline complete | score: %d → %d | tokens: in=%d out=%d', aiScoreIn, aiScoreOut, totalInputTokens, totalOutputTokens);
 
     return {
-      rewrittenText: finalOutput,
-      changes: stage1Changes,
+      rewrittenText: finalText,
+      changes: [],
       aiScoreIn,
-      aiScoreOut: finalScore,
+      aiScoreOut,
       tokenUsage: { steps: tokenSteps, totalInputTokens, totalOutputTokens },
-      iterations: 1 + extraIterations,
+      iterations: 1,
     };
   }
 
