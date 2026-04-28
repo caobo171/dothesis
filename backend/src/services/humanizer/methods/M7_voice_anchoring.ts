@@ -1,9 +1,16 @@
 // backend/src/services/humanizer/methods/M7_voice_anchoring.ts
 
-// M7: Voice-Anchoring. Inject 3 paragraphs of confirmed human academic prose as
-// few-shot examples; instruct the rewriter to mimic cadence, word choice, and
-// punctuation rhythm. Try both anchor sets per call and pick the lower
-// stylometric-score output.
+// M7: Voice-Anchoring. Inject 3 paragraphs of confirmed human prose as few-shot
+// examples; instruct the rewriter to mimic cadence, word choice, and punctuation
+// rhythm. Run all anchors in parallel and pick the lowest stylometric output.
+//
+// Anchor library (all pre-1928, public domain, unambiguously human):
+// - academic_formal: Russell, "The Problems of Philosophy" (1912) — formal analysis
+// - academic_casual: James, "Talks to Teachers" (1899) — looser lecture register
+// - argumentative:   Mill,  "On Liberty" (1859) — argued opinion, polemic register
+//
+// Adding more anchors here automatically extends the parallel sweep and the
+// scorer-based winner selection. The cost scales linearly in the anchor count.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -14,8 +21,14 @@ import { registerMethod } from './index';
 import type { MethodOptions, MethodResult, MethodTokenStep } from './types';
 
 const ANCHOR_DIR = path.resolve(__dirname, '../../../../scripts/bench/anchors');
-const FORMAL = fs.readFileSync(path.join(ANCHOR_DIR, 'academic_formal.txt'), 'utf8').trim();
-const CASUAL = fs.readFileSync(path.join(ANCHOR_DIR, 'academic_casual.txt'), 'utf8').trim();
+
+// To extend the library: drop a .txt into ANCHOR_DIR and add an entry here.
+// Order doesn't matter — the stylometric scorer picks the winner.
+const ANCHORS: { id: string; text: string }[] = [
+  { id: 'academic_formal', text: fs.readFileSync(path.join(ANCHOR_DIR, 'academic_formal.txt'), 'utf8').trim() },
+  { id: 'academic_casual', text: fs.readFileSync(path.join(ANCHOR_DIR, 'academic_casual.txt'), 'utf8').trim() },
+  { id: 'argumentative',   text: fs.readFileSync(path.join(ANCHOR_DIR, 'argumentative.txt'),   'utf8').trim() },
+];
 
 const TEMPLATE = (anchor: string) => `Below are 3 paragraphs written by a human academic. Study their cadence,
 sentence-length variance, word choice, and punctuation rhythm. DO NOT copy
@@ -34,23 +47,34 @@ ${anchor}
 
 Output strict JSON: { "rewrittenText": "<polished>" }`;
 
-async function genWithAnchor(input: string, anchor: string): Promise<{ text: string; tokens: MethodTokenStep[] }> {
+async function genWithAnchor(input: string, anchorId: string, anchor: string): Promise<{ id: string; text: string; tokens: MethodTokenStep[] }> {
   const tokens: MethodTokenStep[] = [];
   const a = await GeminiService.chat(TEMPLATE(anchor), input, { temperature: 0.95, maxTokens: 4096, jsonMode: true });
-  tokens.push({ step: 'gemini_anchored_rewrite', model: 'gemini-3-flash-preview', inputTokens: a.usage.inputTokens, outputTokens: a.usage.outputTokens });
+  // Step labels include the anchor id so token reports stay readable as the
+  // anchor library grows; without this all branches would log identically.
+  tokens.push({ step: `gemini_anchored_${anchorId}`, model: 'gemini-3-flash-preview', inputTokens: a.usage.inputTokens, outputTokens: a.usage.outputTokens });
   let draft = parseRewritten(a.text) || input;
   const b = await OpenAIService.chat(POLISH_TEMPLATE(anchor), draft, { maxTokens: 4096, jsonMode: true });
-  tokens.push({ step: 'gpt_anchored_polish', model: 'gpt-5.5', inputTokens: b.usage.inputTokens, outputTokens: b.usage.outputTokens });
+  tokens.push({ step: `gpt_polish_${anchorId}`, model: 'gpt-5.5', inputTokens: b.usage.inputTokens, outputTokens: b.usage.outputTokens });
   draft = parseRewritten(b.text) || draft;
-  return { text: draft, tokens };
+  return { id: anchorId, text: draft, tokens };
 }
 
 async function run(input: string, _opts: MethodOptions): Promise<MethodResult> {
-  const [formal, casual] = await Promise.all([genWithAnchor(input, FORMAL), genWithAnchor(input, CASUAL)]);
-  const fScore = stylometricScore(formal.text);
-  const cScore = stylometricScore(casual.text);
-  const winner = fScore <= cScore ? formal : casual;
-  return { output: winner.text, tokenSteps: [...formal.tokens, ...casual.tokens] };
+  // Fan out one branch per anchor in parallel. Stylometric scorer (deterministic,
+  // free) picks the most human-like output. The branches share no state, so
+  // adding anchors only widens the sweep — never breaks anything.
+  const branches = await Promise.all(
+    ANCHORS.map((a) => genWithAnchor(input, a.id, a.text)),
+  );
+  let winner = branches[0];
+  let bestScore = stylometricScore(winner.text);
+  for (const b of branches.slice(1)) {
+    const s = stylometricScore(b.text);
+    if (s < bestScore) { winner = b; bestScore = s; }
+  }
+  const allTokens = branches.flatMap((b) => b.tokens);
+  return { output: winner.text, tokenSteps: allTokens };
 }
 
 function parseRewritten(raw: string): string | null {

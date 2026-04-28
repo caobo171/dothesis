@@ -1,0 +1,242 @@
+[
+  {
+    "methodId": "M7",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 2,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 631,
+        "outputTokens": 222
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 682,
+        "outputTokens": 314
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 615,
+        "outputTokens": 208
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 653,
+        "outputTokens": 250
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 682,
+        "outputTokens": 276
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 805,
+        "outputTokens": 428
+      }
+    ],
+    "totalInputTokens": 4068,
+    "totalOutputTokens": 1698,
+    "durationMs": 17094,
+    "output": "A time, however, has arrived, in the progress of computational inquiry, when practitioners have ceased to think it a necessity of architecture that every element in a sequence should be weighed against the whole. It appeared to them much better that the mechanism of attention should be a restricted, or linear, delegate of the network, refined at the discretion of the designer. In that way alone, it seemed, could they have complete security that the burdens of computation would never be permitted to exceed the limits of their resources. By degrees, this new demand for efficient and sparse patterns became the prominent object of the exertions of the researcher, and superseded, to a considerable extent, the previous reliance on exhaustive and dense calculations. But, in mathematical and technical theories, as well as in simpler contrivances, success discloses faults and infirmities which humbler models might have concealed from observation. The notion, that a system has no need to encompass the entirety of its context, may seem axiomatic when sequences are trivial; but the \"efficiency\" spoken of is not merely the reduction of labour, but the preservation of meaning through sliding windows and kernel-based approximations. The context which is retained, moreover, is not always the same context as that on which understanding depends; and the economy of attention, practically speaking, may mean the preference of what is nearest, or of what most readily makes itself computable. Protection, therefore, against the loss of long-term dependency is not enough: there needs protection also against the tyranny of local context, and against the tendency of the model to discard, by means of its own abstractions, those vital intricacies which define the depth of human language."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 786,
+        "outputTokens": 362
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 817,
+        "outputTokens": 407
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 770,
+        "outputTokens": 226
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 675,
+        "outputTokens": 297
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 837,
+        "outputTokens": 287
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 817,
+        "outputTokens": 368
+      }
+    ],
+    "totalInputTokens": 4702,
+    "totalOutputTokens": 1947,
+    "durationMs": 15292,
+    "output": "It is evident that the database does not 'really' contain the words in the way common sense suggests, for the symbols we provide are transformed by a machine into a series of numerical vectors. We know that, if we change the model, the resulting distribution of these points will be different, so that the apparent meaning of the data will change. It follows that if several queries are directed at the same collection, no two of them will find exactly the same significance, because no two can approach the high-dimensional space from exactly the same coordinate, and any change in the mathematical framework makes some change in the way the relevance is calculated.\n\nFor most practical purposes these spatial distances are hidden, but to the system architect they are all-important: the architect has to unlearn the habit of thinking that data has the fixed value which keyword matching says it 'really' has, and to learn the habit of seeing things as they are mapped. Here we have already the beginning of one of the distinctions that cause most trouble in computation—the distinction between 'literal text' and 'vector embedding', between what words seem to be and the underlying meaning they represent.\n\nTo return to the query. It is evident from what we have found, that there is no single result which pre-eminently appears to be the answer to the search—it appears to have different relevance from different points in space, and there is no reason for regarding some of these measures as more really its identity than others. And we know that even from a given coordinate the relevance will seem different by Euclidean distance, or by cosine similarity, or to a system using different indexing structures, while in the absence of a model there would be no meaning at all, though to the raw storage the data would be unchanged."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 825,
+        "outputTokens": 447
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 898,
+        "outputTokens": 495
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 809,
+        "outputTokens": 359
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 806,
+        "outputTokens": 420
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 876,
+        "outputTokens": 385
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 912,
+        "outputTokens": 530
+      }
+    ],
+    "totalInputTokens": 5126,
+    "totalOutputTokens": 2636,
+    "durationMs": 23715,
+    "output": "It is often supposed that a universal provision of income would merely distribute wealth more evenly, but we find that such a policy would fundamentally disturb the established framework of global commerce. I know that, if the compulsion to labour is removed, the motives which drive a man to seek employment will be different, so that the apparent distribution of industriousness throughout the state will change. It follows that, if we examine the national output, any change in the necessity of work makes some change in the way a man's specialized skill is applied to the common good, since no two men will feel quite the same pressure to serve when the spur of survival is withdrawn.\n\nFor most philanthropic purposes these differences are unimportant, but to the director of industry they are all-important: the leader of an enterprise has to unlearn the habit of thinking that men will pursue rigorous education or professional excellence when common sense says they have no 'real' financial need to do so. Here we have the beginning of one of the distinctions that cause most trouble in social philosophy—the distinction between 'guaranteed security' and 'individual ambition', between what a person chooses to be and what he is driven to become. The citizen wants to know what he seems to be in his leisure, the merchant and the philosopher want to know what he is in his utility; but the philosopher's wish to know this is stronger than the merchant's, and is more troubled by knowledge as to the difficulties of maintaining a skilled and capable workforce.\n\nTo return to the marketplace. It is evident from what we have found, that there is no innovation which pre-eminently appears to flourish without the spur of competition—it appears that the resilience of the private sector changes from different points of view, and there is no reason for regarding a subsidized economy as more robust than one governed by traditional incentives. And we know that even with a talented population, the quality of services will seem different under the weight of corporate taxation, or to a small business owner, or to an executive whose ambition is dampened by redistribution, while in the end the efficiency of the great networks of supply will be lost, though to the politician the state will seem unchanged."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T4",
+    "scoreIn": 90,
+    "scoreOut": 38,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 671,
+        "outputTokens": 394
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 846,
+        "outputTokens": 545
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 655,
+        "outputTokens": 328
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 769,
+        "outputTokens": 370
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 722,
+        "outputTokens": 263
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 788,
+        "outputTokens": 309
+      }
+    ],
+    "totalInputTokens": 4451,
+    "totalOutputTokens": 2209,
+    "durationMs": 21176,
+    "output": "We might, if we examined the matter closely, define the successful beginning of a day as the deliberate organization of its earliest hours. In the last analysis, it consists in the systematic arrangement of certain bodily and mental stimuli—the punctual summons of a timepiece, for example, or the rhythmic stretching of the limbs—which prepare the human organism for its subsequent tasks. To an observer, the person who lacks such a regimen appears scattered, and easily nonplussed by the demands of his profession. On the contrary, he who has acquired a stable routine finds himself equipped with a clarity of purpose and a tranquility of mind which enable him to meet his obligations with comparative ease. To illustrate. When I engage in these simple morning ministrations, I am not merely performing mechanical acts. My brain, through the habit of planning and the quietude of reflection, is being trained to act as a more efficient instrument. Something in the very structure of my consciousness tells me that order is required; something directs the currents of my energy toward a productive end. If we reflect upon the various methods of self-improvement, we see that they all aim at the same result: the conversion of the self into a more capable agent of action. Whether through the regulation of diet, or through the steady practice of meditation, the end is to develop what one may call a dynamic efficiency of character. In the end, the persistence of these habits greatly increases one's capacity for achievement, turning what was once a series of effortful choices into a natural and almost effortless flow of behavior."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T5",
+    "scoreIn": 99,
+    "scoreOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1108,
+        "outputTokens": 371
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 827,
+        "outputTokens": 422
+      },
+      {
+        "step": "gemini_anchored_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1092,
+        "outputTokens": 416
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 856,
+        "outputTokens": 554
+      },
+      {
+        "step": "gemini_anchored_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1159,
+        "outputTokens": 494
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 1017,
+        "outputTokens": 551
+      }
+    ],
+    "totalInputTokens": 6059,
+    "totalOutputTokens": 2808,
+    "durationMs": 23126,
+    "output": "I believe that the global lithium market is 'really' on a complex trajectory all over, though the parts that reflect South American expansion look much more stable than the parts troubled by previous volatility. I know that, if we move our gaze to the East Asian refineries, the apparent distribution of refined products will change; it follows that if several analysts are looking at the market at the same moment, no two of them will see exactly the same equilibrium, because no two can see it from exactly the same industrial point of view, and any change in the point of view makes some change in the way the light of supply is reflected. For most practical purposes these logistical delays are unimportant, but to the battery manufacturer they are all-important: he has to unlearn the habit of thinking that lithium has the availability which common sense says it 'really' has, and to learn the habit of seeing supply as it appears through the lens of vertical integration. Here we have already the beginning of one of the distinctions that cause most trouble in industry—the distinction between 'nominal' stock and 'actual' sourcing, between what materials seem to be available and what they are. To return to the circular economy. It is evident from what we have found, that there is no source which pre-eminently appears to be the primary source of the market—it appears to be of different volumes from different points of trade, and there is no reason for regarding traditional extraction as more 'real' than the recovery of end-of-life materials. And we know that even from a given point of view the market will seem different by the light of federal subsidies, or to a man wearing the spectacles of national security, while without technological innovation there would be no commercialization at all, though to the raw brine the Earth would be unchanged."
+  }
+]
