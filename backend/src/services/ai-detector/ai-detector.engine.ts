@@ -43,7 +43,6 @@ const PROVIDERS: Record<string, () => AIDetectionProvider> = {
 
 export class AIDetectorEngine {
   private static provider: AIDetectionProvider;
-  private static fallback: AIDetectionProvider = new StatisticalDetectionProvider();
 
   /**
    * Initialize the engine. Call once at startup.
@@ -64,7 +63,10 @@ export class AIDetectorEngine {
 
   /**
    * Detect AI-generated text.
-   * Falls back to statistical provider if the primary provider fails.
+   *
+   * Decision: No silent fallback. If the configured provider fails (auth error,
+   * API outage, language rejection, quota), the error propagates so callers can
+   * see the real cause. Silent fallback to statistical hid debugging signal.
    */
   static async detect(text: string): Promise<AIDetectionResult> {
     if (!this.provider) {
@@ -75,13 +77,6 @@ export class AIDetectorEngine {
       return await this.provider.analyze(text);
     } catch (err: any) {
       console.error(`[AIDetector] ${this.provider.name} failed:`, err.message);
-
-      // Fall back to statistical if using an external provider
-      if (this.provider.name !== 'statistical') {
-        console.log('[AIDetector] Falling back to statistical provider');
-        return this.fallback.analyze(text);
-      }
-
       throw err;
     }
   }
