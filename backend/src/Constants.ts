@@ -46,6 +46,36 @@ export const JobStatus = {
   Failed: 'failed',
 };
 
+// Sepay bank-transfer config. Vietnamese users see a QR + bank-info card on
+// /credit instead of the international card-payment options. The memo must
+// start with BANK_INFO.formatMsg so the Sepay webhook can recover the
+// user.idcredit and route the credit grant.
+export const BANK_INFO = {
+  current: 'OCB' as const,
+  // Prefix on every transfer memo. Webhook splits on this string to recover
+  // the user's idcredit. Keep it short — Vietnamese banks truncate memos.
+  formatMsg: 'DTH',
+  providers: {
+    OCB: {
+      name: 'OCB - Orient Commercial Bank',
+      number: 'SEPFFR148620',
+    },
+    VTB: {
+      name: 'VTB - Vietinbank',
+      number: '107868958175',
+    },
+  },
+};
+
+// VND-priced credit packs for Sepay flow. Mapped 1:1 with the USD packs
+// (id and credit count match) so the rest of the app sees one set of
+// products. Webhook matches the exact transferAmount to find the package.
+export const PRICING_PACKAGES_VND: Array<{ id: string; price_vnd: number; credit: number }> = [
+  { id: 'starter_package', price_vnd: 200_000, credit: 300 },
+  { id: 'standard_package', price_vnd: 450_000, credit: 700 },
+  { id: 'expert_package', price_vnd: 1_200_000, credit: 2000 },
+];
+
 export const HumanizerTones = ['academic', 'casual', 'persuasive'] as const;
 export const LengthModes = ['match', 'shorter', 'longer'] as const;
 export const CitationStyles = ['apa', 'mla', 'chicago', 'harvard', 'ieee'] as const;

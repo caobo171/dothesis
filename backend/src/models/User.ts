@@ -38,6 +38,12 @@ export class User {
   @prop({ default: false })
   public disabled?: boolean;
 
+  // Numeric identifier embedded in Sepay transfer memos so the webhook can
+  // route credits without needing the user's _id (which is too long for a
+  // bank memo). Backfilled lazily on first /me/bank-info call when missing.
+  @prop({ unique: true, sparse: true })
+  public idcredit?: number;
+
   @prop()
   public version?: string;
 

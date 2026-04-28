@@ -9,6 +9,7 @@ import library from './routes/library';
 import plagiarism from './routes/plagiarism';
 import webhook from './routes/webhook';
 import announcementPublic from './routes/announcement.public';
+import bankInfo from './routes/me/bank.info';
 import order from './routes/order';
 import adminRouter from './routes/admin';
 
@@ -25,6 +26,7 @@ export default () => {
   plagiarism(router);
   webhook(router);
   announcementPublic(router);
+  bankInfo(router);
   order(router);
 
   // Admin sub-router. Each handler inside applies passport.authenticate + requireAdmin

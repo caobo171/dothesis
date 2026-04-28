@@ -6,9 +6,11 @@ import { Router } from 'express';
 import paypal from './paypal';
 import polar from './polar';
 import paddle from './paddle';
+import sepay from './sepay';
 
 export default (router: Router) => {
   paypal(router);
   polar(router);
   paddle(router);
+  sepay(router);
 };
