@@ -51,14 +51,20 @@ type PipelineResult = {
 };
 
 function parseRewriteJson(raw: string): { rewrittenText: string; changes: any[] } {
+  // Strip markdown code fences that some model configurations emit despite jsonMode.
+  // Without this, a fenced JSON block flows into the next stage as raw text.
+  const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(stripped);
+    // Use stripped (not raw) as fallback so a missing rewrittenText still produces clean text.
+    // Empty-string check: parsed.rewrittenText being '' is falsy; trim() catches whitespace-only.
+    const text = parsed.rewrittenText?.trim() ? parsed.rewrittenText : stripped;
     return {
-      rewrittenText: parsed.rewrittenText || raw,
+      rewrittenText: text,
       changes: parsed.changes || [],
     };
   } catch {
-    return { rewrittenText: raw, changes: [] };
+    return { rewrittenText: stripped, changes: [] };
   }
 }
 
