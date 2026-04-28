@@ -1,0 +1,56 @@
+[
+  {
+    "methodId": "M5",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 98,
+    "tokenSteps": [
+      {
+        "step": "gemini_temp07",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 941
+      },
+      {
+        "step": "gemini_temp09",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 802
+      },
+      {
+        "step": "gemini_temp11",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 848
+      },
+      {
+        "step": "gpt_first",
+        "model": "gpt-5.5",
+        "inputTokens": 637,
+        "outputTokens": 397
+      },
+      {
+        "step": "gemini_second",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 862
+      },
+      {
+        "step": "gemini_first",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 844
+      },
+      {
+        "step": "gpt_second",
+        "model": "gpt-5.5",
+        "inputTokens": 693,
+        "outputTokens": 283
+      }
+    ],
+    "totalInputTokens": 5065,
+    "totalOutputTokens": 4977,
+    "durationMs": 24887,
+    "output": "What the data actually shows is that we’ve finally moved past the quadratic bottleneck; researchers are leaning into linear attention to handle sequences that would have crashed our clusters just years ago. Rarely do we see a modern architecture that doesn't use sparse patterns to pinpoint dependencies inside the noise of a deep network. To slash the crushing overhead of training, advanced frameworks are deploying low-rank approximations—essentially a mathematical shortcut that keeps the hardware from melting. It was the sliding window technique that really saved local context. By restricting the focus to a specific neighborhood, models maintain high-dimensional clarity without getting lost in the weeds. Scaling across massive language tasks requires more than just raw power; specific breakthroughs now leverage kernel-based methods to map inputs into manageable spaces. What excites me most are the adaptive attention spans. Instead of a fixed lens, the model tracks dynamic shifts across temporal scales—imagine a microscope that automatically refocuses as the subject moves. Contemporary systems have gone even further by bolting on specialized memory modules. These aren't just buffers; they are the key to long-term retention in sequential data."
+  }
+]
