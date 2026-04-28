@@ -1,0 +1,38 @@
+[
+  {
+    "methodId": "M3",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 96,
+    "tokenSteps": [
+      {
+        "step": "gemini_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 747,
+        "outputTokens": 822
+      },
+      {
+        "step": "proxy_1",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 409,
+        "outputTokens": 136
+      },
+      {
+        "step": "paraphrase_1",
+        "model": "gpt-5.5",
+        "inputTokens": 363,
+        "outputTokens": 296
+      },
+      {
+        "step": "proxy_2",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 454,
+        "outputTokens": 19
+      }
+    ],
+    "totalInputTokens": 1973,
+    "totalOutputTokens": 1273,
+    "durationMs": 39142,
+    "output": "The figures point to a real shift: the old quadratic choke point is no longer the default tax on sequence modeling. For enormous streams of tokens or frames, many current labs now reach for linear-attention schemes, which let the model scan far more material without drowning in pairwise comparisons. Dense matrices, once everywhere, have become less routine. In their place, sparse attention layouts pick out the few relationships that matter inside otherwise tangled model layers. Low-rank approximation deserves much of the credit here; by compressing the expensive parts of the computation, it cuts the training bill during those long runs that push clusters to their limits. When nearby signals still need to be protected in high-dimensional feature space, sliding-window designs keep the neighborhood intact. The scaling crisis has not vanished by magic, but kernel methods have made the largest language workloads far less punishing. Looking at the reported outputs, another pattern shows up as well: adaptive attention spans are being used to follow information over short, medium, and extended time ranges. Is the problem finished? No. Still, with dedicated memory components now being folded into these systems, durable retention across long sequences looks less like wishful thinking and more like an engineering target."
+  }
+]
