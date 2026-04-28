@@ -52,5 +52,10 @@ import './M17_anti_ai_vocab';
 import './M18_anchor_mixing';
 import './M19_strip_then_anchor';
 import './M20_anchor_then_adversarial';
+// v10 candidate — replaces M7's deterministic stylometric anchor picker
+// with an LLM router. Cheaper than M19 (3 LLM calls vs 8) and avoids the
+// case where the stylometric scorer picks an anchor whose features look
+// "human" but whose register doesn't match the input.
+import './M21_router_anchor';
 
 export type { HumanizerMethod, MethodOptions, MethodResult, BenchRecord, MethodTokenStep } from './types';

@@ -1,0 +1,162 @@
+[
+  {
+    "methodId": "M21",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 1,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 331,
+        "outputTokens": 51
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 645,
+        "outputTokens": 269
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 743,
+        "outputTokens": 388
+      }
+    ],
+    "totalInputTokens": 1719,
+    "totalOutputTokens": 708,
+    "durationMs": 18747,
+    "output": "I believe that the modern researcher views the data sequence as something 'really' processed by linear means, the parts that are streamlined for efficiency appearing much brighter than those left to the old overhead. It follows that if we apply a sparse pattern or a low-rank approximation, no two layers will see exactly the same distribution of dependencies, because no two can view the sequence from exactly the same functional point of view, and any change in the architecture makes some change in the way the data is reflected. For most practical applications these approximations are unimportant, but to the architect they are all-important: the designer has to unlearn the habit of thinking that the model 'really' sees the whole, and to learn the habit of seeing information as it appears through a sliding window. Here we have the beginning of a distinction between 'full' attention and 'efficient' representation—between what the sequence seems to be and what the model calculates it to be. It is evident from what we have found, that there is no kernel or memory module which pre-eminently appears to be the 'true' state of the data; it appears differently to a kernel-based method than it does to an adaptive span, and there is no reason for regarding one of these as more really the context than the other."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 1,
+    "saplingIn": 100,
+    "saplingOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 486,
+        "outputTokens": 49
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 800,
+        "outputTokens": 463
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 930,
+        "outputTokens": 618
+      }
+    ],
+    "totalInputTokens": 2216,
+    "totalOutputTokens": 1130,
+    "durationMs": 25347,
+    "output": "I believe that the vector is 'really' a collection of numerical points, yet the parts that reflect the meaning of a word look much more significant than the mere letters themselves, and some parts look entirely different because of the context in which they sit. I know that, if I move the mathematical model, the points that represent the meaning will be different, so that the apparent distribution of values in the space will change. It follows that if several systems are looking at the same data at the same moment, no two of them will see exactly the same distribution of meanings, because no two can see it from exactly the same algorithmic point of view, and any change in the model makes some change in the way the meaning is reflected.\n\nFor most practical purposes these differences are unimportant, but to the engineer they are all-important: the engineer has to unlearn the habit of thinking that words have the simple definitions which common sense says they 'really' have, and to learn the habit of seeing data as they appear in high-dimensional space. Here we have already the beginning of one of the distinctions that causes most trouble in technology—the distinction between 'keyword' and 'semantics', between what a query seems to say and what it actually means. The user wants to know what results seem to be relevant, the developer and the theorist want to know what they are; but the theorist's wish to know this is stronger than the user's, and is more troubled by knowledge as to the difficulties of measuring the distance between two ideas.\n\nTo return to the database. It is evident from what we have found, that there is no single coordinate which pre-eminently appears to be the location of a concept, or even of any one particular part of the concept—it appears to be at different distances from different points of view, and there is no reason for regarding some of these as more really its meaning than others. And we know that even from a given point of view the similarity will seem different by cosine metrics, or to a Euclidean calculation, or to a system wearing different indexing structures, while in the absence of a model there will be no meaning at all, though to the raw storage the data will be unchanged."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 1,
+    "saplingIn": 100,
+    "saplingOut": 21,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 522,
+        "outputTokens": 48
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 836,
+        "outputTokens": 435
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 907,
+        "outputTokens": 761
+      }
+    ],
+    "totalInputTokens": 2265,
+    "totalOutputTokens": 1244,
+    "durationMs": 26548,
+    "output": "It is often supposed that the institution of a universal income would 'really' be a benefit to the common lot of men, but we find that, as soon as the light of scrutiny is turned upon it, the appearance of security differs vastly from the reality of national industry. It follows that if a man is provided for regardless of his exertion, the necessity of employing his particular skills for a wage will change; and any change in the necessity of labour makes some change in the way a person views his duty to his craft. For most practical purposes, the loss of one man's ambition might seem a small thing, but to the student of economy it is all-important: the statesman must unlearn the habit of thinking that men will strive for excellence when they have what common sense says they 'really' need, and learn to see the habit of work as it actually appears under the pressure of want. Here we have already the beginning of a distinction—the distinction between 'leisure' and 'stagnation', between what a policy seems to offer and what it is. The citizen wants to know what his life seems to be with a stipend, the economist and the statesman want to know what it is; but the statesman's wish to know this is more troubled by knowledge as to the difficulty of maintaining an industrious society without the incentive of gain. To return to the worker. It is evident from what we have found, that there is no motive which pre-eminently appears to be the motive of the worker, or even of any one particular class of worker—he appears to seek ease or effort from different points of view, and there is no reason for regarding his desire for promotion as more 'real' than his desire for idleness when he is fed. And we know that even in a great nation, the pursuit of learning will seem different when the end of learning is no longer a livelihood, while in the absence of struggle there will be no innovation at all, though to the touch of the tax-gatherer the wealth of the state may for a time seem unchanged."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T4",
+    "scoreIn": 87,
+    "scoreOut": 4,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 383,
+        "outputTokens": 28
+      },
+      {
+        "step": "gemini_rewrite_user_modern",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 672,
+        "outputTokens": 177
+      },
+      {
+        "step": "gpt_polish_user_modern",
+        "model": "gpt-5.5",
+        "inputTokens": 621,
+        "outputTokens": 232
+      }
+    ],
+    "totalInputTokens": 1676,
+    "totalOutputTokens": 437,
+    "durationMs": 21301,
+    "output": "I decided to make a morning routine because I want to work better and be more productive, and I use a digital alarm to make sure I wake up at the same time every day because consistency is very important. You know, drinking water and stretching are also good for the body, it makes the joints more flexible and your mind will be in a calm state, so the brain can think more effectively during the day. I also use a planner for my work tasks, because if you don't have a plan, you will lose the focus, and I do meditation to find the peace inside my mind. I even prepare my own food to have enough energy for the afternoon and not feel tired, and I see that these habits help me increase my output a lot, so I will keep this framework to reach my potential for growth."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T5",
+    "scoreIn": 98,
+    "scoreOut": 1,
+    "saplingIn": 100,
+    "saplingOut": 2,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 798,
+        "outputTokens": 51
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1112,
+        "outputTokens": 422
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 892,
+        "outputTokens": 1203
+      }
+    ],
+    "totalInputTokens": 2802,
+    "totalOutputTokens": 1676,
+    "durationMs": 31374,
+    "output": "I believe that the global lithium market is 'really' a single movement of commerce, though the parts that reflect the expansion of South American extraction seem much more stable than the parts that reflect the volatile demand of previous years. It follows that if several analysts are looking at the market at this moment, no two of them will see exactly the same distribution of values, because no two can view the supply chain from exactly the same point in the industrial landscape, and any change in the point of view makes some change in the way the availability of raw materials is reflected.\n\nFor most practical purposes these differences in regional output are unimportant, but to the manufacturer they are all-important: the manufacturer has to unlearn the habit of thinking that the mineral has the price which common sense says it 'really' has, and to learn the habit of seeing the market as it appears through processing techniques and battery-grade quality. Here we have already the beginning of a distinction—the distinction between the 'appearance' of a steady market and the 'reality' of geopolitical trade agreements and the shift toward new battery types. The manufacturer wants to know what the market seems to be, the practical man wants to know what it is, and the philosopher's wish to know the reality of this 'circular economy' is perhaps stronger than the practical man's, and is more troubled by the knowledge of how difficult it is to answer whether recycling can truly replace extraction.\n\nTo return to the lithium. It is evident from what we have found, that there is no one value which pre-eminently appears to be the value of the metal—it appears to have different values from different points in the supply chain, whether in the Australian mines or the East Asian refineries, and there is no reason for regarding some of these as more really its price than others. And we know that even from a given point of view the market will seem different by the light of government subsidies, or to a firm wearing the blue spectacles of long-term contracts, while in the absence of technological innovation there would be no expansion at all, though to transport and use the material would be unchanged."
+  }
+]
