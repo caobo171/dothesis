@@ -1,0 +1,182 @@
+[
+  {
+    "methodId": "M7",
+    "textId": "T1",
+    "scoreIn": 99,
+    "scoreOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 631,
+        "outputTokens": 314
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 773,
+        "outputTokens": 507
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 615,
+        "outputTokens": 202
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 648,
+        "outputTokens": 281
+      }
+    ],
+    "totalInputTokens": 2667,
+    "totalOutputTokens": 1304,
+    "durationMs": 18219,
+    "output": "We suppose that the modern researcher 'really' desires to process the whole of a sequence at once, yet the parts that reflect the computational light look much brighter when they are simplified, and some parts look obscure because of the weight of the data. It follows that if several methods are looking at the sequence at the same moment, no two of them will see exactly the same distribution of importance, because no two can see it from exactly the same structural point of view—the linear mechanism perceives a different reality from the sparse pattern. For most practical purposes these differences are unimportant, but to the engineer they are all-important: the engineer has to unlearn the habit of thinking that machines see the data which common sense says they 'really' see, and to learn the habit of seeing things as they appear through low-rank approximations or sliding windows. Here we have already the beginning of one of the distinctions that cause most trouble in research—the distinction between 'approximation' and 'fidelity', between what the data seem to be and what they are. To return to attention. It is evident from what we have found, that there is no single kernel or adaptive span which pre-eminently appears to be the span of the data—it appears to be of different breadths from different points of view, and there is no reason for regarding some of these as more really its meaning than others, while in the absence of specialized memory modules there would be no retention at all, though to the raw input the sequence remains unchanged."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T2",
+    "scoreIn": 98,
+    "scoreOut": 8,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 786,
+        "outputTokens": 266
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 722,
+        "outputTokens": 360
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 770,
+        "outputTokens": 360
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 802,
+        "outputTokens": 458
+      }
+    ],
+    "totalInputTokens": 3080,
+    "totalOutputTokens": 1444,
+    "durationMs": 17912,
+    "output": "In our present inquiry into the digital architecture of information, we are led to frame a rather simple conception of what a vector database means. In the last analysis, it consists in the translation of raw data into mathematical resources, whereby the subtler relations of human language are organized into numerical powers. A traditional system is one which is nonplussed by all but the most rigid keyword matches. On the contrary, a vector-based system is able practically to extricate the underlying meaning from an inquiry, by means of the semantic examples with which its memory is stored and of the abstract spatial conceptions which it has acquired.\n\nTo illustrate. We see this process at work when the database receives a query; it does not merely look for a mirror image of the text, but responds through an internal innervation of its models. Something tells the system that it is expected to find the intent, and must find it; something forces it to calculate the spatial distances within a high-dimensional world. Its internal structures are continuously activated by incoming currents of data, which the specialized methods of indexing, those products of an educated computational brain, have set in motion to identify the nearest conceptual neighbors.\n\nIf we reflect upon the various ideals of data retrieval, we see that what they all aim at is to organize capacities for semantic discovery. This is most immediately obvious in the realm of deep learning, where the explicitly avowed aim is to turn the machine into an instrument for advancing contextual understanding across unstructured forms. In the past, it might have seemed at first sight as if information management aimed at the production of certain static types of storage rather than at the development of what one may call this dynamic semantic efficiency. The vector database, in short, cannot be better described than by calling it the organization of acquired patterns of meaning and tendencies toward intelligent relevance."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T3",
+    "scoreIn": 95,
+    "scoreOut": 61,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 825,
+        "outputTokens": 269
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 729,
+        "outputTokens": 313
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 809,
+        "outputTokens": 412
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 858,
+        "outputTokens": 477
+      }
+    ],
+    "totalInputTokens": 3221,
+    "totalOutputTokens": 1471,
+    "durationMs": 22485,
+    "output": "It is widely supposed that the institution of a universal income would merely alter the mechanism of our economy, yet it seems more likely that it would unsettle the very foundation upon which our collective labour rests. For most practical purposes, the need for a wage is the chief impulse to activity; but if this impulse is removed, the habit of industry may be lost, and the competitive spirit which leads a man to employ his peculiar talents may give way to a general indifference. It follows that, if the reward for effort is no longer distinct from the reward for idleness, the student will find little reason to endure the hardships of study, and the worker will feel no compulsion to contribute to the national output. Here we encounter a difficulty of the first order—the distinction between a life of earned achievement and one of subsidized repose. To the leader of industry this change is all-important, for it removes the traditional incentives by which great enterprises are managed; and to the small merchant the burden of the necessary taxation might prove fatal to innovation. If the most capable among us are led by these circumstances to prefer ease to responsibility, the resilience of the private sector must inevitably decline, and the excellence of our services will fade as the participation of the many ceases to be a necessity of life."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T4",
+    "scoreIn": 88,
+    "scoreOut": 4,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 671,
+        "outputTokens": 295
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 749,
+        "outputTokens": 337
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 655,
+        "outputTokens": 224
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 672,
+        "outputTokens": 275
+      }
+    ],
+    "totalInputTokens": 2747,
+    "totalOutputTokens": 1131,
+    "durationMs": 17852,
+    "output": "I have come to believe that the morning hours are 'really' of a singular potential, though the parts which we occupy with deliberate action look much more vital than the parts which we leave to chance. I know that, if I employ a mechanical clock to fix the moment of waking, the subsequent distribution of my energies will change; it follows that, by the application of water and the movement of the limbs, the body is brought into a state of readiness which the mind alone cannot command. For most practical purposes these small acts of preparation are unremarkable, but to the disciplined observer they are all-important: one must unlearn the habit of drifting into the day as it happens to arrive, and learn the habit of meeting it as a structured whole. Here we have already the beginning of a distinction that causes much difficulty in the conduct of life—the distinction between the 'busy' man and the 'effective' man, between the appearance of activity and the reality of achievement. To return to the planner and the meditation. It is evident from what I have found, that there is no single task which pre-eminently defines the day's success; but, by the quiet ordering of one's thoughts and the careful preparation of sustenance, a calm state of mind is achieved which would otherwise be lost in the fatigue of the afternoon. In the end, it is not merely the output that is increased, but the very clearness of the growth we seek to attain."
+  },
+  {
+    "methodId": "M7",
+    "textId": "T5",
+    "scoreIn": 99,
+    "scoreOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1108,
+        "outputTokens": 416
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 874,
+        "outputTokens": 462
+      },
+      {
+        "step": "gemini_anchored_rewrite",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1092,
+        "outputTokens": 448
+      },
+      {
+        "step": "gpt_anchored_polish",
+        "model": "gpt-5.5",
+        "inputTokens": 894,
+        "outputTokens": 532
+      }
+    ],
+    "totalInputTokens": 3968,
+    "totalOutputTokens": 1858,
+    "durationMs": 18909,
+    "output": "I believe that the lithium market is 'really' a site of equilibrium in the coming year, though the parts that reflect the light of new extraction look much more stable than the parts still obscured by the shadows of past volatility. I know that, if the observer shifts his gaze towards the South American facilities, the apparent distribution of availability will change, for no two analysts can see the supply chain from exactly the same point of view. It follows that there is no single price which pre-eminently appears to be the value of the metal, but rather a series of appearances depending upon the point of view of the manufacturer and the reflection of industrial demand.\n\nFor most practical purposes these distinctions are unimportant, but to the industrialist they are all-important: the maker of batteries has to unlearn the habit of thinking that lithium has the availability which common sense says it 'really' has, and to learn the habit of seeing the resource as it appears through the lens of regulation and refining. Here we have the beginning of a distinction between 'raw' and 'refined', between what the earth offers and what the laboratory requires. The miner wants to know where the brine lies, but the strategist and the philosopher of commerce want to know what it will become; and the philosopher's wish is more troubled by knowledge as to the difficulties of ensuring a steady supply.\n\nTo return to the substance itself. It is evident from what we have found, that there is no method of extraction which is pre-eminently the true source—it appears to be recovered from the earth in some instances and from the scrap-heap in others, and there is no reason for regarding one as more really lithium than the other. And we know that even from a given point of view the market will seem different by the light of new technology, or to a man blinded by geopolitical spectacles, while in the dark of a trade embargo there will be no market at all, though to the touch of the engineer the metal will be unchanged."
+  }
+]
