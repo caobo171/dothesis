@@ -70,8 +70,11 @@ export default (router: Router) => {
         // Update job
         job.outputText = result.rewrittenText;
         job.outputHtml = result.rewrittenText;
-        job.aiScoreIn = result.aiScoreIn;
-        job.aiScoreOut = result.aiScoreOut;
+        // Persist 0 when the AI-detector provider is offline (Copyscape out of
+        // credit, etc.). The pipeline already returns null in that case so it
+        // doesn't crash; we just lose the score badge for this job.
+        job.aiScoreIn = result.aiScoreIn ?? 0;
+        job.aiScoreOut = result.aiScoreOut ?? 0;
         job.changesCount = result.changes.length;
         job.creditsUsed = creditCost;
         job.iterations = result.iterations;
@@ -147,8 +150,11 @@ export default (router: Router) => {
 
         job.outputText = result.rewrittenText;
         job.outputHtml = result.rewrittenText;
-        job.aiScoreIn = result.aiScoreIn;
-        job.aiScoreOut = result.aiScoreOut;
+        // Persist 0 when the AI-detector provider is offline (Copyscape out of
+        // credit, etc.). The pipeline already returns null in that case so it
+        // doesn't crash; we just lose the score badge for this job.
+        job.aiScoreIn = result.aiScoreIn ?? 0;
+        job.aiScoreOut = result.aiScoreOut ?? 0;
         job.changesCount = result.changes.length;
         job.creditsUsed = creditCost;
         job.iterations = result.iterations;

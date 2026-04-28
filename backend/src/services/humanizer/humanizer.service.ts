@@ -53,8 +53,11 @@ type TokenUsage = {
 type PipelineResult = {
   rewrittenText: string;
   changes: Array<{ original: string; replacement: string; reason: string }>;
-  aiScoreIn: number;
-  aiScoreOut: number;
+  // Nullable: when the AI-detector provider is out of credit / unreachable,
+  // we still complete the humanization and return null for the score
+  // instead of throwing. Frontend should render "—" when null.
+  aiScoreIn: number | null;
+  aiScoreOut: number | null;
   tokenUsage: TokenUsage;
   iterations: number; // 1 for the base pipeline + N extra iterations from the self-improvement loop (1-4 total)
 };
@@ -82,9 +85,17 @@ export class HumanizerService {
     return buildRewritePrompt(tone, strength, lengthMode);
   }
 
-  static async checkAiScore(text: string): Promise<number> {
-    const result = await AIDetectorEngine.detect(text);
-    return result.score;
+  // Returns null when the detector provider fails (e.g. Copyscape credit
+  // exhausted, network error). Callers should treat null as "unknown" and
+  // continue the pipeline rather than crash.
+  static async checkAiScore(text: string): Promise<number | null> {
+    try {
+      const result = await AIDetectorEngine.detect(text);
+      return result.score;
+    } catch (e) {
+      console.warn('[Humanizer] AI score check failed (continuing without score):', (e as Error).message);
+      return null;
+    }
   }
 
   // Legacy single-pass method preserved for backward compatibility with any callers
@@ -142,23 +153,25 @@ export class HumanizerService {
     console.log('[Humanizer v8] Input AI score: %d', aiScoreIn);
     onStage?.('ai_score_in', { score: aiScoreIn });
 
-    // Delegate the actual humanization to M7 voice-anchoring (bake-off winner).
-    // M7 runs two anchored rewrites in parallel (formal Russell anchor, casual
-    // James anchor) and picks the one with lower stylometric score. It never
-    // calls Copyscape internally — that stays as the external judge.
+    // Delegate humanization to M21 (router-picked anchor + strip-AI-vocab).
+    // M21 won the v10.1 bake-off: mean Sapling drop 75 vs M7's 31, and mean
+    // Copyscape drop 94 vs M7's 81. Cheaper too: 3 LLM calls per humanize
+    // vs M7's 8. The router picks 1 anchor from {academic_formal,
+    // academic_casual, argumentative, user_modern, user_narrative} via a
+    // single low-cost Gemini call, then runs only that branch.
     onStage?.('stage', { stage: 'rewriting', step: 'voice_anchored' });
-    const m7 = getMethod('M7');
-    const m7Result = await m7.run(text, { tone, strength, lengthMode });
-    const finalText = stripBannedCharacters(m7Result.output);
+    const m21 = getMethod('M21');
+    const m21Result = await m21.run(text, { tone, strength, lengthMode });
+    const finalText = stripBannedCharacters(m21Result.output);
 
     // Output AI score (Copyscape) — drives the "after" badge in UI.
     const aiScoreOut = await this.checkAiScore(finalText);
     onStage?.('score', { score: aiScoreOut });
 
-    // Translate M7's MethodTokenStep[] into the legacy TokenStep[] shape so the
-    // existing PipelineResult contract stays unchanged. iteration=1 since M7 is
-    // a single-shot best-of-2 (not a loop).
-    const tokenSteps: TokenStep[] = m7Result.tokenSteps.map((s) => ({
+    // Translate M21's MethodTokenStep[] into the legacy TokenStep[] shape so
+    // the existing PipelineResult contract stays unchanged. iteration=1 since
+    // M21 is single-shot (router + 2 LLM calls, no loop).
+    const tokenSteps: TokenStep[] = m21Result.tokenSteps.map((s) => ({
       step: s.step as any,
       model: s.model,
       iteration: 1,

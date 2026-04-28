@@ -46,13 +46,16 @@ function parseArgs(): Args {
   return {
     method,
     text: get('--text', 'all')!,
-    copyscape: (get('--copyscape', 'true')!) === 'true',
-    sapling: (get('--sapling', 'false')!) === 'true',
+    // Defaults flipped post-v10.1: Copyscape is out of credit on the project
+    // account and the bake-off result already shipped (M19/M21 win). Sapling
+    // is now the default judge for ongoing evaluation.
+    copyscape: (get('--copyscape', 'false')!) === 'true',
+    sapling: (get('--sapling', 'true')!) === 'true',
     out: get('--out', `bench-results/${method}.json`)!,
   };
 }
 
-const TEXT_IDS = ['T1', 'T2', 'T3', 'T4', 'T5'];
+const TEXT_IDS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
 const CORPUS_DIR = path.resolve(__dirname, 'corpus');
 
 function loadText(id: string): string {

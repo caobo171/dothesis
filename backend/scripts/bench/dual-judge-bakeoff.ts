@@ -20,7 +20,9 @@ import { AIDetectorEngine } from '../../src/services/ai-detector';
 import { SaplingProvider } from '../../src/services/ai-detector/providers/sapling.provider';
 import type { BenchRecord, MethodOptions } from '../../src/services/humanizer/methods/types';
 
-const TEXT_IDS = ['T1', 'T2', 'T3', 'T4', 'T5'];
+// Extended post-v10.1 with T6-T12 to stress-test the router across more
+// registers (short paragraph, news, how-to, narrative, memo, review).
+const TEXT_IDS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
 const CORPUS_DIR = path.resolve(__dirname, 'corpus');
 
 function getArg(flag: string, def?: string): string | undefined {
@@ -29,6 +31,10 @@ function getArg(flag: string, def?: string): string | undefined {
 }
 
 async function copyscape(text: string): Promise<number | null> {
+  // Skip when --no-copyscape is set OR copyscape credit is exhausted.
+  // Defaulting to skip post-v10.1 since the project credit is out and
+  // Sapling alone is sufficient for ongoing eval.
+  if (process.argv.includes('--no-copyscape')) return null;
   try { return (await AIDetectorEngine.detect(text)).score; }
   catch (e) { console.error('  copyscape err:', (e as Error).message); return null; }
 }
