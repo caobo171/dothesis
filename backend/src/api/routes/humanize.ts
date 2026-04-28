@@ -2,7 +2,7 @@ import { Router } from 'express';
 import passport from 'passport';
 import { Code, CreditCosts } from '@/Constants';
 import { HumanizeJobModel } from '@/models/HumanizeJob';
-import { HumanizerService } from '@/services/humanizer.service';
+import { HumanizerService } from '@/services/humanizer/humanizer.service';
 import { CreditService } from '@/services/credit.service';
 import { DocumentService } from '@/services/document.service';
 
