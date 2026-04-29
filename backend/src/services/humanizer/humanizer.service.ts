@@ -18,6 +18,7 @@ import { AIServiceManager } from '@/services/ai/ai.service.manager';
 import { GeminiService } from '@/services/ai/gemini.service';
 import { OpenAIService } from '@/services/ai/openai.service';
 import { AIDetectorEngine } from '@/services/ai-detector';
+import { StatisticalDetectionProvider } from '@/services/ai-detector/providers/statistical.provider';
 import { PerturbationEngine } from './perturbation/perturbation.engine';
 import { buildRewritePrompt } from './prompts/rewrite.prompt';
 import { buildCrossRewritePrompt } from './prompts/cross-rewrite.prompt';
@@ -85,12 +86,21 @@ export class HumanizerService {
     return buildRewritePrompt(tone, strength, lengthMode);
   }
 
-  // Returns null when the detector provider fails (e.g. Copyscape credit
-  // exhausted, network error). Callers should treat null as "unknown" and
-  // continue the pipeline rather than crash.
+  // In-pipeline AI score (input/output badges in the UI).
+  //
+  // Decision: use the built-in statistical provider — free, no API, no rate
+  // limits, no per-call cost. This is the score we surface to the user in
+  // real time. The bench harness (offline) uses Copyscape / Sapling instead
+  // because those are stricter judges; we don't put them in the live pipeline
+  // since per-request cost is too high (Copyscape ~$0.06, Sapling ~$0.005).
+  //
+  // Constructed once at module load and held in a private field so we don't
+  // re-init the statistical scorer on every request.
+  private static readonly _scorer = new StatisticalDetectionProvider();
+
   static async checkAiScore(text: string): Promise<number | null> {
     try {
-      const result = await AIDetectorEngine.detect(text);
+      const result = await this._scorer.analyze(text);
       return result.score;
     } catch (e) {
       console.warn('[Humanizer] AI score check failed (continuing without score):', (e as Error).message);
