@@ -31,20 +31,32 @@ const ANCHOR_DIR = path.resolve(__dirname, '../../../../scripts/bench/anchors');
 // only these descriptions, not the anchor text — keeps the router prompt
 // short and the picker's choice explicit. Adding a new anchor: drop a .txt,
 // add an entry here.
-// Each anchor advertises: WHEN to pick it (positive examples) and WHEN NOT
-// to pick it (negative examples). The router got confused before because
-// generic descriptions made multiple anchors look plausible. Tight rubrics
-// let the router's classification be deterministic.
+// Anchor library — period public-domain works + project-owner's modern
+// writing. Critical insight from the Tier 1 (Wikipedia) experiment: anchors
+// must be statistically OUTSIDE the LLM training distribution. Period works
+// (pre-1928) qualify because they predate web corpora. Personal writing
+// with idiosyncratic typos qualifies because it's unique-to-the-author.
+// CC-licensed modern web text (Wikipedia, Stack Overflow) does NOT qualify
+// because it's heavily in the training corpus — mimicking it produces
+// outputs detectors classify as AI.
+//
+// Sources:
+//   academic_formal:  Russell, "Problems of Philosophy" (1912)
+//   academic_casual:  James, "Talks to Teachers" (1899)
+//   argumentative:    Mill, "On Liberty" (1859)
+//   instructional:    Strunk, "Elements of Style" (1918) — for how-to register
+//   user_modern:      project owner's reflective opinion writing
+//   user_narrative:   project owner's personal narrative
 type AnchorDef = { id: string; desc: string; text: string };
 const ANCHORS: AnchorDef[] = [
   {
     id: 'academic_formal',
-    desc: 'PICK FOR: abstract analytical / expository writing on technical, philosophical, or scientific topics (transformer attention, vector search, market analysis, philosophy). Third-person, formal vocabulary. NOT FOR: personal stories, opinion essays, casual blogs.',
+    desc: 'PICK FOR: abstract analytical / expository writing on technical, philosophical, or scientific topics (transformer attention, vector search, market analysis, philosophy). Third-person, formal vocabulary. NOT FOR: personal stories, opinion essays, casual blogs, how-to guides.',
     text: fs.readFileSync(path.join(ANCHOR_DIR, 'academic_formal.txt'), 'utf8').trim(),
   },
   {
     id: 'academic_casual',
-    desc: 'PICK FOR: educational / explanatory writing addressed to a reader, lecture register, mid-formality. NOT FOR: pure abstract analysis (use academic_formal) or personal narrative (use user_narrative).',
+    desc: 'PICK FOR: educational / explanatory writing addressed to a reader, lecture register, mid-formality, news articles. NOT FOR: pure abstract analysis (use academic_formal) or personal narrative (use user_narrative).',
     text: fs.readFileSync(path.join(ANCHOR_DIR, 'academic_casual.txt'), 'utf8').trim(),
   },
   {
@@ -53,13 +65,18 @@ const ANCHORS: AnchorDef[] = [
     text: fs.readFileSync(path.join(ANCHOR_DIR, 'argumentative.txt'), 'utf8').trim(),
   },
   {
+    id: 'instructional',
+    desc: 'PICK FOR: how-to / tutorial / instructional / business-formal / memo / policy / guidance content. The input tells someone how to do something or describes a procedure or formal announcement. NOT FOR: narrative or argument.',
+    text: fs.readFileSync(path.join(ANCHOR_DIR, 'instructional.txt'), 'utf8').trim(),
+  },
+  {
     id: 'user_modern',
     desc: 'PICK FOR: modern OPINION / REFLECTION about contemporary tech / work / productivity / education ("I think X is overrated", "what I learned about Y"). Generalizing claims, no specific incidents. NOT FOR: pure narrative with specific moments (use user_narrative).',
     text: fs.readFileSync(path.join(ANCHOR_DIR, 'user_modern.txt'), 'utf8').trim(),
   },
   {
     id: 'user_narrative',
-    desc: 'PICK FOR: first-person STORY or EXPERIENCE — describing a specific moment, place, sensory detail, or event ("my experience doing X", "when I tried Y", "starting a morning routine", travel posts, blog posts about something the writer did). Contains concrete specifics. ALWAYS pick this over user_modern when the input is experiential or describes habits/routines/personal moments.',
+    desc: 'PICK FOR: first-person STORY or EXPERIENCE — describing a specific moment, place, sensory detail, or event ("my experience doing X", "when I tried Y", "starting a morning routine", travel posts, blog posts, product reviews). Contains concrete specifics. ALWAYS pick this over user_modern when the input is experiential or describes habits/routines/personal moments.',
     text: fs.readFileSync(path.join(ANCHOR_DIR, 'user_narrative.txt'), 'utf8').trim(),
   },
 ];

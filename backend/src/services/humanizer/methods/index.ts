@@ -57,5 +57,10 @@ import './M20_anchor_then_adversarial';
 // case where the stylometric scorer picks an anchor whose features look
 // "human" but whose register doesn't match the input.
 import './M21_router_anchor';
+// v11 candidate — layers M21's router-picked anchor with M11's back-translation
+// to attack residual LLM token-distribution after the anchor mimicry. Built to
+// break the v11.1 plateau on register-mismatched hard cases (argument, memo,
+// how-to, long essay) without using Sapling-in-pipeline.
+import './M22_router_then_backtrans';
 
 export type { HumanizerMethod, MethodOptions, MethodResult, BenchRecord, MethodTokenStep } from './types';

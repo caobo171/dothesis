@@ -1,0 +1,354 @@
+[
+  {
+    "methodId": "M21",
+    "textId": "T1",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 31,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 469,
+        "outputTokens": 45
+      },
+      {
+        "step": "gemini_rewrite_modern_explainer",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 457,
+        "outputTokens": 205
+      },
+      {
+        "step": "gpt_polish_modern_explainer",
+        "model": "gpt-5.5",
+        "inputTokens": 510,
+        "outputTokens": 325
+      }
+    ],
+    "totalInputTokens": 1436,
+    "totalOutputTokens": 575,
+    "durationMs": 15744,
+    "output": "Most modern researchers use linear attention mechanisms, which means that they are able to process long data sequences with much higher efficiency. However, not all architectures rely on dense computations to handle these sequences; sparse attention patterns use specific connectivity maps, rather than global interactions, to capture important dependencies. In some models and specialized frameworks, sliding window techniques and low-rank approximations are used to help reduce computational overhead. These methods are among the most common optimizations used for high-dimensional feature spaces. Although there are some differences between kernel-based methods and adaptive attention spans, the overall goal of enhancing scalability is quite similar in these systems. There are also many varieties of specialized memory modules, used mostly to help improve long-term retention, which capture sequential data without requiring the same quadratic costs as earlier models. In general outline, these developments represent a shift toward efficient processing: while traditional attention is a process of exhaustive comparison, modern mechanisms reduce complexity to manageable scales."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T2",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 624,
+        "outputTokens": 53
+      },
+      {
+        "step": "gemini_rewrite_modern_explainer",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 612,
+        "outputTokens": 280
+      },
+      {
+        "step": "gpt_polish_modern_explainer",
+        "model": "gpt-5.5",
+        "inputTokens": 581,
+        "outputTokens": 341
+      }
+    ],
+    "totalInputTokens": 1817,
+    "totalOutputTokens": 674,
+    "durationMs": 17673,
+    "output": "Vector databases use mathematical representations to help information retrieval within complex digital environments. Most of these systems employ machine learning models to transform raw textual data into numerical vectors, known as embeddings, which capture semantic relationships and contextual information. However, not all databases rely on literal keyword matching; vector databases prioritize the underlying meaning of queries rather than simple character strings. In this framework, the search process involves calculating the distance between different points in a high-dimensional space.\n\nAlthough there are various metrics used to determine the relevance of retrieved items, such as cosine similarity or Euclidean distance, the overall objective is to identify the most similar data points. There are also specialized indexing structures, used to accelerate the processing of large-scale datasets, which allow the system to quickly map user intent to the closest available information. These indexing methods help the system maintain efficiency even as the volume of data grows.\n\nInformation is converted into vectors through a process called embedding; the database captures conceptual relationships to improve the accuracy of retrieval. In general outline, vector search is the modern counterpart to traditional indexing: while traditional methods focus on exact keyword matches, vector databases enable the processing of unstructured formats such as images and audio. This capability represents an important advance in automated data management, providing a scalable solution for the development of intelligent applications in the modern technological landscape."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T3",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 660,
+        "outputTokens": 52
+      },
+      {
+        "step": "gemini_rewrite_modern_argument",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 661,
+        "outputTokens": 184
+      },
+      {
+        "step": "gpt_polish_modern_argument",
+        "model": "gpt-5.5",
+        "inputTokens": 473,
+        "outputTokens": 253
+      }
+    ],
+    "totalInputTokens": 1794,
+    "totalOutputTokens": 489,
+    "durationMs": 18806,
+    "output": "There is a longstanding consensus that the global economic framework functions on specific labor incentives, and that there should be a high bar for policies like universal basic income that would fundamentally disrupt that balance. The assessment that social motivation remains static when income is unconditional is a flawed assumption. We have seen in other contexts that removing financial pressure from specialized skill-building can lead to declines in industrial output, and we should reflect that in the discussion. The framing of UBI as a sustainable alternative is misleading, especially when one considers the fiscal burden and the likely increases in corporate taxation. These costs would discourage the very investment required for innovation. Editors should consider whether the argument for UBI survives a serious read of private-sector resilience and labor-participation trends — which I'd argue it does not. The reliance on subsidies would likely diminish service quality, a reality that is not currently being adequately addressed."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T4",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 521,
+        "outputTokens": 45
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 441,
+        "outputTokens": 176
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 387,
+        "outputTokens": 228
+      }
+    ],
+    "totalInputTokens": 1349,
+    "totalOutputTokens": 449,
+    "durationMs": 16757,
+    "output": "I start to make a new morning routine to make my life better, I use a digital clock to wake up same time every day, it's very good, and I drink much water to make my body healthy, take the deep breath and stretch my legs and arms, it make my joints very flexible and soft. My mind is very calmful and I can do my work very good, I use a planner to write my tasks, it's like a very organized picture. I sit in the silent for meditation, I feel very peace inside my heart, and I cook healthy food to make me have energy at 3 pm or 4 pm. These new habits make me do more works, it make those days as day, and I will keep doing this to make myself grow more, it's great."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T5",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 98,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 936,
+        "outputTokens": 57
+      },
+      {
+        "step": "gemini_rewrite_modern_explainer",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 924,
+        "outputTokens": 310
+      },
+      {
+        "step": "gpt_polish_modern_explainer",
+        "model": "gpt-5.5",
+        "inputTokens": 603,
+        "outputTokens": 629
+      }
+    ],
+    "totalInputTokens": 2463,
+    "totalOutputTokens": 996,
+    "durationMs": 22939,
+    "output": "The global lithium market continues on a complex trajectory as it enters the first quarter of fiscal year 2026, characterized by significant shifts in supply chain dynamics across major production hubs. Much of the growth in lithium extraction is occurring through the expansion of facilities in South America, which means that these regions are able to increase raw material availability and help stabilize spot prices. However, not all regions rely on the same extraction methods to meet demand; Australian operations focus on spodumene concentrate exports rather than brine-based production. In the automotive sector, high-performance energy storage solutions are the most common application for refined lithium products.\n\nAlthough there are some differences between regional production strategies, the overall process of producing battery-grade lithium chemicals is quite similar across global manufacturers. There are also many varieties of battery technology, such as solid-state systems, which require lithium metal anodes or specialized chemistries instead of standard lithium carbonate. This shift toward advanced technology is supported by significant capital investment, though lithium iron phosphate batteries still represent a substantial share of the market.\n\nRaw materials are converted into battery-grade chemicals in a process of refining and purification; manufacturers capture energy storage potential by processing lithium into high-performance battery materials and compounds. Refining is a resource-intensive industrial operation. In general outline, the circular economy is the opposite of primary extraction: while traditional mining is a process of removing new minerals from the earth, recycling is the recovery of materials from end-of-life batteries to reduce reliance on primary sources."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T6",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 436,
+        "outputTokens": 53
+      },
+      {
+        "step": "gemini_rewrite_modern_explainer",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 424,
+        "outputTokens": 136
+      },
+      {
+        "step": "gpt_polish_modern_explainer",
+        "model": "gpt-5.5",
+        "inputTokens": 442,
+        "outputTokens": 191
+      }
+    ],
+    "totalInputTokens": 1302,
+    "totalOutputTokens": 380,
+    "durationMs": 13350,
+    "output": "Microservices use distributed architectures, which means that they inherently introduce increased operational overhead during standard software deployment processes. However, not all modular systems manage communication in the same way; these architectures rely on network protocols that create significant challenges for latency and reliability. In most decentralized environments, data management strategies require complex synchronization mechanisms to keep information consistent across services.\n\nMonitoring multiple independent components requires sophisticated observability tools; this is needed to maintain system performance and security. In general outline, the management of numerous distinct services demands extensive automation and specialized technical expertise, which are essential for the effective governance of the overall architecture."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T7",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 668,
+        "outputTokens": 51
+      },
+      {
+        "step": "gemini_rewrite_modern_explainer",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 656,
+        "outputTokens": 248
+      },
+      {
+        "step": "gpt_polish_modern_explainer",
+        "model": "gpt-5.5",
+        "inputTokens": 549,
+        "outputTokens": 309
+      }
+    ],
+    "totalInputTokens": 1873,
+    "totalOutputTokens": 608,
+    "durationMs": 18667,
+    "output": "The rise of digital streaming services has altered modern consumption patterns; these platforms provide immediate access to large libraries of content, which challenges the traditional relevance of physical retail. Although local bookstores have historically served as cultural hubs within urban environments, the convenience of subscription models now often takes priority for many consumers. This shift can affect the social fabric of local neighborhoods.\n\nIn many cases, streaming services use advanced algorithms to personalize content for individual users; this technological development influences how people interact with local media providers. Consequently, the social role of the bookstore is undergoing a transformation. The digital landscape continues to redefine engagement with printed media, as the convenience of online access often encourages users to remain in private residences. This isolation can result in a decrease in the frequency of visits to local commercial centers.\n\nThe economic pressure of digital competition has forced many bookstores to close, which represents more than just a reduction in commercial activity. In general outline, the digital transition is the opposite of traditional browsing: while physical bookstores foster social interaction and collective storytelling, digital platforms prioritize direct delivery to the consumer. This transition uses high-speed internet to reduce the need for physical storage and visits to community hubs."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T8",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 98,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 578,
+        "outputTokens": 48
+      },
+      {
+        "step": "gemini_rewrite_modern_howto",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 583,
+        "outputTokens": 181
+      },
+      {
+        "step": "gpt_polish_modern_howto",
+        "model": "gpt-5.5",
+        "inputTokens": 482,
+        "outputTokens": 321
+      }
+    ],
+    "totalInputTokens": 1643,
+    "totalOutputTokens": 550,
+    "durationMs": 16520,
+    "output": "A robust configuration system is essential for a Node.js application. Developers use environment variables to manage sensitive credentials and deployment settings, usually by using the dotenv package to load configuration values into memory. To begin, a hidden file named .env is created in the project root to store the required parameters as key-value pairs.\n\nDuring startup, the script must call the configuration method. This allows the system to access all defined variables through the global process object, and makes it easier to move between development, testing, and production environments.\n\nThis approach is effective in both organizational and security terms. By separating configuration from the core logic, a developer can maintain clearer structure within a modern web service architecture. The following sections detail the commands required to integrate these components into a software project."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T9",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 632,
+        "outputTokens": 56
+      },
+      {
+        "step": "gemini_rewrite_modern_explainer",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 620,
+        "outputTokens": 303
+      },
+      {
+        "step": "gpt_polish_modern_explainer",
+        "model": "gpt-5.5",
+        "inputTokens": 600,
+        "outputTokens": 376
+      }
+    ],
+    "totalInputTokens": 1852,
+    "totalOutputTokens": 735,
+    "durationMs": 17129,
+    "output": "A prominent technology organization released a significant open-source language model earlier this week, which means that the software is able to achieve performance parity with the advanced GPT-4 architecture. However, not all models rely on closed-source frameworks to reach this level; this innovative release uses sophisticated training datasets, rather than restricted data, to foster high levels of computational reasoning. In this system, the engineering team implemented novel algorithms to use existing hardware resources efficiently. This efficient design is by far the most notable feature of the recent release.\n\nAlthough there are some differences between this model and its predecessors, the overall process of integrating specialized modules is quite similar. There are also many varieties of natural language tasks supported by the architecture, used mostly by enterprises to handle complex queries or to provide robust capabilities for global applications. Early benchmarks indicate that the system can process these queries with remarkable accuracy, representing a major shift in artificial intelligence.\n\nInformation is converted into logical responses in a process called multi-step reasoning; the framework captures data from extensive sets to improve general knowledge acquisition. This reasoning is an essential part of the system's output quality. In general outline, the project is a shift in the global software community: while earlier systems were often inaccessible, the open-source license allows users to modify the code for individual needs. This achievement signals a transformative era, in which the system employs advanced safety protocols to mitigate potential risks instead of allowing unrefined operation."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T10",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 4,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 544,
+        "outputTokens": 52
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 464,
+        "outputTokens": 206
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 414,
+        "outputTokens": 249
+      }
+    ],
+    "totalInputTokens": 1422,
+    "totalOutputTokens": 507,
+    "durationMs": 16905,
+    "output": "I decide to use my body for the 10K running, in the first time I prepare the shoes and things, it's very important. The morning of the race is very nervous, I take the deep breath and the air is so fresh, many people come together. I start to run in the street, at first it's very slow to keep the energy. In the middle, the body is very tired and the heart beat fast, I use my breath to stay stable, and I smell the sweat of people, it's very signature smell in the running street. People running is very calmful and enjoyful, they give me the energy to finish the race. The last kilometer is very hard but I use all my power, then I get the medal, it's very shiny and colorful. I like that feeling, it make me feel great and healthy, and I will do more running in the future because everythin is very great."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T12",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 589,
+        "outputTokens": 54
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 509,
+        "outputTokens": 227
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 436,
+        "outputTokens": 257
+      }
+    ],
+    "totalInputTokens": 1534,
+    "totalOutputTokens": 538,
+    "durationMs": 16032,
+    "output": "I have used this wireless keyboard for three months, it is very good for my writing, when you touch the key it gives you very signature feeling, very consistent for many tasks. This keyboard is wireless and it connects very fast, no lag when I typing my story, the battery lasts a very long time and I don't charge it many times, it's very great. The frame is very strong and good quality, it not moving on the desk, it stays very stable. Every keycap has a good coating and it not wear off even I use many hours, and my hand is not tired because the design is very good for people when they write long chapters. In the night you can change the lights, it's very colorful and beautiful, you can see everything. It can work with many computers, very versatile for writers and make my typing very fast and accurate. The size is very small, so my desk is very clean and organized, if you want use the cable it also has one, it's a very good investment for people who like comfort typing."
+  }
+]
