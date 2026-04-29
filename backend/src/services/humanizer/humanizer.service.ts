@@ -19,6 +19,7 @@ import { GeminiService } from '@/services/ai/gemini.service';
 import { OpenAIService } from '@/services/ai/openai.service';
 import { AIDetectorEngine } from '@/services/ai-detector';
 import { StatisticalDetectionProvider } from '@/services/ai-detector/providers/statistical.provider';
+import { SaplingProvider } from '@/services/ai-detector/providers/sapling.provider';
 import { PerturbationEngine } from './perturbation/perturbation.engine';
 import { buildRewritePrompt } from './prompts/rewrite.prompt';
 import { buildCrossRewritePrompt } from './prompts/cross-rewrite.prompt';
@@ -191,6 +192,20 @@ export class HumanizerService {
     const totalInputTokens = tokenSteps.reduce((sum, s) => sum + s.inputTokens, 0);
     const totalOutputTokens = tokenSteps.reduce((sum, s) => sum + s.outputTokens, 0);
     console.log('[Humanizer v10.1] Pipeline complete | score: %d → %d | tokens: in=%d out=%d', aiScoreIn, aiScoreOut, totalInputTokens, totalOutputTokens);
+
+    // Dev-only Sapling check, env-gated so it never runs in production.
+    // Logs the strict-detector verdict on input + output for ground-truth
+    // visibility while iterating locally. Set HUMANIZER_DEV_SAPLING_LOG=true
+    // in local .env to enable. Costs ~$0.005 per call (input+output).
+    if (process.env.HUMANIZER_DEV_SAPLING_LOG === 'true') {
+      try {
+        const sap = new SaplingProvider();
+        const [sIn, sOut] = await Promise.all([sap.analyze(text), sap.analyze(finalText)]);
+        console.log('[Humanizer v10.1][SAPLING] %d → %d', sIn.score, sOut.score);
+      } catch (e) {
+        console.warn('[Humanizer v10.1][SAPLING] check failed (ignored):', (e as Error).message);
+      }
+    }
 
     return {
       rewrittenText: finalText,
