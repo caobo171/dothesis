@@ -146,11 +146,11 @@ export class HumanizerService {
     onStage?: (stage: string, data: any) => void
   ): Promise<PipelineResult> {
     const wordCount = text.split(/\s+/).length;
-    console.log('[Humanizer v8] Pipeline started | tone=%s strength=%d length=%s words=%d', tone, strength, lengthMode, wordCount);
+    console.log('[Humanizer v10.1] Pipeline started | tone=%s strength=%d length=%s words=%d', tone, strength, lengthMode, wordCount);
 
     // Input AI score (Copyscape) — informational, drives the "before" badge in UI.
     const aiScoreIn = await this.checkAiScore(text);
-    console.log('[Humanizer v8] Input AI score: %d', aiScoreIn);
+    console.log('[Humanizer v10.1] Input AI score: %d', aiScoreIn);
     onStage?.('ai_score_in', { score: aiScoreIn });
 
     // Delegate humanization to M21 (router-picked anchor + strip-AI-vocab).
@@ -180,7 +180,7 @@ export class HumanizerService {
     }));
     const totalInputTokens = tokenSteps.reduce((sum, s) => sum + s.inputTokens, 0);
     const totalOutputTokens = tokenSteps.reduce((sum, s) => sum + s.outputTokens, 0);
-    console.log('[Humanizer v8] Pipeline complete | score: %d → %d | tokens: in=%d out=%d', aiScoreIn, aiScoreOut, totalInputTokens, totalOutputTokens);
+    console.log('[Humanizer v10.1] Pipeline complete | score: %d → %d | tokens: in=%d out=%d', aiScoreIn, aiScoreOut, totalInputTokens, totalOutputTokens);
 
     return {
       rewrittenText: finalText,
