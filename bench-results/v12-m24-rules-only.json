@@ -1,0 +1,386 @@
+[
+  {
+    "methodId": "M24",
+    "textId": "T1",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 591,
+        "outputTokens": 42
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 947,
+        "outputTokens": 115
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 588,
+        "outputTokens": 218
+      }
+    ],
+    "totalInputTokens": 2126,
+    "totalOutputTokens": 375,
+    "durationMs": 27205,
+    "output": "In current research, linear attention seems to make possible the efficient treatment of very long sequences; in much the same way, sparse patterns may be used by newer architectures to catch dependencies within networks. By using low-rank approximations, more advanced frameworks appear to lessen the amount of computation required in training. Sliding-window methods allow models, at least in many cases, to deal with the local context, while kernel-based methods are thought to make them more scalable in large tasks. When we look at recent studies, adaptive spans seem able to take in changing information across different temporal scales; and special memory modules, moreover, are believed to help in retaining sequential data."
+  },
+  {
+    "methodId": "M24",
+    "textId": "T2",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 5,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 746,
+        "outputTokens": 52
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1102,
+        "outputTokens": 219
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 694,
+        "outputTokens": 946
+      }
+    ],
+    "totalInputTokens": 2542,
+    "totalOutputTokens": 1217,
+    "durationMs": 33964,
+    "output": "I believe that, in complex digital environments, vector databases use mathematical representations in order to make the finding of information possible, or at any rate much easier. It is understood that these systems employ machine-learning models to turn raw data into numerical vectors, and these vectors, or embeddings, are meant to preserve something of the relations which the original contents have to one another. Thus there is already a distinction between the mere word and what may be called its meaning, between the sign which is written and the thing, or kind of thing, which it is intended to bring before the mind. Whereas the ordinary database is apt to depend upon matching words, the vector system tries to take account of likeness in sense, and not only likeness in spelling. To return to the search process. It consists in calculating distances in a space of many dimensions, where such measures as cosine similarity or Euclidean distance are used to decide what is near enough to be relevant. By means of special indexing structures, the system can avoid much of the labour which a direct comparison of very large collections would involve. It follows that, if the user's intention is mapped near to the information required, the search may be both quick and, for most practical purposes, accurate. The user receives relevant results, not because the system understands in the human sense, but because the form of the request has been placed in a neighbourhood where similar forms are found. The use of deep learning makes the system more sensitive to linguistic patterns, and also permits similar treatment of images, sounds, and texts. In the present technological world, such databases therefore offer a scalable way of dealing with enterprise data, and they seem to be one of the instruments by which more intelligent applications are being made."
+  },
+  {
+    "methodId": "M24",
+    "textId": "T3",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 782,
+        "outputTokens": 43
+      },
+      {
+        "step": "gemini_rewrite_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1189,
+        "outputTokens": 149
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 857,
+        "outputTokens": 441
+      }
+    ],
+    "totalInputTokens": 2828,
+    "totalOutputTokens": 633,
+    "durationMs": 27716,
+    "output": "The establishment of a universal basic income would fundamentally disturb the existing framework of the world's economy. Such a policy would, it is likely, discourage many persons from seeking employment in the competitive labour market. The provision of unconditional funds might conduce to a general decline in individual and social motivation. Workers might no longer feel compelled to employ their special skills for any pecuniary advantage. Many citizens could choose to use these payments as a means of avoiding demanding professional responsibilities. This change in conduct would produce a considerable reduction in the general level of national industrial output. The absence of financial pressure might hinder the pursuit of various advanced educational objects. Students may not set a high value on learning, if they expect a guaranteed income irrespective of their exertions. Consequently, the economy would struggle to produce a highly skilled and capable future workforce.\n\nCorporations would encounter difficulties in attempting to recruit dedicated and industrious professional personnel. The absence of the customary incentives would complicate the management of large and complex organizational structures. Small businesses would find it difficult to compete with these government-funded opportunities for leisure. This dynamic would likely conduce to a stagnation of innovation across many important industrial sectors. The fiscal burden of such a programme would necessitate substantial increases in corporate taxation. High taxes would further discourage investment, and limit the growth of new commercial enterprises. The redistribution of wealth might dampen the ambition of high-performing professional leaders. Individuals may decide to reduce their hours, instead of striving for important executive promotions. This diminution in leadership quality would injuriously affect the efficiency of global supply chains.\n\nThe reliance on government subsidies would weaken the general resilience of the private sector. The quality of services would likely diminish, as rates of labour participation continued to fall from year to year."
+  },
+  {
+    "methodId": "M24",
+    "textId": "T4",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 2,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 643,
+        "outputTokens": 46
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 743,
+        "outputTokens": 152
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 370,
+        "outputTokens": 211
+      }
+    ],
+    "totalInputTokens": 1756,
+    "totalOutputTokens": 409,
+    "durationMs": 19244,
+    "output": "I start to make a routine for my morning, it appears to help my productivity every day. By using a digital alarm, I wake up at the same time, it makes my schedule very stable. Across the day, I drink much water to cover my health. When doing some stretching, my joints feel more flexible, and it seems to make my mind calmful. Looking at my planner, I organize my work tasks, it is very efficient for me. In the silent room, I do meditation, it gives me internal peace. Preparing healthy food can be useful for my energy in the afternoon. Arguably, these habits make my work output increase. Because of this, I will keep this framework for my growth."
+  },
+  {
+    "methodId": "M24",
+    "textId": "T5",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1058,
+        "outputTokens": 52
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1414,
+        "outputTokens": 486
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 947,
+        "outputTokens": 627
+      }
+    ],
+    "totalInputTokens": 3419,
+    "totalOutputTokens": 1165,
+    "durationMs": 31854,
+    "output": "It is evident from present observations that the global lithium market appears to be following a complex course as it enters the first quarter of the fiscal year 2026. If we look at the chief international centres, we find that analysts note considerable changes in the conditions of supply. In South America, the expansion of extraction facilities may increase the availability of raw material. It follows that these developments suggest some stabilization of spot prices, and some avoidance of the volatility previously experienced. By the use of more advanced processing, manufacturers are able to improve the quality of battery-grade products. This tendency seems to accord with the demand, in the automotive industry, for energy storage of high performance. Given government subsidies for the adoption of electric vehicles, continued growth appears likely. At the same time, those concerned with the industry have to watch the environmental regulations which bear upon sustainable mining. Consequently, companies will presumably introduce more efficient systems of water recycling, in order to meet these changing requirements.\n\nOn the side of supply, Australian mining operations anticipate an increase in the export of spodumene. This output appears to support the growing capacity of refining facilities in East Asia. Although logistical difficulties remain, the timely delivery of refined products may still be affected by them. By integrating their supply chains, firms arguably gain greater control over the costs of production. In order to secure a consistent supply, the major automotive corporations intend to make use of long-term contracts. This policy is meant to lessen the risks connected with possible shortages in the high-grade hydroxide segment. With the development of solid-state technology, new requirements for metal anode production appear likely. Research programmes suggest that considerable capital will be needed if commercialization is to be accelerated. In the recycling sector, one observes a notable increase in the recovery of materials.\n\nTo return to the market outlook for the first quarter of 2026. It appears that there is, for the moment, a balance between supply and demand. Analysts believe that inventory levels may provide a buffer against unexpected disturbances. Across international borders, trade agreements continue to influence the flow of lithium. In North America, domestic initiatives are using federal funding to strengthen energy security. These projects include the construction of carbonate plants near brine deposits. By means of direct extraction, more rapid processing of resources may be achieved. This advance arguably enables producers to make use of deposits which were formerly uneconomical, and so to satisfy part of the demand. During this period, the price of lithium carbonate is expected to remain within a steady range. Looking farther ahead, strategic investments may support long-term sustainability. The demand for lithium iron phosphate batteries appears to be taking a larger share of the market. This change presumably affects the particular chemicals required by producers. In Southeast Asia, emerging markets suggest new opportunities for battery manufacture."
+  },
+  {
+    "methodId": "M24",
+    "textId": "T6",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 558,
+        "outputTokens": 46
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 914,
+        "outputTokens": 97
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 573,
+        "outputTokens": 206
+      }
+    ],
+    "totalInputTokens": 2045,
+    "totalOutputTokens": 349,
+    "durationMs": 22343,
+    "output": "In the case of microservices, distributed architectures appear to increase the operational overhead of deployment. Since such systems make use of network protocols, they may meet with difficulties arising from latency, reliability, or packet loss. It follows that, if integrity is to be preserved across services, decentralized management of data seems to require rather complex mechanisms of synchronization. And, given the presence of independent components, more elaborate tools of observability are likely to be needed if performance is to be maintained. Finally, the management of distinct services appears to demand automation, specialized knowledge, and some measure of architectural governance."
+  },
+  {
+    "methodId": "M24",
+    "textId": "T7",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 790,
+        "outputTokens": 51
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1146,
+        "outputTokens": 144
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 799,
+        "outputTokens": 644
+      }
+    ],
+    "totalInputTokens": 2735,
+    "totalOutputTokens": 839,
+    "durationMs": 33868,
+    "output": "The emergence of digital streaming services has greatly altered the ways in which modern society consumes its amusements and its books. These platforms give immediate access to vast libraries of cinematic and literary content. Local bookstores, for a long time, served as primary cultural centres in many and diverse urban places. But digital accessibility now challenges the old relevance of these physical shops.\n\nModern consumers frequently prefer the convenience which digital subscription models provide. This change in habit affects the social fabric of many local neighbourhoods quite significantly. Streaming services use advanced algorithms to personalize content for each individual user. Such devices influence the way people deal with their local booksellers. Consequently, the social role of bookstores undergoes a profound transformation in the present age. The digital landscape continues to redefine the manner in which individuals engage with printed media.\n\nThe convenience of streaming services encourages users to remain in their private residences. This isolation helps to decrease the frequency of visits to local commercial centres. The economic pressure of digital competition forces many bookstores to close their doors. This loss means more than a mere reduction in local trade for residents. The absence of physical books may also influence the cognitive development of the younger generation. The digital transition uses high-speed internet to deliver entertainment directly into the consumer's hand. The rapid expansion of digital libraries brings with it a reduction in the need for physical storage.\n\nLocal bookstores traditionally mean more than simple retail transactions for their many loyal patrons. These physical spaces make possible meaningful social interactions among diverse members of the local community. Many bookstores host public events that use the power of collective storytelling. The rise of streaming services reduces the necessity for physical visits to these places."
+  },
+  {
+    "methodId": "M24",
+    "textId": "T8",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 98,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 700,
+        "outputTokens": 46
+      },
+      {
+        "step": "gemini_rewrite_instructional",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 941,
+        "outputTokens": 150
+      },
+      {
+        "step": "gpt_polish_instructional",
+        "model": "gpt-5.5",
+        "inputTokens": 604,
+        "outputTokens": 378
+      }
+    ],
+    "totalInputTokens": 2245,
+    "totalOutputTokens": 574,
+    "durationMs": 27986,
+    "output": "A robust configuration system is essential in the development of any professional Node.js application. Developers should use environment variables to manage sensitive credentials and deployment-specific settings securely. This tutorial will show the correct implementation of a standard environment-variable architecture. The user will use the popular dotenv package to load external configurations into memory. To initialize the project, create a hidden file named .env in the root directory. This file should contain key-value pairs that define the necessary parameters for the application. The script should call the configuration method during the startup phase. This approach ensures that the system can access all defined variables through the global process object. Consequently, developers can maintain separate configurations for development, testing, and production environments with ease. Following these steps will improve the security and flexibility of the codebase. The following sections will give the precise commands required to achieve this technical goal. Observe the instructions provided to integrate these components into the current software project. Proper execution of these tasks will result in a scalable and manageable application environment. These practices are fundamental to maintaining high standards in any modern web service architecture."
+  },
+  {
+    "methodId": "M24",
+    "textId": "T9",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 754,
+        "outputTokens": 54
+      },
+      {
+        "step": "gemini_rewrite_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1094,
+        "outputTokens": 145
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 752,
+        "outputTokens": 446
+      }
+    ],
+    "totalInputTokens": 2600,
+    "totalOutputTokens": 645,
+    "durationMs": 30559,
+    "output": "A prominent organization in technology released, earlier this week, a considerable open-source language model. This new piece of software is reported to attain a performance not unlike that of the advanced GPT-4 architecture of to-day. Its developers have made use of elaborate training data to foster high degrees of computational reasoning. The engineering group has also introduced new algorithms, by which existing hardware resources may be employed with economy. The release covers various specialized modules, intended to improve particular tasks in natural language. The architecture of the model provides robust capacities for the support of many and diverse applications in global enterprise. Early benchmarks indicate that the system can deal with complex queries with remarkable accuracy. Industry observers remark that this development marks a major change in artificial intelligence. The researchers have designed the framework so as to foster collaboration within the wider community of software workers. The project documentation describes the methods used to secure a consistent quality of output. Its creators intend, in short, to make access to high-performance generative tools more democratic. The open-source license permits users to modify the code according to their several needs. The platform is said to integrate readily with existing cloud infrastructures, and so to aid rapid cycles of deployment. The model shows a superior ability to manage problems of multi-step logical reasoning. The training process uses extensive data to improve the acquisition of general knowledge. The system employs advanced safety protocols to mitigate possible risks during operation. This achievement signals a new era for accessible and powerful instruments of machine learning. The global community anticipates further updates, by which the present version of the software may be refined. Internal testing procedures are meant to ensure that the model maintains high standards of reliability. The development group remains committed to giving its users continuing technical support."
+  },
+  {
+    "methodId": "M24",
+    "textId": "T10",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 666,
+        "outputTokens": 56
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 766,
+        "outputTokens": 148
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 421,
+        "outputTokens": 331
+      }
+    ],
+    "totalInputTokens": 1853,
+    "totalOutputTokens": 535,
+    "durationMs": 28101,
+    "output": "I decided to use my physical ability by joining a local 10K running event. For the preparation, I needed some running shoes and sport clothes, and keep a training schedule, not every day perfect but still consistent. The morning of the race I felt so nervous, the energy was very high in my body. I started the first part of the race with a moderate pace, because I wanted to keep good performance until the end. In the middle of the course, the running became much harder, my legs feel heavy and the breath was not so easy. I kept using my breathing technique, to make my heart and body stay stable. Other runners around me gave me a kind of collective motivation, everyone was tired but still moving forward. The final kilometer needed all my remaining energy, and I tried my best to cross the finish line. I achieved my main objective and got a commemorative medal for finishing this race. This experience helped me to use my discipline and make a good result for my health. So I plan to use these skills again, and join more similar running events in the future."
+  },
+  {
+    "methodId": "M24",
+    "textId": "T11",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 634,
+        "outputTokens": 48
+      },
+      {
+        "step": "gemini_rewrite_instructional",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 875,
+        "outputTokens": 131
+      },
+      {
+        "step": "gpt_polish_instructional",
+        "model": "gpt-5.5",
+        "inputTokens": 498,
+        "outputTokens": 233
+      }
+    ],
+    "totalInputTokens": 2007,
+    "totalOutputTokens": 412,
+    "durationMs": 17793,
+    "output": "For technical staff, management proposes a comprehensive policy on flexible work. This initiative is expected to improve productivity by adapting our remote operating methods. Although employees may remain at home, designated digital platforms will help collaboration. Supervisors will monitor performance, since regular adherence to deadlines is necessary. Documentation from human resources will set out the guidelines for participation. Given the need for coverage, contributors must coordinate their schedules during business hours. Leadership suggests that this transition may improve efficiency. To understand its operational effects, review the attached manual. These adjustments should strengthen our competitive position in the global market. The integration of these practices into our culture will require continued dedication."
+  },
+  {
+    "methodId": "M24",
+    "textId": "T12",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 711,
+        "outputTokens": 51
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 811,
+        "outputTokens": 147
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 466,
+        "outputTokens": 366
+      }
+    ],
+    "totalInputTokens": 1988,
+    "totalOutputTokens": 564,
+    "durationMs": 27967,
+    "output": "I have use this wireless mechanical keyboard for three months now, it help my daily writing a lot. The keyboard have tactile switches, when I press it, the sound and feeling is very clear, every key go down very steady, and it make writing feel more alive. The wireless connection is good, I dont feel many delay even when I write for long time, like in the night when everything is quiet and only the keyboard sound is there. The battery life is enough, I dont need to charge it all the time, so it let me keep working without thinking too much. The frame feel strong and high quality, it stay stable on different table, not moving around when I type fast. Each keycap have coating that still look fine after many hours, not easy to get old. The design is comfortable, my hand dont feel so tired when I write long chapters or many notes. You can change the backlight also, and in low light it look nice and help me see the letters. It work with different systems, so for writers it is quite useful. I think the mechanical feedback make me type more accurate and maybe faster too. Also the compact layout save desk space, make the working place more clean and organized. This model is not very cheap, but for people who care about comfort and efficiency, it is worth to think about. The manufacturer also give a detachable cable, so if you want wired mode, you can use it too."
+  }
+]
