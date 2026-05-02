@@ -71,5 +71,10 @@ import './M23_rules_critic_anchor';
 // rules-in-prompt alone deliver M23's wins without the revision call's
 // variance (which catastrophically regressed T2 and T6 in the v12 bench).
 import './M24_rules_no_critic';
+// v13 candidate — inverse of M23. The Biber MDA diagnostic on T1-T12
+// showed the failing registers are OVER-involved (high modals,
+// contractions, 2nd-person, demonstratives), not under-hedged. M25
+// strips those features instead of adding them.
+import './M25_deinvolve_anchor';
 
 export type { HumanizerMethod, MethodOptions, MethodResult, BenchRecord, MethodTokenStep } from './types';
