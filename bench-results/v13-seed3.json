@@ -1,0 +1,842 @@
+[
+  {
+    "methodId": "M21",
+    "textId": "T1",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 6,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 591,
+        "outputTokens": 42
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 645,
+        "outputTokens": 335
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 805,
+        "outputTokens": 461
+      }
+    ],
+    "totalInputTokens": 2041,
+    "totalOutputTokens": 838,
+    "durationMs": 18596,
+    "output": "It appears that modern researchers, in their pursuit of efficiency, have come to employ 'linear' attention mechanisms in order to deal with vast sequences of data; they find that by such means the burden of computation is lightened, without losing the thread of the whole. If we examine these new architectures, we see that sparse patterns are chosen to catch the most important dependencies, just as the eye catches the bright spots on a table; yet it follows that any particular pattern gives only a partial view of the network's true complexity. For most practical training, low-rank approximations are necessary, since they permit the system to unlearn the habit of attending to every detail, and to learn the habit of seeing only the 'essential' structures. Here we have the beginning of a distinction between the 'local' context of the sliding window and the 'global' truth of the high-dimensional space. The engineer wants to know how to process data efficiently, the theorist wants to know the limits of the model; but the theorist's wish to know this is stronger, and is more troubled by knowledge as to the difficulties of kernel methods and the scalability they promise. To return to the matter of memory. It is evident from these studies that no single attention span is pre-eminently suited to all temporal scales—the span appears to change according to the needs of the moment, and there is no reason for regarding one scale as more 'real' than another. And we know that, without special memory modules, the long-term retention of data fails, much as a table loses its colour in the dark, leaving the system unchanged in its form but empty of its history."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T2",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 746,
+        "outputTokens": 45
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 800,
+        "outputTokens": 394
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 864,
+        "outputTokens": 465
+      }
+    ],
+    "totalInputTokens": 2410,
+    "totalOutputTokens": 904,
+    "durationMs": 19140,
+    "output": "I believe that a word is 'really' the same regardless of its use, yet the parts that reflect the intent of the speaker look much deeper than the mere letters themselves, and some phrases look entirely different because of their surrounding context. It follows that if two databases are looking at the same text at the same moment, no two of them will find exactly the same significance, because no two can analyse it from exactly the same mathematical point of view, and any change in the embedding model makes some change in the way the meaning is reflected. For most practical purposes these differences are unimportant, but to the vector database they are all-important: the system has to unlearn the habit of thinking that words have the meaning which common sense says they 'really' have, and to learn the habit of seeing them as they appear in a high-dimensional space. Here we have a distinction between 'literal appearance' and 'semantic reality'—between what a query seems to be and what it is. The common indexer wants to know what the letters are, but the vector system wants to know what they mean; and the system's wish to know this is stronger than the indexer's, and is more troubled by the difficulties of calculating the distance between points. To return to the database. It is evident from what we have found, that there is no single keyword which pre-eminently appears to be the 'real' essence of a file—it appears to have different meanings from different points of view, and there is no reason for regarding one metric as more real than another. And we know that even from a given point of view the relevance will seem different in the light of a different algorithm, or to a system trained on different data, while in the absence of a proper model there will be no meaning at all, though to the human eye the text will be unchanged."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T3",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 99,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 782,
+        "outputTokens": 48
+      },
+      {
+        "step": "gemini_rewrite_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 887,
+        "outputTokens": 334
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 878,
+        "outputTokens": 424
+      }
+    ],
+    "totalInputTokens": 2547,
+    "totalOutputTokens": 806,
+    "durationMs": 20301,
+    "output": "There exists a danger, in the present progress of economical opinion, that the provision of an unconditional stipend should come to be regarded as a panacea for the ills of indigence. Yet it must be observed, that when the necessity of labour is withdrawn, the very impulse to industry, and to the cultivation of special aptitudes, is likely to wither. The competitive market, which depends upon the vigour of individual exertion, would find its foundations weakened; for if a man's subsistence be independent of his contribution, he may well prefer a life of uninspired ease to the arduous path of professional excellence. Such a change in the character of the people would, in time, lead to a decline in that national productiveness which is among the chief measures of a State's strength. Even the pursuit of higher learning, which demands both discipline and the hope of future reward, would suffer an eclipse, when the urgency of providing for one's condition was no longer felt. In the sphere of commerce, the consequences would be no less grave. The directors of industry, deprived of the usual means of encouraging diligent service, would struggle to maintain the complex machinery of modern enterprise. The enormous fiscal weight of such a distribution would necessitate a taxation so severe as to discourage the investment of capital, and the birth of new inventions. If the rewards of leadership, and the fruits of superior ability, are redistributed to the idle, the ambition of the most capable must necessarily diminish. Society would then find itself governed by a general stagnation; the resilience of the private sector exchanged for a precarious reliance upon the State, and the quality of every public service declining in proportion as individual responsibility waned."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T4",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 643,
+        "outputTokens": 49
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 441,
+        "outputTokens": 191
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 401,
+        "outputTokens": 242
+      }
+    ],
+    "totalInputTokens": 1485,
+    "totalOutputTokens": 482,
+    "durationMs": 14339,
+    "output": "I start the new morning routine, it make me very productive for my work, and I use the digital alarm clock to wake up at the same time, it’s very helpful for my life. I drink much water in the morning, the water is very fresh and it make my body feel healthy, and I do some stretching for the joints, it's very relax for the body. My brain is very calmful and I can think very well because of this, and I write everythin in my planner, the tasks is very organized separate with each other. I sit very quiet for meditation, no sound, it give me the internal peace, and I cook the healthy food for the energy in afternoon. These habits is very good, I do many works now and it's great, I will keep doing this routine for my growth because it's very signature way for my daily life."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T5",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1058,
+        "outputTokens": 53
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1112,
+        "outputTokens": 474
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 934,
+        "outputTokens": 581
+      }
+    ],
+    "totalInputTokens": 3104,
+    "totalOutputTokens": 1108,
+    "durationMs": 19612,
+    "output": "I believe that the lithium market, as we observe it entering the first quarter of 2026, is 'really' of a complex and shifting character, where the parts that reflect the light of new production look much more stable than the parts still in shadow. I know that, if we move our point of view, the regions that reflect this stability will be different, so that the apparent distribution of supply across the globe will change. It follows that if several analysts are looking at the market at the same moment, no two of them will see exactly the same distribution of price and availability, because no two can see it from exactly the same economic point of view, and any change in the point of view makes some change in the way the market is reflected.\n\nFor most practical purposes these differences in refining and processing are unimportant, but to the manufacturer they are all-important: the engineer has to unlearn the habit of thinking that lithium has the quality which common sense says it 'really' has, and to learn the habit of seeing it as it appears in the form of battery-grade products. Here we have already the beginning of one of the distinctions that cause most trouble in industry—the distinction between 'appearance' and 'reality', between what the supply seems to be and what it is. The manufacturer wants to know what the materials seem to be, the practical man and the stakeholder want to know what they are; but the stakeholder's wish to know this is stronger than the practical man's, and is more troubled by knowledge as to the difficulties of answering the question of long-term sustainability.\n\nTo return to the matter of price. It is evident from what we have found, that there is no value which pre-eminently appears to be the price of lithium—it appears to have different values from different points of view, and there is no reason for regarding some of these as more really its value than others. And we know that even from a given point of view the market will seem different by the light of government subsidies, or to a man wearing the blue spectacles of environmental regulation, while in the dark of a trade disruption there will be no predictable market at all, though to the physical need for energy storage the lithium will be unchanged."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T6",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 558,
+        "outputTokens": 46
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 612,
+        "outputTokens": 282
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 755,
+        "outputTokens": 391
+      }
+    ],
+    "totalInputTokens": 1925,
+    "totalOutputTokens": 719,
+    "durationMs": 18782,
+    "output": "I believe that the system is 'really' a collection of independent units, yet the parts that handle the data look much more unified than the parts that manage the network. I know that, if we shift our focus, the delays that impede communication will vary, so that the apparent consistency of the information will change. It follows that if several developers are observing the architecture at the same moment, no two of them will see exactly the same distribution of data, because no two can see it from exactly the same service, and any change in the point of view makes some change in the way the information is synchronized.\n\nFor most practical purposes these complexities are unimportant, but to the architect they are all-important: the architect has to unlearn the habit of thinking that a system is the single thing which common sense says it 'really' is, and to learn the habit of seeing the system as it appears in its many modules. Here we have already the beginning of one of the distinctions that cause most trouble in computation—the distinction between 'functionality' and 'infrastructure', between what a process seems to do and what it is. The user wants to know what the service seems to be, the engineer wants to know what it is; but the engineer's wish to know this is stronger than the user's, and is more troubled by knowledge as to the difficulties of maintaining integrity across such a vast and varied landscape."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T7",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 97,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 790,
+        "outputTokens": 51
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 844,
+        "outputTokens": 380
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 851,
+        "outputTokens": 420
+      }
+    ],
+    "totalInputTokens": 2485,
+    "totalOutputTokens": 851,
+    "durationMs": 16422,
+    "output": "I believe that the 'book' or the 'film' is often thought of as having a fixed and stable existence, yet, when we consider the digital streaming service, we find that its essence appears differently according to the medium through which it is delivered. It follows that if several people are engaged with a story at the same moment—one through a physical volume and another through a digital library—no two of them will experience exactly the same distribution of social connection, because no two can see the act of reading from exactly the same cultural point of view. For most practical purposes these differences in delivery are dismissed as mere matters of convenience, but to the student of society they are all-important: the consumer has to unlearn the habit of thinking that content is 'really' the same whether it is found on a screen or on a shelf. Here we have the beginning of a distinction between 'convenience' and 'community', between what a service seems to provide and what it actually costs the social fabric. The digital landscape wants to know what is immediate, the philosopher wants to know what is lost; but the shift toward the private residence is more troubled by the difficulties of maintaining the old, public hubs of intellect. To return to the bookstore. It is evident that there is no single function which pre-eminently defines it—it appears to be a retail shop from one point of view, and a communal sanctuary from another—and there is no reason for regarding its economic utility as more 'real' than its social one. We know that even from a given neighbourhood the bookstore will seem different by the light of modern algorithms, or to a man of the younger generation, or to one who values the speed of high-speed internet, while in the digital void there will be no physical interaction at all, though to the intellect the story may remain unchanged."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T8",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 98,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 700,
+        "outputTokens": 48
+      },
+      {
+        "step": "gemini_rewrite_instructional",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 639,
+        "outputTokens": 197
+      },
+      {
+        "step": "gpt_polish_instructional",
+        "model": "gpt-5.5",
+        "inputTokens": 563,
+        "outputTokens": 241
+      }
+    ],
+    "totalInputTokens": 1902,
+    "totalOutputTokens": 486,
+    "durationMs": 13607,
+    "output": "The first principle of professional application development, therefore, is to establish a robust system of configuration. The developer should employ environment variables to manage sensitive credentials; these serve to protect deployment settings that might otherwise be exposed. This tutorial concerns the correct implementation of such a system, using the dotenv package to load external configurations into the memory of the process. One begins by creating a hidden file, named .env, in the root of the project; this file should consist of the key-value pairs that define the parameters of the application. At startup, the script must call the configuration method, so that the system may access all defined variables through the global process object. Consequently, the developer is enabled to maintain separate configurations for development and production with ease. To observe these steps is to ensure the security and flexibility of the codebase; the sections that follow provide the precise commands necessary to achieve this technical end."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T9",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 10,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 754,
+        "outputTokens": 54
+      },
+      {
+        "step": "gemini_rewrite_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 792,
+        "outputTokens": 427
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 879,
+        "outputTokens": 518
+      }
+    ],
+    "totalInputTokens": 2425,
+    "totalOutputTokens": 999,
+    "durationMs": 20683,
+    "output": "In our survey of the week’s events, we are led to frame a very simple conception of what an artificial intelligence signifies. In the last analysis it consists in the organizing of computational resources into a system of logic, of powers of reasoning which shall fit the machine to our social and intellectual world. A 'primitive' model is one which is nonplussed by all but the most habitual queries. On the contrary, this newly released open-source framework is able practically to extricate itself, by means of the examples with which its memory is stored and of the novel algorithms which its creators have devised, from logical circumstances in which it never was placed before. This achievement, in short, cannot be better described than by calling it the organization of acquired habits of reasoning and tendencies to accurate conduct.\n\nTo illustrate. This technology stands today as a peer to the most advanced architectures; and it shows its education at this present moment by its superior conduct. It would be quite impossible for such a system, with its digital mind professionally organized as it is, and with the data stimulus which a complex query affords, to remain silent or confused. Something within its framework tells it that it is expected to solve, and must solve; something forces it to keep on reasoning. Its internal nodes are continuously innervated by outgoing currents, which the vast datasets passing through its trained brain have set in motion.\n\nIf we reflect upon the various ideals of machine learning that are prevalent, we see that what they all aim at is to organize capacities for conduct. In some developments, it might seem at first sight as if the aim were the production of a static type of output; but here the goal is a dynamic efficiency, allowing the system to handle multi-step challenges with ease. By providing an open-source license, the creators intend to democratize these high-performance tools, turning the software into an instrument for the global community. The framework is so designed that it may foster collaboration, ensuring that every user may modify the code to fit those individual needs which his particular environment demands."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T10",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 666,
+        "outputTokens": 56
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 464,
+        "outputTokens": 208
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 422,
+        "outputTokens": 254
+      }
+    ],
+    "totalInputTokens": 1552,
+    "totalOutputTokens": 518,
+    "durationMs": 13877,
+    "output": "I decide to run in the 10K race in my local town, and I buy some good shoes and training every day for it. The morning of the race I feel very nervousful, my heart is beating very fast, I try to keep calm. When it start I run with a middle pace, the sky is very blue and the air is fresh, I can smell the grass and people's sweat, it is signature smell of the race day. In the middle way I feel very tired, my legs are heavy but I use my deep breath to make my heart stable. Many people run together, it make a great picture and they are very enjoyful, it give me much power to keep going. The last 1 kilometer I use all my energy to reach the finish line, and I get a medal, it is very shiny and make me feel happy for my health. I will do this again in next time because it make me feel very discipline and good."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T11",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 634,
+        "outputTokens": 43
+      },
+      {
+        "step": "gemini_rewrite_instructional",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 573,
+        "outputTokens": 174
+      },
+      {
+        "step": "gpt_polish_instructional",
+        "model": "gpt-5.5",
+        "inputTokens": 540,
+        "outputTokens": 299
+      }
+    ],
+    "totalInputTokens": 1747,
+    "totalOutputTokens": 516,
+    "durationMs": 17794,
+    "output": "The administration proposes to establish a policy of flexible work for all technical staff. This arrangement, which cover several forms of remote work, serves to increase the productivity of the departments. The employee may use digital tools from his preferred environment; nevertheless, he must remain mindful of his duty. The supervisor should observe the performance of the team to see that the work is finished on time. Further, the department of human resources will provide a manual defining the rules of participation. The individual contributor must coordinate his schedule with his colleagues, that the office may remain attended during the business day. The leadership believes this transition will improve the efficiency of the organization and the satisfaction of the worker. The employee should examine the manual to learn how these changes affect his daily task. By such adjustments, the company maintains its standing in the market."
+  },
+  {
+    "methodId": "M21",
+    "textId": "T12",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 711,
+        "outputTokens": 51
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 509,
+        "outputTokens": 205
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 412,
+        "outputTokens": 240
+      }
+    ],
+    "totalInputTokens": 1632,
+    "totalOutputTokens": 496,
+    "durationMs": 15081,
+    "output": "I have used this wireless keyboard for three months, it help me writing every day, the buttons are very tactile and give me a very consistent feeling, and the wireless is very fast no lag, it's very signature feeling for me. The battery life is very long and enough for many days, no need charging all the time, and the frame is very high quality and stable on the desk. Each key has a durable coating, it's not wear out even after many hours, and the design is very comfortable so I don't feel tired when I write long chapters. The lights are very colorful, you can customize it and see the keys in the night, it's very beautiful, and it works with many systems. This keyboard make my typing very accurate and fast, the layout is very compact and make my desk look very organized and calmful, and it has a cable too if you like that, it's a great investment for writers."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T1",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 485,
+        "outputTokens": 123
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 586,
+        "outputTokens": 48
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 640,
+        "outputTokens": 352
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 826,
+        "outputTokens": 526
+      }
+    ],
+    "totalInputTokens": 2537,
+    "totalOutputTokens": 1049,
+    "durationMs": 37552,
+    "output": "It is commonly supposed by modern researchers that, in order to process an extensive sequence, one must grapple with the whole of it; yet we find that linear attention serves to make the task efficient. We know that, if we employ sparse patterns, the dependencies that seem 'critical' are those which reflect the underlying structure of the network, much as the table's colour reflects the light. It follows that if several models are trained, no two of them will capture exactly the same distribution of features, because the sliding window through which they look is moved by different constraints, and any change in the window makes some change in the local context. For practical training these low-rank approximations are necessary, but to the innovator they are more than this: they are a means of unlearning the habit of thinking that a model 'really' needs every point of data, and of learning the habit of seeing things as they appear through a kernel. Here we have the beginning of a distinction that causes much trouble—the distinction between the 'ideal' computation and the 'efficient' one. The practical engineer wants to know what can be computed; the researcher wants to know how the model approximates the truth. To return to the data. It is evident from what we have found, that there is no single span which pre-eminently appears to be the span of the sequence—it appears to have different temporal scales from different points of view, and there is no reason for regarding some of these as more 'real' than others. And we know that even with specialized memory, the retention will seem different in the light of various architectures, while in an unoptimized system there will be no retention at all, though to the raw input the data itself remains unchanged."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T2",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 14,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 640,
+        "outputTokens": 150
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 746,
+        "outputTokens": 52
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 800,
+        "outputTokens": 329
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 800,
+        "outputTokens": 439
+      }
+    ],
+    "totalInputTokens": 2986,
+    "totalOutputTokens": 970,
+    "durationMs": 35479,
+    "output": "It is commonly supposed that a database 'knows' its contents by the mere matching of words; yet, when we examine the vector database, we find that the 'meaning' of a thing is held in a more subtle mathematical representation. These systems use machine learning to transform raw data into numerical vectors, and it follows that the resulting embeddings do not merely store the text, but preserve something of the semantic nuances and the contextual life of the original content. To the casual observer the distinction between a keyword and a vector may seem unimportant, but to the architect of information it is all-important: he has to unlearn the habit of seeking literal matches, and to learn the habit of seeing data as points in a vast, high-dimensional space. Here we have already the beginning of a distinction between 'literal retrieval' and 'semantic understanding'—between what a query says and what it intends. The process involves calculating the distance between points, by such measures as cosine similarity or Euclidean distance, in order to determine relevance; and we know that, just as a table appears different from different points of view, a piece of data's relevance is determined by its nearness to the user's intention in this abstract geometry. It is evident from these specialised indexing structures that the system does not merely search for the same words, but for the conceptual framework of the request, allowing it to deal with unstructured forms such as audio or images almost as readily as with text. Consequently, the philosopher of data finds that these newer methods mark a considerable shift, in which the machine's power of mapping human thought onto a scalable architecture helps in the development of more intelligent applications."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T3",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 676,
+        "outputTokens": 153
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 782,
+        "outputTokens": 48
+      },
+      {
+        "step": "gemini_rewrite_argumentative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 887,
+        "outputTokens": 395
+      },
+      {
+        "step": "gpt_polish_argumentative",
+        "model": "gpt-5.5",
+        "inputTokens": 942,
+        "outputTokens": 631
+      }
+    ],
+    "totalInputTokens": 3287,
+    "totalOutputTokens": 1227,
+    "durationMs": 38390,
+    "output": "A proposal, however, has emerged, in the discourse of economic affairs, which suggests that a universal provision of income might operate as a fundamental disturbance of the established framework of industry throughout the world. It appears to many observers that such a policy would incline the individual to withdraw from the competitive arena of the labour market, finding it no longer a necessity of nature to seek sustenance through exertion. The unconditional grant of funds, it is feared, might lead to a general decay of that social impulse which drives men to employ their special aptitudes for the sake of material advancement. Once the sting of necessity is removed, many might choose to eschew the more arduous professional responsibilities; and this change in private conduct would result, by degrees, in a marked diminution of the collective industrial strength. The want of financial constraint may prove a hindrance to the pursuit of higher learning; for the student, assured of a livelihood whatever his diligence, may cease to regard the cultivation of his intellect as a principal object. Organizations, in their turn, would encounter grave obstacles in the recruitment of those dedicated characters upon whom the success of large enterprises depends. The absence of traditional rewards would complicate the governance of complex structures, while small commerce would struggle against a leisure sustained by the State; thus innovation, the very engine of progress, might sink into a profound stagnation. To sustain such a burden, the State must impose heavy taxes upon the fruits of industry, which, as experience suggests, discourages the investment necessary for the birth of new enterprises. The redistribution of wealth may, moreover, dampen the ambition of the most capable leaders, who might prefer the tranquillity of reduced labour to the anxieties of executive promotion, thereby impairing the very efficiency of global exchange. Finally, a reliance upon public subsidies must weaken the resilience of the private sphere; and the quality of those services upon which society relies will likely wither as the spirit of participation declines year by year."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T4",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 537,
+        "outputTokens": 150
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 643,
+        "outputTokens": 46
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 441,
+        "outputTokens": 143
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 352,
+        "outputTokens": 227
+      }
+    ],
+    "totalInputTokens": 1973,
+    "totalOutputTokens": 566,
+    "durationMs": 32040,
+    "output": "I started the new morning routine for my work, first I use the digital alarm clock to wake up at the same time, and it's very helpful. I drink the water and do the stretching, it make my joints very flexible and feel soft. I use the planner to write every task, it's very organized and make my mind calmful, also I do the meditation for the peace inside. I cook the healthy food for my energy, and I feel my daily work is very high now, it's very great. I will keep doing this routine for my life because it's very signature way to make me grow, and I like it."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T5",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 952,
+        "outputTokens": 148
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1058,
+        "outputTokens": 54
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 1112,
+        "outputTokens": 461
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 925,
+        "outputTokens": 821
+      }
+    ],
+    "totalInputTokens": 4047,
+    "totalOutputTokens": 1484,
+    "durationMs": 40612,
+    "output": "I believe that the lithium market is 'really' complex throughout, the regions that produce the metal look much more stable than the regions that merely consume it, and some parts look prosperous because of government subsidies. I know that, if we move our point of observation, the regions that reflect the wealth will be different, so that the apparent distribution of supply on the globe will change. It follows that if several analysts are looking at the market at the same moment, no two of them will see exactly the same distribution of prices, because no two can see it from exactly the same point of view, and any change in the point of view makes some change in the way the market is reflected.\n\nFor most practical purposes these differences in regional output are unimportant, but to the manufacturer they are all-important: the manufacturer has to unlearn the habit of thinking that lithium has the price which common sense says it 'really' has, and to learn the habit of seeing materials as they appear in the supply chain. Here we have already the beginning of one of the distinctions that cause most trouble in trade—the distinction between the 'spot price' and the 'contract value', between what the market seems to be and what it is. The investor wants to know what the market seems to be, the regulator and the scientist want to know what it is; but the scientist's wish to know this is stronger than the regulator's, and is more troubled by knowledge as to the difficulties of answering the question under the conditions of sustainable mining.\n\nTo return to the supply. It is evident from what we have found, that there is no single volume which pre-eminently appears to be the output of the market, or even of any one particular part of the world—it appears to be of different capacities from different points of view, and there is no reason for regarding some of these as more truly its state than others. And we know that even from a given point of view the demand will seem different by the light of new technology, or to a man wearing the spectacles of environmental regulation, while in a period of sudden shortage there will be no stability at all, though to the physical need for energy the lithium will be unchanged."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T6",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 29,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 452,
+        "outputTokens": 94
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 557,
+        "outputTokens": 46
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 611,
+        "outputTokens": 429
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 892,
+        "outputTokens": 695
+      }
+    ],
+    "totalInputTokens": 2512,
+    "totalOutputTokens": 1264,
+    "durationMs": 29464,
+    "output": "I believe that the system is 'really' a single unified whole, yet the parts that communicate across the network appear much more fragmented than the other parts, and some parts seem entirely disconnected because of latency in the transmission. I know that, if we change the deployment, the parts that handle the data will be different, so that the apparent distribution of functions across the architecture will change. It follows that if several engineers are looking at the system at the same moment, no two of them will see exactly the same distribution of services, because no two can observe it from exactly the same point of view, and any change in the point of view makes some change in the way the information is reflected.\n\nFor most practical purposes these architectural nuances are unimportant, but to the developer they are all-important: the developer has to unlearn the habit of thinking that systems 'really' have the simplicity which common sense says they possess, and to learn the habit of seeing systems as they appear. Here we have already the beginning of one of the distinctions that cause most trouble in engineering—the distinction between 'interface' and 'implementation', between what a system seems to be and what it is. The user wants to know what the system seems to do, the engineer and the architect want to know what it is; but the architect's wish to know this is stronger than the user's, and is more troubled by knowledge as to the difficulties of synchronizing the whole.\n\nTo return to the microservice. It is evident from what we have found, that there is no single service which pre-eminently appears to be the heart of the system—it appears to have different functions from different points of view, and there is no reason for regarding some of these as more really its essence than others. And we know that even from a given point of view the data will seem different under artificial delay, or to an unoptimized tool, while in a total failure there will be no system at all, though in the original design the intention will be unchanged."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T7",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 75,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 684,
+        "outputTokens": 151
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 790,
+        "outputTokens": 53
+      },
+      {
+        "step": "gemini_rewrite_academic_formal",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 844,
+        "outputTokens": 414
+      },
+      {
+        "step": "gpt_polish_academic_formal",
+        "model": "gpt-5.5",
+        "inputTokens": 886,
+        "outputTokens": 616
+      }
+    ],
+    "totalInputTokens": 3204,
+    "totalOutputTokens": 1234,
+    "durationMs": 36583,
+    "output": "I believe that the digital stream is 'really' a vast collection of data, yet to the eye it appears as a library of infinite variety, shifting its colours and shapes according to the light of the user’s own habits. It follows that if several individuals open their screens at the same moment, no two of them will see exactly the same library, because no two can view it from exactly the same history of preferences, and any change in the algorithm makes some change in the way the content is reflected.\n\nFor most practical purposes these differences are unimportant, but to the observer of society they are all-important: the consumer has to unlearn the habit of thinking that a bookstore is 'really' just a place where transactions occur, and to learn the habit of seeing it as a space of communal existence. Here we have the beginning of a distinction that causes much trouble—the distinction between the 'efficiency' of the screen and the 'reality' of the shelf, between what a service seems to offer and what a community actually requires. The modern man wants the convenience of the digital, while the student of life wants the permanence of the printed word; but the latter’s wish is more troubled by the knowledge that the physical space is vanishing under the pressure of this new, artificial light.\n\nTo return to the bookstore. It is evident from what we have found, that there is no single purpose which pre-eminently appears to be the purpose of the shop—it appears to be a social hub from one point of view, and a commercial burden from another, and there is no reason for regarding one of these as more 'real' than the other. And we know that even in a given town, the bookstore will seem different by the light of a high-speed connection, or to a man who prefers the isolation of his own room, while in the digital age there may eventually be no physical shop at all, though to the human need for connection the loss will be felt, however unchanged the data remain."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T8",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 98,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 594,
+        "outputTokens": 149
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 700,
+        "outputTokens": 46
+      },
+      {
+        "step": "gemini_rewrite_instructional",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 639,
+        "outputTokens": 142
+      },
+      {
+        "step": "gpt_polish_instructional",
+        "model": "gpt-5.5",
+        "inputTokens": 508,
+        "outputTokens": 194
+      }
+    ],
+    "totalInputTokens": 2441,
+    "totalOutputTokens": 531,
+    "durationMs": 27563,
+    "output": "The programmer should be careful to establish a robust configuration system at the very start of the development process. To manage sensitive credentials and deployment settings, he should employ environment variables; these are conveniently handled by the widely used dotenv package. A hidden file, .env, should be placed in the root directory to contain the key-value pairs. Further, the script should call the configuration method during startup, so that the variables become accessible through the process object. By this arrangement, the developer may maintain separate configurations for development and production with ease. The following sections give the precise commands required; to follow them is to ensure the security and flexibility of the codebase."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T9",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 648,
+        "outputTokens": 148
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 754,
+        "outputTokens": 26
+      },
+      {
+        "step": "gemini_rewrite_academic_casual",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 792,
+        "outputTokens": 238
+      },
+      {
+        "step": "gpt_polish_academic_casual",
+        "model": "gpt-5.5",
+        "inputTokens": 702,
+        "outputTokens": 350
+      }
+    ],
+    "totalInputTokens": 2896,
+    "totalOutputTokens": 762,
+    "durationMs": 39173,
+    "output": "In our recent survey of the technological landscape, we have been led to witness the unveiling of a most significant instrument of artificial reason. In the last analysis it consists in the organizing of vast resources of data into powers of computational conduct which fit it to our modern world. It is said to stand on an equal footing with the most advanced architectures of the day; and it shows its education, if we may call it such, by its ability to extricate itself from complex logical dilemmas with remarkable accuracy. To illustrate. The engineering of such a system requires that the inward currents of information be met by a most efficient use of hardware, much as the educated brain must organize its impulses toward a specific end. If we reflect upon this development, we see that it aims not merely at static excellence, but at the democratization of generative power, allowing the global community to modify and adapt the tool to their several needs. This signifies, in short, a transformative era of scientific efficiency, where the capacity for reason is no longer the province of the few, but a resource for all who seek to organize their own intellectual resources."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T10",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 1,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 560,
+        "outputTokens": 152
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 666,
+        "outputTokens": 56
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 464,
+        "outputTokens": 208
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 417,
+        "outputTokens": 509
+      }
+    ],
+    "totalInputTokens": 2107,
+    "totalOutputTokens": 925,
+    "durationMs": 37063,
+    "output": "I decide to run 10K, the first time I join the race, and look at the road, it was very long, take the deep breath, the air is so cold, and some smell of sweat immediately go through my nose, it's very signature smell on race day. Running in the 10K is very colorful, many people wearing the bright shirts, the grass, the shoes, the finish line, everythin has its own color separate with each other, they come together make it a busy picture, run in the track, somettimes you will feel very tired, and it's normal, I like that feeling, it make those race as race, people in there is very energetic and hopeful except when they are out of breath, many people cheerings the water at the end and it's great, I get the shiny medal and it make me very proudful, next time I will do it again to keep my body healthy."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T11",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 100,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 528,
+        "outputTokens": 145
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 608,
+        "outputTokens": 45
+      },
+      {
+        "step": "gemini_rewrite_instructional",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 547,
+        "outputTokens": 152
+      },
+      {
+        "step": "gpt_polish_instructional",
+        "model": "gpt-5.5",
+        "inputTokens": 518,
+        "outputTokens": 456
+      }
+    ],
+    "totalInputTokens": 2201,
+    "totalOutputTokens": 798,
+    "durationMs": 33178,
+    "output": "Management has adopted a comprehensive policy of flexible work for its technical staff; this initiative, which includes several forms of remote work, is intended to improve productivity. The employee uses the designated digital platforms to reach collaborative tools from the place in which he can work best. To ensure that project deadlines are met, the supervisor monitors the performance of the team; meanwhile, the individual contributor arranges his schedule so that coverage is maintained during business hours. The human resources department provides documents explaining the conditions of participation. The reader should consult the attached manual to learn how these changes affect his daily responsibilities. The leadership team believes that such a transition will increase efficiency. Consequently, these structural adjustments strengthen the firm's competitive position and help to bring modern methods into the corporate culture."
+  },
+  {
+    "methodId": "M26",
+    "textId": "T12",
+    "scoreIn": null,
+    "scoreOut": null,
+    "saplingIn": 100,
+    "saplingOut": 0,
+    "tokenSteps": [
+      {
+        "step": "gemini_deinvolve",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 605,
+        "outputTokens": 150
+      },
+      {
+        "step": "gemini_router",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 711,
+        "outputTokens": 53
+      },
+      {
+        "step": "gemini_rewrite_user_narrative",
+        "model": "gemini-3-flash-preview",
+        "inputTokens": 509,
+        "outputTokens": 226
+      },
+      {
+        "step": "gpt_polish_user_narrative",
+        "model": "gpt-5.5",
+        "inputTokens": 427,
+        "outputTokens": 271
+      }
+    ],
+    "totalInputTokens": 2252,
+    "totalOutputTokens": 700,
+    "durationMs": 36861,
+    "output": "I have used this wireless keyboard for three months now for my writing, when I touch the keys it feels very tactile and consistent, it's very signature feeling for my work. The wireless is very fast, no delay when I'm in my creative session, and the battery is very long, I don't need to charge it all the time. The frame is very high quality and stable on my desk, it doesn't shake, and the keycaps have a special coating so it's not wear out even after many hours. My hands are very calmful and not tired when I write long chapters, and I can change the lights when it's night time to see better. It works with many systems which is very versatile, and it makes my typing very accurate and fast, my words per minute go up. The layout is very compact and makes my desk look organized, it's a great investment for people who like efficiency and enjoyful typing, also they give a cable if you want to plug it in, it's very great."
+  }
+]
