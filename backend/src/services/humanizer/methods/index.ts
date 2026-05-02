@@ -62,5 +62,10 @@ import './M21_router_anchor';
 // break the v11.1 plateau on register-mismatched hard cases (argument, memo,
 // how-to, long essay) without using Sapling-in-pipeline.
 import './M22_router_then_backtrans';
+// v12 candidate — layers four mechanically-measurable rewrite rules
+// (hedging, fronted-clause openings, no-expansion, anti-X-and-Y) on
+// top of M21's anchor pipeline, with a deterministic compliance critic
+// that triggers one revision pass on violations.
+import './M23_rules_critic_anchor';
 
 export type { HumanizerMethod, MethodOptions, MethodResult, BenchRecord, MethodTokenStep } from './types';
