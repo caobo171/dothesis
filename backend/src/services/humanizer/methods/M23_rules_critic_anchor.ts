@@ -21,6 +21,11 @@
 // internals from M21 would couple the production-critical M21 to an
 // experimental method. Duplication is the right tradeoff here.
 //
+// DRIFT WATCH: if M21's anchor descriptions, ROUTER_PROMPT, parseJsonField,
+// pickAnchor, or POLISH_TEMPLATE change, evaluate whether to mirror the
+// change here. The duplication is intentional; "they should match" is not
+// enforced.
+//
 // Spec: docs/superpowers/specs/2026-05-02-humanizer-m23-rules-critic-design.md
 
 import * as fs from 'node:fs';
@@ -84,7 +89,7 @@ Output strict JSON: { "anchor": "<one of the anchor ids above>", "reason": "<sho
 // by the rule_compliance checker, and the critic feedback (Task 1) refers
 // back to these by name.
 const RULES_BLOCK = `
-ADDITIONAL REWRITE RULES — apply all four:
+ADDITIONAL REWRITE RULES — apply all four; these take precedence where they conflict with the examples' cadence:
 
 1. HEDGING. Use intellectual hesitation. Replace flat factual statements with hedged ones using "appears", "seems", "may", "might", "can", "suggests", "is believed", "is suspected", "is likely", "tends to", "arguably", "presumably". Aim for at least 2 hedge tokens per 100 words.
 
@@ -151,8 +156,13 @@ async function pickAnchor(input: string): Promise<{ id: string; reason: string; 
   const id = parseJsonField(r.text, 'anchor');
   const reason = parseJsonField(r.text, 'reason') ?? '';
   const validIds = new Set(ANCHORS.map((a) => a.id));
+  // Defensive default on router-parse failure: academic_casual is mid-register
+  // (educational/explanatory) and minimizes opposite-register mismatch on the
+  // failing texts M23 targets (how-to, memo, argumentative). M21 uses
+  // user_modern here; M23 deliberately diverges because user_modern is
+  // reflective-opinion register and would hurt instructional inputs.
   return {
-    id: id && validIds.has(id) ? id : 'user_modern',
+    id: id && validIds.has(id) ? id : 'academic_casual',
     reason,
     tokens,
   };
@@ -179,6 +189,9 @@ async function run(input: string, _opts: MethodOptions): Promise<MethodResult> {
   // 4) deterministic compliance critic — checks the four rules.
   const report = checkRuleCompliance(cleaned, draft);
   if (!report.passed) {
+    // Debug aid: which rules failed? Visible in bench output AND in dev logs.
+    // Bench infers revision from token-step presence, but this is for humans.
+    console.log('[M23] critic fired, rules failed:', report.violations.map((v) => v.rule).join(','));
     // ONE revision call only. Bounded cost, predictable latency.
     const feedback = formatRevisionFeedback(report);
     const rev = await GeminiService.chat(REVISION_TEMPLATE(anchor.text, feedback), draft, {
