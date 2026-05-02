@@ -38,8 +38,10 @@ export type ComplianceReport = {
   metrics: ComplianceMetrics;
 };
 
-// Hedge tokens — multi-word patterns and single words. Multi-word patterns
-// must come first since they're more specific.
+// Hedge tokens — multi-word patterns and single words. "can" deliberately
+// excluded: it's overwhelmingly used as a non-hedging modal ("you can do
+// this") and inflating hedgeCount with it would mask real failures to add
+// proper hedging. The remaining tokens are reliably hedging in normal prose.
 const HEDGE_PATTERNS: RegExp[] = [
   /\bis\s+believed\b/gi,
   /\bis\s+suspected\b/gi,
@@ -49,7 +51,6 @@ const HEDGE_PATTERNS: RegExp[] = [
   /\bseems\b/gi,
   /\bmay\b/gi,
   /\bmight\b/gi,
-  /\bcan\b/gi,
   /\bsuggests?\b/gi,
   /\barguably\b/gi,
   /\bpresumably\b/gi,
@@ -66,7 +67,7 @@ const FRONTED_OPENERS = new Set([
   'given', 'considering',
   'when', 'whenever', 'before', 'after', 'until', 'unless', 'if',
   // Present participles often start fronted clauses
-  'looking', 'consider', 'considering', 'recognizing', 'noting',
+  'looking', 'consider', 'recognizing', 'noting',
   // Common fronted PP heads
   'in', 'across', 'under', 'within', 'beyond', 'throughout', 'amid', 'among',
   'by', 'through', 'with', 'without', 'against', 'during', 'beneath',
@@ -93,6 +94,34 @@ const X_AND_Y_IDIOM_WHITELIST = new Set([
   'black and white',
   'rock and roll',
   'pros and cons',
+  'salt and pepper',
+  'law and order',
+  'war and peace',
+  'men and women',
+  'young and old',
+  'rich and poor',
+  'supply and demand',
+  'research and development',
+  'cause and effect',
+  'health and safety',
+  'food and drink',
+  'arts and crafts',
+  'bread and butter',
+  'flesh and blood',
+  'heart and soul',
+]);
+
+// Right-side function words that disqualify an "X and Y" match. If the
+// second token is a determiner, pronoun, or quantifier, the match is
+// almost always a verb phrase or clause continuation, not a parallel
+// two-item list. E.g. "teacher and the student" — "and the student" is
+// a continuation, not "teacher AND the".
+const X_AND_Y_RIGHT_STOPWORDS = new Set([
+  'the', 'a', 'an',
+  'his', 'her', 'its', 'their', 'my', 'your', 'our',
+  'this', 'that', 'these', 'those',
+  'all', 'some', 'any', 'every', 'each', 'no', 'many', 'most', 'few',
+  'i', 'you', 'he', 'she', 'it', 'we', 'they',
 ]);
 
 // Word-count helper: split on whitespace, filter empties.
@@ -140,7 +169,12 @@ function countXAndY(text: string): number {
   let count = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
-    const phrase = `${m[1].toLowerCase()} and ${m[2].toLowerCase()}`;
+    const left = m[1].toLowerCase();
+    const right = m[2].toLowerCase();
+    // Skip determiner/pronoun/quantifier on the right — likely a clause
+    // continuation rather than a parallel pair.
+    if (X_AND_Y_RIGHT_STOPWORDS.has(right)) continue;
+    const phrase = `${left} and ${right}`;
     if (!X_AND_Y_IDIOM_WHITELIST.has(phrase)) count++;
   }
   return count;
@@ -179,7 +213,7 @@ export function checkRuleCompliance(input: string, output: string): ComplianceRe
       rule: 'hedging',
       measured: hedgeRatePer100Words,
       threshold: THRESHOLDS.hedgeRatePer100Words,
-      feedbackForLLM: `Hedging language: only ${hedgeCount} hedge tokens in ${outputWords} words (${hedgeRatePer100Words.toFixed(1)}/100w). Target ≥ ${THRESHOLDS.hedgeRatePer100Words}/100w. Use words like "appears", "seems", "may", "might", "can", "suggests", "is believed", "tends to" to soften factual statements where appropriate.`,
+      feedbackForLLM: `Hedging language: only ${hedgeCount} hedge tokens in ${outputWords} words (${hedgeRatePer100Words.toFixed(1)}/100w). Target ≥ ${THRESHOLDS.hedgeRatePer100Words}/100w. Use words like "appears", "seems", "may", "might", "suggests", "is believed", "tends to" to soften factual statements where appropriate.`,
     });
   }
 
