@@ -67,5 +67,9 @@ import './M22_router_then_backtrans';
 // top of M21's anchor pipeline, with a deterministic compliance critic
 // that triggers one revision pass on violations.
 import './M23_rules_critic_anchor';
+// v12 follow-up — M23 minus the critic + revision step. Tests whether the
+// rules-in-prompt alone deliver M23's wins without the revision call's
+// variance (which catastrophically regressed T2 and T6 in the v12 bench).
+import './M24_rules_no_critic';
 
 export type { HumanizerMethod, MethodOptions, MethodResult, BenchRecord, MethodTokenStep } from './types';
