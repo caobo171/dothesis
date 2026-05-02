@@ -12,8 +12,11 @@ import Fetch from '@/lib/core/fetch/Fetch';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
+    // suppressHydrationWarning on <body>: browser extensions (Grammarly, etc.)
+    // inject attributes like data-gr-ext-installed before React hydrates,
+    // causing a benign SSR/CSR mismatch we want to ignore.
     <html lang="en">
-      <body className="font-sans antialiased">
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <Provider store={store}>
           <SWRConfig
             value={{

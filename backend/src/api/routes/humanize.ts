@@ -248,7 +248,9 @@ export default (router: Router) => {
       {
         id: 'blog',
         label: 'Blog Post',
-        text: `In today's fast-paced world, remote work has emerged as a game changer for businesses worldwide. Companies are increasingly leveraging digital collaboration tools to streamline their operations and foster a more inclusive work environment. The transition to remote work has unlocked unprecedented opportunities for organizations to tap into a global talent pool. Additionally, studies have shown that remote workers demonstrate higher productivity levels compared to their in-office counterparts. This paradigm shift in workplace dynamics is reshaping how we think about work-life balance and organizational culture.`,
+        // Sample length kept within 100-200 words so the demo experience is
+        // consistent across categories and matches the UI's expected range.
+        text: `In today's fast-paced world, remote work has emerged as a game changer for businesses worldwide. Companies are increasingly leveraging digital collaboration tools to streamline their operations and foster a more inclusive work environment. The transition to remote work has unlocked unprecedented opportunities for organizations to tap into a global talent pool, allowing them to recruit top-tier candidates regardless of geographic constraints. Additionally, studies have shown that remote workers demonstrate higher productivity levels compared to their in-office counterparts, often citing fewer interruptions and greater autonomy. Furthermore, businesses that embrace flexible work arrangements report substantial cost savings on real estate, utilities, and ancillary office expenses. This paradigm shift in workplace dynamics is reshaping how we think about work-life balance and organizational culture, ultimately redefining the very nature of modern employment.`,
       },
       {
         id: 'research',
