@@ -113,6 +113,11 @@ Output strict JSON: { "rewrittenText": "<polished>" }`;
 // De-involve preprocessing — single-purpose. Takes raw input, outputs a
 // version with reduced "involvement" register features. No anchor, no
 // style mimicry. Just structural simplification preserving meaning.
+//
+// Tuned (post-bench): rule 6 ("prefer action verbs over 'be' + complement")
+// was removed. Inspection of T5 outputs showed it added words, which the
+// downstream rewriter then expanded further, tipping T5 from 15 → 34.
+// Rules 1-5 all REMOVE features without adding words.
 const DEINVOLVE_TEMPLATE = `Rewrite the following text to reduce its "involvement register" — the
 features that AI detectors flag in over-helpful prose. Apply ALL of:
 
@@ -125,8 +130,6 @@ features that AI detectors flag in over-helpful prose. Apply ALL of:
 4. EXPAND ALL CONTRACTIONS. "it's" → "it is". "don't" → "do not". "won't" → "will not". No contractions in output.
 
 5. CONVERT 2ND-PERSON ADDRESS TO IMPERSONAL. "You should X" → "X is necessary" or "One should X". "Your data" → "the data". The output should not address the reader.
-
-6. PREFER ACTION VERBS OVER "be" + complement. "X is the cause of Y" → "X causes Y". "There is a tendency for X to Y" → "X tends to Y".
 
 CRITICAL: preserve the input's content and meaning EXACTLY. Do NOT change topic, style, voice, or vocabulary beyond these specific transformations. This is not a rewrite for style — it is a structural simplification only.
 
