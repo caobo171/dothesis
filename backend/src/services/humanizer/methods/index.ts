@@ -76,5 +76,12 @@ import './M24_rules_no_critic';
 // contractions, 2nd-person, demonstratives), not under-hedged. M25
 // strips those features instead of adding them.
 import './M25_deinvolve_anchor';
+// v13 candidate (two-stage). De-involve preprocessing LLM call BEFORE
+// the M21 anchor pipeline. Separates concerns: the preprocessing
+// removes involvement-register features, then M21's anchor mimicry runs
+// unmodified on the cleaner input. Avoids the prompt-conflict failure
+// mode that broke M23/M24/M25 (rules in the rewrite prompt erode the
+// anchor voice).
+import './M26_deinvolve_then_anchor';
 
 export type { HumanizerMethod, MethodOptions, MethodResult, BenchRecord, MethodTokenStep } from './types';
