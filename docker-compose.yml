@@ -1,0 +1,23 @@
+# Dev-only infrastructure. The FastAPI service and Next.js dev server stay native
+# (for fast hot-reload + IDE integration). Only stateful infra runs in Docker.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: opendraft-postgres
+    environment:
+      POSTGRES_USER: opendraft
+      POSTGRES_PASSWORD: opendraft
+      POSTGRES_DB: opendraft
+    ports:
+      - "5432:5432"
+    volumes:
+      - opendraft_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opendraft -d opendraft"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  opendraft_pgdata:
