@@ -142,11 +142,10 @@ const PaperRow = ({ p, divider }) => {
       <div style={{ minWidth: 0 }}>
         <div
           style={{
-            fontFamily: "var(--font-serif)",
-            fontSize: 16.5,
-            fontWeight: 600,
+            fontSize: 15,
+            fontWeight: 700,
             color: "var(--ink-900)",
-            letterSpacing: "-0.01em",
+            letterSpacing: "-0.005em",
             lineHeight: 1.3,
             overflow: "hidden",
             textOverflow: "ellipsis",
