@@ -840,15 +840,16 @@ def research_citations_via_api(
             safe_print(f"   Output: {output_path}")
         safe_print()
 
-    # Initialize CitationResearcher with API fallback chain
-    # Semantic Scholar can be disabled via env var if rate limited (403 errors)
+    # Initialize CitationResearcher with API fallback chain.
+    # Both sources can be disabled via env vars when they're rate-limited or overloaded.
     enable_semantic_scholar = os.environ.get('ENABLE_SEMANTIC_SCHOLAR', 'true').lower() != 'false'
+    enable_gemini_grounded = os.environ.get('ENABLE_GEMINI_GROUNDED', 'true').lower() != 'false'
 
     researcher = CitationResearcher(
         gemini_model=model,
         enable_crossref=True,
         enable_semantic_scholar=enable_semantic_scholar,
-        enable_gemini_grounded=True,  # Enable for industry reports (McKinsey, Gartner, etc.)
+        enable_gemini_grounded=enable_gemini_grounded,
         enable_smart_routing=True,     # Enable query classification for source diversity
         enable_llm_fallback=False,     # DISABLED: LLM hallucinates citations
         use_serper=True,               # Enable Serper API for web search fallback
@@ -858,6 +859,8 @@ def research_citations_via_api(
 
     if not enable_semantic_scholar and verbose:
         safe_print("   ⚠️  Semantic Scholar disabled (ENABLE_SEMANTIC_SCHOLAR=false)")
+    if not enable_gemini_grounded and verbose:
+        safe_print("   ⚠️  Gemini grounded search disabled (ENABLE_GEMINI_GROUNDED=false)")
 
     # Track results
     citations: List[Citation] = []

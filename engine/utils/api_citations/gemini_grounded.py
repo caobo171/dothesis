@@ -333,9 +333,12 @@ class GeminiGroundedClient(BaseAPIClient):
             except Exception as fallback_error:
                 logger.warning(f"DataForSEO fallback failed: {fallback_error}")
             
-            safe_print(f"Gemini grounded search error: {e}")
-            import traceback
-            traceback.print_exc()
+            # One-liner instead of full traceback (set GEMINI_VERBOSE_ERRORS=1 to debug).
+            import os as _os
+            safe_print(f"[gemini] grounded search error: {e.__class__.__name__}: {str(e)[:160]}")
+            if _os.environ.get("GEMINI_VERBOSE_ERRORS"):
+                import traceback
+                traceback.print_exc()
             return None
 
     def _generate_content_with_grounding(self, prompt: str) -> Optional[Dict[str, Any]]:
@@ -432,9 +435,18 @@ class GeminiGroundedClient(BaseAPIClient):
             return data
 
         except Exception as e:
-            safe_print(f"Error calling Gemini API: {e}")
-            import traceback
-            traceback.print_exc()
+            # Gemini timeouts and 503s are routine when the preview model is overloaded.
+            # Print a one-liner; skip the 60-line urllib3/requests traceback which adds zero info.
+            # Set GEMINI_VERBOSE_ERRORS=1 to bring the traceback back when debugging.
+            import os as _os
+            msg = f"{e.__class__.__name__}: {e}"
+            if "timed out" in str(e).lower() or "ReadTimeout" in e.__class__.__name__:
+                safe_print(f"[gemini] timed out (Gemini overloaded — engine falling back)")
+            else:
+                safe_print(f"[gemini] {msg[:200]}")
+            if _os.environ.get("GEMINI_VERBOSE_ERRORS"):
+                import traceback
+                traceback.print_exc()
             return None
 
     def _build_search_prompt(self, query: str) -> str:
