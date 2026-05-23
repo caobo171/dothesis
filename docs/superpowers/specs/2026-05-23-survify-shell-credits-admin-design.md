@@ -124,7 +124,7 @@ sections = [
 ];
 ```
 
-Both layouts read `useMe()`; if the route is `/admin/*` and `user.is_super_admin !== true`, render a 403 with a "Back to app" link instead of the children.
+Both layouts read `useMe()`; the response includes a derived `is_super_admin: boolean` computed server-side from the allowlist (see Admin auth). If the route is `/admin/*` and `user.is_super_admin !== true`, render a 403 with a "Back to app" link instead of the children.
 
 ## Wizard — Standard / Premium model selector
 
@@ -154,7 +154,6 @@ Allowed-model allowlist in `papers.py` is replaced with the tier mapping.
 ```sql
 ALTER TABLE users
   ADD COLUMN credit INTEGER NOT NULL DEFAULT 0,
-  ADD COLUMN is_super_admin BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN username TEXT;
 
 CREATE TABLE orders (
@@ -263,18 +262,38 @@ Stats row on the Credit page becomes: Drafts count + Orders count.
 
 ## Admin section
 
-Gated server-side by a `require_admin(user = Depends(current_user))` FastAPI dependency that raises 403 unless `user.is_super_admin`.
+### Admin auth (allowlist constant)
+
+Super-admin status is **not** stored in the DB. It's resolved from a hardcoded constant in `api/app/admin_config.py`:
+
+```python
+# api/app/admin_config.py
+SUPER_ADMIN_EMAILS: frozenset[str] = frozenset({
+    "cao.nv17@gmail.com",
+    # add more as needed
+})
+
+def is_super_admin(user: "User") -> bool:
+    return user.email.lower() in SUPER_ADMIN_EMAILS
+```
+
+The list can also be extended from an env var `OPENDRAFT_SUPER_ADMIN_EMAILS` (comma-separated) at process start, so deploys can grant admin without a code change — but the source of truth is the constant in code.
+
+- `require_admin(user = Depends(current_user))` raises 403 unless `is_super_admin(user)` is true.
+- `/api/me` returns `is_super_admin` as a derived boolean, never persisted.
+- The admin toggle in the Users admin page is **removed** (was previously listed) — adding a super-admin means editing the constant and redeploying.
+
+Gated server-side by the `require_admin` dependency.
 
 Five pages, all under `/admin/*`:
 
 ### `/admin/users`
 
-- `GET /api/admin/users?page=&q=&limit=` — paginated list with email, username, credit, is_super_admin, created_at, last_seen.
+- `GET /api/admin/users?page=&q=&limit=` — paginated list with email, username, credit, is_super_admin (derived), created_at, last_seen.
 - `GET /api/admin/users/{id}` — detail.
 - `POST /api/admin/users/{id}/credit` body `{ delta, note? }` — admin grant/debit; appends ledger row with `reason='admin_grant'`.
-- `POST /api/admin/users/{id}/admin-toggle` — flip `is_super_admin` (cannot unset on yourself).
 
-UI: searchable table → click row → slide-over drawer with grant form and admin toggle.
+UI: searchable table → click row → slide-over drawer with grant form. The `is_super_admin` column is read-only (managed in code via `SUPER_ADMIN_EMAILS`).
 
 ### `/admin/papers`
 
@@ -309,13 +328,13 @@ export function useMe() {
 }
 ```
 
-`/api/me` returns the User row plus `credit`, `is_super_admin`, `username`. Replace direct `useAuth().user` reads in the new shell with `useMe()` so it stays in sync after credit changes.
+`/api/me` returns the User row plus `credit`, `username`, and a derived `is_super_admin` boolean (computed from `SUPER_ADMIN_EMAILS`; never stored in DB). Replace direct `useAuth().user` reads in the new shell with `useMe()` so it stays in sync after credit changes.
 
 ## Migration order
 
 1. Tailwind/TS scaffolding + tsconfig + tailwind.config + globals.
 2. Alembic migration for new columns + tables.
-3. `is_super_admin` + `credit` on user, `/api/me`, `require_admin` dep.
+3. `credit` + `username` on user, `admin_config.py` with `SUPER_ADMIN_EMAILS`, `/api/me` (derives `is_super_admin`), `require_admin` dep.
 4. New `SidebarLayout` + `(inapp)` route group + admin route group; wrap existing JSX pages.
 5. Credit API + Polar checkout + webhook + Credit page UI.
 6. Per-paper credit cost wiring + tier-based model resolution in `papers.py`.
