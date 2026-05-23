@@ -1,4 +1,5 @@
 import "./globals.css";
+import type { ReactNode } from "react";
 import { AuthProvider } from "./lib/auth-context";
 
 export const metadata = {
@@ -12,10 +13,10 @@ export const viewport = {
   width: 1440,
 };
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>
+      <body className="bg-white text-ink-900 antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
