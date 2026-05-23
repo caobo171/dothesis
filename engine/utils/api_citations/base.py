@@ -287,13 +287,41 @@ class BaseAPIClient(ABC):
         self.session.headers.update(BROWSER_HEADERS)
 
     def _rate_limit_wait(self) -> None:
-        """Wait if necessary to respect rate limit."""
+        """Wait if necessary to respect rate limit.
+
+        Adaptive: in addition to the static min_interval, we also honour the
+        BackpressureManager's recommended_delay, which grows when this API is
+        being 429'd. So a Semantic Scholar burst of 429s automatically slows
+        down subsequent requests instead of hammering and producing more 429s.
+        """
         current_time = time.time()
         time_since_last_request = current_time - self.last_request_time
 
-        if time_since_last_request < self.min_interval:
-            sleep_time = self.min_interval - time_since_last_request
-            logger.debug(f"Rate limit: sleeping {sleep_time:.3f}s")
+        # Adaptive floor: rises when 429s are common.
+        adaptive_floor = self.min_interval
+        try:
+            from utils.backpressure import get_backpressure_manager, APIType
+            bp = get_backpressure_manager()
+            if bp and self.api_type:
+                try:
+                    api_enum = APIType(self.api_type)
+                    api_recent_429s = bp.get_api_429_count(api_enum) if hasattr(bp, "get_api_429_count") else None
+                except (ValueError, AttributeError):
+                    api_recent_429s = None
+                # Always use the global recommended delay as a soft floor.
+                recommended = bp.get_recommended_delay()
+                if recommended and recommended > adaptive_floor:
+                    if recommended > adaptive_floor * 3:
+                        logger.info(
+                            "Adaptive throttle for %s: pacing requests at %.2fs (up from %.2fs) due to recent 429s",
+                            self.api_type, recommended, self.min_interval,
+                        )
+                    adaptive_floor = recommended
+        except ImportError:
+            pass
+
+        if time_since_last_request < adaptive_floor:
+            sleep_time = adaptive_floor - time_since_last_request
             time.sleep(sleep_time)
 
         self.last_request_time = time.time()

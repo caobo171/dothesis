@@ -40,6 +40,7 @@ class TrackerLoggingBridge(logging.Handler):
     PHASE_BY_LOGGER_PREFIX = {
         "utils.api_citations": "research",
         "utils.deep_research": "research",
+        "utils.gemini_client": "research",  # Model-switch messages
         "phases.research": "research",
         "phases.structure": "structure",
         "phases.compose": "compose",
