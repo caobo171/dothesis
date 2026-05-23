@@ -3,13 +3,12 @@
 import { Suspense } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import useSWR from "swr";
-import { Sidebar } from "../../components/shared";
-import { PaperShell } from "../../components/paper-shell";
-import { AgentRun } from "../../components/agent-run";
-import { DraftEditor } from "../../components/draft-editor";
-import { Citations } from "../../components/citations";
-import { ExportTab } from "../../components/export-tab";
-import { swrFetcher } from "../../lib/api";
+import { PaperShell } from "../../../components/paper-shell";
+import { AgentRun } from "../../../components/agent-run";
+import { DraftEditor } from "../../../components/draft-editor";
+import { Citations } from "../../../components/citations";
+import { ExportTab } from "../../../components/export-tab";
+import { swrFetcher } from "../../../lib/api";
 
 const CITATION_STYLE_FALLBACK = "APA";
 
@@ -46,20 +45,17 @@ function PaperPageInner() {
   else body = <AgentRun jobId={jobId} paper={paper} />;
 
   return (
-    <div className="app">
-      <Sidebar />
-      <PaperShell paper={paper} jobId={jobId} latestJob={data?.latest_job} tab={tab} setTab={setTab} onJobChanged={() => mutate()}>
-        {isLoading ? (
-          <div style={{ padding: 32 }}>Loading…</div>
-        ) : error ? (
-          <div style={{ padding: 32, color: "var(--danger-fg)" }}>
-            Error: {error.message}
-          </div>
-        ) : (
-          body
-        )}
-      </PaperShell>
-    </div>
+    <PaperShell paper={paper} jobId={jobId} latestJob={data?.latest_job} tab={tab} setTab={setTab} onJobChanged={() => mutate()}>
+      {isLoading ? (
+        <div style={{ padding: 32 }}>Loading…</div>
+      ) : error ? (
+        <div style={{ padding: 32, color: "var(--danger-fg)" }}>
+          Error: {error.message}
+        </div>
+      ) : (
+        body
+      )}
+    </PaperShell>
   );
 }
 
