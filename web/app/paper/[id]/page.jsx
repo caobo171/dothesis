@@ -39,11 +39,11 @@ function PaperPageInner() {
   const setTab = (newTab) => router.push(`/paper/${id}?tab=${newTab}`);
 
   let body;
-  if (tab === "run") body = <AgentRun jobId={jobId} />;
+  if (tab === "run") body = <AgentRun jobId={jobId} paper={paper} />;
   else if (tab === "editor") body = <DraftEditor paperId={id} citationStyle={style} />;
   else if (tab === "citations") body = <Citations paperId={id} citationStyle={style} />;
   else if (tab === "export") body = <ExportTab paperId={id} citationStyle={style} />;
-  else body = <AgentRun jobId={jobId} />;
+  else body = <AgentRun jobId={jobId} paper={paper} />;
 
   return (
     <div className="app">

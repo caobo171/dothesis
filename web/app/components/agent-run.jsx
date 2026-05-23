@@ -2,42 +2,85 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "./icons";
-import { ProgressBar } from "./shared";
-import { PHASES, AGENTS } from "./data";
+import { Spinner } from "./shared";
 import { openEventStream } from "../lib/api";
 
-export const AgentRun = ({ jobId }) => {
-  const [feed, setFeed] = useState([]);
-  const [phaseStates, setPhaseStates] = useState({
-    research: { state: "queued", progress: 0, activeAgents: [] },
-    structure: { state: "queued", progress: 0, activeAgents: [] },
-    compose: { state: "queued", progress: 0, activeAgents: [] },
-    qa: { state: "queued", progress: 0, activeAgents: [] },
-    compile: { state: "queued", progress: 0, activeAgents: [] },
-    export: { state: "queued", progress: 0, activeAgents: [] },
-  });
+const PHASE_ORDER = [
+  { id: "research", label: "Research" },
+  { id: "structure", label: "Outline" },
+  { id: "compose", label: "Writing" },
+  { id: "qa", label: "Review" },
+  { id: "compile", label: "Compile" },
+  { id: "export", label: "Export" },
+];
+
+const PHASE_ID_BY_BACKEND = {
+  research: "research",
+  structure: "structure",
+  compose: "compose",
+  qa: "qa",
+  compile: "compile",
+  export: "export",
+  // The engine sometimes uses these synonyms — normalize.
+  exporting: "export",
+  writing: "compose",
+  completed: "export",
+};
+
+export const AgentRun = ({ jobId, paper }) => {
+  const [activity, setActivity] = useState([]); // newest first, capped
+  const [sources, setSources] = useState([]); // citation-like events
+  const [currentPhase, setCurrentPhase] = useState("research");
+  const [phaseProgress, setPhaseProgress] = useState({}); // {phaseId: 0..1}
+  const [activeAgents, setActiveAgents] = useState([]);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(false);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1100);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
     if (!jobId) return;
     const close = openEventStream(jobId, {
       onEvent: (msg) => {
-        if (msg.type === "activity") {
-          setFeed((f) => [{ phase: msg.phase || "compose", agent: msg.agent || "Engine",
-                            text: msg.text || "", t: new Date().toLocaleTimeString().slice(0, 5) }, ...f].slice(0, 50));
-        } else if (msg.type === "phase_progress") {
-          setPhaseStates((prev) => {
-            const next = { ...prev };
-            const order = ["research", "structure", "compose", "qa", "compile", "export"];
-            const idx = order.indexOf(msg.phase);
-            for (let i = 0; i < idx; i++) next[order[i]] = { ...next[order[i]], state: "done", progress: 1, activeAgents: [] };
-            next[msg.phase] = { state: msg.progress >= 1 ? "done" : "active",
-                                 progress: msg.progress || 0,
-                                 activeAgents: msg.active_agents || [] };
-            return next;
-          });
+        if (msg.type === "phase_progress") {
+          const id = PHASE_ID_BY_BACKEND[msg.phase] || msg.phase;
+          setCurrentPhase(id);
+          setPhaseProgress((p) => ({ ...p, [id]: msg.progress || 0 }));
+          if (Array.isArray(msg.active_agents)) setActiveAgents(msg.active_agents);
+        } else if (msg.type === "activity") {
+          const phase = PHASE_ID_BY_BACKEND[msg.phase] || msg.phase || currentPhase;
+          setActivity((a) =>
+            [
+              {
+                phase,
+                agent: msg.agent || "Engine",
+                text: msg.text || "",
+                t: new Date().toLocaleTimeString().slice(0, 8),
+              },
+              ...a,
+            ].slice(0, 100),
+          );
+          // Look for "Found source: <title>" or events with a `source` payload.
+          if (msg.source && typeof msg.source === "object") {
+            const s = msg.source;
+            setSources((cur) =>
+              cur.some((x) => x.title === s.title)
+                ? cur
+                : [
+                    {
+                      title: s.title,
+                      authors: s.authors || "",
+                      year: s.year,
+                      source: msg.agent || "verified",
+                    },
+                    ...cur,
+                  ].slice(0, 50),
+            );
+          }
         }
       },
       onDone: () => setDone(true),
@@ -46,336 +89,569 @@ export const AgentRun = ({ jobId }) => {
     return close;
   }, [jobId]);
 
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 1100);
-    return () => clearInterval(id);
-  }, []);
+  const currentLabel = PHASE_ORDER.find((p) => p.id === currentPhase)?.label || "Research";
 
   return (
-    <div className="canvas" style={{ gap: 20 }}>
+    <div className="canvas" style={{ padding: 0, gap: 0, background: "var(--ink-50)" }}>
+      {/* Phase chips */}
+      <PhaseChips currentPhase={currentPhase} phaseProgress={phaseProgress} done={done} />
+
+      {/* Banners */}
       {error && (
-        <div style={{ padding: "12px 16px", background: "var(--danger-bg, #fde2e2)", color: "var(--danger-fg, #b91c1c)",
-                       borderRadius: 8, fontSize: 13, fontWeight: 600 }}>
+        <div
+          style={{
+            margin: "16px 40px 0",
+            padding: "12px 16px",
+            background: "var(--stop-bg)",
+            color: "var(--stop-fg)",
+            borderRadius: 12,
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
           Job failed: {error}
         </div>
       )}
       {done && (
-        <div style={{ padding: "12px 16px", background: "var(--ok-bg, #d1fae5)", color: "var(--ok-fg, #047857)",
-                       borderRadius: 8, fontSize: 13, fontWeight: 600 }}>
-          Draft ready — open the Editor tab.
+        <div
+          style={{
+            margin: "16px 40px 0",
+            padding: "12px 16px",
+            background: "var(--ok-bg)",
+            color: "var(--ok-fg)",
+            borderRadius: 12,
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          Draft ready — open the Draft tab.
         </div>
       )}
-      <PipelineDiagram phaseStates={phaseStates} tick={tick} />
-      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 20 }}>
-        <ActivityFeed feed={feed} />
-        <ChapterProgress />
-      </div>
-      <CitationStream />
-    </div>
-  );
-};
 
-const LegendDot = ({ color, label, pulse }) => (
-  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-    <span style={{
-      width: 8, height: 8, borderRadius: 999, background: color,
-      boxShadow: pulse ? `0 0 0 4px ${color}22` : "none",
-    }} />
-    {label}
-  </span>
-);
-
-const PipelineDiagram = ({ phaseStates, tick }) => (
-  <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-    <div className="card-header">
-      <div>
-        <div className="section-title">19 agents · 6 phases</div>
-        <div style={{ fontSize: 13, color: "var(--ink-500)", marginTop: 4 }}>
-          Hover any agent to see what it&apos;s doing. Data flows left to right.
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", fontSize: 12, color: "var(--ink-500)", fontWeight: 600 }}>
-        <LegendDot color="var(--ok-fg)" label="Done" />
-        <LegendDot color="var(--blue-600)" label="Active" pulse />
-        <LegendDot color="var(--ink-300)" label="Queued" />
-      </div>
-    </div>
-
-    <div style={{ padding: "32px 28px 28px", position: "relative" }}>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(6, 1fr)",
-        gap: 0,
-        position: "relative",
-      }}>
-        {PHASES.map((p, i) => (
-          <PhaseColumn
-            key={p.id}
-            phase={p}
-            state={phaseStates[p.id]}
-            agents={AGENTS.filter((a) => a.phase === p.id)}
-            activeAgents={phaseStates[p.id].activeAgents}
-            isFirst={i === 0}
-            isLast={i === PHASES.length - 1}
-            tick={tick}
+      {/* Two-column body */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 380px",
+          gap: 24,
+          padding: "32px 40px 24px",
+        }}
+      >
+        <DocCard
+          tick={tick}
+          currentPhase={currentPhase}
+          currentLabel={currentLabel}
+          paper={paper}
+          done={done}
+          error={error}
+        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <CurrentPhasePanel
+            currentLabel={currentLabel}
+            progress={phaseProgress[currentPhase] || 0}
+            agents={activeAgents}
           />
-        ))}
-        {PHASES.slice(0, -1).map((p, i) => {
-          const fromState = phaseStates[p.id].state;
-          const active = fromState === "done" || fromState === "active";
-          if (!active) return null;
-          return <FlowParticles key={i} index={i} color={p.color} />;
-        })}
-      </div>
-    </div>
-  </div>
-);
-
-const PHASE_NUMBERS = ["1", "2", "3", "3.5", "4", "5"];
-const PHASE_ORDER = ["research", "structure", "compose", "qa", "compile", "export"];
-
-const PhaseColumn = ({ phase, state, agents, activeAgents, isFirst, tick }) => {
-  const isDone = state.state === "done";
-  const isActive = state.state === "active";
-  const isQueued = state.state === "queued";
-  const stateColor = isDone ? "var(--ok-fg)" : isActive ? phase.color : "var(--ink-300)";
-
-  return (
-    <div style={{
-      padding: "0 12px",
-      borderLeft: isFirst ? "none" : "1px dashed var(--ink-200)",
-      position: "relative",
-    }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8, marginBottom: 16 }}>
-        <div style={{
-          width: 42, height: 42, borderRadius: 12,
-          background: isQueued ? "var(--ink-50)" : `${phase.color}15`,
-          color: isQueued ? "var(--ink-400)" : phase.color,
-          display: "grid", placeItems: "center",
-          border: isActive ? `2px solid ${phase.color}` : "2px solid transparent",
-          boxShadow: isActive ? `0 0 0 4px ${phase.color}20` : "none",
-        }}>
-          <Icon name={phase.icon} size={22} />
-        </div>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 10.5, color: "var(--ink-400)", fontWeight: 700,
-                           letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              Phase {PHASE_NUMBERS[PHASE_ORDER.indexOf(phase.id)]}
-            </span>
-          </div>
-          <div style={{ fontWeight: 800, fontSize: 16, marginTop: 2, color: "var(--ink-900)" }}>
-            {phase.label}
-          </div>
-          <div style={{ fontSize: 11.5, color: "var(--ink-500)", marginTop: 2, lineHeight: 1.35 }}>
-            {phase.desc}
-          </div>
-        </div>
-        <div style={{ width: "100%" }}>
-          <ProgressBar value={state.progress} color={stateColor} height={4} />
-          <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700 }}>
-            <span style={{ color: stateColor }}>
-              {isDone ? "Complete" : isActive ? `${Math.round(state.progress * 100)}%` : "Queued"}
-            </span>
-            <span style={{ color: "var(--ink-400)" }}>{agents.length} agents</span>
-          </div>
+          <SourcesPanel sources={sources} />
+          <RecentActivityPanel activity={activity} />
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {agents.map((a) => {
-          const isAgentActive = activeAgents.includes(a.name);
-          return (
-            <AgentChip
-              key={a.name}
-              agent={a}
-              phase={phase}
-              status={
-                isDone ? "done" :
-                isAgentActive ? "active" :
-                "queued"
-              }
-              tick={tick}
-            />
-          );
-        })}
-      </div>
+      {/* Tail activity strip */}
+      <ActivityStrip activity={activity} tick={tick} />
     </div>
   );
 };
 
-const AgentChip = ({ agent, phase, status, tick }) => {
-  const isActive = status === "active";
-  const isDone = status === "done";
-  const isQueued = status === "queued";
-  const [hover, setHover] = useState(false);
-
-  const bg = isActive ? phase.color : "var(--paper)";
-  const fg = isActive ? "white" : isDone ? "var(--ink-700)" : "var(--ink-400)";
-  const border = isActive ? phase.color : "var(--ink-100)";
-
+// ---------------- Phase chips ----------------
+const PhaseChips = ({ currentPhase, phaseProgress, done }) => {
+  const currentIdx = PHASE_ORDER.findIndex((p) => p.id === currentPhase);
   return (
     <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
       style={{
-        position: "relative",
-        padding: "8px 10px",
-        borderRadius: 10,
-        background: bg,
-        color: fg,
-        border: `1px solid ${border}`,
-        fontSize: 12,
-        fontWeight: 600,
+        background: "var(--paper)",
+        borderBottom: "1px solid var(--ink-100)",
+        padding: "16px 40px",
         display: "flex",
+        justifyContent: "center",
         alignItems: "center",
-        gap: 6,
-        opacity: isQueued ? 0.55 : 1,
-        cursor: "default",
+        gap: 8,
+        flexWrap: "wrap",
       }}
     >
-      <span style={{
-        width: 7, height: 7, borderRadius: 999,
-        background: isActive ? "white" : isDone ? "var(--ok-fg)" : "var(--ink-300)",
-        boxShadow: isActive ? `0 0 0 ${tick % 2 === 0 ? 3 : 1}px rgba(255,255,255,0.4)` : "none",
-        transition: "box-shadow 0.4s ease",
-        flexShrink: 0,
-      }} />
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {agent.name}
+      {PHASE_ORDER.map((p, i) => {
+        const isCurrent = !done && p.id === currentPhase;
+        const isDoneStep = done || currentIdx > i;
+        return (
+          <span key={p.id} style={{ display: "inline-flex", alignItems: "center" }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 14px",
+                borderRadius: 999,
+                background: isCurrent ? "var(--ink-50)" : "transparent",
+                fontWeight: 700,
+                fontSize: 14,
+                color: isCurrent
+                  ? "var(--ink-900)"
+                  : isDoneStep
+                  ? "var(--ink-700)"
+                  : "var(--ink-400)",
+              }}
+            >
+              {isCurrent ? (
+                <Spinner />
+              ) : isDoneStep ? (
+                <Icon name="check" size={14} stroke={3} style={{ color: "var(--ok-fg)" }} />
+              ) : (
+                <span
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: 999,
+                    border: "1.5px solid var(--ink-300)",
+                  }}
+                />
+              )}
+              {p.label}
+            </span>
+            {i < PHASE_ORDER.length - 1 && (
+              <span
+                style={{
+                  width: 24,
+                  height: 1,
+                  background: isDoneStep ? "var(--ok-fg)" : "var(--ink-200)",
+                }}
+              />
+            )}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+// ---------------- DocCard ----------------
+const DocCard = ({ tick, currentPhase, currentLabel, paper, done, error }) => (
+  <div
+    style={{
+      background: "var(--paper)",
+      border: "1px solid var(--ink-100)",
+      borderRadius: 16,
+      padding: "48px 56px",
+      boxShadow: "var(--shadow-card)",
+    }}
+  >
+    <div
+      style={{
+        textAlign: "center",
+        letterSpacing: "0.18em",
+        fontSize: 11,
+        fontWeight: 700,
+        color: "var(--ink-400)",
+      }}
+    >
+      {(paper?.level || "Master's thesis").toUpperCase()}
+    </div>
+    <h1
+      style={{
+        fontFamily: "var(--font-serif)",
+        fontSize: 28,
+        fontWeight: 700,
+        letterSpacing: "-0.01em",
+        lineHeight: 1.25,
+        textAlign: "center",
+        margin: "22px auto 0",
+        maxWidth: 620,
+      }}
+    >
+      {paper?.title || "Untitled thesis"}
+    </h1>
+
+    {!done && !error && (
+      <>
+        <div
+          style={{
+            marginTop: 30,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <Spinner />
+          <span style={{ fontSize: 13.5, color: "var(--ink-500)", fontWeight: 600 }}>
+            {currentLabel}…
+          </span>
+        </div>
+
+        <div style={{ marginTop: 40 }}>
+          <div className="eyebrow" style={{ textAlign: "center" }}>
+            Sections being prepared
+          </div>
+          <div
+            style={{
+              marginTop: 14,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+            }}
+          >
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                style={{
+                  height: 30,
+                  background: "var(--ink-50)",
+                  borderRadius: 8,
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background:
+                      "linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)",
+                    animation: `shimmer 1.6s ${i * 0.15}s ease-in-out infinite`,
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div
+          style={{
+            marginTop: 36,
+            textAlign: "center",
+            fontSize: 12,
+            color: "var(--ink-400)",
+          }}
+        >
+          Generation takes 10–20 minutes. You can leave this tab open.
+        </div>
+
+        <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
+      </>
+    )}
+
+    {done && (
+      <div style={{ marginTop: 28, textAlign: "center" }}>
+        <Icon name="checkcircle" size={48} stroke={1.5} style={{ color: "var(--ok-fg)" }} />
+        <div style={{ marginTop: 12, fontSize: 16, fontWeight: 700, color: "var(--ink-900)" }}>
+          Draft complete
+        </div>
+        <div style={{ marginTop: 4, fontSize: 13, color: "var(--ink-500)" }}>
+          Open the Draft, Citations, or Export tabs.
+        </div>
+      </div>
+    )}
+
+    {error && (
+      <div style={{ marginTop: 28, textAlign: "center" }}>
+        <Icon name="warning" size={48} stroke={1.5} style={{ color: "var(--stop-fg)" }} />
+        <div style={{ marginTop: 12, fontSize: 16, fontWeight: 700, color: "var(--stop-fg)" }}>
+          Generation failed
+        </div>
+        <div
+          style={{
+            marginTop: 4,
+            fontSize: 13,
+            color: "var(--ink-500)",
+            maxWidth: 480,
+            margin: "8px auto 0",
+          }}
+        >
+          {error}
+        </div>
+      </div>
+    )}
+  </div>
+);
+
+// ---------------- Current phase panel ----------------
+const CurrentPhasePanel = ({ currentLabel, progress, agents }) => (
+  <div
+    style={{
+      background: "var(--paper)",
+      border: "1px solid var(--ink-100)",
+      borderRadius: 14,
+      padding: 18,
+    }}
+  >
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Spinner size={10} />
+        <span style={{ fontSize: 14, fontWeight: 700 }}>
+          {currentLabel}{" "}
+          {agents.length > 0 && (
+            <span style={{ color: "var(--ink-500)", fontWeight: 600 }}>
+              ({agents.join(", ")})
+            </span>
+          )}
+        </span>
+      </div>
+      <span style={{ fontSize: 12, color: "var(--ink-400)", fontWeight: 700 }}>
+        {Math.round((progress || 0) * 100)}%
       </span>
-      {isActive && (
-        <span style={{
-          marginLeft: "auto", fontSize: 9, fontWeight: 800,
-          padding: "2px 6px", borderRadius: 4,
-          background: "rgba(255,255,255,0.2)", letterSpacing: 0.4,
-        }}>WORKING</span>
-      )}
-      {isDone && (
-        <Icon name="check" size={12} stroke={3} style={{ color: "var(--ok-fg)", marginLeft: "auto" }} />
-      )}
-      {hover && (
-        <div className="tooltip" style={{ top: -34, left: 0, zIndex: 100 }}>
-          {agent.role}
-        </div>
+    </div>
+    <div
+      style={{
+        marginTop: 14,
+        height: 4,
+        borderRadius: 999,
+        background: "var(--ink-100)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          width: `${Math.round((progress || 0) * 100)}%`,
+          height: "100%",
+          background: "var(--blue-600)",
+          transition: "width 0.4s ease",
+        }}
+      />
+    </div>
+  </div>
+);
+
+// ---------------- Sources panel ----------------
+const SourcesPanel = ({ sources }) => (
+  <div
+    style={{
+      background: "var(--paper)",
+      border: "1px solid var(--ink-100)",
+      borderRadius: 14,
+      padding: 18,
+    }}
+  >
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>Sources Found</div>
+      {sources.length > 0 && (
+        <span style={{ fontSize: 12, color: "var(--blue-600)", fontWeight: 700 }}>
+          {sources.length} verified
+        </span>
       )}
     </div>
-  );
-};
+    {sources.length === 0 ? (
+      <div
+        style={{
+          marginTop: 14,
+          padding: "32px 12px",
+          textAlign: "center",
+          background: "var(--ink-50)",
+          borderRadius: 10,
+          color: "var(--ink-400)",
+          fontSize: 13,
+        }}
+      >
+        Searching for sources…
+      </div>
+    ) : (
+      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        {sources.slice(0, 8).map((s, i) => (
+          <div
+            key={s.title + i}
+            className="fade-in"
+            style={{
+              padding: "10px 12px",
+              background: "var(--ink-50)",
+              borderRadius: 10,
+              fontSize: 12.5,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-serif)",
+                fontWeight: 600,
+                lineHeight: 1.3,
+                color: "var(--ink-900)",
+                overflow: "hidden",
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+              }}
+            >
+              {s.title}
+            </div>
+            <div
+              style={{
+                marginTop: 4,
+                color: "var(--ink-500)",
+                fontSize: 11.5,
+              }}
+            >
+              {s.authors?.split(",")[0] || "—"}
+              {s.year ? `, ${s.year}` : ""}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+);
 
-const FlowParticles = ({ index, color }) => {
-  const left = `${((index + 1) / 6) * 100}%`;
-  return (
-    <div style={{
-      position: "absolute",
-      top: 20,
-      left,
-      transform: "translateX(-50%)",
-      width: 40,
-      height: 30,
-      pointerEvents: "none",
-      zIndex: 1,
-    }}>
-      {[0, 0.5, 1.0].map((delay, i) => (
-        <span key={i} style={{
-          position: "absolute",
-          top: 12,
-          left: -20,
-          width: 6, height: 6,
-          borderRadius: 999,
-          background: color,
-          boxShadow: `0 0 8px ${color}`,
-          animation: `particleFlow 1.8s ${delay}s linear infinite`,
-        }} />
-      ))}
-    </div>
-  );
-};
+const RecentActivityPanel = ({ activity }) => (
+  <div
+    style={{
+      background: "var(--paper)",
+      border: "1px solid var(--ink-100)",
+      borderRadius: 14,
+      padding: 18,
+    }}
+  >
+    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Recent activity</div>
+    {activity.length === 0 ? (
+      <div style={{ fontSize: 13, color: "var(--ink-400)" }}>Waiting for the engine…</div>
+    ) : (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          maxHeight: 220,
+          overflowY: "auto",
+        }}
+        className="scroll"
+      >
+        {activity.slice(0, 12).map((e, i) => (
+          <div
+            key={i}
+            style={{
+              fontSize: 12.5,
+              color: "var(--ink-700)",
+              padding: "6px 0",
+              borderBottom: i < 11 ? "1px solid var(--ink-50)" : "none",
+            }}
+          >
+            <span style={{ color: "var(--blue-600)", fontWeight: 700 }}>{e.agent}</span>{" "}
+            <span style={{ color: "var(--ink-500)" }}>{e.text}</span>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+);
 
-const ActivityFeed = ({ feed }) => {
-  const phaseById = Object.fromEntries(PHASES.map((p) => [p.id, p]));
+// ---------------- Activity strip (tail) ----------------
+const ActivityStrip = ({ activity, tick }) => {
+  const [open, setOpen] = useState(false);
+  const latest = activity[0];
   return (
-    <div className="card" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div className="card-header">
-        <div>
-          <div className="section-title">Live activity</div>
-          <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 3 }}>What the agents just did — newest first.</div>
+    <>
+      {open && (
+        <div
+          style={{
+            borderTop: "1px solid var(--ink-100)",
+            background: "var(--paper)",
+            maxHeight: 320,
+            overflowY: "auto",
+          }}
+          className="scroll"
+        >
+          <div
+            style={{
+              padding: "10px 40px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              borderBottom: "1px solid var(--ink-100)",
+              position: "sticky",
+              top: 0,
+              background: "var(--paper)",
+              zIndex: 1,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "var(--ink-700)",
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              Activity log · {activity.length} events
+            </div>
+          </div>
+          <div>
+            {activity.map((e, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "70px 90px 1fr",
+                  gap: 16,
+                  padding: "8px 40px",
+                  fontSize: 12.5,
+                  borderBottom: "1px solid var(--ink-50)",
+                }}
+              >
+                <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-400)" }}>
+                  {e.t}
+                </span>
+                <span style={{ fontWeight: 700, color: "var(--blue-600)" }}>{e.agent}</span>
+                <span style={{ color: "var(--ink-800)" }}>{e.text}</span>
+              </div>
+            ))}
+          </div>
         </div>
-        <button className="btn btn-ghost btn-sm">
-          <Icon name="copy" size={12} /> Export log
+      )}
+      <div
+        style={{
+          borderTop: "1px solid var(--ink-100)",
+          background: "var(--paper)",
+          padding: "10px 40px",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          fontSize: 12.5,
+        }}
+      >
+        <Spinner size={10} />
+        <span
+          style={{
+            color: "var(--ink-700)",
+            fontWeight: 600,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            flex: 1,
+          }}
+        >
+          {latest ? `${latest.agent} · ${latest.text}` : "Waiting for engine…"}
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          style={{
+            background: "none",
+            border: "none",
+            color: "var(--blue-600)",
+            fontWeight: 700,
+            cursor: "pointer",
+            fontSize: 12.5,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          {open ? "Hide log" : "View all"}
+          <Icon
+            name="chevron-down"
+            size={12}
+            stroke={2.5}
+            style={{
+              transform: open ? "rotate(180deg)" : "none",
+              transition: "transform 0.15s",
+            }}
+          />
         </button>
       </div>
-      <div className="scroll" style={{ maxHeight: 420, overflowY: "auto" }}>
-        {feed.map((f, i) => {
-          const p = phaseById[f.phase];
-          return (
-            <div key={i} className="fade-in" style={{
-              padding: "14px 24px",
-              display: "grid",
-              gridTemplateColumns: "60px 1fr auto",
-              gap: 16,
-              borderBottom: "1px solid var(--ink-100)",
-              alignItems: "center",
-            }}>
-              <span style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                color: "var(--ink-400)",
-                fontWeight: 500,
-              }}>
-                {f.t}
-              </span>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700,
-                    color: p.color,
-                    padding: "1px 8px",
-                    background: `${p.color}15`,
-                    borderRadius: 999,
-                  }}>
-                    {f.agent}
-                  </span>
-                </div>
-                <div style={{ fontSize: 13, color: "var(--ink-800)", lineHeight: 1.4 }}>{f.text}</div>
-              </div>
-              <Icon name="check" size={14} stroke={3} style={{ color: "var(--ok-fg)" }} />
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    </>
   );
 };
-
-const ChapterProgress = () => (
-  <div className="card" style={{ overflow: "hidden" }}>
-    <div className="card-header">
-      <div>
-        <div className="section-title">Chapter progress</div>
-        <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 3 }}>Per-chapter detail available after the job finishes.</div>
-      </div>
-      <span className="badge run"><span className="pulse" />Compose · QA</span>
-    </div>
-    <div style={{ padding: "24px", fontSize: 13, color: "var(--ink-500)" }}>
-      Drafting in progress — chapter detail coming once the job finishes.
-    </div>
-  </div>
-);
-
-const CitationStream = () => (
-  <div className="card" style={{ overflow: "hidden" }}>
-    <div className="card-header">
-      <div>
-        <div className="section-title">Citation verification stream</div>
-        <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 3 }}>
-          Every source checked against CrossRef, OpenAlex, Semantic Scholar and arXiv before it makes the bibliography.
-        </div>
-      </div>
-    </div>
-    <div style={{ padding: "24px", fontSize: 13, color: "var(--ink-500)" }}>
-      Citations will appear here once the job finishes.
-    </div>
-  </div>
-);
-

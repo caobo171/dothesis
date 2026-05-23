@@ -1,5 +1,6 @@
-// Outline-style icons (18-20px, stroke-based) — matches Survify's calm icon vocabulary.
+"use client";
 
+// Icon set adapted from the DoThesis design — outline-style 18-20px, stroke-based.
 export const Icon = ({ name, size = 18, stroke = 1.75, className = "", style }) => {
   const props = {
     width: size,
@@ -82,6 +83,7 @@ export const Icon = ({ name, size = 18, stroke = 1.75, className = "", style }) 
       return <svg {...props}><path d="M12 2 14 9l7 2-7 2-2 7-2-7-7-2 7-2Z"/></svg>;
     case "link":
       return <svg {...props}><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>;
+    case "warn":
     case "warning":
       return <svg {...props}><path d="M12 4 2 20h20Z"/><path d="M12 10v4M12 17v.5"/></svg>;
     case "trend":
