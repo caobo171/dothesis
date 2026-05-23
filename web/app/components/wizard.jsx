@@ -32,6 +32,15 @@ const LENGTH_TO_LEVEL = {
   "50–80 pages (PhD)": "phd",
 };
 
+const SAMPLE_TOPICS = [
+  "AI in healthcare diagnostics",
+  "Climate change mitigation strategies",
+  "Machine learning in finance",
+  "Behavioral economics in policy",
+  "Renewable energy adoption in Southeast Asia",
+  "Vietnamese startup ecosystem post-pandemic",
+];
+
 export const Wizard = () => {
   const router = useRouter();
   const [topic, setTopic] = useState("");
@@ -157,7 +166,7 @@ export const Wizard = () => {
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="What's your thesis about?"
+              placeholder="Describe your research topic…"
               maxLength={500}
               autoFocus
               style={{
@@ -244,6 +253,50 @@ export const Wizard = () => {
             </div>
           )}
         </form>
+
+        {/* Sample topic chips — shown until the user starts typing */}
+        {topic.trim().length === 0 && (
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 720,
+              marginTop: 18,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              justifyContent: "center",
+            }}
+          >
+            {SAMPLE_TOPICS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setTopic(s)}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 999,
+                  border: "1.5px solid var(--ink-200)",
+                  background: "var(--paper)",
+                  color: "var(--ink-700)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "border-color 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--blue-600)";
+                  e.currentTarget.style.color = "var(--blue-600)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--ink-200)";
+                  e.currentTarget.style.color = "var(--ink-700)";
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Settings row */}
         <div
