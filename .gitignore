@@ -62,3 +62,8 @@ api/.venv/
 api/**/__pycache__/
 api/.pytest_cache/
 api/*.egg-info/
+
+# Next.js / web
+web/.next/
+web/node_modules/
+web/tsconfig.tsbuildinfo
