@@ -32,6 +32,16 @@ const LENGTH_TO_LEVEL = {
   "50–80 pages (PhD)": "phd",
 };
 
+const TIER_TO_LABEL = {
+  "standard": "Standard",
+  "premium": "Premium",
+};
+
+const LABEL_TO_TIER = {
+  "Standard": "standard",
+  "Premium": "premium",
+};
+
 const SAMPLE_TOPICS = [
   "AI in healthcare diagnostics",
   "Climate change mitigation strategies",
@@ -49,7 +59,7 @@ export const Wizard = () => {
   const [language, setLanguage] = useState("English");
   const [citationStyle, setCitationStyle] = useState("APA 7th");
   const [length, setLength] = useState("25–30 pages (Master's)");
-  const [model] = useState("claude-sonnet");
+  const [modelLabel, setModelLabel] = useState("Standard");
   const [hideContext, setHideContext] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -68,7 +78,7 @@ export const Wizard = () => {
         research_question: notes.trim() || null,
         academic_level: LENGTH_TO_LEVEL[length] || "master",
         language: LANG_TO_CODE[language] || "en",
-        model,
+        model_tier: LABEL_TO_TIER[modelLabel] || "standard",
         citation_style: STYLE_TO_API[citationStyle] || "apa",
         sources: {
           crossref: true,
@@ -320,6 +330,11 @@ export const Wizard = () => {
             color: "var(--ink-800)",
           }}
         >
+          <DropPick
+            value={modelLabel}
+            options={Object.keys(LABEL_TO_TIER)}
+            onChange={setModelLabel}
+          />
           <DropPick value={language} options={Object.keys(LANG_TO_CODE)} onChange={setLanguage} />
           <DropPick
             value={citationStyle}
