@@ -455,15 +455,27 @@ generated_by: "OpenDraft AI - https://github.com/federicodeponte/opendraft"
     if ctx.verbose:
         print("📄 Exporting PDF (professional formatting)...")
 
-    pdf_success = export_pdf(md_file=final_md_path, output_pdf=pdf_path, engine='pandoc')
+    # PDF is best-effort: 'auto' lets the factory pick whatever engine is installed
+    # (pandoc, weasyprint, etc). If none are available we skip PDF rather than failing
+    # the whole job - the .md and .docx still get produced and uploaded.
+    pdf_success = False
+    try:
+        pdf_success = export_pdf(md_file=final_md_path, output_pdf=pdf_path, engine='auto')
+    except Exception as pdf_err:
+        logger.warning(f"PDF export skipped (non-fatal): {pdf_err}")
+        if ctx.tracker:
+            ctx.tracker.log_activity(
+                "PDF export unavailable on this host - DOCX and Markdown still produced",
+                event_type="warn", phase="exporting",
+            )
 
-    if not pdf_success:
-        raise RuntimeError("PDF export failed - Professional formatting required!")
-    if not pdf_path.exists():
-        raise RuntimeError(f"PDF export failed - file not created: {pdf_path}")
+    if pdf_success and pdf_path.exists():
+        if ctx.tracker:
+            ctx.tracker.log_activity("\u2705 PDF document ready", event_type="found", phase="exporting")
+    else:
+        pdf_path = None  # signal "no PDF" downstream
 
     if ctx.tracker:
-        ctx.tracker.log_activity("\u2705 PDF document ready", event_type="found", phase="exporting")
         ctx.tracker.log_activity("📝 Creating Word document...", event_type="info", phase="exporting")
 
     # DOCX export
@@ -476,11 +488,12 @@ generated_by: "OpenDraft AI - https://github.com/federicodeponte/opendraft"
     if ctx.tracker:
         ctx.tracker.log_activity("\u2705 Word document ready", event_type="found", phase="exporting")
 
-    # ZIP bundle
+    # ZIP bundle - include whichever exports actually exist
     zip_path = ctx.folders['exports'] / f"{base_filename}.zip"
     try:
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            zf.write(pdf_path, pdf_path.name)
+            if pdf_path is not None and pdf_path.exists():
+                zf.write(pdf_path, pdf_path.name)
             zf.write(docx_path, docx_path.name)
             zf.write(final_md_path, final_md_path.name)
         if ctx.tracker:
@@ -493,7 +506,10 @@ generated_by: "OpenDraft AI - https://github.com/federicodeponte/opendraft"
         ctx.tracker.log_activity("🎉 Thesis generation complete!", event_type="milestone", phase="completed")
 
     if ctx.verbose:
-        print(f"\u2705 Exported PDF: {pdf_path}")
+        if pdf_path is not None:
+            print(f"\u2705 Exported PDF: {pdf_path}")
+        else:
+            print("(PDF skipped - no PDF engine installed)")
         print(f"\u2705 Exported DOCX: {docx_path}")
         print(f"📂 Output folder: {ctx.folders['root']}")
 
