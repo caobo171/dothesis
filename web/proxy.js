@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/signup", "/_next", "/favicon.ico"];
 
-export function middleware(request) {
+export function proxy(request) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
