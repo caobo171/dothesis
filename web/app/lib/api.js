@@ -32,15 +32,18 @@ export function openEventStream(jobId, { since = 0, onEvent, onDone, onError } =
     try {
       const data = JSON.parse(e.data);
       onEvent?.(data, e.lastEventId ? parseInt(e.lastEventId, 10) : null);
+      // Terminal events: close so we stop holding the connection open.
       if (data.type === "job_done") { onDone?.(data); es.close(); }
       if (data.type === "error") { onError?.(data); es.close(); }
     } catch (err) {
       onError?.({ message: err.message });
     }
   };
+  // DON'T close on transient errors — EventSource auto-reconnects on its own.
+  // Closing here would mean a single dropped frame kills the live feed forever.
   es.onerror = () => {
-    onError?.({ message: "stream error" });
-    es.close();
+    // Surface the blip to the UI as a soft notice, but keep the stream alive.
+    onError?.({ message: "stream blip — auto-reconnecting", transient: true });
   };
   return () => es.close();
 }

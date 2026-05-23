@@ -35,10 +35,12 @@ export const AgentRun = ({ jobId, paper }) => {
   const [activeAgents, setActiveAgents] = useState([]);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(false);
-  const [tick, setTick] = useState(0);
+  const [startedAt] = useState(() => Date.now());
+  const [lastUpdate, setLastUpdate] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 1100);
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -46,6 +48,7 @@ export const AgentRun = ({ jobId, paper }) => {
     if (!jobId) return;
     const close = openEventStream(jobId, {
       onEvent: (msg) => {
+        setLastUpdate(Date.now());
         if (msg.type === "phase_progress") {
           const id = PHASE_ID_BY_BACKEND[msg.phase] || msg.phase;
           setCurrentPhase(id);
@@ -64,7 +67,6 @@ export const AgentRun = ({ jobId, paper }) => {
               ...a,
             ].slice(0, 100),
           );
-          // Look for "Found source: <title>" or events with a `source` payload.
           if (msg.source && typeof msg.source === "object") {
             const s = msg.source;
             setSources((cur) =>
@@ -84,12 +86,19 @@ export const AgentRun = ({ jobId, paper }) => {
         }
       },
       onDone: () => setDone(true),
-      onError: (e) => setError(e.text || e.message || "stream error"),
+      onError: (e) => {
+        // Transient blips are auto-recovered by EventSource — ignore them.
+        if (e.transient) return;
+        setError(e.text || e.message || "stream error");
+      },
     });
     return close;
   }, [jobId]);
 
   const currentLabel = PHASE_ORDER.find((p) => p.id === currentPhase)?.label || "Research";
+  const elapsedSec = Math.floor((now - startedAt) / 1000);
+  const sinceUpdateSec = Math.floor((now - lastUpdate) / 1000);
+  const stalled = sinceUpdateSec > 25 && !done && !error;
 
   return (
     <div className="canvas" style={{ padding: 0, gap: 0, background: "var(--ink-50)" }}>
@@ -150,6 +159,9 @@ export const AgentRun = ({ jobId, paper }) => {
             currentLabel={currentLabel}
             progress={phaseProgress[currentPhase] || 0}
             agents={activeAgents}
+            elapsedSec={elapsedSec}
+            sinceUpdateSec={sinceUpdateSec}
+            stalled={stalled}
           />
           <SourcesPanel sources={sources} />
           <RecentActivityPanel activity={activity} />
@@ -373,7 +385,14 @@ const DocCard = ({ tick, currentPhase, currentLabel, paper, done, error }) => (
 );
 
 // ---------------- Current phase panel ----------------
-const CurrentPhasePanel = ({ currentLabel, progress, agents }) => (
+const fmtTime = (sec) => {
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}m ${s.toString().padStart(2, "0")}s`;
+};
+
+const CurrentPhasePanel = ({ currentLabel, progress, agents, elapsedSec, sinceUpdateSec, stalled }) => (
   <div
     style={{
       background: "var(--paper)",
@@ -398,6 +417,7 @@ const CurrentPhasePanel = ({ currentLabel, progress, agents }) => (
         {Math.round((progress || 0) * 100)}%
       </span>
     </div>
+    {/* Progress bar: shimmer when nothing's coming in, solid otherwise. */}
     <div
       style={{
         marginTop: 14,
@@ -405,17 +425,51 @@ const CurrentPhasePanel = ({ currentLabel, progress, agents }) => (
         borderRadius: 999,
         background: "var(--ink-100)",
         overflow: "hidden",
+        position: "relative",
       }}
     >
       <div
         style={{
-          width: `${Math.round((progress || 0) * 100)}%`,
+          width: `${Math.max(2, Math.round((progress || 0) * 100))}%`,
           height: "100%",
           background: "var(--blue-600)",
           transition: "width 0.4s ease",
+          opacity: stalled ? 0.4 : 1,
         }}
       />
+      {stalled && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(90deg, transparent 0%, rgba(28,46,255,0.45) 50%, transparent 100%)",
+            animation: "indeterminate 1.6s ease-in-out infinite",
+          }}
+        />
+      )}
     </div>
+    {/* Heartbeat row: elapsed + last-update */}
+    <div
+      style={{
+        marginTop: 10,
+        display: "flex",
+        justifyContent: "space-between",
+        fontSize: 11.5,
+        color: "var(--ink-500)",
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      <span>
+        Elapsed <b style={{ color: "var(--ink-700)" }}>{fmtTime(elapsedSec)}</b>
+      </span>
+      <span style={{ color: stalled ? "var(--pause-fg)" : "var(--ink-500)" }}>
+        {stalled
+          ? `Quiet for ${fmtTime(sinceUpdateSec)} (upstream APIs may be throttling — engine still alive)`
+          : `Updated ${fmtTime(sinceUpdateSec)} ago`}
+      </span>
+    </div>
+    <style>{`@keyframes indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
   </div>
 );
 
