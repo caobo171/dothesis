@@ -58,6 +58,7 @@ class Paper(Base):
     citation_style: Mapped[str] = mapped_column(String(16), nullable=False)
     tone: Mapped[str | None] = mapped_column(String(32))
     model: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_tier: Mapped[str] = mapped_column(String(16), nullable=False, default="standard", server_default="standard")
     sources_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft")
     latest_job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
@@ -102,3 +103,35 @@ class JobEvent(Base):
     agent: Mapped[str | None] = mapped_column(String(128))
     text: Mapped[str | None] = mapped_column(Text)
     meta_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    package_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    credits: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False, default="USD", server_default="USD")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", server_default="pending")
+    polar_checkout_id: Mapped[str | None] = mapped_column(String(128), unique=True)
+    polar_order_id: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CreditTransaction(Base):
+    __tablename__ = "credit_transactions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(32), nullable=False)
+    ref_type: Mapped[str | None] = mapped_column(String(16))
+    ref_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
