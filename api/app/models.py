@@ -135,3 +135,19 @@ class CreditTransaction(Base):
     ref_type: Mapped[str | None] = mapped_column(String(16))
     ref_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    image_url: Mapped[str | None] = mapped_column(Text)
+    cta_label: Mapped[str | None] = mapped_column(String(64))
+    cta_url: Mapped[str | None] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(default=True, server_default="true", nullable=False)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
