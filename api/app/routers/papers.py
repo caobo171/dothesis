@@ -155,8 +155,94 @@ def get_paper(paper_id: uuid.UUID, user: User = Depends(current_user), db: Sessi
     if not p or p.user_id != user.id:
         raise HTTPException(404, detail={"error": {"code": "not_found", "message": "paper not found"}})
     latest = db.get(Job, p.latest_job_id) if p.latest_job_id else None
-    return {"paper": _paper_to_out(p, latest).model_dump(),
-            "latest_job": {"id": str(latest.id), "status": latest.status, "phase": latest.phase, "progress": latest.progress} if latest else None}
+    latest_out = None
+    if latest:
+        latest_out = {
+            "id": str(latest.id),
+            "status": latest.status,
+            "phase": latest.phase,
+            "progress": latest.progress,
+            "completed_phase": latest.completed_phase,
+            "has_checkpoint": latest.checkpoint_json is not None,
+        }
+    return {"paper": _paper_to_out(p, latest).model_dump(), "latest_job": latest_out}
+
+
+@router.post("/{paper_id}/resume", status_code=202)
+async def resume_paper(paper_id: uuid.UUID,
+                       user: User = Depends(current_user),
+                       db: Session = Depends(db_session)):
+    """Spawn a new job that picks up from the latest job's checkpoint."""
+    import shutil
+    from pathlib import Path
+
+    p = db.get(Paper, paper_id)
+    if not p or p.user_id != user.id:
+        raise HTTPException(404, detail={"error": {"code": "not_found", "message": "paper not found"}})
+    if not p.latest_job_id:
+        raise HTTPException(409, detail={"error": {"code": "no_job", "message": "no prior job to resume"}})
+    last_job = db.get(Job, p.latest_job_id)
+    if not last_job:
+        raise HTTPException(409, detail={"error": {"code": "no_job", "message": "prior job missing"}})
+    if last_job.status not in {"failed", "canceled"}:
+        raise HTTPException(409, detail={"error": {"code": "not_resumable",
+                                                    "message": f"job is {last_job.status}; cannot resume"}})
+    if not last_job.checkpoint_json:
+        raise HTTPException(409, detail={"error": {"code": "no_checkpoint",
+                                                    "message": "no checkpoint was saved for this job"}})
+
+    # Quota: same rules as fresh submit.
+    try:
+        check_can_start_job(db, user.id)
+    except QuotaError as e:
+        status_code = 409 if e.code == "already_running" else 429
+        raise HTTPException(status_code, detail={"error": {"code": e.code, "message": e.message}})
+
+    # New job row, same paper.
+    new_job = Job(paper_id=p.id, status="queued")
+    db.add(new_job)
+    db.flush()
+    p.latest_job_id = new_job.id
+    p.status = "running"
+    db.commit()
+
+    # Write the checkpoint into the new workdir; copy bibliography if the old workdir still has it.
+    settings = get_settings()
+    new_workdir = settings.job_workdir_root / str(new_job.id)
+    new_workdir.mkdir(parents=True, exist_ok=True)
+    new_checkpoint = new_workdir / "checkpoint.json"
+    new_checkpoint.write_text(json.dumps(last_job.checkpoint_json), encoding="utf-8")
+    if last_job.workdir:
+        old_workdir = Path(last_job.workdir)
+        for fname in ("bibliography.json",):
+            src = old_workdir / fname
+            if src.exists():
+                shutil.copy(src, new_workdir / fname)
+
+    # Reconstruct the brief from the checkpoint's preserved user inputs.
+    cp = last_job.checkpoint_json
+    brief = {
+        "topic": cp.get("topic") or p.topic,
+        "research_question": p.research_question,
+        "academic_level": cp.get("academic_level") or p.academic_level,
+        "language": cp.get("language") or p.language,
+        "citation_style": cp.get("citation_style") or p.citation_style,
+        "model": p.model,
+        "tone": p.tone,
+        "sources": p.sources_json or {},
+    }
+
+    try:
+        spawn_job(db, new_job, brief, resume_from=str(new_checkpoint))
+    except Exception as e:
+        new_job.status = "failed"
+        new_job.error_text = f"failed to launch engine: {e}"
+        p.status = "failed"
+        db.commit()
+        raise HTTPException(500, detail={"error": {"code": "spawn_failed", "message": str(e)}})
+
+    return {"paper_id": str(p.id), "job_id": str(new_job.id),
+            "resumed_from_phase": last_job.completed_phase}
 
 
 def _job_key_root(paper: Paper, job_id: uuid.UUID) -> str:

@@ -91,6 +91,8 @@ def main() -> int:
     parser.add_argument("--user-id", required=True)
     parser.add_argument("--workdir", required=True)
     parser.add_argument("--brief-json", required=True)
+    parser.add_argument("--resume-from", default=None,
+                        help="Path to a checkpoint.json to resume from")
     args = parser.parse_args()
 
     workdir = Path(args.workdir)
@@ -116,6 +118,11 @@ def main() -> int:
         appender.write({"type": "activity", "phase": "research", "agent": "Scout",
                         "text": "Job starting"})
 
+        resume_path = Path(args.resume_from) if args.resume_from else None
+        if resume_path:
+            appender.write({"type": "activity", "phase": "research", "agent": "System",
+                            "text": f"Resuming from checkpoint at {resume_path.name}"})
+
         generate_draft(
             topic=brief["topic"],
             language=brief.get("language", "en"),
@@ -125,6 +132,7 @@ def main() -> int:
             tracker=tracker,
             streamer=streamer,
             verbose=False,
+            resume_from=resume_path,
         )
 
         s3 = s3_from_env()

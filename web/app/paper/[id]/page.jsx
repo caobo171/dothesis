@@ -48,7 +48,7 @@ function PaperPageInner() {
   return (
     <div className="app">
       <Sidebar />
-      <PaperShell paper={paper} jobId={jobId} tab={tab} setTab={setTab} onJobChanged={() => mutate()}>
+      <PaperShell paper={paper} jobId={jobId} latestJob={data?.latest_job} tab={tab} setTab={setTab} onJobChanged={() => mutate()}>
         {isLoading ? (
           <div style={{ padding: 32 }}>Loading…</div>
         ) : error ? (

@@ -60,7 +60,18 @@ from phases import (
 )
 
 # Checkpoint system
-from utils.checkpoint import save_checkpoint, load_checkpoint, restore_context, get_next_phase
+from utils.checkpoint import save_checkpoint as _save_checkpoint_raw, load_checkpoint, restore_context, get_next_phase
+
+
+def save_checkpoint(ctx, phase, output_dir):
+    """Wrapper: save checkpoint to disk AND notify the tracker so the API can persist it to DB."""
+    path = _save_checkpoint_raw(ctx, phase, output_dir)
+    if ctx.tracker and hasattr(ctx.tracker, "checkpoint_saved"):
+        try:
+            ctx.tracker.checkpoint_saved(phase)
+        except Exception:
+            pass  # Never fail a generation because of tracker hiccups.
+    return path
 
 # Quality gate
 from utils.quality_gate import run_quality_gate

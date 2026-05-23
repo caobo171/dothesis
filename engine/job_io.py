@@ -145,6 +145,12 @@ class JobTracker:
             "event_type": "error",
         })
 
+    # ---- checkpoint marker -------------------------------------------------
+
+    def checkpoint_saved(self, phase: str) -> None:
+        """Tell the API that engine just wrote {workdir}/checkpoint.json after a phase."""
+        self._safe_write({"type": "checkpoint", "phase": phase})
+
     # ---- introspection / reports (no-ops) ---------------------------------
 
     def to_json(self) -> dict:

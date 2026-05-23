@@ -78,6 +78,10 @@ class Job(Base):
     pid: Mapped[int | None] = mapped_column(Integer)
     workdir: Mapped[str | None] = mapped_column(Text)
     events_processed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Resume state: latest checkpoint JSON written by the engine after a phase boundary.
+    # Lets us spin up a fresh job from where this one stopped, even if the workdir is gone.
+    checkpoint_json: Mapped[dict | None] = mapped_column(JSONB)
+    completed_phase: Mapped[str | None] = mapped_column(String(32))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_text: Mapped[str | None] = mapped_column(Text)

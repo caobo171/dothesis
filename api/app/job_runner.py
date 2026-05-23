@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 _monitors: dict[uuid.UUID, asyncio.Task] = {}
 
 
-def spawn_job(db: Session, job: Job, brief: dict) -> None:
+def spawn_job(db: Session, job: Job, brief: dict, resume_from: str | None = None) -> None:
     settings = get_settings()
     workdir = settings.job_workdir_root / str(job.id)
     workdir.mkdir(parents=True, exist_ok=True)
@@ -44,15 +44,19 @@ def spawn_job(db: Session, job: Job, brief: dict) -> None:
     if settings.anthropic_api_key:
         env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
 
+    cmd = [
+        sys.executable, "-m", "engine",
+        "--job-id", str(job.id),
+        "--paper-id", str(job.paper_id),
+        "--workdir", str(workdir),
+        "--brief-json", str(workdir / "brief.json"),
+        "--user-id", str(db.get(Paper, job.paper_id).user_id),
+    ]
+    if resume_from:
+        cmd.extend(["--resume-from", resume_from])
+
     proc = subprocess.Popen(
-        [
-            sys.executable, "-m", "engine",
-            "--job-id", str(job.id),
-            "--paper-id", str(job.paper_id),
-            "--workdir", str(workdir),
-            "--brief-json", str(workdir / "brief.json"),
-            "--user-id", str(db.get(Paper, job.paper_id).user_id),
-        ],
+        cmd,
         cwd=str(Path(__file__).resolve().parents[2]),
         env=env,
     )
@@ -159,6 +163,17 @@ async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
                 paper = db.get(Paper, job.paper_id)
                 if paper:
                     paper.status = "failed"
+            if type_ == "checkpoint" and job.workdir:
+                # Engine wrote a fresh {workdir}/checkpoint.json after a phase boundary.
+                # Persist the entire JSON blob to the DB so we can resume even if the
+                # workdir later disappears.
+                cp_path = Path(job.workdir) / "checkpoint.json"
+                if cp_path.exists():
+                    try:
+                        job.checkpoint_json = json.loads(cp_path.read_text(encoding="utf-8"))
+                        job.completed_phase = payload.get("phase") or job.checkpoint_json.get("completed_phase")
+                    except Exception as e:
+                        log.warning("could not load checkpoint for job %s: %s", job_id, e)
 
         db.commit()
         ev_id = event.id

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Icon } from "./icons";
 import { apiFetch, ApiError } from "../lib/api";
 
-export const PaperShell = ({ paper, jobId, tab, setTab, onJobChanged, children }) => {
+export const PaperShell = ({ paper, jobId, latestJob, tab, setTab, onJobChanged, children }) => {
   const tabs = [
     { id: "run", label: "Generation" },
     { id: "editor", label: "Draft" },
@@ -15,10 +15,12 @@ export const PaperShell = ({ paper, jobId, tab, setTab, onJobChanged, children }
 
   const [stopping, setStopping] = useState(false);
   const [stopError, setStopError] = useState(null);
+  const [resuming, setResuming] = useState(false);
+  const [resumeError, setResumeError] = useState(null);
 
   const stop = async () => {
     if (!jobId) return;
-    if (!confirm("Stop this run? Partial output will not be saved.")) return;
+    if (!confirm("Stop this run? You can resume later if a checkpoint has been saved.")) return;
     setStopping(true);
     setStopError(null);
     try {
@@ -30,6 +32,36 @@ export const PaperShell = ({ paper, jobId, tab, setTab, onJobChanged, children }
       setStopping(false);
     }
   };
+
+  const resume = async () => {
+    setResuming(true);
+    setResumeError(null);
+    try {
+      const resp = await apiFetch(`/papers/${paper.id}/resume`, { method: "POST" });
+      onJobChanged?.();
+      // Navigating to the run tab so the user sees progress streaming.
+      setTab("run");
+      if (resp?.resumed_from_phase) {
+        // Small toast-style hint via console; visible state-change is the running banner itself.
+        console.info(`Resumed from phase: ${resp.resumed_from_phase}`);
+      }
+    } catch (e) {
+      const code = e?.body?.error?.code;
+      if (code === "no_checkpoint") {
+        setResumeError("No checkpoint was saved before this job stopped — nothing to resume from.");
+      } else if (code === "already_running") {
+        setResumeError("You already have a job running. Wait for it to finish first.");
+      } else {
+        setResumeError(e instanceof ApiError ? e.message : "Could not resume");
+      }
+    } finally {
+      setResuming(false);
+    }
+  };
+
+  const canResume =
+    (paper.status === "failed" || paper.status === "canceled") &&
+    latestJob?.has_checkpoint === true;
 
   const statusLabel =
     {
@@ -100,6 +132,16 @@ export const PaperShell = ({ paper, jobId, tab, setTab, onJobChanged, children }
               <Icon name="stop" size={12} /> {stopping ? "Stopping…" : "Stop"}
             </button>
           )}
+          {canResume && (
+            <button
+              type="button"
+              onClick={resume}
+              disabled={resuming}
+              className="btn btn-secondary btn-sm"
+            >
+              <Icon name="play" size={12} /> {resuming ? "Resuming…" : `Resume${latestJob?.completed_phase ? ` from ${latestJob.completed_phase}` : ""}`}
+            </button>
+          )}
           <span
             style={{
               display: "inline-flex",
@@ -125,7 +167,7 @@ export const PaperShell = ({ paper, jobId, tab, setTab, onJobChanged, children }
           </span>
         </div>
 
-        {stopError && (
+        {(stopError || resumeError) && (
           <div
             style={{
               marginTop: 8,
@@ -134,7 +176,7 @@ export const PaperShell = ({ paper, jobId, tab, setTab, onJobChanged, children }
               fontWeight: 600,
             }}
           >
-            {stopError}
+            {stopError || resumeError}
           </div>
         )}
 
