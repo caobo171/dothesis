@@ -98,3 +98,81 @@ def test_create_paper_rejects_unknown_tier(client_for, buyer):
     with patch("app.routers.papers.spawn_job"):
         r = client_for.post("/api/v1/papers", json=_payload(tier="ultra"))
     assert r.status_code == 422
+
+
+def test_refund_helper_returns_credits_to_user():
+    """When refund_if_unrefunded runs after a paper_run debit, balance is restored."""
+    from app.credit_ledger import refund_if_unrefunded
+    from app.models import CreditTransaction, Paper
+
+    Session = get_session_factory()
+    with Session() as s:
+        u = User(email="refund@e.com", password_hash="x", credit=760)
+        s.add(u)
+        s.flush()
+        paper = Paper(
+            user_id=u.id,
+            topic="X", academic_level="master", language="en",
+            citation_style="apa", model="gemini-flash", model_tier="standard",
+            sources_json={}, status="running",
+        )
+        s.add(paper)
+        s.flush()
+        s.add(CreditTransaction(
+            user_id=u.id, delta=-240, reason="paper_run",
+            ref_type="paper", ref_id=paper.id,
+        ))
+        s.commit()
+        user_id = u.id
+        paper_id = paper.id
+
+    with Session() as s:
+        u = s.get(User, user_id)
+        refunded = refund_if_unrefunded(s, u, paper_id=paper_id)
+        s.commit()
+        assert refunded == 240
+
+    with Session() as s:
+        u = s.get(User, user_id)
+        assert u.credit == 1000  # 760 + 240
+
+
+def test_refund_helper_is_idempotent_via_double_call():
+    """Calling refund twice does not double-credit."""
+    from app.credit_ledger import refund_if_unrefunded
+    from app.models import CreditTransaction, Paper
+
+    Session = get_session_factory()
+    with Session() as s:
+        u = User(email="idem@e.com", password_hash="x", credit=200)
+        s.add(u)
+        s.flush()
+        paper = Paper(
+            user_id=u.id,
+            topic="X", academic_level="research", language="en",
+            citation_style="apa", model="gemini-flash", model_tier="standard",
+            sources_json={}, status="running",
+        )
+        s.add(paper)
+        s.flush()
+        s.add(CreditTransaction(
+            user_id=u.id, delta=-60, reason="paper_run",
+            ref_type="paper", ref_id=paper.id,
+        ))
+        s.commit()
+        user_id = u.id
+        paper_id = paper.id
+
+    with Session() as s:
+        u = s.get(User, user_id)
+        refund_if_unrefunded(s, u, paper_id=paper_id)
+        s.commit()
+    with Session() as s:
+        u = s.get(User, user_id)
+        # Second call no-ops
+        again = refund_if_unrefunded(s, u, paper_id=paper_id)
+        s.commit()
+        assert again == 0
+    with Session() as s:
+        u = s.get(User, user_id)
+        assert u.credit == 260  # 200 + 60 (refunded once)

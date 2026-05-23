@@ -163,6 +163,11 @@ async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
                 paper = db.get(Paper, job.paper_id)
                 if paper:
                     paper.status = "failed"
+                    from .credit_ledger import refund_if_unrefunded
+                    from .models import User
+                    paper_user = db.get(User, paper.user_id)
+                    if paper_user:
+                        refund_if_unrefunded(db, paper_user, paper_id=paper.id)
             if type_ == "checkpoint" and job.workdir:
                 # Engine wrote a fresh {workdir}/checkpoint.json after a phase boundary.
                 # Persist the entire JSON blob to the DB so we can resume even if the
@@ -193,4 +198,9 @@ def cancel_job(db: Session, job: Job) -> None:
     paper = db.get(Paper, job.paper_id)
     if paper:
         paper.status = "failed"
+        from .credit_ledger import refund_if_unrefunded
+        from .models import User
+        paper_user = db.get(User, paper.user_id)
+        if paper_user:
+            refund_if_unrefunded(db, paper_user, paper_id=paper.id)
     db.commit()
