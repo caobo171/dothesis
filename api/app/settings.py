@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     job_workdir_root: Path = Field(alias="JOB_WORKDIR_ROOT", default=Path("./var/jobs"))
     api_port: int = Field(alias="API_PORT", default=7100)
     web_origin: str = Field(alias="WEB_ORIGIN", default="http://localhost:3000")
+    polar_access_token: str = Field(alias="POLAR_ACCESS_TOKEN", default="")
+    polar_webhook_secret: str = Field(alias="POLAR_WEBHOOK_SECRET", default="")
+    polar_server: str = Field(alias="POLAR_SERVER", default="sandbox")
+    opendraft_base_url: str = Field(alias="OPENDRAFT_BASE_URL", default="http://localhost:3000")
+    opendraft_payments: str = Field(alias="OPENDRAFT_PAYMENTS", default="polar")
 
     @field_validator("s3_prefix", mode="before")
     @classmethod
