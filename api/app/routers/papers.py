@@ -7,10 +7,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
+from ..credit_ledger import InsufficientCredit, debit
 from ..db import db_session
 from ..deps import current_user
 from ..job_runner import spawn_job
-from ..models import Job, Paper, User
+from ..models import CreditTransaction, Job, Paper, User
+from ..pricing import paper_cost, resolve_model
 from ..quotas import QuotaError, check_can_start_job
 from ..s3 import get_s3_from_settings
 from ..settings import get_settings
@@ -19,7 +21,7 @@ router = APIRouter(prefix="/papers", tags=["papers"])
 
 ALLOWED_LEVELS = {"research", "bachelor", "master", "phd"}
 ALLOWED_STYLES = {"apa", "mla", "chicago", "ieee", "harvard"}
-ALLOWED_MODELS = {"gemini-flash", "claude-sonnet", "claude-opus", "gpt-5"}
+ALLOWED_TIERS = {"standard", "premium"}
 
 
 class Sources(BaseModel):
@@ -36,7 +38,7 @@ class PaperCreate(BaseModel):
     research_question: str | None = Field(default=None, max_length=2000)
     academic_level: str
     language: str = Field(min_length=2, max_length=16)
-    model: str
+    model_tier: str = Field(default="standard")
     citation_style: str
     sources: Sources = Sources()
     tone: str | None = None
@@ -95,14 +97,23 @@ async def create_paper(body: PaperCreate, user: User = Depends(current_user), db
         raise HTTPException(422, detail={"error": {"code": "bad_level", "message": "invalid academic_level"}})
     if body.citation_style not in ALLOWED_STYLES:
         raise HTTPException(422, detail={"error": {"code": "bad_style", "message": "invalid citation_style"}})
-    if body.model not in ALLOWED_MODELS:
-        raise HTTPException(422, detail={"error": {"code": "bad_model", "message": "invalid model"}})
+    if body.model_tier not in ALLOWED_TIERS:
+        raise HTTPException(422, detail={"error": {"code": "bad_tier", "message": "invalid model_tier"}})
 
     try:
         check_can_start_job(db, user.id)
     except QuotaError as e:
         status = 409 if e.code == "already_running" else 429
         raise HTTPException(status, detail={"error": {"code": e.code, "message": e.message}})
+
+    cost = paper_cost(body.academic_level, body.model_tier)
+    try:
+        debit(db, user, delta=cost, reason="paper_run", ref_type="paper", ref_id=None)
+    except InsufficientCredit as e:
+        raise HTTPException(
+            402,
+            detail={"error": {"code": "insufficient_credit", "required": e.required, "balance": e.balance}},
+        )
 
     paper = Paper(
         user_id=user.id,
@@ -112,11 +123,21 @@ async def create_paper(body: PaperCreate, user: User = Depends(current_user), db
         language=body.language,
         citation_style=body.citation_style,
         tone=body.tone,
-        model=body.model,
+        model=resolve_model(body.model_tier),
+        model_tier=body.model_tier,
         sources_json=body.sources.model_dump(),
         status="running",
     )
     db.add(paper)
+    db.flush()
+
+    # Backfill paper_id into the ledger row we just wrote
+    last_tx = db.scalars(
+        select(CreditTransaction)
+        .where(CreditTransaction.user_id == user.id, CreditTransaction.ref_id.is_(None))
+        .order_by(CreditTransaction.id.desc()).limit(1)
+    ).one()
+    last_tx.ref_id = paper.id
     db.flush()
 
     job = Job(paper_id=paper.id, status="queued")
@@ -132,7 +153,7 @@ async def create_paper(body: PaperCreate, user: User = Depends(current_user), db
         "academic_level": body.academic_level,
         "language": body.language,
         "citation_style": body.citation_style,
-        "model": body.model,
+        "model": resolve_model(body.model_tier),
         "tone": body.tone,
         "sources": body.sources.model_dump(),
     }

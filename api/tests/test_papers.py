@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -42,6 +43,7 @@ def test_create_paper_spawns_job():
     assert spawn.called
 
 
+@pytest.mark.skip(reason="superseded by Plan 2 tier-based pricing; model field removed")
 def test_create_paper_rejects_unknown_model():
     c = _signed_in_client()
     bad = {**_brief(), "model": "made-up"}
