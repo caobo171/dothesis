@@ -254,8 +254,9 @@ export const Wizard = () => {
           )}
         </form>
 
-        {/* Sample topic chips — shown until the user starts typing */}
-        {topic.trim().length === 0 && (
+        {/* Sample topic chips — shown until the user types something of their own.
+            Stay visible after clicking a chip so the user can swap suggestions. */}
+        {(topic.trim().length === 0 || SAMPLE_TOPICS.includes(topic.trim())) && (
           <div
             style={{
               width: "100%",
@@ -267,34 +268,41 @@ export const Wizard = () => {
               justifyContent: "center",
             }}
           >
-            {SAMPLE_TOPICS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setTopic(s)}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 999,
-                  border: "1.5px solid var(--ink-200)",
-                  background: "var(--paper)",
-                  color: "var(--ink-700)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  transition: "border-color 0.12s, color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--blue-600)";
-                  e.currentTarget.style.color = "var(--blue-600)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--ink-200)";
-                  e.currentTarget.style.color = "var(--ink-700)";
-                }}
-              >
-                {s}
-              </button>
-            ))}
+            {SAMPLE_TOPICS.map((s) => {
+              const active = topic.trim() === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setTopic(active ? "" : s)}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 999,
+                    border: `1.5px solid ${active ? "var(--blue-600)" : "var(--ink-200)"}`,
+                    background: active ? "var(--blue-50)" : "var(--paper)",
+                    color: active ? "var(--blue-600)" : "var(--ink-700)",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "border-color 0.12s, color 0.12s, background 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) {
+                      e.currentTarget.style.borderColor = "var(--blue-600)";
+                      e.currentTarget.style.color = "var(--blue-600)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) {
+                      e.currentTarget.style.borderColor = "var(--ink-200)";
+                      e.currentTarget.style.color = "var(--ink-700)";
+                    }
+                  }}
+                >
+                  {s}
+                </button>
+              );
+            })}
           </div>
         )}
 
