@@ -24,10 +24,20 @@ class Credentials(BaseModel):
 class UserOut(BaseModel):
     id: str
     email: str
+    username: str | None = None
+    credit: int = 0
+    is_super_admin: bool = False
 
 
 def _to_out(u: User) -> UserOut:
-    return UserOut(id=str(u.id), email=u.email)
+    from ..admin_config import is_super_admin as _is_admin
+    return UserOut(
+        id=str(u.id),
+        email=u.email,
+        username=u.username,
+        credit=u.credit,
+        is_super_admin=_is_admin(u),
+    )
 
 
 def _issue_session(db: Session, user: User, settings: Settings, response: Response, request: Request) -> None:
