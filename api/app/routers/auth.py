@@ -27,6 +27,7 @@ class UserOut(BaseModel):
     username: str | None = None
     credit: int = 0
     is_super_admin: bool = False
+    created_at: str | None = None
 
 
 def _to_out(u: User) -> UserOut:
@@ -37,6 +38,7 @@ def _to_out(u: User) -> UserOut:
         username=u.username,
         credit=u.credit,
         is_super_admin=_is_admin(u),
+        created_at=u.created_at.isoformat() if u.created_at else None,
     )
 
 

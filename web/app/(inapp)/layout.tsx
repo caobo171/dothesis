@@ -8,6 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import type { ReactNode } from "react";
 
+import { AnnouncementProvider } from "@/app/components/announcements/AnnouncementProvider";
 import { SidebarLayout } from "@/app/components/layout/SidebarLayout";
 import type { SidebarSection } from "@/app/components/layout/sections";
 
@@ -29,5 +30,9 @@ const SECTIONS: SidebarSection[] = [
 ];
 
 export default function InAppLayout({ children }: { children: ReactNode }) {
-  return <SidebarLayout sections={SECTIONS}>{children}</SidebarLayout>;
+  return (
+    <SidebarLayout sections={SECTIONS}>
+      <AnnouncementProvider>{children}</AnnouncementProvider>
+    </SidebarLayout>
+  );
 }
