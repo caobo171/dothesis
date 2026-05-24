@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Icon } from "./icons";
-import { Topbar } from "./shared";
 import { useAuth } from "../lib/auth-context";
 
 export const Dashboard = ({ papers = [], loading = false, error = null }) => {
@@ -11,10 +10,9 @@ export const Dashboard = ({ papers = [], loading = false, error = null }) => {
 
   return (
     <div className="main">
-      <Topbar crumbs={["Workspace", "Dashboard"]} />
       <div
         className="canvas"
-        style={{ maxWidth: 1080, margin: "0 auto", width: "100%", gap: 28, paddingTop: 56 }}
+        style={{ maxWidth: 1080, margin: "0 auto", width: "100%", gap: 28, paddingTop: 0 }}
       >
         {/* Hero */}
         <div

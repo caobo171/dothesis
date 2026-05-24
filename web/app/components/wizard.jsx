@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Icon } from "./icons";
-import { Topbar } from "./shared";
 import { apiFetch } from "../lib/api";
 
 const LANG_TO_CODE = {
@@ -116,7 +115,6 @@ export const Wizard = () => {
 
   return (
     <div className="main">
-      <Topbar crumbs={["Workspace", "New Thesis"]} />
       <div
         style={{
           flex: 1,

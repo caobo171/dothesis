@@ -1,7 +1,7 @@
 "use client";
 
 import { Icon } from "./icons";
-import { Topbar, Card, KPI } from "./shared";
+import { Card, KPI } from "./shared";
 
 const USAGE = [
   { date: "Mar 18", draft: "Algorithmic Decision-Making…", model: "Sonnet 4.5", cost: 142 },
@@ -25,7 +25,6 @@ const PLANS = [
 
 export const Billing = () => (
   <div className="main">
-    <Topbar crumbs={["Account", "Credits & Billing"]} />
     <div className="canvas">
       <div>
         <div className="eyebrow">Account</div>
