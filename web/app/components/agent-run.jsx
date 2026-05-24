@@ -164,6 +164,7 @@ export const AgentRun = ({ jobId, paper }) => {
             elapsedSec={elapsedSec}
             sinceUpdateSec={sinceUpdateSec}
             stalled={stalled}
+            done={done}
           />
           <SourcesPanel sources={sources} />
           <RecentActivityPanel activity={activity} />
@@ -394,7 +395,70 @@ const fmtTime = (sec) => {
   return `${m}m ${s.toString().padStart(2, "0")}s`;
 };
 
-const CurrentPhasePanel = ({ currentLabel, progress, agents, elapsedSec, sinceUpdateSec, stalled }) => (
+const CurrentPhasePanel = ({ currentLabel, progress, agents, elapsedSec, sinceUpdateSec, stalled, done }) => {
+  if (done) {
+    return (
+      <div
+        style={{
+          background: "var(--paper)",
+          border: "1px solid var(--ink-100)",
+          borderRadius: 14,
+          padding: 18,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 18,
+                height: 18,
+                borderRadius: 999,
+                background: "var(--ok-bg)",
+                color: "var(--ok-fg)",
+                fontSize: 11,
+                fontWeight: 800,
+              }}
+            >
+              ✓
+            </span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ok-fg)" }}>
+              Draft complete
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: "var(--ink-400)", fontWeight: 700 }}>100%</span>
+        </div>
+        <div
+          style={{
+            marginTop: 14,
+            height: 4,
+            borderRadius: 999,
+            background: "var(--ok-bg)",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ width: "100%", height: "100%", background: "var(--ok-fg)" }} />
+        </div>
+        <div
+          style={{
+            marginTop: 10,
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: 11.5,
+            color: "var(--ink-500)",
+          }}
+        >
+          <span>
+            Total <b style={{ color: "var(--ink-700)" }}>{fmtTime(elapsedSec)}</b>
+          </span>
+          <span>Open the Draft, Citations, or Export tabs.</span>
+        </div>
+      </div>
+    );
+  }
+  return (
   <div
     style={{
       background: "var(--paper)",
@@ -473,7 +537,8 @@ const CurrentPhasePanel = ({ currentLabel, progress, agents, elapsedSec, sinceUp
     </div>
     <style>{`@keyframes indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
   </div>
-);
+  );
+};
 
 // ---------------- Sources panel ----------------
 function sourceHref(s) {
