@@ -537,11 +537,15 @@ def regenerate_exports(paper_id: uuid.UUID,
     import tempfile
     from pathlib import Path
 
-    # Make sure the engine package is importable from the API process.
+    # Make sure the engine package AND its internal modules are importable from the API
+    # process. Engine code does `from utils.X import Y` (no `engine.` prefix), so we
+    # need engine/ itself on sys.path — adding only the repo root is insufficient.
     import sys
-    engine_root = Path(__file__).resolve().parents[3]
-    if str(engine_root) not in sys.path:
-        sys.path.insert(0, str(engine_root))
+    repo_root = Path(__file__).resolve().parents[3]
+    engine_dir = repo_root / "engine"
+    for p in (str(repo_root), str(engine_dir)):
+        if p not in sys.path:
+            sys.path.insert(0, p)
 
     p, job_id = _require_done_paper(db, user, paper_id)
     settings = get_settings()
@@ -555,6 +559,21 @@ def regenerate_exports(paper_id: uuid.UUID,
             detail={"error": {"code": "draft_missing", "message": "No markdown to re-export from."}},
         )
 
+    # Force-reload the engine's export module on every call so the latest code on
+    # disk wins, even if uvicorn --reload didn't pick up changes outside api/.
+    import importlib
+    try:
+        import engine.utils.export_professional as export_module
+        export_module = importlib.reload(export_module)
+    except Exception as reload_err:
+        raise HTTPException(
+            500,
+            detail={"error": {"code": "engine_import_failed", "message": str(reload_err)}},
+        )
+    export_docx_basic = export_module.export_docx_basic
+    export_pdf = export_module.export_pdf
+    code_version = export_module.__file__
+
     regenerated = []
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -563,7 +582,6 @@ def regenerate_exports(paper_id: uuid.UUID,
 
         # DOCX
         try:
-            from engine.utils.export_professional import export_docx_basic
             docx_path = tmp_path / "draft.docx"
             if export_docx_basic(md_path, docx_path) and docx_path.exists():
                 s3.put_file(f"{key_root}/exports/draft.docx", str(docx_path))
@@ -573,7 +591,6 @@ def regenerate_exports(paper_id: uuid.UUID,
 
         # PDF (best-effort; may not be available without a PDF engine)
         try:
-            from engine.utils.export_professional import export_pdf
             pdf_path = tmp_path / "draft.pdf"
             if export_pdf(md_file=md_path, output_pdf=pdf_path, engine="auto") and pdf_path.exists():
                 s3.put_file(f"{key_root}/exports/draft.pdf", str(pdf_path))
@@ -581,4 +598,4 @@ def regenerate_exports(paper_id: uuid.UUID,
         except Exception as e:
             regenerated.append({"format": "pdf", "error": str(e)})
 
-    return {"ok": True, "regenerated": regenerated}
+    return {"ok": True, "regenerated": regenerated, "engine_module": code_version}

@@ -84,7 +84,11 @@ echo "==> running alembic migrations"
 (cd api && "../$VENV_BIN/alembic" upgrade head)
 
 echo "==> starting api on port ${API_PORT:-7100}"
-(cd api && "../$VENV_BIN/uvicorn" app.main:app --reload --port "${API_PORT:-7100}") &
+# Watch both api/ and engine/ — the regenerate-exports endpoint pulls in engine
+# code, and without --reload-dir uvicorn won't pick up edits to engine/.
+(cd api && "../$VENV_BIN/uvicorn" app.main:app --reload \
+  --reload-dir app --reload-dir ../engine \
+  --port "${API_PORT:-7100}") &
 API_PID=$!
 
 # --- 2. Web ---
