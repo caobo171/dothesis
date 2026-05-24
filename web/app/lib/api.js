@@ -2,9 +2,24 @@ const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
 
 class ApiError extends Error {
   constructor(status, body) {
-    super(body?.error?.message || `HTTP ${status}`);
+    // FastAPI wraps our { error: { code, message } } payload inside { detail: ... }.
+    // Normalize so callers can always read `err.body.error.code`.
+    const inner = body && typeof body.detail === "object" ? body.detail : body;
+    // Prefer an explicit human message; if only a `code` is present, humanize it
+    // (e.g. "insufficient_credit" -> "Insufficient credit") so the UI never shows
+    // a bare "HTTP 402" pill.
+    const code = inner?.error?.code;
+    const codeMsg = code
+      ? String(code).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      : null;
+    const msg =
+      inner?.error?.message ||
+      (typeof inner?.detail === "string" ? inner.detail : null) ||
+      codeMsg ||
+      `HTTP ${status}`;
+    super(msg);
     this.status = status;
-    this.body = body;
+    this.body = inner || body || {};
   }
 }
 

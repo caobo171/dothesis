@@ -93,6 +93,7 @@ export const Wizard = () => {
       router.push(`/paper/${resp.paper_id}?tab=run`);
     } catch (err) {
       const code = err?.body?.error?.code;
+      const errData = err?.body?.error || {};
       if (code === "already_running") {
         setSubmitError({
           text: "You already have a thesis running. Stop it or wait for it to finish before starting a new one.",
@@ -101,6 +102,18 @@ export const Wizard = () => {
         });
       } else if (code === "daily_quota") {
         setSubmitError({ text: "Daily limit reached. Try again tomorrow." });
+      } else if (code === "insufficient_credit") {
+        const need = errData.required;
+        const have = errData.balance;
+        const detail =
+          need != null && have != null
+            ? ` This run needs ${need} credit${need === 1 ? "" : "s"}; you have ${have}.`
+            : "";
+        setSubmitError({
+          text: `Not enough credits to start this paper.${detail}`,
+          actionHref: "/credit",
+          actionLabel: "Top up credits",
+        });
       } else {
         setSubmitError({ text: err.message || "Could not start the job." });
       }

@@ -23,6 +23,9 @@ export default function Credit() {
   const orders = useSWR<OrderRow[]>("/credit/orders", swrFetcher);
   const orderCount = orders.data?.length || 0;
 
+  const papers = useSWR<unknown[]>("/papers", swrFetcher);
+  const draftCount = papers.data?.length;  // undefined while loading
+
   return (
     <section className="px-2 sm:px-4 lg:px-6">
       <div className="max-w-5xl mx-auto">
@@ -65,7 +68,9 @@ export default function Credit() {
               <FileText className="w-4 h-4 text-blue-600" />
             </div>
             <div>
-              <span className="text-lg font-bold text-ink-900">—</span>
+              <span className="text-lg font-bold text-ink-900">
+                {draftCount === undefined ? "—" : draftCount}
+              </span>
               <span className="text-xs text-ink-500 ml-1">Drafts</span>
             </div>
           </div>
