@@ -297,10 +297,117 @@ def _add_docx_table(doc, rows: list[list[str]]) -> None:
     for r_idx, row in enumerate(rows):
         for c_idx in range(n_cols):
             cell = table.rows[r_idx].cells[c_idx]
-            cell.text = row[c_idx] if c_idx < len(row) else ""
-            # Bold the header row
-            if r_idx == 0 and cell.paragraphs and cell.paragraphs[0].runs:
-                cell.paragraphs[0].runs[0].bold = True
+            cell_text = row[c_idx] if c_idx < len(row) else ""
+            # Clear the default paragraph then add a properly-formatted one.
+            cell.text = ""
+            para = cell.paragraphs[0]
+            _emit_inline_runs(para, cell_text, base_bold=(r_idx == 0))
+
+
+# Inline markdown patterns. Order matters — longer / more specific patterns first.
+# Each tuple is (pattern, kind) where kind tells _emit_inline_runs how to style the captured text.
+import re as _re
+
+_INLINE_PATTERNS = [
+    # Bold-italic ***x*** or ___x___
+    (_re.compile(r"\*\*\*(.+?)\*\*\*"), "bold_italic"),
+    (_re.compile(r"___(.+?)___"),       "bold_italic"),
+    # Bold **x** or __x__
+    (_re.compile(r"\*\*(.+?)\*\*"),     "bold"),
+    (_re.compile(r"__(.+?)__"),         "bold"),
+    # Inline code `x`
+    (_re.compile(r"`([^`]+?)`"),        "code"),
+    # Link [text](url) — kind tracks the URL via the regex itself
+    (_re.compile(r"\[([^\]]+?)\]\(([^)]+?)\)"), "link"),
+    # Italic *x* or _x_  (after bold so ** isn't matched as italic-italic)
+    (_re.compile(r"(?<![*\w])\*([^*\n]+?)\*(?!\*)"), "italic"),
+    (_re.compile(r"(?<![_\w])_([^_\n]+?)_(?!_)"),   "italic"),
+]
+
+
+def _emit_inline_runs(para, text: str, *, base_bold: bool = False) -> None:
+    """Walk a single line of markdown text and append python-docx Runs with formatting."""
+    if not text:
+        return
+    # Strip stray heading markers that shouldn't appear inside a paragraph
+    cursor = 0
+    # Find all non-overlapping spans across all patterns and process in order.
+    spans = []
+    for pattern, kind in _INLINE_PATTERNS:
+        for m in pattern.finditer(text):
+            spans.append((m.start(), m.end(), kind, m))
+    # Sort by start; resolve overlaps by preferring the earlier start, then the wider span.
+    spans.sort(key=lambda s: (s[0], -(s[1] - s[0])))
+    chosen = []
+    last_end = -1
+    for s in spans:
+        if s[0] >= last_end:
+            chosen.append(s)
+            last_end = s[1]
+    for start, end, kind, m in chosen:
+        if start > cursor:
+            _add_plain_run(para, text[cursor:start], base_bold=base_bold)
+        if kind == "link":
+            label, url = m.group(1), m.group(2)
+            run = para.add_run(label)
+            run.font.color.rgb = _docx_color("#1c2eff")
+            run.underline = True
+            if base_bold:
+                run.bold = True
+        elif kind == "code":
+            run = para.add_run(m.group(1))
+            run.font.name = "Consolas"
+            run.font.size = _docx_pt(10)
+            if base_bold:
+                run.bold = True
+        elif kind == "bold_italic":
+            run = para.add_run(m.group(1))
+            run.bold = True
+            run.italic = True
+        elif kind == "bold":
+            run = para.add_run(m.group(1))
+            run.bold = True
+        elif kind == "italic":
+            run = para.add_run(m.group(1))
+            run.italic = True
+            if base_bold:
+                run.bold = True
+        cursor = end
+    if cursor < len(text):
+        _add_plain_run(para, text[cursor:], base_bold=base_bold)
+
+
+def _add_plain_run(para, text: str, *, base_bold: bool = False) -> None:
+    if not text:
+        return
+    run = para.add_run(text)
+    if base_bold:
+        run.bold = True
+
+
+def _docx_color(hex_str: str):
+    from docx.shared import RGBColor
+    hex_str = hex_str.lstrip("#")
+    return RGBColor(int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
+
+
+def _docx_pt(n):
+    from docx.shared import Pt
+    return Pt(n)
+
+
+def _strip_yaml_frontmatter(md: str) -> str:
+    """Drop a leading `---\\n...\\n---\\n` block if present."""
+    if not md.startswith("---"):
+        return md
+    parts = md.split("\n", 1)
+    if len(parts) < 2:
+        return md
+    end = md.find("\n---", 3)
+    if end < 0:
+        return md
+    after = md[end + 4:]
+    return after.lstrip("\n")
 
 
 def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
@@ -337,102 +444,164 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
         with open(md_file, 'r', encoding='utf-8') as f:
             md_content = f.read()
 
-        # Normalize YAML for Pandoc (translate localized field names to English)
-        md_content = _normalize_yaml_for_pandoc(md_content)
-        lines = md_content.splitlines(keepends=True)
+        # Drop the YAML frontmatter outright — basic exporter doesn't render a
+        # cover page from it, so leaving it in produces a wall of key:value lines.
+        md_content = _strip_yaml_frontmatter(md_content)
+        lines = md_content.splitlines()
 
-        # Create document
+        # Create document with 1" margins
         doc = Document()
-
-        # Set margins (1 inch)
-        sections = doc.sections
-        for section in sections:
+        for section in doc.sections:
             section.top_margin = Inches(1.0)
             section.bottom_margin = Inches(1.0)
             section.left_margin = Inches(1.0)
             section.right_margin = Inches(1.0)
 
-        # Add footer instruction for page numbers
-        section = doc.sections[0]
-        footer = section.footer
-        footer_para = footer.paragraphs[0]
+        # Centered italic footer (manual page numbering hint)
+        footer_para = doc.sections[0].footer.paragraphs[0]
         footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = footer_para.add_run("[Add page numbers via Insert > Page Number in Word]")
         run.font.name = 'Times New Roman'
         run.font.size = Pt(10)
         run.font.italic = True
 
-        # Process markdown content (index-based so we can consume multi-line table blocks)
-        i = 0
-        stripped_lines = [ln.rstrip() for ln in lines]
-        while i < len(stripped_lines):
-            line = stripped_lines[i]
+        BODY_FONT = "Times New Roman"
+        BODY_SIZE = Pt(12)
 
-            if not line:
+        def style_body(para):
+            para.paragraph_format.line_spacing = 1.5
+            para.paragraph_format.space_after = Pt(6)
+            for r in para.runs:
+                if not r.font.name:
+                    r.font.name = BODY_FONT
+                if not r.font.size:
+                    r.font.size = BODY_SIZE
+
+        i = 0
+        while i < len(lines):
+            line = lines[i].rstrip()
+
+            # Blank
+            if not line.strip():
                 i += 1
                 continue
 
-            # Markdown pipe table: header row + separator (|----|----|) + body rows.
-            if line.startswith('|') and i + 1 < len(stripped_lines) and _is_table_separator(stripped_lines[i + 1]):
-                table_rows = []
-                # Header
-                table_rows.append(_split_table_row(line))
-                i += 2  # skip header + separator
-                # Body
-                while i < len(stripped_lines) and stripped_lines[i].startswith('|'):
-                    table_rows.append(_split_table_row(stripped_lines[i]))
+            # Fenced code block ```lang ... ```
+            if line.startswith("```"):
+                lang = line[3:].strip()
+                code_buf = []
+                i += 1
+                while i < len(lines) and not lines[i].rstrip().startswith("```"):
+                    code_buf.append(lines[i].rstrip("\n"))
+                    i += 1
+                if i < len(lines):
+                    i += 1  # skip closing ```
+                para = doc.add_paragraph()
+                run = para.add_run("\n".join(code_buf))
+                run.font.name = "Consolas"
+                run.font.size = Pt(10)
+                # Light gray shade via paragraph; python-docx doesn't easily set bg, so we just
+                # indent and use the monospace font.
+                para.paragraph_format.left_indent = Inches(0.25)
+                para.paragraph_format.space_after = Pt(8)
+                continue
+
+            # Pipe table: header + separator + body
+            if line.startswith("|") and i + 1 < len(lines) and _is_table_separator(lines[i + 1]):
+                table_rows = [_split_table_row(line)]
+                i += 2
+                while i < len(lines) and lines[i].rstrip().startswith("|"):
+                    table_rows.append(_split_table_row(lines[i]))
                     i += 1
                 _add_docx_table(doc, table_rows)
                 continue
 
-            # Title (# heading)
-            if line.startswith('# '):
-                para = doc.add_heading(line[2:], level=1)
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                i += 1
-                continue
+            # ATX headings #, ##, ###, ####, ##### (centered for top level only)
+            if line.startswith("#"):
+                m = _re.match(r"^(#{1,6})\s+(.*)$", line)
+                if m:
+                    level = len(m.group(1))
+                    heading_text = m.group(2).strip()
+                    para = doc.add_heading(level=min(level, 4))
+                    _emit_inline_runs(para, heading_text)
+                    if level == 1:
+                        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    i += 1
+                    continue
 
-            # Section heading (## heading)
-            if line.startswith('## '):
-                doc.add_heading(line[3:], level=2)
-                i += 1
-                continue
-
-            # Subsection heading (### heading)
-            if line.startswith('### '):
-                doc.add_heading(line[4:], level=3)
-                i += 1
-                continue
-
-            # Horizontal rule
-            if line.startswith('---'):
+            # Horizontal rule (--- on its own line, not a table separator)
+            if line.strip() in {"---", "***", "___"}:
                 para = doc.add_paragraph()
-                run = para.add_run('_' * 60)
+                run = para.add_run("_" * 60)
                 run.font.size = Pt(12)
                 i += 1
                 continue
 
-            # Regular paragraph
-            para = doc.add_paragraph(line)
-            para_format = para.paragraph_format
-            para_format.line_spacing = 2.0  # Double spacing
-            para_format.space_after = Pt(0)
+            # Blockquote (one or more consecutive > lines)
+            if line.startswith(">"):
+                quote_lines = []
+                while i < len(lines) and lines[i].lstrip().startswith(">"):
+                    quote_lines.append(_re.sub(r"^>\s?", "", lines[i].rstrip()))
+                    i += 1
+                joined = " ".join(quote_lines).strip()
+                para = doc.add_paragraph()
+                para.paragraph_format.left_indent = Inches(0.4)
+                para.paragraph_format.right_indent = Inches(0.4)
+                _emit_inline_runs(para, joined)
+                for r in para.runs:
+                    r.italic = True
+                    if not r.font.name:
+                        r.font.name = BODY_FONT
+                    if not r.font.size:
+                        r.font.size = BODY_SIZE
+                continue
 
-            # Set font
-            if para.runs:
-                run = para.runs[0]
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(12)
+            # Unordered list (- or * item)
+            if _re.match(r"^[\-\*\+]\s+", line):
+                while i < len(lines) and _re.match(r"^[\-\*\+]\s+", lines[i].rstrip()):
+                    item_text = _re.sub(r"^[\-\*\+]\s+", "", lines[i].rstrip())
+                    para = doc.add_paragraph(style="List Bullet")
+                    _emit_inline_runs(para, item_text)
+                    style_body(para)
+                    i += 1
+                continue
+
+            # Ordered list (1. item, 2. item, ...)
+            if _re.match(r"^\d+\.\s+", line):
+                while i < len(lines) and _re.match(r"^\d+\.\s+", lines[i].rstrip()):
+                    item_text = _re.sub(r"^\d+\.\s+", "", lines[i].rstrip())
+                    para = doc.add_paragraph(style="List Number")
+                    _emit_inline_runs(para, item_text)
+                    style_body(para)
+                    i += 1
+                continue
+
+            # Regular paragraph — collapse soft-wrapped lines until blank or block break
+            para_buf = [line]
             i += 1
+            while i < len(lines):
+                nxt = lines[i].rstrip()
+                if not nxt.strip():
+                    break
+                if nxt.startswith(("#", ">", "|", "```")):
+                    break
+                if _re.match(r"^[\-\*\+]\s+", nxt) or _re.match(r"^\d+\.\s+", nxt):
+                    break
+                if nxt in {"---", "***", "___"}:
+                    break
+                para_buf.append(nxt)
+                i += 1
+            paragraph_text = " ".join(para_buf)
+            para = doc.add_paragraph()
+            _emit_inline_runs(para, paragraph_text)
+            style_body(para)
 
-        # Save
         doc.save(output_docx)
-
         logger.info(f"DOCX created successfully: {output_docx}")
         return True
 
     except Exception as e:
-        logger.error(f"DOCX generation failed: {str(e)}")
+        logger.error(f"DOCX generation failed: {str(e)}", exc_info=True)
         return False
 
 

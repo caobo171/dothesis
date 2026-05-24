@@ -521,3 +521,64 @@ def download_export(paper_id: uuid.UUID, fmt: str,
         ExpiresIn=300,
     )
     return RedirectResponse(url, status_code=302)
+
+
+@router.post("/{paper_id}/regenerate-exports", status_code=200)
+def regenerate_exports(paper_id: uuid.UUID,
+                       user: User = Depends(current_user),
+                       db: Session = Depends(db_session)):
+    """Re-export the existing markdown to fresh DOCX/PDF without re-running the engine.
+
+    Useful when an export was produced by a buggy exporter version: the markdown
+    in S3 is still good, but the .docx/.pdf are broken (e.g., pipe-text tables,
+    literal **bold** markers). This downloads the .md, runs the current exporters,
+    and uploads the new files to the canonical paths.
+    """
+    import tempfile
+    from pathlib import Path
+
+    # Make sure the engine package is importable from the API process.
+    import sys
+    engine_root = Path(__file__).resolve().parents[3]
+    if str(engine_root) not in sys.path:
+        sys.path.insert(0, str(engine_root))
+
+    p, job_id = _require_done_paper(db, user, paper_id)
+    settings = get_settings()
+    s3 = get_s3_from_settings(settings)
+    key_root = _job_key_root(p, job_id)
+
+    md_bytes = _fetch_export_bytes(s3, key_root, "exports/draft.md", "md")
+    if md_bytes is None:
+        raise HTTPException(
+            404,
+            detail={"error": {"code": "draft_missing", "message": "No markdown to re-export from."}},
+        )
+
+    regenerated = []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        md_path = tmp_path / "draft.md"
+        md_path.write_bytes(md_bytes)
+
+        # DOCX
+        try:
+            from engine.utils.export_professional import export_docx_basic
+            docx_path = tmp_path / "draft.docx"
+            if export_docx_basic(md_path, docx_path) and docx_path.exists():
+                s3.put_file(f"{key_root}/exports/draft.docx", str(docx_path))
+                regenerated.append({"format": "docx", "size": docx_path.stat().st_size})
+        except Exception as e:
+            regenerated.append({"format": "docx", "error": str(e)})
+
+        # PDF (best-effort; may not be available without a PDF engine)
+        try:
+            from engine.utils.export_professional import export_pdf
+            pdf_path = tmp_path / "draft.pdf"
+            if export_pdf(md_file=md_path, output_pdf=pdf_path, engine="auto") and pdf_path.exists():
+                s3.put_file(f"{key_root}/exports/draft.pdf", str(pdf_path))
+                regenerated.append({"format": "pdf", "size": pdf_path.stat().st_size})
+        except Exception as e:
+            regenerated.append({"format": "pdf", "error": str(e)})
+
+    return {"ok": True, "regenerated": regenerated}
