@@ -1,35 +1,16 @@
 "use client";
 
-import {
-  CpuChipIcon,
-  CreditCardIcon,
-  DocumentTextIcon,
-  SpeakerWaveIcon,
-  UserIcon,
-} from "@heroicons/react/24/outline";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { AnnouncementProvider } from "@/app/components/announcements/AnnouncementProvider";
 import { SidebarLayout } from "@/app/components/layout/SidebarLayout";
-import type { SidebarSection } from "@/app/components/layout/sections";
+import { useSidebarSections } from "@/app/components/layout/use-sections";
 import { useMe } from "@/app/lib/use-me";
-
-const SECTIONS: SidebarSection[] = [
-  {
-    id: "admin",
-    name: "Admin",
-    options: [
-      { name: "Users", href: "/admin/users", icon: UserIcon },
-      { name: "Papers", href: "/admin/papers", icon: DocumentTextIcon },
-      { name: "Jobs", href: "/admin/jobs", icon: CpuChipIcon },
-      { name: "Announcements", href: "/admin/announcements", icon: SpeakerWaveIcon },
-      { name: "Orders", href: "/admin/orders", icon: CreditCardIcon },
-    ],
-  },
-];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const me = useMe();
+  const sections = useSidebarSections();
 
   if (me.isLoading) {
     return (
@@ -54,5 +35,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  return <SidebarLayout sections={SECTIONS}>{children}</SidebarLayout>;
+  return (
+    <SidebarLayout sections={sections}>
+      <AnnouncementProvider>{children}</AnnouncementProvider>
+    </SidebarLayout>
+  );
 }
