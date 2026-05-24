@@ -327,6 +327,39 @@ def _fetch_export_bytes(s3, key_root: str, canonical_relpath: str, ext: str) -> 
     return s3._client.get_object(Bucket=s3.bucket, Key=pick)["Body"].read()
 
 
+def _split_frontmatter(text: str) -> tuple[dict, str]:
+    """Extract a leading YAML frontmatter block. Returns (meta, body).
+
+    Frontmatter is a `---\n...\n---\n` block at the very top of the file. We
+    parse it line-by-line as `key: "value"` pairs (which is what the engine
+    emits) rather than pulling in PyYAML for one field-per-line block.
+    """
+    if not text.startswith("---"):
+        return {}, text
+    lines = text.split("\n")
+    if len(lines) < 2:
+        return {}, text
+    end_idx = None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            end_idx = i
+            break
+    if end_idx is None:
+        return {}, text
+    meta: dict = {}
+    for raw_line in lines[1:end_idx]:
+        line = raw_line.strip()
+        if not line or ":" not in line:
+            continue
+        key, _, val = line.partition(":")
+        val = val.strip()
+        if val.startswith('"') and val.endswith('"'):
+            val = val[1:-1]
+        meta[key.strip()] = val
+    body = "\n".join(lines[end_idx + 1:]).lstrip("\n")
+    return meta, body
+
+
 @router.get("/{paper_id}/draft")
 def get_draft(paper_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(db_session)):
     p, job_id = _require_done_paper(db, user, paper_id)
@@ -338,9 +371,11 @@ def get_draft(paper_id: uuid.UUID, user: User = Depends(current_user), db: Sessi
             404,
             detail={"error": {"code": "draft_missing", "message": "Markdown draft not found in storage — the engine may have crashed before upload. Try re-running the paper."}},
         )
-    body = raw.decode("utf-8")
+    full_text = raw.decode("utf-8")
+    meta, body = _split_frontmatter(full_text)
     chapters = _chapters_from_markdown(body)
     return {
+        "meta": meta,
         "markdown": body,
         "html": _md_to_html(body),
         "word_count": sum(len(c.get("title", "").split()) for c in chapters) + len(body.split()),
