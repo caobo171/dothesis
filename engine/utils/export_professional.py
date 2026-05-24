@@ -325,18 +325,64 @@ _INLINE_PATTERNS = [
 ]
 
 
-def _emit_inline_runs(para, text: str, *, base_bold: bool = False) -> None:
-    """Walk a single line of markdown text and append python-docx Runs with formatting."""
+# Parenthetical citation like (Smith, 2025), (Smith et al., 2025), (Smith & Jones, 2024)
+# Vietnamese diacritics included in the surname character class. Lookahead allows
+# trailing page refs: (Smith, 2025, p. 14).
+_CITATION_PATTERN = _re.compile(
+    r"\(([^()\n]{2,150})\)"
+)
+
+
+def _split_citation_payload(payload: str) -> list[tuple[str, str]]:
+    """For 'Smith, 2025; Jones et al., 2024' → [(surname_year_key, full_text)]."""
+    out = []
+    parts = [p.strip() for p in payload.split(";") if p.strip()]
+    for part in parts:
+        # First word is the surname (greedy). The rest can be any author-list
+        # variation; we only require it ends with `, YYYY`.
+        m = _re.match(
+            r"^([\wÀ-ɏḀ-ỿ][\wÀ-ɏḀ-ỿ\.\-']*)"   # surname
+            r"[^()0-9]*?"                       # author list, et al., &, and, initials
+            r",\s*(\d{4})[a-z]?",               # year (optionally suffixed: 2025a)
+            part,
+        )
+        if not m:
+            continue
+        surname = m.group(1).strip()
+        year = m.group(2)
+        if not surname:
+            continue
+        key = f"{surname.lower()}_{year}"
+        out.append((key, part))
+    return out
+
+
+def _emit_inline_runs(
+    para,
+    text: str,
+    *,
+    base_bold: bool = False,
+    citation_map: dict | None = None,
+) -> None:
+    """Walk a single line of markdown text and append python-docx Runs with formatting.
+
+    If citation_map is provided, `(Author, year)` parenthetical references are
+    rendered as hyperlinks to bookmarks placed at the matching bibliography entries.
+    """
     if not text:
         return
-    # Strip stray heading markers that shouldn't appear inside a paragraph
-    cursor = 0
-    # Find all non-overlapping spans across all patterns and process in order.
     spans = []
     for pattern, kind in _INLINE_PATTERNS:
         for m in pattern.finditer(text):
             spans.append((m.start(), m.end(), kind, m))
-    # Sort by start; resolve overlaps by preferring the earlier start, then the wider span.
+    # Citation spans (only when a non-empty map is provided)
+    if citation_map:
+        for m in _CITATION_PATTERN.finditer(text):
+            payload = m.group(1)
+            entries = _split_citation_payload(payload)
+            if any(k in citation_map for k, _ in entries):
+                spans.append((m.start(), m.end(), "citation", m))
+
     spans.sort(key=lambda s: (s[0], -(s[1] - s[0])))
     chosen = []
     last_end = -1
@@ -344,6 +390,8 @@ def _emit_inline_runs(para, text: str, *, base_bold: bool = False) -> None:
         if s[0] >= last_end:
             chosen.append(s)
             last_end = s[1]
+
+    cursor = 0
     for start, end, kind, m in chosen:
         if start > cursor:
             _add_plain_run(para, text[cursor:start], base_bold=base_bold)
@@ -372,9 +420,55 @@ def _emit_inline_runs(para, text: str, *, base_bold: bool = False) -> None:
             run.italic = True
             if base_bold:
                 run.bold = True
+        elif kind == "citation":
+            # Render the parens around a single hyperlink targeting the FIRST
+            # matched bibliography entry inside the citation payload. This is a
+            # pragmatic choice for `(A, 2020; B, 2021)` — only one link is
+            # supported per cite group, jumping to whichever entry comes first.
+            payload = m.group(1)
+            entries = _split_citation_payload(payload)
+            target_anchor = None
+            for key, _part in entries:
+                if key in citation_map:
+                    target_anchor = citation_map[key]
+                    break
+            if target_anchor:
+                _add_plain_run(para, "(", base_bold=base_bold)
+                _emit_hyperlink_run(para, payload, target_anchor, bold=base_bold)
+                _add_plain_run(para, ")", base_bold=base_bold)
+            else:
+                _add_plain_run(para, text[start:end], base_bold=base_bold)
         cursor = end
     if cursor < len(text):
         _add_plain_run(para, text[cursor:], base_bold=base_bold)
+
+
+def _emit_hyperlink_run(para, text: str, anchor: str, *, bold: bool = False) -> None:
+    """Append a hyperlink-styled run inside a paragraph, anchored to an in-doc bookmark."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("w:anchor"), anchor)
+    hyperlink.set(qn("w:history"), "1")
+    run = OxmlElement("w:r")
+    rpr = OxmlElement("w:rPr")
+    color = OxmlElement("w:color")
+    color.set(qn("w:val"), "1c2eff")
+    rpr.append(color)
+    u = OxmlElement("w:u")
+    u.set(qn("w:val"), "single")
+    rpr.append(u)
+    if bold:
+        b = OxmlElement("w:b")
+        rpr.append(b)
+    run.append(rpr)
+    t = OxmlElement("w:t")
+    t.set(qn("xml:space"), "preserve")
+    t.text = text
+    run.append(t)
+    hyperlink.append(run)
+    para._p.append(hyperlink)
 
 
 def _add_plain_run(para, text: str, *, base_bold: bool = False) -> None:
@@ -396,14 +490,102 @@ def _docx_pt(n):
     return Pt(n)
 
 
-def _extract_toc_entries(lines: list[str]) -> list[tuple[int, str]]:
+def _add_bookmark(para, name: str, bid: int) -> None:
+    """Insert a Word bookmark at the start of a paragraph so hyperlinks can jump to it."""
+    try:
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+    except Exception:
+        return
+    start = OxmlElement("w:bookmarkStart")
+    start.set(qn("w:id"), str(bid))
+    start.set(qn("w:name"), name)
+    end = OxmlElement("w:bookmarkEnd")
+    end.set(qn("w:id"), str(bid))
+    # bookmarkStart goes before the paragraph's content; bookmarkEnd at the end.
+    para._p.insert(0, start)
+    para._p.append(end)
+
+
+_REFERENCE_HEADING_RE = _re.compile(
+    r"^#{1,3}\s+("
+    r"references|bibliography|works\s+cited|"
+    r"tài\s+liệu\s+tham\s+khảo|"
+    r"literaturverzeichnis|literatur|"
+    r"bibliographie|"
+    r"referencias|"
+    r"参考文献"
+    r")\s*$",
+    _re.IGNORECASE,
+)
+
+_REF_ENTRY_KEY_RE = _re.compile(
+    r"^\s*[-*]?\s*"
+    r"([\wÀ-ɏḀ-ỿ][\wÀ-ɏḀ-ỿ\.\-']*)"  # surname (first whole word; greedy)
+    r"[^()]*?"                          # author list, initials, et al., …
+    r"\(?(\d{4})\)?"                    # year
+)
+
+
+def _build_citation_map(lines: list[str]) -> tuple[dict[str, str], dict[int, str]]:
+    """Pre-scan the markdown for the references section.
+
+    Returns (citation_map, line_to_anchor):
+      citation_map  : "surname_year" -> "_Ref_NNNN"  (for inline lookups)
+      line_to_anchor: line index of a reference entry -> "_Ref_NNNN" (so the body
+                      walker can drop a bookmark when it emits that line)
+    """
+    citation_map: dict[str, str] = {}
+    line_to_anchor: dict[int, str] = {}
+    in_refs = False
+    counter = 0
+    in_fence = False
+    for idx, raw in enumerate(lines):
+        line = raw.rstrip()
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if _REFERENCE_HEADING_RE.match(line.strip()):
+            in_refs = True
+            continue
+        if not in_refs:
+            continue
+        # A new top-level heading (#) ends the references section
+        if line.startswith("# ") or line.startswith("## "):
+            in_refs = False
+            continue
+        if not line.strip():
+            continue
+        m = _REF_ENTRY_KEY_RE.match(line)
+        if not m:
+            continue
+        surname = _re.split(r"[\s,]+", m.group(1).strip())[0].strip()
+        year = m.group(2)
+        if not surname:
+            continue
+        key = f"{surname.lower()}_{year}"
+        # Don't overwrite — first entry with this key wins.
+        if key in citation_map:
+            continue
+        counter += 1
+        anchor = f"_Ref_{counter:04d}"
+        citation_map[key] = anchor
+        line_to_anchor[idx] = anchor
+    return citation_map, line_to_anchor
+
+
+def _extract_toc_entries(lines: list[str]) -> list[dict]:
     """Scan the (frontmatter-stripped) markdown for headings.
 
-    Skips headings inside fenced code blocks. Returns a list of (level, text)
-    where level is 1..3 — deeper headings rarely belong in a TOC.
+    Skips headings inside fenced code blocks. Returns a list of
+    {"level": 1..3, "text": str, "anchor": "_Toc_NNN"} so the body
+    walker and the TOC renderer can share the same bookmark names.
     """
-    entries: list[tuple[int, str]] = []
+    entries: list[dict] = []
     in_fence = False
+    counter = 0
     for raw in lines:
         line = raw.rstrip()
         if line.startswith("```"):
@@ -418,7 +600,8 @@ def _extract_toc_entries(lines: list[str]) -> list[tuple[int, str]]:
         text = _strip_inline_markers(m.group(2).strip())
         if not text:
             continue
-        entries.append((level, text))
+        counter += 1
+        entries.append({"level": level, "text": text, "anchor": f"_Toc_{counter:04d}"})
     return entries
 
 
@@ -436,9 +619,17 @@ def _strip_inline_markers(text: str) -> str:
     return out.strip()
 
 
-def _render_static_toc(doc, entries: list[tuple[int, str]], *, body_font: str) -> None:
-    """Render a plain-text TOC listing. Indents by heading level."""
+def _render_static_toc(doc, entries: list[dict], *, body_font: str) -> None:
+    """Render a TOC list with clickable hyperlinks to in-document bookmarks.
+
+    The engine already numbers its own headings (1, 1.1, 1.1.1 …) so we do
+    NOT prepend our own — that would cause "1.1  1.1 Title" double indicators.
+    Each entry is wrapped in `<w:hyperlink w:anchor="...">` so Ctrl/Cmd-click
+    jumps to the bookmark we emit alongside the matching heading.
+    """
     from docx.shared import Pt, Inches
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
 
     title = doc.add_heading("Table of Contents", level=1)
     try:
@@ -447,36 +638,51 @@ def _render_static_toc(doc, entries: list[tuple[int, str]], *, body_font: str) -
     except Exception:
         pass
 
-    n_h1 = 0
-    n_h2 = 0
-    n_h3 = 0
-    for level, text in entries:
-        if level == 1:
-            n_h1 += 1
-            n_h2 = 0
-            n_h3 = 0
-            number = f"{n_h1}"
-        elif level == 2:
-            n_h2 += 1
-            n_h3 = 0
-            number = f"{n_h1}.{n_h2}"
-        else:
-            n_h3 += 1
-            number = f"{n_h1}.{n_h2}.{n_h3}"
+    for entry in entries:
+        level = entry["level"]
+        text = entry["text"]
+        anchor = entry["anchor"]
 
         para = doc.add_paragraph()
-        para.paragraph_format.left_indent = Inches(0.0 if level == 1 else 0.25 * (level - 1))
+        para.paragraph_format.left_indent = Inches(0.25 * (level - 1))
         para.paragraph_format.space_after = Pt(4)
-        # Number column
-        num_run = para.add_run(f"{number}  ")
-        num_run.bold = (level == 1)
-        num_run.font.name = body_font
-        num_run.font.size = Pt(12 if level == 1 else 11)
-        # Title
-        text_run = para.add_run(text)
-        text_run.bold = (level == 1)
-        text_run.font.name = body_font
-        text_run.font.size = Pt(12 if level == 1 else 11)
+
+        # Build a hyperlink element pointing at the bookmark.
+        hyperlink = OxmlElement("w:hyperlink")
+        hyperlink.set(qn("w:anchor"), anchor)
+        hyperlink.set(qn("w:history"), "1")
+
+        run = OxmlElement("w:r")
+
+        rpr = OxmlElement("w:rPr")
+        rstyle = OxmlElement("w:rStyle")
+        rstyle.set(qn("w:val"), "Hyperlink")
+        rpr.append(rstyle)
+        # Inline font for fallback when Hyperlink style is absent
+        rfonts = OxmlElement("w:rFonts")
+        rfonts.set(qn("w:ascii"), body_font)
+        rfonts.set(qn("w:hAnsi"), body_font)
+        rpr.append(rfonts)
+        sz = OxmlElement("w:sz")
+        sz.set(qn("w:val"), "24" if level == 1 else "22")
+        rpr.append(sz)
+        color = OxmlElement("w:color")
+        color.set(qn("w:val"), "1c2eff")
+        rpr.append(color)
+        u = OxmlElement("w:u")
+        u.set(qn("w:val"), "single")
+        rpr.append(u)
+        if level == 1:
+            b = OxmlElement("w:b")
+            rpr.append(b)
+        run.append(rpr)
+
+        t = OxmlElement("w:t")
+        t.set(qn("xml:space"), "preserve")
+        t.text = text
+        run.append(t)
+        hyperlink.append(run)
+        para._p.append(hyperlink)
 
 
 def _insert_word_toc_field(doc) -> None:
@@ -604,6 +810,16 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
             _insert_word_toc_field(doc)
             doc.add_page_break()
 
+        # Queue of anchors to consume when the body walker emits each heading.
+        heading_anchors = [e["anchor"] for e in toc_entries]
+        bookmark_id_counter = [0]  # mutable so the nested helper can bump it
+
+        # Citation linkage: bibliography pre-scan
+        citation_map, line_to_anchor = _build_citation_map(lines)
+
+        def inline(p, txt, *, base_bold=False):
+            _emit_inline_runs(p, txt, base_bold=base_bold, citation_map=citation_map)
+
         def style_body(para):
             para.paragraph_format.line_spacing = 1.5
             para.paragraph_format.space_after = Pt(6)
@@ -659,7 +875,12 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
                     level = len(m.group(1))
                     heading_text = m.group(2).strip()
                     para = doc.add_heading(level=min(level, 4))
-                    _emit_inline_runs(para, heading_text)
+                    # Anchor for TOC hyperlink: only levels 1-3 are in the TOC.
+                    if 1 <= level <= 3 and heading_anchors:
+                        anchor_name = heading_anchors.pop(0)
+                        bookmark_id_counter[0] += 1
+                        _add_bookmark(para, anchor_name, bookmark_id_counter[0])
+                    inline(para, heading_text)
                     if level == 1:
                         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     i += 1
@@ -683,7 +904,7 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
                 para = doc.add_paragraph()
                 para.paragraph_format.left_indent = Inches(0.4)
                 para.paragraph_format.right_indent = Inches(0.4)
-                _emit_inline_runs(para, joined)
+                inline(para, joined)
                 for r in para.runs:
                     r.italic = True
                     if not r.font.name:
@@ -697,7 +918,11 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
                 while i < len(lines) and _re.match(r"^[\-\*\+]\s+", lines[i].rstrip()):
                     item_text = _re.sub(r"^[\-\*\+]\s+", "", lines[i].rstrip())
                     para = doc.add_paragraph(style="List Bullet")
-                    _emit_inline_runs(para, item_text)
+                    # Reference list entries get a bookmark so inline citations can jump here.
+                    if i in line_to_anchor:
+                        bookmark_id_counter[0] += 1
+                        _add_bookmark(para, line_to_anchor[i], bookmark_id_counter[0])
+                    inline(para, item_text)
                     style_body(para)
                     i += 1
                 continue
@@ -707,12 +932,16 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
                 while i < len(lines) and _re.match(r"^\d+\.\s+", lines[i].rstrip()):
                     item_text = _re.sub(r"^\d+\.\s+", "", lines[i].rstrip())
                     para = doc.add_paragraph(style="List Number")
-                    _emit_inline_runs(para, item_text)
+                    if i in line_to_anchor:
+                        bookmark_id_counter[0] += 1
+                        _add_bookmark(para, line_to_anchor[i], bookmark_id_counter[0])
+                    inline(para, item_text)
                     style_body(para)
                     i += 1
                 continue
 
             # Regular paragraph — collapse soft-wrapped lines until blank or block break
+            start_line = i
             para_buf = [line]
             i += 1
             while i < len(lines):
@@ -729,7 +958,11 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
                 i += 1
             paragraph_text = " ".join(para_buf)
             para = doc.add_paragraph()
-            _emit_inline_runs(para, paragraph_text)
+            # If this paragraph is a non-list-style reference entry, anchor it.
+            if start_line in line_to_anchor:
+                bookmark_id_counter[0] += 1
+                _add_bookmark(para, line_to_anchor[start_line], bookmark_id_counter[0])
+            inline(para, paragraph_text)
             style_body(para)
 
         doc.save(output_docx)
