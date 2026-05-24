@@ -216,6 +216,16 @@ This research expose serves as a starting point for a comprehensive {ctx.academi
             print(f"   PDF: {pdf_path}")
         print(f"   DOCX: {docx_path}")
 
+    # Canonical aliases so the API/web can fetch draft.{ext} regardless of slug.
+    import shutil
+    try:
+        shutil.copy2(expose_md_path, ctx.folders['exports'] / "draft.md")
+        shutil.copy2(docx_path, ctx.folders['exports'] / "draft.docx")
+        if pdf_path is not None and pdf_path.exists() and pdf_path != expose_md_path:
+            shutil.copy2(pdf_path, ctx.folders['exports'] / "draft.pdf")
+    except Exception as alias_err:
+        logger.warning(f"canonical alias copy failed (non-fatal): {alias_err}")
+
     # Return paths (pdf_path may be None if PDF export failed, fall back to md)
     return pdf_path or expose_md_path, docx_path
 
@@ -512,6 +522,21 @@ generated_by: "OpenDraft AI - https://github.com/federicodeponte/opendraft"
             print("(PDF skipped - no PDF engine installed)")
         print(f"\u2705 Exported DOCX: {docx_path}")
         print(f"📂 Output folder: {ctx.folders['root']}")
+
+    # Canonical aliases: the API/web look for exports/draft.{ext}, regardless of
+    # the slugified human-readable filename. Copying (not moving) preserves both
+    # so the ZIP bundle and any other slug-based references still resolve.
+    import shutil
+    exports_dir = ctx.folders['exports']
+    try:
+        shutil.copy2(final_md_path, exports_dir / "draft.md")
+        shutil.copy2(docx_path, exports_dir / "draft.docx")
+        if pdf_path is not None and pdf_path.exists():
+            shutil.copy2(pdf_path, exports_dir / "draft.pdf")
+        if zip_path.exists():
+            shutil.copy2(zip_path, exports_dir / "bundle.zip")
+    except Exception as alias_err:
+        logger.warning(f"canonical alias copy failed (non-fatal): {alias_err}")
 
     return pdf_path, docx_path
 

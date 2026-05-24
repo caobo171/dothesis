@@ -282,13 +282,38 @@ def _require_done_paper(db: Session, user: User, paper_id: uuid.UUID) -> tuple[P
     return p, job.id
 
 
+def _fetch_export_bytes(s3, key_root: str, canonical_relpath: str, ext: str) -> bytes | None:
+    """Try the canonical key first; if missing, list the prefix and pick any file with this extension.
+
+    Older engine runs wrote {slug}.{ext} instead of draft.{ext}. The list-fallback lets us
+    keep older papers viewable while new ones land at the canonical path.
+    """
+    try:
+        full = s3._full_key(f"{key_root}/{canonical_relpath}")
+        return s3._client.get_object(Bucket=s3.bucket, Key=full)["Body"].read()
+    except s3._client.exceptions.NoSuchKey:
+        pass
+    # Fallback: list the exports/ prefix and grab the first matching .ext
+    prefix = s3._full_key(f"{key_root}/exports/")
+    resp = s3._client.list_objects_v2(Bucket=s3.bucket, Prefix=prefix)
+    for item in resp.get("Contents", []) or []:
+        if item["Key"].lower().endswith("." + ext.lower()):
+            return s3._client.get_object(Bucket=s3.bucket, Key=item["Key"])["Body"].read()
+    return None
+
+
 @router.get("/{paper_id}/draft")
 def get_draft(paper_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(db_session)):
     p, job_id = _require_done_paper(db, user, paper_id)
     settings = get_settings()
     s3 = get_s3_from_settings(settings)
-    md_key = f"{_job_key_root(p, job_id)}/exports/draft.md"
-    body = s3._client.get_object(Bucket=s3.bucket, Key=s3._full_key(md_key))["Body"].read().decode("utf-8")
+    raw = _fetch_export_bytes(s3, _job_key_root(p, job_id), "exports/draft.md", "md")
+    if raw is None:
+        raise HTTPException(
+            404,
+            detail={"error": {"code": "draft_missing", "message": "Markdown draft not found in storage — the engine may have crashed before upload. Try re-running the paper."}},
+        )
+    body = raw.decode("utf-8")
     chapters = _chapters_from_markdown(body)
     return {
         "markdown": body,
@@ -321,8 +346,14 @@ def _md_to_html(md: str) -> str:
 def get_citations(paper_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(db_session)):
     p, job_id = _require_done_paper(db, user, paper_id)
     s3 = get_s3_from_settings(get_settings())
-    key = f"{_job_key_root(p, job_id)}/research/bibliography.json"
-    body = s3._client.get_object(Bucket=s3.bucket, Key=s3._full_key(key))["Body"].read().decode("utf-8")
+    key = s3._full_key(f"{_job_key_root(p, job_id)}/research/bibliography.json")
+    try:
+        body = s3._client.get_object(Bucket=s3.bucket, Key=key)["Body"].read().decode("utf-8")
+    except s3._client.exceptions.NoSuchKey:
+        raise HTTPException(
+            404,
+            detail={"error": {"code": "bibliography_missing", "message": "Bibliography not found in storage — the engine may have crashed before upload."}},
+        )
     raw = json.loads(body) if body else []
     return [
         {
