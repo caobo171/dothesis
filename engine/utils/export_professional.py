@@ -396,6 +396,132 @@ def _docx_pt(n):
     return Pt(n)
 
 
+def _extract_toc_entries(lines: list[str]) -> list[tuple[int, str]]:
+    """Scan the (frontmatter-stripped) markdown for headings.
+
+    Skips headings inside fenced code blocks. Returns a list of (level, text)
+    where level is 1..3 — deeper headings rarely belong in a TOC.
+    """
+    entries: list[tuple[int, str]] = []
+    in_fence = False
+    for raw in lines:
+        line = raw.rstrip()
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = _re.match(r"^(#{1,3})\s+(.*)$", line)
+        if not m:
+            continue
+        level = len(m.group(1))
+        text = _strip_inline_markers(m.group(2).strip())
+        if not text:
+            continue
+        entries.append((level, text))
+    return entries
+
+
+def _strip_inline_markers(text: str) -> str:
+    """Strip the markers used by the inline parser so TOC lines stay clean."""
+    out = text
+    out = _re.sub(r"\*\*\*(.+?)\*\*\*", r"\1", out)
+    out = _re.sub(r"___(.+?)___", r"\1", out)
+    out = _re.sub(r"\*\*(.+?)\*\*", r"\1", out)
+    out = _re.sub(r"__(.+?)__", r"\1", out)
+    out = _re.sub(r"`([^`]+?)`", r"\1", out)
+    out = _re.sub(r"\[([^\]]+?)\]\(([^)]+?)\)", r"\1", out)
+    out = _re.sub(r"(?<!\w)\*([^*\n]+?)\*(?!\*)", r"\1", out)
+    out = _re.sub(r"(?<!\w)_([^_\n]+?)_(?!_)", r"\1", out)
+    return out.strip()
+
+
+def _render_static_toc(doc, entries: list[tuple[int, str]], *, body_font: str) -> None:
+    """Render a plain-text TOC listing. Indents by heading level."""
+    from docx.shared import Pt, Inches
+
+    title = doc.add_heading("Table of Contents", level=1)
+    try:
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    except Exception:
+        pass
+
+    n_h1 = 0
+    n_h2 = 0
+    n_h3 = 0
+    for level, text in entries:
+        if level == 1:
+            n_h1 += 1
+            n_h2 = 0
+            n_h3 = 0
+            number = f"{n_h1}"
+        elif level == 2:
+            n_h2 += 1
+            n_h3 = 0
+            number = f"{n_h1}.{n_h2}"
+        else:
+            n_h3 += 1
+            number = f"{n_h1}.{n_h2}.{n_h3}"
+
+        para = doc.add_paragraph()
+        para.paragraph_format.left_indent = Inches(0.0 if level == 1 else 0.25 * (level - 1))
+        para.paragraph_format.space_after = Pt(4)
+        # Number column
+        num_run = para.add_run(f"{number}  ")
+        num_run.bold = (level == 1)
+        num_run.font.name = body_font
+        num_run.font.size = Pt(12 if level == 1 else 11)
+        # Title
+        text_run = para.add_run(text)
+        text_run.bold = (level == 1)
+        text_run.font.name = body_font
+        text_run.font.size = Pt(12 if level == 1 else 11)
+
+
+def _insert_word_toc_field(doc) -> None:
+    """Insert a Word TOC field that auto-populates with page numbers.
+
+    Users see the static list above; if they right-click → Update Field
+    Word will replace this with a real linked TOC with page numbers.
+    """
+    try:
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+    except Exception:
+        return
+
+    para = doc.add_paragraph()
+    para.paragraph_format.space_before = _docx_pt(8)
+    run = para.add_run()
+    # Hint label
+    hint = doc.add_paragraph()
+    hint_run = hint.add_run(
+        "(For page numbers, right-click the TOC below and choose Update Field in Microsoft Word.)"
+    )
+    hint_run.italic = True
+    hint_run.font.size = _docx_pt(10)
+
+    fld_para = doc.add_paragraph()
+    fld_run = fld_para.add_run()
+    fld_begin = OxmlElement("w:fldChar")
+    fld_begin.set(qn("w:fldCharType"), "begin")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = 'TOC \\o "1-3" \\h \\z \\u'
+    fld_sep = OxmlElement("w:fldChar")
+    fld_sep.set(qn("w:fldCharType"), "separate")
+    placeholder = OxmlElement("w:t")
+    placeholder.text = "[Right-click → Update Field to populate]"
+    fld_end = OxmlElement("w:fldChar")
+    fld_end.set(qn("w:fldCharType"), "end")
+    fld_run._r.append(fld_begin)
+    fld_run._r.append(instr)
+    fld_run._r.append(fld_sep)
+    fld_run._r.append(placeholder)
+    fld_run._r.append(fld_end)
+
+
 def _strip_yaml_frontmatter(md: str) -> str:
     """Drop a leading `---\\n...\\n---\\n` block if present."""
     if not md.startswith("---"):
@@ -467,6 +593,16 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
 
         BODY_FONT = "Times New Roman"
         BODY_SIZE = Pt(12)
+
+        # --- Build Table of Contents from headings before walking the body ---
+        toc_entries = _extract_toc_entries(lines)
+        if toc_entries:
+            _render_static_toc(doc, toc_entries, body_font=BODY_FONT)
+            # Word's auto-updating TOC field. Hidden behind the static list so users
+            # who Update Field get the real page numbers; everyone else sees the
+            # static one we just wrote.
+            _insert_word_toc_field(doc)
+            doc.add_page_break()
 
         def style_body(para):
             para.paragraph_format.line_spacing = 1.5
