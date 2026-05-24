@@ -355,19 +355,31 @@ def get_citations(paper_id: uuid.UUID, user: User = Depends(current_user), db: S
             detail={"error": {"code": "bibliography_missing", "message": "Bibliography not found in storage — the engine may have crashed before upload."}},
         )
     raw = json.loads(body) if body else []
-    return [
-        {
+    out = []
+    for e in raw:
+        if isinstance(e, str):
+            # Engine wrote a list of formatted citation strings — surface them as title-only entries.
+            out.append({
+                "key": "", "title": e, "authors": "", "year": None,
+                "doi": None, "source": "CrossRef", "venue": None, "verified": True,
+            })
+            continue
+        if not isinstance(e, dict):
+            continue
+        authors = e.get("authors", "")
+        if isinstance(authors, list):
+            authors = ", ".join(str(a) for a in authors)
+        out.append({
             "key": e.get("key") or e.get("id") or "",
             "title": e.get("title", ""),
-            "authors": ", ".join(e.get("authors", [])) if isinstance(e.get("authors"), list) else e.get("authors", ""),
+            "authors": authors,
             "year": e.get("year"),
             "doi": e.get("doi"),
             "source": e.get("source", "CrossRef"),
             "venue": e.get("venue") or e.get("journal"),
             "verified": bool(e.get("verified", True)),
-        }
-        for e in raw
-    ]
+        })
+    return out
 
 
 EXPORT_FORMATS = {
