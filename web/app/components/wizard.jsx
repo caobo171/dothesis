@@ -121,8 +121,7 @@ export const Wizard = () => {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          padding: "56px 40px 80px",
-          background: "var(--ink-50)",
+          padding: "0 0 80px",
         }}
       >
         <div style={{ width: "100%", maxWidth: 720, textAlign: "center" }}>
