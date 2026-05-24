@@ -262,6 +262,47 @@ def _normalize_yaml_for_pandoc(md_content: str) -> str:
     return f'---{yaml_content}---{rest_content}'
 
 
+def _is_table_separator(line: str) -> bool:
+    """A markdown table separator looks like `|---|---|` (with optional :---, ---:, :--:)."""
+    s = line.strip()
+    if not s.startswith("|") or not s.endswith("|"):
+        return False
+    cells = [c.strip() for c in s.strip("|").split("|")]
+    if not cells:
+        return False
+    for cell in cells:
+        if not cell:
+            return False
+        # Allow leading/trailing colons for alignment
+        if not all(ch in "-:" for ch in cell):
+            return False
+        if "-" not in cell:
+            return False
+    return True
+
+
+def _split_table_row(line: str) -> list[str]:
+    """Split `| a | b | c |` into ['a', 'b', 'c'], stripping whitespace."""
+    inner = line.strip().strip("|")
+    return [cell.strip() for cell in inner.split("|")]
+
+
+def _add_docx_table(doc, rows: list[list[str]]) -> None:
+    """Insert a python-docx Table from a list of rows (header first)."""
+    if not rows:
+        return
+    n_cols = max(len(r) for r in rows)
+    table = doc.add_table(rows=len(rows), cols=n_cols)
+    table.style = "Light Grid Accent 1"
+    for r_idx, row in enumerate(rows):
+        for c_idx in range(n_cols):
+            cell = table.rows[r_idx].cells[c_idx]
+            cell.text = row[c_idx] if c_idx < len(row) else ""
+            # Bold the header row
+            if r_idx == 0 and cell.paragraphs and cell.paragraphs[0].runs:
+                cell.paragraphs[0].runs[0].bold = True
+
+
 def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
     """
     Export markdown to DOCX format using basic python-docx parsing.
@@ -321,27 +362,46 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
         run.font.size = Pt(10)
         run.font.italic = True
 
-        # Process markdown content
-        for line in lines:
-            line = line.rstrip()
+        # Process markdown content (index-based so we can consume multi-line table blocks)
+        i = 0
+        stripped_lines = [ln.rstrip() for ln in lines]
+        while i < len(stripped_lines):
+            line = stripped_lines[i]
 
             if not line:
+                i += 1
+                continue
+
+            # Markdown pipe table: header row + separator (|----|----|) + body rows.
+            if line.startswith('|') and i + 1 < len(stripped_lines) and _is_table_separator(stripped_lines[i + 1]):
+                table_rows = []
+                # Header
+                table_rows.append(_split_table_row(line))
+                i += 2  # skip header + separator
+                # Body
+                while i < len(stripped_lines) and stripped_lines[i].startswith('|'):
+                    table_rows.append(_split_table_row(stripped_lines[i]))
+                    i += 1
+                _add_docx_table(doc, table_rows)
                 continue
 
             # Title (# heading)
             if line.startswith('# '):
                 para = doc.add_heading(line[2:], level=1)
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                i += 1
                 continue
 
             # Section heading (## heading)
             if line.startswith('## '):
                 doc.add_heading(line[3:], level=2)
+                i += 1
                 continue
 
             # Subsection heading (### heading)
             if line.startswith('### '):
                 doc.add_heading(line[4:], level=3)
+                i += 1
                 continue
 
             # Horizontal rule
@@ -349,6 +409,7 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
                 para = doc.add_paragraph()
                 run = para.add_run('_' * 60)
                 run.font.size = Pt(12)
+                i += 1
                 continue
 
             # Regular paragraph
@@ -362,6 +423,7 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
                 run = para.runs[0]
                 run.font.name = 'Times New Roman'
                 run.font.size = Pt(12)
+            i += 1
 
         # Save
         doc.save(output_docx)
