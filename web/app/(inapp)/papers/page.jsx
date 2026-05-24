@@ -8,169 +8,149 @@ export default function PapersPage() {
   const { data: papers = [], error, isLoading } = useSWR("/papers", swrFetcher);
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", width: "100%" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 18,
-        }}
-      >
+    <section className="space-y-6 max-w-6xl mx-auto w-full">
+      <div className="flex items-center justify-between gap-2">
         <div>
-          <h1
-            style={{
-              fontSize: 24,
-              fontWeight: 800,
-              letterSpacing: "-0.015em",
-              margin: 0,
-              color: "var(--ink-900)",
-            }}
-          >
-            Drafts
-          </h1>
-          <p style={{ fontSize: 13, color: "var(--ink-500)", marginTop: 4 }}>
+          <h1 className="text-2xl font-bold text-ink-900">Drafts</h1>
+          <p className="text-ink-500 mt-1 text-sm">
             {isLoading
               ? "Loading…"
-              : `${papers.length} ${papers.length === 1 ? "paper" : "papers"} in your workspace.`}
+              : `${papers.length} ${papers.length === 1 ? "draft" : "drafts"} in your workspace.`}
           </p>
         </div>
         <Link
           href="/wizard"
-          className="btn btn-primary"
-          style={{ padding: "10px 16px", fontSize: 14 }}
+          className="inline-flex items-center gap-2 py-2 px-4 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 transition-colors shadow-sm"
         >
-          + New Paper
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          New Paper
         </Link>
       </div>
 
       {error && (
-        <div
-          style={{
-            padding: 14,
-            background: "var(--stop-bg)",
-            color: "var(--stop-fg)",
-            borderRadius: 12,
-            fontSize: 13,
-            fontWeight: 600,
-          }}
-        >
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error.message || "Could not load papers"}
         </div>
       )}
 
       {!isLoading && papers.length === 0 && !error && (
-        <div
-          style={{
-            padding: 40,
-            textAlign: "center",
-            background: "var(--paper)",
-            border: "1px dashed var(--ink-200)",
-            borderRadius: 14,
-            color: "var(--ink-500)",
-            fontSize: 14,
-          }}
-        >
-          No drafts yet. <Link href="/wizard" style={{ color: "var(--blue-600)", fontWeight: 600 }}>Start one →</Link>
+        <div className="bg-white rounded-xl border border-dashed border-ink-200 p-12 text-center">
+          <h2 className="text-base font-semibold text-ink-900">No drafts yet</h2>
+          <p className="text-sm text-ink-500 mt-2">
+            <Link href="/wizard" className="text-primary-600 font-medium hover:underline">
+              Start your first one →
+            </Link>
+          </p>
         </div>
       )}
 
       {papers.length > 0 && (
-        <div
-          style={{
-            background: "var(--paper)",
-            border: "1px solid var(--ink-100)",
-            borderRadius: 14,
-            overflow: "hidden",
-          }}
-        >
-          {papers.map((p, i) => (
-            <PaperRow key={p.id} p={p} divider={i < papers.length - 1} />
-          ))}
+        <div className="bg-white rounded-xl p-4 sm:p-6 space-y-4 shadow-sm border border-ink-100">
+          <h2 className="text-lg sm:text-xl font-semibold text-ink-900">Your Drafts</h2>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full hidden md:table">
+              <thead>
+                <tr className="border-b border-ink-200">
+                  <th className="py-3 pr-3 text-left text-sm font-medium text-primary-600 w-16">No</th>
+                  <th className="py-3 text-left text-sm font-medium text-primary-600">Draft Title</th>
+                  <th className="py-3 text-left text-sm font-medium text-ink-500 w-32">Level</th>
+                  <th className="py-3 text-left text-sm font-medium text-ink-500 w-28">Status</th>
+                  <th className="py-3 text-left text-sm font-medium text-ink-500 w-32">Date Created</th>
+                  <th className="py-3 pl-6 w-28"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {papers.map((p, idx) => (
+                  <PaperRow key={p.id} p={p} index={idx + 1} />
+                ))}
+              </tbody>
+            </table>
+
+            <div className="md:hidden divide-y divide-ink-100">
+              {papers.map((p, idx) => (
+                <PaperMobileRow key={p.id} p={p} index={idx + 1} />
+              ))}
+            </div>
+          </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function PaperRow({ p, index }) {
+  const tab = p.status === "done" ? "editor" : "run";
+  return (
+    <tr className="border-b border-ink-100 hover:bg-ink-50/50 transition-colors">
+      <td className="py-5 pr-3 whitespace-nowrap text-sm text-ink-500">
+        {index.toString().padStart(2, "0")}.
+      </td>
+      <td className="py-5">
+        <span className="text-sm text-ink-900 block truncate max-w-[300px] lg:max-w-[400px]">
+          {p.title || "Untitled"}
+        </span>
+      </td>
+      <td className="py-5 text-sm text-ink-500">{p.level || "—"}</td>
+      <td className="py-5"><StatusBadge status={p.status} /></td>
+      <td className="py-5 whitespace-nowrap text-left text-sm text-ink-500">
+        {p.updated_at ? new Date(p.updated_at).toLocaleDateString("en-GB") : "—"}
+      </td>
+      <td className="py-5 pl-6 whitespace-nowrap text-left">
+        <Link
+          href={`/paper/${p.id}?tab=${tab}`}
+          className="inline-flex items-center px-4 py-1.5 border border-primary-600 text-primary-600 text-sm font-medium rounded-full hover:bg-primary-50 transition-colors"
+        >
+          View Detail
+        </Link>
+      </td>
+    </tr>
+  );
+}
+
+function PaperMobileRow({ p, index }) {
+  const tab = p.status === "done" ? "editor" : "run";
+  return (
+    <div className="py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-ink-400 shrink-0">{index.toString().padStart(2, "0")}.</span>
+            <span className="text-sm font-medium text-ink-900 truncate">{p.title || "Untitled"}</span>
+          </div>
+          <div className="mt-1 ml-7 flex items-center gap-2">
+            <StatusBadge status={p.status} />
+            <span className="text-xs text-ink-400">
+              {p.updated_at ? new Date(p.updated_at).toLocaleDateString("en-GB") : "—"}
+            </span>
+          </div>
+        </div>
+        <Link
+          href={`/paper/${p.id}?tab=${tab}`}
+          className="inline-flex items-center px-3 py-1 border border-primary-600 text-primary-600 text-xs font-medium rounded-full hover:bg-primary-50 transition-colors shrink-0"
+        >
+          View
+        </Link>
+      </div>
     </div>
   );
 }
 
-function PaperRow({ p, divider }) {
-  const tab = p.status === "done" ? "editor" : "run";
-  const statusColor =
-    {
-      running: "var(--blue-600)",
-      done: "var(--ok-fg)",
-      failed: "var(--stop-fg)",
-      canceled: "var(--ink-400)",
-    }[p.status] || "var(--ink-400)";
-
+function StatusBadge({ status }) {
+  const map = {
+    running: "bg-primary-50 text-primary-600",
+    done: "bg-green-50 text-green-700",
+    failed: "bg-red-50 text-red-700",
+    canceled: "bg-ink-100 text-ink-500",
+    draft: "bg-ink-100 text-ink-500",
+  };
+  const cls = map[status] || "bg-ink-100 text-ink-500";
+  const label = status === "running" ? "Generating" : status === "done" ? "Complete" : status || "—";
   return (
-    <Link
-      href={`/paper/${p.id}?tab=${tab}`}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 130px 110px 100px",
-        gap: 18,
-        alignItems: "center",
-        padding: "16px 22px",
-        borderBottom: divider ? "1px solid var(--ink-100)" : "none",
-        textDecoration: "none",
-        color: "inherit",
-        transition: "background 0.12s",
-      }}
-      className="paper-row"
-    >
-      <div style={{ minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 14.5,
-            fontWeight: 700,
-            color: "var(--ink-900)",
-            letterSpacing: "-0.005em",
-            lineHeight: 1.3,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {p.title}
-        </div>
-        <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 4 }}>
-          {p.level || "—"}
-        </div>
-      </div>
-
-      <div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-          <span style={{ fontSize: 11, color: "var(--ink-400)", fontWeight: 700 }}>
-            {Math.round((p.progress || 0) * 100)}%
-          </span>
-        </div>
-        <div
-          style={{
-            background: "var(--ink-100)",
-            borderRadius: 999,
-            height: 4,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              width: `${Math.round((p.progress || 0) * 100)}%`,
-              height: "100%",
-              background: statusColor,
-              transition: "width 0.4s ease",
-            }}
-          />
-        </div>
-      </div>
-
-      <div style={{ fontSize: 12, fontWeight: 600, color: statusColor, textTransform: "capitalize" }}>
-        {p.status}
-      </div>
-
-      <div style={{ fontSize: 12, color: "var(--ink-400)", textAlign: "right" }}>
-        {p.updated_at ? new Date(p.updated_at).toLocaleDateString() : "—"}
-      </div>
-    </Link>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${cls}`}>
+      {label}
+    </span>
   );
 }
