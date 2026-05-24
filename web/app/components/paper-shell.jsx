@@ -20,7 +20,10 @@ export const PaperShell = ({ paper, jobId, latestJob, tab, setTab, onJobChanged,
 
   const stop = async () => {
     if (!jobId) return;
-    if (!confirm("Stop this run? You can resume later if a checkpoint has been saved.")) return;
+    const msg = latestJob?.has_checkpoint
+      ? `Stop this run? A checkpoint was saved after the "${latestJob.completed_phase || "previous"}" phase — you'll be able to resume from there.`
+      : "Stop this run? No checkpoint has been saved yet, so the work in progress will be lost.";
+    if (!confirm(msg)) return;
     setStopping(true);
     setStopError(null);
     try {
@@ -122,15 +125,18 @@ export const PaperShell = ({ paper, jobId, latestJob, tab, setTab, onJobChanged,
             {paper.title}
           </div>
           {paper.status === "running" && jobId && (
-            <button
-              type="button"
-              onClick={stop}
-              disabled={stopping}
-              className="btn btn-ghost btn-sm"
-              style={{ color: "var(--stop-fg)", fontWeight: 700 }}
-            >
-              <Icon name="stop" size={12} /> {stopping ? "Stopping…" : "Stop"}
-            </button>
+            <>
+              <CheckpointBadge latestJob={latestJob} />
+              <button
+                type="button"
+                onClick={stop}
+                disabled={stopping}
+                className="btn btn-ghost btn-sm"
+                style={{ color: "var(--stop-fg)", fontWeight: 700 }}
+              >
+                <Icon name="stop" size={12} /> {stopping ? "Stopping…" : "Stop"}
+              </button>
+            </>
           )}
           {canResume && (
             <button
@@ -220,3 +226,37 @@ export const PaperShell = ({ paper, jobId, latestJob, tab, setTab, onJobChanged,
     </div>
   );
 };
+
+function CheckpointBadge({ latestJob }) {
+  const hasCheckpoint = latestJob?.has_checkpoint === true;
+  const phase = latestJob?.completed_phase;
+  const baseStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    fontSize: 11,
+    fontWeight: 700,
+    padding: "3px 8px",
+    borderRadius: 999,
+    flexShrink: 0,
+  };
+  if (hasCheckpoint) {
+    return (
+      <span
+        title={phase ? `Last checkpoint at the "${phase}" phase. Resuming will pick up from there.` : "A checkpoint has been saved. You can resume if this job stops."}
+        style={{ ...baseStyle, background: "var(--ok-bg)", color: "var(--ok-fg)" }}
+      >
+        <Icon name="check" size={10} stroke={3} />
+        Checkpoint{phase ? `: ${phase}` : ""}
+      </span>
+    );
+  }
+  return (
+    <span
+      title="No checkpoint has been saved yet. Stopping now will lose progress."
+      style={{ ...baseStyle, background: "var(--ink-100)", color: "var(--ink-500)" }}
+    >
+      No checkpoint yet
+    </span>
+  );
+}
