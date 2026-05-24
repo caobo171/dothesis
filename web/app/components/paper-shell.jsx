@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Icon } from "./icons";
 import { apiFetch, ApiError } from "../lib/api";
+import { ConfirmDialog } from "./common/ConfirmDialog";
 
 export const PaperShell = ({ paper, jobId, latestJob, tab, setTab, onJobChanged, children }) => {
   const tabs = [
@@ -15,20 +16,18 @@ export const PaperShell = ({ paper, jobId, latestJob, tab, setTab, onJobChanged,
 
   const [stopping, setStopping] = useState(false);
   const [stopError, setStopError] = useState(null);
+  const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [resumeError, setResumeError] = useState(null);
 
-  const stop = async () => {
+  const performStop = async () => {
     if (!jobId) return;
-    const msg = latestJob?.has_checkpoint
-      ? `Stop this run? A checkpoint was saved after the "${latestJob.completed_phase || "previous"}" phase — you'll be able to resume from there.`
-      : "Stop this run? No checkpoint has been saved yet, so the work in progress will be lost.";
-    if (!confirm(msg)) return;
     setStopping(true);
     setStopError(null);
     try {
       await apiFetch(`/jobs/${jobId}/cancel`, { method: "POST" });
       onJobChanged?.();
+      setStopConfirmOpen(false);
     } catch (e) {
       setStopError(e instanceof ApiError ? e.message : "Could not stop job");
     } finally {
@@ -129,7 +128,7 @@ export const PaperShell = ({ paper, jobId, latestJob, tab, setTab, onJobChanged,
               <CheckpointBadge latestJob={latestJob} />
               <button
                 type="button"
-                onClick={stop}
+                onClick={() => setStopConfirmOpen(true)}
                 disabled={stopping}
                 className="btn btn-ghost btn-sm"
                 style={{ color: "var(--stop-fg)", fontWeight: 700 }}
@@ -223,6 +222,22 @@ export const PaperShell = ({ paper, jobId, latestJob, tab, setTab, onJobChanged,
       </div>
 
       {children}
+
+      <ConfirmDialog
+        open={stopConfirmOpen}
+        title="Stop this draft run?"
+        description={
+          latestJob?.has_checkpoint
+            ? `A checkpoint was saved after the "${latestJob.completed_phase || "previous"}" phase. You'll be able to resume from there.`
+            : "No checkpoint has been saved yet, so the work in progress will be lost."
+        }
+        confirmLabel="Stop run"
+        cancelLabel="Keep generating"
+        destructive
+        busy={stopping}
+        onConfirm={performStop}
+        onCancel={() => setStopConfirmOpen(false)}
+      />
     </div>
   );
 };
