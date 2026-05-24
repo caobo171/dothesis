@@ -794,8 +794,12 @@ def generate_draft(
         raise
 
 
-def _finalize(ctx: DraftContext, pdf_path: Path, docx_path: Path, draft_start_time: float) -> None:
-    """Print final report, save token usage, mark tracker complete."""
+def _finalize(ctx: DraftContext, pdf_path: Path | None, docx_path: Path | None, draft_start_time: float) -> None:
+    """Print final report, save token usage, mark tracker complete.
+
+    pdf_path and docx_path may be None when the corresponding export engine
+    was unavailable (PDF export is best-effort).
+    """
     # Token usage report
     if ctx.token_tracker:
         ctx.token_tracker.print_report()
@@ -826,9 +830,9 @@ def _finalize(ctx: DraftContext, pdf_path: Path, docx_path: Path, draft_start_ti
     logger.info(f"Total time: {draft_total_time:.1f}s ({draft_total_time/60:.1f} minutes)")
     logger.info(f"PDF: {pdf_path}")
     logger.info(f"DOCX: {docx_path}")
-    if pdf_path.exists():
+    if pdf_path and pdf_path.exists():
         logger.info(f"PDF size: {pdf_path.stat().st_size:,} bytes ({pdf_path.stat().st_size/1024/1024:.1f} MB)")
-    if docx_path.exists():
+    if docx_path and docx_path.exists():
         logger.info(f"DOCX size: {docx_path.stat().st_size:,} bytes ({docx_path.stat().st_size/1024/1024:.1f} MB)")
     log_memory_usage("Final")
     logger.info("=" * 80)
