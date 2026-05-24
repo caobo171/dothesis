@@ -77,6 +77,9 @@ export const AgentRun = ({ jobId, paper }) => {
                       title: s.title,
                       authors: s.authors || "",
                       year: s.year,
+                      doi: s.doi || null,
+                      url: s.url || null,
+                      venue: s.venue || s.journal || null,
                       source: msg.agent || "verified",
                     },
                     ...cur,
@@ -147,7 +150,6 @@ export const AgentRun = ({ jobId, paper }) => {
         }}
       >
         <DocCard
-          tick={tick}
           currentPhase={currentPhase}
           currentLabel={currentLabel}
           paper={paper}
@@ -169,7 +171,7 @@ export const AgentRun = ({ jobId, paper }) => {
       </div>
 
       {/* Tail activity strip */}
-      <ActivityStrip activity={activity} tick={tick} />
+      <ActivityStrip activity={activity} />
     </div>
   );
 };
@@ -245,7 +247,7 @@ const PhaseChips = ({ currentPhase, phaseProgress, done }) => {
 };
 
 // ---------------- DocCard ----------------
-const DocCard = ({ tick, currentPhase, currentLabel, paper, done, error }) => (
+const DocCard = ({ currentPhase, currentLabel, paper, done, error }) => (
   <div
     style={{
       background: "var(--paper)",
@@ -474,6 +476,74 @@ const CurrentPhasePanel = ({ currentLabel, progress, agents, elapsedSec, sinceUp
 );
 
 // ---------------- Sources panel ----------------
+function sourceHref(s) {
+  if (s.url) return s.url;
+  if (s.doi) {
+    const doi = String(s.doi).trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, "");
+    return `https://doi.org/${doi}`;
+  }
+  // Fall back to a Google Scholar lookup so the citation is at least one click from verifiable
+  return `https://scholar.google.com/scholar?q=${encodeURIComponent(s.title || "")}`;
+}
+
+const SourceRow = ({ s }) => (
+  <a
+    href={sourceHref(s)}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="fade-in source-row"
+    style={{
+      display: "block",
+      padding: "10px 12px",
+      background: "var(--ink-50)",
+      borderRadius: 10,
+      fontSize: 12.5,
+      textDecoration: "none",
+      color: "inherit",
+      transition: "background 0.12s, transform 0.12s",
+    }}
+    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--blue-50)"; }}
+    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--ink-50)"; }}
+    title={s.doi ? `DOI: ${s.doi}` : s.url || "Open in Google Scholar"}
+  >
+    <div
+      style={{
+        fontFamily: "var(--font-serif)",
+        fontWeight: 600,
+        lineHeight: 1.3,
+        color: "var(--ink-900)",
+        overflow: "hidden",
+        display: "-webkit-box",
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: "vertical",
+      }}
+    >
+      {s.title}
+    </div>
+    <div
+      style={{
+        marginTop: 4,
+        color: "var(--ink-500)",
+        fontSize: 11.5,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      <span>
+        {s.authors?.split(",")[0] || "—"}
+        {s.year ? `, ${s.year}` : ""}
+      </span>
+      {s.doi && (
+        <span style={{ color: "var(--blue-600)", fontWeight: 700 }}>· DOI</span>
+      )}
+      {!s.doi && !s.url && (
+        <span style={{ color: "var(--ink-400)", fontWeight: 600 }}>· Scholar</span>
+      )}
+    </div>
+  </a>
+);
+
 const SourcesPanel = ({ sources }) => (
   <div
     style={{
@@ -508,41 +578,7 @@ const SourcesPanel = ({ sources }) => (
     ) : (
       <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
         {sources.slice(0, 8).map((s, i) => (
-          <div
-            key={s.title + i}
-            className="fade-in"
-            style={{
-              padding: "10px 12px",
-              background: "var(--ink-50)",
-              borderRadius: 10,
-              fontSize: 12.5,
-            }}
-          >
-            <div
-              style={{
-                fontFamily: "var(--font-serif)",
-                fontWeight: 600,
-                lineHeight: 1.3,
-                color: "var(--ink-900)",
-                overflow: "hidden",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-              }}
-            >
-              {s.title}
-            </div>
-            <div
-              style={{
-                marginTop: 4,
-                color: "var(--ink-500)",
-                fontSize: 11.5,
-              }}
-            >
-              {s.authors?.split(",")[0] || "—"}
-              {s.year ? `, ${s.year}` : ""}
-            </div>
-          </div>
+          <SourceRow key={s.title + i} s={s} />
         ))}
       </div>
     )}
@@ -592,7 +628,7 @@ const RecentActivityPanel = ({ activity }) => (
 );
 
 // ---------------- Activity strip (tail) ----------------
-const ActivityStrip = ({ activity, tick }) => {
+const ActivityStrip = ({ activity }) => {
   const [open, setOpen] = useState(false);
   const latest = activity[0];
   return (
