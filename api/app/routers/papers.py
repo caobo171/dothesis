@@ -282,24 +282,49 @@ def _require_done_paper(db: Session, user: User, paper_id: uuid.UUID) -> tuple[P
     return p, job.id
 
 
-def _fetch_export_bytes(s3, key_root: str, canonical_relpath: str, ext: str) -> bytes | None:
-    """Try the canonical key first; if missing, list the prefix and pick any file with this extension.
+# Intermediate engine artifacts that live in exports/ but are NOT the final draft.
+# When falling back to a prefix listing, skip these so the API doesn't surface
+# the abstract or the pre-abstract intermediate as if it were the full paper.
+_EXPORT_INTERMEDIATES = {
+    "16_abstract_generated.md",
+    "intermediate_draft.md",
+}
 
-    Older engine runs wrote {slug}.{ext} instead of draft.{ext}. The list-fallback lets us
-    keep older papers viewable while new ones land at the canonical path.
+
+def _list_exports(s3, key_root: str) -> list[dict]:
+    prefix = s3._full_key(f"{key_root}/exports/")
+    resp = s3._client.list_objects_v2(Bucket=s3.bucket, Prefix=prefix)
+    return resp.get("Contents", []) or []
+
+
+def _fetch_export_bytes(s3, key_root: str, canonical_relpath: str, ext: str) -> bytes | None:
+    """Try the canonical key first; if missing, fall back to listing the exports/ prefix.
+
+    Older engine runs wrote {slug}.{ext} instead of draft.{ext}. The fallback prefers
+    the largest matching file and skips known intermediate artifacts (the abstract
+    fragment, pre-citation intermediate), so we always return the actual final draft.
     """
     try:
         full = s3._full_key(f"{key_root}/{canonical_relpath}")
         return s3._client.get_object(Bucket=s3.bucket, Key=full)["Body"].read()
     except s3._client.exceptions.NoSuchKey:
         pass
-    # Fallback: list the exports/ prefix and grab the first matching .ext
-    prefix = s3._full_key(f"{key_root}/exports/")
-    resp = s3._client.list_objects_v2(Bucket=s3.bucket, Prefix=prefix)
-    for item in resp.get("Contents", []) or []:
-        if item["Key"].lower().endswith("." + ext.lower()):
-            return s3._client.get_object(Bucket=s3.bucket, Key=item["Key"])["Body"].read()
-    return None
+    suffix = "." + ext.lower()
+    candidates = []
+    for item in _list_exports(s3, key_root):
+        key = item["Key"]
+        name = key.rsplit("/", 1)[-1].lower()
+        if not name.endswith(suffix):
+            continue
+        if name in _EXPORT_INTERMEDIATES:
+            continue
+        candidates.append((item.get("Size", 0), key))
+    if not candidates:
+        return None
+    # Largest wins — the final draft is always longer than any intermediate fragment.
+    candidates.sort(reverse=True)
+    pick = candidates[0][1]
+    return s3._client.get_object(Bucket=s3.bucket, Key=pick)["Body"].read()
 
 
 @router.get("/{paper_id}/draft")
@@ -395,12 +420,30 @@ EXPORT_FORMATS = {
 def list_exports(paper_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(db_session)):
     p, job_id = _require_done_paper(db, user, paper_id)
     s3 = get_s3_from_settings(get_settings())
+    key_root = _job_key_root(p, job_id)
+    # For each format, prefer the canonical path. If it isn't there (older runs)
+    # fall back to picking the largest non-intermediate file with that extension.
     out = []
+    listing = _list_exports(s3, key_root)
     for fmt, (rel, _ct) in EXPORT_FORMATS.items():
-        meta = s3.head_object(f"{_job_key_root(p, job_id)}/{rel}")
-        if meta:
-            out.append({"format": fmt, "size": meta["ContentLength"],
-                         "generated_at": meta["LastModified"].isoformat()})
+        canonical_meta = s3.head_object(f"{key_root}/{rel}")
+        if canonical_meta:
+            out.append({"format": fmt, "size": canonical_meta["ContentLength"],
+                         "generated_at": canonical_meta["LastModified"].isoformat()})
+            continue
+        # Fallback: find a slug-named alternative
+        suffix = "." + fmt.lower()
+        cands = []
+        for item in listing:
+            name = item["Key"].rsplit("/", 1)[-1].lower()
+            if not name.endswith(suffix) or name in _EXPORT_INTERMEDIATES:
+                continue
+            cands.append((item.get("Size", 0), item))
+        if cands:
+            cands.sort(reverse=True)
+            item = cands[0][1]
+            out.append({"format": fmt, "size": item["Size"],
+                         "generated_at": item["LastModified"].isoformat()})
     return out
 
 
@@ -412,5 +455,34 @@ def download_export(paper_id: uuid.UUID, fmt: str,
     p, job_id = _require_done_paper(db, user, paper_id)
     s3 = get_s3_from_settings(get_settings())
     rel, _ct = EXPORT_FORMATS[fmt]
-    url = s3.presigned_get(f"{_job_key_root(p, job_id)}/{rel}", expires_in=300)
+    key_root = _job_key_root(p, job_id)
+
+    # Prefer the canonical path. If absent (older runs), find the slug-named alternative.
+    canonical_full = s3._full_key(f"{key_root}/{rel}")
+    target_key = None
+    if s3.head_object(f"{key_root}/{rel}"):
+        target_key = canonical_full
+    else:
+        suffix = "." + fmt.lower()
+        cands = []
+        for item in _list_exports(s3, key_root):
+            name = item["Key"].rsplit("/", 1)[-1].lower()
+            if name.endswith(suffix) and name not in _EXPORT_INTERMEDIATES:
+                cands.append((item.get("Size", 0), item["Key"]))
+        if cands:
+            cands.sort(reverse=True)
+            target_key = cands[0][1]
+
+    if not target_key:
+        raise HTTPException(
+            404,
+            detail={"error": {"code": "export_missing", "message": f"No {fmt} export found for this paper."}},
+        )
+
+    # presigned_get expects a relative key (it prefixes); pass the raw key by going through the client.
+    url = s3._client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": s3.bucket, "Key": target_key},
+        ExpiresIn=300,
+    )
     return RedirectResponse(url, status_code=302)
