@@ -380,6 +380,7 @@ generated_by: "OpenDraft AI - https://github.com/federicodeponte/opendraft"
         run_agent_func=run_agent,
         output_dir=ctx.folders['exports'],
         verbose=ctx.verbose,
+        language=ctx.language,
     )
 
     if ctx.tracker:

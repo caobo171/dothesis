@@ -189,12 +189,46 @@ def replace_placeholder_with_abstract(draft_content: str, generated_abstract: st
     return updated_content
 
 
+# Map ISO-style language codes (the API/UI use) to the names the abstract prompt expects.
+# Anything not in the map falls through to the code itself so the LLM still sees a hint.
+_LANG_CODE_TO_NAME = {
+    "en": "english",
+    "en-us": "english", "en-gb": "english",
+    "de": "german",
+    "es": "spanish",
+    "fr": "french",
+    "vi": "vietnamese",
+    "zh": "chinese", "zh-cn": "chinese", "zh-tw": "chinese",
+    "ja": "japanese",
+    "ko": "korean",
+    "pt": "portuguese", "pt-br": "portuguese",
+    "it": "italian",
+    "nl": "dutch",
+    "ru": "russian",
+    "ar": "arabic",
+    "hi": "hindi",
+    "id": "indonesian",
+    "th": "thai",
+    "tr": "turkish",
+    "pl": "polish",
+}
+
+
+def normalize_language(value: Optional[str]) -> str:
+    """Resolve an inbound language string to a lowercase name the abstract prompt uses."""
+    if not value:
+        return "english"
+    key = value.strip().lower()
+    return _LANG_CODE_TO_NAME.get(key, key)
+
+
 def generate_abstract_for_draft(
     draft_path: Path,
     model,
     run_agent_func,
     output_dir: Path,
-    verbose: bool = True
+    verbose: bool = True,
+    language: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Generate and integrate abstract for a draft.
@@ -212,6 +246,8 @@ def generate_abstract_for_draft(
         run_agent_func: Function to run agent (from test_utils)
         output_dir: Output directory for intermediate files
         verbose: Print progress messages
+        language: Target language (ISO code like "vi" or name like "vietnamese").
+                  When provided, takes precedence over content-based detection.
 
     Returns:
         Tuple of (success: bool, updated_content: str or None)
@@ -220,8 +256,12 @@ def generate_abstract_for_draft(
     with open(draft_path, 'r', encoding='utf-8') as f:
         draft_content = f.read()
 
-    # Detect language
-    language = detect_draft_language(draft_content)
+    # Resolve language: prefer the explicit value the caller passed (from the wizard / brief).
+    # Fall back to content-based detection only when the caller didn't provide one.
+    if language:
+        language = normalize_language(language)
+    else:
+        language = detect_draft_language(draft_content)
 
     # Check if abstract generation is needed
     if not has_placeholder_abstract(draft_content):
@@ -244,14 +284,18 @@ def generate_abstract_for_draft(
 
 **Language:** {language.title()}
 
+**CRITICAL: Write the ENTIRE abstract — every paragraph, every keyword, every heading — in {language.title()}.**
+Do NOT write any part of the output in English unless the target language IS English.
+If the draft context below is in a different language, still write the abstract in {language.title()}.
+
 **Draft Context:**
 {draft_context}
 
 **Instructions:**
-- Generate a 4-paragraph abstract (250-300 words)
-- Include 12-15 relevant keywords
-- Follow standard academic abstract structure
-- Output ONLY the abstract content (no meta-comments)
+- Generate a 4-paragraph abstract (250-300 words) in {language.title()}.
+- Include 12-15 relevant keywords in {language.title()}.
+- Follow standard academic abstract structure.
+- Output ONLY the abstract content (no meta-comments).
 """
 
     # Call Abstract Generator agent
