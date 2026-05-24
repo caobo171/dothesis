@@ -5,14 +5,16 @@ import {
   DocumentTextIcon,
   HomeIcon,
   PlusIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { AnnouncementProvider } from "@/app/components/announcements/AnnouncementProvider";
 import { SidebarLayout } from "@/app/components/layout/SidebarLayout";
 import type { SidebarSection } from "@/app/components/layout/sections";
+import { useMe } from "@/app/lib/use-me";
 
-const SECTIONS: SidebarSection[] = [
+const BASE_SECTIONS: SidebarSection[] = [
   {
     id: "workspace",
     name: "Workspace",
@@ -29,9 +31,21 @@ const SECTIONS: SidebarSection[] = [
   },
 ];
 
+const ADMIN_SECTION: SidebarSection = {
+  id: "admin",
+  name: "Admin",
+  options: [{ name: "Admin Console", href: "/admin/users", icon: ShieldCheckIcon }],
+};
+
 export default function InAppLayout({ children }: { children: ReactNode }) {
+  const me = useMe();
+  const sections = useMemo<SidebarSection[]>(
+    () => (me.data?.is_super_admin ? [...BASE_SECTIONS, ADMIN_SECTION] : BASE_SECTIONS),
+    [me.data?.is_super_admin],
+  );
+
   return (
-    <SidebarLayout sections={SECTIONS}>
+    <SidebarLayout sections={sections}>
       <AnnouncementProvider>{children}</AnnouncementProvider>
     </SidebarLayout>
   );
