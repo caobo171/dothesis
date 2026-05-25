@@ -220,3 +220,18 @@ def resend_verification(body: EmailRequest,
     user.last_verify_sent_at = now
     db.commit()
     return {"ok": True}
+
+
+@router.post("/forgot-password")
+def forgot_password(body: EmailRequest,
+                    db: Session = Depends(db_session),
+                    settings: Settings = Depends(get_settings)):
+    user = db.scalar(select(User).where(User.email == body.email.lower()))
+    if not user:
+        return {"ok": True}
+    token = make_reset_token(user.id)
+    reset_url = f"{settings.web_origin}/reset-password?token={token}"
+    send_template(user.email, "reset_password",
+                  {"username": user.username, "reset_url": reset_url, "expires_minutes": 60},
+                  "Reset your DoThesis password")
+    return {"ok": True}
