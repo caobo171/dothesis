@@ -92,6 +92,13 @@ class Job(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_text: Mapped[str | None] = mapped_column(Text)
+    # Orchestrator-mode extensions (sub-project 1). All nullable so legacy engine
+    # jobs (with mode IS NULL) keep working unchanged. New orchestrator runs set
+    # mode = "auto" and populate the other three.
+    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    thread_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    mode: Mapped[str | None] = mapped_column(String(16))
+    langgraph_thread_id: Mapped[str | None] = mapped_column(Text)
 
 
 class JobEvent(Base):
@@ -155,3 +162,73 @@ class Announcement(Base):
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator tables (sub-project 1)
+# ---------------------------------------------------------------------------
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    field: Mapped[str | None] = mapped_column(String(64))
+    language: Mapped[str] = mapped_column(String(16), nullable=False, server_default="en")
+    citation_style: Mapped[str] = mapped_column(String(16), nullable=False, server_default="apa")
+    research_approach: Mapped[str | None] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="draft")
+    current_module: Mapped[str] = mapped_column(String(8), nullable=False, server_default="M1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Thread(Base):
+    __tablename__ = "threads"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False, server_default="Main")
+    langgraph_thread_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    parent_thread_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    forked_at_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_active_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    thread_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("threads.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    module_tag: Mapped[str | None] = mapped_column(String(8))
+    tool_calls_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ContextStore(Base):
+    __tablename__ = "context_store"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
+    )
+    m1_topic: Mapped[dict | None] = mapped_column(JSONB)
+    m2_literature: Mapped[dict | None] = mapped_column(JSONB)
+    m3_design: Mapped[dict | None] = mapped_column(JSONB)
+    m4_analysis: Mapped[dict | None] = mapped_column(JSONB)
+    m5_writing: Mapped[dict | None] = mapped_column(JSONB)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
