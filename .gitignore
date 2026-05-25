@@ -67,3 +67,6 @@ api/*.egg-info/
 web/.next/
 web/node_modules/
 web/tsconfig.tsbuildinfo
+
+# Brainstorming visual companion scratch files
+.superpowers/
