@@ -70,17 +70,32 @@ export const ExportTab = ({ paperId }) => {
         {(!exports || !exports.length) && <div style={{ color: "var(--ink-500)" }}>No exports yet.</div>}
       </div>
 
-      {regenResult && (
-        <div style={{ marginTop: 16, padding: 12, background: "var(--ok-bg)", color: "var(--ok-fg)", borderRadius: 10, fontSize: 13 }}>
-          Re-export complete:{" "}
-          {regenResult.map((r) => (
-            <span key={r.format} style={{ marginRight: 12 }}>
-              <b>{(LABELS[r.format] || r.format).toUpperCase()}</b>
-              {r.size ? ` (${(r.size / 1024).toFixed(0)} KB)` : r.error ? ` — failed: ${r.error}` : ""}
-            </span>
-          ))}
-        </div>
-      )}
+      {regenResult && (() => {
+        const okCount = regenResult.filter((r) => r.size && !r.error).length;
+        const errCount = regenResult.filter((r) => r.error).length;
+        const allFailed = okCount === 0 && errCount > 0;
+        const allOk = okCount > 0 && errCount === 0;
+        const palette = allFailed
+          ? { bg: "var(--stop-bg)", fg: "var(--stop-fg)", label: "Re-export failed" }
+          : allOk
+          ? { bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Re-export complete" }
+          : { bg: "var(--pause-bg)", fg: "var(--pause-fg)", label: "Re-export partially succeeded" };
+        return (
+          <div style={{ marginTop: 16, padding: 12, background: palette.bg, color: palette.fg, borderRadius: 10, fontSize: 13 }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>{palette.label}</div>
+            {regenResult.map((r) => (
+              <div key={r.format} style={{ fontSize: 12.5 }}>
+                <b>{(LABELS[r.format] || r.format).toUpperCase()}</b>
+                {r.size
+                  ? ` — ${(r.size / 1024).toFixed(0)} KB`
+                  : r.error
+                  ? ` — failed: ${r.error}`
+                  : ""}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
       {regenError && (
         <div style={{ marginTop: 16, padding: 12, background: "var(--stop-bg)", color: "var(--stop-fg)", borderRadius: 10, fontSize: 13 }}>
           {regenError}

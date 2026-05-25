@@ -76,7 +76,7 @@ export function SidebarLayout({ sections, children }: PropsWithChildren<{ sectio
               {section.options.map((option) => {
                 const hasSubitems = (option.subitems?.length ?? 0) > 0;
                 const isExpanded = expandedItems.has(option.name);
-                const active = selectedHref === option.href || option.default;
+                const active = selectedHref === option.href;
                 const hasActiveSubitem =
                   hasSubitems && option.subitems!.some((s) => selectedHref === s.href);
 

@@ -31,18 +31,36 @@ export function PricingPackages({ onSuccess }: { onSuccess?: () => void }) {
     try {
       const res = await apiFetch("/credit/checkout", {
         method: "POST",
-        body: { package_id: pkg.id },
+        body: { package_id: pkg.id, quantity: qty[pkg.id] || 1 },
       });
       if (res?.checkout_url) {
+        // Successful checkout — redirect, parent can refresh me after Polar callback.
+        onSuccess?.();
         window.location.href = res.checkout_url;
-      } else {
-        setErr("Could not start checkout.");
+        return;
       }
+      // 200 OK but no checkout_url — backend didn't actually start a session.
+      console.error("[credit] checkout returned no checkout_url:", res);
+      setErr(
+        "Checkout could not be started. The server returned a successful response but no Polar checkout URL — most likely Polar isn't configured yet (POLAR_ACCESS_TOKEN / POLAR_PRODUCT_ID).",
+      );
     } catch (e: any) {
-      setErr(e?.message || "Checkout failed.");
+      // Log the full error to the console so it's debuggable in DevTools.
+      console.error("[credit] checkout failed:", e, e?.body);
+      const code = e?.body?.error?.code;
+      let msg = e?.message || "Checkout failed.";
+      if (code === "polar_not_configured") {
+        msg = "Polar payments aren't configured on this server. Ask the admin to set POLAR_ACCESS_TOKEN and POLAR_PRODUCT_ID in .env.";
+      } else if (e?.status === 401) {
+        msg = "You're signed out. Refresh the page and sign in again.";
+      } else if (e?.status === 404) {
+        msg = `Checkout endpoint /credit/checkout not found on the API (404). The route may not be wired up yet.`;
+      } else if (e?.status >= 500) {
+        msg = `Server error ${e.status}: ${e.message}. Check the API server logs for the full traceback.`;
+      }
+      setErr(msg);
     } finally {
       setBusy(null);
-      onSuccess?.();
     }
   }
 
