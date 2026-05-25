@@ -146,6 +146,36 @@ def login(body: LoginRequest, request: Request, response: Response,
     return _to_out(user)
 
 
+class TokenRequest(BaseModel):
+    token: str
+
+
+@router.post("/verify")
+def verify(body: TokenRequest, request: Request, response: Response,
+           db: Session = Depends(db_session), settings: Settings = Depends(get_settings)):
+    try:
+        uid = decode_token(body.token, kind="verify", max_age=VERIFY_TTL)
+    except ValueError as e:
+        code = str(e) if str(e) in {"token_expired", "token_invalid", "token_mismatch"} else "token_invalid"
+        raise HTTPException(400, detail={"error": {"code": code,
+                                                    "message": "Verification link is invalid or expired"}})
+    user = db.get(User, uid)
+    if not user:
+        raise HTTPException(400, detail={"error": {"code": "token_invalid",
+                                                    "message": "User not found"}})
+    if user.email_verified:
+        _issue_session(db, user, settings, response, request)
+        return {"ok": True, "already_verified": True, "user": _to_out(user).model_dump()}
+
+    user.email_verified = True
+    ledger_credit(db, user, delta=settings.signup_bonus_credits,
+                  reason="signup_bonus", ref_type="user", ref_id=user.id)
+    user.last_login = datetime.now(timezone.utc)
+    _issue_session(db, user, settings, response, request)
+    db.commit()
+    return {"ok": True, "user": _to_out(user).model_dump()}
+
+
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(response: Response):
     response.delete_cookie(SESSION_COOKIE, path="/")
