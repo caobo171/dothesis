@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth_tokens import VERIFY_TTL, RESET_TTL, make_verify_token, make_reset_token, decode_token
+from ..google_auth import verify_google_id_token
 from ..credit_ledger import credit as ledger_credit
 from ..db import db_session
 from ..deps import SESSION_COOKIE, current_user
@@ -259,3 +260,58 @@ def reset_password(body: ResetRequest,
     db.query(UserSession).filter(UserSession.user_id == uid).delete()
     db.commit()
     return {"ok": True}
+
+
+class GoogleRequest(BaseModel):
+    id_token: str
+
+
+@router.post("/google")
+def google_signin(body: GoogleRequest, request: Request, response: Response,
+                  db: Session = Depends(db_session),
+                  settings: Settings = Depends(get_settings)) -> UserOut:
+    try:
+        info = verify_google_id_token(body.id_token)
+    except ValueError as e:
+        raise HTTPException(401, detail={"error": {"code": "bad_google_token",
+                                                    "message": str(e)}})
+
+    # 1. Look up by google_id
+    user = db.scalar(select(User).where(User.google_id == info["google_id"]))
+    # 2. Else by email — link to this Google account
+    if not user:
+        user = db.scalar(select(User).where(User.email == info["email"]))
+        if user:
+            user.google_id = info["google_id"]
+            if not user.email_verified:
+                user.email_verified = True
+    # 3. Else create new
+    created = False
+    if not user:
+        import random, secrets
+        email_prefix = re.sub(r"[^a-zA-Z0-9]", "", info["email"].split("@")[0])[:24] or "user"
+        for _ in range(20):
+            candidate = f"{email_prefix}{random.randint(1000, 9999)}"
+            if not db.scalar(select(User).where(User.username == candidate)):
+                break
+        else:
+            raise HTTPException(500, detail={"error": {"code": "username_collision",
+                                                        "message": "couldn't allocate a unique username"}})
+        user = User(
+            email=info["email"],
+            username=candidate,
+            password_hash=hash_password(secrets.token_urlsafe(32)),
+            email_verified=True,
+            google_id=info["google_id"],
+        )
+        db.add(user)
+        db.flush()
+        created = True
+
+    if created:
+        ledger_credit(db, user, delta=settings.signup_bonus_credits,
+                      reason="signup_bonus", ref_type="user", ref_id=user.id)
+    user.last_login = datetime.now(timezone.utc)
+    db.commit()
+    _issue_session(db, user, settings, response, request)
+    return _to_out(user)
