@@ -21,6 +21,8 @@ def _alembic(args: list[str]) -> None:
 
 
 def test_migration_up_down_up_clean(alembic_env):
+    # Start from a clean DB so the test is order-independent.
+    _alembic(["downgrade", "base"])
     _alembic(["upgrade", "head"])
     eng = create_engine(alembic_env)
     insp = inspect(eng)
