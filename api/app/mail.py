@@ -17,11 +17,15 @@ def _ses():
     global _client
     if _client is None:
         s = get_settings()
+        # Prefer SES-specific creds when set (Survify pattern); fall back to the
+        # general AWS creds used by S3.
+        access_key = s.aws_ses_access_key or s.aws_access_key
+        secret_key = s.aws_ses_secret_key or s.aws_secret_key
         _client = boto3.client(
             "sesv2",
             region_name=s.mail_region or "ap-southeast-1",
-            aws_access_key_id=s.aws_access_key,
-            aws_secret_access_key=s.aws_secret_key,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
         )
     return _client
 

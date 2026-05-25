@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     mail_from: str = Field(alias="OPENDRAFT_MAIL_FROM", default="")
     mail_region: str = Field(alias="OPENDRAFT_MAIL_REGION", default="ap-southeast-1")
     opendraft_mail: str = Field(alias="OPENDRAFT_MAIL", default="")
+    # Optional SES-specific credentials. Survify uses dedicated SES keys distinct from S3.
+    # When unset, mail.py falls back to aws_access_key / aws_secret_key.
+    aws_ses_access_key: str = Field(alias="AWS_SES_ACCESS_KEY", default="")
+    aws_ses_secret_key: str = Field(alias="AWS_SES_SECRET_KEY", default="")
     google_client_id: str = Field(alias="OPENDRAFT_GOOGLE_CLIENT_ID", default="")
     signup_bonus_credits: int = Field(alias="OPENDRAFT_SIGNUP_BONUS_CREDITS", default=100)
 
