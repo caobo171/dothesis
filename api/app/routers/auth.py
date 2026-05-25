@@ -1,12 +1,17 @@
 from datetime import datetime, timedelta, timezone
+import re
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..auth_tokens import VERIFY_TTL, RESET_TTL, make_verify_token, make_reset_token, decode_token
+from ..credit_ledger import credit as ledger_credit
 from ..db import db_session
 from ..deps import SESSION_COOKIE, current_user
+from ..mail import send_template
 from ..models import Session as UserSession, User
 from ..security import hash_password, sign_session_id, verify_password
 from ..settings import Settings, get_settings
@@ -16,7 +21,16 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 SESSION_TTL = timedelta(days=30)
 
 
-class Credentials(BaseModel):
+USERNAME_RE = re.compile(r"^[a-zA-Z0-9_]{3,32}$")
+
+
+class SignupRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=32)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=200)
+
+
+class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=200)
 
@@ -63,24 +77,45 @@ def _issue_session(db: Session, user: User, settings: Settings, response: Respon
 
 
 @router.post("/signup", status_code=201)
-def signup(creds: Credentials, request: Request, response: Response,
-           db: Session = Depends(db_session), settings: Settings = Depends(get_settings)) -> UserOut:
-    email = creds.email.lower()
-    existing = db.scalar(select(User).where(User.email == email))
-    if existing:
-        raise HTTPException(409, detail={"error": {"code": "email_taken", "message": "email already registered"}})
-    user = User(email=email, password_hash=hash_password(creds.password))
+def signup(body: SignupRequest,
+           db: Session = Depends(db_session),
+           settings: Settings = Depends(get_settings)):
+    if not USERNAME_RE.match(body.username):
+        raise HTTPException(422, detail={"error": {"code": "bad_username",
+                                                    "message": "username must be 3-32 chars, [a-zA-Z0-9_]"}})
+    email = body.email.lower()
+    username = body.username.lower()
+    if db.scalar(select(User).where(User.email == email)):
+        raise HTTPException(409, detail={"error": {"code": "email_taken",
+                                                    "message": "email already registered"}})
+    if db.scalar(select(User).where(User.username == username)):
+        raise HTTPException(409, detail={"error": {"code": "username_taken",
+                                                    "message": "username already taken"}})
+
+    user = User(
+        email=email,
+        username=username,
+        password_hash=hash_password(body.password),
+        email_verified=False,
+    )
     db.add(user)
+    db.flush()
+
+    token = make_verify_token(user.id)
+    verify_url = f"{settings.web_origin}/verify?token={token}"
+    send_template(email, "verify_email",
+                  {"username": user.username, "verify_url": verify_url, "expires_hours": 24},
+                  "Confirm your DoThesis email")
+    user.last_verify_sent_at = datetime.now(timezone.utc)
     db.commit()
-    _issue_session(db, user, settings, response, request)
-    return _to_out(user)
+    return {"ok": True, "email": email}
 
 
 @router.post("/login")
-def login(creds: Credentials, request: Request, response: Response,
+def login(body: LoginRequest, request: Request, response: Response,
           db: Session = Depends(db_session), settings: Settings = Depends(get_settings)) -> UserOut:
-    user = db.scalar(select(User).where(User.email == creds.email.lower()))
-    if not user or not verify_password(creds.password, user.password_hash):
+    user = db.scalar(select(User).where(User.email == body.email.lower()))
+    if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, detail={"error": {"code": "bad_credentials", "message": "invalid email or password"}})
     _issue_session(db, user, settings, response, request)
     return _to_out(user)
