@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=70.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "opendraft-api"
 version = "0.1.0"
@@ -19,6 +23,7 @@ dependencies = [
   "email-validator>=2.2",
   "markdown>=3.7",
   "polar-sdk>=0.9",
+  "google-auth>=2.34",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +34,9 @@ dev = [
   "moto[s3]>=5.0",
   "ruff>=0.7",
 ]
+
+[tool.setuptools]
+packages = ["app"]
 
 [tool.ruff]
 line-length = 100
