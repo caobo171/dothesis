@@ -27,6 +27,15 @@ dev = [
 ]
 
 [tool.setuptools]
-# package source lives one level up (repo-root/orchestrator/__init__.py)
-package-dir = {"orchestrator" = ".."}
-packages = ["orchestrator"]
+# The orchestrator package lives at repo-root/orchestrator/ (one level up
+# from this pyproject.toml). Map the package name to that location, and
+# enumerate every subpackage so `pip install -e orchestrator` exposes
+# `import orchestrator.graph`, `import orchestrator.agents.m1_topic`, etc.
+# When adding a new submodule directory under orchestrator/, append it here.
+package-dir = {"orchestrator" = "../orchestrator"}
+packages = [
+    "orchestrator",
+    "orchestrator.agents",
+    "orchestrator.schemas",
+    "orchestrator.tools",
+]
