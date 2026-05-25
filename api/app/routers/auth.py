@@ -56,11 +56,24 @@ def _to_out(u: User) -> UserOut:
     )
 
 
+def _parse_ip(raw: str | None) -> str | None:
+    """Return a valid inet string or None (handles test-client hostnames)."""
+    import ipaddress
+    if not raw:
+        return None
+    try:
+        ipaddress.ip_address(raw)
+        return raw
+    except ValueError:
+        return None
+
+
 def _issue_session(db: Session, user: User, settings: Settings, response: Response, request: Request) -> None:
+    raw_ip = request.client.host if request.client else None
     sess = UserSession(
         user_id=user.id,
         expires_at=datetime.now(timezone.utc) + SESSION_TTL,
-        ip=request.client.host if request.client else None,
+        ip=_parse_ip(raw_ip),
     )
     db.add(sess)
     db.commit()
@@ -115,8 +128,20 @@ def signup(body: SignupRequest,
 def login(body: LoginRequest, request: Request, response: Response,
           db: Session = Depends(db_session), settings: Settings = Depends(get_settings)) -> UserOut:
     user = db.scalar(select(User).where(User.email == body.email.lower()))
-    if not user or not verify_password(body.password, user.password_hash):
-        raise HTTPException(401, detail={"error": {"code": "bad_credentials", "message": "invalid email or password"}})
+    if not user:
+        raise HTTPException(401, detail={"error": {"code": "bad_credentials",
+                                                    "message": "invalid email or password"}})
+    if not verify_password(body.password, user.password_hash):
+        if user.google_id:
+            raise HTTPException(401, detail={"error": {"code": "use_google",
+                                                        "message": "This account is linked to Google"}})
+        raise HTTPException(401, detail={"error": {"code": "bad_credentials",
+                                                    "message": "invalid email or password"}})
+    if not user.email_verified:
+        raise HTTPException(403, detail={"error": {"code": "unverified",
+                                                    "message": "Please verify your email",
+                                                    "email": user.email}})
+    user.last_login = datetime.now(timezone.utc)
     _issue_session(db, user, settings, response, request)
     return _to_out(user)
 
