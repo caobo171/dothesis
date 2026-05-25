@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     polar_server: str = Field(alias="POLAR_SERVER", default="sandbox")
     opendraft_base_url: str = Field(alias="OPENDRAFT_BASE_URL", default="http://localhost:3000")
     opendraft_payments: str = Field(alias="OPENDRAFT_PAYMENTS", default="polar")
+    mail_from: str = Field(alias="OPENDRAFT_MAIL_FROM", default="")
+    mail_region: str = Field(alias="OPENDRAFT_MAIL_REGION", default="ap-southeast-1")
+    opendraft_mail: str = Field(alias="OPENDRAFT_MAIL", default="")
+    google_client_id: str = Field(alias="OPENDRAFT_GOOGLE_CLIENT_ID", default="")
+    signup_bonus_credits: int = Field(alias="OPENDRAFT_SIGNUP_BONUS_CREDITS", default=100)
 
     @field_validator("s3_prefix", mode="before")
     @classmethod
