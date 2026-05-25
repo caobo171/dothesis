@@ -184,3 +184,39 @@ def logout(response: Response):
 @router.get("/me")
 def me(user: User = Depends(current_user)) -> UserOut:
     return _to_out(user)
+
+
+class EmailRequest(BaseModel):
+    email: EmailStr
+
+
+RESEND_THROTTLE_SECONDS = 60
+
+
+@router.post("/resend-verification")
+def resend_verification(body: EmailRequest,
+                        db: Session = Depends(db_session),
+                        settings: Settings = Depends(get_settings)):
+    user = db.scalar(select(User).where(User.email == body.email.lower()))
+    if not user or user.email_verified:
+        return {"ok": True}  # no enumeration
+    now = datetime.now(timezone.utc)
+    if user.last_verify_sent_at:
+        last = user.last_verify_sent_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        elapsed = (now - last).total_seconds()
+        if elapsed < RESEND_THROTTLE_SECONDS:
+            raise HTTPException(429, detail={"error": {
+                "code": "throttled",
+                "message": "Please wait before requesting another email",
+                "retry_in": int(RESEND_THROTTLE_SECONDS - elapsed),
+            }})
+    token = make_verify_token(user.id)
+    verify_url = f"{settings.web_origin}/verify?token={token}"
+    send_template(user.email, "verify_email",
+                  {"username": user.username, "verify_url": verify_url, "expires_hours": 24},
+                  "Confirm your DoThesis email")
+    user.last_verify_sent_at = now
+    db.commit()
+    return {"ok": True}
