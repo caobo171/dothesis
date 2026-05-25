@@ -26,9 +26,13 @@ class User(Base):
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
-    username: Mapped[str | None] = mapped_column(String(64))
+    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     credit: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    email_verified: Mapped[bool] = mapped_column(default=False, server_default="false", nullable=False)
+    google_id: Mapped[str | None] = mapped_column(String(64), unique=True)
+    last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_verify_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
