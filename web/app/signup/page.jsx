@@ -1,12 +1,16 @@
 "use client";
-
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAuth } from "../lib/auth-context";
+
+import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
+import { apiFetch } from "../lib/api";
+
+const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 
 export default function SignupPage() {
-  const { signup } = useAuth();
   const router = useRouter();
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
@@ -15,37 +19,85 @@ export default function SignupPage() {
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
+    if (!USERNAME_RE.test(username)) {
+      setError("Username must be 3–32 characters, letters/numbers/underscore only.");
+      return;
+    }
     setBusy(true);
     try {
-      await signup(email, password);
-      router.push("/");
+      await apiFetch("/auth/signup", { method: "POST", body: { username, email, password } });
+      router.push(`/wait-verify?email=${encodeURIComponent(email)}`);
     } catch (err) {
-      setError(err.message || "Signup failed");
+      const code = err?.body?.detail?.error?.code;
+      const map = {
+        email_taken: "That email is already registered. Try signing in instead.",
+        username_taken: "That username is taken. Pick another.",
+        bad_username: "Username must be 3–32 characters, letters/numbers/underscore only.",
+      };
+      setError(map[code] || err.message || "Signup failed.");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div style={{ display: "grid", placeItems: "center", minHeight: "100vh", background: "var(--ink-50)" }}>
-      <form onSubmit={submit} className="card" style={{ padding: 32, width: 360, display: "flex", flexDirection: "column", gap: 14 }}>
-        <h1 className="section-title" style={{ marginBottom: 4 }}>Create account</h1>
-        <div className="field">
-          <label>Email</label>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required autoFocus />
+    <main className="min-h-screen flex items-center justify-center bg-ink-50 px-4 py-12">
+      <div className="w-full max-w-md bg-white rounded-2xl border border-ink-100 shadow-sm p-8 space-y-5">
+        <div className="text-center">
+          <div className="font-extrabold text-2xl text-ink-900">Do<span className="text-primary-600">Thesis</span></div>
+          <h1 className="mt-3 text-xl font-bold text-ink-900">Create your account</h1>
+          <p className="mt-1 text-sm text-ink-500">Sign up to start drafting verified-citation theses.</p>
         </div>
-        <div className="field">
-          <label>Password (≥ 8 chars)</label>
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" minLength={8} required />
+
+        <GoogleSignInButton onError={setError} />
+
+        <div className="flex items-center gap-3 text-xs text-ink-400">
+          <span className="flex-1 h-px bg-ink-100" />
+          <span>or with email</span>
+          <span className="flex-1 h-px bg-ink-100" />
         </div>
-        {error && <div style={{ color: "var(--danger-fg)", fontSize: 12 }}>{error}</div>}
-        <button className="btn btn-primary btn-lg btn-block" disabled={busy} type="submit">
-          {busy ? "Creating…" : "Create account"}
-        </button>
-        <a href="/login" style={{ fontSize: 13, color: "var(--blue-600)", textAlign: "center" }}>
-          Already have an account? Sign in
-        </a>
-      </form>
-    </div>
+
+        <form onSubmit={submit} className="space-y-3">
+          <label className="block">
+            <span className="text-xs font-medium text-ink-500">Username</span>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              autoFocus
+              className="mt-1 w-full rounded-xl border border-ink-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+              placeholder="your_handle"
+              pattern="[a-zA-Z0-9_]{3,32}"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-ink-500">Email</span>
+            <input
+              type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+              className="mt-1 w-full rounded-xl border border-ink-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-ink-500">Password (8+ chars)</span>
+            <input
+              type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8}
+              className="mt-1 w-full rounded-xl border border-ink-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+            />
+          </label>
+          {error && <div className="text-xs text-red-700">{error}</div>}
+          <button
+            type="submit" disabled={busy}
+            className="w-full rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
+          >
+            {busy ? "Creating account…" : "Create account"}
+          </button>
+        </form>
+
+        <div className="text-center text-sm text-ink-500">
+          Already have an account?{" "}
+          <Link href="/login" className="text-primary-600 font-medium hover:underline">Sign in</Link>
+        </div>
+      </div>
+    </main>
   );
 }
