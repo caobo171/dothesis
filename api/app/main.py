@@ -20,6 +20,18 @@ from .settings import get_settings, reset_settings
 async def lifespan(app: FastAPI):
     settings = get_settings()
     settings.job_workdir_root.mkdir(parents=True, exist_ok=True)
+
+    # Orchestrator: prime the graph cache at startup so first chat turn isn't slow.
+    # PostgresSaver.setup() runs as a side effect of get_*_graph().
+    if settings.orchestrator_enabled:
+        try:
+            from orchestrator.graph import get_auto_graph, get_interactive_graph
+            get_interactive_graph()
+            get_auto_graph()
+        except Exception:
+            import logging
+            logging.exception("orchestrator graph init failed (continuing without it)")
+
     yield
 
 
