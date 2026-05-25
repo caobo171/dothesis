@@ -29,7 +29,7 @@ The existing wizard (`web/(inapp)/wizard`) stays alive in parallel until the new
 
 ```
                     ┌───────────────────────────────────┐
-                    │  1. Orchestration foundation      │   ⬅ unblocks everything
+                    │  1. Orchestration foundation  ✅  │   ⬅ shipped 2026-05-26
                     │     (LangGraph + DB + auto+chat)  │
                     └───────────────────────────────────┘
                                     │
@@ -51,9 +51,9 @@ Sub-projects 2–6 are mostly independent and can be parallelized once #1 lands.
 
 ---
 
-## Sub-project 1 — Orchestration foundation 🔵
+## Sub-project 1 — Orchestration foundation ✅
 
-**Status:** In implementation (spec + plan complete 2026-05-26)
+**Status:** Shipped 2026-05-26 (branch `feat/orchestrator-foundation`, 28 commits, 68 tests passing)
 **Spec:** `docs/superpowers/specs/2026-05-25-orchestration-foundation-design.md`
 **Plan:** `docs/superpowers/plans/2026-05-26-orchestration-foundation-plan.md` (+ 4 phase files)
 **Estimated effort:** ~32 TDD tasks, ≈ 2–4 weeks
@@ -247,6 +247,7 @@ A short, append-only log of state changes. Update this when a sub-project moves 
 |---|---|---|---|
 | 2026-05-25 | 1 | ⬜ → 🟡 | Brainstormed; spec at `specs/2026-05-25-orchestration-foundation-design.md` |
 | 2026-05-26 | 1 | 🟡 → 🔵 | Plan at `plans/2026-05-26-orchestration-foundation-plan.md` |
+| 2026-05-26 | 1 | 🔵 → ✅ | All 32 tasks shipped on `feat/orchestrator-foundation`; 68 tests passing |
 
 ---
 
