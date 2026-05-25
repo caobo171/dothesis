@@ -153,21 +153,25 @@ async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
                 job.status = "done"
                 job.finished_at = datetime.now(timezone.utc)
                 job.progress = 1.0
-                paper = db.get(Paper, job.paper_id)
-                if paper:
-                    paper.status = "done"
+                # Orchestrator runs (mode="auto") have no paper_id — skip paper update.
+                if job.paper_id:
+                    paper = db.get(Paper, job.paper_id)
+                    if paper:
+                        paper.status = "done"
             if type_ == "error":
                 job.status = "failed"
                 job.finished_at = datetime.now(timezone.utc)
                 job.error_text = payload.get("text") or "unknown error"
-                paper = db.get(Paper, job.paper_id)
-                if paper:
-                    paper.status = "failed"
-                    from .credit_ledger import refund_if_unrefunded
-                    from .models import User
-                    paper_user = db.get(User, paper.user_id)
-                    if paper_user:
-                        refund_if_unrefunded(db, paper_user, paper_id=paper.id)
+                # Orchestrator runs (mode="auto") have no paper_id — skip paper/credit cleanup.
+                if job.paper_id:
+                    paper = db.get(Paper, job.paper_id)
+                    if paper:
+                        paper.status = "failed"
+                        from .credit_ledger import refund_if_unrefunded
+                        from .models import User
+                        paper_user = db.get(User, paper.user_id)
+                        if paper_user:
+                            refund_if_unrefunded(db, paper_user, paper_id=paper.id)
             if type_ == "checkpoint" and job.workdir:
                 # Engine wrote a fresh {workdir}/checkpoint.json after a phase boundary.
                 # Persist the entire JSON blob to the DB so we can resume even if the
@@ -201,14 +205,16 @@ def cancel_job(db: Session, job: Job) -> None:
             pass
     job.status = "canceled"
     job.finished_at = datetime.now(timezone.utc)
-    paper = db.get(Paper, job.paper_id)
-    if paper:
-        paper.status = "failed"
-        from .credit_ledger import refund_if_unrefunded
-        from .models import User
-        paper_user = db.get(User, paper.user_id)
-        if paper_user:
-            refund_if_unrefunded(db, paper_user, paper_id=paper.id)
+    # Orchestrator runs (mode="auto") have no paper_id — skip paper/credit cleanup.
+    if job.paper_id:
+        paper = db.get(Paper, job.paper_id)
+        if paper:
+            paper.status = "failed"
+            from .credit_ledger import refund_if_unrefunded
+            from .models import User
+            paper_user = db.get(User, paper.user_id)
+            if paper_user:
+                refund_if_unrefunded(db, paper_user, paper_id=paper.id)
     db.commit()
 
 

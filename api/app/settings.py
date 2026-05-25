@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     aws_ses_secret_key: str = Field(alias="AWS_SES_SECRET_KEY", default="")
     google_client_id: str = Field(alias="OPENDRAFT_GOOGLE_CLIENT_ID", default="")
     signup_bonus_credits: int = Field(alias="OPENDRAFT_SIGNUP_BONUS_CREDITS", default=100)
+    orchestrator_enabled: bool = Field(alias="ORCHESTRATOR_ENABLED", default=False)
+    langsmith_api_key: str | None = Field(alias="LANGSMITH_API_KEY", default=None)
+    orchestrator_pg_pool_max: int = Field(alias="ORCHESTRATOR_PG_POOL_MAX", default=10)
 
     @field_validator("s3_prefix", mode="before")
     @classmethod
@@ -62,3 +65,12 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
     return _settings
+
+
+def reset_settings() -> None:
+    """Force the next get_settings() call to re-read from environment.
+
+    Useful in tests that monkeypatch env vars before calling create_app().
+    """
+    global _settings
+    _settings = None

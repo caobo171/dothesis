@@ -108,9 +108,13 @@ def upgrade() -> None:
     op.add_column("jobs", sa.Column("thread_id",  UUID(as_uuid=True), nullable=True))
     op.add_column("jobs", sa.Column("mode",       sa.String(16),       nullable=True))
     op.add_column("jobs", sa.Column("langgraph_thread_id", sa.Text,    nullable=True))
+    # Allow paper_id to be NULL for orchestrator runs (auto-mode jobs are project-scoped,
+    # not paper-scoped). Legacy engine rows always have a paper_id set.
+    op.alter_column("jobs", "paper_id", existing_type=UUID(as_uuid=True), nullable=True)
 
 
 def downgrade() -> None:
+    op.alter_column("jobs", "paper_id", existing_type=UUID(as_uuid=True), nullable=False)
     op.drop_column("jobs", "langgraph_thread_id")
     op.drop_column("jobs", "mode")
     op.drop_column("jobs", "thread_id")

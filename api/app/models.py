@@ -76,8 +76,12 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    paper_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("papers.id", ondelete="CASCADE"), index=True
+    # Nullable: orchestrator runs (mode="auto") are project-scoped and have no paper_id.
+    # Legacy engine jobs always set paper_id; the NOT NULL constraint is dropped in the
+    # orchestrator migration so both row types can coexist in the same table.
+    paper_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("papers.id", ondelete="CASCADE"), index=True,
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
     phase: Mapped[str | None] = mapped_column(String(32))

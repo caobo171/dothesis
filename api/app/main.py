@@ -13,7 +13,7 @@ from .routers import auth as auth_router
 from .routers import credit as credit_router
 from .routers import jobs as jobs_router
 from .routers import papers as papers_router
-from .settings import get_settings
+from .settings import get_settings, reset_settings
 
 
 @asynccontextmanager
@@ -24,6 +24,8 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    # Reset cached settings so that env-var monkeypatching in tests takes effect.
+    reset_settings()
     settings = get_settings()
     app = FastAPI(title="OpenDraft API", version="0.1.0", lifespan=lifespan)
     app.add_middleware(
@@ -48,6 +50,13 @@ def create_app() -> FastAPI:
     app.include_router(admin_orders_router.router, prefix="/api/v1")
     app.include_router(admin_announcements_router.router, prefix="/api/v1")
     app.include_router(announcements_router.router, prefix="/api/v1")
+
+    if settings.orchestrator_enabled:
+        from .routers import chat as chat_router
+        from .routers import runs as runs_router
+        app.include_router(chat_router.router, prefix="/api/v1")
+        app.include_router(runs_router.router, prefix="/api/v1")
+
     return app
 
 
