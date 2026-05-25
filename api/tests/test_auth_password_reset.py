@@ -43,3 +43,45 @@ def test_forgot_known_email_sends_template():
     assert args[0] == "alice@e.com"
     assert args[1] == "reset_password"
     assert "reset_url" in args[2]
+
+
+def test_reset_with_valid_token_changes_password_and_invalidates_sessions():
+    Session = get_session_factory()
+    uid = _seed("alice@e.com")
+    # Seed a session row so we can verify it gets deleted
+    with Session() as s:
+        from datetime import datetime, timedelta, timezone
+        s.add(UserSession(user_id=uid,
+                          expires_at=datetime.now(timezone.utc) + timedelta(days=30)))
+        s.commit()
+        assert s.query(UserSession).filter_by(user_id=uid).count() == 1
+
+    tok = make_reset_token(uid)
+    c = _client()
+    r = c.post("/api/v1/auth/reset-password",
+                json={"token": tok, "new_password": "brandnew1234"})
+    assert r.status_code == 200
+
+    with Session() as s:
+        u = s.get(User, uid)
+        assert verify_password("brandnew1234", u.password_hash)
+        assert not verify_password("oldpass1234", u.password_hash)
+        assert s.query(UserSession).filter_by(user_id=uid).count() == 0
+
+
+def test_reset_rejects_verify_token():
+    uid = _seed("x@e.com")
+    tok = make_verify_token(uid)
+    c = _client()
+    r = c.post("/api/v1/auth/reset-password",
+                json={"token": tok, "new_password": "supernew1234"})
+    assert r.status_code == 400
+
+
+def test_reset_rejects_short_password():
+    uid = _seed("p@e.com")
+    tok = make_reset_token(uid)
+    c = _client()
+    r = c.post("/api/v1/auth/reset-password",
+                json={"token": tok, "new_password": "short"})
+    assert r.status_code == 422

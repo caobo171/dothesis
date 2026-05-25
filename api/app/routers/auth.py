@@ -235,3 +235,27 @@ def forgot_password(body: EmailRequest,
                   {"username": user.username, "reset_url": reset_url, "expires_minutes": 60},
                   "Reset your DoThesis password")
     return {"ok": True}
+
+
+class ResetRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8, max_length=200)
+
+
+@router.post("/reset-password")
+def reset_password(body: ResetRequest,
+                   db: Session = Depends(db_session)):
+    try:
+        uid = decode_token(body.token, kind="reset", max_age=RESET_TTL)
+    except ValueError as e:
+        code = str(e) if str(e) in {"token_expired", "token_invalid", "token_mismatch"} else "token_invalid"
+        raise HTTPException(400, detail={"error": {"code": code,
+                                                    "message": "Reset link is invalid or expired"}})
+    user = db.get(User, uid)
+    if not user:
+        raise HTTPException(400, detail={"error": {"code": "token_invalid",
+                                                    "message": "User not found"}})
+    user.password_hash = hash_password(body.new_password)
+    db.query(UserSession).filter(UserSession.user_id == uid).delete()
+    db.commit()
+    return {"ok": True}
