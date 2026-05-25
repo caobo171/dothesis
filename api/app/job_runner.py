@@ -153,21 +153,25 @@ async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
                 job.status = "done"
                 job.finished_at = datetime.now(timezone.utc)
                 job.progress = 1.0
-                paper = db.get(Paper, job.paper_id)
-                if paper:
-                    paper.status = "done"
+                # Orchestrator runs (mode="auto") have no paper_id — skip paper update.
+                if job.paper_id:
+                    paper = db.get(Paper, job.paper_id)
+                    if paper:
+                        paper.status = "done"
             if type_ == "error":
                 job.status = "failed"
                 job.finished_at = datetime.now(timezone.utc)
                 job.error_text = payload.get("text") or "unknown error"
-                paper = db.get(Paper, job.paper_id)
-                if paper:
-                    paper.status = "failed"
-                    from .credit_ledger import refund_if_unrefunded
-                    from .models import User
-                    paper_user = db.get(User, paper.user_id)
-                    if paper_user:
-                        refund_if_unrefunded(db, paper_user, paper_id=paper.id)
+                # Orchestrator runs (mode="auto") have no paper_id — skip paper/credit cleanup.
+                if job.paper_id:
+                    paper = db.get(Paper, job.paper_id)
+                    if paper:
+                        paper.status = "failed"
+                        from .credit_ledger import refund_if_unrefunded
+                        from .models import User
+                        paper_user = db.get(User, paper.user_id)
+                        if paper_user:
+                            refund_if_unrefunded(db, paper_user, paper_id=paper.id)
             if type_ == "checkpoint" and job.workdir:
                 # Engine wrote a fresh {workdir}/checkpoint.json after a phase boundary.
                 # Persist the entire JSON blob to the DB so we can resume even if the
@@ -179,12 +183,18 @@ async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
                         job.completed_phase = payload.get("phase") or job.checkpoint_json.get("completed_phase")
                     except Exception as e:
                         log.warning("could not load checkpoint for job %s: %s", job_id, e)
+            # Orchestrator emits a "paused" event when the graph halts gracefully
+            # (e.g., after receiving SIGTERM). Mark the run paused so it can be resumed.
+            if type_ == "paused":
+                job.status = "paused"
+                job.finished_at = datetime.now(timezone.utc)
 
         db.commit()
         ev_id = event.id
 
     await pubsub.publish(job_id, {"id": ev_id, **payload})
-    return type_ in {"job_done", "error"}
+    # "paused" is terminal for the monitor loop — the run will be resumed via a new spawn.
+    return type_ in {"job_done", "error", "paused"}
 
 
 def cancel_job(db: Session, job: Job) -> None:
@@ -195,12 +205,77 @@ def cancel_job(db: Session, job: Job) -> None:
             pass
     job.status = "canceled"
     job.finished_at = datetime.now(timezone.utc)
-    paper = db.get(Paper, job.paper_id)
-    if paper:
-        paper.status = "failed"
-        from .credit_ledger import refund_if_unrefunded
-        from .models import User
-        paper_user = db.get(User, paper.user_id)
-        if paper_user:
-            refund_if_unrefunded(db, paper_user, paper_id=paper.id)
+    # Orchestrator runs (mode="auto") have no paper_id — skip paper/credit cleanup.
+    if job.paper_id:
+        paper = db.get(Paper, job.paper_id)
+        if paper:
+            paper.status = "failed"
+            from .credit_ledger import refund_if_unrefunded
+            from .models import User
+            paper_user = db.get(User, paper.user_id)
+            if paper_user:
+                refund_if_unrefunded(db, paper_user, paper_id=paper.id)
     db.commit()
+
+
+def spawn_orchestrator_run(db: Session, run: Job, brief: dict,
+                           resume_from: str | None = None) -> None:
+    """Spawn `python -m orchestrator` as a subprocess for an auto-mode run.
+
+    Mirrors `spawn_job` but uses the orchestrator entrypoint. Reuses events.jsonl
+    contract so existing `_monitor` works unchanged.
+    """
+    settings = get_settings()
+    workdir = settings.job_workdir_root / str(run.id)
+    workdir.mkdir(parents=True, exist_ok=True)
+    if not resume_from:
+        (workdir / "brief.json").write_text(json.dumps(brief), encoding="utf-8")
+    (workdir / "events.jsonl").touch()
+
+    env = os.environ.copy()
+    env["RUN_ID"] = str(run.id)
+    if run.project_id:
+        env["PROJECT_ID"] = str(run.project_id)
+    env["DATABASE_URL"] = os.environ.get("DATABASE_URL", "")
+    env["AWS_REGION"] = settings.aws_region
+    env["S3_BUCKET"] = settings.s3_bucket
+    env["S3_PREFIX"] = settings.s3_prefix
+    env["AWS_ACCESS_KEY"] = settings.aws_access_key
+    env["AWS_SECRET_KEY"] = settings.aws_secret_key
+    if settings.gemini_api_key:
+        env["GEMINI_API_KEY"] = settings.gemini_api_key
+        env["GOOGLE_API_KEY"] = settings.gemini_api_key
+    if settings.openai_api_key:
+        env["OPENAI_API_KEY"] = settings.openai_api_key
+
+    user_id = None
+    if run.project_id:
+        from .models import Project
+        proj = db.get(Project, run.project_id)
+        user_id = str(proj.user_id) if proj else None
+
+    cmd = [sys.executable, "-m", "orchestrator",
+           "--workdir", str(workdir),
+           "--run-id", str(run.id)]
+    if resume_from:
+        cmd.extend(["--resume-run-id", resume_from])
+    else:
+        cmd.extend([
+            "--auto-draft",
+            "--brief-json", str(workdir / "brief.json"),
+            "--project-id", str(run.project_id) if run.project_id else "",
+            "--user-id", user_id or "",
+        ])
+
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(Path(__file__).resolve().parents[2]),
+        env=env,
+    )
+    run.pid = proc.pid
+    run.workdir = str(workdir)
+    run.status = "running"
+    run.started_at = datetime.now(timezone.utc)
+    db.commit()
+
+    start_monitor(run.id)

@@ -27,3 +27,11 @@ python-dotenv>=1.0.0,<2.0.0 # Load .env files
 rich>=13.0.0,<14.0.0        # Pretty terminal output (for scripts)
 psutil>=5.9.0,<7.0.0        # System monitoring for health checks
 tenacity>=8.2.0,<10.0.0    # Production-grade retry with exponential backoff
+
+# === LangChain 1.x orchestrator (sub-project 1) ===
+langchain>=1.3.0,<2
+langchain-core>=1.4.0,<2
+langgraph>=1.2.0,<2
+langgraph-checkpoint>=4.1.0,<5
+langgraph-checkpoint-postgres>=3.1.0,<4
+langchain-google-genai>=4.1.0,<5

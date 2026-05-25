@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=70.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dothesis-orchestrator"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+  # LangChain 1.x stack (verified May 2026 PyPI versions)
+  "langchain>=1.3.0,<2",
+  "langchain-core>=1.4.0,<2",
+  "langgraph>=1.2.0,<2",
+  "langgraph-checkpoint>=4.1.0,<5",
+  "langgraph-checkpoint-postgres>=3.1.0,<4",
+  "langchain-google-genai>=4.1.0,<5",
+  "pydantic>=2.9",
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.2",
+  "psycopg-pool>=3.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+]
+
+[tool.setuptools]
+# The orchestrator package lives at repo-root/orchestrator/ (one level up
+# from this pyproject.toml). Map the package name to that location, and
+# enumerate every subpackage so `pip install -e orchestrator` exposes
+# `import orchestrator.graph`, `import orchestrator.agents.m1_topic`, etc.
+# When adding a new submodule directory under orchestrator/, append it here.
+package-dir = {"orchestrator" = "../orchestrator"}
+packages = [
+    "orchestrator",
+    "orchestrator.agents",
+    "orchestrator.schemas",
+    "orchestrator.tools",
+]

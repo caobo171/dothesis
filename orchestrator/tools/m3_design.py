@@ -1,0 +1,130 @@
+"""M3 — Research Design tools."""
+from __future__ import annotations
+
+import json
+import logging
+import os
+
+from langchain_core.tools import tool
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+logger = logging.getLogger(__name__)
+
+
+def _get_llm():
+    # Centralised LLM factory — allows monkeypatching in tests without touching each tool.
+    return ChatGoogleGenerativeAI(
+        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.0-flash-001"),
+        temperature=0.3,
+    )
+
+
+@tool
+def recommend_methodology(research_question: str, paradigm: str) -> dict:
+    """Suggest a research design + analysis tool for the given RQ and paradigm.
+
+    Returns: {design, tool, rationale}.
+    """
+    llm = _get_llm()
+    prompt = (
+        "Given this research question and paradigm, recommend a specific research "
+        "design and primary analysis tool. Respond with ONLY a JSON object: "
+        '{"design": "<e.g. PLS-SEM>", "tool": "<e.g. SmartPLS>", '
+        '"rationale": "<one sentence>"}.\n\n'
+        f"Research question: {research_question}\nParadigm: {paradigm}"
+    )
+    try:
+        return json.loads(llm.invoke(prompt).content)
+    except (json.JSONDecodeError, TypeError):
+        # Fallback to a safe default so callers always receive a valid dict.
+        logger.warning("recommend_methodology: malformed LLM response, returning default")
+        return {"design": "regression", "tool": "SPSS", "rationale": "fallback default"}
+
+
+@tool
+def build_conceptual_model(constructs: list[str], research_question: str) -> dict:
+    """Build a conceptual model with paths between constructs.
+
+    Returns: {constructs, paths: [{from, to, hypothesis}]}.
+    """
+    llm = _get_llm()
+    prompt = (
+        "Build a quantitative conceptual model. Given constructs and RQ, return "
+        "ONLY a JSON object: "
+        '{"constructs": [...], "paths": [{"from":"A","to":"B","hypothesis":"H1: ..."}]}.\n\n'
+        f"Constructs: {constructs}\nResearch question: {research_question}"
+    )
+    try:
+        return json.loads(llm.invoke(prompt).content)
+    except (json.JSONDecodeError, TypeError):
+        # Return a structurally valid empty-paths model so downstream steps don't crash.
+        logger.warning("build_conceptual_model: malformed LLM response, returning empty paths")
+        return {"constructs": constructs, "paths": []}
+
+
+@tool
+def suggest_scale_items(construct: str, n: int = 5) -> list[dict]:
+    """Suggest `n` Likert items measuring the construct.
+
+    Returns: [{id, text}, ...].
+    """
+    llm = _get_llm()
+    prompt = (
+        f"Write {n} validated-style Likert items (5-point) measuring the construct "
+        f"'{construct}'. Respond with ONLY a JSON array: "
+        f'[{{"id": "C1", "text": "..."}}, ...].'
+    )
+    try:
+        return list(json.loads(llm.invoke(prompt).content))
+    except (json.JSONDecodeError, TypeError):
+        # Return empty list rather than crashing; caller can decide whether to retry.
+        logger.warning("suggest_scale_items: malformed LLM response, returning empty list")
+        return []
+
+
+@tool
+def estimate_sample_size(model: dict) -> dict:
+    """Estimate minimum and recommended sample sizes for a given design.
+
+    Pure heuristic — no LLM call needed.  Rules applied in order:
+      1. Qualitative designs (thematic, grounded theory, case study) → saturation range 8-15.
+      2. PLS-SEM / CB-SEM → Hair et al. (2019) 10× rule on max arrows per construct, min 100.
+      3. Regression / ANOVA → Cohen (1988) medium-effect heuristic, min 100.
+      4. Generic quantitative default → 150/250.
+
+    Returns: {min_size, recommended, rationale}.
+    """
+    design = (model.get("design") or "").lower()
+
+    # Qualitative: purposive sampling to saturation
+    if "qualitative" in design or "thematic" in design or "grounded" in design or "case" in design:
+        return {
+            "min_size": 8,
+            "recommended": 15,
+            "rationale": "Purposive sampling until data saturation (Braun & Clarke, 2006).",
+        }
+
+    # SEM variants: 10× max incoming arrows, floor at 100
+    if "pls" in design or "sem" in design:
+        arrows = int(model.get("max_arrows_per_construct", 3))
+        n_min = max(100, 10 * arrows)
+        return {
+            "min_size": n_min,
+            "recommended": int(n_min * 1.5),
+            "rationale": f"10× max arrows rule (Hair et al., 2019), n_min = 10 × {arrows}.",
+        }
+
+    # Classic parametric designs
+    if "regression" in design or "anova" in design:
+        return {
+            "min_size": 100,
+            "recommended": 200,
+            "rationale": "Cohen (1988) heuristic for medium effect, α=0.05, power=0.8.",
+        }
+
+    # Generic quantitative fallback
+    return {
+        "min_size": 150,
+        "recommended": 250,
+        "rationale": "Generic quantitative default.",
+    }
