@@ -26,9 +26,10 @@ export function useChat(threadId: string) {
   );
 
   // Accumulate token events into a single streaming text string
+  // Cast via unknown first since SSEEvent uses an index signature for extra fields
   const streamingText = stream.state.events
     .filter(e => e.type === "token")
-    .map(e => (e as { text: string }).text)
+    .map(e => (e as unknown as { text: string }).text)
     .join("");
 
   const send = async (text: string) => {

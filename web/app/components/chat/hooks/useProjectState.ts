@@ -19,7 +19,8 @@ export function useProjectState(threadId: string) {
   const latest = useMemo(() => {
     return stream.state.events.reduce((acc, ev) => {
       if (ev.type === "context_update") {
-        return { ...acc, ...((ev as { patch: Record<string, unknown> }).patch) };
+        // Cast via unknown: SSEEvent uses an index signature so direct cast requires unknown first
+        return { ...acc, ...((ev as unknown as { patch: Record<string, unknown> }).patch) };
       }
       return acc;
     }, {} as Record<string, unknown>);
