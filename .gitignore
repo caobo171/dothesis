@@ -7,6 +7,8 @@ __pycache__/
 venv/
 ENV/
 env/
+# Exception: vitest custom environment directory
+!web/tests/env/
 .pytest_cache/
 
 # Environment
