@@ -9,6 +9,12 @@ export const Dashboard = ({ papers = [], loading = false, error = null }) => {
 
   return (
     <section className="space-y-8 max-w-6xl mx-auto w-full">
+      {/* SP7 banner: surfaces the new chat UI to wizard users */}
+      <div className="bg-purple-50 border border-purple-200 rounded-md px-4 py-3 text-sm text-purple-900 mb-6">
+        <strong>New:</strong> Try the chat-based research experience.{" "}
+        <a href="/chat" className="underline font-medium">Open the chat UI →</a>
+      </div>
+
       {/* Header: greeting + CTA on the left, credit card on the right */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
         <div className="flex-1 space-y-6">
