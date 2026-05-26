@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..db import db_session
+from ..db import db_session, get_session_factory
 from ..deps import current_user
 from ..models import ContextStore, Message, Project, Thread, User
 
@@ -232,6 +232,49 @@ async def send_message(thread_id: uuid.UUID,
                 )
                 conn.commit()
         yield sse_pack({"type": "done"})
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache",
+                                      "X-Accel-Buffering": "no"})
+
+
+# ----------------------------------------------------------------------------
+# Thread state SSE stream (SP7 T1)
+# ----------------------------------------------------------------------------
+
+@router.get("/threads/{thread_id}/state")
+async def state_stream(thread_id: uuid.UUID,
+                       user: User = Depends(current_user),
+                       db: Session = Depends(db_session)):
+    """SSE stream of context_store snapshots for the project this thread belongs to.
+
+    Emits the current context_store snapshot as a 'context_update' event and
+    terminates. The frontend uses EventSource (which auto-reconnects every ~3s)
+    to receive live updates. This long-poll-via-SSE pattern keeps the generator
+    finite and therefore compatible with test clients and load balancers that
+    buffer responses. LISTEN/NOTIFY push can replace it later if sub-second
+    latency is needed.
+    """
+    from ..sse import sse_pack
+
+    t = db.get(Thread, thread_id)
+    if not t:
+        raise HTTPException(404, detail={"error": {"code": "not_found"}})
+    _owned_project(db, user, t.project_id)
+    project_id = t.project_id
+
+    async def gen():
+        sf = get_session_factory()
+        with sf() as inner:
+            cs = inner.get(ContextStore, project_id)
+            snapshot = {
+                "m1_topic":      cs.m1_topic      if cs else None,
+                "m2_literature": cs.m2_literature if cs else None,
+                "m3_design":     cs.m3_design     if cs else None,
+                "m4_analysis":   cs.m4_analysis   if cs else None,
+                "m5_writing":    cs.m5_writing     if cs else None,
+            }
+        yield sse_pack({"type": "context_update", "patch": snapshot})
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache",

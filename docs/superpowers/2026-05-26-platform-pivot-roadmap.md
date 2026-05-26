@@ -36,7 +36,7 @@ The existing wizard (`web/(inapp)/wizard`) stays alive in parallel until the new
         ┌───────────────────────────┼──────────────────────────────┬─────────────┐
         │            │              │              │               │             │
         ▼            ▼              ▼              ▼               ▼             ▼
-    2. M2 chat✅ 3. M1 topic   4. M3 design   5. M4 analysis  6. M5 writing  7. New chat UI
+    2. M2 chat✅ 3. M1 topic   4. M3 design   5. M4 analysis  6. M5 writing  7. New chat UI ✅
        (Lit       (card-grid    (multi-method  (data-type      (auto-fill      (Next.js)
         Review)    UX)          branches)       detection +    + editor)
                                                  parsers)
@@ -185,9 +185,9 @@ Sub-projects 2–6 are mostly independent and can be parallelized once #1 lands.
 
 ---
 
-## Sub-project 7 — New Next.js chat UI ⬜
+## Sub-project 7 — New Next.js chat UI ✅
 
-**Status:** Not started · could begin in parallel with #2 once #1's API stabilizes
+**Status:** Shipped 2026-05-27 (branch `feat/sp7-chat-ui-shell`; 3-pane shell + useStream + auto-draft drawer; 60+ tests passing)
 
 **Why last to fully finish:** Each module's UX (sub-projects 2-6) lands real frontend components into this app. Sub-project 7 owns the chat-shell scaffold: routing, message list, streaming token rendering, thread switcher, project sidebar, file-upload drop zone, token-cost UI.
 
@@ -237,6 +237,8 @@ When a new session opens and needs to figure out what to do next:
 
 If the answer to step 2 is "everything is ⬜", the answer is **sub-project 1**.
 
+**Note on actual ship order:** The original map implied 1 → 2 → 3 → 4 → 5 → 6 → 7, but the actual ship order was 1 → 2 → 7 (chat shell landed before the module-specific widgets). Sub-projects 3–6 will now plug their widgets directly into the SP7 shell.
+
 ---
 
 ## Status log
@@ -249,6 +251,7 @@ A short, append-only log of state changes. Update this when a sub-project moves 
 | 2026-05-26 | 1 | 🟡 → 🔵 | Plan at `plans/2026-05-26-orchestration-foundation-plan.md` |
 | 2026-05-26 | 1 | 🔵 → ✅ | All 32 tasks shipped on `feat/orchestrator-foundation`; 68 tests passing |
 | 2026-05-27 | 2 | ⬜ → ✅ | M2 chat-first redesign + PDF upload shipped on feat/m2-chat-first; 207 tests passing |
+| 2026-05-27 | 7 | ⬜ → ✅ | Chat UI shell shipped (no module-specific widgets yet); SP3-SP6 will plug widgets into this shell |
 
 ---
 

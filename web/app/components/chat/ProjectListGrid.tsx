@@ -1,0 +1,83 @@
+"use client";
+
+import useSWR from "swr";
+import Link from "next/link";
+import { Plus, ChevronRight } from "lucide-react";
+
+
+type Project = {
+  id: string;
+  name: string;
+  field: string | null;
+  language: string;
+  status: string;
+  current_module: string;
+  context_store: { m1_topic?: { confirmed_at?: string | null } | null };
+  created_at: string;
+  updated_at: string;
+};
+
+
+const fetcher = async (url: string) => {
+  const res = await fetch(`/api/v1${url}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+};
+
+
+export function ProjectListGrid() {
+  const { data: projects, mutate } = useSWR<Project[]>("/projects", fetcher, { dedupingInterval: 0 });
+
+  const newProject = async () => {
+    const name = window.prompt("Project name?");
+    if (!name) return;
+    await fetch("/api/v1/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    void mutate();
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Your projects</h1>
+        <button
+          type="button"
+          onClick={newProject}
+          className="inline-flex items-center gap-1 bg-purple-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-purple-700"
+        >
+          <Plus className="w-4 h-4" /> New project
+        </button>
+      </div>
+
+      <div className="bg-purple-50 border border-purple-200 rounded-md px-4 py-3 text-sm text-purple-900 mb-6">
+        Auto-draft works here. For full thesis generation, the wizard is still recommended
+        until module-specific UIs ship. <Link href="/wizard" className="underline">Open wizard</Link>
+      </div>
+
+      {projects && projects.length === 0 && (
+        <div className="text-center py-12 text-gray-500">No projects yet. Click the New project button to get started.</div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {projects?.map(p => (
+          <Link
+            key={p.id}
+            href={`/chat/projects/${p.id}`}
+            className="block bg-white border border-gray-200 rounded-lg p-4 hover:border-purple-400 hover:shadow-sm transition-all"
+          >
+            <h3 className="font-semibold text-gray-900 mb-1 flex items-center justify-between">
+              {p.name}
+              <ChevronRight className="w-4 h-4 text-gray-400" />
+            </h3>
+            <p className="text-xs text-gray-500">
+              {p.field ?? "no field"} · {p.language} · {p.current_module}
+            </p>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
