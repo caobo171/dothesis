@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { X } from "lucide-react";
 
@@ -26,6 +26,10 @@ export function AutoDraftModal({
   onConfirm: (topic: string) => void;
 }) {
   const [topic, setTopic] = useState(defaultTopic);
+  // Sync topic when defaultTopic changes (e.g. project data arrives after modal mount)
+  useEffect(() => {
+    if (defaultTopic && !topic) setTopic(defaultTopic);
+  }, [defaultTopic]);
   const { data: est } = useSWR(
     open && projectId ? `/projects/${projectId}/runs/estimate?topic=${encodeURIComponent(topic)}` : null,
     fetcher,
