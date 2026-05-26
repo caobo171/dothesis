@@ -45,4 +45,27 @@ describe("useChat", () => {
 
     expect(result.current.streamingText).toBe("reply");
   });
+
+  test("collects tool_calls SSE event into streamingToolCalls", async () => {
+    server.use(
+      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+      http.post("/api/v1/threads/t1/messages", () => streamResponse([
+        'data: {"type":"token","text":"Pick a field"}\n\n',
+        'data: {"type":"tool_calls","payload":{"widget_type":"card_grid","field_name":"field","title":"Pick","options":[],"columns":3}}\n\n',
+        'data: {"type":"done"}\n\n',
+      ])),
+    );
+
+    const { result } = renderHook(() => useChat("t1"), { wrapper });
+    await waitFor(() => expect(result.current.messages).toEqual([]));
+
+    await act(async () => {
+      await result.current.send("hello");
+    });
+
+    expect(result.current.streamingToolCalls).toMatchObject({
+      widget_type: "card_grid",
+      field_name: "field",
+    });
+  });
 });

@@ -2,6 +2,8 @@
 
 import useSWR from "swr";
 import { useStream } from "./useStream";
+import type { WidgetHint } from "../widgets/types";
+
 
 const fetcher = async (url: string) => {
   const res = await fetch(`/api/v1${url}`);
@@ -14,6 +16,7 @@ export type Message = {
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   module_tag?: string | null;
+  tool_calls_json?: WidgetHint | null;
   created_at: string;
 };
 
@@ -31,6 +34,15 @@ export function useChat(threadId: string) {
     .filter(e => e.type === "token")
     .map(e => (e as unknown as { text: string }).text)
     .join("");
+
+  // SP3: pick up the latest tool_calls event from the in-flight stream so the
+  // bubble that's still being streamed can render its widget while the user
+  // reads. The persisted message (next page-load) carries the same dict via
+  // Message.tool_calls_json.
+  const streamingToolCalls = (stream.state.events
+    .filter(e => e.type === "tool_calls")
+    .map(e => (e as unknown as { payload: WidgetHint }).payload)
+    .at(-1)) ?? null;
 
   const send = async (text: string) => {
     // Optimistic update: show user message immediately before server confirms
@@ -55,6 +67,7 @@ export function useChat(threadId: string) {
   return {
     messages: messages ?? [],
     streamingText,
+    streamingToolCalls,
     inflight: stream.state.inflight,
     error: stream.state.error,
     send,
