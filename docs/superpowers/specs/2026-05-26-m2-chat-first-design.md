@@ -1,0 +1,388 @@
+# M2 Literature Review — chat-first redesign (sub-project 2 of 7)
+
+**Date:** 2026-05-26
+**Status:** Draft — pending user review
+**Depends on:** Sub-project 1 (orchestration foundation) — shipped 2026-05-26
+
+## Context
+
+Sub-project 1 landed M2 as a thin `ModuleAgent` subclass using the shared clarification loop — the same generic "ask for missing field one at a time" pattern used by every module. PRD §6.2.3 calls for something fundamentally different: a **5-phase chat-first conversation** where the agent presents synthesis material, the user accepts or asks for unlimited regenerations with new constraints, and only then advances. Sub-project 2 replaces M2's generic loop with a dedicated LangGraph sub-graph that encodes the 5 phases as self-looping nodes.
+
+## Goal
+
+Replace the generic M2 agent with a 5-phase sub-graph (Familiarization → Research_State → Gap_Analysis → Reference_Confirm → Output_Gen). The outer graph from sub-project 1 is **unchanged** — it still sees M2 as a single node. Internally, M2 is now a compiled LangGraph sub-graph with its own state model, its own intent classifier loop per phase, and its own thread_id namespace under PostgresSaver.
+
+## Non-goals
+
+- PDF upload endpoint + S3 storage (sub-project 7)
+- Quick-reply button rendering (sub-project 7 frontend; backend tags messages with affordances but doesn't render UI)
+- Dedicated `citations` DB table (stays in `context_store.m2_literature` JSONB)
+- Real engine `CitationDatabase` integration (continues using sub-project 1's minimal wrapper)
+- Improving `verify_page_numbers` from current stub (needs PDF storage first)
+- Cross-thread citation deduplication
+- Semantic Scholar live API (PRD Phase 4 roadmap)
+- M3-M5 sub-graph redesigns (each gets its own sub-project)
+
+## Decisions (locked from brainstorming)
+
+- **Architecture:** M2 is a compiled LangGraph sub-graph with 5 phase nodes + self-loops for regeneration. Outer graph keeps its single `M2` node; the wrapper invokes the sub-graph internally.
+- **PDF upload scope:** deferred to sub-project 7. M2 sub-graph keeps a `paper_uris: list[str]` field interface-ready; populated as empty list in sub-project 2.
+- **Regeneration loop:** each phase node self-loops on user "redo / change X / focus on Y" requests until user confirms or a 5-iteration cap is hit (soft warning at iteration 3; configurable via `M2_REGEN_CAP` env).
+- **Tool binding:** all 5 M2 tools (`scout_citations`, `summarize_paper`, `find_research_gaps`, `compile_citations`, `verify_page_numbers`) are bound to every phase node. Per-phase differentiation lives in the system prompts, not in tool gating.
+- **State model:** new `M2SubGraphState` TypedDict separate from outer `OrchestratorState`. The wrapper translates outer ↔ sub-graph state at entry and exit.
+- **Citation persistence:** continues to live in `context_store.m2_literature.citation_list` JSONB. No new DB table.
+- **Bilingual:** agent detects vi/en from the user's latest message and responds in kind; falls back to project's `language` field.
+- **Phase 4 walk-vs-batch:** walk one page reference at a time (matches PRD §6.2); `skip_all` quick-reply available.
+- **Phase 5 regeneration:** single-shot. If user dislikes the Ch.2 draft, they jump back to Phase 2 or 3 to fix the underlying inputs.
+
+---
+
+## Architecture
+
+The outer graph from sub-project 1 is unchanged. The `M2` node in `orchestrator/graph.py` still wraps a `ModuleAgent` subclass — only that subclass's `step()` implementation changes. Internally, M2 now invokes a compiled LangGraph sub-graph:
+
+```
+outer graph (sub-project 1, unchanged):
+    START → supervisor → [M1, M2, M3, M4, M5] → supervisor → END
+
+when supervisor routes to M2, it invokes this sub-graph:
+
+┌─ START_M2 ──────────────────────────────────────────────┐
+│   ▼                                                      │
+│   m2_familiarize ─── advance ─────►                      │
+│                                m2_research_state ◀──┐    │
+│                                 │ "regenerate"      │    │
+│                                 ├───────────────────┘    │
+│                                 │ "confirm"               │
+│                                 ▼                         │
+│                            m2_gap_analysis ◀────┐         │
+│                                 │ "regenerate"  │         │
+│                                 ├───────────────┘         │
+│                                 │ "select gaps"           │
+│                                 ▼                         │
+│                            m2_reference_confirm ◀──┐      │
+│                                 │ "verify next"    │      │
+│                                 ├──────────────────┘      │
+│                                 │ "all done / skip_all"   │
+│                                 ▼                         │
+│                            m2_output_gen                  │
+│                                 │                         │
+│                                 ▼                         │
+│                              END_M2 ─→ outer supervisor   │
+│                                                           │
+│   Cross-phase jumps ("go back to research state")        │
+│   handled by the shared intent classifier — emits a       │
+│   conditional edge to the target phase's node.            │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Compilation:** the M2 sub-graph compiles lazily on first call to `get_m2_graph(interactive)`. The compiled graph is cached (per interactive/auto mode) via `functools.lru_cache`.
+
+**Interrupts:** in interactive mode, every phase node has `interrupt_before` set so it can present output and wait for the user's next turn. In auto mode, the sub-graph compiles with `interrupt_before=[]` — each phase runs once and advances.
+
+**Auto-mode behavior:** Phase 1 assumes no PDFs. Phase 2 generates a one-shot synthesis. Phase 3 auto-selects all candidate gaps. Phase 4 marks all references as `verified=False`. Phase 5 writes the Ch.2 draft. The sub-graph completes in a single `invoke()`.
+
+---
+
+## Sub-graph state model
+
+`orchestrator/agents/m2/state.py`:
+
+```python
+class M2SubGraphState(TypedDict, total=False):
+    # --- Inputs from outer state (set on entry) ---
+    project_id: UUID
+    thread_id: UUID
+    research_title: str                  # copied from context_store.m1_topic
+    research_type: Literal["quantitative", "qualitative", "mixed"]
+    language: Literal["vi", "en", "bilingual"]
+    paper_uris: list[str]                # interface ready; populated by SP7 later
+    messages: Annotated[list[BaseMessage], add_messages]
+    mode: Literal["interactive", "auto"]
+
+    # --- Phase pointer ---
+    current_phase: Literal[
+        "familiarize", "research_state", "gap_analysis",
+        "reference_confirm", "output_gen", "DONE"
+    ]
+    regeneration_count: dict[str, int]   # per-phase iteration counter, capped at 5
+
+    # --- Phase 1: Familiarize ---
+    has_uploaded_papers: bool | None
+
+    # --- Phase 2: Research_State ---
+    research_state_draft: str | None
+    research_state_refinements: list[str]    # user pushback log
+    research_state_confirmed: bool
+    research_state_citations: list[dict]     # raw scout output, reused across regens
+
+    # --- Phase 3: Gap_Analysis ---
+    candidate_gaps: list[dict] | None        # CitedGap-shaped dicts presented to user
+    gap_refinements: list[str]
+    selected_gap_ids: list[str] | None       # user's picks
+
+    # --- Phase 4: Reference_Confirm ---
+    pending_page_checks: list[dict]          # PaperReference-shaped queue
+    verified_refs: list[dict]
+    page_check_cursor: int
+
+    # --- Phase 5: Output_Gen ---
+    ch2_draft: str | None
+    citation_list: list[dict]
+```
+
+The `M2SubGraphState` is **never persisted directly** — only LangGraph's PostgresSaver checkpoints hold it. The user-visible truth lives in `context_store.m2_literature` (which the outer chat UI reads).
+
+**Why separate from `OrchestratorState`:**
+- Sub-graph evolves independently — adding `page_check_cursor` doesn't bloat the outer state.
+- LangGraph 1.x optimizes field read/write tracking better with focused TypedDicts.
+- Future M3/M4/M5 sub-graphs follow the same pattern.
+
+**Thread_id convention:** the sub-graph runs under thread_id `"{outer_thread_id}::m2"`. Future M3 sub-graph uses `"::m3"`, etc. Predictable, no collisions, easy to grep for.
+
+---
+
+## The wrapper (`orchestrator/agents/m2/agent.py`)
+
+Public surface stays the same — it's still a `ModuleAgent` subclass so the outer graph doesn't change. The difference is `step()` invokes the sub-graph instead of running the generic clarification loop.
+
+```python
+class M2Agent(ModuleAgent):
+    schema = M2Output
+    module_key = "M2"
+    system_prompt = _PROMPT
+    tools = [scout_citations, summarize_paper, find_research_gaps,
+             compile_citations, verify_page_numbers]
+
+    def step(self, state: OrchestratorState) -> ModuleStepResult:
+        sub_state = _seed_from_outer(state)
+        sub_graph = get_m2_graph(interactive=state["mode"] == "interactive")
+        config = {"configurable": {"thread_id": f"{state['thread_id']}::m2"}}
+        final = sub_graph.invoke(sub_state, config=config)
+
+        if final.get("current_phase") == "DONE":
+            return ModuleStepResult(
+                assistant_message=f"M2 complete — {len(final.get('citation_list',[]))} citations.",
+                context_patch=_flatten_to_m2_output(final),
+                transition=True,
+            )
+
+        latest_msg = final["messages"][-1].content if final.get("messages") else ""
+        return ModuleStepResult(
+            assistant_message=latest_msg,
+            context_patch=_flatten_to_m2_output(final),  # partial — no confirmed_at
+            transition=False,
+            needs_user_reply=True,
+        )
+```
+
+`_seed_from_outer(state)` reads `state["context_store"].m1_topic.{research_title, research_type, language}` plus any existing partial work in `state["context_store"].m2_literature`. Returns a fresh `M2SubGraphState`.
+
+`_flatten_to_m2_output(sub_state)` takes the sub-graph's final state, packs it into a `M2Output`-shape dict ready to write to `context_store.m2_literature`. Sets `confirmed_at=now` only if `current_phase == "DONE"`.
+
+These two pure functions are the only places that know about *both* state shapes — everywhere else either reads outer state or sub-state but never both.
+
+---
+
+## The 5 phase nodes
+
+All 5 phase nodes live under `orchestrator/agents/m2/phases/`. Each has the same shape:
+
+```python
+def run(state: M2SubGraphState) -> dict:
+    """Returns a state patch that LangGraph merges into the sub-graph state."""
+```
+
+The shared intent classifier (`orchestrator/agents/m2/intent.py`, extracted from sub-project 1's `supervisor.py`) is reused across phases.
+
+### Phase 1 — `m2_familiarize`
+
+- **Prompt** (`prompts/m2/1_familiarize.md`): brief greeting + asks *"Do you have papers to upload?"*
+- **Interactive:** asks the question, sets `has_uploaded_papers = None`, interrupts. On resume, classifies user reply (yes/no), sets `has_uploaded_papers`, advances.
+- **Auto:** assumes `has_uploaded_papers = False`, advances.
+- **Edges out:** unconditional → `m2_research_state`.
+
+### Phase 2 — `m2_research_state`
+
+The PRD's centerpiece. Generates a literature synthesis with in-text citations; user can ask for unlimited regenerations (capped at 5).
+
+- **Prompt** (`prompts/m2/2_research_state.md`): *"Synthesize the current state of research on `{research_title}`. Cite specific authors and page numbers where possible. Tone: academic but readable. Constraints from user (if any): `{refinements_joined}`."*
+- **Interactive flow:**
+  - **First call:** invokes `scout_citations(topic, min_n=20)` → stores result in `research_state_citations` → LLM synthesizes into `research_state_draft` → posts to chat → interrupts.
+  - **Resume:** classifies user reply.
+    - `confirm` → set `research_state_confirmed = True`, advance.
+    - `refine` → append the constraint to `research_state_refinements`, increment counter, re-invoke LLM with the cached citations + new constraint. Loop.
+    - `cap_hit` (counter == 5) → assistant posts *"we've regenerated 5 times — let's lock this in or move on"*; only accepts confirm/skip.
+    - `navigate` (user wants to jump back/forward) → emit a transition event the outer wrapper catches.
+- **Auto flow:** one-shot generation, set `confirmed = True`, advance.
+- **Edges out:** `confirm` → `m2_gap_analysis`; self-loop on `refine`; navigate-back → END_M2 with reason `user_requested_navigate`.
+
+### Phase 3 — `m2_gap_analysis`
+
+- **Prompt** (`prompts/m2/3_gap_analysis.md`): *"Given the synthesis below, identify 3-4 research gaps WITH supporting page-level citations. Synthesis: `{research_state_draft}`. User constraints: `{gap_refinements_joined}`."*
+- **Interactive flow:**
+  - First call: `find_research_gaps(citations_from_phase2)` → store as `candidate_gaps` → present numbered list in chat → interrupt.
+  - Resume: classifies reply.
+    - `select [1, 2, 3]` → write `selected_gap_ids`, advance.
+    - `refine` (e.g. *"make them more methodological"*) → loop with refinement appended.
+    - `add_custom_gap` → append user's free-text gap as a manually-confirmed `CitedGap`, then ask for re-selection.
+- **Auto flow:** auto-select all candidates, advance.
+- **Edges out:** `select` → `m2_reference_confirm`; self-loop on `refine` (5-cap).
+
+### Phase 4 — `m2_reference_confirm`
+
+Walks every page reference in `selected_gap_ids`' supporting_papers one at a time, with cursor-based queue.
+
+- **Prompt per page:** *"Gap N cites `{author}, {year}, page {page}`. Can you verify this is correct?"*
+- **Interactive flow:**
+  - First call: populates `pending_page_checks` from selected gaps. Presents the FIRST unverified reference, interrupts.
+  - Resume: classifies reply.
+    - `confirm` → mark `verified=True`, advance cursor.
+    - `correct_page <n>` → update page, mark `verified=True`, advance cursor.
+    - `skip` → leave `[page?]` placeholder, advance cursor.
+    - `skip_all` → mark all remaining as unverified, exit phase.
+  - When cursor exhausts the queue → advance to Phase 5.
+- **Auto flow:** mark all references as `verified=False` (no source PDFs in SP2), advance.
+- **Edges out:** queue empty → `m2_output_gen`; self-loop until cursor done.
+
+### Phase 5 — `m2_output_gen`
+
+Single-shot — no regeneration loop here.
+
+- **Prompt** (`prompts/m2/5_output_gen.md`): *"Write Chapter 2 (Literature Review) using the synthesis from Phase 2, the confirmed gaps from Phase 3, and the page references from Phase 4. Mark unverified pages as `[page?]`. Structure: 2.1 Theoretical Foundation, 2.2 Empirical Studies, 2.3 Research Gaps, 2.4 Theoretical Framework."*
+- **Output:** writes `ch2_draft` and final `citation_list`. Sets `current_phase = "DONE"`.
+- **Edges out:** END_M2.
+
+---
+
+## File layout
+
+```
+orchestrator/agents/m2/
+├── __init__.py              # exposes M2Agent (the wrapper)
+├── agent.py                 # M2Agent — wraps the sub-graph for the outer graph
+├── graph.py                 # build_m2_subgraph(), get_m2_graph()
+├── state.py                 # M2SubGraphState TypedDict
+├── intent.py                # shared intent classifier (extracted from supervisor.py)
+└── phases/
+    ├── __init__.py
+    ├── phase1_familiarize.py
+    ├── phase2_research_state.py
+    ├── phase3_gap_analysis.py
+    ├── phase4_reference_confirm.py
+    └── phase5_output_gen.py
+
+orchestrator/prompts/m2/
+├── _style.md                # tone + voice guidelines shared by all phases
+├── 1_familiarize.md
+├── 2_research_state.md
+├── 3_gap_analysis.md
+├── 4_reference_confirm.md
+└── 5_output_gen.md
+
+orchestrator/tests/agents/m2/
+├── test_intent_classifier.py
+├── test_state_translation.py
+├── test_phase1_familiarize.py
+├── test_phase2_research_state.py    # heaviest — regen loop, 5-cap
+├── test_phase3_gap_analysis.py
+├── test_phase4_reference_confirm.py # cursor walk
+├── test_phase5_output_gen.py
+├── test_m2_subgraph.py              # full sub-graph e2e
+└── test_m2_agent_wrapper.py         # outer-state-in → context_store-out
+```
+
+### Deletions
+
+- `orchestrator/agents/m2_literature.py` — its responsibility moves to `orchestrator/agents/m2/agent.py`.
+- `orchestrator/prompts/m2.md` — replaced by the 5 per-phase prompts under `orchestrator/prompts/m2/`. (The `_PROMPT` constant inside the new `agent.py` keeps a high-level wrapper-level prompt for the outer graph; not the same content.)
+
+### Imports updated
+
+- `orchestrator/graph.py`:
+  ```diff
+  - from orchestrator.agents.m2_literature import M2Agent
+  + from orchestrator.agents.m2 import M2Agent
+  ```
+- Any test that imports the old path gets updated; the public `M2Agent` name is preserved.
+
+---
+
+## Testing
+
+### Per-phase unit tests (the bulk of new coverage)
+
+Every phase node has a test file covering:
+- First-call behavior (synthesis + scout, interrupt)
+- Refine path (append refinement, regenerate, do not advance)
+- Confirm path (advance to next phase)
+- Auto mode (one-shot, advance)
+- 5-cap behavior (Phase 2 & 3 only)
+- Phase-specific edge cases (Phase 4 cursor; Phase 3 custom gap)
+
+All tests use `MagicMock`-based fake LLMs + monkeypatching at module-local names — no network.
+
+### Sub-graph end-to-end tests (`test_m2_subgraph.py`)
+
+- `test_subgraph_walks_all_5_phases_in_auto_mode`: drives sub-graph from start to END_M2 with all phases auto-filled; asserts final state has `current_phase = "DONE"`, `ch2_draft`, non-empty `citation_list`.
+- `test_subgraph_phase_2_refines_then_confirms`: interactive; sends two refine messages then a confirm; asserts `regeneration_count["research_state"] == 2` and final advances to gap_analysis.
+- `test_subgraph_phase_2_cap_blocks_6th_regen`: pre-seeds counter at 5; sends another refine; asserts no regeneration happens, assistant message says lock-in.
+- `test_subgraph_phase_4_walk_then_skip_all`: confirms 2 of 5 references, then `skip_all`; asserts remaining 3 are marked unverified.
+- `test_subgraph_navigate_back_returns_to_outer`: mid-phase-3, user says *"go back to research state"*; asserts sub-graph emits END with `reason="user_requested_navigate"` and `current_phase` is left at `gap_analysis` (so the wrapper can re-enter at the right place).
+
+### Wrapper integration test (`test_m2_agent_wrapper.py`)
+
+- `test_m2_agent_completes_module_in_auto_mode`: drives the full wrapper end-to-end (sub-graph stubbed); asserts `result.transition is True` and the flattened context_patch matches `M2Output` schema.
+- `test_seed_and_flatten_roundtrip`: property-style — `_flatten_to_m2_output(_seed_from_outer(s))` does not lose data for several realistic outer-state fixtures.
+
+### Regression guards (must pass unchanged)
+
+- `orchestrator/tests/test_agents_m2.py` (from sub-project 1) — uses the public `M2Agent` interface; should still pass.
+- `orchestrator/tests/test_graph.py::test_graph_routes_to_correct_first_unconfirmed` — exercises the full M1-M5 path; M2 portion goes through the new sub-graph but produces the same shape of context_store output.
+- `orchestrator/tests/integration/test_full_interactive.py` and `test_full_auto.py` — full graph integration.
+
+### Coverage targets
+
+- Each phase node: **80%+**
+- Sub-graph e2e: **90%+**
+- Wrapper: **100%**
+
+### Multi-language
+
+- `test_phase2_research_state_vi_output`: seeds `language="vi"`; asserts assistant message contains Vietnamese tokens.
+
+---
+
+## Risks & mitigations
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Nested checkpointers (outer + sub) interact badly | Medium | Distinct `thread_id`s (`"<outer>::m2"`); integration test for outer → M2 sub → outer transitions |
+| 5-iteration cap arbitrary; users hit it on hard topics | Medium | Configurable via `M2_REGEN_CAP` env. Soft warning at iteration 3. `/force-continue` lifts for the next turn only. |
+| Per-phase prompts drift in tone/structure | Low | `prompts/m2/_style.md` style guide; each phase prompt references it |
+| `_seed_from_outer` / `_flatten_to_m2_output` drift from M2Output schema | Medium | Unit test asserts `M2Output.model_validate(_flatten_to_m2_output(complete_sub_state))` passes — fails CI if schema diverges |
+| Sub-graph compile heavy at startup | Low | M2 sub-graph compiles lazily on first call; FastAPI startup only warms the outer graph |
+| Phase 4 "walk every reference" feels tedious | Medium | `skip_all` quick-reply; field experience after SP7 ships tells us whether to redesign |
+| State translation has subtle data loss | High | Round-trip property test for `_seed_from_outer` ↔ `_flatten_to_m2_output` |
+| `scout_citations` called multiple times across regens wastes tokens | Medium | Phase 2 caches the first scout result in `research_state_citations`; regens reuse it. Only fresh scouts on `add_custom_gap` paths. |
+
+---
+
+## Success criteria
+
+Sub-project 2 is done when ALL hold:
+
+1. **Outer-graph compatibility:** every test from sub-project 1's M2 surface still passes without modification.
+2. **Phase coverage:** each of the 5 phase nodes has its own test file with the unit tests outlined above; coverage targets met.
+3. **Auto-mode end-to-end:** `python -m orchestrator --auto-draft …` on a fresh topic produces a `context_store.m2_literature` with `research_state_summary`, ≥1 confirmed `CitedGap`, `literature_review_doc`, and a `citation_list` — same shape as sub-project 1's auto run but generated through the 5-phase sub-graph.
+4. **Interactive end-to-end:** scripted integration test drives the sub-graph through all 5 phases (with at least one regeneration in Phase 2 and one selection in Phase 3) and reaches `current_phase = "DONE"`.
+5. **Regen cap works:** integration test confirms iteration 6 in Phase 2 is rejected without `/force-continue`.
+6. **Navigation works:** integration test confirms mid-phase "go back to research state" returns sub-graph control to the outer wrapper with `current_module` still `M2`; subsequent invocation resumes at Phase 2.
+7. **No engine regressions:** existing `engine/` tests still pass.
+8. **Bilingual smoke:** one integration test with `language="vi"` asserts the assistant's chat output is Vietnamese.
+
+## Explicit non-commitments
+
+- **Agent prose quality:** the phase prompts are first drafts. Tuning them is a follow-on concern.
+- **Tool call efficiency:** M2 might call `scout_citations` more than needed across regens. SP2 caches the first call but doesn't deduplicate across regen iterations or threads.
+- **Frontend chat UI:** still doesn't exist (SP7's job). SP2 ships an API that the existing wizard frontend won't use; exercise via `curl` + SSE stream.
