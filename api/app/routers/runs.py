@@ -78,7 +78,11 @@ def list_runs(project_id: uuid.UUID,
               db: Session = Depends(db_session)):
     """List runs for a project. ?latest=true returns {run: <most-recent>} or {run: null}."""
     _owned_project(db, user, project_id)
-    q = db.query(Job).filter_by(project_id=project_id).order_by(Job.id.desc())
+    # Order by started_at desc (NULLS LAST) so queued jobs that haven't started
+    # yet sort after running/done jobs with real timestamps.
+    q = (db.query(Job)
+           .filter_by(project_id=project_id)
+           .order_by(Job.started_at.desc().nulls_last()))
 
     if latest:
         row = q.first()

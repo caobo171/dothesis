@@ -36,10 +36,13 @@ def test_latest_returns_null_when_no_runs(client):
 def test_latest_returns_most_recent_run(client):
     pid = _login_and_project(client)
     sf = get_session_factory()
+    from datetime import datetime, timezone, timedelta
     with sf() as db:
-        older = Job(project_id=pid, mode="auto", status="done")
+        older = Job(project_id=pid, mode="auto", status="done",
+                    started_at=datetime(2026, 1, 1, tzinfo=timezone.utc))
         db.add(older); db.flush()
-        newer = Job(project_id=pid, mode="auto", status="running")
+        newer = Job(project_id=pid, mode="auto", status="running",
+                    started_at=datetime(2026, 1, 2, tzinfo=timezone.utc))
         db.add(newer); db.commit()
         newer_id = newer.id
 
