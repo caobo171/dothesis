@@ -99,8 +99,13 @@ def classify_phase_intent(
     if any(kw in text for kw in _REFINE_KEYWORDS):
         return PhaseIntent(action="refine", refinement_text=last_user_message)
 
-    # Exact-match confirm words
-    if any(text == w or text.startswith(w + " ") for w in _CONFIRM_WORDS):
+    # Confirm words: exact match, prefix, or as a whole word within the text
+    # e.g. "looks good, continue" should match "continue" even mid-sentence
+    if any(
+        text == w or text.startswith(w + " ") or
+        re.search(r"\b" + re.escape(w) + r"\b", text)
+        for w in _CONFIRM_WORDS
+    ):
         return PhaseIntent(action="confirm")
 
     # Ambiguous — fall back to LLM structured-output classification
