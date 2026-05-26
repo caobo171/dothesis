@@ -37,6 +37,57 @@ def _owned_run(db: Session, user: User, run_id: uuid.UUID) -> Job:
     return j
 
 
+@router.get("/projects/{project_id}/runs/estimate")
+def estimate_run(project_id: uuid.UUID,
+                 topic: str = "",
+                 user: User = Depends(current_user),
+                 db: Session = Depends(db_session)):
+    """Estimate token cost for an auto-mode run on this topic.
+
+    Heuristic: ~3500 tokens per module × 5 modules = 17,500 baseline,
+    plus 25 tokens per character of topic.
+    """
+    _owned_project(db, user, project_id)
+    estimated = 17_500 + len(topic) * 25
+    return {
+        "estimated_tokens": estimated,
+        "credit_balance": user.credit,
+        "sufficient_credit": user.credit >= estimated,
+    }
+
+
+def _serialize_run(j: Job) -> dict:
+    """Serialise a Job row to a dict for API responses."""
+    return {
+        "id": str(j.id),
+        "project_id": str(j.project_id) if j.project_id else None,
+        "status": j.status,
+        "phase": j.phase,
+        "progress": j.progress,
+        "mode": j.mode,
+        "started_at": j.started_at.isoformat() if j.started_at else None,
+        "finished_at": j.finished_at.isoformat() if j.finished_at else None,
+    }
+
+
+@router.get("/projects/{project_id}/runs")
+def list_runs(project_id: uuid.UUID,
+              latest: bool = False,
+              limit: int = 50,
+              user: User = Depends(current_user),
+              db: Session = Depends(db_session)):
+    """List runs for a project. ?latest=true returns {run: <most-recent>} or {run: null}."""
+    _owned_project(db, user, project_id)
+    q = db.query(Job).filter_by(project_id=project_id).order_by(Job.id.desc())
+
+    if latest:
+        row = q.first()
+        return {"run": _serialize_run(row) if row else None}
+
+    rows = q.limit(min(limit, 200)).all()
+    return [_serialize_run(r) for r in rows]
+
+
 @router.post("/projects/{project_id}/runs")
 def start_run(project_id: uuid.UUID, body: StartRunBody,
               user: User = Depends(current_user),
