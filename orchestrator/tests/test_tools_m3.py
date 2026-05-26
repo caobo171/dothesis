@@ -104,3 +104,46 @@ def test_suggest_themes_returns_empty_on_malformed(monkeypatch):
         "research_question": "x", "paradigm": "qualitative", "gaps_summary": "",
     })
     assert out == []
+
+
+def test_compose_interview_guide_returns_structured(monkeypatch):
+    from orchestrator.tools.m3_design import compose_interview_guide
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = json.dumps({
+        "sections": [
+            {"phase": "intro", "time_minutes": 5,
+             "questions": [{"q": "Tell me about your role.", "probes": []}]},
+            {"phase": "main", "time_minutes": 40,
+             "questions": [
+                 {"q": "How does your manager inspire you?",
+                  "probes": ["Can you give an example?"]},
+             ]},
+            {"phase": "closing", "time_minutes": 5,
+             "questions": [{"q": "Anything you'd like to add?", "probes": []}]},
+        ]
+    })
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+
+    out = compose_interview_guide.invoke({
+        "themes": [{"theme": "Leadership style", "sub_themes": ["vision"]}],
+        "research_question": "How does TL affect EE?",
+    })
+    assert "sections" in out
+    assert len(out["sections"]) == 3
+    assert out["sections"][1]["questions"][0]["probes"] == ["Can you give an example?"]
+
+
+def test_compose_interview_guide_falls_back_on_malformed(monkeypatch):
+    from orchestrator.tools.m3_design import compose_interview_guide
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "garbage"
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+
+    out = compose_interview_guide.invoke({
+        "themes": [], "research_question": "x",
+    })
+    # Fallback: one minimal main-phase section
+    assert "sections" in out
+    assert len(out["sections"]) >= 1

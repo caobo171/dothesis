@@ -157,3 +157,39 @@ def suggest_themes(research_question: str, paradigm: str,
     except (json.JSONDecodeError, TypeError):
         logger.warning("suggest_themes: malformed LLM response, returning empty list")
         return []
+
+
+@tool
+def compose_interview_guide(themes: list[dict], research_question: str) -> dict:
+    """Build a semi-structured interview guide from themes.
+
+    Returns: {sections: [{phase: "intro"|"main"|"closing", time_minutes,
+              questions: [{q, probes: [str]}]}]}
+    Falls back to a one-section minimal guide on malformed LLM response.
+    """
+    # Decision: Use LLM to generate structured interview guide with intro/main/closing
+    # phases based on themes and research question. This follows the same pattern as
+    # suggest_themes (invoke -> json.loads -> safe fallback) to maintain consistency
+    # across M3 qualitative design tools.
+    llm = _get_llm()
+    prompt = (
+        "Build a semi-structured interview guide. Three sections: intro (5 min, "
+        "warm-up and consent), main (40-50 min, theme-driven questions with probes), "
+        "closing (5 min, wrap-up). For each main-phase question, give 1-2 probes. "
+        "Respond with ONLY a JSON object: "
+        '{"sections":[{"phase":"intro","time_minutes":5,"questions":[{"q":"...","probes":[]}]},'
+        '{"phase":"main","time_minutes":40,"questions":[{"q":"...","probes":["..."]}]},'
+        '{"phase":"closing","time_minutes":5,"questions":[{"q":"...","probes":[]}]}]}.\n\n'
+        f"Research question: {research_question}\n"
+        f"Themes: {json.dumps(themes, ensure_ascii=False)}"
+    )
+    try:
+        return dict(json.loads(llm.invoke(prompt).content))
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("compose_interview_guide: malformed LLM response, returning fallback")
+        return {
+            "sections": [
+                {"phase": "main", "time_minutes": 45,
+                 "questions": [{"q": "Tell me about your experience.", "probes": []}]},
+            ]
+        }
