@@ -68,3 +68,39 @@ def test_estimate_sample_size_qualitative():
         "model": {"design": "Thematic Analysis"},
     })
     assert out["min_size"] <= 30
+
+
+def test_suggest_themes_returns_structured(monkeypatch):
+    from orchestrator.tools.m3_design import suggest_themes
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = json.dumps([
+        {"id": "t1", "theme": "Cách thức lãnh đạo",
+         "sub_themes": ["Tầm nhìn", "Giao tiếp"]},
+        {"id": "t2", "theme": "Biểu hiện gắn kết",
+         "sub_themes": ["Nhận thức", "Cảm xúc"]},
+    ])
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+
+    out = suggest_themes.invoke({
+        "research_question": "How does transformational leadership affect engagement?",
+        "paradigm": "qualitative",
+        "gaps_summary": "",
+    })
+    assert isinstance(out, list)
+    assert len(out) == 2
+    assert out[0]["theme"] == "Cách thức lãnh đạo"
+    assert "Tầm nhìn" in out[0]["sub_themes"]
+
+
+def test_suggest_themes_returns_empty_on_malformed(monkeypatch):
+    from orchestrator.tools.m3_design import suggest_themes
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "not valid json"
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+
+    out = suggest_themes.invoke({
+        "research_question": "x", "paradigm": "qualitative", "gaps_summary": "",
+    })
+    assert out == []

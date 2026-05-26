@@ -128,3 +128,32 @@ def estimate_sample_size(model: dict) -> dict:
         "recommended": 250,
         "rationale": "Generic quantitative default.",
     }
+
+
+@tool
+def suggest_themes(research_question: str, paradigm: str,
+                   gaps_summary: str = "") -> list[dict]:
+    """Suggest 3-5 themes (with sub-themes) for qualitative analysis.
+
+    Returns: [{id, theme, sub_themes: [str]}, ...]
+    Falls back to [] on malformed LLM response so the agent can show an
+    empty list_editor for the user to fill from scratch.
+    """
+    # Decision: Use LLM to generate thematic suggestions based on research question
+    # and literature gaps, following same pattern as other tools in this module
+    # (invoke -> json.loads -> safe fallback). This ensures consistency across the
+    # M3 design workflow.
+    llm = _get_llm()
+    prompt = (
+        "Suggest 3-5 themes for a qualitative analysis. For each theme, give 2-3 "
+        "sub-themes. Respond with ONLY a JSON array: "
+        '[{"id":"t1","theme":"<theme>","sub_themes":["<sub>","<sub>"]}, ...].\n\n'
+        f"Research question: {research_question}\n"
+        f"Paradigm: {paradigm}\n"
+        f"Literature gaps summary (from M2): {gaps_summary or '(none provided)'}"
+    )
+    try:
+        return list(json.loads(llm.invoke(prompt).content))
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("suggest_themes: malformed LLM response, returning empty list")
+        return []
