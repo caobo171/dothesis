@@ -36,6 +36,8 @@ package-dir = {"orchestrator" = "../orchestrator"}
 packages = [
     "orchestrator",
     "orchestrator.agents",
+    "orchestrator.agents.m2",
+    "orchestrator.agents.m2.phases",
     "orchestrator.schemas",
     "orchestrator.tools",
 ]
