@@ -36,7 +36,7 @@ The existing wizard (`web/(inapp)/wizard`) stays alive in parallel until the new
         ┌───────────────────────────┼──────────────────────────────┬─────────────┐
         │            │              │              │               │             │
         ▼            ▼              ▼              ▼               ▼             ▼
-    2. M2 chat✅ 3. M1 topic   4. M3 design   5. M4 analysis  6. M5 writing  7. New chat UI ✅
+    2. M2 chat✅ 3. M1 topic ✅ 4. M3 design   5. M4 analysis  6. M5 writing  7. New chat UI ✅
        (Lit       (card-grid    (multi-method  (data-type      (auto-fill      (Next.js)
         Review)    UX)          branches)       detection +    + editor)
                                                  parsers)
@@ -104,23 +104,27 @@ Sub-projects 2–6 are mostly independent and can be parallelized once #1 lands.
 
 ---
 
-## Sub-project 3 — M1 Topic Discovery card-grid UX ⬜
+## Sub-project 3 — M1 Topic Discovery card-grid UX ✅
 
-**Status:** Not started
+**Status:** Shipped 2026-05-27 (branch `feat/sp3-m1-card-grid`; widget infra + FieldPicker + ResearchTypePicker)
 
-**Why this one next (after M2):** Smallest module-specific UX, validates the "agent + custom frontend widget" pattern that M3 and M4 also need.
+**Spec:** `docs/superpowers/specs/2026-05-27-sp3-m1-card-grid-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-27-sp3-m1-card-grid-plan.md`
 
-**Anticipated scope:**
-- Card-grid field selector (PRD §6.1.2 Step 1.1)
-- 3-column topic explorer: Topic Clusters / Suggested Topics / Topic Detail
-- Topic specification with 3 AI-suggested directions (PRD §6.1.2 Step 1.3)
-- Frontend component: `web/app/(inapp)/project/[id]/m1-topic-discovery/` (or whatever the chat UI router from sub-project 7 settles on)
-- Agent emits structured "render-card-grid" instructions (likely via `tool_calls_json` with a typed schema) that the frontend interprets
+**Delivers:**
+- Backend widget primitive — `orchestrator/agents/widgets.py` with `CardOption` + `CardGridHint` + discriminated `WidgetHint` union (ready for SP4-SP6 variants)
+- `ModuleAgent.render_hint_for_field` override hook (None-by-default on base; M1 overrides for `field` + `research_type`)
+- Graph wiring — `_agent_node_factory` threads `tool_calls_json` through `AIMessage.additional_kwargs`
+- API streaming — chat router emits `tool_calls` SSE event + persists `messages.tool_calls_json` (already-existing JSONB column)
+- Frontend widget primitive — `widgets/types.ts` + `synthesize.ts` + `CardGridWidget` + `WidgetRenderer` dispatch (forward-compatible: unknown `widget_type` renders null)
+- ChatPane integration — click on a card synthesizes a natural-language sentence ("I'd like to study Marketing.") and submits through the existing send path; no new backend protocol
+- Widget "spent" semantics: enabled only on the last assistant message AND when nothing is streaming
+- Schema-drift guard test (TS fixture mirrors backend Pydantic shape)
 
-**Key brainstorming questions:**
-- How does the agent signal "show a card grid here" to the chat UI? Via tool-call shape, via a special message role, or via a separate "ui_hints" SSE event?
-- Does click-to-select bypass the agent's clarification loop, or does it just synthesize a user message?
-- Trending-topics data source — Gemini search grounding, Semantic Scholar API, or a curated static list?
+**Decisions worth remembering for SP4-SP6:**
+- New widget variants land as new `WidgetHint` discriminated-union arms — existing variants and consumers stay untouched
+- The "synthesize text and reuse the existing send path" approach keeps the protocol simple; click → text is one direction only
+- M1 uses the shared `ModuleAgent` clarification loop (no sub-graph). M2's sub-graph pattern is reserved for modules with phase-distinct conversational shapes
 
 ---
 
@@ -252,6 +256,7 @@ A short, append-only log of state changes. Update this when a sub-project moves 
 | 2026-05-26 | 1 | 🔵 → ✅ | All 32 tasks shipped on `feat/orchestrator-foundation`; 68 tests passing |
 | 2026-05-27 | 2 | ⬜ → ✅ | M2 chat-first redesign + PDF upload shipped on feat/m2-chat-first; 207 tests passing |
 | 2026-05-27 | 7 | ⬜ → ✅ | Chat UI shell shipped (no module-specific widgets yet); SP3-SP6 will plug widgets into this shell |
+| 2026-05-27 | 3 | ⬜ → ✅ | M1 card-grid widgets shipped — widget infra + FieldPicker + ResearchTypePicker; pattern ready for SP4-SP6 |
 
 ---
 
