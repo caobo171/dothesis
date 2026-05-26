@@ -33,3 +33,46 @@ def test_hint_options_carry_description():
     hint = M1Agent().render_hint_for_field("field")
     marketing = next(o for o in hint["options"] if o["value"] == "Marketing")
     assert marketing["description"] != ""
+
+
+def test_synthesized_field_sentence_extracts_to_value(monkeypatch):
+    """The synthesized sentence 'I'd like to study Marketing.' should
+    extract to the value 'Marketing' via ModuleAgent._extract_answer."""
+    from unittest.mock import MagicMock
+    from langchain_core.messages import HumanMessage
+    from orchestrator.agents.m1_topic import M1Agent
+
+    # Stub the LLM to behave like the real extractor: respond with
+    # {"field": "field", "value": "Marketing"} when fed the synthesized text.
+    fake = MagicMock()
+    fake.invoke.return_value.content = '{"field": "field", "value": "Marketing"}'
+    monkeypatch.setattr(M1Agent, "_get_llm", lambda self: fake)
+
+    agent = M1Agent()
+    state = {
+        "messages": [HumanMessage(content="I'd like to study Marketing.")],
+        "current_module": "M1",
+        "mode": "interactive",
+    }
+    extracted = agent._extract_answer(state, "field")
+    assert extracted == "Marketing"
+
+
+def test_synthesized_research_type_extracts_to_value(monkeypatch):
+    """'I'll use a qualitative approach.' → 'qualitative'."""
+    from unittest.mock import MagicMock
+    from langchain_core.messages import HumanMessage
+    from orchestrator.agents.m1_topic import M1Agent
+
+    fake = MagicMock()
+    fake.invoke.return_value.content = '{"field": "research_type", "value": "qualitative"}'
+    monkeypatch.setattr(M1Agent, "_get_llm", lambda self: fake)
+
+    agent = M1Agent()
+    state = {
+        "messages": [HumanMessage(content="I'll use a qualitative approach.")],
+        "current_module": "M1",
+        "mode": "interactive",
+    }
+    extracted = agent._extract_answer(state, "research_type")
+    assert extracted == "qualitative"
