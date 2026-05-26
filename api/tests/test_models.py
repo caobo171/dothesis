@@ -96,6 +96,25 @@ def test_context_store_jsonb_roundtrip():
         assert got.m2_literature is None
 
 
+def test_paper_upload_roundtrip():
+    from app.models import PaperUpload
+    with OrmSession(get_engine()) as db:
+        u = _make_user(db)
+        p = Project(user_id=u.id, name="X", language="en", citation_style="apa")
+        db.add(p); db.flush()
+        up = PaperUpload(
+            project_id=p.id, filename="paper.pdf",
+            s3_uri="s3://bucket/key.pdf",
+            size_bytes=12345, mime_type="application/pdf",
+        )
+        db.add(up); db.commit()
+
+        got = db.scalar(select(PaperUpload).where(PaperUpload.project_id == p.id))
+        assert got.filename == "paper.pdf"
+        assert got.text_extracted_at is None
+        assert got.uploaded_at is not None
+
+
 def test_threads_can_have_many_per_project():
     with OrmSession(get_engine()) as db:
         u = _make_user(db)

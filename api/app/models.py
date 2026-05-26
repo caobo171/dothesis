@@ -222,6 +222,29 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+# ---------------------------------------------------------------------------
+# M2 upload tables (sub-project 2)
+# ---------------------------------------------------------------------------
+
+class PaperUpload(Base):
+    __tablename__ = "paper_uploads"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    s3_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    text_extracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    text_extract_uri: Mapped[str | None] = mapped_column(Text)
+    page_count: Mapped[int | None] = mapped_column(Integer)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class ContextStore(Base):
     __tablename__ = "context_store"
 
