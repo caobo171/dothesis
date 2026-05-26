@@ -34,3 +34,26 @@ describe("WidgetRenderer", () => {
     expect(btn).toBeDisabled();
   });
 });
+
+import type { ListEditorHint } from "./types";
+
+const listEditorHint: ListEditorHint = {
+  widget_type: "list_editor",
+  field_name: "themes",
+  title: "T",
+  initial_items: [{ id: "t1", text: "A" }],
+};
+
+
+describe("WidgetRenderer list_editor dispatch", () => {
+  test("dispatches list_editor to ListEditorWidget", () => {
+    render(<WidgetRenderer hint={listEditorHint} onSelect={() => {}} />);
+    expect(screen.getByTestId("list-editor-themes")).toBeTruthy();
+  });
+
+  test("forwards disabled prop to ListEditorWidget", () => {
+    render(<WidgetRenderer hint={listEditorHint} onSelect={() => {}} disabled />);
+    // When disabled, the Confirm button is hidden — sufficient signal that disabled forwarded.
+    expect(screen.queryByTestId("list-editor-confirm")).toBeNull();
+  });
+});

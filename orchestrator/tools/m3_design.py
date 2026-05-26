@@ -128,3 +128,101 @@ def estimate_sample_size(model: dict) -> dict:
         "recommended": 250,
         "rationale": "Generic quantitative default.",
     }
+
+
+@tool
+def suggest_themes(research_question: str, paradigm: str,
+                   gaps_summary: str = "") -> list[dict]:
+    """Suggest 3-5 themes (with sub-themes) for qualitative analysis.
+
+    Returns: [{id, theme, sub_themes: [str]}, ...]
+    Falls back to [] on malformed LLM response so the agent can show an
+    empty list_editor for the user to fill from scratch.
+    """
+    # Decision: Use LLM to generate thematic suggestions based on research question
+    # and literature gaps, following same pattern as other tools in this module
+    # (invoke -> json.loads -> safe fallback). This ensures consistency across the
+    # M3 design workflow.
+    llm = _get_llm()
+    prompt = (
+        "Suggest 3-5 themes for a qualitative analysis. For each theme, give 2-3 "
+        "sub-themes. Respond with ONLY a JSON array: "
+        '[{"id":"t1","theme":"<theme>","sub_themes":["<sub>","<sub>"]}, ...].\n\n'
+        f"Research question: {research_question}\n"
+        f"Paradigm: {paradigm}\n"
+        f"Literature gaps summary (from M2): {gaps_summary or '(none provided)'}"
+    )
+    try:
+        return list(json.loads(llm.invoke(prompt).content))
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("suggest_themes: malformed LLM response, returning empty list")
+        return []
+
+
+@tool
+def compose_interview_guide(themes: list[dict], research_question: str) -> dict:
+    """Build a semi-structured interview guide from themes.
+
+    Returns: {sections: [{phase: "intro"|"main"|"closing", time_minutes,
+              questions: [{q, probes: [str]}]}]}
+    Falls back to a one-section minimal guide on malformed LLM response.
+    """
+    # Decision: Use LLM to generate structured interview guide with intro/main/closing
+    # phases based on themes and research question. This follows the same pattern as
+    # suggest_themes (invoke -> json.loads -> safe fallback) to maintain consistency
+    # across M3 qualitative design tools.
+    llm = _get_llm()
+    prompt = (
+        "Build a semi-structured interview guide. Three sections: intro (5 min, "
+        "warm-up and consent), main (40-50 min, theme-driven questions with probes), "
+        "closing (5 min, wrap-up). For each main-phase question, give 1-2 probes. "
+        "Respond with ONLY a JSON object: "
+        '{"sections":[{"phase":"intro","time_minutes":5,"questions":[{"q":"...","probes":[]}]},'
+        '{"phase":"main","time_minutes":40,"questions":[{"q":"...","probes":["..."]}]},'
+        '{"phase":"closing","time_minutes":5,"questions":[{"q":"...","probes":[]}]}]}.\n\n'
+        f"Research question: {research_question}\n"
+        f"Themes: {json.dumps(themes, ensure_ascii=False)}"
+    )
+    try:
+        return dict(json.loads(llm.invoke(prompt).content))
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("compose_interview_guide: malformed LLM response, returning fallback")
+        return {
+            "sections": [
+                {"phase": "main", "time_minutes": 45,
+                 "questions": [{"q": "Tell me about your experience.", "probes": []}]},
+            ]
+        }
+
+
+@tool
+def suggest_purposive_criteria(research_question: str,
+                                paradigm: str) -> dict:
+    """Propose sampling criteria and strategies for qualitative purposive sampling.
+
+    Returns: {criteria: list[str], strategies: list[str],
+              saturation_min: int, saturation_max: int}
+    Falls back to a generic criteria list on malformed LLM response.
+    """
+    # Decision: Use LLM to generate purposive sampling criteria and strategies
+    # based on research question and paradigm. This follows the same pattern as
+    # suggest_themes and compose_interview_guide (invoke -> json.loads -> safe fallback)
+    # to maintain consistency across M3 qualitative design tools.
+    llm = _get_llm()
+    prompt = (
+        "Propose purposive sampling criteria and supplementary strategies for "
+        "a qualitative study. Provide 3-5 criteria, 1-3 strategies, and a "
+        "saturation range. Respond with ONLY a JSON object: "
+        '{"criteria":["..."],"strategies":["Snowball","Maximum variation"],'
+        '"saturation_min":10,"saturation_max":15}.\n\n'
+        f"Research question: {research_question}\nParadigm: {paradigm}"
+    )
+    try:
+        return dict(json.loads(llm.invoke(prompt).content))
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("suggest_purposive_criteria: malformed LLM response, returning fallback")
+        return {
+            "criteria": ["Participants directly experience the phenomenon under study"],
+            "strategies": ["Snowball", "Maximum variation"],
+            "saturation_min": 10, "saturation_max": 15,
+        }

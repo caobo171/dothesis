@@ -36,7 +36,7 @@ The existing wizard (`web/(inapp)/wizard`) stays alive in parallel until the new
         ┌───────────────────────────┼──────────────────────────────┬─────────────┐
         │            │              │              │               │             │
         ▼            ▼              ▼              ▼               ▼             ▼
-    2. M2 chat✅ 3. M1 topic ✅ 4. M3 design   5. M4 analysis  6. M5 writing  7. New chat UI ✅
+    2. M2 chat✅ 3. M1 topic ✅ 4. M3 design ✅ 5. M4 analysis  6. M5 writing  7. New chat UI ✅
        (Lit       (card-grid    (multi-method  (data-type      (auto-fill      (Next.js)
         Review)    UX)          branches)       detection +    + editor)
                                                  parsers)
@@ -128,23 +128,32 @@ Sub-projects 2–6 are mostly independent and can be parallelized once #1 lands.
 
 ---
 
-## Sub-project 4 — M3 Research Design multi-method branches ⬜
+## Sub-project 4 — M3 Research Design multi-method branches ✅
 
-**Status:** Not started
+**Status:** Shipped 2026-05-27 (branch `feat/sp4-m3-multi-method`; paradigm-aware agent + list_editor widget + 3 new qual tools)
 
-**Why important:** This is where the user's paradigm choice (quant vs qual vs mixed) cascades into very different tool sets and downstream M4 outline. Without this redesign, sub-project 1's generic M3 agent will produce shallow research designs.
+**Spec:** `docs/superpowers/specs/2026-05-27-sp4-m3-multi-method-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-27-sp4-m3-multi-method-plan.md`
 
-**Anticipated scope:**
-- Branch the M3 agent into three sub-paths (quantitative / qualitative / mixed) with distinct tool sets:
-  - **Quant branch:** drag-and-drop conceptual model builder (PRD §6.3.3 Step 3.2A-i), scale builder pulling from canonical scales (PRD §6.3.3 Step 3.2A-ii), Cohen / Hair sample size calculator
-  - **Qual branch:** thematic framework builder, interview guide composer (PRD §6.3.4 Step 3.2B-ii), purposive sampling strategy
-  - **Mixed branch:** sequential design selector (explanatory vs exploratory), both sub-flows
-- New tools: `validate_likert_scale`, `compose_interview_guide`, `compute_sample_size_pls_sem`
-- M3 schema bifurcates: `M3Quant`, `M3Qual`, `M3Mixed` (or one schema with discriminated union)
+**Delivers:**
+- Single `M3Agent` with paradigm-aware `_next_missing_field` walking `_FIELDS_BY_PARADIGM[paradigm]`; mixed flow composes quant + qual branches in order (no mixed-only code path)
+- Improved flat `M3Output` schema with paradigm-specific optionals + `@model_validator` that fires only when `confirmed_at` is set (in-progress partials remain valid)
+- Three new qualitative-flow tools: `suggest_themes`, `compose_interview_guide`, `suggest_purposive_criteria`
+- Four static option JSON files (`_options_tool_quant.json`, `_options_tool_qual.json`, `_options_design_qual.json`, `_options_mixed_design_type.json`)
+- New widget variant `ListEditorHint` joins the SP3 `WidgetHint` discriminated union; `ListEditorWidget` React component with local state + batch synthesize on Confirm (per-edit operations never hit the backend)
+- `summarizeList` helper builds per-field bulleted final-state messages routed through the existing send path (themes/scale_items/purposive_criteria/interview_guide/conceptual_model formatters)
+- 5 round-trip tests verify synthesized messages → `_extract_answer` produces expected structured values
 
-**Key questions:**
-- Is the model builder a true drag-and-drop frontend (canvas) or chat-driven ("add a path from A to B")?
-- How do we represent the conceptual model in `context_store.m3_design` so M4 can consume it programmatically?
+**Decisions worth remembering for SP5-SP6:**
+- Paradigm-aware field walks can live entirely in a single ModuleAgent override (`_next_missing_field`) — no sub-graph needed when branches differ only in *fields asked*, not in *conversational phases*
+- New widget variants extend the WidgetHint discriminated union; existing variants and the `WidgetRenderer` default-null forward-compat stay untouched
+- List_editor batch-confirm + per-field synthesizer keeps the LLM extraction unambiguous and the chat noise low
+- M3 stashes paradigm context on a class-level cache that the parameter-less `render_hint_for_field` hook reads; this avoids changing the base-class signature while still allowing per-paradigm widget logic
+
+**Out of scope (deferred):**
+- Drag-and-drop conceptual-model canvas (separate post-pivot sub-project)
+- Curated canonical scale library (Cronbach alpha + citations) — `suggest_scale_items` LLM tool covers V1
+- Live Cohen / Hair / G*Power sample-size calculator widget — existing `estimate_sample_size` heuristic suffices
 
 ---
 
@@ -257,6 +266,7 @@ A short, append-only log of state changes. Update this when a sub-project moves 
 | 2026-05-27 | 2 | ⬜ → ✅ | M2 chat-first redesign + PDF upload shipped on feat/m2-chat-first; 207 tests passing |
 | 2026-05-27 | 7 | ⬜ → ✅ | Chat UI shell shipped (no module-specific widgets yet); SP3-SP6 will plug widgets into this shell |
 | 2026-05-27 | 3 | ⬜ → ✅ | M1 card-grid widgets shipped — widget infra + FieldPicker + ResearchTypePicker; pattern ready for SP4-SP6 |
+| 2026-05-27 | 4 | ⬜ → ✅ | M3 multi-method shipped — paradigm-aware agent + list_editor widget + 3 new qual tools |
 
 ---
 

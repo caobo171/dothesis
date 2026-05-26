@@ -103,3 +103,46 @@ def test_list_messages_returns_tool_calls_json(client, monkeypatch):
     last = msgs[-1]
     assert last["tool_calls_json"] is not None
     assert last["tool_calls_json"]["widget_type"] == "card_grid"
+
+
+def test_stream_emits_list_editor_tool_calls_event(client, monkeypatch):
+    """The chat router already forwards any additional_kwargs['tool_calls_json']
+    as an SSE 'tool_calls' event (added in SP3). This test verifies the existing
+    code path handles the new list_editor variant — no router changes needed."""
+    pid, tid = _setup(client)
+
+    from langchain_core.messages import AIMessage
+    ai = AIMessage(content="Pick themes")
+    ai.additional_kwargs["tool_calls_json"] = {
+        "widget_type": "list_editor",
+        "field_name": "themes",
+        "title": "Pick themes",
+        "initial_items": [
+            {"id": "t1", "text": "Theme 1", "sub_items": []},
+            {"id": "t2", "text": "Theme 2", "sub_items": []},
+        ],
+        "allow_nested": True,
+        "confirm_label": "Confirm", "reset_label": "Reset to suggested",
+    }
+
+    fake_graph = MagicMock()
+    fake_graph.astream.return_value = _async_iter([
+        {"M3": {"messages": [ai]}},
+    ])
+    monkeypatch.setattr(
+        "orchestrator.graph.get_interactive_graph", lambda: fake_graph
+    )
+
+    resp = client.post(f"/api/v1/threads/{tid}/messages", json={"text": "go"})
+    assert resp.status_code == 200
+    body = resp.text
+    assert '"type": "tool_calls"' in body or '"type":"tool_calls"' in body
+    assert "list_editor" in body
+    assert "Theme 1" in body
+
+    sf = get_session_factory()
+    with sf() as db:
+        assistants = db.query(Message).filter_by(thread_id=tid, role="assistant").all()
+        assert assistants
+        assert assistants[-1].tool_calls_json["widget_type"] == "list_editor"
+        assert assistants[-1].tool_calls_json["field_name"] == "themes"
