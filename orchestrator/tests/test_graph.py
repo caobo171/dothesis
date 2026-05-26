@@ -38,23 +38,46 @@ def test_graph_terminates_when_all_confirmed():
 
 
 def test_graph_routes_to_correct_first_unconfirmed(monkeypatch):
-    """Inject fake LLMs so all 5 module agents auto-fill silently and return valid schemas."""
+    """Inject fake LLMs/sub-graphs so all 5 module agents complete silently."""
     from orchestrator.agents.m1_topic import M1Agent
-    from orchestrator.agents.m2_literature import M2Agent
+    from orchestrator.agents.m2 import M2Agent
     from orchestrator.agents.m3_design import M3Agent
     from orchestrator.agents.m4_analysis import M4Agent
     from orchestrator.agents.m5_writing import M5Agent
 
-    responses = {
+    # M1, M3-M5 use the generic _get_llm auto-fill path.
+    llm_responses = {
         M1Agent: '{"research_title": "T", "field": "Marketing", "research_type": "quantitative", "target_population": "p", "scope": "s", "objectives": ["o1"], "research_questions": ["q1"]}',
-        M2Agent: '{"research_state_summary":"x","research_gaps":[{"description":"g","relevance":"High","confirmed":true,"supporting_papers":[]}],"theoretical_framework":"f","hypotheses":[],"literature_review_doc":"d","citation_list":[]}',
         M3Agent: '{"paradigm":"quantitative","design":"Regression","tool":"SPSS","sampling_strategy":"convenience","target_sample_size":200,"constructs":[]}',
         M4Agent: '{"data_type_detected":"SPSS","analysis_outline":{"sections":["Descriptive"]},"results":{},"interpretations":{}}',
         M5Agent: '{"sections":[{"name":"intro","text":"..."}],"export_artifacts":[]}',
     }
-    for cls, blob in responses.items():
+    for cls, blob in llm_responses.items():
         m = MagicMock(); m.invoke.return_value.content = blob
         monkeypatch.setattr(cls, "_get_llm", lambda self, _m=m: _m)
+
+    # M2 now delegates to the sub-graph; stub get_m2_graph and the DB session.
+    fake_m2_subgraph = MagicMock()
+    fake_m2_subgraph.invoke.return_value = {
+        "current_phase": "DONE",
+        "research_state_draft": "x",
+        "candidate_gaps": [{"description": "g", "supporting_papers": []}],
+        "selected_gap_ids": ["0"],
+        "ch2_draft": "d",
+        "citation_list": [],
+        "research_type": "quantitative",
+    }
+    monkeypatch.setattr("orchestrator.agents.m2.agent.get_m2_graph",
+                        lambda interactive: fake_m2_subgraph)
+
+    class _FakeDb:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def query(self, *a, **kw):
+            m = MagicMock()
+            m.filter_by.return_value.all.return_value = []
+            return m
+    monkeypatch.setattr("orchestrator.agents.m2.agent._open_db_session", lambda: _FakeDb())
 
     graph = build_graph(interactive=False, checkpointer=MemorySaver())
     final = graph.invoke({

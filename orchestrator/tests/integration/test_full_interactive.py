@@ -5,7 +5,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from unittest.mock import MagicMock
 
 from orchestrator.agents.m1_topic import M1Agent
-from orchestrator.agents.m2_literature import M2Agent
+from orchestrator.agents.m2 import M2Agent
 from orchestrator.agents.m3_design import M3Agent
 from orchestrator.agents.m4_analysis import M4Agent
 from orchestrator.agents.m5_writing import M5Agent

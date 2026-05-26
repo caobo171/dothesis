@@ -47,7 +47,10 @@ class M2Agent(ModuleAgent):
 
         is_interactive = state.get("mode", "interactive") == "interactive"
         sub_graph = get_m2_graph(interactive=is_interactive)
-        config = {"configurable": {"thread_id": f"{state['thread_id']}::m2"}}
+        # Use thread_id::m2 so the sub-graph checkpoint is scoped under the outer thread.
+        # Fall back to "unknown" if caller did not set thread_id (e.g. unit tests).
+        outer_thread = state.get("thread_id") or "unknown"
+        config = {"configurable": {"thread_id": f"{outer_thread}::m2"}}
         final = sub_graph.invoke(sub_state, config=config)
 
         if final.get("current_phase") == "DONE":
