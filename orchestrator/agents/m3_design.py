@@ -98,11 +98,13 @@ class M3Agent(ModuleAgent):
         cls = type(self)
         partial = dict(get_module_slice(state["context_store"], self.module_key))
         cls._render_paradigm = partial.get("paradigm")
-        # M1's research_question (first one if multiple), M2's gap summary
+        # M1's research_question (first one if multiple), M2's gap summary.
+        # M2 stores gaps under "research_gaps" in M2Output (translation.py:67);
+        # the M2 sub-graph's internal "candidate_gaps" gets translated out.
         m1 = state["context_store"].m1_topic or {}
         m2 = state["context_store"].m2_literature or {}
         cls._render_research_question = (m1.get("research_questions") or [""])[0]
-        gaps = m2.get("candidate_gaps") or []
+        gaps = m2.get("research_gaps") or []
         cls._render_gaps_summary = "; ".join(
             g.get("description", "") for g in gaps[:3]
         )
