@@ -35,10 +35,13 @@ export function useChat(threadId: string) {
     .map(e => (e as unknown as { text: string }).text)
     .join("");
 
-  // SP3: pick up the latest tool_calls event from the in-flight stream so the
-  // bubble that's still being streamed can render its widget while the user
-  // reads. The persisted message (next page-load) carries the same dict via
-  // Message.tool_calls_json.
+  // SP3: parse tool_calls SSE events from the in-flight stream. Exposed but
+  // not consumed by ChatPane today — MessageBubble renders widgets off
+  // Message.tool_calls_json once SWR revalidates after the stream completes
+  // (revalidation runs immediately in send() below, so the user sees the
+  // widget moments after stream-end). Kept exported because (1) it locks
+  // down the SSE event-parsing path under test (see useChat.test.tsx) and
+  // (2) SP4+ may want a mid-stream widget preview — the wire is in place.
   const streamingToolCalls = (stream.state.events
     .filter(e => e.type === "tool_calls")
     .map(e => (e as unknown as { payload: WidgetHint }).payload)
