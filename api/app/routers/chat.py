@@ -159,9 +159,13 @@ def list_messages(thread_id: uuid.UUID, before_id: int | None = None, limit: int
     if before_id is not None:
         q = q.filter(Message.id < before_id)
     rows = q.order_by(Message.id.desc()).limit(min(limit, 200)).all()
+    # SP3 T6: include tool_calls_json so the frontend can hydrate widget bubbles
+    # on page load — without this field, card_grid and other widgets would not
+    # re-render after a page refresh.
     return [
         {"id": m.id, "role": m.role, "content": m.content,
-         "module_tag": m.module_tag, "created_at": m.created_at.isoformat()}
+         "module_tag": m.module_tag, "tool_calls_json": m.tool_calls_json,
+         "created_at": m.created_at.isoformat()}
         for m in reversed(rows)
     ]
 
@@ -198,9 +202,14 @@ async def send_message(thread_id: uuid.UUID,
 
     assistant_chunks: list[str] = []
     final_module_tag: str | None = None
+    # SP3 T6: capture the last tool_calls_json hint emitted by the agent so we
+    # can persist it alongside the assistant message and hydrate widgets on
+    # page reload.  None when no module attached a render hint (→ SQL NULL,
+    # safe for the nullable JSONB column).
+    final_tool_calls: dict | None = None
 
     async def gen():
-        nonlocal final_module_tag
+        nonlocal final_module_tag, final_tool_calls
         async for event in graph.astream(
             {"messages": [HumanMessage(content=body.text)], "mode": "interactive"},
             config=config,
@@ -220,7 +229,16 @@ async def send_message(thread_id: uuid.UUID,
                             "text": chunk,
                         })
 
-        # 2. Persist the assistant reply (full).
+                    # SP3 T6: forward render hint if the agent attached one.
+                    # additional_kwargs["tool_calls_json"] is set by M1 (and
+                    # future modules) when they want the frontend to show a
+                    # structured widget (card_grid, scale, etc.).
+                    tc = getattr(m, "additional_kwargs", {}).get("tool_calls_json")
+                    if tc:
+                        final_tool_calls = tc
+                        yield sse_pack({"type": "tool_calls", "payload": tc})
+
+        # Persist the assistant reply (full text + any widget hint).
         full = "".join(assistant_chunks)
         if full:
             with db.bind.connect() as conn:
@@ -228,6 +246,7 @@ async def send_message(thread_id: uuid.UUID,
                     Message.__table__.insert().values(
                         thread_id=thread_id, role="assistant",
                         content=full, module_tag=final_module_tag,
+                        tool_calls_json=final_tool_calls,
                     )
                 )
                 conn.commit()
