@@ -147,3 +147,41 @@ def test_compose_interview_guide_falls_back_on_malformed(monkeypatch):
     # Fallback: one minimal main-phase section
     assert "sections" in out
     assert len(out["sections"]) >= 1
+
+
+def test_suggest_purposive_criteria_returns_structured(monkeypatch):
+    from orchestrator.tools.m3_design import suggest_purposive_criteria
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = json.dumps({
+        "criteria": [
+            "Employees at SMEs (< 300 staff)",
+            "At least 6 months tenure",
+            "Has a direct line manager",
+        ],
+        "strategies": ["Snowball", "Maximum variation"],
+        "saturation_min": 10, "saturation_max": 15,
+    })
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+
+    out = suggest_purposive_criteria.invoke({
+        "research_question": "How does TL affect EE in Vietnamese SMEs?",
+        "paradigm": "qualitative",
+    })
+    assert "criteria" in out
+    assert len(out["criteria"]) == 3
+    assert out["saturation_min"] == 10
+
+
+def test_suggest_purposive_criteria_falls_back_on_malformed(monkeypatch):
+    from orchestrator.tools.m3_design import suggest_purposive_criteria
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "{ broken"
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+
+    out = suggest_purposive_criteria.invoke({
+        "research_question": "x", "paradigm": "qualitative",
+    })
+    assert "criteria" in out
+    assert isinstance(out["criteria"], list)
