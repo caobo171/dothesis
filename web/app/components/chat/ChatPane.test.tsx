@@ -123,3 +123,54 @@ describe("ChatPane widget click integration", () => {
     await waitFor(() => expect(capturedBody?.text).toBe("I'd like to study Marketing."));
   });
 });
+
+describe("ChatPane list_editor integration", () => {
+  test("clicking Confirm on a themes list_editor synthesizes message and POSTs it", async () => {
+    let capturedBody: { text?: string } | null = null;
+    server.use(
+      http.get("/api/v1/projects/p1", () => HttpResponse.json({
+        name: "Test Project",
+        context_store: { m1_topic: null },
+      })),
+      http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+      http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({ run: null })),
+      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([
+        {
+          id: 1,
+          role: "assistant",
+          content: "Confirm your themes",
+          created_at: "2026-05-27T00:00:00Z",
+          tool_calls_json: {
+            widget_type: "list_editor",
+            field_name: "themes",
+            title: "Themes",
+            initial_items: [
+              { id: "t1", text: "Cách thức lãnh đạo",
+                sub_items: [{ id: "s1", text: "Tầm nhìn" }] },
+              { id: "t2", text: "Biểu hiện gắn kết", sub_items: [] },
+            ],
+            allow_nested: true,
+            confirm_label: "Confirm", reset_label: "Reset to suggested",
+          },
+        },
+      ])),
+      http.post("/api/v1/threads/t1/messages", async ({ request }) => {
+        capturedBody = await request.json() as { text?: string };
+        return streamResponse([
+          'data: {"type":"token","text":"Got it."}\n\n',
+          'data: {"type":"done"}\n\n',
+        ]);
+      }),
+    );
+
+    renderFresh(<ChatPane projectId="p1" threadId="t1" />);
+
+    await waitFor(() => expect(screen.getByTestId("list-editor-themes")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("list-editor-confirm"));
+
+    await waitFor(() => expect(capturedBody?.text).toContain("My themes are:"));
+    expect(capturedBody?.text).toContain("Cách thức lãnh đạo");
+    expect(capturedBody?.text).toContain("(Sub: Tầm nhìn)");
+  });
+});
