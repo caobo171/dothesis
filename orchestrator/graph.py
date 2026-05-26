@@ -146,8 +146,14 @@ def _get_pool():
     if _pool is None:
         from psycopg_pool import ConnectionPool
 
+        # SQLAlchemy uses URLs like `postgresql+psycopg://...` but psycopg's
+        # native parser rejects the `+psycopg` driver suffix. Strip it so the
+        # same DATABASE_URL works for both SQLAlchemy and psycopg_pool.
+        url = os.environ["DATABASE_URL"]
+        url = url.replace("postgresql+psycopg://", "postgresql://", 1)
+
         _pool = ConnectionPool(
-            os.environ["DATABASE_URL"],
+            url,
             min_size=1,
             max_size=int(os.getenv("ORCHESTRATOR_PG_POOL_MAX", "10")),
             # autocommit=True is required by LangGraph's PostgresSaver which
