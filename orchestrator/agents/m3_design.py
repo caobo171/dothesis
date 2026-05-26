@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from orchestrator.agents.base import ModuleAgent
-from orchestrator.agents.widgets import CardGridHint, CardOption
+from orchestrator.agents.widgets import CardGridHint, CardOption, ListEditorHint, ListItem
 from orchestrator.schemas.m3 import M3Output
 from orchestrator.tools.m3_design import (
     build_conceptual_model, compose_interview_guide, estimate_sample_size,
@@ -73,24 +73,43 @@ class M3Agent(ModuleAgent):
         suggest_purposive_criteria,
     ]
 
-    # SP4: a class-level cache the agent's step() writes to before the
-    # ModuleAgent base calls render_hint_for_field. We can't pass `partial`
-    # into the hook without changing the base-class signature (which would
-    # ripple to all 5 module agents), so M3 keeps the paradigm context here.
-    # Tests patch this attribute directly.
+    # SP4: class-level caches the agent's step() populates before the
+    # ModuleAgent base calls render_hint_for_field. The hook signature is
+    # parameter-less for compatibility with the other 4 agents; M3 stashes
+    # everything it needs here.
     _render_paradigm: str | None = None
+    _render_research_question: str = ""
+    _render_gaps_summary: str = ""
+    _render_themes: list = []
+    _render_constructs: list = []
+    _render_conceptual_model: dict | None = None
 
     def step(self, state):
-        """Stash the resolved paradigm so render_hint_for_field can read it
-        without the base class needing to pass `partial` into the hook.
+        """Stash paradigm + RQ + M2 gaps + already-confirmed M3 partials so
+        render_hint_for_field can read them without `partial` access.
 
-        Decision: using a class-level attribute (rather than instance) means
-        the stashed value survives across the base-class call chain and is
+        Decision: using class-level attributes (rather than instance) means
+        the stashed values survive across the base-class call chain and are
         also directly patchable in unit tests without needing a real state dict.
+        All dependencies for list_editor renders (themes, constructs,
+        conceptual_model) are stashed here so the hint methods stay stateless.
         """
         from orchestrator.state import get_module_slice
+        cls = type(self)
         partial = dict(get_module_slice(state["context_store"], self.module_key))
-        type(self)._render_paradigm = partial.get("paradigm")
+        cls._render_paradigm = partial.get("paradigm")
+        # M1's research_question (first one if multiple), M2's gap summary
+        m1 = state["context_store"].m1_topic or {}
+        m2 = state["context_store"].m2_literature or {}
+        cls._render_research_question = (m1.get("research_questions") or [""])[0]
+        gaps = m2.get("candidate_gaps") or []
+        cls._render_gaps_summary = "; ".join(
+            g.get("description", "") for g in gaps[:3]
+        )
+        # Already-confirmed M3 partials that later list_editor renders depend on
+        cls._render_themes = partial.get("themes") or []
+        cls._render_constructs = (partial.get("conceptual_model") or {}).get("constructs", [])
+        cls._render_conceptual_model = partial.get("conceptual_model")
         return super().step(state)
 
     def _resolved_paradigm_key(self, partial: dict) -> str | None:
@@ -124,13 +143,13 @@ class M3Agent(ModuleAgent):
         return None
 
     def render_hint_for_field(self, field_name: str) -> dict | None:
-        """Return a CardGridHint for the three selection-point fields; None for
-        all free-text fields (handled conversationally by the agent tools).
+        """Return a widget hint dict for the field, or None for free-text fields.
 
-        Decision: only the fields where the user picks from a bounded set get a
-        card_grid widget. Free-text fields like sampling_strategy and
-        target_sample_size are left as chat input so the LLM can coach the
-        student through sizing decisions interactively.
+        Decision: card_grid for bounded-selection fields (tool, design,
+        mixed_design_type); list_editor for list-valued fields that benefit from
+        AI-suggested initial items (themes, interview_guide, purposive_criteria,
+        conceptual_model, scale_items). Free-text fields like sampling_strategy
+        and target_sample_size return None so the LLM coaches interactively.
         """
         # Card-grid hints (selection points) ---
         if field_name == "tool":
@@ -160,5 +179,124 @@ class M3Agent(ModuleAgent):
                 options=_load_options("mixed_design_type"), columns=2,
             ).model_dump()
 
-        # List-editor branches land in Task 9.
-        return None
+        # List-editor hints (editable list fields) ---
+        if field_name == "themes":
+            # Decision: call suggest_themes with the RQ + paradigm + gap context
+            # so the initial item set is already aligned with the study framing.
+            # Sub-themes become nested ListItem children (allow_nested=True).
+            raw = suggest_themes.invoke({
+                "research_question": self._render_research_question,
+                "paradigm": self._render_paradigm or "qualitative",
+                "gaps_summary": self._render_gaps_summary,
+            })
+            items = [
+                ListItem(
+                    id=t.get("id", f"t{i}"),
+                    text=t.get("theme", ""),
+                    sub_items=[ListItem(id=f"{t.get('id','t')}_s{j}", text=s)
+                               for j, s in enumerate(t.get("sub_themes", []))],
+                )
+                for i, t in enumerate(raw)
+            ]
+            return ListEditorHint(
+                field_name="themes",
+                title="Thematic framework — edit and confirm",
+                initial_items=items,
+                allow_nested=True,
+            ).model_dump()
+
+        if field_name == "interview_guide":
+            # Decision: guide is structured into phases/sections with timed slots.
+            # Each question becomes a top-level item; probes become sub_items so
+            # the student can expand/collapse them without losing structure.
+            guide = compose_interview_guide.invoke({
+                "themes": self._render_themes,
+                "research_question": self._render_research_question,
+            })
+            items: list[ListItem] = []
+            for s_idx, section in enumerate(guide.get("sections", [])):
+                phase = section.get("phase", "main")
+                for q_idx, q in enumerate(section.get("questions", [])):
+                    items.append(ListItem(
+                        id=f"{phase}_{s_idx}_{q_idx}",
+                        text=f"[{phase}] {q.get('q', '')}",
+                        sub_items=[
+                            ListItem(id=f"{phase}_{s_idx}_{q_idx}_p{p_idx}", text=p)
+                            for p_idx, p in enumerate(q.get("probes", []))
+                        ],
+                        meta={"phase": phase, "time_minutes": section.get("time_minutes")},
+                    ))
+            return ListEditorHint(
+                field_name="interview_guide",
+                title="Interview guide — edit questions and probes",
+                initial_items=items,
+                allow_nested=True,
+            ).model_dump()
+
+        if field_name == "purposive_criteria":
+            # Decision: criteria are flat strings — no nesting needed, so
+            # allow_nested=False and items are a simple flat list.
+            raw = suggest_purposive_criteria.invoke({
+                "research_question": self._render_research_question,
+                "paradigm": self._render_paradigm or "qualitative",
+            })
+            items = [
+                ListItem(id=f"c{i}", text=c)
+                for i, c in enumerate(raw.get("criteria", []))
+            ]
+            return ListEditorHint(
+                field_name="purposive_criteria",
+                title="Purposive sampling criteria",
+                initial_items=items,
+                allow_nested=False,
+            ).model_dump()
+
+        if field_name == "conceptual_model":
+            # Decision: build_conceptual_model returns {constructs, paths:[{from,to,hypothesis}]}.
+            # We adapt paths into flat ListItem rows (one per path) because the
+            # student edits hypotheses, not constructs — constructs are derived
+            # from confirmed paths at submission time. hypothesis is stashed in
+            # meta so the frontend can surface it as a tooltip or secondary label.
+            model = build_conceptual_model.invoke({
+                "constructs": self._render_constructs,
+                "research_question": self._render_research_question,
+            })
+            items = []
+            for i, p in enumerate(model.get("paths", [])):
+                items.append(ListItem(
+                    id=f"H{i+1}",
+                    text=f"{p.get('from', '?')} → {p.get('to', '?')}",
+                    meta={"hypothesis": p.get("hypothesis", "")},
+                ))
+            return ListEditorHint(
+                field_name="conceptual_model",
+                title="Conceptual model — paths between constructs",
+                initial_items=items,
+                allow_nested=False,
+            ).model_dump()
+
+        if field_name == "scale_items":
+            # Decision: each construct becomes a top-level ListItem; its 5
+            # suggested scale items become sub_items. allow_nested=True so the
+            # student can add/remove items per construct in the editor.
+            cm = self._render_conceptual_model or {}
+            constructs = cm.get("constructs", []) if isinstance(cm, dict) else []
+            items_list: list[ListItem] = []
+            for c_idx, c in enumerate(constructs):
+                suggested = suggest_scale_items.invoke({"construct": c, "n": 5})
+                items_list.append(ListItem(
+                    id=f"c{c_idx}",
+                    text=c,
+                    sub_items=[
+                        ListItem(id=f"c{c_idx}_i{j}", text=s.get("text", ""))
+                        for j, s in enumerate(suggested)
+                    ],
+                ))
+            return ListEditorHint(
+                field_name="scale_items",
+                title="Scale items per construct",
+                initial_items=items_list,
+                allow_nested=True,
+            ).model_dump()
+
+        return None  # free-text for sampling_strategy / target_sample_size
