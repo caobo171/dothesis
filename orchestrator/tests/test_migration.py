@@ -32,7 +32,11 @@ def test_migration_up_down_up_clean(alembic_env):
     for c in ("project_id", "thread_id", "mode", "langgraph_thread_id"):
         assert c in job_cols, f"jobs missing column {c}"
 
-    _alembic(["downgrade", "-1"])
+    # Downgrade to the revision directly before the orchestrator migration using
+    # its explicit ID. Using -1 is fragile: if a newer migration sits on top of
+    # 20260526_orch01 (e.g. 20260527_uploads01), downgrade -1 would only undo
+    # that newer migration, leaving the orchestrator tables in place.
+    _alembic(["downgrade", "cbab05df531a"])
     insp = inspect(eng)
     for t in ("projects", "threads", "messages", "context_store"):
         assert t not in insp.get_table_names(), f"{t} should be gone after downgrade"

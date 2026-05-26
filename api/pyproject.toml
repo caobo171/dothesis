@@ -30,6 +30,7 @@ dependencies = [
   "langgraph-checkpoint>=4.1.0,<5",
   "langgraph-checkpoint-postgres>=3.1.0,<4",
   "langchain-google-genai>=4.1.0,<5",
+  "pdfminer.six>=20231228",
 ]
 
 [project.optional-dependencies]

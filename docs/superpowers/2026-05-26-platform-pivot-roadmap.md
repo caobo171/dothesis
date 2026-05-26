@@ -36,7 +36,7 @@ The existing wizard (`web/(inapp)/wizard`) stays alive in parallel until the new
         ┌───────────────────────────┼──────────────────────────────┬─────────────┐
         │            │              │              │               │             │
         ▼            ▼              ▼              ▼               ▼             ▼
-    2. M2 chat   3. M1 topic   4. M3 design   5. M4 analysis  6. M5 writing  7. New chat UI
+    2. M2 chat✅ 3. M1 topic   4. M3 design   5. M4 analysis  6. M5 writing  7. New chat UI
        (Lit       (card-grid    (multi-method  (data-type      (auto-fill      (Next.js)
         Review)    UX)          branches)       detection +    + editor)
                                                  parsers)
@@ -78,9 +78,9 @@ Sub-projects 2–6 are mostly independent and can be parallelized once #1 lands.
 
 ---
 
-## Sub-project 2 — M2 Literature Review chat-first redesign ⬜
+## Sub-project 2 — M2 Literature Review chat-first redesign ✅
 
-**Status:** Not started · brainstorm when sub-project 1 is shipped
+**Status:** Shipped 2026-05-27 (branch `feat/m2-chat-first`; 5-phase sub-graph + PDF upload subsystem + all tests passing)
 
 **Why this one second:** Most chat-native module in the PRD (PRD §6.2). Existing `engine/utils/agent_runner.research_citations_via_api` + `engine/utils/api_citations/*` + `engine/utils/citation_compiler` are already used as tools in sub-project 1, so the upgrade is purely about M2 agent specialization — not new tools.
 
@@ -248,6 +248,7 @@ A short, append-only log of state changes. Update this when a sub-project moves 
 | 2026-05-25 | 1 | ⬜ → 🟡 | Brainstormed; spec at `specs/2026-05-25-orchestration-foundation-design.md` |
 | 2026-05-26 | 1 | 🟡 → 🔵 | Plan at `plans/2026-05-26-orchestration-foundation-plan.md` |
 | 2026-05-26 | 1 | 🔵 → ✅ | All 32 tasks shipped on `feat/orchestrator-foundation`; 68 tests passing |
+| 2026-05-27 | 2 | ⬜ → ✅ | M2 chat-first redesign + PDF upload shipped on feat/m2-chat-first; 207 tests passing |
 
 ---
 
