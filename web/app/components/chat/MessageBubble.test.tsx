@@ -76,3 +76,40 @@ describe("MessageBubble widget rendering", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
+
+import type { ListEditorHint } from "./widgets/types";
+
+const listEditorBubbleHint: ListEditorHint = {
+  widget_type: "list_editor",
+  field_name: "themes",
+  title: "Pick themes",
+  initial_items: [{ id: "t1", text: "Theme 1" }],
+};
+
+
+describe("MessageBubble list_editor rendering", () => {
+  test("renders list_editor widget when toolCallsJson is a list_editor hint", () => {
+    render(
+      <MessageBubble
+        role="assistant"
+        content="Pick themes"
+        toolCallsJson={listEditorBubbleHint}
+        onWidgetSelect={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("list-editor-themes")).toBeTruthy();
+  });
+
+  test("widgetDisabled hides Confirm in the embedded list_editor", () => {
+    render(
+      <MessageBubble
+        role="assistant"
+        content="Pick themes"
+        toolCallsJson={listEditorBubbleHint}
+        onWidgetSelect={() => {}}
+        widgetDisabled
+      />,
+    );
+    expect(screen.queryByTestId("list-editor-confirm")).toBeNull();
+  });
+});
