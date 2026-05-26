@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, expect, test, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MessageBubble } from "./MessageBubble";
 import { StreamingBubble } from "./StreamingBubble";
 
@@ -30,5 +30,49 @@ describe("StreamingBubble", () => {
     render(<StreamingBubble text="streaming…" />);
     expect(screen.getByText("streaming…")).toBeTruthy();
     expect(screen.getByTestId("streaming-cursor")).toBeTruthy();
+  });
+});
+
+import type { CardGridHint } from "./widgets/types";
+
+const cardGridHint: CardGridHint = {
+  widget_type: "card_grid",
+  field_name: "field",
+  title: "Pick a field",
+  options: [{ value: "Marketing", label: "Marketing" }],
+};
+
+
+describe("MessageBubble widget rendering", () => {
+  test("renders widget when toolCallsJson present and onWidgetSelect provided", () => {
+    render(
+      <MessageBubble
+        role="assistant"
+        content="Pick a field"
+        toolCallsJson={cardGridHint}
+        onWidgetSelect={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("card-grid-field")).toBeTruthy();
+  });
+
+  test("does not render widget when toolCallsJson absent", () => {
+    render(<MessageBubble role="assistant" content="Hi" />);
+    expect(screen.queryByTestId(/card-grid/)).toBeNull();
+  });
+
+  test("widgetDisabled prevents card clicks", () => {
+    const onSelect = vi.fn();
+    render(
+      <MessageBubble
+        role="assistant"
+        content="Pick a field"
+        toolCallsJson={cardGridHint}
+        onWidgetSelect={onSelect}
+        widgetDisabled
+      />,
+    );
+    fireEvent.click(screen.getByTestId("card-Marketing"));
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

@@ -25,6 +25,7 @@ class ModuleStepResult:
     context_patch: dict
     transition: bool                 # True → done; supervisor takes over
     needs_user_reply: bool = False
+    tool_calls_json: dict | None = None    # SP3: widget render hint, or None
 
 
 class ModuleAgent(ABC):
@@ -40,6 +41,17 @@ class ModuleAgent(ABC):
             model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.0-flash-001"),
             temperature=0.4,
         )
+
+    def render_hint_for_field(self, field_name: str) -> dict | None:
+        """Optional override: return a widget render hint when asking the user
+        to fill `field_name`. Default returns None (plain-text input).
+
+        Subclasses should return a dict matching one of the WidgetHint
+        variants in orchestrator/agents/widgets.py (e.g. CardGridHint).
+        Use `<HintClass>(...).model_dump()` to produce the dict.
+        """
+        # SP3: hook point for card-grid UX — subclasses override per-field
+        return None
 
     def step(self, state: OrchestratorState) -> ModuleStepResult:
         mode = state.get("mode", "interactive")
@@ -130,9 +142,12 @@ class ModuleAgent(ABC):
             f"filled: {json.dumps({k:v for k,v in partial.items() if not k.startswith('_')}, default=str)[:1000]}"
         )
         msg = self._get_llm().invoke(prompt).content.strip()
+        # SP3: call the hook so subclasses can attach a widget render hint
+        hint = self.render_hint_for_field(missing)
         return ModuleStepResult(
             assistant_message=msg, context_patch=partial,
             transition=False, needs_user_reply=True,
+            tool_calls_json=hint,
         )
 
     def _extract_answer(self, state, field_name: str) -> Any:

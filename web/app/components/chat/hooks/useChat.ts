@@ -2,6 +2,8 @@
 
 import useSWR from "swr";
 import { useStream } from "./useStream";
+import type { WidgetHint } from "../widgets/types";
+
 
 const fetcher = async (url: string) => {
   const res = await fetch(`/api/v1${url}`);
@@ -14,6 +16,7 @@ export type Message = {
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   module_tag?: string | null;
+  tool_calls_json?: WidgetHint | null;
   created_at: string;
 };
 
@@ -31,6 +34,18 @@ export function useChat(threadId: string) {
     .filter(e => e.type === "token")
     .map(e => (e as unknown as { text: string }).text)
     .join("");
+
+  // SP3: parse tool_calls SSE events from the in-flight stream. Exposed but
+  // not consumed by ChatPane today — MessageBubble renders widgets off
+  // Message.tool_calls_json once SWR revalidates after the stream completes
+  // (revalidation runs immediately in send() below, so the user sees the
+  // widget moments after stream-end). Kept exported because (1) it locks
+  // down the SSE event-parsing path under test (see useChat.test.tsx) and
+  // (2) SP4+ may want a mid-stream widget preview — the wire is in place.
+  const streamingToolCalls = (stream.state.events
+    .filter(e => e.type === "tool_calls")
+    .map(e => (e as unknown as { payload: WidgetHint }).payload)
+    .at(-1)) ?? null;
 
   const send = async (text: string) => {
     // Optimistic update: show user message immediately before server confirms
@@ -55,6 +70,7 @@ export function useChat(threadId: string) {
   return {
     messages: messages ?? [],
     streamingText,
+    streamingToolCalls,
     inflight: stream.state.inflight,
     error: stream.state.error,
     send,

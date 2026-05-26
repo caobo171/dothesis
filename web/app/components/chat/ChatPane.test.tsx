@@ -2,9 +2,21 @@ import { describe, expect, test } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
+import { SWRConfig } from "swr";
 import { server } from "../../../tests/setup";
 import { streamResponse } from "../../../tests/helpers/sseResponse";
 import { ChatPane } from "./ChatPane";
+
+
+// Wrap component with a fresh SWR cache to prevent cross-test cache bleed.
+// Each isolated render gets its own Map() so prior test data never leaks in.
+function renderFresh(ui: JSX.Element) {
+  return render(
+    <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
+      {ui}
+    </SWRConfig>
+  );
+}
 
 
 function setupMocks() {
@@ -48,7 +60,7 @@ describe("ChatPane integration", () => {
       }),
     );
 
-    render(<ChatPane projectId="p1" threadId="t1" />);
+    renderFresh(<ChatPane projectId="p1" threadId="t1" />);
     await waitFor(() => screen.getByText("Test Project"));
 
     const textarea = screen.getByRole("textbox");
@@ -60,5 +72,54 @@ describe("ChatPane integration", () => {
     // Streaming reply concatenates (shown during inflight); after done, persisted via SWR revalidation
     await waitFor(() => expect(screen.getByText(/Hello!.*How can I help/)).toBeTruthy());
     expect(postCount).toBe(1);
+  });
+});
+
+describe("ChatPane widget click integration", () => {
+  test("clicking a card synthesizes message and POSTs it", async () => {
+    let capturedBody: { text?: string } | null = null;
+    server.use(
+      http.get("/api/v1/projects/p1", () => HttpResponse.json({
+        name: "Test Project",
+        context_store: { m1_topic: null },
+      })),
+      http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+      http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({ run: null })),
+      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([
+        {
+          id: 1,
+          role: "assistant",
+          content: "Which field is your research in?",
+          created_at: "2026-05-27T00:00:00Z",
+          tool_calls_json: {
+            widget_type: "card_grid",
+            field_name: "field",
+            title: "Pick a field",
+            options: [
+              { value: "Marketing", label: "Marketing", description: "" },
+              { value: "Economics", label: "Economics", description: "" },
+            ],
+            columns: 3,
+          },
+        },
+      ])),
+      http.post("/api/v1/threads/t1/messages", async ({ request }) => {
+        capturedBody = await request.json() as { text?: string };
+        return streamResponse([
+          'data: {"type":"token","text":"Got it."}\n\n',
+          'data: {"type":"done"}\n\n',
+        ]);
+      }),
+    );
+
+    renderFresh(<ChatPane projectId="p1" threadId="t1" />);
+
+    // The widget renders from the existing message
+    await waitFor(() => expect(screen.getByTestId("card-Marketing")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("card-Marketing"));
+
+    // The frontend should POST with the synthesized message
+    await waitFor(() => expect(capturedBody?.text).toBe("I'd like to study Marketing."));
   });
 });

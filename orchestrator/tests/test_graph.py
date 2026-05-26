@@ -92,3 +92,50 @@ def test_graph_routes_to_correct_first_unconfirmed(monkeypatch):
     assert final["current_module"] == "DONE"
     for m in ("m1_topic", "m2_literature", "m3_design", "m4_analysis", "m5_writing"):
         assert getattr(final["context_store"], m) is not None
+
+
+def test_graph_node_attaches_tool_calls_json_to_ai_message(monkeypatch):
+    """When ModuleStepResult.tool_calls_json is set, the emitted AIMessage
+    should carry the same dict in additional_kwargs['tool_calls_json']."""
+    from orchestrator.agents.m1_topic import M1Agent
+    from orchestrator.agents.base import ModuleStepResult
+
+    hint = {"widget_type": "card_grid", "field_name": "field",
+            "title": "Pick", "options": [], "columns": 3}
+
+    def fake_step(self, state):
+        return ModuleStepResult(
+            assistant_message="Pick a field",
+            context_patch={"field": None, "confirmed_at": "2026-05-26"},
+            transition=False, needs_user_reply=True,
+            tool_calls_json=hint,
+        )
+    monkeypatch.setattr(M1Agent, "step", fake_step)
+
+    # Build the graph in NON-interactive (no interrupts) so the first invoke
+    # actually executes the M1 spoke. Agent mode in state is still "interactive"
+    # so the agent's interactive branch is exercised.
+    graph = build_graph(interactive=False, checkpointer=MemorySaver())
+
+    # Pre-confirm M2-M5 so the supervisor routes to M1, then on the loop-back
+    # routes straight to DONE — keeps the test focused on the M1 node.
+    cs = ContextStore(**{
+        m: {"confirmed_at": "2026-05-26"}
+        for m in ("m2_literature", "m3_design", "m4_analysis", "m5_writing")
+    })
+
+    config = {"configurable": {"thread_id": "test-tc"}}
+    final = graph.invoke({
+        "messages": [HumanMessage(content="leadership thesis")],
+        "current_module": "M1",
+        "context_store": cs,
+        "mode": "interactive",
+        "user_intent": None,
+        "pending_confirmations": [],
+    }, config=config)
+
+    last_ai = next(
+        m for m in reversed(final["messages"])
+        if m.__class__.__name__ == "AIMessage"
+    )
+    assert last_ai.additional_kwargs.get("tool_calls_json") == hint

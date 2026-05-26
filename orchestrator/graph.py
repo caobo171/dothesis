@@ -69,8 +69,16 @@ def _agent_node_factory(module_key: str):
         cs = state["context_store"].model_copy(deep=True)
         setattr(cs, _MODULE_FIELD[module_key], result.context_patch)
 
+        # Attach tool_calls_json to additional_kwargs only when present so
+        # empty-dict pollution is avoided for the common case where no widget
+        # hint is emitted.  The chat router (Task 6) reads this key to decide
+        # whether to stream a UI widget alongside the text reply.
+        ai = AIMessage(content=result.assistant_message)
+        if result.tool_calls_json:
+            ai.additional_kwargs["tool_calls_json"] = result.tool_calls_json
+
         return {
-            "messages": [AIMessage(content=result.assistant_message)],
+            "messages": [ai],
             "context_store": cs,
         }
 
