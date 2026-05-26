@@ -9,6 +9,8 @@ import { ChatInput } from "./ChatInput";
 import { AutoDraftButton, type RunStatus } from "./AutoDraftButton";
 import { AutoDraftModal } from "./AutoDraftModal";
 import { AutoDraftDrawer } from "./AutoDraftDrawer";
+import { synthesizeWidgetSelection } from "./widgets/synthesize";
+import type { WidgetSelectHandler } from "./widgets/types";
 
 
 const fetcher = async (url: string) => {
@@ -54,6 +56,14 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     }
   };
 
+  const onWidgetSelect: WidgetSelectHandler = (fieldName, value, label) => {
+    // SP3: translate widget click into a natural-language user message that
+    // the agent's free-text extractor can parse. Click thus reuses the
+    // existing send path — no new backend protocol needed.
+    const text = synthesizeWidgetSelection(fieldName, value, label);
+    void send(text);
+  };
+
   const onFileDrop = async (files: File[]) => {
     for (const f of files) {
       const fd = new FormData();
@@ -75,6 +85,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         messages={messages}
         streamingText={inflight ? streamingText : ""}
         streamingModuleTag={null}
+        onWidgetSelect={onWidgetSelect}
       />
       <ChatInput onSubmit={send} onFileDrop={onFileDrop} disabled={inflight} />
 
