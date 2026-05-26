@@ -14,24 +14,25 @@ Replace the generic M2 agent with a 5-phase sub-graph (Familiarization → Resea
 
 ## Non-goals
 
-- PDF upload endpoint + S3 storage (sub-project 7)
 - Quick-reply button rendering (sub-project 7 frontend; backend tags messages with affordances but doesn't render UI)
+- Frontend drag-and-drop upload widget (sub-project 7 — but the backend upload endpoint ships here)
 - Dedicated `citations` DB table (stays in `context_store.m2_literature` JSONB)
 - Real engine `CitationDatabase` integration (continues using sub-project 1's minimal wrapper)
-- Improving `verify_page_numbers` from current stub (needs PDF storage first)
 - Cross-thread citation deduplication
 - Semantic Scholar live API (PRD Phase 4 roadmap)
 - M3-M5 sub-graph redesigns (each gets its own sub-project)
+- OCR for scanned PDFs (text-extraction only; if PDF has no extractable text, mark unverified)
 
 ## Decisions (locked from brainstorming)
 
 - **Architecture:** M2 is a compiled LangGraph sub-graph with 5 phase nodes + self-loops for regeneration. Outer graph keeps its single `M2` node; the wrapper invokes the sub-graph internally.
-- **PDF upload scope:** deferred to sub-project 7. M2 sub-graph keeps a `paper_uris: list[str]` field interface-ready; populated as empty list in sub-project 2.
+- **PDF upload scope:** **IN scope for sub-project 2.** Backend endpoint `POST /api/v1/projects/{pid}/uploads` accepts multipart PDF/text, stores in S3, indexes a `paper_uploads` DB row. M2 sub-graph reads these on Phase 1 entry. Sub-project 7 still owns the frontend drag-and-drop widget but the backend is here.
 - **Regeneration loop:** each phase node self-loops on user "redo / change X / focus on Y" requests until user confirms or a 5-iteration cap is hit (soft warning at iteration 3; configurable via `M2_REGEN_CAP` env).
 - **Tool binding:** all 5 M2 tools (`scout_citations`, `summarize_paper`, `find_research_gaps`, `compile_citations`, `verify_page_numbers`) are bound to every phase node. Per-phase differentiation lives in the system prompts, not in tool gating.
 - **State model:** new `M2SubGraphState` TypedDict separate from outer `OrchestratorState`. The wrapper translates outer ↔ sub-graph state at entry and exit.
 - **Citation persistence:** continues to live in `context_store.m2_literature.citation_list` JSONB. No new DB table.
 - **Bilingual:** agent detects vi/en from the user's latest message and responds in kind; falls back to project's `language` field.
+- **PDF text extraction:** uses `pdfminer.six` (already vendored by sub-project 1's `summarize_paper`). If a PDF has no extractable text (image-only scan), `paper_uploads.text_extracted_at` stays NULL and Phase 1 surfaces a warning. No OCR.
 - **Phase 4 walk-vs-batch:** walk one page reference at a time (matches PRD §6.2); `skip_all` quick-reply available.
 - **Phase 5 regeneration:** single-shot. If user dislikes the Ch.2 draft, they jump back to Phase 2 or 3 to fix the underlying inputs.
 
@@ -184,6 +185,101 @@ These two pure functions are the only places that know about *both* state shapes
 
 ---
 
+## PDF upload subsystem
+
+Project-scoped uploads (shared across all threads of a project). Phase 1 (Familiarize) reads this list on entry; later phases use the extracted text via `summarize_paper` (Phase 2) and `verify_page_numbers` (Phase 4).
+
+### DB schema — new Alembic migration
+
+```python
+# api/migrations/versions/20260527_add_paper_uploads.py
+def upgrade():
+    op.create_table(
+        "paper_uploads",
+        sa.Column("id", UUID(as_uuid=True), primary_key=True,
+                  server_default=sa.text("gen_random_uuid()")),
+        sa.Column("project_id", UUID(as_uuid=True),
+                  sa.ForeignKey("projects.id", ondelete="CASCADE"),
+                  nullable=False, index=True),
+        sa.Column("filename", sa.Text, nullable=False),
+        sa.Column("s3_uri", sa.Text, nullable=False),
+        sa.Column("size_bytes", sa.BigInteger, nullable=False),
+        sa.Column("mime_type", sa.String(64), nullable=False),
+        sa.Column("text_extracted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("text_extract_uri", sa.Text, nullable=True),   # S3 location of cached .txt
+        sa.Column("page_count", sa.Integer, nullable=True),
+        sa.Column("uploaded_at", sa.DateTime(timezone=True),
+                  server_default=sa.text("now()"), nullable=False),
+    )
+```
+
+### SQLAlchemy model
+
+Append to `api/app/models.py`:
+
+```python
+class PaperUpload(Base):
+    __tablename__ = "paper_uploads"
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    s3_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    text_extracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    text_extract_uri: Mapped[str | None] = mapped_column(Text)
+    page_count: Mapped[int | None] = mapped_column(Integer)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+```
+
+### HTTP endpoints
+
+New file `api/app/routers/uploads.py`, mounted alongside `chat.py` when `ORCHESTRATOR_ENABLED`:
+
+```
+POST   /api/v1/projects/{project_id}/uploads        multipart/form-data → 200 {upload_id, filename, size_bytes, page_count}
+GET    /api/v1/projects/{project_id}/uploads        → list of {id, filename, size_bytes, mime_type, page_count, uploaded_at}
+DELETE /api/v1/uploads/{upload_id}                  → 204 no content (cascades nothing; M2 sub-graph re-reads on next phase)
+GET    /api/v1/uploads/{upload_id}/text             → plain text of extracted body (cached) — for debugging only
+```
+
+### Server behavior
+
+`POST /projects/{pid}/uploads`:
+1. Verify caller owns the project (existing `_owned_project` helper from `chat.py`).
+2. Validate `content-type` — must be `application/pdf` or `text/plain`. Reject otherwise (415).
+3. Validate size — reject if `> 50MB` (config: `M2_UPLOAD_MAX_BYTES`, default `50 * 1024 * 1024`).
+4. Generate `upload_id = uuid4()`. Upload to S3 at `s3://{bucket}/users/{user_id}/projects/{project_id}/uploads/{upload_id}/{filename}` using existing `engine/s3_for_jobs.s3_from_env()`.
+5. Insert `paper_uploads` row.
+6. **Synchronously extract text** (small files, <50MB, expected sub-second on modern hardware). Cache extracted text at `s3://.../{upload_id}/extracted.txt`. Update row's `text_extracted_at`, `text_extract_uri`, `page_count`. If extraction fails, leave NULL — Phase 1 surfaces the warning later.
+7. Return the response payload.
+
+Synchronous extraction is acceptable for sub-project 2's scope (academic papers are typically <10MB; pdfminer extracts in <2s). If a project hits the throughput ceiling later, a background worker is a follow-up — but **not** sub-project 2's concern.
+
+### `paper_uris` field plumbing
+
+The wrapper's `_seed_from_outer(state)` now queries `paper_uploads` for the project and populates `M2SubGraphState["paper_uris"]` with the list of S3 URIs. Phase 1 reads this list to decide:
+- Empty list → behave as "no papers, fall back to scout" (the previous deferred behavior).
+- Non-empty list → fetch extracted text via existing `summarize_paper` tool; ask user *"I see you've uploaded N papers. Want me to use them as primary sources?"*
+
+### Tests
+
+- `api/tests/test_uploads_router.py`:
+  - `test_upload_pdf_returns_id_and_extracted_text`
+  - `test_upload_rejects_oversized_file`
+  - `test_upload_rejects_disallowed_mime_type`
+  - `test_list_uploads_returns_project_scoped`
+  - `test_delete_upload_removes_row_and_s3_object`
+  - `test_upload_text_endpoint_returns_extracted_body`
+  - `test_pdf_with_no_extractable_text_leaves_text_extracted_at_null`
+- `orchestrator/tests/test_seed_with_paper_uris.py`: asserts `_seed_from_outer` populates `paper_uris` from `paper_uploads`.
+
+S3 mocked via `moto[s3]` (already a test dependency from sub-project 1's `api/pyproject.toml`).
+
+---
+
 ## The 5 phase nodes
 
 All 5 phase nodes live under `orchestrator/agents/m2/phases/`. Each has the same shape:
@@ -197,10 +293,22 @@ The shared intent classifier (`orchestrator/agents/m2/intent.py`, extracted from
 
 ### Phase 1 — `m2_familiarize`
 
-- **Prompt** (`prompts/m2/1_familiarize.md`): brief greeting + asks *"Do you have papers to upload?"*
-- **Interactive:** asks the question, sets `has_uploaded_papers = None`, interrupts. On resume, classifies user reply (yes/no), sets `has_uploaded_papers`, advances.
-- **Auto:** assumes `has_uploaded_papers = False`, advances.
+The wrapper has already populated `paper_uris` from the `paper_uploads` table before this node runs.
+
+- **Prompt** (`prompts/m2/1_familiarize.md`): brief greeting + acknowledges uploaded papers if any.
+- **Interactive flow:**
+  - **If `paper_uris` is non-empty:** post *"I see N papers uploaded: {filenames}. Use them as the primary citation source? (yes / let me upload more / use AI search instead)"*, interrupt.
+  - **If `paper_uris` is empty:** post *"Do you have papers to upload? You can drag-and-drop PDFs into the chat. (upload / skip — use AI search)"*, interrupt.
+  - On resume, classify user reply:
+    - `confirm_use_uploaded` → set `has_uploaded_papers = True`, advance.
+    - `upload_more` (only valid in interactive UI when SP7 ships) → post a hint, interrupt again. **In SP2 backend: treat as `skip` and proceed; the user uploaded outside the chat turn via the upload endpoint.**
+    - `skip` → set `has_uploaded_papers = False`, advance.
+- **Auto flow:** if `paper_uris` non-empty, set `has_uploaded_papers = True`; otherwise `False`. Advance.
 - **Edges out:** unconditional → `m2_research_state`.
+
+### Phase 1.5 — handling user uploads mid-conversation
+
+If the user uploads a PDF via the upload endpoint between two chat turns, on the *next* message the wrapper re-queries `paper_uploads` before invoking the sub-graph. Phase 1 doesn't re-run automatically (we've already moved past it) — but Phase 2's first call sees the refreshed `paper_uris` and the agent's prompt acknowledges them. The user can also explicitly say *"I just uploaded more papers"* and the intent classifier routes the sub-graph back to Phase 1 for re-familiarization.
 
 ### Phase 2 — `m2_research_state`
 
@@ -231,18 +339,19 @@ The PRD's centerpiece. Generates a literature synthesis with in-text citations; 
 
 ### Phase 4 — `m2_reference_confirm`
 
-Walks every page reference in `selected_gap_ids`' supporting_papers one at a time, with cursor-based queue.
+Walks every page reference in `selected_gap_ids`' supporting_papers one at a time, with cursor-based queue. When uploaded PDFs are available, attempts auto-verification first; only falls back to asking the user when no source exists or the auto-check is inconclusive.
 
-- **Prompt per page:** *"Gap N cites `{author}, {year}, page {page}`. Can you verify this is correct?"*
-- **Interactive flow:**
-  - First call: populates `pending_page_checks` from selected gaps. Presents the FIRST unverified reference, interrupts.
+- **Prompt per page** (when auto-verify inconclusive): *"Gap N cites `{author}, {year}, page {page}`. I couldn't find this in the uploaded sources — can you verify?"*
+- **Auto-verification path:** on first call, for each pending reference where a matching `paper_upload` exists (matched by author + year heuristic, then fuzzy title), call `verify_page_numbers(claim={author, year, page, quote, pdf_path=text_extract_uri})`. If result is `verified`, mark and skip user interaction. If `unverified` or `not_found`, queue for user prompting.
+- **Interactive flow** (for queued unverified references):
+  - First call: populates `pending_page_checks` from selected gaps; runs auto-verify on all; presents the FIRST still-unverified reference, interrupts.
   - Resume: classifies reply.
     - `confirm` → mark `verified=True`, advance cursor.
     - `correct_page <n>` → update page, mark `verified=True`, advance cursor.
     - `skip` → leave `[page?]` placeholder, advance cursor.
     - `skip_all` → mark all remaining as unverified, exit phase.
   - When cursor exhausts the queue → advance to Phase 5.
-- **Auto flow:** mark all references as `verified=False` (no source PDFs in SP2), advance.
+- **Auto flow:** run auto-verify; mark anything still unverified as `verified=False` (don't ask user), advance.
 - **Edges out:** queue empty → `m2_output_gen`; self-loop until cursor done.
 
 ### Phase 5 — `m2_output_gen`
@@ -286,10 +395,17 @@ orchestrator/tests/agents/m2/
 ├── test_phase1_familiarize.py
 ├── test_phase2_research_state.py    # heaviest — regen loop, 5-cap
 ├── test_phase3_gap_analysis.py
-├── test_phase4_reference_confirm.py # cursor walk
+├── test_phase4_reference_confirm.py # cursor walk + auto-verify
 ├── test_phase5_output_gen.py
 ├── test_m2_subgraph.py              # full sub-graph e2e
 └── test_m2_agent_wrapper.py         # outer-state-in → context_store-out
+
+api/app/routers/uploads.py           # NEW — PDF upload endpoints
+api/tests/test_uploads_router.py     # NEW
+api/migrations/versions/
+└── 20260527_add_paper_uploads.py    # NEW — paper_uploads table
+
+orchestrator/tests/test_seed_with_paper_uris.py   # NEW — wrapper reads uploads
 ```
 
 ### Deletions
@@ -365,6 +481,10 @@ All tests use `MagicMock`-based fake LLMs + monkeypatching at module-local names
 | Phase 4 "walk every reference" feels tedious | Medium | `skip_all` quick-reply; field experience after SP7 ships tells us whether to redesign |
 | State translation has subtle data loss | High | Round-trip property test for `_seed_from_outer` ↔ `_flatten_to_m2_output` |
 | `scout_citations` called multiple times across regens wastes tokens | Medium | Phase 2 caches the first scout result in `research_state_citations`; regens reuse it. Only fresh scouts on `add_custom_gap` paths. |
+| PDF text extraction blocks the upload request for large/complex PDFs | Medium | Cap upload at 50MB. pdfminer.six on academic papers (typically <10MB) runs in <2s. If extraction fails or times out, row is created with `text_extracted_at = NULL` and the user is told. Background extraction is a follow-up. |
+| Image-only / scanned PDFs have no extractable text | High | Detect zero-bytes extraction; mark `text_extracted_at = NULL`; Phase 1 warns the user *"PDF N has no extractable text — page-reference verification won't work for it. Add OCR'd version or proceed without verification."* |
+| Author/year heuristic matching upload to citation is fragile | Medium | First version uses simple fuzzy match (`rapidfuzz` against `filename`, then against extracted-text first page). Misses surface as `auto-verify inconclusive → ask user`. Improving the matcher is a follow-up. |
+| Cross-thread uploads — uploads are project-scoped but two threads might compete | Low | `paper_uploads.project_id` FK with CASCADE; no per-thread isolation. Both threads see the same papers. Acceptable for SP2. |
 
 ---
 
@@ -380,9 +500,14 @@ Sub-project 2 is done when ALL hold:
 6. **Navigation works:** integration test confirms mid-phase "go back to research state" returns sub-graph control to the outer wrapper with `current_module` still `M2`; subsequent invocation resumes at Phase 2.
 7. **No engine regressions:** existing `engine/` tests still pass.
 8. **Bilingual smoke:** one integration test with `language="vi"` asserts the assistant's chat output is Vietnamese.
+9. **Upload end-to-end:** integration test uploads a real PDF fixture (with extractable text) via `POST /projects/{id}/uploads`, then runs M2 auto-mode; asserts that Phase 1 surfaces the upload, Phase 4 auto-verifies at least one reference against the extracted text, and the M2 output's `citation_list` includes the uploaded paper.
+10. **Upload error handling:** integration tests confirm 415 (bad mime), 413 (oversized), 404 (not owner) responses are returned and don't create rows.
 
 ## Explicit non-commitments
 
 - **Agent prose quality:** the phase prompts are first drafts. Tuning them is a follow-on concern.
 - **Tool call efficiency:** M2 might call `scout_citations` more than needed across regens. SP2 caches the first call but doesn't deduplicate across regen iterations or threads.
 - **Frontend chat UI:** still doesn't exist (SP7's job). SP2 ships an API that the existing wizard frontend won't use; exercise via `curl` + SSE stream.
+- **Background PDF extraction:** synchronous on upload. If you upload 100 papers at once, that's 100 sequential extractions. Acceptable for the typical thesis workflow (5-30 papers); a job queue is a follow-up if usage demands.
+- **OCR for scanned PDFs:** out of scope. Image-only PDFs work for upload but yield empty extracted text; page-reference verification falls back to asking the user.
+- **PDF/A or password-protected PDFs:** not specially handled. pdfminer.six will surface a runtime error; the upload returns 422 with the error message.
