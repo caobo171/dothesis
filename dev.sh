@@ -22,12 +22,6 @@ set -a
 source .env
 set +a
 
-# SP6: M5 export uploads to S3 (mandatory for both interactive + auto-mode).
-# Set AWS_S3_BUCKET=opendraft-dev (plus AWS_ACCESS_KEY + AWS_SECRET_KEY) in
-# your .env. For local dev without real S3, run minio (https://min.io) and
-# point AWS_* at it. The orchestrator subprocess refuses to start without
-# AWS_S3_BUCKET.
-
 # --- 0. Postgres via docker compose ---
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker not found on PATH. Install Docker Desktop, then re-run." >&2
@@ -73,7 +67,7 @@ fi
 
 if [ ! -d api/.venv ]; then
   echo "==> creating api/.venv and installing deps (one-time, ~2 min)"
-  (cd api && python -m venv .venv)
+  (cd api && python3 -m venv .venv)
   "$VENV_BIN/pip" install --upgrade pip
   "$VENV_BIN/pip" install -e "api[dev]"
   # Engine deps so `python -m engine` subprocess can import draft_generator.
