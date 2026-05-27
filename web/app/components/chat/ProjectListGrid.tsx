@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Plus, ChevronRight } from "lucide-react";
+
+import { NewProjectModal } from "./NewProjectModal";
 
 
 type Project = {
@@ -27,16 +31,15 @@ const fetcher = async (url: string) => {
 
 export function ProjectListGrid() {
   const { data: projects, mutate } = useSWR<Project[]>("/projects", fetcher, { dedupingInterval: 0 });
+  const [modalOpen, setModalOpen] = useState(false);
+  const router = useRouter();
 
-  const newProject = async () => {
-    const name = window.prompt("Project name?");
-    if (!name) return;
-    await fetch("/api/v1/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
+  // After creation: revalidate the project list and route the user directly
+  // into the new project. That's the typical next action and saves a click.
+  const handleCreated = (project: { id: string; name: string }) => {
     void mutate();
+    setModalOpen(false);
+    router.push(`/chat/projects/${project.id}`);
   };
 
   return (
@@ -45,12 +48,18 @@ export function ProjectListGrid() {
         <h1 className="text-2xl font-bold text-gray-900">Your projects</h1>
         <button
           type="button"
-          onClick={newProject}
+          onClick={() => setModalOpen(true)}
           className="inline-flex items-center gap-1 bg-purple-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-purple-700"
         >
           <Plus className="w-4 h-4" /> New project
         </button>
       </div>
+
+      <NewProjectModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreated={handleCreated}
+      />
 
       {/* Wizard banner removed 2026-05-27 — chat UI is the primary surface now (full M1–M5 module flow is shipped). */}
 
