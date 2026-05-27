@@ -618,6 +618,15 @@ def test_accept_409_on_stale_offsets(client):
     assert r.status_code == 409, r.text
     assert r.json()["detail"]["error"]["code"] == "stale_offsets"
 
+    # Decision: the edit must NOT be consumed on 409; peek happens before pop so
+    # the edit stays in pending_edits and can still be rejected via /reject.
+    sf2 = get_session_factory()
+    with sf2() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        remaining = cs.m5_writing["chapters"]["intro"]["pending_edits"]
+        ids = [e["id"] for e in remaining]
+        assert edit_id in ids, "stale 409 must NOT remove the edit from pending_edits"
+
 
 def test_accept_404_on_unknown_edit(client):
     """POST /m5/chapters/intro/pending/nonexistent/accept → 404.
