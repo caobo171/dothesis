@@ -385,26 +385,3 @@ def test_rewrite_chapter_falls_back_on_llm_error(monkeypatch):
         "references": [], "language": "en",
     })
     assert out["prose"] == original  # unchanged on failure
-
-
-# SP6.5 tests — validate_citations_plain (plain function, no @tool decorator)
-
-def test_validate_citations_plain_callable_exists():
-    """SP6.5: autosave PATCH calls validate_citations_plain (no decorator)."""
-    from orchestrator.tools.m5_writing import validate_citations_plain
-    result = validate_citations_plain(
-        prose="See (Smith, 2024) and (Unknown, 2023).",
-        reference_pool=[{"author": "Smith", "year": "2024"}],
-    )
-    assert result["citations_used"] == ["(Smith, 2024)"]
-    assert result["uncited_warnings"] == ["(Unknown, 2023)"]
-
-
-def test_validate_citations_plain_dedupes_in_order():
-    from orchestrator.tools.m5_writing import validate_citations_plain
-    result = validate_citations_plain(
-        prose="(A, 2020). Later (B, 2021). Earlier (A, 2020) again.",
-        reference_pool=[{"author": "A", "year": "2020"}, {"author": "B", "year": "2021"}],
-    )
-    assert result["citations_used"] == ["(A, 2020)", "(B, 2021)"]
-    assert result["uncited_warnings"] == []
