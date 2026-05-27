@@ -378,3 +378,85 @@ def cite_chapter(
     edit_dict = _append_pending_edit(cs, chapter_name, pe)
     db.commit()
     return edit_dict
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{project_id}/m5/chapters/{chapter_name}/pending/{edit_id}/accept
+# ---------------------------------------------------------------------------
+
+
+def _splice(prose: str, from_offset: int, to_offset: int, new_text: str) -> str:
+    """Return prose with prose[from_offset:to_offset] replaced by new_text.
+
+    Decision: pure string concat keeps this simple and O(n); no regex so
+    special characters in new_text are never misinterpreted.
+    """
+    return prose[:from_offset] + new_text + prose[to_offset:]
+
+
+def _find_and_pop_edit(chapter_dict: dict, edit_id: str) -> dict | None:
+    """Remove and return the edit with the given id from pending_edits.
+
+    Decision: pop by index so we never iterate the list twice; returns None
+    when the id is not found so callers can raise their own 404.
+    """
+    edits = chapter_dict.get("pending_edits", [])
+    for i, e in enumerate(edits):
+        if e.get("id") == edit_id:
+            return edits.pop(i)
+    return None
+
+
+@router.post("/projects/{project_id}/m5/chapters/{chapter_name}/pending/{edit_id}/accept")
+def accept_pending_edit(
+    project_id: uuid.UUID,
+    chapter_name: str,
+    edit_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """Splice a PendingEdit's new_text into chapter prose and remove the edit.
+
+    Decision: the endpoint peeks (without popping) to validate offsets first.
+    If prose[from_offset:to_offset] no longer equals the edit's old_text the
+    chapter was mutated after the edit was created; we return 409 stale_offsets
+    so the front-end can surface the conflict rather than silently corrupting
+    the document.
+    """
+    from orchestrator.tools.m5_writing import validate_citations_plain  # noqa: PLC0415
+
+    _owned_project(db, user, project_id)
+    cs = db.get(ContextStore, project_id)
+    ch = _load_chapter_or_404(cs, chapter_name)
+    prose = ch.get("prose", "")
+
+    # Peek without popping to validate offsets first
+    edits = ch.get("pending_edits", [])
+    target = next((e for e in edits if e.get("id") == edit_id), None)
+    if target is None:
+        raise HTTPException(404, detail={"error": {"code": "edit_not_found"}})
+
+    from_offset = target["from_offset"]
+    to_offset = target["to_offset"]
+    # Critical concurrency check: if the prose changed since the edit was created
+    # the offsets are stale and splicing would corrupt the document.
+    if from_offset > len(prose) or to_offset > len(prose) or prose[from_offset:to_offset] != target["old_text"]:
+        raise HTTPException(
+            409,
+            detail={"error": {"code": "stale_offsets", "edit_id": edit_id}},
+        )
+
+    # Offsets validated — now pop and splice
+    _find_and_pop_edit(ch, edit_id)
+    new_prose = _splice(prose, from_offset, to_offset, target["new_text"])
+    ch["prose"] = new_prose
+
+    # Re-validate citations so the chapter's used/uncited lists stay current
+    pool = _collect_reference_pool(cs)
+    validation = validate_citations_plain(new_prose, pool)
+    ch["citations_used"] = validation["citations_used"]
+    ch["uncited_warnings"] = validation["uncited_warnings"]
+
+    flag_modified(cs, "m5_writing")
+    db.commit()
+    return ch

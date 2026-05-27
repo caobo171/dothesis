@@ -500,3 +500,136 @@ def test_cite_404_on_unknown_reference(client):
         json={"at_offset": 0, "reference_id": "nonexistent"},
     )
     assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{pid}/m5/chapters/{chapter_name}/pending/{edit_id}/accept
+# ---------------------------------------------------------------------------
+
+
+def _seed_pending_edit(pid: str, chapter: str, **overrides) -> dict:
+    """Seed a hand-rolled pending edit directly into the chapter's ContextStore.
+
+    Decision: bypasses the paraphrase/translate/cite endpoints so the test
+    controls the exact offsets + texts without requiring LLM mocks. Returns
+    the edit dict (with its id) so the caller can POST to the accept endpoint.
+    """
+    from datetime import datetime, timezone
+    from uuid import uuid4
+    from sqlalchemy.orm.attributes import flag_modified
+
+    edit = {
+        "id": uuid4().hex,
+        "chapter_name": chapter,
+        "from_offset": 0,
+        "to_offset": 5,
+        "old_text": "Hello",
+        "new_text": "Greetings",
+        "source": "paraphrase",
+        "pending_at": datetime.now(timezone.utc).isoformat(),
+        "metadata": {},
+    }
+    edit.update(overrides)
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        ch = cs.m5_writing["chapters"][chapter]
+        ch.setdefault("pending_edits", []).append(edit)
+        flag_modified(cs, "m5_writing")
+        db.commit()
+    return edit
+
+
+def test_accept_splices_new_text_and_drops_edit(client):
+    """1. Seed chapter with prose 'Hello world.' AND a pending_edit (from 0..5, old='Hello', new='Greetings').
+    2. POST /m5/chapters/intro/pending/{edit_id}/accept
+    3. Assert 200; response chapter has prose='Greetings world.' and pending_edits=[].
+
+    Decision: _make_project_with_chapters seeds intro with 'Hello world.' so
+    the offsets 0..5 exactly cover 'Hello'. The accept endpoint must splice
+    new_text in place and clear the edit from pending_edits.
+    """
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    # Seed the pending edit (offsets 0..5 = 'Hello' in 'Hello world.')
+    edit = _seed_pending_edit(
+        pid,
+        "intro",
+        from_offset=0,
+        to_offset=5,
+        old_text="Hello",
+        new_text="Greetings",
+    )
+    edit_id = edit["id"]
+
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters/intro/pending/{edit_id}/accept")
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    # Prose must be spliced; pending_edits must be empty
+    assert body["prose"] == "Greetings world."
+    assert body["pending_edits"] == []
+
+    # Verify DB persistence
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        ch = cs.m5_writing["chapters"]["intro"]
+        assert ch["prose"] == "Greetings world."
+        assert ch["pending_edits"] == []
+
+
+def test_accept_409_on_stale_offsets(client):
+    """1. Seed pending_edit (old_text='Hello') but mutate prose AFTER (e.g. 'DIFFERENT world.').
+    2. POST .../accept
+    3. Assert 409, response detail.error.code == 'stale_offsets'.
+
+    Decision: the stale check compares prose[from_offset:to_offset] against
+    the edit's old_text. If they differ the prose was modified after the edit
+    was created and accepting it would corrupt the document.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    # Seed edit expecting 'Hello' at 0..5
+    edit = _seed_pending_edit(
+        pid,
+        "intro",
+        from_offset=0,
+        to_offset=5,
+        old_text="Hello",
+        new_text="Greetings",
+    )
+    edit_id = edit["id"]
+
+    # Mutate the prose so offsets are stale (the chapter now starts with 'DIFFERENT')
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing["chapters"]["intro"]["prose"] = "DIFFERENT world."
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters/intro/pending/{edit_id}/accept")
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["error"]["code"] == "stale_offsets"
+
+
+def test_accept_404_on_unknown_edit(client):
+    """POST /m5/chapters/intro/pending/nonexistent/accept → 404.
+
+    Decision: the endpoint must return 404 (not 500 or 422) when the edit_id
+    does not exist in the chapter's pending_edits list.
+    """
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/pending/nonexistent/accept"
+    )
+    assert r.status_code == 404, r.text
+    assert r.json()["detail"]["error"]["code"] == "edit_not_found"
