@@ -90,3 +90,99 @@ class M4Agent(ModuleAgent):
             if v is None or v == "" or v == []:
                 return name
         return None
+
+    # SP5 Task 11: outline step templates per outline-type-key, with thresholds metadata.
+    # Used to populate the list_editor widget's ListItem.meta. For qualitative,
+    # only the 2-step pipeline ships per Q5=C; writeup is M5's job.
+    _AGENT_OUTLINE_TEMPLATES = {
+        "SPSS": [
+            {"name": "Descriptive Statistics", "thresholds": ""},
+            {"name": "Reliability (Cronbach's Alpha)", "thresholds": "α ≥ 0.7"},
+            {"name": "EFA", "thresholds": "KMO ≥ 0.5, factor loading ≥ 0.5"},
+            {"name": "Correlation Matrix", "thresholds": "r < 0.85"},
+            {"name": "Regression Analysis", "thresholds": "VIF < 10"},
+            {"name": "ANOVA / t-tests", "thresholds": "p < 0.05"},
+        ],
+        "SmartPLS": [
+            {"name": "Outer Loadings", "thresholds": "≥ 0.7"},
+            {"name": "Convergent Validity: AVE & CR", "thresholds": "AVE ≥ 0.5, CR ≥ 0.7"},
+            {"name": "Discriminant Validity: HTMT & Fornell-Larcker", "thresholds": "HTMT < 0.85"},
+            {"name": "Collinearity: VIF", "thresholds": "VIF < 5"},
+            {"name": "Path Coefficients (Bootstrap 5000)", "thresholds": "p < 0.05"},
+            {"name": "R² and Adjusted R²", "thresholds": ""},
+            {"name": "Effect size (f²)", "thresholds": "≥ 0.02 small, ≥ 0.15 medium, ≥ 0.35 large"},
+            {"name": "Predictive Relevance (Q²)", "thresholds": "Q² > 0"},
+        ],
+        "CB-SEM": [
+            {"name": "Confirmatory Factor Analysis (CFI/TLI/RMSEA)",
+             "thresholds": "CFI/TLI ≥ 0.90, RMSEA ≤ 0.08, SRMR ≤ 0.08"},
+            {"name": "Discriminant Validity", "thresholds": "HTMT < 0.85"},
+            {"name": "Structural Model", "thresholds": "p < 0.05"},
+            {"name": "Mediation/Moderation", "thresholds": ""},
+        ],
+        "Qualitative": [
+            {"name": "Initial coding (extract codes + verbatim quotes)", "thresholds": ""},
+            {"name": "Theme generation (cluster codes into themes)", "thresholds": ""},
+        ],
+        "Unknown": [
+            {"name": "Generic descriptive", "thresholds": ""},
+            {"name": "Generic inferential", "thresholds": ""},
+        ],
+    }
+
+    def step(self, state):
+        """Populate _render_* class caches from state before delegating to base.
+
+        Reads m3_design.tool, m3_design.paradigm, partial.data_type_detected,
+        partial.data_paste, partial.analysis_outline. Task 12 adds execution
+        phase dispatch on top of this. Class-level assignment (via type(self))
+        ensures test patches on M4Agent._render_* are reflected correctly.
+        """
+        from orchestrator.state import get_module_slice
+        cls = type(self)
+        partial = dict(get_module_slice(state["context_store"], self.module_key))
+        m3 = state["context_store"].m3_design or {}
+        # Prefer post-paste data_type_detected over m3.tool if it disagrees.
+        cls._render_paradigm = m3.get("paradigm")
+        cls._render_outline_type = (
+            partial.get("data_type_detected")
+            or self._outline_template_key_from_tool(m3.get("tool"))
+        )
+        cls._render_paste_text = partial.get("data_paste", "")
+        cls._render_outline = partial.get("analysis_outline")
+        return super().step(state)
+
+    def render_hint_for_field(self, field_name: str) -> dict | None:
+        """Emit ListEditorHint for outline fields; None for data_paste* and pseudo-fields.
+
+        outline_quant uses the SmartPLS template (default quant for mixed flow).
+        outline_qual always uses the Qualitative 2-step template.
+        analysis_outline uses _render_outline_type (set by step() or patched in tests).
+        """
+        from orchestrator.agents.widgets import ListEditorHint, ListItem
+
+        if field_name in ("analysis_outline", "outline_quant", "outline_qual"):
+            # Pick the correct template key per field type.
+            if field_name == "outline_qual":
+                template_key = "Qualitative"
+            elif field_name == "outline_quant":
+                template_key = "SmartPLS"
+            else:
+                template_key = self._render_outline_type or "SPSS"
+            sections = self._AGENT_OUTLINE_TEMPLATES.get(
+                template_key, self._AGENT_OUTLINE_TEMPLATES["Unknown"]
+            )
+            items = [
+                ListItem(
+                    id=f"s{i}", text=s["name"],
+                    meta={"thresholds": s.get("thresholds", "")},
+                )
+                for i, s in enumerate(sections)
+            ]
+            return ListEditorHint(
+                field_name=field_name,
+                title=f"{template_key} analysis outline — edit and confirm",
+                initial_items=items,
+                allow_nested=False,
+            ).model_dump()
+        return None  # free-text for data_paste*; None for pseudo-fields
