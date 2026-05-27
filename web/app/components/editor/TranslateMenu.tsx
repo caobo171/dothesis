@@ -23,8 +23,7 @@ type Props = {
 
 
 // Small popover with target-language picker. Default value is whatever the
-// project's m1_topic.language is; persisted to localStorage between sessions
-// so frequent translators don't re-pick every time.
+// project's m1_topic.language is.
 export function TranslateMenu({ defaultLang, onConfirm, onClose }: Props) {
   const [lang, setLang] = useState(defaultLang || "en");
 

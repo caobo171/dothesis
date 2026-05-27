@@ -436,6 +436,12 @@ def accept_pending_edit(
     if target is None:
         raise HTTPException(404, detail={"error": {"code": "edit_not_found"}})
 
+    # Critical correctness guard: verify the edit's stored chapter_name matches
+    # the URL's chapter_name. If a bug ever places an edit in the wrong chapter's
+    # pending_edits, this prevents silently consuming it via the wrong URL.
+    if target.get("chapter_name") != chapter_name:
+        raise HTTPException(404, detail={"error": {"code": "edit_not_found"}})
+
     from_offset = target["from_offset"]
     to_offset = target["to_offset"]
     # Critical concurrency check: if the prose changed since the edit was created
@@ -479,13 +485,22 @@ def reject_pending_edit(
 
     Decision: simpler than accept — no offset check, no prose mutation.
     The edit is removed from pending_edits and the chapter is returned unchanged.
+    Peek (without popping) to validate chapter_name ownership before any mutation,
+    mirroring the "don't mutate before validation" semantics of the accept endpoint.
     """
     _owned_project(db, user, project_id)
     cs = db.get(ContextStore, project_id)
     ch = _load_chapter_or_404(cs, chapter_name)
-    popped = _find_and_pop_edit(ch, edit_id)
-    if popped is None:
+    # Peek first to validate existence and chapter_name ownership before mutating.
+    edits = ch.get("pending_edits", [])
+    target = next((e for e in edits if e.get("id") == edit_id), None)
+    if target is None:
         raise HTTPException(404, detail={"error": {"code": "edit_not_found"}})
+    # Critical correctness guard: verify the edit's stored chapter_name matches
+    # the URL's chapter_name. Prevents consuming an edit via the wrong chapter URL.
+    if target.get("chapter_name") != chapter_name:
+        raise HTTPException(404, detail={"error": {"code": "edit_not_found"}})
+    _find_and_pop_edit(ch, edit_id)
     flag_modified(cs, "m5_writing")
     db.commit()
     return ch

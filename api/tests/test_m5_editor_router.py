@@ -705,6 +705,89 @@ def test_reject_404_on_unknown_edit(client):
 
 
 # ---------------------------------------------------------------------------
+# chapter_name guard: accept + reject must 404 when edit belongs to a different chapter
+# ---------------------------------------------------------------------------
+
+
+def test_accept_404_when_edit_id_belongs_to_other_chapter(client):
+    """Critical: an edit_id from a different chapter should not be acceptable via wrong URL.
+
+    Decision: this validates the chapter_name guard added to accept_pending_edit.
+    If a bug ever places an edit in the wrong chapter's pending_edits, it must not
+    be consumable via a URL pointing to a different chapter.
+
+    Seed an edit on lit_review, then POST accept via the intro URL → 404.
+    Re-fetch ContextStore: the edit must STILL be on lit_review (not consumed).
+    """
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    # Seed an edit on lit_review ("Lit body." → "Lit content.")
+    edit = _seed_pending_edit(
+        pid,
+        "lit_review",
+        from_offset=0,
+        to_offset=3,
+        old_text="Lit",
+        new_text="Lit content",
+        chapter_name="lit_review",
+    )
+    edit_id = edit["id"]
+
+    # Attempt to accept via the WRONG chapter URL (intro instead of lit_review)
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters/intro/pending/{edit_id}/accept")
+    assert r.status_code == 404, r.text
+    assert r.json()["detail"]["error"]["code"] == "edit_not_found"
+
+    # Critical: the edit must still be present on lit_review — not consumed
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        lit_edits = cs.m5_writing["chapters"]["lit_review"]["pending_edits"]
+        ids = [e["id"] for e in lit_edits]
+        assert edit_id in ids, "Wrong-chapter 404 must NOT consume the edit from lit_review"
+
+
+def test_reject_404_when_edit_id_belongs_to_other_chapter(client):
+    """Critical: an edit_id from a different chapter should not be rejectable via wrong URL.
+
+    Decision: this validates the chapter_name guard added to reject_pending_edit.
+    Mirrors the accept variant — both accept and reject must guard against cross-chapter
+    edit consumption.
+
+    Seed an edit on lit_review, then POST reject via the intro URL → 404.
+    Re-fetch ContextStore: the edit must STILL be on lit_review (not consumed).
+    """
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    # Seed an edit on lit_review ("Lit body." → "Literature review body.")
+    edit = _seed_pending_edit(
+        pid,
+        "lit_review",
+        from_offset=0,
+        to_offset=3,
+        old_text="Lit",
+        new_text="Literature",
+        chapter_name="lit_review",
+    )
+    edit_id = edit["id"]
+
+    # Attempt to reject via the WRONG chapter URL (intro instead of lit_review)
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters/intro/pending/{edit_id}/reject")
+    assert r.status_code == 404, r.text
+    assert r.json()["detail"]["error"]["code"] == "edit_not_found"
+
+    # Critical: the edit must still be present on lit_review — not consumed
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        lit_edits = cs.m5_writing["chapters"]["lit_review"]["pending_edits"]
+        ids = [e["id"] for e in lit_edits]
+        assert edit_id in ids, "Wrong-chapter 404 must NOT consume the edit from lit_review"
+
+
+# ---------------------------------------------------------------------------
 # POST /projects/{pid}/m5/export — re-run compile_pdf + export_docx (SP6.5)
 # ---------------------------------------------------------------------------
 
