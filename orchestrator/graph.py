@@ -178,23 +178,77 @@ def _get_pool():
     return _pool
 
 
-@lru_cache(maxsize=1)
-def get_interactive_graph():
-    """Returns the cached in-process graph used by the chat router.
+_async_pool = None
+_interactive_graph = None
 
-    saver.setup() is idempotent — it creates LangGraph's internal checkpoint
-    tables on first run and is a no-op on subsequent calls.
+
+async def _get_async_pool():
+    """Lazy AsyncConnectionPool used by AsyncPostgresSaver.
+
+    Decision: the chat router calls graph.astream(), which dispatches to the
+    checkpointer's aget_tuple — only AsyncPostgresSaver implements that.
+    The sync PostgresSaver raises NotImplementedError on the async path.
     """
-    from langgraph.checkpoint.postgres import PostgresSaver
+    global _async_pool
+    if _async_pool is None:
+        from psycopg_pool import AsyncConnectionPool
 
-    saver = PostgresSaver(_get_pool())
-    saver.setup()
-    return build_graph(interactive=True, checkpointer=saver)
+        url = os.environ["DATABASE_URL"]
+        url = url.replace("postgresql+psycopg://", "postgresql://", 1)
+        _async_pool = AsyncConnectionPool(
+            url,
+            min_size=1,
+            max_size=int(os.getenv("ORCHESTRATOR_PG_POOL_MAX", "10")),
+            kwargs={"autocommit": True},
+            # psycopg_pool 3.2+ refuses to auto-open in async contexts to avoid
+            # hidden blocking I/O during import — open() must be awaited explicitly.
+            open=False,
+        )
+        await _async_pool.open()
+    return _async_pool
+
+
+async def init_interactive_graph():
+    """Async initializer for the chat-surface graph. Call from FastAPI lifespan.
+
+    Caches the resulting graph in a module global so subsequent sync
+    `get_interactive_graph()` calls hand back the same instance without
+    re-running setup.
+    """
+    global _interactive_graph
+    if _interactive_graph is not None:
+        return _interactive_graph
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+    pool = await _get_async_pool()
+    saver = AsyncPostgresSaver(pool)
+    await saver.setup()
+    _interactive_graph = build_graph(interactive=True, checkpointer=saver)
+    return _interactive_graph
+
+
+def get_interactive_graph():
+    """Returns the cached async interactive graph.
+
+    Must be initialized first via `await init_interactive_graph()` — typically
+    in the FastAPI lifespan startup. Kept as a sync accessor so call sites
+    (chat router, tests monkeypatching the function) don't need to change.
+    """
+    if _interactive_graph is None:
+        raise RuntimeError(
+            "Interactive graph not initialized. "
+            "Call `await init_interactive_graph()` from app startup first."
+        )
+    return _interactive_graph
 
 
 @lru_cache(maxsize=1)
 def get_auto_graph():
-    """Returns the cached auto-mode graph used by the subprocess entrypoint (__main__.py)."""
+    """Returns the cached auto-mode graph used by the subprocess entrypoint (__main__.py).
+
+    Subprocess (`python -m orchestrator`) drives the graph with sync .invoke(),
+    so the sync PostgresSaver is correct here.
+    """
     from langgraph.checkpoint.postgres import PostgresSaver
 
     saver = PostgresSaver(_get_pool())

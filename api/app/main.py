@@ -22,11 +22,12 @@ async def lifespan(app: FastAPI):
     settings.job_workdir_root.mkdir(parents=True, exist_ok=True)
 
     # Orchestrator: prime the graph cache at startup so first chat turn isn't slow.
-    # PostgresSaver.setup() runs as a side effect of get_*_graph().
+    # Interactive needs AsyncPostgresSaver (chat uses graph.astream); auto-mode
+    # stays on sync PostgresSaver (subprocess invokes synchronously).
     if settings.orchestrator_enabled:
         try:
-            from orchestrator.graph import get_auto_graph, get_interactive_graph
-            get_interactive_graph()
+            from orchestrator.graph import get_auto_graph, init_interactive_graph
+            await init_interactive_graph()
             get_auto_graph()
         except Exception:
             import logging

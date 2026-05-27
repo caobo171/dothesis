@@ -35,7 +35,16 @@ async function logout() {
   window.location.href = "/login";
 }
 
-export function SidebarLayout({ sections, children }: PropsWithChildren<{ sections: SidebarSection[] }>) {
+// fullBleed: when true, the main slot renders edge-to-edge without the
+// gradient backdrop, vertical padding, or max-width wrapper. The chat
+// surface needs this because it manages its own panes (threads + chat +
+// context) at full viewport height — the default shell chrome wraps it
+// in a cramped column with unwanted top spacing.
+export function SidebarLayout({
+  sections,
+  children,
+  fullBleed = false,
+}: PropsWithChildren<{ sections: SidebarSection[]; fullBleed?: boolean }>) {
   const [selectedHref, setSelectedHref] = useState<string>("");
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -368,9 +377,13 @@ export function SidebarLayout({ sections, children }: PropsWithChildren<{ sectio
           </div>
         </div>
 
-        <main className="bg-gradient-to-b from-primary-50/60 to-white min-h-[calc(100vh-4rem)] py-10">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">{children}</div>
-        </main>
+        {fullBleed ? (
+          <main className="min-h-[calc(100vh-4rem)] bg-white">{children}</main>
+        ) : (
+          <main className="bg-gradient-to-b from-primary-50/60 to-white min-h-[calc(100vh-4rem)] py-10">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">{children}</div>
+          </main>
+        )}
       </div>
     </div>
   );
