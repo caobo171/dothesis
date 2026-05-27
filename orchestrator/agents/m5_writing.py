@@ -114,17 +114,73 @@ class M5Agent(ModuleAgent):
         )
 
     def step(self, state):
-        """SP6: on first turn → compose phase. Tasks 11-12 add rewrite + finalize branches."""
+        """SP6: rewrite detection (when in confirm state) → compose phase → fallback."""
         from orchestrator.state import get_module_slice
         cls = type(self)
         partial = dict(get_module_slice(state["context_store"], self.module_key))
         cls._render_context = self._extract_context_slice(state["context_store"])
 
-        # Compose phase — first M5 turn always lands here when chapters not yet done.
+        # Rewrite path — fires BEFORE compose dispatch when in confirm state.
+        if partial.get("_compose_chapters_done") and partial.get("_awaiting_confirm"):
+            if self._is_rewrite_request(state["messages"]):
+                return self._handle_rewrite(state, partial)
+            # Affirmative confirm dispatch lands in Task 12 — fall through for now.
+
+        # Compose phase — first M5 turn.
         if not partial.get("_compose_chapters_done"):
             return self._compose_all_chapters(state, partial)
 
         return super().step(state)
+
+    def _is_rewrite_request(self, messages) -> bool:
+        last = self._latest_user_message(messages).lower()
+        return any(kw in last for kw in self._REWRITE_KEYWORDS)
+
+    def _identify_chapter(self, user_msg: str) -> str | None:
+        """Map common chapter aliases to the canonical name. None if ambiguous."""
+        if not user_msg:
+            return None
+        text = user_msg.lower()
+        # Longest alias first so "introduction" matches before "intro"
+        for alias in sorted(self._CHAPTER_ALIASES.keys(), key=len, reverse=True):
+            if alias in text:
+                return self._CHAPTER_ALIASES[alias]
+        return None
+
+    def _handle_rewrite(self, state, partial):
+        """Route the user's rewrite request to the target chapter."""
+        last_user = self._latest_user_message(state["messages"])
+        target = self._identify_chapter(last_user)
+        if target is None:
+            partial["_awaiting_confirm"] = True
+            return ModuleStepResult(
+                assistant_message=(
+                    "Which chapter do you want me to rewrite? "
+                    "(intro / lit_review / methodology / results / discussion / conclusion)"
+                ),
+                context_patch=partial,
+                transition=False, needs_user_reply=True,
+            )
+        context = self._render_context or {}
+        current = (partial.get("chapters") or {}).get(target, {}).get("prose", "")
+        new_draft = rewrite_chapter.invoke({
+            "chapter_name": target,
+            "current_prose": current,
+            "instruction": last_user,
+            "context_slice": context,
+            "references": self._collect_references(context),
+            "language": context.get("language", "en"),
+        })
+        chapters = dict(partial.get("chapters", {}))
+        chapters[target] = new_draft
+        partial["chapters"] = chapters
+        partial["_awaiting_confirm"] = True
+        return ModuleStepResult(
+            assistant_message=f"Rewrote chapter — {target}. Review below.",
+            context_patch=partial,
+            transition=False, needs_user_reply=True,
+            extra_messages=[AIMessage(content=f"## Chapter — {target} (rewritten)\n\n{new_draft.get('prose', '')}")],
+        )
 
     def render_hint_for_field(self, field_name: str) -> dict | None:
         # SP6 has no widgets; chapter prose renders as plain markdown
