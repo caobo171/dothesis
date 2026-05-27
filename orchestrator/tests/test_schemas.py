@@ -334,3 +334,23 @@ def test_m5_confirm_passes_with_six_chapters_and_docx():
         confirmed_at=datetime.now(timezone.utc),
     )
     assert len(out.chapters) == 6
+
+
+def test_chapter_draft_pending_edits_default_empty():
+    from orchestrator.schemas.m5 import ChapterDraft
+    c = ChapterDraft(name="intro", prose="hello world")
+    assert c.pending_edits == []
+
+
+def test_chapter_draft_accepts_pending_edits():
+    from datetime import datetime, timezone
+    from orchestrator.schemas.m5 import ChapterDraft
+    from orchestrator.schemas.m5_editor import PendingEdit
+    pe = PendingEdit(
+        id="x", chapter_name="intro", from_offset=0, to_offset=5,
+        old_text="hello", new_text="hi", source="paraphrase",
+        pending_at=datetime.now(timezone.utc),
+    )
+    c = ChapterDraft(name="intro", prose="hello world", pending_edits=[pe])
+    assert len(c.pending_edits) == 1
+    assert c.pending_edits[0].source == "paraphrase"

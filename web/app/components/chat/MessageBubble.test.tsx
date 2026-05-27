@@ -113,3 +113,23 @@ describe("MessageBubble list_editor rendering", () => {
     expect(screen.queryByTestId("list-editor-confirm")).toBeNull();
   });
 });
+
+describe("MessageBubble — markdown link rendering (SP6.5)", () => {
+  test("renders [text](url) as an anchor", () => {
+    render(
+      <MessageBubble
+        role="assistant"
+        content="Rewrite ready — [Open in editor](/chat/projects/p1/editor)"
+      />
+    );
+    const link = screen.getByRole("link", { name: /open in editor/i });
+    expect(link).toHaveAttribute("href", "/chat/projects/p1/editor");
+  });
+
+  test("leaves plain content untouched", () => {
+    render(
+      <MessageBubble role="assistant" content="No links here." />
+    );
+    expect(screen.getByText("No links here.")).toBeInTheDocument();
+  });
+});

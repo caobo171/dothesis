@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: opendraft
       POSTGRES_DB: opendraft
     ports:
-      - "5432:5432"
+      - "5499:5432"
     volumes:
       - opendraft_pgdata:/var/lib/postgresql/data
     healthcheck:

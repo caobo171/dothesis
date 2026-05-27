@@ -22,13 +22,26 @@ const fetcher = async (url: string) => {
 
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
   const { messages, streamingText, inflight, send } = useChat(threadId);
-  const { data: project } = useSWR<{ name: string; context_store: { m1_topic?: { research_title?: string } | null } }>(
+  // SP6.5: include m5_writing.chapters so we can gate the "Open editor" link in
+  // ChatHeader — the link must only appear once at least one chapter exists.
+  const { data: project } = useSWR<{
+    name: string;
+    context_store: {
+      m1_topic?: { research_title?: string } | null;
+      m5_writing?: { chapters?: Record<string, unknown> } | null;
+    };
+  }>(
     `/projects/${projectId}`, fetcher,
   );
   const { data: thread } = useSWR<{ name: string }>(`/threads/${threadId}`, fetcher);
   const { data: latestRun, mutate: mutateRun } = useSWR<{ run: { id: string; status: RunStatus } | null }>(
     `/projects/${projectId}/runs?latest=true`, fetcher,
   );
+
+  // SP6.5: gate is true only when at least one chapter entry exists.
+  // Defaults to false while the project data is still loading.
+  const hasChapters =
+    Object.keys(project?.context_store?.m5_writing?.chapters ?? {}).length > 0;
 
   const [modalOpen, setModalOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -80,6 +93,8 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         autoDraftButton={
           <AutoDraftButton runStatus={latestRun?.run?.status ?? null} onClick={onAutoDraftClick} />
         }
+        projectId={projectId}
+        hasChapters={hasChapters}
       />
       <MessageList
         messages={messages}
