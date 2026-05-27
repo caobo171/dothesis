@@ -73,3 +73,17 @@ def translate_selection(
         context_after=context_after,
     )
     return _strip(_call_llm(prompt))
+
+
+def build_citation_text(reference: dict) -> str:
+    """Derive canonical (Author, Year) text from an M2 reference record.
+
+    M2 papers carry at least 'author' and 'year' under normal circumstances.
+    Falls back to ('Anonymous', 'n.d.') on either missing piece so that
+    malformed-but-present references still produce a usable citation rather
+    than blowing up the API call.
+    """
+    author = str(reference.get("author") or "").strip() or "Anonymous"
+    year_val = reference.get("year")
+    year = str(year_val).strip() if year_val not in (None, "") else "n.d."
+    return f"({author}, {year})"

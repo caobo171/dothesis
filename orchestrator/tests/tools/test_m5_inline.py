@@ -60,3 +60,27 @@ def test_translate_preserves_inline_citation(mock_llm):
         "selection": "According to (Smith, 2024), this matters",
     })
     assert "(Smith, 2024)" in result
+
+
+def test_build_citation_text_uses_author_and_year():
+    from orchestrator.tools.m5_inline import build_citation_text
+    ref = {"author": "Smith", "year": 2024, "title": "Whatever"}
+    assert build_citation_text(ref) == "(Smith, 2024)"
+
+
+def test_build_citation_text_handles_string_year():
+    from orchestrator.tools.m5_inline import build_citation_text
+    ref = {"author": "Jones", "year": "2023"}
+    assert build_citation_text(ref) == "(Jones, 2023)"
+
+
+def test_build_citation_text_falls_back_when_fields_missing():
+    from orchestrator.tools.m5_inline import build_citation_text
+    assert build_citation_text({}) == "(Anonymous, n.d.)"
+    assert build_citation_text({"author": "X"}) == "(X, n.d.)"
+    assert build_citation_text({"year": 2024}) == "(Anonymous, 2024)"
+
+
+def test_build_citation_text_strips_whitespace():
+    from orchestrator.tools.m5_inline import build_citation_text
+    assert build_citation_text({"author": "  Smith  ", "year": " 2024 "}) == "(Smith, 2024)"
