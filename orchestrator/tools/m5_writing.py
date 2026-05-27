@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 from uuid import uuid4
@@ -69,6 +70,36 @@ def _upload_to_s3(local_path: str, project_id: str, kind: str, filename: str) ->
         )
     Path(local_path).unlink(missing_ok=True)
     return s3_key
+
+
+_CITE_PATTERN = re.compile(r"\((?P<author>[A-Z][\w-]+(?: et al\.)?), (?P<year>\d{4})\)")
+
+
+def validate_citations(prose: str, references: list[dict]) -> tuple[list[str], list[str]]:
+    """Regex-scan prose for (Author, Year) patterns; partition into
+    (cited_in_pool, uncited). Each returned list is de-duplicated and
+    preserves first-occurrence order.
+
+    Plain Python helper (not a @tool) — used by compose_chapter +
+    rewrite_chapter post-validation.
+    """
+    # Build a pool of (author, year) tuples from references.
+    # Convert year to string to match regex group which is always a string.
+    pool = {(r.get("author", ""), str(r.get("year", ""))) for r in references}
+    cited: list[str] = []
+    uncited: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for m in _CITE_PATTERN.finditer(prose):
+        key = (m.group("author"), m.group("year"))
+        if key in seen:
+            continue
+        seen.add(key)
+        label = f"{m.group('author')}, {m.group('year')}"
+        if key in pool:
+            cited.append(label)
+        else:
+            uncited.append(label)
+    return cited, uncited
 
 
 # --- Wrappers that tests can monkeypatch ---------------------------------

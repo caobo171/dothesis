@@ -203,3 +203,43 @@ def test_export_docx_raises_without_project_id():
     from orchestrator.tools.m5_writing import export_docx
     with pytest.raises(ValueError, match="project_id"):
         export_docx.invoke({"sections": [], "project_id": ""})
+
+
+def test_validate_citations_matches_pool():
+    from orchestrator.tools.m5_writing import validate_citations
+    prose = "Bass (1990) found... Later researchers confirmed (Avolio et al., 2009) that..."
+    references = [
+        {"author": "Bass", "year": 1990, "title": "Leadership"},
+        {"author": "Avolio et al.", "year": 2009, "title": "Trans. leadership"},
+    ]
+    cited, uncited = validate_citations(prose, references)
+    # The regex matches "(Author, Year)" — "Bass (1990)" is NOT in that shape;
+    # only "(Avolio et al., 2009)" matches.
+    assert "Avolio et al., 2009" in cited
+    assert uncited == []
+
+
+def test_validate_citations_flags_uncited():
+    from orchestrator.tools.m5_writing import validate_citations
+    prose = "Some studies (Smith, 2023) claim X. Others (Bass, 1990) agree."
+    references = [
+        {"author": "Bass", "year": 1990, "title": "Leadership"},
+    ]
+    cited, uncited = validate_citations(prose, references)
+    assert cited == ["Bass, 1990"]
+    assert uncited == ["Smith, 2023"]
+
+
+def test_validate_citations_empty_prose():
+    from orchestrator.tools.m5_writing import validate_citations
+    cited, uncited = validate_citations("", [])
+    assert cited == []
+    assert uncited == []
+
+
+def test_validate_citations_deduplicates():
+    from orchestrator.tools.m5_writing import validate_citations
+    prose = "(Bass, 1990) said X. Later (Bass, 1990) also said Y."
+    references = [{"author": "Bass", "year": 1990}]
+    cited, uncited = validate_citations(prose, references)
+    assert cited == ["Bass, 1990"]  # de-duplicated
