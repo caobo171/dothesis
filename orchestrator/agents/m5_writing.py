@@ -114,7 +114,17 @@ class M5Agent(ModuleAgent):
         )
 
     def step(self, state):
-        """SP6: rewrite detection → finalize on affirmative → compose phase → fallback."""
+        """SP6: rewrite detection → finalize on affirmative → compose phase → fallback.
+
+        Auto-mode bypasses the interactive compose phase entirely — the base class
+        _auto_fill asks the LLM for the full payload in one shot, which is faster
+        and avoids per-chapter tool calls in test/CI environments.
+        """
+        # Auto-mode uses the base class's _auto_fill (one-shot full-payload request).
+        # Only interactive sessions use the SP6 compose-phase flow below.
+        if state.get("mode") == "auto":
+            return super().step(state)
+
         from orchestrator.state import get_module_slice
         cls = type(self)
         partial = dict(get_module_slice(state["context_store"], self.module_key))

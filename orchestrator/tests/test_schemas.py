@@ -70,11 +70,13 @@ def test_m4_minimal():
 
 
 def test_m5_export_artifact():
+    # Decision: test is about ExportArtifact back-compat with the deprecated `uri`
+    # field, not about a confirmed M5Output. Removing confirmed_at so the
+    # @model_validator (which requires 6 chapters + docx on confirm) does not fire.
     a = ExportArtifact(kind="docx", uri="s3://bucket/key", size_bytes=12345)
     out = M5Output(
         sections=[{"name": "Ch.1", "text": "..."}],
         export_artifacts=[a],
-        confirmed_at=datetime.now(timezone.utc),
     )
     assert out.export_artifacts[0].uri.startswith("s3://")
 
