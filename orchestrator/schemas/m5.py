@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from orchestrator.schemas.m5_editor import PendingEdit
+
 
 ChapterName = Literal["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
 
@@ -14,6 +16,8 @@ class ChapterDraft(BaseModel):
     prose: str
     citations_used: list[str] = Field(default_factory=list)
     uncited_warnings: list[str] = Field(default_factory=list)
+    # SP6.5 — additive; defaults empty so existing M5Output data still validates
+    pending_edits: list[PendingEdit] = Field(default_factory=list)
 
 
 class ExportArtifact(BaseModel):
