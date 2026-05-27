@@ -421,3 +421,82 @@ def test_translate_400_on_missing_target_lang(client):
         json={"from_offset": 0, "to_offset": 5},  # target_lang is missing
     )
     assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{pid}/m5/chapters/{chapter_name}/cite — inline citations
+# ---------------------------------------------------------------------------
+
+
+def test_cite_inserts_pending_edit_with_canonical_text(client):
+    """Cite a paper from M2 pool → PendingEdit with canonical (Author, Year) text.
+
+    Decision: cite differs from paraphrase/translate — it's an INSERTION (not
+    replacement). from_offset == to_offset == at_offset, old_text="", new_text
+    has a leading space to ensure whitespace between prose and citation.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    # 1. Authenticate + create project + seed chapters
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    # 2. Seed M2 reference pool with one paper
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m2_literature = {
+            "research_gaps": [
+                {"supporting_papers": [{"author": "Smith", "year": "2024"}]}
+            ]
+        }
+        flag_modified(cs, "m2_literature")
+        db.commit()
+
+    # 3. GET /m5/references to retrieve the assigned reference id
+    r = client.get(f"/api/v1/projects/{pid}/m5/references")
+    assert r.status_code == 200
+    refs = r.json()
+    assert len(refs) == 1
+    ref_id = refs[0]["id"]
+
+    # 4. POST /m5/chapters/intro/cite at offset 5 ("Hello world."; offset 5 is after "Hello")
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/cite",
+        json={"at_offset": 5, "reference_id": ref_id},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    # 5. Response body assertions
+    assert body["source"] == "cite"
+    assert body["new_text"] == " (Smith, 2024)", f"Expected leading space in '{body['new_text']}'"
+    assert body["old_text"] == ""
+    assert body["from_offset"] == 5
+    assert body["to_offset"] == 5
+    assert body["metadata"]["reference_id"] == ref_id
+
+    # 6. Verify PendingEdit persisted into ContextStore
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        pending = cs.m5_writing["chapters"]["intro"]["pending_edits"]
+        assert len(pending) == 1
+        assert pending[0]["source"] == "cite"
+        assert pending[0]["new_text"] == " (Smith, 2024)"
+        assert pending[0]["metadata"]["reference_id"] == ref_id
+
+
+def test_cite_404_on_unknown_reference(client):
+    """POSTing cite with a nonexistent reference_id returns 404.
+
+    Decision: _make_project_with_chapters creates a project with chapters but
+    does not seed M2 references, so any reference_id lookup will fail.
+    """
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/cite",
+        json={"at_offset": 0, "reference_id": "nonexistent"},
+    )
+    assert r.status_code == 404

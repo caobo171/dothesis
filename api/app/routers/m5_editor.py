@@ -323,3 +323,58 @@ def translate_chapter_selection(
     edit_dict = _append_pending_edit(cs, chapter_name, pe)
     db.commit()
     return edit_dict
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{project_id}/m5/chapters/{chapter_name}/cite — canonical citations
+# ---------------------------------------------------------------------------
+
+
+class CiteBody(BaseModel):
+    at_offset: int
+    reference_id: str
+
+
+@router.post("/projects/{project_id}/m5/chapters/{chapter_name}/cite")
+def cite_chapter(
+    project_id: uuid.UUID,
+    chapter_name: str,
+    body: CiteBody,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """Insert a canonical citation at a specific offset in chapter prose.
+
+    Decision: cite differs from paraphrase/translate — it's an INSERTION (not
+    replacement). from_offset == to_offset == at_offset, old_text="", and
+    new_text is " (Author, Year)" with a leading space to ensure whitespace
+    between prose and citation. No LLM call — uses build_citation_text(ref).
+
+    The endpoint creates a PendingEdit so the front-end can present an
+    accept/reject ribbon before the prose is mutated.
+    """
+    _owned_project(db, user, project_id)
+    cs = db.get(ContextStore, project_id)
+    ch = _load_chapter_or_404(cs, chapter_name)
+    prose = ch.get("prose", "")
+    if body.at_offset < 0 or body.at_offset > len(prose):
+        raise HTTPException(400, detail={"error": {"code": "offset_out_of_range"}})
+    pool = _collect_reference_pool(cs)
+    target = next((r for r in pool if _reference_id(r) == body.reference_id), None)
+    if target is None:
+        raise HTTPException(404, detail={"error": {"code": "reference_not_found"}})
+    citation = " " + build_citation_text(target)
+    pe = PendingEdit(
+        id=uuid4().hex,
+        chapter_name=chapter_name,
+        from_offset=body.at_offset,
+        to_offset=body.at_offset,
+        old_text="",
+        new_text=citation,
+        source="cite",
+        pending_at=datetime.now(timezone.utc),
+        metadata={"reference_id": body.reference_id},
+    )
+    edit_dict = _append_pending_edit(cs, chapter_name, pe)
+    db.commit()
+    return edit_dict
