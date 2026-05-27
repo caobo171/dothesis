@@ -56,9 +56,10 @@ def test_compile_pdf_writes_artifact(tmp_path, monkeypatch):
         "sections": [{"name": "Ch.1", "text": "..."}],
         "project_id": "proj-test",
     })
-    # SP6: returns s3_key, not local path
-    assert out.startswith("projects/proj-test/exports/thesis-")
-    assert out.endswith(".pdf")
+    # SP6: returns {s3_key, size_bytes} dict — not a plain string
+    assert out["s3_key"].startswith("projects/proj-test/exports/thesis-")
+    assert out["s3_key"].endswith(".pdf")
+    assert isinstance(out["size_bytes"], int)
     assert fake_s3.put_object.call_count == 1
 
 
@@ -81,9 +82,10 @@ def test_export_docx_writes_artifact(tmp_path, monkeypatch):
         "sections": [{"name": "Ch.1", "text": "..."}],
         "project_id": "proj-test",
     })
-    # SP6: returns s3_key, not local path
-    assert out.startswith("projects/proj-test/exports/thesis-")
-    assert out.endswith(".docx")
+    # SP6: returns {s3_key, size_bytes} dict — not a plain string
+    assert out["s3_key"].startswith("projects/proj-test/exports/thesis-")
+    assert out["s3_key"].endswith(".docx")
+    assert isinstance(out["size_bytes"], int)
     assert fake_s3.put_object.call_count == 1
 
 
@@ -123,10 +125,12 @@ def test_upload_to_s3_writes_correct_key_and_deletes_local(tmp_path, monkeypatch
     local = tmp_path / "thesis-abc123.docx"
     local.write_bytes(b"fake docx content")
 
-    s3_key = m5_writing._upload_to_s3(
+    # _upload_to_s3 now returns (s3_key, size_bytes) tuple — unpack both.
+    s3_key, size_bytes = m5_writing._upload_to_s3(
         str(local), project_id="proj-xyz", kind="docx", filename="thesis-abc123.docx",
     )
     assert s3_key == "projects/proj-xyz/exports/thesis-abc123.docx"
+    assert size_bytes == len(b"fake docx content")
     call = fake_s3.put_object.call_args
     assert call.kwargs["Bucket"] == "test-bucket"
     assert call.kwargs["Key"] == "projects/proj-xyz/exports/thesis-abc123.docx"
@@ -163,12 +167,14 @@ def test_compile_pdf_uploads_to_s3_and_returns_key(monkeypatch):
         return output_path
     monkeypatch.setattr(m5_writing, "_compile_pdf_via_engine", fake_compile_via_engine)
 
-    s3_key = m5_writing.compile_pdf.invoke({
+    # compile_pdf now returns {s3_key, size_bytes} dict — not a plain string.
+    result = m5_writing.compile_pdf.invoke({
         "sections": [{"name": "intro", "text": "x"}],
         "project_id": "proj-xyz",
     })
-    assert s3_key.startswith("projects/proj-xyz/exports/thesis-")
-    assert s3_key.endswith(".pdf")
+    assert result["s3_key"].startswith("projects/proj-xyz/exports/thesis-")
+    assert result["s3_key"].endswith(".pdf")
+    assert result["size_bytes"] == len(b"%PDF-1.4\nfake")
     assert fake_s3.put_object.call_count == 1
 
 
@@ -185,12 +191,14 @@ def test_export_docx_uploads_to_s3_and_returns_key(monkeypatch):
         return output_path
     monkeypatch.setattr(m5_writing, "_export_docx_via_engine", fake_export_via_engine)
 
-    s3_key = m5_writing.export_docx.invoke({
+    # export_docx now returns {s3_key, size_bytes} dict — not a plain string.
+    result = m5_writing.export_docx.invoke({
         "sections": [{"name": "intro", "text": "x"}],
         "project_id": "proj-xyz",
     })
-    assert s3_key.startswith("projects/proj-xyz/exports/thesis-")
-    assert s3_key.endswith(".docx")
+    assert result["s3_key"].startswith("projects/proj-xyz/exports/thesis-")
+    assert result["s3_key"].endswith(".docx")
+    assert result["size_bytes"] == len(b"PK\x03\x04 fake docx")
 
 
 def test_compile_pdf_raises_without_project_id():

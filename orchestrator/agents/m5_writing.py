@@ -114,23 +114,45 @@ class M5Agent(ModuleAgent):
         )
 
     def step(self, state):
-        """SP6: rewrite detection → finalize on affirmative → compose phase → fallback.
-
-        Auto-mode bypasses the interactive compose phase entirely — the base class
-        _auto_fill asks the LLM for the full payload in one shot, which is faster
-        and avoids per-chapter tool calls in test/CI environments.
-        """
-        # Auto-mode uses the base class's _auto_fill (one-shot full-payload request).
-        # Only interactive sessions use the SP6 compose-phase flow below.
-        if state.get("mode") == "auto":
-            return super().step(state)
-
+        """SP6: auto-mode + interactive both produce S3 artifacts via the same
+        compile_pdf/export_docx tools (Q-S3 decision: single code path)."""
         from orchestrator.state import get_module_slice
         cls = type(self)
         partial = dict(get_module_slice(state["context_store"], self.module_key))
         cls._render_context = self._extract_context_slice(state["context_store"])
 
-        # Confirm-state branches: rewrite OR affirmative-finalize.
+        # Auto-mode: let base class _auto_fill produce the chapters, then
+        # replace any LLM-hallucinated export_artifacts with REAL S3 uploads.
+        if state.get("mode") == "auto":
+            base_result = super().step(state)
+            if base_result.transition and base_result.context_patch.get("chapters"):
+                project_id = str(state.get("project_id") or "")
+                if project_id:
+                    sections = self._build_sections_for_export(base_result.context_patch)
+                    docx_result = export_docx.invoke({
+                        "sections": sections, "project_id": project_id,
+                    })
+                    pdf_result = compile_pdf.invoke({
+                        "sections": sections, "project_id": project_id,
+                    })
+                    artifacts = [
+                        ExportArtifact(
+                            kind="docx",
+                            s3_key=docx_result["s3_key"],
+                            download_url=f"/api/v1/projects/{project_id}/exports/{docx_result['s3_key'].split('/')[-1]}",
+                            size_bytes=docx_result["size_bytes"],
+                        ),
+                        ExportArtifact(
+                            kind="pdf",
+                            s3_key=pdf_result["s3_key"],
+                            download_url=f"/api/v1/projects/{project_id}/exports/{pdf_result['s3_key'].split('/')[-1]}",
+                            size_bytes=pdf_result["size_bytes"],
+                        ),
+                    ]
+                    base_result.context_patch["export_artifacts"] = [a.model_dump() for a in artifacts]
+            return base_result
+
+        # Interactive: rewrite + finalize + compose phase (existing logic).
         if partial.get("_compose_chapters_done") and partial.get("_awaiting_confirm"):
             if self._is_rewrite_request(state["messages"]):
                 return self._handle_rewrite(state, partial)
@@ -193,29 +215,35 @@ class M5Agent(ModuleAgent):
         )
 
     def _finalize_and_export(self, state, partial):
-        """Compile docx + pdf, upload to S3, populate export_artifacts, transition."""
+        """Compile docx + pdf, upload to S3, populate export_artifacts, transition.
+
+        Uses dict-shape return from compile_pdf/export_docx to propagate real
+        size_bytes into ExportArtifact instead of hardcoding 0.
+        """
         project_id = str(state.get("project_id") or "")
         if not project_id:
             raise RuntimeError("M5 finalize requires project_id in state")
 
         sections_for_engine = self._build_sections_for_export(partial)
-        docx_key = export_docx.invoke({
+        docx_result = export_docx.invoke({
             "sections": sections_for_engine, "project_id": project_id,
         })
-        pdf_key = compile_pdf.invoke({
+        pdf_result = compile_pdf.invoke({
             "sections": sections_for_engine, "project_id": project_id,
         })
 
         artifacts = [
             ExportArtifact(
-                kind="docx", s3_key=docx_key,
-                download_url=f"/api/v1/projects/{project_id}/exports/{docx_key.split('/')[-1]}",
-                size_bytes=0,
+                kind="docx",
+                s3_key=docx_result["s3_key"],
+                download_url=f"/api/v1/projects/{project_id}/exports/{docx_result['s3_key'].split('/')[-1]}",
+                size_bytes=docx_result["size_bytes"],
             ),
             ExportArtifact(
-                kind="pdf", s3_key=pdf_key,
-                download_url=f"/api/v1/projects/{project_id}/exports/{pdf_key.split('/')[-1]}",
-                size_bytes=0,
+                kind="pdf",
+                s3_key=pdf_result["s3_key"],
+                download_url=f"/api/v1/projects/{project_id}/exports/{pdf_result['s3_key'].split('/')[-1]}",
+                size_bytes=pdf_result["size_bytes"],
             ),
         ]
         partial["export_artifacts"] = [a.model_dump() for a in artifacts]
@@ -227,11 +255,31 @@ class M5Agent(ModuleAgent):
             needs_user_reply=False,
         )
 
+    def _strip_uncited_warnings(self, prose: str) -> str:
+        """Remove the ⚠️ uncited-warnings notice block before exporting.
+
+        The block is appended by _annotate_uncited in compose_chapter /
+        rewrite_chapter and is fine to show in chat, but it shouldn't end up
+        in the final thesis docx/pdf.
+        """
+        marker = "\n\n> ⚠️ The following inline citations are not present"
+        idx = prose.find(marker)
+        if idx == -1:
+            return prose
+        return prose[:idx]
+
     def _build_sections_for_export(self, partial: dict) -> list[dict]:
-        """Assemble the per-chapter section list passed to compile_pdf/export_docx."""
+        """Assemble the per-chapter section list passed to compile_pdf/export_docx.
+
+        Strips uncited-warning blockquotes so editorial notices don't appear in
+        the exported thesis docx/pdf (they remain visible in chat bubbles).
+        """
         chapters = partial.get("chapters", {})
         sections = [
-            {"name": name, "text": chapters.get(name, {}).get("prose", "")}
+            {"name": name,
+             "text": self._strip_uncited_warnings(
+                 chapters.get(name, {}).get("prose", "")
+             )}
             for name in _CHAPTER_ORDER
         ]
         if partial.get("bibliography"):

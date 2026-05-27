@@ -57,23 +57,25 @@ _CONTENT_TYPES = {
 }
 
 
-def _upload_to_s3(local_path: str, project_id: str, kind: str, filename: str) -> str:
+def _upload_to_s3(local_path: str, project_id: str, kind: str, filename: str) -> tuple[str, int]:
     """Upload a local artifact to S3 under projects/{project_id}/exports/.
 
-    Returns the s3_key (not signed URL — keys persist; signed URLs expire).
-    Deletes the local file after upload to keep the scratch dir clean.
+    Returns (s3_key, size_bytes). Deletes the local file after upload.
+    Reading the file bytes before upload lets us capture size without a
+    separate stat call, and avoids a second open() after write.
     """
     s3 = s3_from_env()
     bucket = os.environ["AWS_S3_BUCKET"]
     s3_key = f"projects/{project_id}/exports/{filename}"
     content_type = _CONTENT_TYPES[kind]
-    with open(local_path, "rb") as f:
-        s3.put_object(
-            Bucket=bucket, Key=s3_key, Body=f.read(),
-            ContentType=content_type,
-        )
+    body = Path(local_path).read_bytes()
+    size_bytes = len(body)
+    s3.put_object(
+        Bucket=bucket, Key=s3_key, Body=body,
+        ContentType=content_type,
+    )
     Path(local_path).unlink(missing_ok=True)
-    return s3_key
+    return s3_key, size_bytes
 
 
 _CITE_PATTERN = re.compile(r"\((?P<author>[A-Z][\w-]+(?: et al\.)?), (?P<year>\d{4})\)")
@@ -281,32 +283,35 @@ def validate_draft(text: str) -> dict:
 
 
 @tool
-def compile_pdf(sections: list[dict], project_id: str) -> str:
-    """SP6: render sections to PDF, upload to S3, return s3_key.
+def compile_pdf(sections: list[dict], project_id: str) -> dict:
+    """SP6: render sections to PDF, upload to S3, return {s3_key, size_bytes}.
 
-    Required for both interactive and auto-mode paths — local-path fallback
-    removed (Q-S3 decision).
+    Returning size_bytes avoids a separate S3 HeadObject call in the agent and
+    lets ExportArtifact carry real file sizes instead of hardcoded 0.
     """
     if not project_id:
         raise ValueError("compile_pdf requires project_id")
     filename = f"thesis-{uuid4().hex[:8]}.pdf"
     local_path = _scratch_dir() / filename
     _compile_pdf_via_engine(sections, str(local_path))
-    return _upload_to_s3(str(local_path), project_id, "pdf", filename)
+    s3_key, size_bytes = _upload_to_s3(str(local_path), project_id, "pdf", filename)
+    return {"s3_key": s3_key, "size_bytes": size_bytes}
 
 
 @tool
-def export_docx(sections: list[dict], project_id: str) -> str:
-    """SP6: render sections to DOCX, upload to S3, return s3_key.
+def export_docx(sections: list[dict], project_id: str) -> dict:
+    """SP6: render sections to DOCX, upload to S3, return {s3_key, size_bytes}.
 
-    Required for both interactive and auto-mode paths.
+    Returning size_bytes avoids a separate S3 HeadObject call in the agent and
+    lets ExportArtifact carry real file sizes instead of hardcoded 0.
     """
     if not project_id:
         raise ValueError("export_docx requires project_id")
     filename = f"thesis-{uuid4().hex[:8]}.docx"
     local_path = _scratch_dir() / filename
     _export_docx_via_engine(sections, str(local_path))
-    return _upload_to_s3(str(local_path), project_id, "docx", filename)
+    s3_key, size_bytes = _upload_to_s3(str(local_path), project_id, "docx", filename)
+    return {"s3_key": s3_key, "size_bytes": size_bytes}
 
 
 @tool

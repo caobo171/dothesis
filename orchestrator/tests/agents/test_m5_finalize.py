@@ -24,12 +24,13 @@ def _build_full_partial():
 def test_finalize_calls_export_tools_and_transitions(monkeypatch):
     from orchestrator.agents import m5_writing as m5_mod
 
+    # Tools now return {s3_key, size_bytes} dicts — not plain strings.
     fake_docx = MagicMock()
-    fake_docx.invoke.return_value = "projects/proj-xyz/exports/thesis-abc.docx"
+    fake_docx.invoke.return_value = {"s3_key": "projects/proj-xyz/exports/thesis-abc.docx", "size_bytes": 1024}
     monkeypatch.setattr(m5_mod, "export_docx", fake_docx)
 
     fake_pdf = MagicMock()
-    fake_pdf.invoke.return_value = "projects/proj-xyz/exports/thesis-abc.pdf"
+    fake_pdf.invoke.return_value = {"s3_key": "projects/proj-xyz/exports/thesis-abc.pdf", "size_bytes": 2048}
     monkeypatch.setattr(m5_mod, "compile_pdf", fake_pdf)
 
     agent = M5Agent()
@@ -68,8 +69,9 @@ def test_finalize_calls_export_tools_and_transitions(monkeypatch):
 
 def test_finalize_emits_markdown_links(monkeypatch):
     from orchestrator.agents import m5_writing as m5_mod
-    monkeypatch.setattr(m5_mod, "export_docx", MagicMock(invoke=lambda kw: "projects/p/exports/x.docx"))
-    monkeypatch.setattr(m5_mod, "compile_pdf", MagicMock(invoke=lambda kw: "projects/p/exports/x.pdf"))
+    # Tools now return {s3_key, size_bytes} dicts — not plain strings.
+    monkeypatch.setattr(m5_mod, "export_docx", MagicMock(invoke=lambda kw: {"s3_key": "projects/p/exports/x.docx", "size_bytes": 100}))
+    monkeypatch.setattr(m5_mod, "compile_pdf", MagicMock(invoke=lambda kw: {"s3_key": "projects/p/exports/x.pdf", "size_bytes": 200}))
 
     agent = M5Agent()
     partial = _build_full_partial()

@@ -157,17 +157,13 @@ def main() -> int:
         exports = {}
         if cs is not None and cs.m5_writing:
             for art in cs.m5_writing.get("export_artifacts", []):
-                exports[art["kind"]] = art["uri"]
+                # SP6: new field is download_url; fall back to uri for back-compat.
+                exports[art["kind"]] = art.get("download_url") or art.get("uri", "")
 
-        # Optionally upload to S3 if creds are present.
-        import os as _os
-        if exports and "S3_BUCKET" in _os.environ:
-            from engine.s3_for_jobs import s3_from_env, upload_artifacts
-            uploaded = upload_artifacts(
-                s3_from_env(), workdir,
-                f"users/{args.user_id}/projects/{args.project_id}/runs/{run_id}",
-            )
-            exports.update(uploaded)
+        # SP6: compile_pdf/export_docx already uploaded to S3 with the new
+        # mandatory single-code-path. The old optional secondary upload block
+        # (engine.s3_for_jobs) is dead; export URIs live in cs.m5_writing
+        # already.
 
         appender.write({"type": "job_done", "exports": exports})
         return 0
