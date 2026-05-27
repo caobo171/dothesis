@@ -35,37 +35,56 @@ def test_validate_draft_returns_ok_when_no_issues(monkeypatch):
 
 
 def test_compile_pdf_writes_artifact(tmp_path, monkeypatch):
+    # SP6: compile_pdf now requires project_id and uploads to S3; mock s3 + engine.
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
     captured = {}
     def fake_compile(sections, output_path, **kw):
         captured["sections"] = sections
         captured["output_path"] = output_path
         Path(output_path).write_bytes(b"%PDF-1.4 fake")
         return output_path
-    monkeypatch.setattr(
-        "orchestrator.tools.m5_writing._compile_pdf_via_engine", fake_compile
-    )
+    monkeypatch.setattr(m5_writing, "_compile_pdf_via_engine", fake_compile)
     monkeypatch.setenv("ORCHESTRATOR_SCRATCH", str(tmp_path))
 
     out = compile_pdf.invoke({
         "sections": [{"name": "Ch.1", "text": "..."}],
+        "project_id": "proj-test",
     })
+    # SP6: returns s3_key, not local path
+    assert out.startswith("projects/proj-test/exports/thesis-")
     assert out.endswith(".pdf")
-    assert Path(out).exists()
+    assert fake_s3.put_object.call_count == 1
 
 
 def test_export_docx_writes_artifact(tmp_path, monkeypatch):
+    # SP6: export_docx now requires project_id and uploads to S3; mock s3 + engine.
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
     def fake_docx(sections, output_path, **kw):
         Path(output_path).write_bytes(b"PK\x03\x04 docx fake")
         return output_path
-    monkeypatch.setattr(
-        "orchestrator.tools.m5_writing._export_docx_via_engine", fake_docx
-    )
+    monkeypatch.setattr(m5_writing, "_export_docx_via_engine", fake_docx)
     monkeypatch.setenv("ORCHESTRATOR_SCRATCH", str(tmp_path))
+
     out = export_docx.invoke({
         "sections": [{"name": "Ch.1", "text": "..."}],
+        "project_id": "proj-test",
     })
+    # SP6: returns s3_key, not local path
+    assert out.startswith("projects/proj-test/exports/thesis-")
     assert out.endswith(".docx")
-    assert Path(out).exists()
+    assert fake_s3.put_object.call_count == 1
 
 
 def test_format_citations_apa(monkeypatch):
@@ -129,3 +148,58 @@ def test_upload_to_s3_pdf_content_type(tmp_path, monkeypatch):
     local.write_bytes(b"%PDF-1.4")
     m5_writing._upload_to_s3(str(local), "p", "pdf", "thesis-x.pdf")
     assert fake_s3.put_object.call_args.kwargs["ContentType"] == "application/pdf"
+
+
+def test_compile_pdf_uploads_to_s3_and_returns_key(monkeypatch):
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
+    def fake_compile_via_engine(sections, output_path, **kw):
+        Path(output_path).write_bytes(b"%PDF-1.4\nfake")
+        return output_path
+    monkeypatch.setattr(m5_writing, "_compile_pdf_via_engine", fake_compile_via_engine)
+
+    s3_key = m5_writing.compile_pdf.invoke({
+        "sections": [{"name": "intro", "text": "x"}],
+        "project_id": "proj-xyz",
+    })
+    assert s3_key.startswith("projects/proj-xyz/exports/thesis-")
+    assert s3_key.endswith(".pdf")
+    assert fake_s3.put_object.call_count == 1
+
+
+def test_export_docx_uploads_to_s3_and_returns_key(monkeypatch):
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
+    def fake_export_via_engine(sections, output_path, **kw):
+        Path(output_path).write_bytes(b"PK\x03\x04 fake docx")
+        return output_path
+    monkeypatch.setattr(m5_writing, "_export_docx_via_engine", fake_export_via_engine)
+
+    s3_key = m5_writing.export_docx.invoke({
+        "sections": [{"name": "intro", "text": "x"}],
+        "project_id": "proj-xyz",
+    })
+    assert s3_key.startswith("projects/proj-xyz/exports/thesis-")
+    assert s3_key.endswith(".docx")
+
+
+def test_compile_pdf_raises_without_project_id():
+    from orchestrator.tools.m5_writing import compile_pdf
+    with pytest.raises(ValueError, match="project_id"):
+        compile_pdf.invoke({"sections": [], "project_id": ""})
+
+
+def test_export_docx_raises_without_project_id():
+    from orchestrator.tools.m5_writing import export_docx
+    with pytest.raises(ValueError, match="project_id"):
+        export_docx.invoke({"sections": [], "project_id": ""})

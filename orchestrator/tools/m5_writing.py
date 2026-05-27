@@ -196,17 +196,32 @@ def validate_draft(text: str) -> dict:
 
 
 @tool
-def compile_pdf(sections: list[dict]) -> str:
-    """Render sections into a PDF artifact, return absolute path."""
-    out = _scratch_dir() / f"thesis-{uuid4().hex[:8]}.pdf"
-    return _compile_pdf_via_engine(sections, str(out))
+def compile_pdf(sections: list[dict], project_id: str) -> str:
+    """SP6: render sections to PDF, upload to S3, return s3_key.
+
+    Required for both interactive and auto-mode paths — local-path fallback
+    removed (Q-S3 decision).
+    """
+    if not project_id:
+        raise ValueError("compile_pdf requires project_id")
+    filename = f"thesis-{uuid4().hex[:8]}.pdf"
+    local_path = _scratch_dir() / filename
+    _compile_pdf_via_engine(sections, str(local_path))
+    return _upload_to_s3(str(local_path), project_id, "pdf", filename)
 
 
 @tool
-def export_docx(sections: list[dict]) -> str:
-    """Render sections into a .docx artifact, return absolute path."""
-    out = _scratch_dir() / f"thesis-{uuid4().hex[:8]}.docx"
-    return _export_docx_via_engine(sections, str(out))
+def export_docx(sections: list[dict], project_id: str) -> str:
+    """SP6: render sections to DOCX, upload to S3, return s3_key.
+
+    Required for both interactive and auto-mode paths.
+    """
+    if not project_id:
+        raise ValueError("export_docx requires project_id")
+    filename = f"thesis-{uuid4().hex[:8]}.docx"
+    local_path = _scratch_dir() / filename
+    _export_docx_via_engine(sections, str(local_path))
+    return _upload_to_s3(str(local_path), project_id, "docx", filename)
 
 
 @tool
