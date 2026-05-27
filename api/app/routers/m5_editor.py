@@ -460,3 +460,32 @@ def accept_pending_edit(
     flag_modified(cs, "m5_writing")
     db.commit()
     return ch
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{project_id}/m5/chapters/{chapter_name}/pending/{edit_id}/reject
+# ---------------------------------------------------------------------------
+
+
+@router.post("/projects/{project_id}/m5/chapters/{chapter_name}/pending/{edit_id}/reject")
+def reject_pending_edit(
+    project_id: uuid.UUID,
+    chapter_name: str,
+    edit_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """Drop a PendingEdit without touching prose or validating offsets.
+
+    Decision: simpler than accept — no offset check, no prose mutation.
+    The edit is removed from pending_edits and the chapter is returned unchanged.
+    """
+    _owned_project(db, user, project_id)
+    cs = db.get(ContextStore, project_id)
+    ch = _load_chapter_or_404(cs, chapter_name)
+    popped = _find_and_pop_edit(ch, edit_id)
+    if popped is None:
+        raise HTTPException(404, detail={"error": {"code": "edit_not_found"}})
+    flag_modified(cs, "m5_writing")
+    db.commit()
+    return ch

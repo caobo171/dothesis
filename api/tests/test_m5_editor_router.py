@@ -642,3 +642,63 @@ def test_accept_404_on_unknown_edit(client):
     )
     assert r.status_code == 404, r.text
     assert r.json()["detail"]["error"]["code"] == "edit_not_found"
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{pid}/m5/chapters/{chapter_name}/pending/{edit_id}/reject
+# ---------------------------------------------------------------------------
+
+
+def test_reject_drops_edit_without_touching_prose(client):
+    """1. Seed chapter with prose 'Hello world.' AND a pending_edit (from 0..5, old='Hello', new='Greetings').
+    2. POST /m5/chapters/intro/pending/{edit_id}/reject
+    3. Assert 200; response chapter has prose='Hello world.' UNCHANGED + pending_edits=[].
+
+    Decision: reject is simpler than accept — it drops the edit without any
+    offset validation or prose mutation. The original prose stays unchanged.
+    """
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    # Seed the pending edit (offsets 0..5 = 'Hello' in 'Hello world.')
+    edit = _seed_pending_edit(
+        pid,
+        "intro",
+        from_offset=0,
+        to_offset=5,
+        old_text="Hello",
+        new_text="Greetings",
+    )
+    edit_id = edit["id"]
+
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters/intro/pending/{edit_id}/reject")
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    # Prose must be unchanged; pending_edits must be empty
+    assert body["prose"] == "Hello world."
+    assert body["pending_edits"] == []
+
+    # Verify DB persistence
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        ch = cs.m5_writing["chapters"]["intro"]
+        assert ch["prose"] == "Hello world."
+        assert ch["pending_edits"] == []
+
+
+def test_reject_404_on_unknown_edit(client):
+    """POST /m5/chapters/intro/pending/nope/reject → 404.
+
+    Decision: the endpoint must return 404 when the edit_id does not exist
+    in the chapter's pending_edits list, mirroring the accept endpoint behavior.
+    """
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/pending/nope/reject"
+    )
+    assert r.status_code == 404, r.text
+    assert r.json()["detail"]["error"]["code"] == "edit_not_found"
