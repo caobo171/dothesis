@@ -1,5 +1,6 @@
 """Smoke tests for the auto-mode subprocess entrypoint."""
 import json
+import os
 import signal
 import subprocess
 import sys
@@ -41,6 +42,25 @@ def test_argparse_routes_auto_vs_resume(tmp_path):
     args = p.parse_args(["--resume-run-id", "abc", "--workdir", str(tmp_path)])
     assert args.resume_run_id == "abc"
     assert args.auto_draft is False
+
+
+def test_subprocess_refuses_without_aws_s3_bucket(tmp_path):
+    """SP6: subprocess must refuse to start without AWS_S3_BUCKET set.
+    M5 export is mandatory and S3-only — the check fires after argparse parses
+    valid args, before any real work begins."""
+    env = {k: v for k, v in os.environ.items() if k != "AWS_S3_BUCKET"}
+    # Provide a valid arg set so argparse succeeds; the env check should fire next.
+    brief = tmp_path / "b.json"
+    brief.write_text('{"topic": "x"}')
+    res = subprocess.run(
+        [sys.executable, "-m", "orchestrator", "--auto-draft",
+         "--project-id", "p", "--user-id", "u",
+         "--workdir", str(tmp_path), "--brief-json", str(brief)],
+        cwd=REPO_ROOT, capture_output=True, text=True, env=env,
+    )
+    assert res.returncode != 0
+    combined = (res.stdout + res.stderr).lower()
+    assert "aws_s3_bucket" in combined
 
 
 def test_sigterm_handler_writes_paused_event(tmp_path, monkeypatch):

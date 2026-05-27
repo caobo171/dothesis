@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import signal
 import sys
 import traceback
@@ -24,6 +25,15 @@ from typing import Any
 from uuid import UUID, uuid4
 
 logger = logging.getLogger("orchestrator")
+
+
+def _require_aws_s3_bucket():
+    """SP6: M5 export uploads to S3; refuse to start without a configured bucket."""
+    if not os.environ.get("AWS_S3_BUCKET"):
+        raise SystemExit(
+            "AWS_S3_BUCKET env var is required for M5 export artifacts. "
+            "Set it (e.g. AWS_S3_BUCKET=opendraft-dev) and re-run."
+        )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -94,6 +104,7 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     args = build_arg_parser().parse_args()
+    _require_aws_s3_bucket()
 
     workdir = Path(args.workdir)
     workdir.mkdir(parents=True, exist_ok=True)
