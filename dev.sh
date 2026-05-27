@@ -20,6 +20,9 @@ fi
 set -a
 # shellcheck disable=SC1091
 source .env
+# Orchestrator (chat + M5 editor + SP6.5 surface) is shipped — default it on for
+# the dev stack. Override by setting ORCHESTRATOR_ENABLED=false in .env explicitly.
+export ORCHESTRATOR_ENABLED="${ORCHESTRATOR_ENABLED:-true}"
 set +a
 
 # --- 0. Postgres via docker compose ---
