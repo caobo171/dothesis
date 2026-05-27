@@ -197,6 +197,21 @@ async def send_message(thread_id: uuid.UUID,
     db.add(Message(thread_id=thread_id, role="user", content=body.text))
     db.commit()
 
+    # Seed the LangGraph state with the project's ContextStore. The supervisor +
+    # every module agent reads state["context_store"] to decide the next step
+    # and to dump confirmed-module slices back. Without this the supervisor
+    # crashes on KeyError as soon as it runs.
+    from orchestrator.state import ContextStore as OrchestratorContextStore
+    from ..models import ContextStore as DbContextStore
+    db_cs = db.get(DbContextStore, t.project_id)
+    initial_context_store = OrchestratorContextStore(
+        m1_topic=(db_cs.m1_topic if db_cs else None),
+        m2_literature=(db_cs.m2_literature if db_cs else None),
+        m3_design=(db_cs.m3_design if db_cs else None),
+        m4_analysis=(db_cs.m4_analysis if db_cs else None),
+        m5_writing=(db_cs.m5_writing if db_cs else None),
+    )
+
     graph = get_interactive_graph()
     config = {"configurable": {"thread_id": t.langgraph_thread_id}}
 
@@ -214,7 +229,12 @@ async def send_message(thread_id: uuid.UUID,
         log = logging.getLogger(__name__)
         try:
             async for event in graph.astream(
-                {"messages": [HumanMessage(content=body.text)], "mode": "interactive"},
+                {
+                    "messages": [HumanMessage(content=body.text)],
+                    "mode": "interactive",
+                    "context_store": initial_context_store,
+                    "project_id": t.project_id,
+                },
                 config=config,
                 stream_mode="updates",
             ):

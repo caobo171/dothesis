@@ -21,11 +21,11 @@ def _get_llm():
     """Factory function for LLM instance.
 
     Returns a ChatGoogleGenerativeAI instance configured with the
-    ORCHESTRATOR_LLM_MODEL env var (defaults to gemini-2.0-flash-001).
+    ORCHESTRATOR_LLM_MODEL env var (defaults to gemini-2.5-flash).
     This function is mocked in tests to inject fake LLM responses.
     """
     return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.0-flash-001"),
+        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
         temperature=0.1,
     )
 

@@ -33,7 +33,7 @@ class IntentClassification(BaseModel):
 
 def _intent_llm():
     return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.0-flash-001"),
+        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
         temperature=0.0,
     )
 

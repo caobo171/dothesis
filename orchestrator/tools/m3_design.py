@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 def _get_llm():
     # Centralised LLM factory — allows monkeypatching in tests without touching each tool.
     return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.0-flash-001"),
+        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
         temperature=0.3,
     )
 

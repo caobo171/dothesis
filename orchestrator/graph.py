@@ -134,12 +134,17 @@ def build_graph(*, interactive: bool, checkpointer: BaseCheckpointSaver):
     for key in ("M1", "M2", "M3", "M4", "M5"):
         builder.add_edge(key, "supervisor")
 
-    # In interactive mode we interrupt *before* the supervisor so the HTTP
-    # layer can inject the next user message between turns.  In auto-mode the
-    # list is empty and the graph runs end-to-end.
-    interrupt_before = ["supervisor"] if interactive else []
+    # Interactive flow on each user turn: supervisor → module → (pause). The
+    # pause must fire AFTER the module emits its assistant message, not before
+    # the supervisor — `interrupt_before` fires on the FIRST entry too, which
+    # would mean nothing runs on the user's very first message (astream just
+    # yields an empty __interrupt__ and returns). interrupt_after on the
+    # module nodes is the correct hook: the supervisor + module both run, the
+    # message is yielded over SSE, then the graph pauses waiting for the next
+    # user input. Auto-mode (subprocess) runs end-to-end with no interrupts.
+    interrupt_after = ["M1", "M2", "M3", "M4", "M5"] if interactive else []
 
-    return builder.compile(checkpointer=checkpointer, interrupt_before=interrupt_before)
+    return builder.compile(checkpointer=checkpointer, interrupt_after=interrupt_after)
 
 
 # ---------------------------------------------------------------------------
