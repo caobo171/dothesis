@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import pytest
+from pydantic import ValidationError
 from orchestrator.schemas.m5_editor import PendingEdit
 
 
@@ -18,8 +20,6 @@ def test_pending_edit_roundtrip():
 
 
 def test_pending_edit_rejects_unknown_source():
-    import pytest
-    from pydantic import ValidationError
     with pytest.raises(ValidationError):
         PendingEdit(
             id="x", chapter_name="intro",
@@ -31,8 +31,6 @@ def test_pending_edit_rejects_unknown_source():
 
 
 def test_pending_edit_offsets_must_be_nonnegative():
-    import pytest
-    from pydantic import ValidationError
     with pytest.raises(ValidationError):
         PendingEdit(
             id="x", chapter_name="intro",
@@ -53,3 +51,15 @@ def test_pending_edit_degenerate_range_for_cite():
     )
     assert pe.from_offset == pe.to_offset
     assert pe.old_text == ""
+
+
+def test_pending_edit_rejects_reversed_range():
+    """from_offset > to_offset is invalid (would produce empty/reversed slice)."""
+    with pytest.raises(ValidationError):
+        PendingEdit(
+            id="x", chapter_name="intro",
+            from_offset=25, to_offset=10,
+            old_text="", new_text="b",
+            source="paraphrase",
+            pending_at=datetime.now(timezone.utc),
+        )
