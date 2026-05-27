@@ -223,3 +223,61 @@ describe("ChatPane list_editor integration", () => {
     expect(capturedBody?.text).toContain("2. Reliability (Cronbach's Alpha) — α ≥ 0.7");
   });
 });
+
+describe("ChatPane → ChatHeader integration (SP6.5)", () => {
+  it("passes hasChapters=true when m5_writing.chapters has entries", async () => {
+    // Mock the project fetch to return a non-empty chapters map, which should
+    // cause ChatHeader to render the "Open editor" link for the project.
+    server.use(
+      http.get("/api/v1/projects/p1", () =>
+        HttpResponse.json({
+          name: "Test Project",
+          context_store: {
+            m1_topic: null,
+            m5_writing: {
+              chapters: {
+                introduction: { title: "Introduction", content: "..." },
+              },
+            },
+          },
+        }),
+      ),
+      http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+      http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({ run: null })),
+      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+    );
+
+    renderFresh(<ChatPane projectId="p1" threadId="t1" />);
+
+    // The "Open editor" link is rendered by ChatHeader only when hasChapters &&
+    // projectId are both truthy — wait for it to appear.
+    await waitFor(() => expect(screen.getByRole("link", { name: /open editor/i })).toBeTruthy());
+
+    const link = screen.getByRole("link", { name: /open editor/i });
+    expect(link).toHaveAttribute("href", "/chat/projects/p1/editor");
+  });
+
+  it("hides Open editor when chapters is empty", async () => {
+    // An empty chapters map means hasChapters=false — the link must NOT render.
+    server.use(
+      http.get("/api/v1/projects/p1", () =>
+        HttpResponse.json({
+          name: "Test Project",
+          context_store: {
+            m1_topic: null,
+            m5_writing: { chapters: {} },
+          },
+        }),
+      ),
+      http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+      http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({ run: null })),
+      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+    );
+
+    renderFresh(<ChatPane projectId="p1" threadId="t1" />);
+
+    // Wait for project name to confirm data has loaded, then assert link absent.
+    await waitFor(() => screen.getByText("Test Project"));
+    expect(screen.queryByRole("link", { name: /open editor/i })).toBeNull();
+  });
+});
