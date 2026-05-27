@@ -104,3 +104,87 @@ def test_get_chapters_requires_auth(monkeypatch):
     fake = uuid.uuid4()
     r = fresh_client.get(f"/api/v1/projects/{fake}/m5/chapters")
     assert r.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /projects/{pid}/m5/chapters/{chapter_name} — autosave + revalidate
+# ---------------------------------------------------------------------------
+
+def test_patch_chapter_updates_prose(client):
+    """PATCH with new prose → 200, response has new prose, DB is persisted."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    r = client.patch(
+        f"/api/v1/projects/{pid}/m5/chapters/intro",
+        json={"prose": "Rewritten by user."},
+    )
+    assert r.status_code == 200
+    # Decision: response body is the updated chapter dict
+    assert r.json()["prose"] == "Rewritten by user."
+
+    # Verify persistence in DB
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        assert cs.m5_writing["chapters"]["intro"]["prose"] == "Rewritten by user."
+
+
+def test_patch_chapter_revalidates_citations(client):
+    """Citations in prose are validated against the M2 reference pool."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    # Seed an M2 reference pool so (Smith, 2024) is known; (Unknown, 2023) is not
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m2_literature = {
+            "research_gaps": [
+                {"supporting_papers": [{"author": "Smith", "year": "2024"}]}
+            ]
+        }
+        flag_modified(cs, "m2_literature")
+        db.commit()
+
+    r = client.patch(
+        f"/api/v1/projects/{pid}/m5/chapters/intro",
+        json={"prose": "See (Smith, 2024) and (Unknown, 2023)."},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    # Decision: only the known citation is recorded; the unknown one is flagged
+    assert body["citations_used"] == ["(Smith, 2024)"]
+    assert body["uncited_warnings"] == ["(Unknown, 2023)"]
+
+
+def test_patch_unknown_chapter_returns_404(client):
+    """Patching a chapter name not yet drafted (or unknown) returns 404."""
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    # _make_project_with_chapters seeds only intro + lit_review; conclusion is absent
+    r = client.patch(
+        f"/api/v1/projects/{pid}/m5/chapters/conclusion",
+        json={"prose": "x"},
+    )
+    assert r.status_code == 404
+
+
+def test_patch_chapter_404_for_other_user(client):
+    """User B cannot PATCH a chapter that belongs to User A's project."""
+    # User A creates the project and chapters
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    # Switch to User B
+    _create_user_and_set_cookie(client)
+    r = client.patch(
+        f"/api/v1/projects/{pid}/m5/chapters/intro",
+        json={"prose": "intruder"},
+    )
+    assert r.status_code == 404
