@@ -146,3 +146,124 @@ def list_references(
     cs = db.get(ContextStore, project_id)
     pool = _collect_reference_pool(cs) if cs else []
     return [{"id": _reference_id(r), **r} for r in pool]
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{project_id}/m5/chapters/{chapter_name}/paraphrase
+# ---------------------------------------------------------------------------
+
+from datetime import datetime, timezone  # noqa: E402 — stdlib, safe to re-import
+from uuid import uuid4  # noqa: E402
+
+from orchestrator.schemas.m5_editor import PendingEdit  # noqa: E402
+from orchestrator.tools.m5_inline import paraphrase_selection, translate_selection, build_citation_text  # noqa: E402 — translate_selection + build_citation_text reused by Tasks 12+13
+
+
+class ParaphraseBody(BaseModel):
+    from_offset: int
+    to_offset: int
+    style: str = ""
+
+
+def _validate_range(prose: str, from_offset: int, to_offset: int) -> None:
+    """Raise 400 when the selection window is outside the current prose length.
+
+    Decision: guard fires before any LLM call to avoid paying API cost on
+    invalid input. from_offset == to_offset is allowed (insertion point).
+    """
+    if from_offset < 0 or to_offset < from_offset or to_offset > len(prose):
+        raise HTTPException(400, detail={"error": {"code": "offset_out_of_range"}})
+
+
+def _surrounding_context(prose: str, from_offset: int, to_offset: int) -> tuple[str, str]:
+    """~200 chars before and after the selection for LLM context.
+
+    Decision: truncate rather than fail — the LLM degrades gracefully on
+    shorter context whereas an error here blocks the whole feature.
+    """
+    before = prose[max(0, from_offset - 200): from_offset]
+    after = prose[to_offset: to_offset + 200]
+    return before, after
+
+
+def _append_pending_edit(cs: ContextStore, chapter_name: str, pe: PendingEdit) -> dict:
+    """Mutate cs.m5_writing in-place and mark the column dirty for SQLAlchemy.
+
+    Decision: flag_modified is required because SQLAlchemy cannot detect
+    mutations inside a nested dict assigned to a JSONB column by identity.
+    Returns the serialised edit dict so callers can return it directly.
+    """
+    m5 = cs.m5_writing or {}
+    chapters = m5.get("chapters") or {}
+    ch = chapters[chapter_name]
+    existing = ch.get("pending_edits") or []
+    edit_dict = pe.model_dump(mode="json")
+    ch["pending_edits"] = existing + [edit_dict]
+    chapters[chapter_name] = ch
+    m5["chapters"] = chapters
+    cs.m5_writing = m5
+    flag_modified(cs, "m5_writing")
+    return edit_dict
+
+
+def _load_chapter_or_404(cs: ContextStore, chapter_name: str) -> dict:
+    """Return the chapter dict or raise 404.
+
+    Decision: unknown chapter names (not in the allowed set) and undrafted
+    chapters (valid name but not yet written) both return 404 for the same
+    reason as PATCH — the caller must not be able to probe chapter existence
+    on projects they don't own.
+    """
+    if chapter_name not in _VALID_CHAPTER_NAMES:
+        raise HTTPException(404, detail={"error": {"code": "unknown_chapter"}})
+    chapters = ((cs.m5_writing or {}).get("chapters") or {}) if cs else {}
+    if chapter_name not in chapters:
+        raise HTTPException(404, detail={"error": {"code": "chapter_not_drafted"}})
+    return chapters[chapter_name]
+
+
+@router.post("/projects/{project_id}/m5/chapters/{chapter_name}/paraphrase")
+def paraphrase_chapter_selection(
+    project_id: uuid.UUID,
+    chapter_name: str,
+    body: ParaphraseBody,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """Paraphrase a text selection in a chapter and return a PendingEdit.
+
+    Decision: The endpoint creates a PendingEdit (not an accepted edit) so the
+    front-end can present an accept/reject ribbon before the prose is mutated.
+    The LLM receives ±200 chars of surrounding context to produce a paraphrase
+    that fits naturally into the surrounding prose.
+    """
+    _owned_project(db, user, project_id)
+    cs = db.get(ContextStore, project_id)
+    ch = _load_chapter_or_404(cs, chapter_name)
+    prose = ch.get("prose", "")
+    _validate_range(prose, body.from_offset, body.to_offset)
+    before, after = _surrounding_context(prose, body.from_offset, body.to_offset)
+    selection = prose[body.from_offset: body.to_offset]
+    language = ((cs.m1_topic or {}).get("language", "en")) if cs else "en"
+    new_text = paraphrase_selection.invoke({
+        "chapter_name": chapter_name,
+        "language": language,
+        "context_before": before,
+        "selection": selection,
+        "context_after": after,
+        "style": body.style,
+    })
+    pe = PendingEdit(
+        id=uuid4().hex,
+        chapter_name=chapter_name,
+        from_offset=body.from_offset,
+        to_offset=body.to_offset,
+        old_text=selection,
+        new_text=new_text,
+        source="paraphrase",
+        pending_at=datetime.now(timezone.utc),
+        metadata={"style": body.style} if body.style else {},
+    )
+    edit_dict = _append_pending_edit(cs, chapter_name, pe)
+    db.commit()
+    return edit_dict

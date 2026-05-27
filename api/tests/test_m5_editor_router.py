@@ -253,3 +253,95 @@ def test_get_references_returns_empty_when_no_m2(client):
     r = client.get(f"/api/v1/projects/{pid}/m5/references")
     assert r.status_code == 200
     assert r.json() == []
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{pid}/m5/chapters/{chapter_name}/paraphrase — inline AI
+# ---------------------------------------------------------------------------
+
+from unittest.mock import patch  # noqa: E402 — may already be imported at top via monkeypatch
+
+
+@patch("orchestrator.tools.m5_inline._call_llm")
+def test_paraphrase_creates_pending_edit(mock_llm, client):
+    """Mock the LLM, paraphrase a selection, verify PendingEdit landed in chapter.
+
+    Decision: the test overrides the default intro prose with a full sentence so
+    from_offset / to_offset can be computed deterministically via str.index().
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    mock_llm.return_value = "A growing body of work suggests"
+
+    # 1. Authenticate + create project + seed chapters
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    # 2. Overwrite the intro prose with the target sentence we'll select from
+    full_prose = "The literature is broad. Recent studies have shown that algo decisions matter."
+    target = "Recent studies have shown"
+    from_o = full_prose.index(target)
+    to_o = from_o + len(target)
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing["chapters"]["intro"]["prose"] = full_prose
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    # 3. POST paraphrase
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/paraphrase",
+        json={"from_offset": from_o, "to_offset": to_o, "style": "more formal"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    # 4. Response shape assertions
+    assert body["source"] == "paraphrase"
+    assert body["new_text"] == "A growing body of work suggests"
+    assert body["old_text"] == target
+    assert body["from_offset"] == from_o
+    assert body["to_offset"] == to_o
+
+    # 5. Verify PendingEdit persisted into ContextStore
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        pending = cs.m5_writing["chapters"]["intro"]["pending_edits"]
+        assert len(pending) == 1
+        assert pending[0]["source"] == "paraphrase"
+        assert pending[0]["new_text"] == "A growing body of work suggests"
+
+
+def test_paraphrase_404_unknown_chapter(client):
+    """POSTing to a chapter name that was never seeded returns 404.
+
+    Decision: _make_project_with_chapters seeds only intro + lit_review;
+    conclusion is absent so the endpoint should respond with 404.
+    """
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/conclusion/paraphrase",
+        json={"from_offset": 0, "to_offset": 5},
+    )
+    assert r.status_code == 404
+
+
+def test_paraphrase_offsets_out_of_range_returns_400(client):
+    """Offsets that exceed prose length return 400 with offset_out_of_range.
+
+    Decision: _make_project_with_chapters seeds intro with 'Hello world.' (12 chars).
+    to_offset=9999 is far past the end, so the validation guard must fire before
+    the LLM is called.
+    """
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/paraphrase",
+        json={"from_offset": 0, "to_offset": 9999},
+    )
+    assert r.status_code == 400
