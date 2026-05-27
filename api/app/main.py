@@ -65,9 +65,11 @@ def create_app() -> FastAPI:
 
     if settings.orchestrator_enabled:
         from .routers import chat as chat_router
+        from .routers import exports as exports_router  # SP6: M5 export download
         from .routers import runs as runs_router
         from .routers import uploads as uploads_router
         app.include_router(chat_router.router, prefix="/api/v1")
+        app.include_router(exports_router.router, prefix="/api/v1")  # SP6
         app.include_router(runs_router.router, prefix="/api/v1")
         app.include_router(uploads_router.router, prefix="/api/v1")
 

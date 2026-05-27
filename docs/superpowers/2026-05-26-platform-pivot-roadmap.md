@@ -36,7 +36,7 @@ The existing wizard (`web/(inapp)/wizard`) stays alive in parallel until the new
         ┌───────────────────────────┼──────────────────────────────┬─────────────┐
         │            │              │              │               │             │
         ▼            ▼              ▼              ▼               ▼             ▼
-    2. M2 chat✅ 3. M1 topic ✅ 4. M3 design ✅ 5. M4 analysis ✅ 6. M5 writing  7. New chat UI ✅
+    2. M2 chat✅ 3. M1 topic ✅ 4. M3 design ✅ 5. M4 analysis ✅ 6. M5 writing ✅ 7. New chat UI ✅
        (Lit       (card-grid    (multi-method  (data-type      (auto-fill      (Next.js)
         Review)    UX)          branches)       detection +    + editor)
                                                  parsers)
@@ -188,21 +188,33 @@ Sub-projects 2–6 are mostly independent and can be parallelized once #1 lands.
 
 ---
 
-## Sub-project 6 — M5 Writing & Finalization (auto-fill + new editor) ⬜
+## Sub-project 6 — M5 Writing & Finalization ✅
 
-**Status:** Not started
+**Status:** Shipped 2026-05-27 (branch `feat/sp6-m5-writing`; batch chapter compose + S3 export + NL rewrite)
 
-**Why later:** Sub-project 1 already wires M5 to existing `engine/phases/compose.py` + `engine/utils/docx_post_processor` so the auto-mode draft works end-to-end. This sub-project upgrades the **interactive** experience — section-by-section editing, paraphrase tools, citation manager.
+**Spec:** `docs/superpowers/specs/2026-05-27-sp6-m5-writing-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-27-sp6-m5-writing-plan.md`
 
-**Anticipated scope:**
-- WYSIWYG section editor (in the new chat UI) showing the composed draft + inline edit, paraphrase, translate, cite-insert affordances
-- New tools: `paraphrase_text(passage, style)`, `translate_passage(text, from, to)`, `insert_inline_citation(passage, ref)`
-- Citation manager UI: dedupe, format-switch (APA7 ↔ Vancouver ↔ Chicago), import from Zotero/Mendeley (Phase 3 of PRD roadmap)
-- Auto-fill engine: when M1-M4 are confirmed, M5 pre-fills every chapter (PRD §6.5.2 — adapts structure by `research_approach`)
+**Delivers:**
+- Single `M5Agent` batch-composes 6 chapters via paradigm-aware LLM prompts (`orchestrator/prompts/m5/<name>.md`); paradigm-branched Chapter 4 closes the SP5-deferred Braun & Clarke writeup
+- Per-chapter `AIMessage` emission via SP5's `extra_messages`; bibliography + summary as additional bubbles
+- NL keyword detection routes rewrites ("rewrite chapter 3 to be less formal") to `rewrite_chapter` LLM tool; `_identify_chapter` alias map covers en + chapter-number forms
+- Auto-export on affirmative confirm: `compile_pdf` + `export_docx` upload to S3 (mandatory for both interactive and auto-mode), `ExportArtifact` stores `s3_key` + `download_url`
+- New `GET /api/v1/projects/{id}/exports/{filename}` endpoint resolves s3_key → 5-min signed URL → 302 redirect
+- Inline citation validation: regex-scan prose for (Author, Year) patterns, flag uncited, append notice block
+- Subprocess refuses to start without `AWS_S3_BUCKET`
+- No frontend changes — chapters render as markdown bubbles in existing `MessageBubble`
 
-**Key questions:**
-- Editor library? (TipTap / Lexical / Slate — drives the rest of the frontend stack)
-- Do we keep `engine/utils/docx_post_processor` for export, or migrate to a Web-app-side renderer?
+**Decisions worth remembering for post-pivot work:**
+- Pure-LLM chapter composition via per-chapter prompts is the chat-native path; auto-mode goes through `_auto_fill` (one LLM call for the full payload) — both produce S3 artifacts via the same `compile_pdf`+`export_docx` tools
+- Citation validation as a regex post-pass (not LLM judging itself) gives auditable provenance
+- S3 keys (persistent) + relative `/api/v1/projects/{id}/exports/{filename}` URLs (resolved via endpoint → fresh signed URL on each request) — the right separation for shareable + secure artifact serving
+
+**Out of scope (deferred):**
+- WYSIWYG section editor, inline paraphrase / translate / cite tools → SP6.5
+- Citation Manager UI (style switching, Zotero/Mendeley) → SP6.6 / Phase 3
+- LaTeX / Google Docs export → Post-pivot
+- Slash commands (`/cite`, `/translate`, `/explain`) → Post-pivot
 
 ---
 
@@ -276,6 +288,7 @@ A short, append-only log of state changes. Update this when a sub-project moves 
 | 2026-05-27 | 3 | ⬜ → ✅ | M1 card-grid widgets shipped — widget infra + FieldPicker + ResearchTypePicker; pattern ready for SP4-SP6 |
 | 2026-05-27 | 4 | ⬜ → ✅ | M3 multi-method shipped — paradigm-aware agent + list_editor widget + 3 new qual tools |
 | 2026-05-27 | 5 | ⬜ → ✅ | M4 adaptive analysis shipped — paste-text parsers (SPSS+SmartPLS+lavaan+transcript) + per-step execution + ad-hoc + qual codes/themes |
+| 2026-05-27 | 6 | ⬜ → ✅ | M5 writing shipped — batch chapter compose + S3 export + NL rewrite; pivot COMPLETE (SP1-SP7 all ✅) |
 
 ---
 

@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import signal
 import sys
 import traceback
@@ -24,6 +25,15 @@ from typing import Any
 from uuid import UUID, uuid4
 
 logger = logging.getLogger("orchestrator")
+
+
+def _require_aws_s3_bucket():
+    """SP6: M5 export uploads to S3; refuse to start without a configured bucket."""
+    if not os.environ.get("AWS_S3_BUCKET"):
+        raise SystemExit(
+            "AWS_S3_BUCKET env var is required for M5 export artifacts. "
+            "Set it (e.g. AWS_S3_BUCKET=opendraft-dev) and re-run."
+        )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -94,6 +104,7 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     args = build_arg_parser().parse_args()
+    _require_aws_s3_bucket()
 
     workdir = Path(args.workdir)
     workdir.mkdir(parents=True, exist_ok=True)
@@ -146,17 +157,13 @@ def main() -> int:
         exports = {}
         if cs is not None and cs.m5_writing:
             for art in cs.m5_writing.get("export_artifacts", []):
-                exports[art["kind"]] = art["uri"]
+                # SP6: new field is download_url; fall back to uri for back-compat.
+                exports[art["kind"]] = art.get("download_url") or art.get("uri", "")
 
-        # Optionally upload to S3 if creds are present.
-        import os as _os
-        if exports and "S3_BUCKET" in _os.environ:
-            from engine.s3_for_jobs import s3_from_env, upload_artifacts
-            uploaded = upload_artifacts(
-                s3_from_env(), workdir,
-                f"users/{args.user_id}/projects/{args.project_id}/runs/{run_id}",
-            )
-            exports.update(uploaded)
+        # SP6: compile_pdf/export_docx already uploaded to S3 with the new
+        # mandatory single-code-path. The old optional secondary upload block
+        # (engine.s3_for_jobs) is dead; export URIs live in cs.m5_writing
+        # already.
 
         appender.write({"type": "job_done", "exports": exports})
         return 0

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from orchestrator.tools.m5_writing import (
-    compile_pdf, compose_section, export_docx, format_citations, validate_draft,
+    compile_bibliography, compile_pdf, compose_section, export_docx, format_citations, validate_draft,
 )
 
 
@@ -35,37 +35,58 @@ def test_validate_draft_returns_ok_when_no_issues(monkeypatch):
 
 
 def test_compile_pdf_writes_artifact(tmp_path, monkeypatch):
+    # SP6: compile_pdf now requires project_id and uploads to S3; mock s3 + engine.
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
     captured = {}
     def fake_compile(sections, output_path, **kw):
         captured["sections"] = sections
         captured["output_path"] = output_path
         Path(output_path).write_bytes(b"%PDF-1.4 fake")
         return output_path
-    monkeypatch.setattr(
-        "orchestrator.tools.m5_writing._compile_pdf_via_engine", fake_compile
-    )
+    monkeypatch.setattr(m5_writing, "_compile_pdf_via_engine", fake_compile)
     monkeypatch.setenv("ORCHESTRATOR_SCRATCH", str(tmp_path))
 
     out = compile_pdf.invoke({
         "sections": [{"name": "Ch.1", "text": "..."}],
+        "project_id": "proj-test",
     })
-    assert out.endswith(".pdf")
-    assert Path(out).exists()
+    # SP6: returns {s3_key, size_bytes} dict — not a plain string
+    assert out["s3_key"].startswith("projects/proj-test/exports/thesis-")
+    assert out["s3_key"].endswith(".pdf")
+    assert isinstance(out["size_bytes"], int)
+    assert fake_s3.put_object.call_count == 1
 
 
 def test_export_docx_writes_artifact(tmp_path, monkeypatch):
+    # SP6: export_docx now requires project_id and uploads to S3; mock s3 + engine.
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
     def fake_docx(sections, output_path, **kw):
         Path(output_path).write_bytes(b"PK\x03\x04 docx fake")
         return output_path
-    monkeypatch.setattr(
-        "orchestrator.tools.m5_writing._export_docx_via_engine", fake_docx
-    )
+    monkeypatch.setattr(m5_writing, "_export_docx_via_engine", fake_docx)
     monkeypatch.setenv("ORCHESTRATOR_SCRATCH", str(tmp_path))
+
     out = export_docx.invoke({
         "sections": [{"name": "Ch.1", "text": "..."}],
+        "project_id": "proj-test",
     })
-    assert out.endswith(".docx")
-    assert Path(out).exists()
+    # SP6: returns {s3_key, size_bytes} dict — not a plain string
+    assert out["s3_key"].startswith("projects/proj-test/exports/thesis-")
+    assert out["s3_key"].endswith(".docx")
+    assert isinstance(out["size_bytes"], int)
+    assert fake_s3.put_object.call_count == 1
 
 
 def test_format_citations_apa(monkeypatch):
@@ -79,3 +100,288 @@ def test_format_citations_apa(monkeypatch):
         "style": "apa7",
     })
     assert "Wang" in out
+
+
+def test_s3_from_env_returns_boto3_client(monkeypatch):
+    """The factory should return a boto3 S3 client built from env vars."""
+    from orchestrator.tools.m5_writing import s3_from_env
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    monkeypatch.setenv("AWS_ACCESS_KEY", "fake-key")
+    monkeypatch.setenv("AWS_SECRET_KEY", "fake-secret")
+    client = s3_from_env()
+    assert hasattr(client, "put_object")
+    assert hasattr(client, "generate_presigned_url")
+
+
+def test_upload_to_s3_writes_correct_key_and_deletes_local(tmp_path, monkeypatch):
+    """_upload_to_s3 uploads to projects/{id}/exports/{filename} and deletes local file."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
+    local = tmp_path / "thesis-abc123.docx"
+    local.write_bytes(b"fake docx content")
+
+    # _upload_to_s3 now returns (s3_key, size_bytes) tuple — unpack both.
+    s3_key, size_bytes = m5_writing._upload_to_s3(
+        str(local), project_id="proj-xyz", kind="docx", filename="thesis-abc123.docx",
+    )
+    assert s3_key == "projects/proj-xyz/exports/thesis-abc123.docx"
+    assert size_bytes == len(b"fake docx content")
+    call = fake_s3.put_object.call_args
+    assert call.kwargs["Bucket"] == "test-bucket"
+    assert call.kwargs["Key"] == "projects/proj-xyz/exports/thesis-abc123.docx"
+    assert call.kwargs["ContentType"].startswith("application/vnd.openxmlformats")
+    assert call.kwargs["Body"] == b"fake docx content"
+    assert not local.exists()  # local file deleted
+
+
+def test_upload_to_s3_pdf_content_type(tmp_path, monkeypatch):
+    """PDF gets the right content type."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
+    local = tmp_path / "thesis-x.pdf"
+    local.write_bytes(b"%PDF-1.4")
+    m5_writing._upload_to_s3(str(local), "p", "pdf", "thesis-x.pdf")
+    assert fake_s3.put_object.call_args.kwargs["ContentType"] == "application/pdf"
+
+
+def test_compile_pdf_uploads_to_s3_and_returns_key(monkeypatch):
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
+    def fake_compile_via_engine(sections, output_path, **kw):
+        Path(output_path).write_bytes(b"%PDF-1.4\nfake")
+        return output_path
+    monkeypatch.setattr(m5_writing, "_compile_pdf_via_engine", fake_compile_via_engine)
+
+    # compile_pdf now returns {s3_key, size_bytes} dict — not a plain string.
+    result = m5_writing.compile_pdf.invoke({
+        "sections": [{"name": "intro", "text": "x"}],
+        "project_id": "proj-xyz",
+    })
+    assert result["s3_key"].startswith("projects/proj-xyz/exports/thesis-")
+    assert result["s3_key"].endswith(".pdf")
+    assert result["size_bytes"] == len(b"%PDF-1.4\nfake")
+    assert fake_s3.put_object.call_count == 1
+
+
+def test_export_docx_uploads_to_s3_and_returns_key(monkeypatch):
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
+    def fake_export_via_engine(sections, output_path, **kw):
+        Path(output_path).write_bytes(b"PK\x03\x04 fake docx")
+        return output_path
+    monkeypatch.setattr(m5_writing, "_export_docx_via_engine", fake_export_via_engine)
+
+    # export_docx now returns {s3_key, size_bytes} dict — not a plain string.
+    result = m5_writing.export_docx.invoke({
+        "sections": [{"name": "intro", "text": "x"}],
+        "project_id": "proj-xyz",
+    })
+    assert result["s3_key"].startswith("projects/proj-xyz/exports/thesis-")
+    assert result["s3_key"].endswith(".docx")
+    assert result["size_bytes"] == len(b"PK\x03\x04 fake docx")
+
+
+def test_compile_pdf_raises_without_project_id():
+    from orchestrator.tools.m5_writing import compile_pdf
+    with pytest.raises(ValueError, match="project_id"):
+        compile_pdf.invoke({"sections": [], "project_id": ""})
+
+
+def test_export_docx_raises_without_project_id():
+    from orchestrator.tools.m5_writing import export_docx
+    with pytest.raises(ValueError, match="project_id"):
+        export_docx.invoke({"sections": [], "project_id": ""})
+
+
+def test_validate_citations_matches_pool():
+    from orchestrator.tools.m5_writing import validate_citations
+    prose = "Bass (1990) found... Later researchers confirmed (Avolio et al., 2009) that..."
+    references = [
+        {"author": "Bass", "year": 1990, "title": "Leadership"},
+        {"author": "Avolio et al.", "year": 2009, "title": "Trans. leadership"},
+    ]
+    cited, uncited = validate_citations(prose, references)
+    # The regex matches "(Author, Year)" — "Bass (1990)" is NOT in that shape;
+    # only "(Avolio et al., 2009)" matches.
+    assert "Avolio et al., 2009" in cited
+    assert uncited == []
+
+
+def test_validate_citations_flags_uncited():
+    from orchestrator.tools.m5_writing import validate_citations
+    prose = "Some studies (Smith, 2023) claim X. Others (Bass, 1990) agree."
+    references = [
+        {"author": "Bass", "year": 1990, "title": "Leadership"},
+    ]
+    cited, uncited = validate_citations(prose, references)
+    assert cited == ["Bass, 1990"]
+    assert uncited == ["Smith, 2023"]
+
+
+def test_validate_citations_empty_prose():
+    from orchestrator.tools.m5_writing import validate_citations
+    cited, uncited = validate_citations("", [])
+    assert cited == []
+    assert uncited == []
+
+
+def test_validate_citations_deduplicates():
+    from orchestrator.tools.m5_writing import validate_citations
+    prose = "(Bass, 1990) said X. Later (Bass, 1990) also said Y."
+    references = [{"author": "Bass", "year": 1990}]
+    cited, uncited = validate_citations(prose, references)
+    assert cited == ["Bass, 1990"]  # de-duplicated
+
+
+def test_compile_bibliography_formats_references():
+    from orchestrator.tools.m5_writing import compile_bibliography
+    refs = [
+        {"author": "Bass", "year": 1990, "title": "Transformational leadership"},
+        {"author": "Avolio et al.", "year": 2009, "title": "Authentic leadership"},
+    ]
+    out = compile_bibliography.invoke({"references": refs, "citation_style": "apa7"})
+    assert "Bass" in out
+    assert "1990" in out
+    assert "Avolio" in out
+
+
+def test_compile_bibliography_empty_references():
+    from orchestrator.tools.m5_writing import compile_bibliography
+    out = compile_bibliography.invoke({"references": [], "citation_style": "apa7"})
+    assert "No references" in out
+
+
+def test_compose_chapter_returns_chapter_draft_shape(monkeypatch):
+    """compose_chapter calls the LLM with a chapter prompt + returns ChapterDraft dict."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = (
+        "# Introduction\n\nThis is a draft intro citing (Bass, 1990).\n"
+    )
+    monkeypatch.setattr(m5_writing, "_get_llm", lambda: fake_llm)
+
+    refs = [{"author": "Bass", "year": 1990, "title": "Leadership"}]
+    out = m5_writing.compose_chapter.invoke({
+        "chapter_name": "intro",
+        "paradigm": "quantitative",
+        "context_slice": {
+            "research_title": "Leadership and Engagement",
+            "field": "Management", "paradigm": "quantitative",
+            "research_type": "quantitative",
+            "objectives": ["O1"], "research_questions": ["RQ1"],
+            "target_population": "SME employees", "scope": "VN, 2026",
+        },
+        "references": refs,
+        "citation_style": "apa7",
+        "language": "en",
+    })
+    assert out["name"] == "intro"
+    assert out["prose"].startswith("# Introduction")
+    assert "Bass, 1990" in out["citations_used"]
+    assert out["uncited_warnings"] == []
+
+
+def test_compose_chapter_flags_uncited(monkeypatch):
+    """When the LLM cites a reference NOT in the pool, it's flagged."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = (
+        "Some studies (Smith, 2023) suggest X. Others (Bass, 1990) agree.\n"
+    )
+    monkeypatch.setattr(m5_writing, "_get_llm", lambda: fake_llm)
+
+    refs = [{"author": "Bass", "year": 1990}]
+    out = m5_writing.compose_chapter.invoke({
+        "chapter_name": "intro",
+        "paradigm": "quantitative",
+        "context_slice": {"research_title": "x", "objectives": []},
+        "references": refs,
+        "citation_style": "apa7", "language": "en",
+    })
+    assert "Bass, 1990" in out["citations_used"]
+    assert "Smith, 2023" in out["uncited_warnings"]
+    assert "uncited" in out["prose"].lower() or "⚠️" in out["prose"]
+
+
+def test_compose_chapter_falls_back_on_llm_error(monkeypatch):
+    """compose_chapter survives an LLM exception with a placeholder prose."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.side_effect = RuntimeError("API down")
+    monkeypatch.setattr(m5_writing, "_get_llm", lambda: fake_llm)
+
+    out = m5_writing.compose_chapter.invoke({
+        "chapter_name": "intro",
+        "paradigm": "quantitative",
+        "context_slice": {"research_title": "x", "objectives": []},
+        "references": [],
+        "citation_style": "apa7", "language": "en",
+    })
+    assert out["name"] == "intro"
+    assert "Composition failed" in out["prose"] or "[Composition failed" in out["prose"]
+
+
+def test_rewrite_chapter_returns_new_draft(monkeypatch):
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "Less formal intro version here.\n"
+    monkeypatch.setattr(m5_writing, "_get_llm", lambda: fake_llm)
+
+    out = m5_writing.rewrite_chapter.invoke({
+        "chapter_name": "intro",
+        "current_prose": "# Introduction\n\nFormal intro.",
+        "instruction": "rewrite to be less formal",
+        "context_slice": {"research_title": "x", "objectives": []},
+        "references": [],
+        "language": "en",
+    })
+    assert out["name"] == "intro"
+    assert "Less formal" in out["prose"]
+
+
+def test_rewrite_chapter_falls_back_on_llm_error(monkeypatch):
+    """If the LLM errors, return the original prose unchanged (don't lose work)."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.side_effect = RuntimeError("API down")
+    monkeypatch.setattr(m5_writing, "_get_llm", lambda: fake_llm)
+
+    original = "# Original prose"
+    out = m5_writing.rewrite_chapter.invoke({
+        "chapter_name": "intro",
+        "current_prose": original,
+        "instruction": "any",
+        "context_slice": {"research_title": "x", "objectives": []},
+        "references": [], "language": "en",
+    })
+    assert out["prose"] == original  # unchanged on failure
