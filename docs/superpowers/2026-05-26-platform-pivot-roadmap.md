@@ -36,7 +36,7 @@ The existing wizard (`web/(inapp)/wizard`) stays alive in parallel until the new
         ┌───────────────────────────┼──────────────────────────────┬─────────────┐
         │            │              │              │               │             │
         ▼            ▼              ▼              ▼               ▼             ▼
-    2. M2 chat✅ 3. M1 topic ✅ 4. M3 design ✅ 5. M4 analysis  6. M5 writing  7. New chat UI ✅
+    2. M2 chat✅ 3. M1 topic ✅ 4. M3 design ✅ 5. M4 analysis ✅ 6. M5 writing  7. New chat UI ✅
        (Lit       (card-grid    (multi-method  (data-type      (auto-fill      (Next.js)
         Review)    UX)          branches)       detection +    + editor)
                                                  parsers)
@@ -157,26 +157,34 @@ Sub-projects 2–6 are mostly independent and can be parallelized once #1 lands.
 
 ---
 
-## Sub-project 5 — M4 Adaptive Analysis ⬜
+## Sub-project 5 — M4 Adaptive Analysis ✅
 
-**Status:** Not started
+**Status:** Shipped 2026-05-27 (branch `feat/sp5-m4-analysis`; paste-text parsers + per-step execution + ad-hoc analysis + qual codes/themes)
 
-**Why hardest:** This is the highest-effort sub-project by far. Sub-project 1 ships M4 as stubs (`run_analysis_step` returns a placeholder). This sub-project replaces those stubs with real parsers for SPSS / SmartPLS / CB-SEM (AMOS / R lavaan) / NVivo / Atlas.ti / manual transcripts, plus the chat-triggered ad-hoc analysis (PRD §6.4.6).
+**Spec:** `docs/superpowers/specs/2026-05-27-sp5-m4-analysis-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-27-sp5-m4-analysis-plan.md`
 
-**Anticipated scope:**
-- File format parsers:
-  - SPSS `.spv` (XML), `.sav` (read via `pyreadstat`), copy-paste of SPSS output (regex over text)
-  - SmartPLS HTML reports (BeautifulSoup-based)
-  - R lavaan console output (regex over fit indices)
-  - NVivo / Atlas.ti exports (XLSX/DOCX)
-  - Raw transcript files (TXT/DOCX) → coding pipeline
-- Outline templates from PRD §6.4.3 (outlines A–E) become Pydantic schemas with editable steps
-- Chat-triggered ad-hoc analysis: `/run-extra <step>` command flow + tool calls
-- Initial coding pipeline for qualitative data (line-by-line code suggestion + theme clustering)
+**Delivers:**
+- Single `M4Agent` with outline-type-aware `_FIELDS_BY_OUTLINE_TYPE` walk driven by `m3_design.tool` (SPSS / SmartPLS / CB-SEM / Qualitative / Mixed / Unknown)
+- Real per-format paste-text parsers: SPSS (Cronbach + regression), SmartPLS (loadings + AVE/CR + paths + HTMT), R lavaan (CFA fit indices), transcript (qual codes + themes via LLM)
+- Hybrid regex-first / LLM-fallback / stub extraction; the `StepResult.parser` field records the source for audit
+- Per-step `AIMessage` emission via new `ModuleStepResult.extra_messages` (graph node forwards them; chat router's SSE loop already handles N messages per LangGraph update)
+- Natural-language ad-hoc analysis detection (keyword heuristic) routes to `run_extra_analysis` + appends to `M4Output.custom_analyses`
+- 2-step qual pipeline (codes → themes); writeup deferred to M5
+- Frontend extension: 3 new `summarizeList` cases for outline fields; reuses SP4's `list_editor` widget unchanged
 
-**Out of scope:** NVivo/Atlas.ti file format support beyond Excel/Word exports; live SPSS execution (we read existing output, don't run SPSS ourselves).
+**Decisions worth remembering for SP6:**
+- Multi-message-per-update via `extra_messages` is a clean additive change that other modules can use
+- The hybrid parser pattern (regex + LLM fallback + stub) is reusable for other "extract structured data from messy text" needs
+- The `parser` field on result records (`regex` / `llm_fallback` / `stub`) is critical for audit trails and threshold-confidence
 
-**Risks:** Parser fragility against vendor format updates. May need a `parser_version` field per data type and version-gated parsing logic.
+**Out of scope (deferred):**
+- File uploads (`.sav`, `.spv`, `.xlsx`) → SP5.5 reuses SP2's upload subsystem
+- Stata `.log`, NVivo XLSX, Atlas.ti exports → SP5.5
+- CB-SEM full 8-step rigor → refinement once SmartPLS is stable
+- `result_card` widget variant + per-step rerun buttons → optional SP5.5
+- Slash-command `/run-extra` → optional post-V1
+- Braun & Clarke writeup step → SP6 (M5 Writing owns Chapter 4 composition)
 
 ---
 
@@ -267,6 +275,7 @@ A short, append-only log of state changes. Update this when a sub-project moves 
 | 2026-05-27 | 7 | ⬜ → ✅ | Chat UI shell shipped (no module-specific widgets yet); SP3-SP6 will plug widgets into this shell |
 | 2026-05-27 | 3 | ⬜ → ✅ | M1 card-grid widgets shipped — widget infra + FieldPicker + ResearchTypePicker; pattern ready for SP4-SP6 |
 | 2026-05-27 | 4 | ⬜ → ✅ | M3 multi-method shipped — paradigm-aware agent + list_editor widget + 3 new qual tools |
+| 2026-05-27 | 5 | ⬜ → ✅ | M4 adaptive analysis shipped — paste-text parsers (SPSS+SmartPLS+lavaan+transcript) + per-step execution + ad-hoc + qual codes/themes |
 
 ---
 
