@@ -337,3 +337,43 @@ def test_compose_chapter_falls_back_on_llm_error(monkeypatch):
     })
     assert out["name"] == "intro"
     assert "Composition failed" in out["prose"] or "[Composition failed" in out["prose"]
+
+
+def test_rewrite_chapter_returns_new_draft(monkeypatch):
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "Less formal intro version here.\n"
+    monkeypatch.setattr(m5_writing, "_get_llm", lambda: fake_llm)
+
+    out = m5_writing.rewrite_chapter.invoke({
+        "chapter_name": "intro",
+        "current_prose": "# Introduction\n\nFormal intro.",
+        "instruction": "rewrite to be less formal",
+        "context_slice": {"research_title": "x", "objectives": []},
+        "references": [],
+        "language": "en",
+    })
+    assert out["name"] == "intro"
+    assert "Less formal" in out["prose"]
+
+
+def test_rewrite_chapter_falls_back_on_llm_error(monkeypatch):
+    """If the LLM errors, return the original prose unchanged (don't lose work)."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.side_effect = RuntimeError("API down")
+    monkeypatch.setattr(m5_writing, "_get_llm", lambda: fake_llm)
+
+    original = "# Original prose"
+    out = m5_writing.rewrite_chapter.invoke({
+        "chapter_name": "intro",
+        "current_prose": original,
+        "instruction": "any",
+        "context_slice": {"research_title": "x", "objectives": []},
+        "references": [], "language": "en",
+    })
+    assert out["prose"] == original  # unchanged on failure

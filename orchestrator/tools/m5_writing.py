@@ -377,3 +377,65 @@ def compose_chapter(
         "citations_used": cited_in_pool,
         "uncited_warnings": uncited,
     }
+
+
+@tool
+def rewrite_chapter(
+    chapter_name: str, current_prose: str, instruction: str,
+    context_slice: dict, references: list[dict], language: str,
+) -> dict:
+    """Rewrite one chapter per user instruction. Returns new ChapterDraft dict.
+
+    Used when the user says e.g. "rewrite the intro to be less formal".
+    Same prompt template as compose_chapter + the instruction + current prose
+    as anchor. On LLM error, returns the original prose unchanged.
+    """
+    # Decision: load the same chapter prompt template as compose_chapter so the
+    # rewrite stays grounded in the chapter's structural requirements, then
+    # append the user's instruction and existing prose as a rewrite anchor.
+    prompt_template = (_PROMPT_DIR / f"{chapter_name}.md").read_text()
+    refs_block = _format_references_for_prompt(references)
+    safe_kwargs = _safe_format_kwargs(context_slice)
+    safe_kwargs.setdefault("paradigm", context_slice.get("paradigm", "quantitative"))
+    safe_kwargs.setdefault("language", language)
+    safe_kwargs.setdefault("citation_style", "apa7")
+    safe_kwargs["references_list"] = refs_block
+    expected_keys = (
+        "research_title", "field", "paradigm", "research_type",
+        "objectives", "research_questions", "target_population", "scope",
+        "literature_review_doc", "research_gaps",
+        "design", "tool", "conceptual_model", "scale_items",
+        "themes", "interview_guide", "purposive_criteria",
+        "sampling_strategy", "target_sample_size", "mixed_design_type",
+        "data_type_detected", "results", "qual_codes", "qual_themes",
+        "custom_analyses",
+        "language", "citation_style", "references_list",
+    )
+    for k in expected_keys:
+        safe_kwargs.setdefault(k, "")
+
+    try:
+        base_prompt = prompt_template.format(**safe_kwargs)
+        rewrite_prompt = (
+            f"{base_prompt}\n\n"
+            f"## User rewrite instruction\n{instruction}\n\n"
+            f"## Current chapter prose (rewrite based on the instruction; preserve good content):\n"
+            f"{current_prose}\n\n"
+            f"Output ONLY the rewritten chapter prose."
+        )
+        prose = _get_llm().invoke(rewrite_prompt).content.strip()
+    except Exception as e:
+        # Decision: on any LLM failure, return the original prose unchanged so
+        # the user never loses work they've already reviewed or produced.
+        logger.warning("rewrite_chapter LLM call failed for %s: %s", chapter_name, e)
+        prose = current_prose  # unchanged on failure
+
+    cited_in_pool, uncited = validate_citations(prose, references)
+    if uncited:
+        prose = _annotate_uncited(prose, uncited)
+    return {
+        "name": chapter_name,
+        "prose": prose,
+        "citations_used": cited_in_pool,
+        "uncited_warnings": uncited,
+    }
