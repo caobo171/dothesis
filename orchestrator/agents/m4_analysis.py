@@ -147,7 +147,13 @@ class M4Agent(ModuleAgent):
         # Ad-hoc detection: if execution is done and the latest user message
         # looks like an extra-analysis request, route to run_extra_analysis
         # before the base class's confirm flow takes over.
-        if partial.get("_run_execution_done") or partial.get("_run_qual_pipeline_done"):
+        # SP5 final-review fix: only route to ad-hoc when NOT awaiting confirm,
+        # so "yes, also run ..." gets handled by the confirm path (it transitions)
+        # rather than being treated as an ad-hoc request.
+        if (
+            (partial.get("_run_execution_done") or partial.get("_run_qual_pipeline_done"))
+            and not partial.get("_awaiting_confirm")
+        ):
             if self._is_ad_hoc_request(state["messages"]):
                 return self._handle_ad_hoc(state, partial)
 
@@ -175,10 +181,17 @@ class M4Agent(ModuleAgent):
         extra: list = []
         for section in sections:
             step_name = section["name"]
+            # SP5 fix: in mixed mode, quant paste is in data_paste_quant (not data_paste).
+            # Read from partial directly, falling back to cache for non-mixed flows.
+            paste = (
+                partial.get("data_paste_quant")
+                or partial.get("data_paste")
+                or self._render_paste_text
+            )
             sr = run_analysis_step.invoke({
                 "step_name": step_name,
                 "data": {
-                    "paste": self._render_paste_text,
+                    "paste": paste,
                     "data_type": self._render_outline_type or "Unknown",
                 },
             })
@@ -186,6 +199,7 @@ class M4Agent(ModuleAgent):
             extra.append(AIMessage(content=format_step_as_markdown(sr)))
         partial["results"] = results
         partial["_run_execution_done"] = True
+        partial["_summary_done"] = True  # SP5 fix: summary message IS the summary step; advance it now
         partial["_awaiting_confirm"] = True
         summary = self._build_execution_summary(results)
         return ModuleStepResult(
@@ -205,11 +219,19 @@ class M4Agent(ModuleAgent):
         from langchain_core.messages import AIMessage
         from orchestrator.agents.base import ModuleStepResult
 
-        codes = suggest_qual_codes.invoke({"transcript": self._render_paste_text})
+        # SP5 fix: in mixed mode, qual paste is in data_paste_qual (not data_paste).
+        # Read from partial directly, falling back to cache for non-mixed flows.
+        transcript = (
+            partial.get("data_paste_qual")
+            or partial.get("data_paste")
+            or self._render_paste_text
+        )
+        codes = suggest_qual_codes.invoke({"transcript": transcript})
         themes = cluster_codes_into_themes.invoke({"codes": codes})
         partial["qual_codes"] = codes
         partial["qual_themes"] = themes
         partial["_run_qual_pipeline_done"] = True
+        partial["_summary_done"] = True  # SP5 fix: summary message IS the summary step; advance it now
         partial["_awaiting_confirm"] = True
 
         code_msg = self._format_qual_codes_markdown(codes)
@@ -323,7 +345,14 @@ class M4Agent(ModuleAgent):
             if field_name == "outline_qual":
                 template_key = "Qualitative"
             elif field_name == "outline_quant":
-                template_key = "SmartPLS"
+                # SP5 fix: for mixed, prefer the user's actual quant tool resolved from
+                # m3.tool. Default to SmartPLS if unknown (most common for
+                # publishable mixed-methods studies).
+                resolved = self._render_outline_type
+                if resolved in ("SPSS", "SmartPLS", "CB-SEM"):
+                    template_key = resolved
+                else:
+                    template_key = "SmartPLS"
             else:
                 template_key = self._render_outline_type or "SPSS"
             sections = self._AGENT_OUTLINE_TEMPLATES.get(
