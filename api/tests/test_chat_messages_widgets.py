@@ -146,3 +146,46 @@ def test_stream_emits_list_editor_tool_calls_event(client, monkeypatch):
         assert assistants
         assert assistants[-1].tool_calls_json["widget_type"] == "list_editor"
         assert assistants[-1].tool_calls_json["field_name"] == "themes"
+
+
+def test_stream_emits_analysis_outline_tool_calls_event(client, monkeypatch):
+    """SP5 contract test — the SP3 router forwards analysis_outline list_editor
+    payloads through the SSE stream and persistence path. No router changes."""
+    pid, tid = _setup(client)
+
+    from langchain_core.messages import AIMessage
+    ai = AIMessage(content="Pick your outline")
+    ai.additional_kwargs["tool_calls_json"] = {
+        "widget_type": "list_editor",
+        "field_name": "analysis_outline",
+        "title": "SPSS analysis outline",
+        "initial_items": [
+            {"id": "s0", "text": "Descriptive Statistics", "sub_items": [], "meta": {"thresholds": ""}},
+            {"id": "s1", "text": "Reliability (Cronbach's Alpha)", "sub_items": [],
+             "meta": {"thresholds": "α ≥ 0.7"}},
+        ],
+        "allow_nested": False,
+        "confirm_label": "Confirm", "reset_label": "Reset to suggested",
+    }
+
+    fake_graph = MagicMock()
+    fake_graph.astream.return_value = _async_iter([
+        {"M4": {"messages": [ai]}},
+    ])
+    monkeypatch.setattr(
+        "orchestrator.graph.get_interactive_graph", lambda: fake_graph
+    )
+
+    resp = client.post(f"/api/v1/threads/{tid}/messages", json={"text": "go"})
+    assert resp.status_code == 200
+    body = resp.text
+    assert '"type": "tool_calls"' in body or '"type":"tool_calls"' in body
+    assert "list_editor" in body
+    assert "analysis_outline" in body
+    assert "Reliability" in body
+
+    sf = get_session_factory()
+    with sf() as db:
+        assistants = db.query(Message).filter_by(thread_id=tid, role="assistant").all()
+        assert assistants
+        assert assistants[-1].tool_calls_json["field_name"] == "analysis_outline"

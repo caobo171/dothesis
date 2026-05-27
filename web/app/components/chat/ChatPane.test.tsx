@@ -173,4 +173,53 @@ describe("ChatPane list_editor integration", () => {
     expect(capturedBody?.text).toContain("Cách thức lãnh đạo");
     expect(capturedBody?.text).toContain("(Sub: Tầm nhìn)");
   });
+
+  test("clicking Confirm on an analysis_outline list_editor synthesizes POST body", async () => {
+    let capturedBody: { text?: string } | null = null;
+    server.use(
+      http.get("/api/v1/projects/p1", () => HttpResponse.json({
+        name: "Test Project",
+        context_store: { m1_topic: null },
+      })),
+      http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+      http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({ run: null })),
+      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([
+        {
+          id: 1,
+          role: "assistant",
+          content: "Confirm the outline below",
+          created_at: "2026-05-27T00:00:00Z",
+          tool_calls_json: {
+            widget_type: "list_editor",
+            field_name: "analysis_outline",
+            title: "SPSS outline",
+            initial_items: [
+              { id: "s0", text: "Descriptive Statistics", sub_items: [], meta: {} },
+              { id: "s1", text: "Reliability (Cronbach's Alpha)", sub_items: [],
+                meta: { thresholds: "α ≥ 0.7" } },
+            ],
+            allow_nested: false,
+            confirm_label: "Confirm", reset_label: "Reset to suggested",
+          },
+        },
+      ])),
+      http.post("/api/v1/threads/t1/messages", async ({ request }) => {
+        capturedBody = await request.json() as { text?: string };
+        return streamResponse([
+          'data: {"type":"token","text":"Running..."}\n\n',
+          'data: {"type":"done"}\n\n',
+        ]);
+      }),
+    );
+
+    renderFresh(<ChatPane projectId="p1" threadId="t1" />);
+
+    await waitFor(() => expect(screen.getByTestId("list-editor-analysis_outline")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("list-editor-confirm"));
+
+    await waitFor(() => expect(capturedBody?.text).toContain("My analysis outline:"));
+    expect(capturedBody?.text).toContain("1. Descriptive Statistics");
+    expect(capturedBody?.text).toContain("2. Reliability (Cronbach's Alpha) — α ≥ 0.7");
+  });
 });

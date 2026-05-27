@@ -1,0 +1,21 @@
+Coefficients
+
+Model        Unstandardized B    Std. Error    Standardized Beta    t        Sig.
+(Constant)   1.234               .312                                3.954    .000
+TL           .452                .078          .421                  5.795    .000
+Trust        .328                .089          .305                  3.685    .000
+
+Model Summary
+R       R Square    Adjusted R Square    Std. Error of the Estimate
+.712    .507        .502                  .58432
+
+ANOVA
+                 Sum of Squares    df      Mean Square    F        Sig.
+Regression       102.345            2       51.173          149.93   .000
+Residual         99.755             292     .342
+Total            202.100            294
+
+Collinearity Statistics
+                 Tolerance    VIF
+TL               .842         1.188
+Trust            .842         1.188

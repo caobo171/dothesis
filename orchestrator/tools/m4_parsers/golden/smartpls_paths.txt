@@ -1,0 +1,19 @@
+Path Coefficients
+
+                    Original Sample (O)    T Statistics (|O/STDEV|)    P Values
+TL -> EE            0.452                  6.234                       0.000
+TL -> Trust         0.380                  4.987                       0.000
+Trust -> EE         0.298                  3.451                       0.001
+
+R Square
+
+           R Square    R Square Adjusted
+EE         0.527        0.520
+Trust      0.144        0.140
+
+Heterotrait-Monotrait Ratio (HTMT)
+
+           TL        EE        Trust
+TL
+EE         0.625
+Trust      0.582     0.501

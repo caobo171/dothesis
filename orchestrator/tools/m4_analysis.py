@@ -15,6 +15,9 @@ from typing import Literal
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from orchestrator.tools.m4_parsers import dispatch_parse
+from orchestrator.tools.m4_parsers.llm_fallback import extract_step_data
+
 logger = logging.getLogger(__name__)
 
 DataType = Literal["SPSS", "SmartPLS", "CB-SEM", "Qualitative", "Mixed", "Unknown"]
@@ -115,13 +118,32 @@ def generate_analysis_outline(data_type: str, methodology: dict | None = None) -
 
 @tool
 def run_analysis_step(step_name: str, data: dict) -> dict:
-    """Sub-project 1 stub: returns a placeholder result for the named step.
+    """SP5: parse one outline step from the user's pasted analysis output.
 
-    A later sub-project will replace this with real SPSS/SmartPLS parsing.
-    The stub contract (keys: step, summary, raw) is stable so callers can
-    integrate against it today without blocking on parser completion.
+    Hybrid extraction: regex-first via dispatch_parse, LLM fallback on miss,
+    stub StepResult on both miss. The returned dict's `parser` field records
+    the source path so M5 and audit logs can distinguish regex from LLM
+    extraction.
     """
-    return {"step": step_name, "summary": f"Stub result for {step_name}", "raw": data}
+    # SP5 replaces the SP1 stub — dispatch_parse handles regex + LLM fallback
+    # internally; we only need to handle the case where both fail (None return).
+    text = data.get("paste", "")
+    data_type = data.get("data_type", "Unknown")
+    result = dispatch_parse(data_type, text, step_name)
+    if result is not None:
+        return result
+    # Both regex and LLM fallback failed — return a stub so the walk continues.
+    return {
+        "step_name": step_name,
+        "table": [],
+        "thresholds_met": None,
+        "interpretation": (
+            "(unable to parse this step from the paste; please paste this step's "
+            "output separately or describe the result)"
+        ),
+        "raw_paste_excerpt": text[:200],
+        "parser": "stub",
+    }
 
 
 @tool
@@ -140,3 +162,27 @@ def interpret_result(result: dict, language: str = "en") -> str:
         f"Mention thresholds where relevant.\n\nResult: {json.dumps(result, default=str)}"
     )
     return llm.invoke(prompt).content.strip()
+
+
+@tool
+def run_extra_analysis(step_description: str, data_paste: str) -> dict:
+    """SP5: ad-hoc analysis requested via natural language (PRD §6.4.6).
+
+    Routes to the LLM extractor with the user's free-text step description.
+    The caller (M4Agent) appends the result to M4Output.custom_analyses.
+    """
+    # Delegate to the LLM extractor; step_description becomes the step_name so
+    # the result is identifiable in M4Output.custom_analyses.
+    result = extract_step_data.invoke({
+        "text": data_paste,
+        "step_name": step_description,
+        "data_type": "AdHoc",
+    })
+    if result is None:
+        return {
+            "step_name": step_description,
+            "table": [],
+            "interpretation": "(unable to perform this ad-hoc analysis from the paste)",
+            "parser": "stub",
+        }
+    return result

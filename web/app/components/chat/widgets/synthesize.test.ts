@@ -92,3 +92,37 @@ describe("summarizeList", () => {
     expect(out).toContain("- anything");
   });
 });
+
+describe("summarizeList — SP5 analysis outline fields", () => {
+  const outlineItems: ListItem[] = [
+    { id: "s0", text: "Descriptive Statistics", meta: {} },
+    { id: "s1", text: "Reliability (Cronbach's Alpha)", meta: { thresholds: "α ≥ 0.7" } },
+    { id: "s2", text: "Regression Analysis", meta: { thresholds: "VIF < 10" } },
+  ];
+
+  test("analysis_outline produces numbered list with thresholds", () => {
+    const out = summarizeList(outlineItems, "analysis_outline");
+    expect(out).toContain("My analysis outline:");
+    expect(out).toContain("1. Descriptive Statistics");
+    expect(out).toContain("2. Reliability (Cronbach's Alpha) — α ≥ 0.7");
+    expect(out).toContain("3. Regression Analysis — VIF < 10");
+  });
+
+  test("outline_quant uses the same format", () => {
+    const out = summarizeList(outlineItems, "outline_quant");
+    expect(out).toContain("My analysis outline:");
+    expect(out).toContain("1. Descriptive Statistics");
+  });
+
+  test("outline_qual uses the same format", () => {
+    const out = summarizeList(outlineItems, "outline_qual");
+    expect(out).toContain("My analysis outline:");
+  });
+
+  test("steps without thresholds omit the em-dash", () => {
+    const items: ListItem[] = [{ id: "s0", text: "Step One", meta: {} }];
+    const out = summarizeList(items, "analysis_outline");
+    expect(out).toContain("1. Step One");
+    expect(out).not.toContain("Step One —");
+  });
+});

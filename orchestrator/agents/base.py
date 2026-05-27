@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from abc import ABC
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -25,7 +25,11 @@ class ModuleStepResult:
     context_patch: dict
     transition: bool                 # True → done; supervisor takes over
     needs_user_reply: bool = False
-    tool_calls_json: dict | None = None    # SP3: widget render hint, or None
+    tool_calls_json: dict | None = None    # SP3 — widget render hint, or None
+    # SP5: additional AIMessages the graph node should emit after the primary
+    # assistant_message. Used by M4 to stream per-step execution results.
+    # Default empty list keeps SP3/SP4 callers untouched.
+    extra_messages: list = field(default_factory=list)
 
 
 class ModuleAgent(ABC):

@@ -1,0 +1,30 @@
+Reliability Statistics
+
+Cronbach's Alpha    N of Items
+.840                5
+
+Construct: Transformational Leadership (TL)
+
+Item-Total Statistics
+
+                  Scale Mean if Item Deleted    Cronbach's Alpha if Item Deleted
+TL1               16.32                          .810
+TL2               16.45                          .815
+TL3               16.21                          .825
+TL4               16.50                          .830
+TL5               16.30                          .795
+
+----
+
+Reliability Statistics
+
+Cronbach's Alpha    N of Items
+.620                4
+
+Construct: Trust
+
+Item-Total Statistics
+Trust1              12.15                          .580
+Trust2              12.34                          .595
+Trust3              12.10                          .530
+Trust4              12.22                          .610

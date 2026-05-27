@@ -77,8 +77,15 @@ def _agent_node_factory(module_key: str):
         if result.tool_calls_json:
             ai.additional_kwargs["tool_calls_json"] = result.tool_calls_json
 
+        # SP5: forward extra_messages (M4's per-step execution emissions).
+        # The chat router's SSE loop already handles N messages per LangGraph
+        # update — see api/app/routers/chat.py gen().
+        messages = [ai]
+        if result.extra_messages:
+            messages.extend(result.extra_messages)
+
         return {
-            "messages": [ai],
+            "messages": messages,
             "context_store": cs,
         }
 

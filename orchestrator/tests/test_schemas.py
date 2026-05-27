@@ -151,3 +151,95 @@ def test_m3_output_mixed_confirm_with_full_artifacts_validates():
         confirmed_at=datetime.now(timezone.utc),
     )
     assert out.mixed_design_type == "sequential_explanatory"
+
+
+def test_step_result_minimal():
+    from orchestrator.schemas.m4 import StepResult
+    sr = StepResult(step_name="Cronbach's Alpha")
+    assert sr.step_name == "Cronbach's Alpha"
+    assert sr.table == []
+    assert sr.thresholds_met is None
+    assert sr.interpretation == ""
+    assert sr.parser == "regex"
+
+
+def test_step_result_full():
+    from orchestrator.schemas.m4 import StepResult
+    sr = StepResult(
+        step_name="Reliability",
+        table=[{"construct": "TL", "alpha": 0.84, "n_items": 5}],
+        thresholds_met=True,
+        interpretation="All scales reliable.",
+        raw_paste_excerpt="Cronbach's Alpha\n.840",
+        parser="regex",
+    )
+    blob = sr.model_dump()
+    assert blob["table"][0]["alpha"] == 0.84
+    assert blob["parser"] == "regex"
+
+
+def test_m4_unconfirmed_partial_is_valid_minimal():
+    """In-progress partials are valid even with no results."""
+    from orchestrator.schemas.m4 import M4Output
+    out = M4Output(
+        data_type_detected="SPSS",
+        analysis_outline={"sections": [], "confirmed_by_user": False},
+    )
+    assert out.confirmed_at is None
+    assert out.results == {}
+
+
+def test_m4_spss_confirm_requires_results():
+    from datetime import datetime, timezone
+    from pydantic import ValidationError
+    from orchestrator.schemas.m4 import M4Output
+    with pytest.raises(ValidationError):
+        M4Output(
+            data_type_detected="SPSS",
+            analysis_outline={"sections": [{"name": "Descriptive"}], "confirmed_by_user": True},
+            confirmed_at=datetime.now(timezone.utc),
+            # missing results
+        )
+
+
+def test_m4_qualitative_confirm_requires_codes_and_themes():
+    from datetime import datetime, timezone
+    from pydantic import ValidationError
+    from orchestrator.schemas.m4 import M4Output
+    with pytest.raises(ValidationError):
+        M4Output(
+            data_type_detected="Qualitative",
+            analysis_outline={"sections": [], "confirmed_by_user": True},
+            confirmed_at=datetime.now(timezone.utc),
+            qual_codes=[{"code": "leadership style", "quote": "..."}],
+            # missing qual_themes
+        )
+
+
+def test_m4_qualitative_confirm_with_codes_and_themes_validates():
+    from datetime import datetime, timezone
+    from orchestrator.schemas.m4 import M4Output
+    out = M4Output(
+        data_type_detected="Qualitative",
+        analysis_outline={"sections": [{"name": "Initial coding"}], "confirmed_by_user": True},
+        qual_codes=[{"code": "leadership style", "quote": "..."}],
+        qual_themes=[{"theme": "Leadership", "codes": ["leadership style"]}],
+        confirmed_at=datetime.now(timezone.utc),
+    )
+    assert len(out.qual_codes) == 1
+    assert len(out.qual_themes) == 1
+
+
+def test_m4_mixed_confirm_requires_both_sets():
+    from datetime import datetime, timezone
+    from pydantic import ValidationError
+    from orchestrator.schemas.m4 import M4Output
+    with pytest.raises(ValidationError):
+        M4Output(
+            data_type_detected="Mixed",
+            analysis_outline={"sections": [], "confirmed_by_user": True},
+            confirmed_at=datetime.now(timezone.utc),
+            results={"Descriptive": {"step_name": "Descriptive"}},
+            qual_codes=[],
+            qual_themes=[],
+        )
