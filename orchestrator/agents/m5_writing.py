@@ -1,11 +1,13 @@
 """M5 — Writing & Export agent (SP6 chapter-by-chapter compose + auto-export)."""
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from langchain_core.messages import AIMessage, HumanMessage
 
 from orchestrator.agents.base import ModuleAgent, ModuleStepResult
 from orchestrator.schemas.m5 import M5Output, ExportArtifact
+from orchestrator.schemas.m5_editor import PendingEdit
 from orchestrator.tools.m5_writing import (
     compose_chapter, compose_section, rewrite_chapter,
     validate_draft, validate_citations,
@@ -180,7 +182,11 @@ class M5Agent(ModuleAgent):
         return None
 
     def _handle_rewrite(self, state, partial):
-        """Route the user's rewrite request to the target chapter."""
+        """SP6.5: chat NL-rewrite now lands as a PendingEdit (whole-chapter
+        range) instead of overwriting prose directly. The user reviews and
+        accepts or rejects it in the editor — same accept/reject flow as
+        paraphrase/translate/cite. This keeps prose immutable in chat and
+        gives the user a clean diff view before any text is committed."""
         last_user = self._latest_user_message(state["messages"])
         target = self._identify_chapter(last_user)
         if target is None:
@@ -192,26 +198,54 @@ class M5Agent(ModuleAgent):
                 ),
                 context_patch=partial,
                 transition=False, needs_user_reply=True,
+                # SP6.5: no extra_messages when we can't identify the chapter
+                extra_messages=[],
             )
         context = self._render_context or {}
-        current = (partial.get("chapters") or {}).get(target, {}).get("prose", "")
-        new_draft = rewrite_chapter.invoke({
+        chapters = dict(partial.get("chapters", {}))
+        # SP6.5: read old prose from the chapter dict (prose key preserved, not overwritten)
+        old_prose = chapters.get(target, {}).get("prose", "")
+        new_text = rewrite_chapter.invoke({
             "chapter_name": target,
-            "current_prose": current,
+            "current_prose": old_prose,
             "instruction": last_user,
             "context_slice": context,
             "references": self._collect_references(context),
             "language": context.get("language", "en"),
         })
-        chapters = dict(partial.get("chapters", {}))
-        chapters[target] = new_draft
+        # SP6.5: new_text may be a plain string (from mock/LLM); normalise to str
+        if isinstance(new_text, dict):
+            new_text = new_text.get("prose", "")
+        # SP6.5: build a PendingEdit covering the whole chapter (from_offset=0,
+        # to_offset=len(old_prose)) so the editor accept path slices [0:len] = new_text
+        pe = PendingEdit(
+            id=uuid4().hex,
+            chapter_name=target,
+            from_offset=0,
+            to_offset=len(old_prose),
+            old_text=old_prose,
+            new_text=new_text,
+            source="chat_rewrite",
+            pending_at=datetime.now(timezone.utc),
+        )
+        chapter_data = dict(chapters.get(target, {"name": target, "prose": old_prose}))
+        existing_edits = list(chapter_data.get("pending_edits") or [])
+        chapter_data["pending_edits"] = existing_edits + [pe.model_dump(mode="json")]
+        chapters[target] = chapter_data
         partial["chapters"] = chapters
         partial["_awaiting_confirm"] = True
+        # SP6.5: bubble points user to the editor so they can accept/reject the diff
+        project_id = state.get("project_id") or ""
+        link = f"/chat/projects/{project_id}/editor" if project_id else "/editor"
+        bubble = AIMessage(content=(
+            f"Rewrite of **{target}** is ready — review it in the editor "
+            f"and click ✓ to accept or ✗ to reject. [Open in editor]({link})"
+        ))
         return ModuleStepResult(
-            assistant_message=f"Rewrote chapter — {target}. Review below.",
+            assistant_message=f"Rewrite of {target} queued as a pending edit. Open the editor to review.",
             context_patch=partial,
             transition=False, needs_user_reply=True,
-            extra_messages=[AIMessage(content=f"## Chapter — {target} (rewritten)\n\n{new_draft.get('prose', '')}")],
+            extra_messages=[bubble],
         )
 
     def _finalize_and_export(self, state, partial):

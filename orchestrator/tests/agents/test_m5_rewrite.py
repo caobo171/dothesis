@@ -36,6 +36,9 @@ def test_identify_chapter_returns_none_on_ambiguous():
 
 
 def test_handle_rewrite_calls_rewrite_chapter_and_updates_partial(monkeypatch):
+    # SP6.5: rewrite now writes a PendingEdit instead of overwriting prose.
+    # The rewrite_chapter tool may return a dict (with a "prose" key) or a plain
+    # string; both are normalised to str before being stored in new_text.
     from orchestrator.agents import m5_writing as m5_mod
 
     fake_rewrite = MagicMock()
@@ -53,7 +56,7 @@ def test_handle_rewrite_calls_rewrite_chapter_and_updates_partial(monkeypatch):
         "language": "en", "research_gaps": [],
     }
     partial = {
-        "chapters": {"methodology": {"name": "methodology", "prose": "Formal version"}},
+        "chapters": {"methodology": {"name": "methodology", "prose": "Formal version", "pending_edits": []}},
         "_compose_chapters_done": True,
         "_awaiting_confirm": True,
     }
@@ -65,11 +68,19 @@ def test_handle_rewrite_calls_rewrite_chapter_and_updates_partial(monkeypatch):
     }
     result = agent._handle_rewrite(state, partial)
 
-    assert result.context_patch["chapters"]["methodology"]["prose"].startswith("Less formal")
+    # SP6.5: prose must NOT be overwritten; a PendingEdit is appended instead
+    ch = result.context_patch["chapters"]["methodology"]
+    assert ch["prose"] == "Formal version"
+    assert len(ch["pending_edits"]) == 1
+    edit = ch["pending_edits"][0]
+    # When invoke returns a dict, the "prose" value is extracted as new_text
+    assert edit["new_text"] == "Less formal methodology rewrite"
+    assert edit["source"] == "chat_rewrite"
     assert result.context_patch["_awaiting_confirm"] is True
     assert len(result.extra_messages) == 1
     assert "methodology" in result.extra_messages[0].content.lower()
-    assert "rewritten" in result.extra_messages[0].content.lower()
+    # SP6.5: bubble says "ready" and links to editor, not "rewritten"
+    assert "editor" in result.extra_messages[0].content.lower()
 
 
 def test_handle_rewrite_asks_for_clarification_on_ambiguous(monkeypatch):
@@ -93,7 +104,8 @@ def test_handle_rewrite_asks_for_clarification_on_ambiguous(monkeypatch):
 
 
 def test_step_routes_rewrite_request_to_handle_rewrite(monkeypatch):
-    """End-to-end: step() detects rewrite + dispatches to _handle_rewrite."""
+    """SP6.5 end-to-end: step() detects rewrite + dispatches to _handle_rewrite,
+    which now appends a PendingEdit instead of overwriting prose."""
     from orchestrator.agents import m5_writing as m5_mod
 
     fake_rewrite = MagicMock()
@@ -111,7 +123,7 @@ def test_step_routes_rewrite_request_to_handle_rewrite(monkeypatch):
             m1_topic={"research_title": "x", "language": "en"},
             m3_design={"paradigm": "quantitative", "confirmed_at": "x"},
             m5_writing={
-                "chapters": {"intro": {"name": "intro", "prose": "old intro"}},
+                "chapters": {"intro": {"name": "intro", "prose": "old intro", "pending_edits": []}},
                 "_compose_chapters_done": True,
                 "_awaiting_confirm": True,
             },
@@ -119,5 +131,9 @@ def test_step_routes_rewrite_request_to_handle_rewrite(monkeypatch):
         "mode": "interactive", "user_intent": None, "pending_confirmations": [],
     }
     result = agent.step(state)
-    assert result.context_patch["chapters"]["intro"]["prose"] == "New intro"
+    # SP6.5: prose must remain unchanged; new text lives in pending_edits
+    assert result.context_patch["chapters"]["intro"]["prose"] == "old intro"
+    edits = result.context_patch["chapters"]["intro"]["pending_edits"]
+    assert len(edits) == 1
+    assert edits[0]["new_text"] == "New intro"
     assert fake_rewrite.invoke.called
