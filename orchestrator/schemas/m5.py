@@ -1,16 +1,49 @@
-"""M5 Writing & Finalization output schema. Mirrors PRD §6.5."""
+"""M5 Writing & Finalization output schema (SP6 — chapter-by-chapter compose + S3 export)."""
 from datetime import datetime
 from typing import Literal
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel, Field, model_validator
+
+
+ChapterName = Literal["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
+
+
+class ChapterDraft(BaseModel):
+    """One composed chapter with provenance info."""
+    name: ChapterName
+    prose: str
+    citations_used: list[str] = Field(default_factory=list)
+    uncited_warnings: list[str] = Field(default_factory=list)
 
 
 class ExportArtifact(BaseModel):
     kind: Literal["docx", "pdf", "latex", "md"]
-    uri: str
-    size_bytes: int = Field(..., ge=0)
+    s3_key: str = ""
+    download_url: str = ""
+    size_bytes: int = Field(default=0, ge=0)
+    # SP1 field — DEPRECATED but kept for back-compat with auto-mode readers
+    uri: str = ""
 
 
 class M5Output(BaseModel):
-    sections: list[dict] = Field(..., min_length=1)  # [{name, text, ...}]
+    chapters: dict[str, dict] = Field(default_factory=dict)
+    bibliography: str = ""
     export_artifacts: list[ExportArtifact] = Field(default_factory=list)
+    # SP1 — preserved for back-compat with engine-fallback auto-mode
+    sections: list[dict] = Field(default_factory=list)
     confirmed_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def _require_artifacts_on_confirm(self):
+        """When confirmed, the agent must have produced all 6 chapters + at
+        least the docx export. Pre-confirm partials remain valid."""
+        if self.confirmed_at is None:
+            return self
+        required = {"intro", "lit_review", "methodology", "results", "discussion", "conclusion"}
+        present = set(self.chapters.keys())
+        missing = required - present
+        if missing:
+            raise ValueError(f"M5 confirm requires all 6 chapters; missing: {sorted(missing)}")
+        if not any(a.kind == "docx" for a in self.export_artifacts):
+            raise ValueError("M5 confirm requires at least the docx export artifact")
+        return self

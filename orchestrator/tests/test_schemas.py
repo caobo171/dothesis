@@ -243,3 +243,92 @@ def test_m4_mixed_confirm_requires_both_sets():
             qual_codes=[],
             qual_themes=[],
         )
+
+
+def test_chapter_draft_minimal():
+    from orchestrator.schemas.m5 import ChapterDraft
+    cd = ChapterDraft(name="intro", prose="# Introduction\n...")
+    assert cd.name == "intro"
+    assert cd.prose.startswith("# Introduction")
+    assert cd.citations_used == []
+    assert cd.uncited_warnings == []
+
+
+def test_chapter_draft_with_citations():
+    from orchestrator.schemas.m5 import ChapterDraft
+    cd = ChapterDraft(
+        name="lit_review", prose="...",
+        citations_used=["Bass, 1990", "Avolio et al., 2009"],
+        uncited_warnings=["Smith, 2023"],
+    )
+    blob = cd.model_dump()
+    assert blob["citations_used"][0] == "Bass, 1990"
+    assert blob["uncited_warnings"] == ["Smith, 2023"]
+
+
+def test_export_artifact_new_shape():
+    from orchestrator.schemas.m5 import ExportArtifact
+    a = ExportArtifact(
+        kind="docx",
+        s3_key="projects/abc/exports/thesis-X.docx",
+        download_url="/api/v1/projects/abc/exports/thesis-X.docx",
+        size_bytes=12345,
+    )
+    assert a.s3_key.startswith("projects/")
+    assert a.download_url.startswith("/api/v1/")
+    assert a.uri == ""  # deprecated field, default empty
+
+
+def test_m5_unconfirmed_partial_is_valid_minimal():
+    from orchestrator.schemas.m5 import M5Output
+    out = M5Output()  # all fields default
+    assert out.chapters == {}
+    assert out.export_artifacts == []
+    assert out.confirmed_at is None
+
+
+def test_m5_confirm_requires_all_six_chapters():
+    from datetime import datetime, timezone
+    from pydantic import ValidationError
+    from orchestrator.schemas.m5 import M5Output, ExportArtifact
+    with pytest.raises(ValidationError) as exc:
+        M5Output(
+            chapters={"intro": {"name": "intro", "prose": "x"}},
+            export_artifacts=[ExportArtifact(
+                kind="docx", s3_key="k", download_url="u", size_bytes=1,
+            )],
+            confirmed_at=datetime.now(timezone.utc),
+        )
+    assert "missing" in str(exc.value).lower()
+
+
+def test_m5_confirm_requires_docx_artifact():
+    from datetime import datetime, timezone
+    from pydantic import ValidationError
+    from orchestrator.schemas.m5 import M5Output
+    chapters = {n: {"name": n, "prose": "x"}
+                for n in ("intro", "lit_review", "methodology",
+                          "results", "discussion", "conclusion")}
+    with pytest.raises(ValidationError) as exc:
+        M5Output(
+            chapters=chapters,
+            export_artifacts=[],  # no docx
+            confirmed_at=datetime.now(timezone.utc),
+        )
+    assert "docx" in str(exc.value).lower()
+
+
+def test_m5_confirm_passes_with_six_chapters_and_docx():
+    from datetime import datetime, timezone
+    from orchestrator.schemas.m5 import M5Output, ExportArtifact
+    chapters = {n: {"name": n, "prose": "x"}
+                for n in ("intro", "lit_review", "methodology",
+                          "results", "discussion", "conclusion")}
+    out = M5Output(
+        chapters=chapters,
+        export_artifacts=[ExportArtifact(
+            kind="docx", s3_key="k", download_url="u", size_bytes=1,
+        )],
+        confirmed_at=datetime.now(timezone.utc),
+    )
+    assert len(out.chapters) == 6
