@@ -71,6 +71,21 @@ export function summarizeList(items: ListItem[], fieldName: string): string {
         }),
       ].join("\n");
 
+    case "analysis_outline":
+    case "outline_quant":
+    case "outline_qual":
+      // Numbered list with inline thresholds for SP5 analysis outline fields.
+      // If meta.thresholds is present, append " — {threshold}" to the item text.
+      return [
+        "My analysis outline:",
+        ...items.map((s, i) => {
+          const thresholds = (s.meta?.thresholds as string | undefined);
+          return thresholds
+            ? `${i + 1}. ${s.text} — ${thresholds}`
+            : `${i + 1}. ${s.text}`;
+        }),
+      ].join("\n");
+
     default:
       // Generic bulleted fallback for unknown fields.
       return items.map(i => `- ${i.text}`).join("\n");
