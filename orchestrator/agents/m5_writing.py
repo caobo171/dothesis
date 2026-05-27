@@ -114,19 +114,19 @@ class M5Agent(ModuleAgent):
         )
 
     def step(self, state):
-        """SP6: rewrite detection (when in confirm state) → compose phase → fallback."""
+        """SP6: rewrite detection → finalize on affirmative → compose phase → fallback."""
         from orchestrator.state import get_module_slice
         cls = type(self)
         partial = dict(get_module_slice(state["context_store"], self.module_key))
         cls._render_context = self._extract_context_slice(state["context_store"])
 
-        # Rewrite path — fires BEFORE compose dispatch when in confirm state.
+        # Confirm-state branches: rewrite OR affirmative-finalize.
         if partial.get("_compose_chapters_done") and partial.get("_awaiting_confirm"):
             if self._is_rewrite_request(state["messages"]):
                 return self._handle_rewrite(state, partial)
-            # Affirmative confirm dispatch lands in Task 12 — fall through for now.
+            if self._is_affirmative(state["messages"]):
+                return self._finalize_and_export(state, partial)
 
-        # Compose phase — first M5 turn.
         if not partial.get("_compose_chapters_done"):
             return self._compose_all_chapters(state, partial)
 
@@ -181,6 +181,63 @@ class M5Agent(ModuleAgent):
             transition=False, needs_user_reply=True,
             extra_messages=[AIMessage(content=f"## Chapter — {target} (rewritten)\n\n{new_draft.get('prose', '')}")],
         )
+
+    def _finalize_and_export(self, state, partial):
+        """Compile docx + pdf, upload to S3, populate export_artifacts, transition."""
+        project_id = str(state.get("project_id") or "")
+        if not project_id:
+            raise RuntimeError("M5 finalize requires project_id in state")
+
+        sections_for_engine = self._build_sections_for_export(partial)
+        docx_key = export_docx.invoke({
+            "sections": sections_for_engine, "project_id": project_id,
+        })
+        pdf_key = compile_pdf.invoke({
+            "sections": sections_for_engine, "project_id": project_id,
+        })
+
+        artifacts = [
+            ExportArtifact(
+                kind="docx", s3_key=docx_key,
+                download_url=f"/api/v1/projects/{project_id}/exports/{docx_key.split('/')[-1]}",
+                size_bytes=0,
+            ),
+            ExportArtifact(
+                kind="pdf", s3_key=pdf_key,
+                download_url=f"/api/v1/projects/{project_id}/exports/{pdf_key.split('/')[-1]}",
+                size_bytes=0,
+            ),
+        ]
+        partial["export_artifacts"] = [a.model_dump() for a in artifacts]
+        partial["confirmed_at"] = datetime.now(timezone.utc).isoformat()
+        return ModuleStepResult(
+            assistant_message=self._format_export_artifacts_markdown(artifacts),
+            context_patch=partial,
+            transition=True,
+            needs_user_reply=False,
+        )
+
+    def _build_sections_for_export(self, partial: dict) -> list[dict]:
+        """Assemble the per-chapter section list passed to compile_pdf/export_docx."""
+        chapters = partial.get("chapters", {})
+        sections = [
+            {"name": name, "text": chapters.get(name, {}).get("prose", "")}
+            for name in _CHAPTER_ORDER
+        ]
+        if partial.get("bibliography"):
+            sections.append({"name": "bibliography", "text": partial["bibliography"]})
+        return sections
+
+    def _format_export_artifacts_markdown(self, artifacts: list) -> str:
+        lines = ["**Done.**", ""]
+        for a in artifacts:
+            label = {"docx": "Download thesis (.docx)",
+                     "pdf": "Download thesis (.pdf)"}.get(a.kind, a.kind)
+            filename = a.s3_key.split("/")[-1]
+            lines.append(f"- \U0001f4c4 {label}: [{filename}]({a.download_url})")
+        lines.append("")
+        lines.append("Thesis confirmed and exported. M1-M5 complete.")
+        return "\n".join(lines)
 
     def render_hint_for_field(self, field_name: str) -> dict | None:
         # SP6 has no widgets; chapter prose renders as plain markdown
