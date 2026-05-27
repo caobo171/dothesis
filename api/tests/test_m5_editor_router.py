@@ -702,3 +702,109 @@ def test_reject_404_on_unknown_edit(client):
     )
     assert r.status_code == 404, r.text
     assert r.json()["detail"]["error"]["code"] == "edit_not_found"
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{pid}/m5/export — re-run compile_pdf + export_docx (SP6.5)
+# ---------------------------------------------------------------------------
+
+
+def _make_project_with_all_chapters(client: TestClient) -> str:
+    """Create a project then seed ALL 6 chapters into context_store.m5_writing.
+
+    Decision: export requires all 6 chapters; this helper is separate from
+    _make_project_with_chapters (which only seeds 2) so the incomplete-chapters
+    400 test can reuse _make_project_with_chapters without modification.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    r = client.post("/api/v1/projects", json={"name": "Export test project"})
+    assert r.status_code == 200, r.text
+    pid = r.json()["id"]
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing = {
+            "chapters": {
+                "intro":       {"name": "intro",       "prose": "Introduction prose.",   "pending_edits": []},
+                "lit_review":  {"name": "lit_review",  "prose": "Lit review prose.",     "pending_edits": []},
+                "methodology": {"name": "methodology", "prose": "Methodology prose.",    "pending_edits": []},
+                "results":     {"name": "results",     "prose": "Results prose.",        "pending_edits": []},
+                "discussion":  {"name": "discussion",  "prose": "Discussion prose.",     "pending_edits": []},
+                "conclusion":  {"name": "conclusion",  "prose": "Conclusion prose.",     "pending_edits": []},
+            }
+        }
+        flag_modified(cs, "m5_writing")
+        db.commit()
+    return pid
+
+
+@patch("app.routers.m5_editor.export_docx")
+@patch("app.routers.m5_editor.compile_pdf")
+def test_export_runs_both_compilers_and_returns_artifacts(mock_pdf, mock_docx, client):
+    """1. Mock export_docx → {"s3_key": "projects/p/exports/thesis.docx", "size_bytes": 1234}
+       Mock compile_pdf → {"s3_key": "projects/p/exports/thesis.pdf", "size_bytes": 5678}
+    2. Auth + create project + seed ALL 6 chapters
+    3. POST /api/v1/projects/{pid}/m5/export
+    4. Assert 200; body has docx.s3_key + pdf.size_bytes + docx.download_url
+    5. Assert both mocks called exactly once
+
+    Decision: patch in the router's namespace (app.routers.m5_editor) rather than
+    the tool module, because the router does `from orchestrator.tools.m5_writing import
+    compile_pdf, export_docx` at import time — patching the source module's names
+    after import would not affect the already-bound local references in the router.
+    Decorators stack bottom-up: innermost @patch → first parameter, so
+    mock_pdf = compile_pdf mock, mock_docx = export_docx mock.
+    """
+    mock_pdf.invoke.return_value = {"s3_key": "projects/p/exports/thesis.pdf",  "size_bytes": 5678}
+    mock_docx.invoke.return_value = {"s3_key": "projects/p/exports/thesis.docx", "size_bytes": 1234}
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_all_chapters(client)
+
+    r = client.post(f"/api/v1/projects/{pid}/m5/export")
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    # Shape: top-level "docx" and "pdf" keys
+    assert "docx" in body, f"Missing 'docx' key: {body}"
+    assert "pdf"  in body, f"Missing 'pdf' key: {body}"
+
+    # Check docx artifact fields
+    assert body["docx"]["s3_key"] == "projects/p/exports/thesis.docx"
+    assert body["docx"]["size_bytes"] == 1234
+    # download_url is the relative redirect path to the exports endpoint
+    assert "thesis.docx" in body["docx"]["download_url"]
+
+    # Check pdf artifact fields
+    assert body["pdf"]["s3_key"] == "projects/p/exports/thesis.pdf"
+    assert body["pdf"]["size_bytes"] == 5678
+
+    # Both compilers were called exactly once via .invoke()
+    # Decision: assert on .invoke rather than the top-level mock because the
+    # router calls compile_pdf.invoke(...) / export_docx.invoke(...), not the
+    # tool objects directly.
+    mock_pdf.invoke.assert_called_once()
+    mock_docx.invoke.assert_called_once()
+
+
+def test_export_400_when_chapters_incomplete(client):
+    """_make_project_with_chapters seeds only 2 chapters (intro + lit_review).
+    POST .../m5/export → 400 with detail containing "chapters_incomplete".
+
+    Decision: the export endpoint must gate on all 6 required chapters being
+    present; returning 400 (not 404) keeps the semantics clear — the resource
+    exists but the pre-condition is unmet.
+    """
+    _create_user_and_set_cookie(client)
+    # Only intro + lit_review seeded — 4 chapters missing
+    pid = _make_project_with_chapters(client)
+
+    r = client.post(f"/api/v1/projects/{pid}/m5/export")
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert detail["error"]["code"] == "chapters_incomplete"
+    # "missing" list must name the 4 absent chapters
+    missing = detail["error"]["missing"]
+    assert set(missing) == {"methodology", "results", "discussion", "conclusion"}

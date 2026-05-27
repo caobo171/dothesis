@@ -489,3 +489,91 @@ def reject_pending_edit(
     flag_modified(cs, "m5_writing")
     db.commit()
     return ch
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{project_id}/m5/export — re-run compile_pdf + export_docx
+# ---------------------------------------------------------------------------
+
+from orchestrator.tools.m5_writing import compile_pdf, export_docx  # noqa: E402
+
+
+_REQUIRED_CHAPTERS = ["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
+
+
+def _build_sections_for_export(chapters: dict) -> list[dict]:
+    """Build the canonical 6-section list consumable by compile_pdf / export_docx.
+
+    Decision: mirrors M5Agent._build_sections_for_export so that the router and
+    the auto-mode agent produce identical artifact inputs. Having a single source
+    of truth here avoids drift between the two code paths.
+    """
+    titles = {
+        "intro":       "Chapter 1 — Introduction",
+        "lit_review":  "Chapter 2 — Literature Review",
+        "methodology": "Chapter 3 — Methodology",
+        "results":     "Chapter 4 — Results",
+        "discussion":  "Chapter 5 — Discussion",
+        "conclusion":  "Chapter 6 — Conclusion",
+    }
+    return [
+        {"title": titles[name], "prose": chapters[name].get("prose", "")}
+        for name in _REQUIRED_CHAPTERS
+    ]
+
+
+@router.post("/projects/{project_id}/m5/export")
+def reexport(
+    project_id: uuid.UUID,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """Re-run compile_pdf + export_docx on the current chapter prose.
+
+    Decision: the endpoint is intentionally idempotent — every POST replaces
+    the stored export_artifacts with fresh S3 artifacts. This lets the user
+    re-export after editing without any state cleanup.
+
+    Returns {"docx": artifact, "pdf": artifact} where each artifact has
+    kind, s3_key, size_bytes, download_url, and uri fields.
+    """
+    _owned_project(db, user, project_id)
+    cs = db.get(ContextStore, project_id)
+    m5 = (cs.m5_writing or {}) if cs else {}
+    chapters = m5.get("chapters") or {}
+
+    # Guard: all 6 chapters must be present before we can produce a coherent export.
+    # Decision: return 400 (not 404) — the project exists but the pre-condition
+    # (all chapters drafted) is unmet; 400 communicates a client-fixable problem.
+    missing = [n for n in _REQUIRED_CHAPTERS if n not in chapters]
+    if missing:
+        raise HTTPException(400, detail={"error": {"code": "chapters_incomplete", "missing": missing}})
+
+    sections = _build_sections_for_export(chapters)
+    pid_str = str(project_id)
+
+    docx_result = export_docx.invoke({"sections": sections, "project_id": pid_str})
+    pdf_result = compile_pdf.invoke({"sections": sections, "project_id": pid_str})
+
+    def _to_artifact(kind: str, res: dict) -> dict:
+        # Decision: download_url is a relative path so the front-end can call
+        # GET /api/v1/projects/{pid}/exports/{filename} which 302-redirects to a
+        # signed S3 URL; avoids embedding expiring presigned URLs in the response.
+        return {
+            "kind": kind,
+            "s3_key": res["s3_key"],
+            "size_bytes": res["size_bytes"],
+            "download_url": f"/api/v1/projects/{pid_str}/exports/{res['s3_key'].split('/')[-1]}",
+            "uri": "",
+        }
+
+    artifacts = [_to_artifact("docx", docx_result), _to_artifact("pdf", pdf_result)]
+
+    # Persist fresh artifacts into m5_writing so the editor UI can surface them
+    # without a separate fetch.
+    m5["export_artifacts"] = artifacts
+    cs.m5_writing = m5
+    flag_modified(cs, "m5_writing")
+    db.commit()
+
+    return {"docx": artifacts[0], "pdf": artifacts[1]}
