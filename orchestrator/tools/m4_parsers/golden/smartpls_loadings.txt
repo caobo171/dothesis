@@ -1,0 +1,20 @@
+Outer Loadings
+
+           TL        EE        Trust
+TL1        0.842
+TL2        0.795
+TL3        0.821
+TL4        0.778
+EE1                  0.811
+EE2                  0.785
+EE3                  0.792
+Trust1                         0.755
+Trust2                         0.713
+Trust3                         0.602
+
+Construct Reliability and Validity
+
+           Cronbach's Alpha    Composite Reliability    Average Variance Extracted (AVE)
+TL         0.832                0.890                    0.671
+EE         0.756                0.860                    0.673
+Trust      0.625                0.798                    0.572
