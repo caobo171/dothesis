@@ -210,40 +210,53 @@ async def send_message(thread_id: uuid.UUID,
 
     async def gen():
         nonlocal final_module_tag, final_tool_calls
-        async for event in graph.astream(
-            {"messages": [HumanMessage(content=body.text)], "mode": "interactive"},
-            config=config,
-            stream_mode="updates",
-        ):
-            for node_name, payload in event.items():
-                # LangGraph v1 emits non-dict payloads for special signals like
-                # __interrupt__ (a tuple of Interrupt objects) when the graph is
-                # built with interrupt_before. Skip — the chat surface only
-                # forwards regular node updates as SSE tokens. (When we wire
-                # the interrupt UX, branch here on node_name == "__interrupt__".)
-                if not isinstance(payload, dict):
-                    continue
-                if node_name in {"M1", "M2", "M3", "M4", "M5"}:
-                    final_module_tag = node_name
-                msgs = payload.get("messages") or []
-                for m in msgs:
-                    chunk = getattr(m, "content", "")
-                    if chunk:
-                        assistant_chunks.append(chunk)
-                        yield sse_pack({
-                            "type": "token",
-                            "module": node_name if node_name != "supervisor" else None,
-                            "text": chunk,
-                        })
+        import logging
+        log = logging.getLogger(__name__)
+        try:
+            async for event in graph.astream(
+                {"messages": [HumanMessage(content=body.text)], "mode": "interactive"},
+                config=config,
+                stream_mode="updates",
+            ):
+                for node_name, payload in event.items():
+                    # LangGraph v1 emits non-dict payloads for special signals like
+                    # __interrupt__ (a tuple of Interrupt objects) when the graph is
+                    # built with interrupt_before. Skip — the chat surface only
+                    # forwards regular node updates as SSE tokens. (When we wire
+                    # the interrupt UX, branch here on node_name == "__interrupt__".)
+                    if not isinstance(payload, dict):
+                        continue
+                    if node_name in {"M1", "M2", "M3", "M4", "M5"}:
+                        final_module_tag = node_name
+                    msgs = payload.get("messages") or []
+                    for m in msgs:
+                        chunk = getattr(m, "content", "")
+                        if chunk:
+                            assistant_chunks.append(chunk)
+                            yield sse_pack({
+                                "type": "token",
+                                "module": node_name if node_name != "supervisor" else None,
+                                "text": chunk,
+                            })
 
-                    # SP3 T6: forward render hint if the agent attached one.
-                    # additional_kwargs["tool_calls_json"] is set by M1 (and
-                    # future modules) when they want the frontend to show a
-                    # structured widget (card_grid, scale, etc.).
-                    tc = getattr(m, "additional_kwargs", {}).get("tool_calls_json")
-                    if tc:
-                        final_tool_calls = tc
-                        yield sse_pack({"type": "tool_calls", "payload": tc})
+                        # SP3 T6: forward render hint if the agent attached one.
+                        # additional_kwargs["tool_calls_json"] is set by M1 (and
+                        # future modules) when they want the frontend to show a
+                        # structured widget (card_grid, scale, etc.).
+                        tc = getattr(m, "additional_kwargs", {}).get("tool_calls_json")
+                        if tc:
+                            final_tool_calls = tc
+                            yield sse_pack({"type": "tool_calls", "payload": tc})
+        except Exception as e:
+            # Surface graph failures to the client instead of silently closing the
+            # stream. Without this the browser sees an empty SSE response and the
+            # user thinks the assistant just didn't reply.
+            log.exception("graph.astream crashed for thread %s", thread_id)
+            yield sse_pack({
+                "type": "error",
+                "message": f"{type(e).__name__}: {e}",
+            })
+            return
 
         # Persist the assistant reply (full text + any widget hint).
         full = "".join(assistant_chunks)
