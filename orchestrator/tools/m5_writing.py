@@ -259,3 +259,14 @@ def export_docx(sections: list[dict], project_id: str) -> str:
 def format_citations(items: list[dict], style: str = "apa7") -> str:
     """Format a citation list using the requested style."""
     return CitationCompiler(style).compile(items)
+
+
+@tool
+def compile_bibliography(references: list[dict], citation_style: str) -> str:
+    """Format M2 references as a bibliography section using the existing
+    CitationCompiler. Returns the formatted block as a multi-line string,
+    or '(No references)' on empty input.
+    """
+    if not references:
+        return "(No references)"
+    return CitationCompiler(citation_style).compile(references)

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from orchestrator.tools.m5_writing import (
-    compile_pdf, compose_section, export_docx, format_citations, validate_draft,
+    compile_bibliography, compile_pdf, compose_section, export_docx, format_citations, validate_draft,
 )
 
 
@@ -243,3 +243,21 @@ def test_validate_citations_deduplicates():
     references = [{"author": "Bass", "year": 1990}]
     cited, uncited = validate_citations(prose, references)
     assert cited == ["Bass, 1990"]  # de-duplicated
+
+
+def test_compile_bibliography_formats_references():
+    from orchestrator.tools.m5_writing import compile_bibliography
+    refs = [
+        {"author": "Bass", "year": 1990, "title": "Transformational leadership"},
+        {"author": "Avolio et al.", "year": 2009, "title": "Authentic leadership"},
+    ]
+    out = compile_bibliography.invoke({"references": refs, "citation_style": "apa7"})
+    assert "Bass" in out
+    assert "1990" in out
+    assert "Avolio" in out
+
+
+def test_compile_bibliography_empty_references():
+    from orchestrator.tools.m5_writing import compile_bibliography
+    out = compile_bibliography.invoke({"references": [], "citation_style": "apa7"})
+    assert "No references" in out
