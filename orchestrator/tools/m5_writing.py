@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
+import boto3
 from langchain_core.tools import tool
 
 # Make engine package importable.
@@ -31,6 +32,43 @@ def _scratch_dir() -> Path:
     d = Path(os.getenv("ORCHESTRATOR_SCRATCH", "/tmp/orchestrator_scratch"))
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def s3_from_env():
+    """S3 client factory — mirrors the SP2 api/app/routers/uploads.py pattern.
+    Indirection point so tests can monkeypatch easily.
+    """
+    return boto3.client(
+        "s3",
+        region_name=os.environ.get("AWS_REGION", "us-east-1"),
+        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY"),
+        aws_secret_access_key=os.environ.get("AWS_SECRET_KEY"),
+    )
+
+
+_CONTENT_TYPES = {
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "pdf":  "application/pdf",
+}
+
+
+def _upload_to_s3(local_path: str, project_id: str, kind: str, filename: str) -> str:
+    """Upload a local artifact to S3 under projects/{project_id}/exports/.
+
+    Returns the s3_key (not signed URL — keys persist; signed URLs expire).
+    Deletes the local file after upload to keep the scratch dir clean.
+    """
+    s3 = s3_from_env()
+    bucket = os.environ["AWS_S3_BUCKET"]
+    s3_key = f"projects/{project_id}/exports/{filename}"
+    content_type = _CONTENT_TYPES[kind]
+    with open(local_path, "rb") as f:
+        s3.put_object(
+            Bucket=bucket, Key=s3_key, Body=f.read(),
+            ContentType=content_type,
+        )
+    Path(local_path).unlink(missing_ok=True)
+    return s3_key
 
 
 # --- Wrappers that tests can monkeypatch ---------------------------------

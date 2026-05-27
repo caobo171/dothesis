@@ -79,3 +79,53 @@ def test_format_citations_apa(monkeypatch):
         "style": "apa7",
     })
     assert "Wang" in out
+
+
+def test_s3_from_env_returns_boto3_client(monkeypatch):
+    """The factory should return a boto3 S3 client built from env vars."""
+    from orchestrator.tools.m5_writing import s3_from_env
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    monkeypatch.setenv("AWS_ACCESS_KEY", "fake-key")
+    monkeypatch.setenv("AWS_SECRET_KEY", "fake-secret")
+    client = s3_from_env()
+    assert hasattr(client, "put_object")
+    assert hasattr(client, "generate_presigned_url")
+
+
+def test_upload_to_s3_writes_correct_key_and_deletes_local(tmp_path, monkeypatch):
+    """_upload_to_s3 uploads to projects/{id}/exports/{filename} and deletes local file."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
+    local = tmp_path / "thesis-abc123.docx"
+    local.write_bytes(b"fake docx content")
+
+    s3_key = m5_writing._upload_to_s3(
+        str(local), project_id="proj-xyz", kind="docx", filename="thesis-abc123.docx",
+    )
+    assert s3_key == "projects/proj-xyz/exports/thesis-abc123.docx"
+    call = fake_s3.put_object.call_args
+    assert call.kwargs["Bucket"] == "test-bucket"
+    assert call.kwargs["Key"] == "projects/proj-xyz/exports/thesis-abc123.docx"
+    assert call.kwargs["ContentType"].startswith("application/vnd.openxmlformats")
+    assert call.kwargs["Body"] == b"fake docx content"
+    assert not local.exists()  # local file deleted
+
+
+def test_upload_to_s3_pdf_content_type(tmp_path, monkeypatch):
+    """PDF gets the right content type."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
+    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+
+    local = tmp_path / "thesis-x.pdf"
+    local.write_bytes(b"%PDF-1.4")
+    m5_writing._upload_to_s3(str(local), "p", "pdf", "thesis-x.pdf")
+    assert fake_s3.put_object.call_args.kwargs["ContentType"] == "application/pdf"
