@@ -216,6 +216,13 @@ async def send_message(thread_id: uuid.UUID,
             stream_mode="updates",
         ):
             for node_name, payload in event.items():
+                # LangGraph v1 emits non-dict payloads for special signals like
+                # __interrupt__ (a tuple of Interrupt objects) when the graph is
+                # built with interrupt_before. Skip — the chat surface only
+                # forwards regular node updates as SSE tokens. (When we wire
+                # the interrupt UX, branch here on node_name == "__interrupt__".)
+                if not isinstance(payload, dict):
+                    continue
                 if node_name in {"M1", "M2", "M3", "M4", "M5"}:
                     final_module_tag = node_name
                 msgs = payload.get("messages") or []
