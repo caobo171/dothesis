@@ -218,6 +218,37 @@ Sub-projects 2–6 are mostly independent and can be parallelized once #1 lands.
 
 ---
 
+## Sub-project 6.5 — M5 Editor Surface ✅
+
+**Status:** Shipped 2026-05-27 (branch `feat/sp65-m5-editor`; TipTap WYSIWYG + 3 inline AI tools + unified PendingEdit accept/reject)
+
+**Spec:** `docs/superpowers/specs/2026-05-27-sp65-m5-editor-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-27-sp65-m5-editor-plan.md`
+
+**Delivers:**
+- Dedicated editor route `/chat/projects/[pid]/editor` with per-chapter TipTap instances + outline rail + sources rail
+- Three inline AI tools (paraphrase / translate / cite) via floating BubbleMenu — all produce `PendingEdit` records
+- Unified accept/reject machinery: chat NL-rewrites now also land as `PendingEdit` instead of overwriting prose
+- Autosave-debounced PATCH + explicit Re-export button (last-export status + edits-since counter)
+- 409 stale-offset conflict path for accept
+- `AiPending` TipTap custom mark + `CitationMark` for inline references
+- 11 new REST endpoints under `/m5/`, full auth + ownership coverage + concurrency tests
+
+**Decisions worth remembering for post-pivot work:**
+- `PendingEdit.source` enum is the extensibility surface — adding a new AI tool means a new endpoint + adding to the enum, nothing else
+- TipTap custom marks > custom nodes for "decorate existing text" features
+- Chat as coordinator, editor as canvas — durable separation as more module editors land
+- Autosave + explicit re-export is the right split for any artifact-producing editor: edits are cheap, exports are not
+
+**Out of scope (deferred):**
+- Citation Manager UI (style switching, Zotero/Mendeley) → SP6.6
+- LaTeX / Google Docs export → post-pivot
+- Real-time multi-user collab → post-pivot
+- Live web-search for citations → post-pivot
+- AI style-consistency audit → post-pivot
+
+---
+
 ## Sub-project 7 — New Next.js chat UI ✅
 
 **Status:** Shipped 2026-05-27 (branch `feat/sp7-chat-ui-shell`; 3-pane shell + useStream + auto-draft drawer; 60+ tests passing)
@@ -289,6 +320,7 @@ A short, append-only log of state changes. Update this when a sub-project moves 
 | 2026-05-27 | 4 | ⬜ → ✅ | M3 multi-method shipped — paradigm-aware agent + list_editor widget + 3 new qual tools |
 | 2026-05-27 | 5 | ⬜ → ✅ | M4 adaptive analysis shipped — paste-text parsers (SPSS+SmartPLS+lavaan+transcript) + per-step execution + ad-hoc + qual codes/themes |
 | 2026-05-27 | 6 | ⬜ → ✅ | M5 writing shipped — batch chapter compose + S3 export + NL rewrite; pivot COMPLETE (SP1-SP7 all ✅) |
+| 2026-05-27 | 6.5 | ⬜ → ✅ | M5 editor surface shipped — TipTap WYSIWYG + 3 inline AI tools + unified PendingEdit accept/reject |
 
 ---
 
