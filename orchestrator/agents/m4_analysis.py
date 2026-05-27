@@ -131,12 +131,13 @@ class M4Agent(ModuleAgent):
     }
 
     def step(self, state):
-        """Populate _render_* class caches from state before delegating to base.
+        """Populate caches, then dispatch execution phase if we're at a pseudo-field.
 
         Reads m3_design.tool, m3_design.paradigm, partial.data_type_detected,
-        partial.data_paste, partial.analysis_outline. Task 12 adds execution
-        phase dispatch on top of this. Class-level assignment (via type(self))
-        ensures test patches on M4Agent._render_* are reflected correctly.
+        partial.data_paste, partial.analysis_outline and populates class-level
+        _render_* caches. When the next missing field is _run_execution or
+        _run_qual_pipeline, delegates to the respective execution handler instead
+        of calling the LLM — this is the Task 12 extension on top of Task 11.
         """
         from orchestrator.state import get_module_slice
         cls = type(self)
@@ -150,7 +151,117 @@ class M4Agent(ModuleAgent):
         )
         cls._render_paste_text = partial.get("data_paste", "")
         cls._render_outline = partial.get("analysis_outline")
+
+        # Execution-phase dispatch when next missing field is a pseudo-field.
+        missing = self._next_missing_field(partial)
+        if missing == "_run_execution":
+            return self._run_quant_execution(state, partial)
+        if missing == "_run_qual_pipeline":
+            return self._run_qual_pipeline(state, partial)
         return super().step(state)
+
+    def _run_quant_execution(self, state, partial):
+        """Loop confirmed outline sections, dispatch to run_analysis_step,
+        emit one AIMessage per step via extra_messages.
+
+        Decision: emit per-step AIMessages rather than one big blob so the
+        frontend can stream results section-by-section in the chat pane.
+        """
+        from langchain_core.messages import AIMessage
+        from orchestrator.agents.base import ModuleStepResult
+        from orchestrator.tools.m4_parsers import format_step_as_markdown
+
+        outline = partial.get("analysis_outline") or {}
+        sections = outline.get("sections", []) or []
+        results: dict[str, dict] = dict(partial.get("results", {}))
+        extra: list = []
+        for section in sections:
+            step_name = section["name"]
+            sr = run_analysis_step.invoke({
+                "step_name": step_name,
+                "data": {
+                    "paste": self._render_paste_text,
+                    "data_type": self._render_outline_type or "Unknown",
+                },
+            })
+            results[step_name] = sr
+            extra.append(AIMessage(content=format_step_as_markdown(sr)))
+        partial["results"] = results
+        partial["_run_execution_done"] = True
+        partial["_awaiting_confirm"] = True
+        summary = self._build_execution_summary(results)
+        return ModuleStepResult(
+            assistant_message=summary,
+            context_patch=partial,
+            transition=False,
+            needs_user_reply=True,
+            extra_messages=extra,
+        )
+
+    def _run_qual_pipeline(self, state, partial):
+        """Two-step qual pipeline (Q5=C): codes + themes. Emit one message per step.
+
+        Decision: separate AIMessages for codes and themes lets the UI render
+        each pipeline stage as its own expandable block in the chat pane.
+        """
+        from langchain_core.messages import AIMessage
+        from orchestrator.agents.base import ModuleStepResult
+
+        codes = suggest_qual_codes.invoke({"transcript": self._render_paste_text})
+        themes = cluster_codes_into_themes.invoke({"codes": codes})
+        partial["qual_codes"] = codes
+        partial["qual_themes"] = themes
+        partial["_run_qual_pipeline_done"] = True
+        partial["_awaiting_confirm"] = True
+
+        code_msg = self._format_qual_codes_markdown(codes)
+        theme_msg = self._format_qual_themes_markdown(themes)
+        summary = (
+            f"Qualitative pipeline complete: {len(codes)} codes clustered "
+            f"into {len(themes)} themes. Confirm to move on to Chapter 4 writing."
+        )
+        return ModuleStepResult(
+            assistant_message=summary,
+            context_patch=partial,
+            transition=False,
+            needs_user_reply=True,
+            extra_messages=[AIMessage(content=code_msg), AIMessage(content=theme_msg)],
+        )
+
+    def _build_execution_summary(self, results: dict[str, dict]) -> str:
+        """One-paragraph summary of step thresholds for the user's confirm prompt."""
+        total = len(results)
+        breached = [name for name, sr in results.items()
+                    if sr.get("thresholds_met") is False]
+        if not breached:
+            return (
+                f"All {total} steps met their thresholds. "
+                "Confirm to move on to Chapter 4 writing?"
+            )
+        flagged = ", ".join(breached)
+        return (
+            f"Ran {total} steps. ⚠️ {len(breached)} flagged threshold breaches: {flagged}. "
+            "Review the per-step results above. Confirm to move on, or ask for an "
+            "ad-hoc analysis to investigate further."
+        )
+
+    def _format_qual_codes_markdown(self, codes: list[dict]) -> str:
+        if not codes:
+            return "**Initial coding** — no codes extracted."
+        rows = "\n".join(
+            f"- **{c.get('code', '?')}** — \"{c.get('quote', '')[:120]}\""
+            for c in codes
+        )
+        return f"**Initial coding** — {len(codes)} codes extracted:\n\n{rows}"
+
+    def _format_qual_themes_markdown(self, themes: list[dict]) -> str:
+        if not themes:
+            return "**Theme generation** — no themes clustered."
+        rows = "\n".join(
+            f"- **{t.get('theme', '?')}** — codes: {', '.join(t.get('codes', []))}"
+            for t in themes
+        )
+        return f"**Theme generation** — {len(themes)} themes:\n\n{rows}"
 
     def render_hint_for_field(self, field_name: str) -> dict | None:
         """Emit ListEditorHint for outline fields; None for data_paste* and pseudo-fields.
