@@ -13,6 +13,7 @@ from langchain_core.tools import tool
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts" / "m5_inline"
 _PARAPHRASE_PROMPT = (_PROMPTS_DIR / "paraphrase.md").read_text()
+_TRANSLATE_PROMPT = (_PROMPTS_DIR / "translate.md").read_text()
 
 
 def _call_llm(prompt: str) -> str:
@@ -51,5 +52,24 @@ def paraphrase_selection(
         selection=selection,
         context_after=context_after,
         style=style or "(none — use a natural academic register)",
+    )
+    return _strip(_call_llm(prompt))
+
+
+@tool
+def translate_selection(
+    chapter_name: str,
+    target_lang: str,
+    context_before: str,
+    selection: str,
+    context_after: str,
+) -> str:
+    """Translate a chapter selection into target_lang. Returns translated text only."""
+    prompt = _TRANSLATE_PROMPT.format(
+        chapter_name=chapter_name,
+        target_lang=target_lang,
+        context_before=context_before,
+        selection=selection,
+        context_after=context_after,
     )
     return _strip(_call_llm(prompt))
