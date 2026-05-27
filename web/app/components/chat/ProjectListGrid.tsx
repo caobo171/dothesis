@@ -49,7 +49,7 @@ export function ProjectListGrid() {
         <button
           type="button"
           onClick={() => setModalOpen(true)}
-          className="inline-flex items-center gap-1 bg-purple-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-purple-700"
+          className="inline-flex items-center gap-1 bg-primary-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-primary-700"
         >
           <Plus className="w-4 h-4" /> New project
         </button>
@@ -72,7 +72,7 @@ export function ProjectListGrid() {
           <Link
             key={p.id}
             href={`/chat/projects/${p.id}`}
-            className="block bg-white border border-gray-200 rounded-lg p-4 hover:border-purple-400 hover:shadow-sm transition-all"
+            className="block bg-white border border-gray-200 rounded-lg p-4 hover:border-primary-500 hover:shadow-sm transition-all"
           >
             <h3 className="font-semibold text-gray-900 mb-1 flex items-center justify-between">
               {p.name}

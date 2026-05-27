@@ -101,7 +101,7 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
             }
           }}
           placeholder="e.g. EU AI Act and Democratic Accountability"
-          className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400 mb-3"
+          className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 mb-3"
         />
 
         {error && (
@@ -123,7 +123,7 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
             type="button"
             onClick={() => void submit()}
             disabled={submitting || !name.trim()}
-            className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? "Creating…" : "Create"}
           </button>
