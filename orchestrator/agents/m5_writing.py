@@ -112,3 +112,77 @@ class M5Agent(ModuleAgent):
             (m.content for m in reversed(messages) if isinstance(m, HumanMessage)),
             "",
         )
+
+    def step(self, state):
+        """SP6: on first turn → compose phase. Tasks 11-12 add rewrite + finalize branches."""
+        from orchestrator.state import get_module_slice
+        cls = type(self)
+        partial = dict(get_module_slice(state["context_store"], self.module_key))
+        cls._render_context = self._extract_context_slice(state["context_store"])
+
+        # Compose phase — first M5 turn always lands here when chapters not yet done.
+        if not partial.get("_compose_chapters_done"):
+            return self._compose_all_chapters(state, partial)
+
+        return super().step(state)
+
+    def render_hint_for_field(self, field_name: str) -> dict | None:
+        # SP6 has no widgets; chapter prose renders as plain markdown
+        return None
+
+    def _compose_all_chapters(self, state, partial):
+        """Loop all 6 chapters, compose each, emit one AIMessage per chapter +
+        bibliography + summary. Sets _awaiting_confirm=True on the context patch."""
+        context = self._render_context or {}
+        references = self._collect_references(context)
+        chapters: dict[str, dict] = {}
+        extras: list[AIMessage] = []
+        for name in _CHAPTER_ORDER:
+            draft = compose_chapter.invoke({
+                "chapter_name": name,
+                "paradigm": context.get("paradigm") or "quantitative",
+                "context_slice": context,
+                "references": references,
+                "citation_style": context.get("citation_style", "apa7"),
+                "language": context.get("language", "en"),
+            })
+            chapters[name] = draft
+            extras.append(AIMessage(content=f"## Chapter — {name}\n\n{draft.get('prose', '')}"))
+
+        bib = compile_bibliography.invoke({
+            "references": references,
+            "citation_style": context.get("citation_style", "apa7"),
+        })
+        extras.append(AIMessage(content=f"## Bibliography\n\n{bib}"))
+
+        partial["chapters"] = chapters
+        partial["bibliography"] = bib
+        partial["_compose_chapters_done"] = True
+        partial["_awaiting_confirm"] = True
+        partial["_summary_done"] = True  # SP5 pattern — summary IS the summary step
+
+        summary = self._build_compose_summary(chapters, references)
+        return ModuleStepResult(
+            assistant_message=summary,
+            context_patch=partial,
+            transition=False,
+            needs_user_reply=True,
+            extra_messages=extras,
+        )
+
+    def _build_compose_summary(self, chapters: dict, references: list) -> str:
+        """Return the summary message shown after all chapters are composed."""
+        n_uncited = sum(len(c.get("uncited_warnings") or []) for c in chapters.values())
+        msg = [
+            f"Drafted all 6 chapters + bibliography ({len(references)} unique references).",
+        ]
+        if n_uncited:
+            msg.append(
+                f"⚠️ {n_uncited} inline citations flagged as potentially missing "
+                "from the reference pool."
+            )
+        msg.append(
+            "Confirm to export to docx + pdf, or ask for a rewrite "
+            "(e.g. 'rewrite chapter 3 to be less formal')."
+        )
+        return "\n\n".join(msg)
