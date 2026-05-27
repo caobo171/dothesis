@@ -188,3 +188,68 @@ def test_patch_chapter_404_for_other_user(client):
         json={"prose": "intruder"},
     )
     assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /projects/{pid}/m5/references — M2 reference pool with stable ids
+# ---------------------------------------------------------------------------
+
+
+def test_get_references_returns_dedup_m2_pool(client):
+    """GET /m5/references returns deduped M2 pool with stable hash ids."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    # 1. Create authenticated user + project
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "X"})
+    assert r.status_code == 200
+    pid = r.json()["id"]
+
+    # 2. Seed M2 ref pool with two research gaps; one gap has a duplicate paper
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m2_literature = {
+            "research_gaps": [
+                {
+                    "supporting_papers": [
+                        {"author": "Smith", "year": "2024", "title": "A"},
+                        {"author": "Jones", "year": "2023", "title": "B"},
+                    ]
+                },
+                {
+                    "supporting_papers": [
+                        {"author": "Smith", "year": "2024", "title": "A"},  # duplicate
+                    ]
+                },
+            ]
+        }
+        flag_modified(cs, "m2_literature")
+        db.commit()
+
+    # 3. GET /m5/references
+    r = client.get(f"/api/v1/projects/{pid}/m5/references")
+    assert r.status_code == 200
+    refs = r.json()
+
+    # 4. Assert deduplication + stable ids
+    assert len(refs) == 2, f"Expected 2 deduplicated references, got {len(refs)}: {refs}"
+    # All refs should have "id" key
+    assert all("id" in ref for ref in refs), f"All refs must have 'id' key: {refs}"
+    # Extract (author, year) pairs to verify dedup
+    authors_years = {(ref["author"], ref["year"]) for ref in refs}
+    assert authors_years == {("Smith", "2024"), ("Jones", "2023")}
+
+
+def test_get_references_returns_empty_when_no_m2(client):
+    """GET /m5/references returns [] when no M2 pool exists."""
+    # Create authenticated user + project (no M2 seeding)
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "X"})
+    assert r.status_code == 200
+    pid = r.json()["id"]
+
+    # GET /m5/references on empty project
+    r = client.get(f"/api/v1/projects/{pid}/m5/references")
+    assert r.status_code == 200
+    assert r.json() == []
