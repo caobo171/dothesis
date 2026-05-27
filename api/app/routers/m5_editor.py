@@ -267,3 +267,59 @@ def paraphrase_chapter_selection(
     edit_dict = _append_pending_edit(cs, chapter_name, pe)
     db.commit()
     return edit_dict
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{project_id}/m5/chapters/{chapter_name}/translate
+# ---------------------------------------------------------------------------
+
+
+class TranslateBody(BaseModel):
+    from_offset: int
+    to_offset: int
+    target_lang: str
+
+
+@router.post("/projects/{project_id}/m5/chapters/{chapter_name}/translate")
+def translate_chapter_selection(
+    project_id: uuid.UUID,
+    chapter_name: str,
+    body: TranslateBody,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """Translate a text selection in a chapter and return a PendingEdit.
+
+    Decision: Mirrors the paraphrase endpoint — creates a PendingEdit so the
+    front-end can present an accept/reject ribbon before the prose is mutated.
+    The LLM receives target_lang + ±200 chars of surrounding context to produce
+    a translation that fits naturally into the surrounding prose.
+    """
+    _owned_project(db, user, project_id)
+    cs = db.get(ContextStore, project_id)
+    ch = _load_chapter_or_404(cs, chapter_name)
+    prose = ch.get("prose", "")
+    _validate_range(prose, body.from_offset, body.to_offset)
+    before, after = _surrounding_context(prose, body.from_offset, body.to_offset)
+    selection = prose[body.from_offset: body.to_offset]
+    new_text = translate_selection.invoke({
+        "chapter_name": chapter_name,
+        "target_lang": body.target_lang,
+        "context_before": before,
+        "selection": selection,
+        "context_after": after,
+    })
+    pe = PendingEdit(
+        id=uuid4().hex,
+        chapter_name=chapter_name,
+        from_offset=body.from_offset,
+        to_offset=body.to_offset,
+        old_text=selection,
+        new_text=new_text,
+        source="translate",
+        pending_at=datetime.now(timezone.utc),
+        metadata={"target_lang": body.target_lang},
+    )
+    edit_dict = _append_pending_edit(cs, chapter_name, pe)
+    db.commit()
+    return edit_dict

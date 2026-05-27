@@ -345,3 +345,79 @@ def test_paraphrase_offsets_out_of_range_returns_400(client):
         json={"from_offset": 0, "to_offset": 9999},
     )
     assert r.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# POST /projects/{pid}/m5/chapters/{chapter_name}/translate — inline AI
+# ---------------------------------------------------------------------------
+
+
+@patch("orchestrator.tools.m5_inline._call_llm")
+def test_translate_creates_pending_edit_with_target_lang(mock_llm, client):
+    """Mock the LLM, translate a selection, verify PendingEdit landed with target_lang.
+
+    Decision: mirrors the paraphrase test pattern. The endpoint creates a PendingEdit
+    (not an accepted edit) so the front-end can present an accept/reject ribbon.
+    The metadata dict includes target_lang so the client can reconstruct the operation.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    mock_llm.return_value = "Một nghiên cứu gần đây"
+
+    # 1. Authenticate + create project + seed chapters
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    # 2. Overwrite the intro prose with the target sentence we'll select from
+    full_prose = "The literature is broad. Recent studies have shown that algo decisions matter."
+    target = "Recent studies have shown"
+    from_o = full_prose.index(target)
+    to_o = from_o + len(target)
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing["chapters"]["intro"]["prose"] = full_prose
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    # 3. POST translate with target_lang
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/translate",
+        json={"from_offset": from_o, "to_offset": to_o, "target_lang": "vi"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    # 4. Response shape assertions
+    assert body["source"] == "translate"
+    assert body["new_text"] == "Một nghiên cứu gần đây"
+    assert body["old_text"] == target
+    assert body["from_offset"] == from_o
+    assert body["to_offset"] == to_o
+    assert body["metadata"]["target_lang"] == "vi"
+
+    # 5. Verify PendingEdit persisted into ContextStore
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        pending = cs.m5_writing["chapters"]["intro"]["pending_edits"]
+        assert len(pending) == 1
+        assert pending[0]["source"] == "translate"
+        assert pending[0]["new_text"] == "Một nghiên cứu gần đây"
+        assert pending[0]["metadata"]["target_lang"] == "vi"
+
+
+def test_translate_400_on_missing_target_lang(client):
+    """Missing target_lang field returns 422 via FastAPI body validation.
+
+    Decision: This is a required field in TranslateBody, so FastAPI rejects the
+    request before it reaches the endpoint handler.
+    """
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/translate",
+        json={"from_offset": 0, "to_offset": 5},  # target_lang is missing
+    )
+    assert r.status_code == 422
