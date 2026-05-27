@@ -80,6 +80,41 @@ def _upload_to_s3(local_path: str, project_id: str, kind: str, filename: str) ->
 
 _CITE_PATTERN = re.compile(r"\((?P<author>[A-Z][\w-]+(?: et al\.)?), (?P<year>\d{4})\)")
 
+# SP6.5: separate regex used by validate_citations_plain for the autosave PATCH
+# endpoint. Broader than _CITE_PATTERN — accepts any author token and n.d. years
+# so the inline autosave validator is tolerant of varied LLM citation styles.
+_CITATION_REGEX = re.compile(r"\(([^)]+?),\s*(\d{4}|n\.d\.)\)")
+
+
+def validate_citations_plain(prose: str, reference_pool: list[dict]) -> dict:
+    """Extract (Author, Year) patterns; classify as used vs uncited based on pool.
+
+    SP6.5: called directly by the autosave PATCH endpoint without @tool overhead.
+    Uses _CITATION_REGEX (broader pattern, accepts n.d.) unlike the older
+    _CITE_PATTERN. Returns {"citations_used": [...], "uncited_warnings": [...]}
+    preserving first-occurrence order with no duplicates.
+    """
+    # Decision: strip whitespace from pool keys so "Smith " and "Smith" match,
+    # and convert year to string to align with the regex group (always a string).
+    pool_keys = {
+        (str(r.get("author", "")).strip(), str(r.get("year", "")).strip())
+        for r in reference_pool
+    }
+    seen: dict[str, bool] = {}    # ordered dedupe via insertion-order dict
+    citations_used: list[str] = []
+    uncited: list[str] = []
+    for match in _CITATION_REGEX.finditer(prose):
+        author, year = match.group(1).strip(), match.group(2).strip()
+        text = f"({author}, {year})"
+        if text in seen:
+            continue
+        seen[text] = True
+        if (author, year) in pool_keys:
+            citations_used.append(text)
+        else:
+            uncited.append(text)
+    return {"citations_used": citations_used, "uncited_warnings": uncited}
+
 
 def validate_citations(prose: str, references: list[dict]) -> tuple[list[str], list[str]]:
     """Regex-scan prose for (Author, Year) patterns; partition into
