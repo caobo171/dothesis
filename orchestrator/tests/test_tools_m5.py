@@ -261,3 +261,79 @@ def test_compile_bibliography_empty_references():
     from orchestrator.tools.m5_writing import compile_bibliography
     out = compile_bibliography.invoke({"references": [], "citation_style": "apa7"})
     assert "No references" in out
+
+
+def test_compose_chapter_returns_chapter_draft_shape(monkeypatch):
+    """compose_chapter calls the LLM with a chapter prompt + returns ChapterDraft dict."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = (
+        "# Introduction\n\nThis is a draft intro citing (Bass, 1990).\n"
+    )
+    monkeypatch.setattr(m5_writing, "_get_llm", lambda: fake_llm)
+
+    refs = [{"author": "Bass", "year": 1990, "title": "Leadership"}]
+    out = m5_writing.compose_chapter.invoke({
+        "chapter_name": "intro",
+        "paradigm": "quantitative",
+        "context_slice": {
+            "research_title": "Leadership and Engagement",
+            "field": "Management", "paradigm": "quantitative",
+            "research_type": "quantitative",
+            "objectives": ["O1"], "research_questions": ["RQ1"],
+            "target_population": "SME employees", "scope": "VN, 2026",
+        },
+        "references": refs,
+        "citation_style": "apa7",
+        "language": "en",
+    })
+    assert out["name"] == "intro"
+    assert out["prose"].startswith("# Introduction")
+    assert "Bass, 1990" in out["citations_used"]
+    assert out["uncited_warnings"] == []
+
+
+def test_compose_chapter_flags_uncited(monkeypatch):
+    """When the LLM cites a reference NOT in the pool, it's flagged."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = (
+        "Some studies (Smith, 2023) suggest X. Others (Bass, 1990) agree.\n"
+    )
+    monkeypatch.setattr(m5_writing, "_get_llm", lambda: fake_llm)
+
+    refs = [{"author": "Bass", "year": 1990}]
+    out = m5_writing.compose_chapter.invoke({
+        "chapter_name": "intro",
+        "paradigm": "quantitative",
+        "context_slice": {"research_title": "x", "objectives": []},
+        "references": refs,
+        "citation_style": "apa7", "language": "en",
+    })
+    assert "Bass, 1990" in out["citations_used"]
+    assert "Smith, 2023" in out["uncited_warnings"]
+    assert "uncited" in out["prose"].lower() or "⚠️" in out["prose"]
+
+
+def test_compose_chapter_falls_back_on_llm_error(monkeypatch):
+    """compose_chapter survives an LLM exception with a placeholder prose."""
+    from orchestrator.tools import m5_writing
+    from unittest.mock import MagicMock
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.side_effect = RuntimeError("API down")
+    monkeypatch.setattr(m5_writing, "_get_llm", lambda: fake_llm)
+
+    out = m5_writing.compose_chapter.invoke({
+        "chapter_name": "intro",
+        "paradigm": "quantitative",
+        "context_slice": {"research_title": "x", "objectives": []},
+        "references": [],
+        "citation_style": "apa7", "language": "en",
+    })
+    assert out["name"] == "intro"
+    assert "Composition failed" in out["prose"] or "[Composition failed" in out["prose"]

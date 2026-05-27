@@ -11,6 +11,7 @@ implementation. Proper engine integration is a follow-on sub-project.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -27,6 +28,9 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 logger = logging.getLogger(__name__)
+
+# Directory where M5 chapter prompt templates live.
+_PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts" / "m5"
 
 
 def _scratch_dir() -> Path:
@@ -208,6 +212,56 @@ class CitationCompiler:
         return "\n".join(lines)
 
 
+# --- M5 LLM helpers -------------------------------------------------------
+
+def _format_references_for_prompt(refs: list[dict]) -> str:
+    """One reference per line, numbered. Used inside chapter prompts."""
+    if not refs:
+        return "(no references available — write without inline citations)"
+    lines = []
+    for i, r in enumerate(refs, 1):
+        author = r.get("author", "Anon")
+        year = r.get("year", "n.d.")
+        title = r.get("title", "")
+        lines.append(f"[{i}] {author} ({year}). {title}".strip())
+    return "\n".join(lines)
+
+
+def _safe_format_kwargs(context_slice: dict) -> dict:
+    """Convert dict/list values to JSON strings so str.format() doesn't break."""
+    out = {}
+    for k, v in context_slice.items():
+        if isinstance(v, (dict, list)):
+            out[k] = json.dumps(v, ensure_ascii=False, default=str)
+        elif v is None:
+            out[k] = ""
+        else:
+            out[k] = str(v)
+    return out
+
+
+def _annotate_uncited(prose: str, uncited: list[str]) -> str:
+    """Append a notice block listing any uncited (Author, Year) flags."""
+    if not uncited:
+        return prose
+    notice = (
+        "\n\n> ⚠️ The following inline citations are not present in the "
+        "M2 reference pool and may be hallucinated: "
+        + ", ".join(uncited)
+        + ". Verify or remove."
+    )
+    return prose + notice
+
+
+def _get_llm():
+    """LLM factory for M5 tools. Monkeypatchable in tests."""
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    return ChatGoogleGenerativeAI(
+        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.0-flash-001"),
+        temperature=0.4,
+    )
+
+
 # --- Public tools --------------------------------------------------------
 
 @tool
@@ -270,3 +324,56 @@ def compile_bibliography(references: list[dict], citation_style: str) -> str:
     if not references:
         return "(No references)"
     return CitationCompiler(citation_style).compile(references)
+
+
+@tool
+def compose_chapter(
+    chapter_name: str, paradigm: str, context_slice: dict,
+    references: list[dict], citation_style: str, language: str,
+) -> dict:
+    """Compose one chapter via LLM, returns ChapterDraft dict.
+
+    Loads orchestrator/prompts/m5/<chapter_name>.md as the prompt template;
+    fills it with the context_slice + references; calls the LLM; runs
+    validate_citations on the result; returns
+    {name, prose, citations_used, uncited_warnings}.
+    """
+    prompt_template = (_PROMPT_DIR / f"{chapter_name}.md").read_text()
+    refs_block = _format_references_for_prompt(references)
+    safe_kwargs = _safe_format_kwargs(context_slice)
+    safe_kwargs.setdefault("paradigm", paradigm)
+    safe_kwargs.setdefault("language", language)
+    safe_kwargs.setdefault("citation_style", citation_style)
+    safe_kwargs["references_list"] = refs_block
+    # str.format may KeyError on placeholders not in safe_kwargs — pre-extract
+    # all expected keys and fall back to empty string for missing context.
+    expected_keys = (
+        "research_title", "field", "paradigm", "research_type",
+        "objectives", "research_questions", "target_population", "scope",
+        "literature_review_doc", "research_gaps",
+        "design", "tool", "conceptual_model", "scale_items",
+        "themes", "interview_guide", "purposive_criteria",
+        "sampling_strategy", "target_sample_size", "mixed_design_type",
+        "data_type_detected", "results", "qual_codes", "qual_themes",
+        "custom_analyses",
+        "language", "citation_style", "references_list",
+    )
+    for k in expected_keys:
+        safe_kwargs.setdefault(k, "")
+
+    try:
+        prompt = prompt_template.format(**safe_kwargs)
+        prose = _get_llm().invoke(prompt).content.strip()
+    except Exception as e:
+        logger.warning("compose_chapter LLM call failed for %s: %s", chapter_name, e)
+        prose = f"# {chapter_name.title()}\n\n[Composition failed — please retry]"
+
+    cited_in_pool, uncited = validate_citations(prose, references)
+    if uncited:
+        prose = _annotate_uncited(prose, uncited)
+    return {
+        "name": chapter_name,
+        "prose": prose,
+        "citations_used": cited_in_pool,
+        "uncited_warnings": uncited,
+    }
