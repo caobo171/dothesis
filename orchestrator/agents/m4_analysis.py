@@ -131,19 +131,11 @@ class M4Agent(ModuleAgent):
     }
 
     def step(self, state):
-        """Populate caches, then dispatch execution phase if we're at a pseudo-field.
-
-        Reads m3_design.tool, m3_design.paradigm, partial.data_type_detected,
-        partial.data_paste, partial.analysis_outline and populates class-level
-        _render_* caches. When the next missing field is _run_execution or
-        _run_qual_pipeline, delegates to the respective execution handler instead
-        of calling the LLM — this is the Task 12 extension on top of Task 11.
-        """
+        """Populate caches, dispatch execution phase, OR detect ad-hoc request."""
         from orchestrator.state import get_module_slice
         cls = type(self)
         partial = dict(get_module_slice(state["context_store"], self.module_key))
         m3 = state["context_store"].m3_design or {}
-        # Prefer post-paste data_type_detected over m3.tool if it disagrees.
         cls._render_paradigm = m3.get("paradigm")
         cls._render_outline_type = (
             partial.get("data_type_detected")
@@ -152,7 +144,13 @@ class M4Agent(ModuleAgent):
         cls._render_paste_text = partial.get("data_paste", "")
         cls._render_outline = partial.get("analysis_outline")
 
-        # Execution-phase dispatch when next missing field is a pseudo-field.
+        # Ad-hoc detection: if execution is done and the latest user message
+        # looks like an extra-analysis request, route to run_extra_analysis
+        # before the base class's confirm flow takes over.
+        if partial.get("_run_execution_done") or partial.get("_run_qual_pipeline_done"):
+            if self._is_ad_hoc_request(state["messages"]):
+                return self._handle_ad_hoc(state, partial)
+
         missing = self._next_missing_field(partial)
         if missing == "_run_execution":
             return self._run_quant_execution(state, partial)
@@ -243,6 +241,54 @@ class M4Agent(ModuleAgent):
             f"Ran {total} steps. ⚠️ {len(breached)} flagged threshold breaches: {flagged}. "
             "Review the per-step results above. Confirm to move on, or ask for an "
             "ad-hoc analysis to investigate further."
+        )
+
+    _AD_HOC_KEYWORDS = (
+        "also run", "also test", "rerun", "re-run", "run again",
+        "mediation", "moderation", "moderate", "controlling for",
+        "with control", "ad-hoc", "extra analysis", "additional analysis",
+    )
+
+    def _is_ad_hoc_request(self, messages) -> bool:
+        """Heuristic: scan the latest user message for ad-hoc keywords."""
+        from langchain_core.messages import HumanMessage
+        last_user = next(
+            (m.content for m in reversed(messages) if isinstance(m, HumanMessage)),
+            "",
+        )
+        if not last_user:
+            return False
+        text = last_user.lower()
+        return any(kw in text for kw in self._AD_HOC_KEYWORDS)
+
+    def _handle_ad_hoc(self, state, partial):
+        """Route an ad-hoc user message to run_extra_analysis + append to custom_analyses.
+
+        Decision: appending to custom_analyses (separate from results) lets the
+        frontend render ad-hoc results distinctly from the confirmed outline steps,
+        keeping the main results dict clean.
+        """
+        from langchain_core.messages import AIMessage, HumanMessage
+        from orchestrator.agents.base import ModuleStepResult
+        from orchestrator.tools.m4_parsers import format_step_as_markdown
+
+        last_user = next(
+            (m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
+            "",
+        )
+        sr = run_extra_analysis.invoke({
+            "step_description": last_user.strip(),
+            "data_paste": self._render_paste_text,
+        })
+        custom = list(partial.get("custom_analyses", []))
+        custom.append(sr)
+        partial["custom_analyses"] = custom
+        msg = format_step_as_markdown(sr)
+        return ModuleStepResult(
+            assistant_message=msg,
+            context_patch=partial,
+            transition=False,
+            needs_user_reply=True,
         )
 
     def _format_qual_codes_markdown(self, codes: list[dict]) -> str:
