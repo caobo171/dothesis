@@ -139,3 +139,51 @@ def test_graph_node_attaches_tool_calls_json_to_ai_message(monkeypatch):
         if m.__class__.__name__ == "AIMessage"
     )
     assert last_ai.additional_kwargs.get("tool_calls_json") == hint
+
+
+def test_graph_node_emits_extra_messages_from_step_result(monkeypatch):
+    """When ModuleStepResult.extra_messages is non-empty, the graph node
+    emits the primary AIMessage followed by each extra message in order."""
+    from langchain_core.messages import AIMessage, HumanMessage
+    from langgraph.checkpoint.memory import MemorySaver
+    from orchestrator.agents.base import ModuleStepResult
+    from orchestrator.agents.m1_topic import M1Agent
+    from orchestrator.graph import build_graph
+    from orchestrator.state import ContextStore
+
+    extra1 = AIMessage(content="step 1 result")
+    extra2 = AIMessage(content="step 2 result")
+
+    def fake_step(self, state):
+        return ModuleStepResult(
+            assistant_message="primary",
+            context_patch={"confirmed_at": "2026-05-27"},
+            transition=False, needs_user_reply=True,
+            extra_messages=[extra1, extra2],
+        )
+    monkeypatch.setattr(M1Agent, "step", fake_step)
+
+    cs = ContextStore(**{
+        m: {"confirmed_at": "2026-05-26"}
+        for m in ("m2_literature", "m3_design", "m4_analysis", "m5_writing")
+    })
+    g = build_graph(interactive=False, checkpointer=MemorySaver())
+    final = g.invoke({
+        "messages": [HumanMessage(content="start")],
+        "current_module": "M1",
+        "context_store": cs,
+        "mode": "interactive",
+        "user_intent": None,
+        "pending_confirmations": [],
+    }, config={"configurable": {"thread_id": "test-extra-msgs"}})
+
+    ai_msgs = [m for m in final["messages"] if m.__class__.__name__ == "AIMessage"]
+    contents = [m.content for m in ai_msgs]
+    # The primary message + both extras must appear in order.
+    assert "primary" in contents
+    assert "step 1 result" in contents
+    assert "step 2 result" in contents
+    primary_idx = contents.index("primary")
+    s1_idx = contents.index("step 1 result")
+    s2_idx = contents.index("step 2 result")
+    assert primary_idx < s1_idx < s2_idx
