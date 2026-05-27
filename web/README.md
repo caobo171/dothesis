@@ -19,11 +19,11 @@ npm start
 
 ## Structure
 
-- `app/page.jsx` — entry; routes between Dashboard / Wizard / Billing / per-paper view via local state.
+- `app/page.jsx` — entry; routes between Dashboard / Chat / Billing / per-paper view via local state.
 - `app/components/`
   - `shared.jsx` — Sidebar, Topbar, Brand, Badge, Card, ProgressBar, KPI
   - `dashboard.jsx` — drafts table + credit card + KPI strip + running highlight
-  - `wizard.jsx` — new-thesis brief (topic, level, sources, model, style, language)
+  - `chat/` — chat-based research copilot (M1–M5 module flow, ChatPane, ProjectListGrid). Replaced the legacy wizard surface on 2026-05-27.
   - `paper-shell.jsx` — per-paper header + 4 tabs (Live progress · Draft · Citations · Export)
   - `agent-run.jsx` — hero pipeline view: 6 phases, 19 agents, live activity feed, chapter progress, citation stream
   - `draft-editor.jsx` — serif-typeset thesis with outline rail + citation rail

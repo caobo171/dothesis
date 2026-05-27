@@ -30,7 +30,8 @@ export const Brand = () => (
 // Billing/Affiliate intentionally omitted per MVP spec — re-add when billing lands.
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: "home" },
-  { href: "/wizard", label: "New Thesis", icon: "plus", badge: "AI" },
+  // Wizard retired 2026-05-27 — chat UI is the primary entry point now.
+  { href: "/chat", label: "New Thesis", icon: "plus", badge: "AI" },
 ];
 
 export const Sidebar = () => {

@@ -9,12 +9,6 @@ export const Dashboard = ({ papers = [], loading = false, error = null }) => {
 
   return (
     <section className="space-y-8 max-w-6xl mx-auto w-full">
-      {/* SP7 banner: surfaces the new chat UI to wizard users */}
-      <div className="bg-purple-50 border border-purple-200 rounded-md px-4 py-3 text-sm text-purple-900 mb-6">
-        <strong>New:</strong> Try the chat-based research experience.{" "}
-        <a href="/chat" className="underline font-medium">Open the chat UI →</a>
-      </div>
-
       {/* Header: greeting + CTA on the left, credit card on the right */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
         <div className="flex-1 space-y-6">
@@ -30,7 +24,7 @@ export const Dashboard = ({ papers = [], loading = false, error = null }) => {
           </div>
 
           <Link
-            href="/wizard"
+            href="/chat"
             className="w-full max-w-md flex items-center justify-center gap-3 py-3 px-5 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 transition-all focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 shadow-sm"
           >
             <div className="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center">

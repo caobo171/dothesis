@@ -52,10 +52,7 @@ export function ProjectListGrid() {
         </button>
       </div>
 
-      <div className="bg-purple-50 border border-purple-200 rounded-md px-4 py-3 text-sm text-purple-900 mb-6">
-        Auto-draft works here. For full thesis generation, the wizard is still recommended
-        until module-specific UIs ship. <Link href="/wizard" className="underline">Open wizard</Link>
-      </div>
+      {/* Wizard banner removed 2026-05-27 — chat UI is the primary surface now (full M1–M5 module flow is shipped). */}
 
       {projects && projects.length === 0 && (
         <div className="text-center py-12 text-gray-500">No projects yet. Click the New project button to get started.</div>

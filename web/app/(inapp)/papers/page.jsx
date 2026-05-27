@@ -19,7 +19,7 @@ export default function PapersPage() {
           </p>
         </div>
         <Link
-          href="/wizard"
+          href="/chat"
           className="inline-flex items-center gap-2 py-2 px-4 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 transition-colors shadow-sm"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -39,7 +39,7 @@ export default function PapersPage() {
         <div className="bg-white rounded-xl border border-dashed border-ink-200 p-12 text-center">
           <h2 className="text-base font-semibold text-ink-900">No drafts yet</h2>
           <p className="text-sm text-ink-500 mt-2">
-            <Link href="/wizard" className="text-primary-600 font-medium hover:underline">
+            <Link href="/chat" className="text-primary-600 font-medium hover:underline">
               Start your first one →
             </Link>
           </p>
