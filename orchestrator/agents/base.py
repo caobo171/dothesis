@@ -79,14 +79,36 @@ class ModuleAgent(ABC):
 
         # Interactive: check if we were waiting for the user to fill a specific field.
         awaiting_field = partial.pop("_awaiting_field", None)
+        delegated_notice: str | None = None
         if awaiting_field:
-            # Extract the field value from the latest user message.
-            extracted = self._extract_answer(state, awaiting_field)
-            if extracted is not None:
-                partial[awaiting_field] = extracted
+            last_user = next(
+                (m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
+                "",
+            )
+            if self._looks_like_delegation(last_user):
+                # User asked the agent to pick for them. Generate a reasonable
+                # value and stash a notice so the next assistant message tells
+                # the user what was chosen.
+                suggested = self._suggest_field_value(state, awaiting_field, partial)
+                if suggested is not None:
+                    partial[awaiting_field] = suggested
+                    delegated_notice = (
+                        f"Got it — I'll go with **{suggested}** for "
+                        f"`{awaiting_field}`. We can refine that later."
+                    )
+            else:
+                # Normal path: extract the field value from the user's reply.
+                extracted = self._extract_answer(state, awaiting_field)
+                if extracted is not None:
+                    partial[awaiting_field] = extracted
 
         # Continue clarification: find the next missing field or summarize for confirm.
-        return self._ask_next_question(state, partial)
+        result = self._ask_next_question(state, partial)
+        if delegated_notice:
+            # Prepend the notice so the user sees what was auto-filled BEFORE
+            # the agent moves on to the next question.
+            result.extra_messages = [AIMessage(content=delegated_notice)] + list(result.extra_messages or [])
+        return result
 
     def _auto_fill(self, state, partial: dict) -> ModuleStepResult:
         """In auto mode, ask the LLM to fill all required fields at once silently."""
@@ -176,6 +198,45 @@ class ModuleAgent(ABC):
         except (json.JSONDecodeError, TypeError):
             # Fall back to using the raw user message as the value.
             return last_user
+
+    # Phrases that indicate the user is delegating the answer to the agent.
+    # Detected before _extract_answer so we don't try to parse "you decide" as
+    # the actual field value (which yields null and loops the conversation).
+    _DELEGATE_KEYWORDS = (
+        "you decide", "you suggest", "you recommend", "you choose", "you pick",
+        "i don't know", "i dont know", "i don't have", "no idea", "not sure",
+        "no clue", "anything works", "you tell me", "your call", "up to you",
+        "surprise me", "whatever you think",
+        "bạn quyết định", "tùy bạn", "tôi không biết", "không biết", "tùy ý",
+    )
+
+    def _looks_like_delegation(self, text: str) -> bool:
+        t = (text or "").lower().strip()
+        return any(k in t for k in self._DELEGATE_KEYWORDS)
+
+    def _suggest_field_value(self, state, field_name: str, partial: dict):
+        """User asked the agent to choose. Generate one reasonable value via LLM.
+
+        Uses already-filled fields as context so the suggestion is coherent
+        (e.g., research_title aligned with field and research_type).
+        """
+        context_summary = json.dumps(
+            {k: v for k, v in partial.items() if not k.startswith("_")},
+            default=str, ensure_ascii=False,
+        )
+        prompt = (
+            f"{self.system_prompt}\n\n"
+            f"The user has asked you to choose a value for the schema field "
+            f"'{field_name}'. Generate ONE concrete, sensible value. The "
+            f"schema field is described as: {self._field_description(field_name)}\n\n"
+            f"Already-filled fields for context:\n{context_summary}\n\n"
+            f"Respond with ONLY a JSON object: {{\"value\": <the value>}}."
+        )
+        try:
+            data = json.loads(_strip_code_fence(self._get_llm().invoke(prompt).content))
+            return data.get("value")
+        except (json.JSONDecodeError, TypeError):
+            return None
 
     @staticmethod
     def _is_affirmative(messages: list[BaseMessage]) -> bool:
