@@ -1,9 +1,8 @@
 """M3 — Research Design agent (paradigm-aware multi-method)."""
-import json
 from pathlib import Path
 
 from orchestrator.agents.base import ModuleAgent
-from orchestrator.agents.widgets import CardGridHint, CardOption, ListEditorHint, ListItem
+from orchestrator.agents.widgets import ListEditorHint, ListItem
 from orchestrator.schemas.m3 import M3Output
 from orchestrator.tools.m3_design import (
     build_conceptual_model, compose_interview_guide, estimate_sample_size,
@@ -14,18 +13,6 @@ from orchestrator.tools.m3_design import (
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _PROMPT = (_PROMPT_DIR / "m3.md").read_text()
-_OPTIONS_DIR = _PROMPT_DIR / "m3"
-
-
-def _load_options(name: str) -> list[CardOption]:
-    """Load a `_options_<name>.json` file and return as a list of CardOption.
-
-    Decision: reading from static JSON files keeps option data out of Python
-    code and makes it easy to update labels/descriptions without touching agent
-    logic. The files live next to the m3 prompt so they ship together.
-    """
-    raw = json.loads((_OPTIONS_DIR / f"_options_{name}.json").read_text())
-    return [CardOption(**o) for o in raw]
 
 
 # SP4: paradigm-aware field walk order. Keys are the resolved paradigm-or-mixed-type.
@@ -73,10 +60,21 @@ class M3Agent(ModuleAgent):
         suggest_purposive_criteria,
     ]
 
+    # Dynamic LLM-generated cards for the bounded-selection slots. The base
+    # class reads `card_fields`, asks the LLM for options seeded by `partial`,
+    # which already carries the resolved paradigm so quant vs qual suggestions
+    # diverge naturally (e.g. SmartPLS/AMOS for quant `tool`, NVivo/MAXQDA for
+    # qual). `design` is paradigm-gated in render_hint_for_field below.
+    card_fields = {"tool", "design", "mixed_design_type"}
+    card_field_titles = {
+        "tool": "Which analysis tool will you use?",
+        "design": "Which qualitative design fits your study?",
+        "mixed_design_type": "Which mixed-methods design?",
+    }
+
     # SP4: class-level caches the agent's step() populates before the
-    # ModuleAgent base calls render_hint_for_field. The hook signature is
-    # parameter-less for compatibility with the other 4 agents; M3 stashes
-    # everything it needs here.
+    # ModuleAgent base calls render_hint_for_field. The list-editor branches
+    # below read these; card branches now read paradigm from `partial` directly.
     _render_paradigm: str | None = None
     _render_research_question: str = ""
     _render_gaps_summary: str = ""
@@ -144,42 +142,28 @@ class M3Agent(ModuleAgent):
                 return name
         return None
 
-    def render_hint_for_field(self, field_name: str) -> dict | None:
+    def render_hint_for_field(self, field_name: str, partial: dict | None = None) -> dict | None:
         """Return a widget hint dict for the field, or None for free-text fields.
 
-        Decision: card_grid for bounded-selection fields (tool, design,
-        mixed_design_type); list_editor for list-valued fields that benefit from
-        AI-suggested initial items (themes, interview_guide, purposive_criteria,
-        conceptual_model, scale_items). Free-text fields like sampling_strategy
-        and target_sample_size return None so the LLM coaches interactively.
+        Card-grid fields (tool / design / mixed_design_type) defer to the base
+        class's dynamic LLM generator — it reads `card_fields`, asks the LLM
+        for options seeded by `partial`, returns a CardGridHint. `design` is
+        paradigm-gated: quant flows return None so recommend_methodology drives
+        the conversation as free text.
+
+        List-editor fields (themes / interview_guide / purposive_criteria /
+        conceptual_model / scale_items) still call the dedicated tools so the
+        initial item set is structurally correct (nested sub_items, hypothesis
+        meta, etc.) — those branches stay below.
+
+        Free-text fields (sampling_strategy, target_sample_size) return None.
         """
-        # Card-grid hints (selection points) ---
-        if field_name == "tool":
-            opts = _load_options("tool_qual" if self._render_paradigm == "qualitative"
-                                 else "tool_quant")
-            return CardGridHint(
-                field_name="tool",
-                title="Which analysis tool will you use?",
-                options=opts, columns=3,
-            ).model_dump()
-
-        if field_name == "design":
-            # Quant `design` is free-text (recommend_methodology drives the
-            # conversation). Qual `design` shows the four canonical designs.
-            if self._render_paradigm != "qualitative":
-                return None
-            return CardGridHint(
-                field_name="design",
-                title="Which qualitative design fits your study?",
-                options=_load_options("design_qual"), columns=2,
-            ).model_dump()
-
-        if field_name == "mixed_design_type":
-            return CardGridHint(
-                field_name="mixed_design_type",
-                title="Which mixed-methods design?",
-                options=_load_options("mixed_design_type"), columns=2,
-            ).model_dump()
+        # Card-grid hints — delegate to base class dynamic generator.
+        # `design` is qual-only; quant uses free-text driven by the prompt.
+        if field_name == "design" and (partial or {}).get("paradigm") != "qualitative":
+            return None
+        if field_name in self.card_fields:
+            return super().render_hint_for_field(field_name, partial)
 
         # List-editor hints (editable list fields) ---
         if field_name == "themes":

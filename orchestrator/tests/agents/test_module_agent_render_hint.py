@@ -21,7 +21,7 @@ class _PlainAgent(ModuleAgent):
 
 
 class _HintingAgent(_PlainAgent):
-    def render_hint_for_field(self, field_name):
+    def render_hint_for_field(self, field_name, partial=None):
         if field_name == "color":
             return {
                 "widget_type": "card_grid",

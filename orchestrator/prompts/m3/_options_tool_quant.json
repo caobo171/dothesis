@@ -1,7 +1,0 @@
-[
-  {"value": "SmartPLS",     "label": "SmartPLS",        "description": "Variance-based SEM; small-to-medium samples with latent variables"},
-  {"value": "AMOS",         "label": "IBM AMOS",        "description": "Covariance-based SEM; needs N ≥ 200; classic publishable choice"},
-  {"value": "R lavaan",     "label": "R lavaan",        "description": "Open-source CB-SEM in R; reproducible workflows"},
-  {"value": "SPSS",         "label": "SPSS",            "description": "Regression / ANOVA / mediation via PROCESS macro; no latent SEM"},
-  {"value": "Stata",        "label": "Stata",           "description": "Regression / SEM via the sem command; common in economics"}
-]

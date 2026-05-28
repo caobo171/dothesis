@@ -6,6 +6,7 @@ from uuid import uuid4
 from langchain_core.messages import AIMessage, HumanMessage
 
 from orchestrator.agents.base import ModuleAgent, ModuleStepResult
+from orchestrator.message_utils import text_of
 from orchestrator.schemas.m5 import M5Output, ExportArtifact
 from orchestrator.schemas.m5_editor import PendingEdit
 from orchestrator.tools.m5_writing import (
@@ -111,7 +112,7 @@ class M5Agent(ModuleAgent):
 
     def _latest_user_message(self, messages) -> str:
         return next(
-            (m.content for m in reversed(messages) if isinstance(m, HumanMessage)),
+            (text_of(m) for m in reversed(messages) if isinstance(m, HumanMessage)),
             "",
         )
 
@@ -331,7 +332,7 @@ class M5Agent(ModuleAgent):
         lines.append("Thesis confirmed and exported. M1-M5 complete.")
         return "\n".join(lines)
 
-    def render_hint_for_field(self, field_name: str) -> dict | None:
+    def render_hint_for_field(self, field_name: str, partial: dict | None = None) -> dict | None:
         # SP6 has no widgets; chapter prose renders as plain markdown
         return None
 

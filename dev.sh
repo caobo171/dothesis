@@ -117,10 +117,26 @@ echo "==> starting web on port ${WEB_PORT:-3000}"
 (cd web && npm run dev) &
 WEB_PID=$!
 
+# --- 3. LangGraph Studio (optional visualizer) ---
+# Boots the local Agent Server that LangSmith Studio talks to so we can see
+# the orchestrator graph + step through state at
+#   https://smith.langchain.com/studio/?baseUrl=http://localhost:${STUDIO_PORT:-8123}
+# Auto-detected: skipped when langgraph-cli isn't installed in the venv.
+# To install: api/.venv/bin/pip install 'langgraph-cli[inmem]'
+STUDIO_PID=""
+if [ -x "$VENV_BIN/langgraph" ] && [ "${STUDIO_ENABLED:-true}" = "true" ]; then
+  echo "==> starting langgraph studio on port ${STUDIO_PORT:-8123}"
+  "$VENV_BIN/langgraph" dev --no-browser --port "${STUDIO_PORT:-8123}" &
+  STUDIO_PID=$!
+  echo "    → studio UI: https://smith.langchain.com/studio/?baseUrl=http://localhost:${STUDIO_PORT:-8123}"
+elif [ ! -x "$VENV_BIN/langgraph" ]; then
+  echo "==> skipping langgraph studio (langgraph-cli not installed in api/.venv)"
+fi
+
 cleanup() {
   echo
-  echo "==> shutting down (api=$API_PID web=$WEB_PID)"
-  kill "$API_PID" "$WEB_PID" 2>/dev/null || true
+  echo "==> shutting down (api=$API_PID web=$WEB_PID studio=${STUDIO_PID:-none})"
+  kill "$API_PID" "$WEB_PID" ${STUDIO_PID:+"$STUDIO_PID"} 2>/dev/null || true
   wait 2>/dev/null || true
   # Postgres is left running on purpose — it persists across restarts.
   # Stop it explicitly with: docker compose down

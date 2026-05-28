@@ -13,6 +13,8 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, ValidationError
 
+from orchestrator.agents.widgets import CardGridHint, CardOption
+from orchestrator.message_utils import text_of
 from orchestrator.state import OrchestratorState, get_module_slice
 
 logger = logging.getLogger(__name__)
@@ -40,22 +42,102 @@ class ModuleAgent(ABC):
     system_prompt: str
     tools: list[Any]
 
+    # Set of schema fields that should render as a card grid when asked.
+    # The card options are generated dynamically per turn via an LLM call
+    # seeded from the already-filled partial state, so suggestions adapt
+    # to context (e.g. when research_title="AI in education" is filled, the
+    # `field` cards lean toward EdTech / Pedagogy / AI Ethics instead of
+    # the generic Marketing / Management list). Subclasses opt in by setting
+    # this and `card_field_titles`. Empty = no cards (free-text input).
+    card_fields: set[str] = set()
+
+    # Human-readable card-grid headers per field. Falls back to a generic
+    # "Which <field name> fits best?" when a field isn't listed here.
+    card_field_titles: dict[str, str] = {}
+
     def _get_llm(self):
         return ChatGoogleGenerativeAI(
             model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
             temperature=0.4,
         )
 
-    def render_hint_for_field(self, field_name: str) -> dict | None:
-        """Optional override: return a widget render hint when asking the user
-        to fill `field_name`. Default returns None (plain-text input).
+    def render_hint_for_field(self, field_name: str, partial: dict | None = None) -> dict | None:
+        """Return a widget render hint for the next question, or None for free-text.
 
-        Subclasses should return a dict matching one of the WidgetHint
-        variants in orchestrator/agents/widgets.py (e.g. CardGridHint).
-        Use `<HintClass>(...).model_dump()` to produce the dict.
+        Default implementation: when `field_name` is in `card_fields`, generates
+        contextually relevant card options via _generate_card_options. Falls
+        back to None (free-text input) when generation fails or yields nothing.
+        Subclasses override only for non-card widget shapes (toggle, slider,
+        list_editor, etc.).
         """
-        # SP3: hook point for card-grid UX — subclasses override per-field
-        return None
+        if field_name not in self.card_fields:
+            return None
+        options = self._generate_card_options(field_name, partial or {})
+        if not options:
+            return None
+        title = self.card_field_titles.get(
+            field_name,
+            f"Which {field_name.replace('_', ' ')} fits best?",
+        )
+        return CardGridHint(
+            field_name=field_name,
+            title=title,
+            options=options,
+            columns=3,
+        ).model_dump()
+
+    def _generate_card_options(self, field_name: str, partial: dict) -> list[CardOption]:
+        """Ask the LLM for contextually relevant card options for `field_name`.
+
+        Seeded with the schema field description + the partial state already
+        filled by the user. Returns [] when the LLM call or parse fails so the
+        caller can fall back to free-text input. Always asks the LLM to include
+        an `Other / Specify` escape hatch so the user can type a custom value
+        even when none of the cards fit.
+        """
+        desc = self._field_description(field_name)
+        context = json.dumps(
+            {k: v for k, v in partial.items() if not k.startswith("_")},
+            default=str, ensure_ascii=False,
+        )
+        prompt = (
+            f"{self.system_prompt}\n\n"
+            f"Generate 5 to 7 distinct, contextually relevant card options to "
+            f"help the user pick a value for the schema field '{field_name}'.\n"
+            f"Field description: {desc}\n\n"
+            f"Already-filled fields for context:\n{context}\n\n"
+            f"Rules:\n"
+            f"- Each card MUST be coherent with the already-filled context.\n"
+            f"- value: short identifier <=30 chars (snake_case or PascalCase OK).\n"
+            f"- label: human-readable display name <=30 chars.\n"
+            f"- description: one short sentence explaining why this option fits "
+            f"the user's situation specifically.\n"
+            f"- Always include one final card with value='Other' and "
+            f"label='Other / Specify' so the user can type a custom value.\n\n"
+            f"Respond with ONLY a JSON array of "
+            f"{{\"value\": str, \"label\": str, \"description\": str}} objects. "
+            f"No prose, no markdown."
+        )
+        try:
+            raw = self._get_llm().invoke(prompt).content
+            data = json.loads(_strip_code_fence(raw))
+            if not isinstance(data, list):
+                return []
+            options: list[CardOption] = []
+            for entry in data:
+                if not isinstance(entry, dict):
+                    continue
+                try:
+                    options.append(CardOption(**entry))
+                except ValidationError:
+                    continue
+            return options
+        except Exception:  # noqa: BLE001 - LLM/JSON failure is best-effort
+            logger.exception(
+                "%s dynamic card generation failed for %s",
+                self.module_key, field_name,
+            )
+            return []
 
     def step(self, state: OrchestratorState) -> ModuleStepResult:
         mode = state.get("mode", "interactive")
@@ -82,7 +164,7 @@ class ModuleAgent(ABC):
         delegated_notice: str | None = None
         if awaiting_field:
             last_user = next(
-                (m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
+                (text_of(m) for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
                 "",
             )
             if self._looks_like_delegation(last_user):
@@ -113,7 +195,7 @@ class ModuleAgent(ABC):
     def _auto_fill(self, state, partial: dict) -> ModuleStepResult:
         """In auto mode, ask the LLM to fill all required fields at once silently."""
         seed = " ".join(
-            m.content for m in state["messages"]
+            text_of(m) for m in state["messages"]
             if isinstance(m, HumanMessage)
         )
         required = self._required_field_names()
@@ -168,8 +250,10 @@ class ModuleAgent(ABC):
             f"filled: {json.dumps({k:v for k,v in partial.items() if not k.startswith('_')}, default=str)[:1000]}"
         )
         msg = self._get_llm().invoke(prompt).content.strip()
-        # SP3: call the hook so subclasses can attach a widget render hint
-        hint = self.render_hint_for_field(missing)
+        # SP3: call the hook so subclasses can attach a widget render hint.
+        # Pass `partial` so the default LLM card generator can ground its
+        # suggestions in what the user has already filled.
+        hint = self.render_hint_for_field(missing, partial)
         return ModuleStepResult(
             assistant_message=msg, context_patch=partial,
             transition=False, needs_user_reply=True,
@@ -179,7 +263,7 @@ class ModuleAgent(ABC):
     def _extract_answer(self, state, field_name: str) -> Any:
         """Ask the LLM to extract the field value from the user's latest message."""
         last_user = next(
-            (m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
+            (text_of(m) for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
             None,
         )
         if not last_user:
@@ -242,7 +326,7 @@ class ModuleAgent(ABC):
     def _is_affirmative(messages: list[BaseMessage]) -> bool:
         """Return True if the last user message is a confirmation word."""
         last_user = next(
-            (m.content for m in reversed(messages) if isinstance(m, HumanMessage)),
+            (text_of(m) for m in reversed(messages) if isinstance(m, HumanMessage)),
             "",
         )
         return last_user.strip().lower() in {

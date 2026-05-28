@@ -22,7 +22,7 @@ from orchestrator.agents.m3_design import M3Agent
 from orchestrator.agents.m4_analysis import M4Agent
 from orchestrator.agents.m5_writing import M5Agent
 from orchestrator.agents.supervisor import route_from_supervisor, supervisor_node
-from orchestrator.state import OrchestratorState
+from orchestrator.state import ContextStore, OrchestratorState
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,29 @@ def _agent_node_factory(module_key: str):
     return _node
 
 
+def _seed_state_node(state: OrchestratorState) -> dict:
+    """Pre-supervisor seeder for missing required fields.
+
+    Decision: callers like the FastAPI chat router seed `context_store` from
+    Postgres before the first turn, but other front-doors (LangSmith Studio,
+    direct LangGraph SDK calls, ad-hoc Python REPL exploration) typically only
+    submit `{messages: [...]}` on the first turn — and the supervisor reads
+    `state["context_store"]` unconditionally, so it would KeyError.
+    Returning a partial patch here is safe: LangGraph merges by key, so when
+    the chat router already populated the fields the patch stays empty and
+    nothing is overwritten. When fields are missing we seed empty defaults so
+    every direct LangGraph caller works without knowing about the contract.
+    """
+    patch: dict = {}
+    if "context_store" not in state:
+        patch["context_store"] = ContextStore()
+    if "mode" not in state:
+        # Default to interactive mode — auto-mode is reserved for the
+        # subprocess entrypoint which seeds mode itself.
+        patch["mode"] = "interactive"
+    return patch
+
+
 def build_graph(*, interactive: bool, checkpointer: BaseCheckpointSaver):
     """Compile the orchestrator graph.
 
@@ -110,6 +133,10 @@ def build_graph(*, interactive: bool, checkpointer: BaseCheckpointSaver):
     """
     builder = StateGraph(OrchestratorState)
 
+    # Seed node fills any missing required state fields before the supervisor
+    # reads them. See _seed_state_node docstring for the contract rationale.
+    builder.add_node("_seed", _seed_state_node)
+
     # Supervisor is the central hub — every spoke flows back through it.
     builder.add_node("supervisor", supervisor_node)
 
@@ -117,9 +144,11 @@ def build_graph(*, interactive: bool, checkpointer: BaseCheckpointSaver):
     for key in ("M1", "M2", "M3", "M4", "M5"):
         builder.add_node(key, _agent_node_factory(key))
 
-    # Execution always begins at the supervisor so it can route even on the
-    # very first invocation (e.g. when current_module is pre-seeded to "M1").
-    builder.add_edge(START, "supervisor")
+    # Execution flows START → _seed → supervisor so the supervisor can rely on
+    # context_store + mode being populated even when the caller submits the
+    # minimal `{messages: [...]}` state (Studio, raw SDK calls).
+    builder.add_edge(START, "_seed")
+    builder.add_edge("_seed", "supervisor")
 
     # The supervisor's route_from_supervisor() reads state["current_module"]
     # and returns the node name to go to next (or "DONE" which maps to END).

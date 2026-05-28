@@ -1,5 +1,0 @@
-[
-  {"value": "quantitative", "label": "Quantitative",  "description": "Test relationships between variables; statistical analysis"},
-  {"value": "qualitative",  "label": "Qualitative",   "description": "Explore experiences, meanings, themes; interpretive analysis"},
-  {"value": "mixed",        "label": "Mixed methods", "description": "Combine both for breadth and depth"}
-]

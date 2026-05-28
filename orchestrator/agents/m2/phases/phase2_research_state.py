@@ -9,6 +9,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from orchestrator.agents.m2.intent import classify_phase_intent
 from orchestrator.agents.m2.state import M2SubGraphState
+from orchestrator.message_utils import text_of
 from orchestrator.tools.m2_literature import scout_citations
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent.parent.parent / "prompts" / "m2"
@@ -72,7 +73,7 @@ def run(state: M2SubGraphState) -> dict:
         }
 
     last_user = next(
-        (m.content for m in reversed(state.get("messages") or [])
+        (text_of(m) for m in reversed(state.get("messages") or [])
          if isinstance(m, HumanMessage)),
         "",
     )

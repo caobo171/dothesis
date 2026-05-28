@@ -1,17 +1,13 @@
 """M1 — Topic Discovery agent."""
-import json
 from pathlib import Path
 
 from orchestrator.agents.base import ModuleAgent
-from orchestrator.agents.widgets import CardGridHint, CardOption
 from orchestrator.schemas.m1 import M1Output
 from orchestrator.tools.m1_topic import refine_title, suggest_topics
 
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _PROMPT = (_PROMPT_DIR / "m1.md").read_text()
-_FIELD_OPTIONS = json.loads((_PROMPT_DIR / "m1" / "_options_field.json").read_text())
-_RESEARCH_TYPE_OPTIONS = json.loads((_PROMPT_DIR / "m1" / "_options_research_type.json").read_text())
 
 
 class M1Agent(ModuleAgent):
@@ -20,21 +16,16 @@ class M1Agent(ModuleAgent):
     system_prompt = _PROMPT
     tools = [suggest_topics, refine_title]
 
-    def render_hint_for_field(self, field_name: str) -> dict | None:
-        # SP3: card-grid widgets for `field` + `research_type` only. Other M1
-        # fields stay free-text. New variants land via this same override pattern.
-        if field_name == "field":
-            return CardGridHint(
-                field_name="field",
-                title="Which academic field is your research in?",
-                options=[CardOption(**o) for o in _FIELD_OPTIONS],
-                columns=3,
-            ).model_dump()
-        if field_name == "research_type":
-            return CardGridHint(
-                field_name="research_type",
-                title="Which research approach fits your question?",
-                options=[CardOption(**o) for o in _RESEARCH_TYPE_OPTIONS],
-                columns=3,
-            ).model_dump()
-        return None
+    # Dynamic LLM-generated cards for these fields — see base.ModuleAgent.
+    # The base class's render_hint_for_field reads `card_fields` and asks the
+    # LLM for options grounded in the partial state, so e.g. once the user
+    # enters research_title="Gen Z social media use" the `field` cards will
+    # surface Sociology / Media Studies / Marketing / Education rather than
+    # a generic catalog. Static JSON option files used to live in
+    # prompts/m1/_options_{field,research_type}.json and were retired when
+    # this opt-in was added.
+    card_fields = {"field", "research_type"}
+    card_field_titles = {
+        "field": "Which academic field is your research in?",
+        "research_type": "Which research approach fits your question?",
+    }

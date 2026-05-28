@@ -1,5 +1,0 @@
-[
-  {"value": "NVivo",        "label": "NVivo",           "description": "Industry-standard CAQDAS; coding, themes, queries"},
-  {"value": "Atlas.ti",     "label": "Atlas.ti",        "description": "Code-and-retrieve with network views; similar to NVivo"},
-  {"value": "Manual",       "label": "Manual (Word/Excel)", "description": "Hand-coding in spreadsheets; fine for small samples"}
-]

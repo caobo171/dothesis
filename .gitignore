@@ -73,3 +73,6 @@ web/tsconfig.tsbuildinfo
 
 # Brainstorming visual companion scratch files
 .superpowers/
+
+# LangGraph Studio (langgraph dev) local checkpoint store
+.langgraph_api/

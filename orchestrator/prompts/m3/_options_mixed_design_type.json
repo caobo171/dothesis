@@ -1,4 +1,0 @@
-[
-  {"value": "sequential_explanatory", "label": "Sequential Explanatory", "description": "Quant survey first → qual interviews after to explain unexpected results"},
-  {"value": "sequential_exploratory", "label": "Sequential Exploratory", "description": "Qual interviews first → quant survey after to test constructs you discovered"}
-]

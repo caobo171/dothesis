@@ -1,61 +1,107 @@
-"""Tests for M3Agent.render_hint_for_field overrides."""
+"""Tests for M3Agent.render_hint_for_field — dynamic cards + paradigm gating + list editors."""
+import json
+from unittest.mock import MagicMock
+
 from orchestrator.agents.m3_design import M3Agent
 
 
-def test_tool_returns_card_grid_quant_options():
-    """When the resolved paradigm is quant, `tool` widget shows quant tools."""
-    agent = M3Agent()
-    M3Agent._render_paradigm = "quantitative"
-    hint = agent.render_hint_for_field("tool")
+def _stub_llm_returning(monkeypatch, cards):
+    """Patch M3Agent._get_llm so the dynamic card generator returns `cards`."""
+    fake = MagicMock()
+    fake.invoke.return_value.content = json.dumps(cards)
+    monkeypatch.setattr(M3Agent, "_get_llm", lambda self: fake)
+    return fake
+
+
+def test_tool_returns_card_grid_for_quant(monkeypatch):
+    """`tool` is opted into card rendering and the LLM-supplied cards round-trip."""
+    cards = [
+        {"value": "SmartPLS", "label": "SmartPLS", "description": "PLS-SEM"},
+        {"value": "AMOS",     "label": "AMOS",     "description": "CB-SEM"},
+        {"value": "Other",    "label": "Other / Specify", "description": "Type your own"},
+    ]
+    _stub_llm_returning(monkeypatch, cards)
+
+    hint = M3Agent().render_hint_for_field("tool", partial={"paradigm": "quantitative"})
+
     assert hint is not None
     assert hint["widget_type"] == "card_grid"
     assert hint["field_name"] == "tool"
-    values = {o["value"] for o in hint["options"]}
-    assert "SmartPLS" in values
-    assert "NVivo" not in values  # qual-only tool should not appear in quant grid
+    assert hint["title"].startswith("Which analysis tool")
+    assert [o["value"] for o in hint["options"]] == ["SmartPLS", "AMOS", "Other"]
 
 
-def test_tool_returns_card_grid_qual_options():
+def test_tool_returns_card_grid_for_qual(monkeypatch):
+    """Same field — different paradigm → LLM is free to suggest qual-aligned tools."""
+    cards = [
+        {"value": "NVivo",   "label": "NVivo",   "description": "Qual coding"},
+        {"value": "MAXQDA",  "label": "MAXQDA",  "description": "Qual analysis"},
+        {"value": "Other",   "label": "Other / Specify", "description": "Type your own"},
+    ]
+    _stub_llm_returning(monkeypatch, cards)
+
+    hint = M3Agent().render_hint_for_field("tool", partial={"paradigm": "qualitative"})
+
+    assert {o["value"] for o in hint["options"]} == {"NVivo", "MAXQDA", "Other"}
+
+
+def test_design_card_grid_only_for_qual_paradigm(monkeypatch):
+    """`design` is qual-only. Quant skips the card grid and uses free-text input
+    so recommend_methodology can drive the conversation."""
+    cards = [
+        {"value": "thematic_analysis", "label": "Thematic Analysis", "description": "Codes → themes"},
+        {"value": "grounded_theory",    "label": "Grounded Theory",   "description": "Iterative coding"},
+        {"value": "Other",              "label": "Other / Specify",   "description": "Type your own"},
+    ]
+    _stub_llm_returning(monkeypatch, cards)
+
     agent = M3Agent()
-    M3Agent._render_paradigm = "qualitative"
-    hint = agent.render_hint_for_field("tool")
+    hint = agent.render_hint_for_field("design", partial={"paradigm": "qualitative"})
     assert hint is not None
-    values = {o["value"] for o in hint["options"]}
-    assert "NVivo" in values
-    assert "SmartPLS" not in values
+    assert hint["field_name"] == "design"
+    assert hint["title"].startswith("Which qualitative design")
+
+    # Quant paradigm → no card grid.
+    assert agent.render_hint_for_field("design", partial={"paradigm": "quantitative"}) is None
+    # Empty partial (paradigm not yet set) → also no card grid.
+    assert agent.render_hint_for_field("design", partial={}) is None
 
 
-def test_design_returns_card_grid_qual_options_only_for_qual():
-    """For qual paradigm, `design` shows the four qual designs. For quant, the
-    agent prefers free-text (so `design` returns None) since recommend_methodology
-    handles it conversationally."""
-    agent = M3Agent()
-    M3Agent._render_paradigm = "qualitative"
-    hint = agent.render_hint_for_field("design")
-    assert hint is not None
-    values = {o["value"] for o in hint["options"]}
-    assert "Thematic Analysis" in values
-    assert "Grounded Theory" in values
+def test_mixed_design_type_returns_card_grid(monkeypatch):
+    """`mixed_design_type` is only asked when paradigm is mixed; LLM picks the
+    sequential_* variants the schema accepts."""
+    cards = [
+        {"value": "sequential_explanatory", "label": "Sequential Explanatory",
+         "description": "Quant first, qual explains"},
+        {"value": "sequential_exploratory", "label": "Sequential Exploratory",
+         "description": "Qual first, quant tests"},
+        {"value": "Other", "label": "Other / Specify", "description": "Type your own"},
+    ]
+    _stub_llm_returning(monkeypatch, cards)
 
-    M3Agent._render_paradigm = "quantitative"
-    assert agent.render_hint_for_field("design") is None
+    hint = M3Agent().render_hint_for_field("mixed_design_type", partial={"paradigm": "mixed"})
 
-
-def test_mixed_design_type_returns_card_grid_with_two_options():
-    agent = M3Agent()
-    M3Agent._render_paradigm = "mixed"
-    hint = agent.render_hint_for_field("mixed_design_type")
-    assert hint is not None
     assert hint["widget_type"] == "card_grid"
     values = {o["value"] for o in hint["options"]}
-    assert values == {"sequential_explanatory", "sequential_exploratory"}
+    assert {"sequential_explanatory", "sequential_exploratory"}.issubset(values)
+
+
+def test_card_generation_falls_back_to_none_when_llm_fails(monkeypatch):
+    """Card branches must not crash on LLM/JSON failure — falls back to free-text."""
+    fake = MagicMock()
+    fake.invoke.side_effect = RuntimeError("network down")
+    monkeypatch.setattr(M3Agent, "_get_llm", lambda self: fake)
+
+    assert M3Agent().render_hint_for_field("tool", partial={"paradigm": "quantitative"}) is None
 
 
 def test_free_text_fields_return_none():
+    """Fields not in card_fields and not handled by a list_editor branch → None."""
     agent = M3Agent()
-    M3Agent._render_paradigm = "quantitative"
     for f in ("sampling_strategy", "target_sample_size"):
-        assert agent.render_hint_for_field(f) is None, f"Expected None for {f}"
+        assert agent.render_hint_for_field(f, partial={"paradigm": "quantitative"}) is None, (
+            f"Expected None for {f}"
+        )
 
 
 def test_themes_returns_list_editor_hint(monkeypatch):

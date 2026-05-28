@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from orchestrator.agents.base import ModuleAgent
+from orchestrator.message_utils import text_of
 from orchestrator.schemas.m4 import M4Output
 from orchestrator.tools.m4_analysis import (
     detect_data_type, generate_analysis_outline, interpret_result,
@@ -275,7 +276,7 @@ class M4Agent(ModuleAgent):
         """Heuristic: scan the latest user message for ad-hoc keywords."""
         from langchain_core.messages import HumanMessage
         last_user = next(
-            (m.content for m in reversed(messages) if isinstance(m, HumanMessage)),
+            (text_of(m) for m in reversed(messages) if isinstance(m, HumanMessage)),
             "",
         )
         if not last_user:
@@ -295,7 +296,7 @@ class M4Agent(ModuleAgent):
         from orchestrator.tools.m4_parsers import format_step_as_markdown
 
         last_user = next(
-            (m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
+            (text_of(m) for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
             "",
         )
         sr = run_extra_analysis.invoke({
@@ -331,7 +332,7 @@ class M4Agent(ModuleAgent):
         )
         return f"**Theme generation** — {len(themes)} themes:\n\n{rows}"
 
-    def render_hint_for_field(self, field_name: str) -> dict | None:
+    def render_hint_for_field(self, field_name: str, partial: dict | None = None) -> dict | None:
         """Emit ListEditorHint for outline fields; None for data_paste* and pseudo-fields.
 
         outline_quant uses the SmartPLS template (default quant for mixed flow).

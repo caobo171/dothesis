@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
+from orchestrator.message_utils import text_of
 from orchestrator.state import ModuleKey, OrchestratorState, next_unconfirmed_module
 
 logger = logging.getLogger(__name__)
@@ -57,7 +58,7 @@ def supervisor_node(state: OrchestratorState) -> dict:
 
     if state.get("mode") == "interactive":
         last_user = next(
-            (m.content for m in reversed(state.get("messages") or [])
+            (text_of(m) for m in reversed(state.get("messages") or [])
              if isinstance(m, HumanMessage)),
             "",
         )

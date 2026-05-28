@@ -1,6 +1,0 @@
-[
-  {"value": "Thematic Analysis",   "label": "Thematic Analysis",  "description": "Identify, analyse, report patterns (Braun & Clarke 2006)"},
-  {"value": "Grounded Theory",     "label": "Grounded Theory",    "description": "Build theory from data through coding cycles (Glaser & Strauss)"},
-  {"value": "Phenomenological",    "label": "Phenomenological",   "description": "Explore lived experience of a phenomenon"},
-  {"value": "Case Study",          "label": "Case Study",         "description": "Deep analysis of one or more bounded cases (Yin)"}
-]
