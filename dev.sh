@@ -87,10 +87,13 @@ echo "==> running alembic migrations"
 (cd api && "../$VENV_BIN/alembic" upgrade head)
 
 echo "==> starting api on port ${API_PORT:-7100}"
-# Watch both api/ and engine/ — the regenerate-exports endpoint pulls in engine
-# code, and without --reload-dir uvicorn won't pick up edits to engine/.
+# Watch api/, engine/ AND orchestrator/ — the chat router + LangGraph agents
+# import from orchestrator/, and uvicorn's --reload only picks up directories
+# explicitly listed via --reload-dir. Without orchestrator/ in the list, edits
+# to agent/tool code (model names, prompts, graph topology) need a manual
+# kill + restart to take effect.
 (cd api && "../$VENV_BIN/uvicorn" app.main:app --reload \
-  --reload-dir app --reload-dir ../engine \
+  --reload-dir app --reload-dir ../engine --reload-dir ../orchestrator \
   --port "${API_PORT:-7100}") &
 API_PID=$!
 
