@@ -197,13 +197,22 @@ async def send_message(thread_id: uuid.UUID,
     db.add(Message(thread_id=thread_id, role="user", content=body.text))
     db.commit()
 
-    # Seed the LangGraph state with the project's ContextStore. The supervisor +
-    # every module agent reads state["context_store"] to decide the next step
-    # and to dump confirmed-module slices back. Without this the supervisor
-    # crashes on KeyError as soon as it runs.
+    # Seed the LangGraph state with the project's ContextStore — but ONLY on the
+    # first turn for this thread. OrchestratorState.context_store has no
+    # reducer, so passing it in the input on every turn would clobber the
+    # checkpoint's accumulated state (_awaiting_field markers, partial slices)
+    # and the agent would loop forever asking the same question. Subsequent
+    # turns rely on the checkpoint resuming with whatever the previous turn
+    # wrote.
     from orchestrator.state import ContextStore as OrchestratorContextStore
     from ..models import ContextStore as DbContextStore
     db_cs = db.get(DbContextStore, t.project_id)
+
+    graph = get_interactive_graph()
+    config = {"configurable": {"thread_id": t.langgraph_thread_id}}
+
+    existing = await graph.aget_state(config)
+    is_first_turn = not existing or not existing.values
     initial_context_store = OrchestratorContextStore(
         m1_topic=(db_cs.m1_topic if db_cs else None),
         m2_literature=(db_cs.m2_literature if db_cs else None),
@@ -211,9 +220,6 @@ async def send_message(thread_id: uuid.UUID,
         m4_analysis=(db_cs.m4_analysis if db_cs else None),
         m5_writing=(db_cs.m5_writing if db_cs else None),
     )
-
-    graph = get_interactive_graph()
-    config = {"configurable": {"thread_id": t.langgraph_thread_id}}
 
     assistant_chunks: list[str] = []
     final_module_tag: str | None = None
@@ -228,13 +234,15 @@ async def send_message(thread_id: uuid.UUID,
         import logging
         log = logging.getLogger(__name__)
         try:
+            graph_input: dict = {
+                "messages": [HumanMessage(content=body.text)],
+                "mode": "interactive",
+            }
+            if is_first_turn:
+                graph_input["context_store"] = initial_context_store
+                graph_input["project_id"] = t.project_id
             async for event in graph.astream(
-                {
-                    "messages": [HumanMessage(content=body.text)],
-                    "mode": "interactive",
-                    "context_store": initial_context_store,
-                    "project_id": t.project_id,
-                },
+                graph_input,
                 config=config,
                 stream_mode="updates",
             ):
@@ -287,6 +295,27 @@ async def send_message(thread_id: uuid.UUID,
                         thread_id=thread_id, role="assistant",
                         content=full, module_tag=final_module_tag,
                         tool_calls_json=final_tool_calls,
+                    )
+                )
+                conn.commit()
+
+        # Sync the agent's updated context_store back to the DB row so other
+        # threads (and future first-turn seeds) see the latest progress. The
+        # checkpoint is the source of truth between turns; the DB row is the
+        # cross-thread durable copy.
+        final_state = await graph.aget_state(config)
+        cs_after = (final_state.values or {}).get("context_store") if final_state else None
+        if cs_after is not None:
+            with db.bind.connect() as conn:
+                conn.execute(
+                    DbContextStore.__table__.update()
+                    .where(DbContextStore.__table__.c.project_id == t.project_id)
+                    .values(
+                        m1_topic=cs_after.m1_topic,
+                        m2_literature=cs_after.m2_literature,
+                        m3_design=cs_after.m3_design,
+                        m4_analysis=cs_after.m4_analysis,
+                        m5_writing=cs_after.m5_writing,
                     )
                 )
                 conn.commit()
