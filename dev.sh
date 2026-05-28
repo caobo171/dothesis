@@ -23,6 +23,16 @@ source .env
 # Orchestrator (chat + M5 editor + SP6.5 surface) is shipped — default it on for
 # the dev stack. Override by setting ORCHESTRATOR_ENABLED=false in .env explicitly.
 export ORCHESTRATOR_ENABLED="${ORCHESTRATOR_ENABLED:-true}"
+
+# LangSmith tracing — auto-enable in dev when an API key is present. Skipped
+# silently when no key is configured so the stack still boots without it.
+# Tracing failures never affect runtime (the SDK is fire-and-forget), but we
+# avoid enabling it without a key to skip the constant 401 retries.
+if [ -n "${LANGSMITH_API_KEY:-}" ]; then
+  export LANGSMITH_TRACING="${LANGSMITH_TRACING:-true}"
+  export LANGSMITH_PROJECT="${LANGSMITH_PROJECT:-dothesis-dev}"
+  echo "==> langsmith tracing enabled (project: ${LANGSMITH_PROJECT})"
+fi
 set +a
 
 # --- 0. Postgres via docker compose ---
