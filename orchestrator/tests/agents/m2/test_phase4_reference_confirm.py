@@ -59,9 +59,17 @@ def test_phase4_confirm_advances_cursor(monkeypatch):
 
 def test_phase4_correct_page_updates_and_advances(monkeypatch):
     from orchestrator.agents.m2.phases import phase4_reference_confirm
+    from orchestrator.agents.m2 import intent as m2_intent
     monkeypatch.setattr(phase4_reference_confirm, "_auto_verify",
                         lambda paper_uris, refs: refs)
     monkeypatch.setattr(phase4_reference_confirm, "_get_llm", lambda: MagicMock())
+
+    # LLM intent: correct_page. Regex backfill picks "120" from the message.
+    fake_structured = MagicMock()
+    fake_structured.invoke.return_value = m2_intent.PhaseIntent(action="correct_page")
+    fake_intent = MagicMock()
+    fake_intent.with_structured_output.return_value = fake_structured
+    monkeypatch.setattr(m2_intent, "_intent_llm", lambda: fake_intent)
 
     s = _state(user_msg="correct page 120")
     s["pending_page_checks"] = [
@@ -77,9 +85,17 @@ def test_phase4_correct_page_updates_and_advances(monkeypatch):
 
 def test_phase4_skip_all_marks_remaining_unverified(monkeypatch):
     from orchestrator.agents.m2.phases import phase4_reference_confirm
+    from orchestrator.agents.m2 import intent as m2_intent
     monkeypatch.setattr(phase4_reference_confirm, "_auto_verify",
                         lambda paper_uris, refs: refs)
     monkeypatch.setattr(phase4_reference_confirm, "_get_llm", lambda: MagicMock())
+
+    # LLM-classified intent: skip_all.
+    fake_structured = MagicMock()
+    fake_structured.invoke.return_value = m2_intent.PhaseIntent(action="skip_all")
+    fake_intent = MagicMock()
+    fake_intent.with_structured_output.return_value = fake_structured
+    monkeypatch.setattr(m2_intent, "_intent_llm", lambda: fake_intent)
 
     s = _state(user_msg="skip all")
     s["pending_page_checks"] = [

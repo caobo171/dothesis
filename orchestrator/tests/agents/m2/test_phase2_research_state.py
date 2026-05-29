@@ -67,7 +67,14 @@ def test_phase2_refine_appends_and_regenerates_with_cached_citations(monkeypatch
 
 def test_phase2_confirm_advances_to_gap_analysis(monkeypatch):
     from orchestrator.agents.m2.phases import phase2_research_state
+    from orchestrator.agents.m2 import intent as m2_intent
     monkeypatch.setattr(phase2_research_state, "_get_llm", lambda: MagicMock())
+
+    fake_structured = MagicMock()
+    fake_structured.invoke.return_value = m2_intent.PhaseIntent(action="confirm")
+    fake_intent = MagicMock()
+    fake_intent.with_structured_output.return_value = fake_structured
+    monkeypatch.setattr(m2_intent, "_intent_llm", lambda: fake_intent)
 
     s = _state(user_msg="looks good, continue")
     s["research_state_draft"] = "synthesis"
@@ -93,7 +100,16 @@ def test_phase2_regen_cap_blocks_6th_iteration(monkeypatch):
 
 def test_phase2_navigate_back_to_familiarize(monkeypatch):
     from orchestrator.agents.m2.phases import phase2_research_state
+    from orchestrator.agents.m2 import intent as m2_intent
     monkeypatch.setattr(phase2_research_state, "_get_llm", lambda: MagicMock())
+
+    fake_structured = MagicMock()
+    fake_structured.invoke.return_value = m2_intent.PhaseIntent(
+        action="navigate", target_phase="familiarize",
+    )
+    fake_intent = MagicMock()
+    fake_intent.with_structured_output.return_value = fake_structured
+    monkeypatch.setattr(m2_intent, "_intent_llm", lambda: fake_intent)
 
     s = _state(user_msg="redo familiarize")
     s["research_state_draft"] = "synthesis"

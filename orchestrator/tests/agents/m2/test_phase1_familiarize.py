@@ -43,9 +43,17 @@ def test_phase1_with_uploads_lists_filenames(monkeypatch):
 
 def test_phase1_resume_after_confirm_advances(monkeypatch):
     from orchestrator.agents.m2.phases import phase1_familiarize
+    from orchestrator.agents.m2 import intent as m2_intent
     s = _state(paper_uris=["s3://b/a.pdf"], user_msg="yes use them")
     s["has_uploaded_papers"] = None
     monkeypatch.setattr(phase1_familiarize, "_get_llm", lambda: MagicMock())
+
+    # LLM-classified intent: confirm.
+    fake_structured = MagicMock()
+    fake_structured.invoke.return_value = m2_intent.PhaseIntent(action="confirm")
+    fake_intent = MagicMock()
+    fake_intent.with_structured_output.return_value = fake_structured
+    monkeypatch.setattr(m2_intent, "_intent_llm", lambda: fake_intent)
 
     patch = phase1_familiarize.run(s)
     assert patch.get("has_uploaded_papers") is True

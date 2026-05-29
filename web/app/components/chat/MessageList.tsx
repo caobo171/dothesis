@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { StreamingBubble } from "./StreamingBubble";
+import { ThinkingBubble } from "./ThinkingBubble";
 import type { Message } from "./hooks/useChat";
 import type { WidgetSelectHandler } from "./widgets/types";
 
@@ -11,11 +12,18 @@ export function MessageList({
   messages,
   streamingText,
   streamingModuleTag,
+  inflight = false,
   onWidgetSelect,
 }: {
   messages: Message[];
   streamingText: string;
   streamingModuleTag: string | null;
+  /**
+   * SSE stream is open and we're waiting on the first token. When true and
+   * streamingText is empty, ThinkingBubble fills the silence so the user
+   * sees the agent is working rather than a stalled UI.
+   */
+  inflight?: boolean;
   onWidgetSelect?: WidgetSelectHandler;
 }) {
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -47,9 +55,13 @@ export function MessageList({
           />
         );
       })}
-      {streamingText && (
+      {streamingText ? (
         <StreamingBubble text={streamingText} moduleTag={streamingModuleTag} />
-      )}
+      ) : inflight ? (
+        // No tokens have arrived yet but the SSE stream is open — show the
+        // "thinking" indicator so the user knows something is happening.
+        <ThinkingBubble moduleTag={streamingModuleTag} />
+      ) : null}
       <div ref={endRef} />
     </div>
   );

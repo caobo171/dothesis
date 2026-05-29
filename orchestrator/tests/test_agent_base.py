@@ -53,12 +53,17 @@ def test_interactive_asks_for_first_missing_field(monkeypatch):
 
 
 def test_interactive_fills_field_from_user_answer(monkeypatch):
-    """When the agent has just asked for 'title' and user replies, it stores 'title'."""
+    """When the agent has just asked for 'title' and user replies, it stores 'title'.
+
+    Post-refactor flow per turn:
+      1. _classify_user_intent  → JSON with intent + extracted value
+      2. _ask_next_question     → prose prompt for the next field
+    """
     agent = _ToyAgent()
     fake_llm = MagicMock()
     fake_llm.invoke.side_effect = [
-        AIMessage(content='{"field": "title", "value": "My Title"}'),  # extraction
-        AIMessage(content="Got it. What is the answer?"),               # next question
+        AIMessage(content='{"intent": "answer", "value": "My Title"}'),  # classify+extract
+        AIMessage(content="Got it. What is the answer?"),                # next question
     ]
     monkeypatch.setattr(_ToyAgent, "_get_llm", lambda self: fake_llm)
 

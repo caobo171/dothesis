@@ -41,7 +41,17 @@ def test_phase3_first_call_proposes_gaps(monkeypatch):
 
 def test_phase3_select_advances_to_reference_confirm(monkeypatch):
     from orchestrator.agents.m2.phases import phase3_gap_analysis
+    from orchestrator.agents.m2 import intent as m2_intent
     monkeypatch.setattr(phase3_gap_analysis, "_get_llm", lambda: MagicMock())
+
+    # classify_phase_intent now always calls the LLM (keyword catches removed).
+    # Mock it to return action="select" — the regex backfill in classify will
+    # populate selected_ids from "gap 1 and gap 2" automatically.
+    fake_structured = MagicMock()
+    fake_structured.invoke.return_value = m2_intent.PhaseIntent(action="select")
+    fake_intent_llm = MagicMock()
+    fake_intent_llm.with_structured_output.return_value = fake_structured
+    monkeypatch.setattr(m2_intent, "_intent_llm", lambda: fake_intent_llm)
 
     s = _state(user_msg="use gap 1 and gap 2")
     s["candidate_gaps"] = [

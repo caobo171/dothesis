@@ -23,9 +23,10 @@ def test_ad_hoc_request_appends_to_custom_analyses(monkeypatch):
     }
     monkeypatch.setattr(m4_mod, "run_extra_analysis", fake_extra)
 
-    # Stub the LLM so any fallback path in the base class doesn't hit the network.
+    # Stub the LLM. _is_ad_hoc_request now LLM-classifies — return ad_hoc=true
+    # for "also run a mediation test on H3" so the ad-hoc dispatch fires.
     fake_llm = MagicMock()
-    fake_llm.invoke.return_value.content = "ok"
+    fake_llm.invoke.return_value.content = '{"ad_hoc": true}'
     monkeypatch.setattr(M4Agent, "_get_llm", lambda self: fake_llm)
 
     agent = M4Agent()

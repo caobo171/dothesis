@@ -60,6 +60,30 @@ describe("summarizeList", () => {
     expect(out).toContain("- 6mo+ tenure");
   });
 
+  test("objectives lead with a labeled header so _extract_answer can parse them", () => {
+    const items: ListItem[] = [
+      { id: "obj_0", text: "Measure the correlation between TikTok use and academic motivation." },
+      { id: "obj_1", text: "Examine moderating effects of content type." },
+    ];
+    const out = summarizeList(items, "objectives");
+    // Header is the load-bearing bit — without it the bare bullets used to
+    // read as a clarifying question and looped the conversation.
+    expect(out.split("\n")[0]).toBe("My research objectives:");
+    expect(out).toContain("- Measure the correlation between TikTok use and academic motivation.");
+    expect(out).toContain("- Examine moderating effects of content type.");
+  });
+
+  test("research_questions use the labeled header pattern too", () => {
+    const items: ListItem[] = [
+      { id: "rq_0", text: "How does TikTok use affect academic motivation?" },
+      { id: "rq_1", text: "What content types drive the strongest engagement?" },
+    ];
+    const out = summarizeList(items, "research_questions");
+    expect(out.split("\n")[0]).toBe("My research questions:");
+    expect(out).toContain("- How does TikTok use affect academic motivation?");
+    expect(out).toContain("- What content types drive the strongest engagement?");
+  });
+
   test("interview_guide groups questions by phase via meta", () => {
     const qs: ListItem[] = [
       { id: "q1", text: "[intro] Tell me about your role.",

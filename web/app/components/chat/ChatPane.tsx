@@ -100,6 +100,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         messages={messages}
         streamingText={inflight ? streamingText : ""}
         streamingModuleTag={null}
+        inflight={inflight}
         onWidgetSelect={onWidgetSelect}
       />
       <ChatInput onSubmit={send} onFileDrop={onFileDrop} disabled={inflight} />

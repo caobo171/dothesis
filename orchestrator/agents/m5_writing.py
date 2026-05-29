@@ -33,11 +33,6 @@ class M5Agent(ModuleAgent):
         compile_pdf, export_docx,
     ]
 
-    _REWRITE_KEYWORDS = (
-        "rewrite", "rephrase", "paraphrase", "less formal", "more formal",
-        "more academic", "expand", "condense", "shorter", "longer",
-        "more detail", "less detail",
-    )
     _CHAPTER_ALIASES = {
         "intro": "intro", "introduction": "intro",
         "chapter 1": "intro", "ch1": "intro", "ch 1": "intro",
@@ -168,8 +163,35 @@ class M5Agent(ModuleAgent):
         return super().step(state)
 
     def _is_rewrite_request(self, messages) -> bool:
-        last = self._latest_user_message(messages).lower()
-        return any(kw in last for kw in self._REWRITE_KEYWORDS)
+        """LLM check: is the user asking us to rewrite an existing chapter?
+
+        Replaces a keyword list ("rewrite" / "rephrase" / "shorter" / etc.)
+        that missed phrasings like "tighten the intro" or "make chapter 4
+        sound more academic". Falls back to False on LLM failure so the
+        normal compose flow continues.
+        """
+        import json
+        last = self._latest_user_message(messages)
+        if not last:
+            return False
+        prompt = (
+            f"The user is in the writing phase of their research project. "
+            f"Their reply is below.\n"
+            f"User reply: {last}\n\n"
+            f"Are they asking the agent to REWRITE or modify an existing "
+            f"chapter (e.g. 'rewrite the intro', 'make chapter 4 shorter', "
+            f"'tighten the methods section', 'rephrase more formally')?\n\n"
+            f'Respond with ONLY: {{"rewrite": true|false}}'
+        )
+        try:
+            from orchestrator.agents.base import _strip_code_fence
+            raw = self._get_llm().invoke(prompt).content
+            data = json.loads(_strip_code_fence(raw))
+            return bool(data.get("rewrite"))
+        except Exception:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).exception("M5 rewrite classification failed")
+        return False
 
     def _identify_chapter(self, user_msg: str) -> str | None:
         """Map common chapter aliases to the canonical name. None if ambiguous."""

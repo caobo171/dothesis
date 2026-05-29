@@ -61,10 +61,69 @@ def test_research_type_returns_card_grid_hint(monkeypatch):
 
 
 def test_text_fields_return_none():
-    """Free-text M1 fields (not in card_fields) get no widget hint."""
+    """Truly free-text M1 fields get no widget hint.
+
+    research_title is the user's seed input — nothing upstream to ground
+    card suggestions in, so it stays as a text input.
+    """
     agent = M1Agent()
-    for f in ("research_title", "target_population", "scope", "objectives", "research_questions"):
-        assert agent.render_hint_for_field(f) is None, f"Expected None for {f}"
+    assert agent.render_hint_for_field("research_title") is None
+
+
+def _stub_llm_returning_list(monkeypatch, items):
+    """Patch M1Agent._get_llm so _generate_list_items returns `items`."""
+    fake = MagicMock()
+    fake.invoke.return_value.content = json.dumps(items)
+    monkeypatch.setattr(M1Agent, "_get_llm", lambda self: fake)
+    return fake
+
+
+def test_objectives_returns_list_editor_hint(monkeypatch):
+    """objectives is in list_fields → LLM-seeded ListEditorHint, flat (no nesting)."""
+    items = [
+        "Measure the correlation between TikTok engagement and purchase intent.",
+        "Examine moderating effects of brand familiarity.",
+        "Identify content types that drive highest engagement.",
+    ]
+    _stub_llm_returning_list(monkeypatch, items)
+
+    hint = M1Agent().render_hint_for_field("objectives", partial={
+        "research_title": "Gen Z TikTok marketing effectiveness",
+        "field": "Marketing",
+        "research_type": "quantitative",
+    })
+
+    assert hint is not None
+    assert hint["widget_type"] == "list_editor"
+    assert hint["field_name"] == "objectives"
+    assert hint["allow_nested"] is False
+    assert hint["title"].lower().startswith("research objectives")
+    assert [item["text"] for item in hint["initial_items"]] == items
+
+
+def test_research_questions_returns_list_editor_hint(monkeypatch):
+    """research_questions opts in via list_fields too."""
+    items = [
+        "How does TikTok engagement type predict purchase intent?",
+        "Does brand familiarity moderate the engagement-purchase relationship?",
+    ]
+    _stub_llm_returning_list(monkeypatch, items)
+
+    hint = M1Agent().render_hint_for_field("research_questions", partial={
+        "research_title": "Gen Z TikTok marketing",
+    })
+    assert hint["widget_type"] == "list_editor"
+    assert hint["field_name"] == "research_questions"
+    assert len(hint["initial_items"]) == 2
+
+
+def test_list_editor_falls_back_to_none_when_llm_fails(monkeypatch):
+    """LLM/JSON failure → no widget hint → caller falls back to free-text input."""
+    fake = MagicMock()
+    fake.invoke.side_effect = RuntimeError("network down")
+    monkeypatch.setattr(M1Agent, "_get_llm", lambda self: fake)
+
+    assert M1Agent().render_hint_for_field("objectives", partial={}) is None
 
 
 def test_hint_options_carry_description(monkeypatch):

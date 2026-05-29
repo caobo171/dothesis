@@ -1,9 +1,23 @@
 """SP6.5: chat NL-rewrite no longer overwrites prose — it appends a
 PendingEdit so the editor's unified accept/reject flow owns the resolution."""
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import pytest
 from langchain_core.messages import HumanMessage
 
 from orchestrator.agents.m5_writing import M5Agent
+
+
+@pytest.fixture(autouse=True)
+def _mock_m5_llm(monkeypatch):
+    """M5Agent.step() routes through _is_rewrite_request (LLM-based since the
+    keyword purge). Every test in this file expects rewrite=true → dispatch
+    to _handle_rewrite, so default to that. Individual tests can override.
+    """
+    fake = MagicMock()
+    fake.invoke.return_value.content = '{"rewrite": true}'
+    monkeypatch.setattr(M5Agent, "_get_llm", lambda self: fake)
+    return fake
 
 
 def _make_state(user_msg: str, partial: dict, project_id: str = "p1") -> dict:

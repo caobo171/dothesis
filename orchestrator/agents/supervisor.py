@@ -14,11 +14,6 @@ from orchestrator.state import ModuleKey, OrchestratorState, next_unconfirmed_mo
 
 logger = logging.getLogger(__name__)
 
-_NAV_KEYWORDS = (
-    "go back", "skip", "redo", "i already have", "jump to", "start over",
-    "quay lại", "bỏ qua", "làm lại",
-)
-
 
 class RouteDecision(BaseModel):
     next_module: Literal["M1", "M2", "M3", "M4", "M5", "DONE"]
@@ -39,11 +34,6 @@ def _intent_llm():
     )
 
 
-def _looks_like_navigation(text: str) -> bool:
-    t = text.lower()
-    return any(k in t for k in _NAV_KEYWORDS)
-
-
 def _rule_based(state: OrchestratorState) -> RouteDecision:
     nxt = next_unconfirmed_module(state["context_store"])
     return RouteDecision(
@@ -62,12 +52,19 @@ def supervisor_node(state: OrchestratorState) -> dict:
              if isinstance(m, HumanMessage)),
             "",
         )
-        if last_user and _looks_like_navigation(last_user):
+        # Always ask the LLM whether the user wants cross-module navigation.
+        # The keyword gate that used to bypass this call has been removed —
+        # user-content like "I want to go back to my marketing question"
+        # contained "go back" but wasn't a navigation request, while phrasings
+        # like "let's revisit the design step" weren't in the keyword list at
+        # all. Confidence threshold (>=0.7) protects against false positives.
+        if last_user:
             try:
                 llm = _intent_llm().with_structured_output(IntentClassification)
                 intent = llm.invoke(
-                    f"Is the user requesting navigation to a specific module? "
-                    f"Message: {last_user}"
+                    f"Is the user requesting navigation to a specific module "
+                    f"(M1=topic, M2=literature, M3=design, M4=analysis, "
+                    f"M5=writing)? Message: {last_user}"
                 )
                 if intent.wants_navigation and intent.confidence >= 0.7 and intent.target_module:
                     decision = RouteDecision(

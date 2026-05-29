@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, ValidationError
 
-from orchestrator.agents.widgets import CardGridHint, CardOption
+from orchestrator.agents.widgets import CardGridHint, CardOption, ListEditorHint, ListItem
 from orchestrator.message_utils import text_of
 from orchestrator.state import OrchestratorState, get_module_slice
 
@@ -55,21 +55,65 @@ class ModuleAgent(ABC):
     # "Which <field name> fits best?" when a field isn't listed here.
     card_field_titles: dict[str, str] = {}
 
+    # Set of schema fields that should render as an editable list (vs single
+    # card pick). Initial items are LLM-suggested per turn — seeded from the
+    # partial state — so the user gets a usable starting list they edit in
+    # place. Right widget for `list[str]` schema fields like objectives /
+    # research_questions where the user wants 2-5 items rather than a single
+    # choice. Empty = no list editors.
+    list_fields: set[str] = set()
+
+    # Human-readable list-editor headers per field. Falls back to a generic
+    # title when a field isn't listed here.
+    list_field_titles: dict[str, str] = {}
+
     def _get_llm(self):
+        # Per-call timeout caps how long a single Gemini request can hang.
+        # Without it, a stalled API call wedges the whole conversation —
+        # observed when intent classification + _is_affirmative + next-question
+        # generation all queued behind a slow upstream. 20s is the conservative
+        # ceiling: Gemini 2.5 Flash typically returns in 1-3s, anything past
+        # ~10s is the API being unhealthy and we'd rather fail fast and let
+        # the caller's except-fallback path run.
         return ChatGoogleGenerativeAI(
             model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
             temperature=0.4,
+            timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
         )
 
     def render_hint_for_field(self, field_name: str, partial: dict | None = None) -> dict | None:
         """Return a widget render hint for the next question, or None for free-text.
 
-        Default implementation: when `field_name` is in `card_fields`, generates
-        contextually relevant card options via _generate_card_options. Falls
-        back to None (free-text input) when generation fails or yields nothing.
-        Subclasses override only for non-card widget shapes (toggle, slider,
-        list_editor, etc.).
+        Two declarative opt-ins in subclasses:
+          - `card_fields`: single-choice card grid, LLM-generated options
+            grounded in `partial`.
+          - `list_fields`: editable multi-item list, LLM-seeded initial items
+            grounded in `partial`. Right widget for `list[str]` schema slots.
+
+        Falls back to None (free-text input) when LLM generation fails or
+        yields nothing — the clarification loop still works without a widget.
+        Subclasses override only for bespoke widget shapes (M3's themes /
+        interview_guide use tool-driven list editors with nested sub_items).
         """
+        if field_name in self.list_fields:
+            items = self._generate_list_items(field_name, partial or {})
+            if not items:
+                return None
+            title = self.list_field_titles.get(
+                field_name,
+                f"{field_name.replace('_', ' ').title()} — edit and confirm",
+            )
+            list_items = [
+                ListItem(id=f"{field_name[:3]}_{i}", text=s)
+                for i, s in enumerate(items)
+            ]
+            return ListEditorHint(
+                field_name=field_name,
+                title=title,
+                initial_items=list_items,
+                allow_nested=False,
+            ).model_dump()
+
         if field_name not in self.card_fields:
             return None
         options = self._generate_card_options(field_name, partial or {})
@@ -85,6 +129,51 @@ class ModuleAgent(ABC):
             options=options,
             columns=3,
         ).model_dump()
+
+    def _generate_list_items(self, field_name: str, partial: dict) -> list[str]:
+        """Ask the LLM for 3-4 suggested string items for a list-shaped field.
+
+        Seeded with the schema field description + partial state so the
+        suggestions reflect what the user has already filled (e.g. an
+        `objectives` list anchored on the research_title + research_type).
+        Returns [] on LLM/parse failure so render_hint_for_field falls back
+        to free-text input — the clarification loop still works without items.
+        The user edits the suggested list in place (add / remove / change)
+        before clicking Confirm in the list_editor widget — zero-typing path.
+        """
+        desc = self._field_description(field_name)
+        context = json.dumps(
+            {k: v for k, v in partial.items() if not k.startswith("_")},
+            default=str, ensure_ascii=False,
+        )
+        prompt = (
+            f"{self.system_prompt}\n\n"
+            f"Generate 3 to 4 distinct, contextually relevant suggested items "
+            f"for the schema list-field '{field_name}'.\n"
+            f"Field description: {desc}\n\n"
+            f"Already-filled fields for context:\n{context}\n\n"
+            f"Rules:\n"
+            f"- Each item must be a single concise sentence (under 30 words).\n"
+            f"- For 'objectives'-shaped fields: lead with an action verb "
+            f"(Measure, Examine, Compare, Identify, Evaluate, Investigate).\n"
+            f"- For 'research_questions'-shaped fields: phrase each as a "
+            f"question ending with '?'.\n"
+            f"- All items must be coherent with the already-filled context.\n"
+            f"- The user will edit the list in place — give them a strong "
+            f"starting point, not exhaustive coverage.\n\n"
+            f"Respond with ONLY a JSON array of strings. No prose, no markdown."
+        )
+        try:
+            raw = self._get_llm().invoke(prompt).content
+            data = json.loads(_strip_code_fence(raw))
+            if isinstance(data, list):
+                return [str(x).strip() for x in data if x]
+        except Exception:  # noqa: BLE001 - LLM/JSON failure is best-effort
+            logger.exception(
+                "%s list-item suggestion failed for %s",
+                self.module_key, field_name,
+            )
+        return []
 
     def _generate_card_options(self, field_name: str, partial: dict) -> list[CardOption]:
         """Ask the LLM for contextually relevant card options for `field_name`.
@@ -157,35 +246,56 @@ class ModuleAgent(ABC):
                     transition=True,
                 )
             # User did not confirm — treat as a correction and re-ask missing fields.
-            return self._ask_next_question(state, partial)
+            return self._ask_next_question(partial)
 
         # Interactive: check if we were waiting for the user to fill a specific field.
         awaiting_field = partial.pop("_awaiting_field", None)
         delegated_notice: str | None = None
         if awaiting_field:
-            last_user = next(
-                (text_of(m) for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
-                "",
-            )
-            if self._looks_like_delegation(last_user):
-                # User asked the agent to pick for them. Generate a reasonable
-                # value and stash a notice so the next assistant message tells
-                # the user what was chosen.
-                suggested = self._suggest_field_value(state, awaiting_field, partial)
+            # Single LLM call (gemini-2.5-flash, ~$0.0001/turn) classifies the
+            # user's intent + extracts the answer when applicable. Replaces
+            # the previous keyword heuristics that were tripping on user
+            # content: a labeled research_questions answer containing the
+            # substring "what is" matched _CLARIFICATION_KEYWORDS and looped
+            # the conversation forever. The LLM understands context.
+            classification = self._classify_user_intent(state, awaiting_field, partial)
+            intent = classification.get("intent", "answer")
+            value = classification.get("value")
+
+            if intent == "clarification":
+                explanation = self._explain_and_reask(awaiting_field, partial)
+                partial["_awaiting_field"] = awaiting_field
+                return ModuleStepResult(
+                    assistant_message=explanation,
+                    context_patch=partial,
+                    transition=False,
+                    needs_user_reply=True,
+                    tool_calls_json=self.render_hint_for_field(awaiting_field, partial),
+                )
+
+            if intent == "delegation":
+                # User asked the agent to pick. Generate a reasonable value
+                # and stash a notice for the next assistant message.
+                suggested = self._suggest_field_value(awaiting_field, partial)
                 if suggested is not None:
                     partial[awaiting_field] = suggested
                     delegated_notice = (
                         f"Got it — I'll go with **{suggested}** for "
                         f"`{awaiting_field}`. We can refine that later."
                     )
-            else:
-                # Normal path: extract the field value from the user's reply.
-                extracted = self._extract_answer(state, awaiting_field)
-                if extracted is not None:
-                    partial[awaiting_field] = extracted
+            elif intent == "answer":
+                # Classifier already extracted the value when it was clear.
+                # If it returned null but classified as "answer", fall back to
+                # the dedicated extractor (tighter, field-specific prompt).
+                if value is None:
+                    value = self._extract_answer(state, awaiting_field)
+                if value is not None:
+                    partial[awaiting_field] = value
+            # navigation: supervisor will re-route on the next graph tick.
+            # off_topic: ignore the reply, _ask_next_question re-asks below.
 
         # Continue clarification: find the next missing field or summarize for confirm.
-        result = self._ask_next_question(state, partial)
+        result = self._ask_next_question(partial)
         if delegated_notice:
             # Prepend the notice so the user sees what was auto-filled BEFORE
             # the agent moves on to the next question.
@@ -226,18 +336,40 @@ class ModuleAgent(ABC):
             transition=True,
         )
 
-    def _ask_next_question(self, state, partial: dict) -> ModuleStepResult:
+    def _ask_next_question(self, partial: dict) -> ModuleStepResult:
         """Find the next missing required field and ask for it, or summarize for confirm."""
         missing = self._next_missing_field(partial)
         if missing is None:
             # All required fields filled — summarize and ask for user confirmation.
             summary = self._summarize_for_confirm(partial)
             partial["_awaiting_confirm"] = True
+            # Attach a confirm-button widget so the user can one-click move on
+            # instead of typing "yes" — and a "Let me edit" escape hatch for
+            # corrections. The frontend synthesizes the click into a HumanMessage
+            # whose content lands in `_is_affirmative`'s allow-list.
+            confirm_hint = CardGridHint(
+                field_name="_confirm",
+                title=f"Ready to lock in {self.module_key}?",
+                options=[
+                    CardOption(
+                        value="yes",
+                        label="Confirm & continue",
+                        description=f"Save {self.module_key} and start the next step.",
+                    ),
+                    CardOption(
+                        value="no",
+                        label="Let me edit",
+                        description="Tell me what to change in your next message.",
+                    ),
+                ],
+                columns=2,
+            ).model_dump()
             return ModuleStepResult(
-                assistant_message=f"Here's what we have:\n\n{summary}\n\nConfirm and move on?",
+                assistant_message=f"Here's what we have:\n\n{summary}\n\nReady to move on?",
                 context_patch=partial,
                 transition=False,
                 needs_user_reply=True,
+                tool_calls_json=confirm_hint,
             )
 
         # Mark which field we're waiting on so the next step can extract the answer.
@@ -283,22 +415,107 @@ class ModuleAgent(ABC):
             # Fall back to using the raw user message as the value.
             return last_user
 
-    # Phrases that indicate the user is delegating the answer to the agent.
-    # Detected before _extract_answer so we don't try to parse "you decide" as
-    # the actual field value (which yields null and loops the conversation).
-    _DELEGATE_KEYWORDS = (
-        "you decide", "you suggest", "you recommend", "you choose", "you pick",
-        "i don't know", "i dont know", "i don't have", "no idea", "not sure",
-        "no clue", "anything works", "you tell me", "your call", "up to you",
-        "surprise me", "whatever you think",
-        "bạn quyết định", "tùy bạn", "tôi không biết", "không biết", "tùy ý",
-    )
+    def _classify_user_intent(self, state, field_name: str, partial: dict) -> dict:
+        """One LLM call to classify the user's intent + extract the answer.
 
-    def _looks_like_delegation(self, text: str) -> bool:
-        t = (text or "").lower().strip()
-        return any(k in t for k in self._DELEGATE_KEYWORDS)
+        Returns {"intent": str, "value": Any | None}. intent ∈ {answer,
+        clarification, delegation, navigation, off_topic}.
 
-    def _suggest_field_value(self, state, field_name: str, partial: dict):
+        Replaces the previous keyword heuristics — those tripped on user
+        content: a research_questions answer with bullets like "What is the
+        average daily time..." substring-matched _CLARIFICATION_KEYWORDS
+        ("what is") and looped the conversation forever. The LLM
+        understands the difference between an answer that mentions a
+        keyword and a question asking what the field means.
+
+        Falls back to {"intent": "answer", "value": None} on LLM/parse
+        failure so the caller's dedicated _extract_answer can still try.
+
+        Cost note: one Gemini 2.5 Flash call per user turn (~$0.0001).
+        Replaces the dedicated _extract_answer call in the happy path, so
+        total LLM calls per turn is unchanged (1 classify+extract, then 1
+        for next-question generation).
+        """
+        last_user = next(
+            (text_of(m) for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
+            "",
+        )
+        if not last_user:
+            return {"intent": "off_topic", "value": None}
+
+        desc = self._field_description(field_name)
+        context = json.dumps(
+            {k: v for k, v in partial.items() if not k.startswith("_")},
+            default=str, ensure_ascii=False,
+        )
+        prompt = (
+            f"You are classifying a user's reply during a research-project intake.\n"
+            f"The user was asked to provide a value for the field '{field_name}'.\n"
+            f"Field type/description: {desc}\n"
+            f"Already-filled fields (context):\n{context}\n\n"
+            f"User's reply:\n{last_user}\n\n"
+            f"Classify the user's intent. Return ONLY a JSON object:\n"
+            f'  {{"intent": "<one of>", "value": <extracted value if intent="answer", else null>}}\n\n'
+            f"Intent options (pick the SINGLE best match):\n"
+            f'- "answer": the user is providing the value. Extract it matching the\n'
+            f"  field type. For list fields return a list of strings; for string\n"
+            f"  fields return a string. Strip labels like \"My objectives are:\" —\n"
+            f"  keep only the actual content.\n"
+            f'- "clarification": the user is asking what the field means or for\n'
+            f'  an example (e.g. "what is scope?", "explain please", bare "?").\n'
+            f'- "delegation": the user wants you to pick for them (e.g. "you\n'
+            f'  decide", "I don\'t have a preference", "surprise me", "tùy bạn").\n'
+            f'- "navigation": user wants to go back / skip / redo / jump elsewhere.\n'
+            f'- "off_topic": user is asking about something unrelated to the field.\n\n'
+            f"CRITICAL: a long multi-item reply that happens to contain words\n"
+            f'like "what is" or "for example" inside the answer content is\n'
+            f'STILL "answer" — those keywords are part of the user\'s content.\n\n'
+            f"No prose. No markdown. JSON only."
+        )
+        try:
+            raw = self._get_llm().invoke(prompt).content
+            data = json.loads(_strip_code_fence(raw))
+            intent = data.get("intent")
+            if intent in {"answer", "clarification", "delegation", "navigation", "off_topic"}:
+                return {"intent": intent, "value": data.get("value")}
+        except Exception:  # noqa: BLE001 - classifier failure is best-effort
+            logger.exception(
+                "%s intent classification failed for %s",
+                self.module_key, field_name,
+            )
+        return {"intent": "answer", "value": None}
+
+    def _explain_and_reask(self, field_name: str, partial: dict) -> str:
+        """Produce a friendly explanation of `field_name` + re-ask the question.
+
+        One LLM call returns BOTH the explanation and the re-asked question so
+        the assistant message reads as a single coherent turn. The prompt is
+        seeded with the partial state so the explanation references what the
+        user already filled (e.g. "since your topic is X, scope here means…"),
+        and asks for concrete examples grounded in that context — far more
+        useful than a generic dictionary definition.
+        """
+        desc = self._field_description(field_name)
+        context = json.dumps(
+            {k: v for k, v in partial.items() if not k.startswith("_")},
+            default=str, ensure_ascii=False,
+        )
+        prompt = (
+            f"{self.system_prompt}\n\n"
+            f"The user just asked for clarification about the schema field "
+            f"'{field_name}'.\n"
+            f"Field description: {desc}\n\n"
+            f"Already-filled fields for context:\n{context}\n\n"
+            f"Write a friendly 2-3 sentence explanation of what '{field_name}' "
+            f"means in the context of THEIR research (reference the already-filled "
+            f"fields). Then re-ask the question with 1-2 concrete examples "
+            f"specific to their topic. Match the language of the user's most "
+            f"recent message (English or Vietnamese). Respond with prose only — "
+            f"no markdown headers, no bullets."
+        )
+        return self._get_llm().invoke(prompt).content.strip()
+
+    def _suggest_field_value(self, field_name: str, partial: dict):
         """User asked the agent to choose. Generate one reasonable value via LLM.
 
         Uses already-filled fields as context so the suggestion is coherent
@@ -322,14 +539,52 @@ class ModuleAgent(ABC):
         except (json.JSONDecodeError, TypeError):
             return None
 
-    @staticmethod
-    def _is_affirmative(messages: list[BaseMessage]) -> bool:
-        """Return True if the last user message is a confirmation word."""
+    def _is_affirmative(self, messages: list[BaseMessage]) -> bool:
+        """LLM-based affirmative check for the summary confirmation step.
+
+        Replaces the hardcoded keyword set that missed natural phrasings like
+        "yeah", "sure", "looks good", "yep go". Fast path: literal "yes"/"y"/
+        "no"/"n" (what the Confirm button widget sends) skips the LLM call
+        entirely. Everything else asks gemini-2.5-flash. Falls back to the
+        old keyword set if the LLM call/parse fails so a bad API turn never
+        wedges the conversation.
+        """
         last_user = next(
             (text_of(m) for m in reversed(messages) if isinstance(m, HumanMessage)),
             "",
         )
-        return last_user.strip().lower() in {
+        trivial = last_user.strip().lower()
+        if not trivial:
+            return False
+        # Fast path — skip the LLM for unambiguous single-word confirms /
+        # rejections. Covers the Confirm button widget (sends literal "yes"/"no")
+        # AND every short phrasing real users type ("go", "ok", "sure", etc.).
+        # Latency win + removes Gemini as a wedge point when it stalls.
+        if trivial in {
+            "yes", "y", "ok", "okay", "confirm", "go", "continue", "yep",
+            "yeah", "sure", "alright", "lgtm", "looks good",
+            "đồng ý", "ok rồi", "tiếp tục", "tốt rồi",
+        }:
+            return True
+        if trivial in {"no", "n", "nope", "không"}:
+            return False
+        prompt = (
+            f"The user was shown a summary of their research setup and asked "
+            f"'Ready to move on?'.\n"
+            f"User reply: {last_user}\n\n"
+            f"Is this an affirmative confirmation (yes / sure / lock it in / "
+            f"approve / go ahead — in any language)? Or is it a non-confirmation "
+            f"(no / not yet / I want to change something)?\n\n"
+            f'Respond with ONLY a JSON object: {{"confirm": true|false}}.'
+        )
+        try:
+            raw = self._get_llm().invoke(prompt).content
+            data = json.loads(_strip_code_fence(raw))
+            return bool(data.get("confirm"))
+        except Exception:  # noqa: BLE001 - LLM/JSON failure is best-effort
+            logger.exception("affirmative classification failed")
+        # Fallback to the original allow-list so the conversation never wedges.
+        return trivial in {
             "yes", "y", "ok", "okay", "confirm", "go", "continue", "yep",
             "đồng ý", "ok rồi", "tiếp tục",
         }

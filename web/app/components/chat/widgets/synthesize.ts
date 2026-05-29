@@ -16,6 +16,10 @@ export function synthesizeWidgetSelection(
   const descriptors: Record<string, string> = {
     field: `I'd like to study ${label}.`,
     research_type: `I'll use a ${label.toLowerCase()} approach.`,
+    // Module confirmation widget — backend's _is_affirmative checks for "yes"
+    // exactly, so send the raw value (which is always "yes" or "no") so the
+    // click round-trips into the confirm/reject path without rephrasing.
+    _confirm: value,
   };
   return descriptors[fieldName] ?? label;
 }
@@ -84,6 +88,24 @@ export function summarizeList(items: ListItem[], fieldName: string): string {
             ? `${i + 1}. ${s.text} — ${thresholds}`
             : `${i + 1}. ${s.text}`;
         }),
+      ].join("\n");
+
+    case "objectives":
+      // M1 — labeled header lets _extract_answer parse bulleted list[str]
+      // unambiguously. Without the header the bare bullets read as a
+      // clarifying question and extraction returns null → infinite loop.
+      return [
+        "My research objectives:",
+        ...items.map(o => `- ${o.text}`),
+      ].join("\n");
+
+    case "research_questions":
+      // Same labeled-header pattern as objectives. Each item is itself
+      // phrased as a question ending in '?' which is what the LLM extractor
+      // expects for this field's schema.
+      return [
+        "My research questions:",
+        ...items.map(q => `- ${q.text}`),
       ].join("\n");
 
     default:

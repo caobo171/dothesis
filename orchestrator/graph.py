@@ -94,6 +94,35 @@ def _agent_node_factory(module_key: str):
     return _node
 
 
+def _make_route_after_module(module_key: str):
+    """Closure: routing decision for the conditional edge from a module node.
+
+    Decision: replaces the previous static `interrupt_after=[M1..M5]` on the
+    compiled graph. interrupt_after fired unconditionally after every visit
+    to a module, which meant when M1 transitioned to M2 the turn ended right
+    after M1 emitted "Confirmed M1. Moving on." — the user had to send
+    another message before M2's first question appeared. That broke the
+    intuitive "confirm and immediately see the next step" UX.
+
+    With the conditional edge:
+      - If the module emitted a question (sets _awaiting_field / _awaiting_confirm)
+        → route to END, ending the astream. Checkpoint preserves state for the
+        next user message.
+      - If the module just transitioned (confirmed_at stamped, no awaiting flags)
+        → route back to supervisor, which then routes to the next module IN THE
+        SAME ASTREAM CALL. M2 emits its first question, hits its own routing,
+        and END fires. The user sees M1's confirmation + M2's first question
+        in a single turn.
+    """
+    def _route(state: OrchestratorState) -> str:
+        cs = state["context_store"]
+        slice_ = getattr(cs, _MODULE_FIELD[module_key], None) or {}
+        if "_awaiting_field" in slice_ or "_awaiting_confirm" in slice_:
+            return "end"
+        return "supervisor"
+    return _route
+
+
 def _seed_state_node(state: OrchestratorState) -> dict:
     """Pre-supervisor seeder for missing required fields.
 
@@ -159,21 +188,25 @@ def build_graph(*, interactive: bool, checkpointer: BaseCheckpointSaver):
          "M4": "M4", "M5": "M5", "DONE": END},
     )
 
-    # Each module node loops back to the supervisor after completing its step.
+    # Each module routes either back to supervisor (continue same turn after
+    # transition) or to END (pause for user reply). See _make_route_after_module
+    # for the contract. Replaces the previous static interrupt_after which
+    # always paused after M1, hiding M2's first question behind an extra turn.
     for key in ("M1", "M2", "M3", "M4", "M5"):
-        builder.add_edge(key, "supervisor")
+        builder.add_conditional_edges(
+            key,
+            _make_route_after_module(key),
+            {"supervisor": "supervisor", "end": END},
+        )
 
-    # Interactive flow on each user turn: supervisor → module → (pause). The
-    # pause must fire AFTER the module emits its assistant message, not before
-    # the supervisor — `interrupt_before` fires on the FIRST entry too, which
-    # would mean nothing runs on the user's very first message (astream just
-    # yields an empty __interrupt__ and returns). interrupt_after on the
-    # module nodes is the correct hook: the supervisor + module both run, the
-    # message is yielded over SSE, then the graph pauses waiting for the next
-    # user input. Auto-mode (subprocess) runs end-to-end with no interrupts.
-    interrupt_after = ["M1", "M2", "M3", "M4", "M5"] if interactive else []
+    # `interactive` is preserved as a parameter for API stability — both modes
+    # now use the same topology. Auto-mode never hits the END-routing branch
+    # because _auto_fill transitions immediately, so supervisor just keeps
+    # routing through the module chain until M5 confirms → supervisor →
+    # DONE → END. No checkpointer interrupts needed in either mode.
+    _ = interactive  # retained for compat; routing handles both modes
 
-    return builder.compile(checkpointer=checkpointer, interrupt_after=interrupt_after)
+    return builder.compile(checkpointer=checkpointer)
 
 
 # ---------------------------------------------------------------------------

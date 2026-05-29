@@ -266,14 +266,15 @@ class M4Agent(ModuleAgent):
             "ad-hoc analysis to investigate further."
         )
 
-    _AD_HOC_KEYWORDS = (
-        "also run", "also test", "rerun", "re-run", "run again",
-        "mediation", "moderation", "moderate", "controlling for",
-        "with control", "ad-hoc", "extra analysis", "additional analysis",
-    )
-
     def _is_ad_hoc_request(self, messages) -> bool:
-        """Heuristic: scan the latest user message for ad-hoc keywords."""
+        """LLM check: is the user asking for an extra/ad-hoc analysis?
+
+        Replaces a brittle keyword list ("also run" / "mediation" / etc.)
+        that missed natural phrasings like "could you test the mediation
+        path?" or "what if we control for age?". Falls back to False on LLM
+        failure so the conversation stays on the outline track.
+        """
+        import json
         from langchain_core.messages import HumanMessage
         last_user = next(
             (text_of(m) for m in reversed(messages) if isinstance(m, HumanMessage)),
@@ -281,8 +282,24 @@ class M4Agent(ModuleAgent):
         )
         if not last_user:
             return False
-        text = last_user.lower()
-        return any(kw in text for kw in self._AD_HOC_KEYWORDS)
+        prompt = (
+            f"The user is currently running the outlined analysis steps.\n"
+            f"User reply: {last_user}\n\n"
+            f"Is this an ad-hoc / extra-analysis request (e.g. 'also run a "
+            f"mediation test', 'rerun with a control', 'try a moderation', "
+            f"'what about an extra t-test')? Or is it a normal next-step / "
+            f"confirmation / clarification reply?\n\n"
+            f'Respond with ONLY: {{"ad_hoc": true|false}}'
+        )
+        try:
+            from orchestrator.agents.base import _strip_code_fence
+            raw = self._get_llm().invoke(prompt).content
+            data = json.loads(_strip_code_fence(raw))
+            return bool(data.get("ad_hoc"))
+        except Exception:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).exception("M4 ad-hoc classification failed")
+        return False
 
     def _handle_ad_hoc(self, state, partial):
         """Route an ad-hoc user message to run_extra_analysis + append to custom_analyses.

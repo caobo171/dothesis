@@ -105,6 +105,24 @@ def create_project(body: CreateProjectBody,
     return _serialize_project(db, p)
 
 
+@router.get("/projects", response_model=list[ProjectOut])
+def list_projects(user: User = Depends(current_user),
+                  db: Session = Depends(db_session)):
+    """Return the current user's projects, most recently updated first.
+
+    Decision: same serializer as the single-project GET so the frontend's
+    ProjectListGrid + project-detail page share one Project type. Ordered by
+    updated_at desc so the project the user just edited (or just created)
+    appears at the top — without this the list felt non-deterministic and the
+    user couldn't tell whether their just-created project landed at all.
+    """
+    projects = (db.query(Project)
+                  .filter_by(user_id=user.id)
+                  .order_by(Project.updated_at.desc())
+                  .all())
+    return [_serialize_project(db, p) for p in projects]
+
+
 @router.get("/projects/{project_id}", response_model=ProjectOut)
 def get_project(project_id: uuid.UUID,
                 user: User = Depends(current_user),

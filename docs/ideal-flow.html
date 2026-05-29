@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DoThesis — Ideal Conversation Flow</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --panel: #131826;
+    --panel-2: #1a2030;
+    --border: #2a3245;
+    --text: #e6e8eb;
+    --text-dim: #8b95a8;
+    --accent: #6ee7ff;
+    --accent-2: #a78bfa;
+    --good: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --user: #1e3a5f;
+    --user-border: #3b82f6;
+    --ai: #1f2937;
+    --ai-border: #6ee7ff;
+    --code-bg: #0a0e18;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font: 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 80px; }
+  header.hero {
+    padding: 40px 24px 32px;
+    background: linear-gradient(135deg, #0f172a 0%, #1a1338 100%);
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+  }
+  header.hero h1 {
+    margin: 0 0 8px; font-size: 30px; font-weight: 700;
+    background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { margin: 0; color: var(--text-dim); }
+  h2 {
+    margin: 48px 0 16px; font-size: 22px; font-weight: 600;
+    border-left: 3px solid var(--accent); padding-left: 12px;
+  }
+  h3 { margin: 28px 0 10px; font-size: 16px; color: var(--accent); font-weight: 600; }
+  p, li { color: var(--text); }
+  code {
+    background: var(--code-bg); padding: 2px 6px; border-radius: 4px;
+    font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent);
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    padding: 12px 16px; border-radius: 8px; overflow-x: auto;
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--text);
+  }
+
+  /* ── Topology row ─────────────────────────────────────────────── */
+  .topology {
+    display: grid; grid-template-columns: 24px repeat(5, 1fr) 24px;
+    align-items: stretch; gap: 8px; margin: 16px 0;
+  }
+  .topology .terminal {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim); font: 13px ui-monospace, monospace;
+  }
+  .topology .module {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 10px;
+    position: relative; transition: transform 0.15s;
+  }
+  .topology .module:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .topology .module .key {
+    color: var(--accent); font-weight: 700; font-size: 14px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .topology .module .key .pill {
+    background: rgba(110,231,255,0.1); padding: 2px 8px; border-radius: 12px;
+    font-size: 11px; color: var(--accent); font-weight: 500;
+  }
+  .topology .module .title { font-size: 13px; margin: 4px 0 6px; color: var(--text); }
+  .topology .module .out { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+
+  /* ── Chat transcript ──────────────────────────────────────────── */
+  .convo {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 12px 0 24px;
+  }
+  .turn { display: flex; margin: 10px 0; gap: 8px; }
+  .turn.user { justify-content: flex-end; }
+  .bubble {
+    max-width: 78%; padding: 10px 14px; border-radius: 12px;
+    border: 1px solid; font-size: 14px;
+  }
+  .turn.user .bubble {
+    background: var(--user); border-color: var(--user-border);
+    border-radius: 12px 12px 4px 12px;
+  }
+  .turn.ai .bubble {
+    background: var(--ai); border-color: var(--ai-border);
+    border-radius: 12px 12px 12px 4px;
+  }
+  .turn .role {
+    font-size: 10px; text-transform: uppercase; color: var(--text-dim);
+    margin-bottom: 4px; letter-spacing: 0.05em; font-weight: 600;
+  }
+  .widget {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+  }
+  .widget .card {
+    background: rgba(110,231,255,0.08); border: 1px solid rgba(110,231,255,0.25);
+    padding: 4px 10px; border-radius: 6px; font-size: 12px; color: var(--accent);
+  }
+  .widget .card.selected {
+    background: rgba(167,139,250,0.2); border-color: var(--accent-2); color: #ddd;
+  }
+
+  /* ── Annotation boxes ─────────────────────────────────────────── */
+  .note {
+    background: rgba(110,231,255,0.06); border-left: 3px solid var(--accent);
+    padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 12px 0;
+    font-size: 13px; color: var(--text);
+  }
+  .note.warn { background: rgba(251,191,36,0.06); border-color: var(--warn); }
+  .note.bad { background: rgba(248,113,113,0.06); border-color: var(--bad); }
+  .note.good { background: rgba(74,222,128,0.06); border-color: var(--good); }
+  .note strong { color: var(--accent); }
+  .note.warn strong { color: var(--warn); }
+  .note.bad strong { color: var(--bad); }
+  .note.good strong { color: var(--good); }
+
+  /* ── Field checklist ──────────────────────────────────────────── */
+  .fields {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px; margin: 12px 0;
+  }
+  .fields .field {
+    display: flex; align-items: center; gap: 8px; font-size: 13px;
+    padding: 4px 0;
+  }
+  .fields .field .mark { color: var(--good); font-weight: bold; }
+  .fields .field .name { color: var(--text); font-family: ui-monospace, monospace; font-size: 12px; }
+  .fields .field .kind {
+    font-size: 11px; color: var(--text-dim);
+    background: rgba(255,255,255,0.04); padding: 1px 6px; border-radius: 4px;
+  }
+
+  /* ── Diverged-from-ideal table ────────────────────────────────── */
+  table.pitfalls {
+    width: 100%; border-collapse: collapse; margin: 12px 0;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden;
+  }
+  table.pitfalls th, table.pitfalls td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+    font-size: 13px; vertical-align: top;
+  }
+  table.pitfalls th {
+    background: var(--panel-2); color: var(--text-dim);
+    font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em;
+  }
+  table.pitfalls tr:last-child td { border-bottom: 0; }
+  table.pitfalls td:first-child { color: var(--bad); font-family: ui-monospace, monospace; white-space: nowrap; }
+  table.pitfalls td:last-child { color: var(--good); }
+
+  footer { color: var(--text-dim); font-size: 12px; text-align: center; margin: 40px 0 0; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>DoThesis — Ideal Conversation Flow</h1>
+  <p>What a healthy run through M1–M5 looks like end-to-end, so you can spot where yours diverges.</p>
+</header>
+
+<div class="wrap">
+
+<!-- ──────────────────────────────────────────────────────────────── -->
+<h2>1 · Graph topology</h2>
+<p>One supervisor in the middle, five module agents on the spokes. Each module owns one ContextStore slice; the supervisor only routes. <code>interrupt_after</code> pauses execution after each module emits its question, so the graph runs in <em>one user turn = one supervisor → module hop</em>.</p>
+
+<div class="topology">
+  <div class="terminal">START</div>
+  <div class="module">
+    <div class="key">M1 <span class="pill">topic</span></div>
+    <div class="title">Topic Discovery</div>
+    <div class="out">research_title · field · research_type · scope · target_population · objectives · research_questions</div>
+  </div>
+  <div class="module">
+    <div class="key">M2 <span class="pill">literature</span></div>
+    <div class="title">Literature Review</div>
+    <div class="out">familiarize · research_state · gap_analysis · reference_confirm</div>
+  </div>
+  <div class="module">
+    <div class="key">M3 <span class="pill">design</span></div>
+    <div class="title">Research Design</div>
+    <div class="out">paradigm · design · tool · conceptual_model · scale_items / themes · sample_size · sampling</div>
+  </div>
+  <div class="module">
+    <div class="key">M4 <span class="pill">analysis</span></div>
+    <div class="title">Data Analysis</div>
+    <div class="out">data_type · outline · run_steps · interpret · custom_analyses</div>
+  </div>
+  <div class="module">
+    <div class="key">M5 <span class="pill">writing</span></div>
+    <div class="title">Writing &amp; Export</div>
+    <div class="out">compose_chapters · validate · format_citations · compile_pdf · export_docx</div>
+  </div>
+  <div class="terminal">END</div>
+</div>
+
+<div class="note">
+  <strong>Hub-and-spoke loop:</strong> each module → supervisor → next module. <code>interrupt_after</code> fires on M1–M5; the graph yields the assistant message over SSE, then pauses waiting for the next HumanMessage.
+</div>
+
+<!-- ──────────────────────────────────────────────────────────────── -->
+<h2>2 · Why you keep getting stuck in M1</h2>
+
+<table class="pitfalls">
+  <thead><tr><th>What you typed</th><th>Why it stalls</th><th>What to type instead</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>"hello"</td>
+      <td>M1's <code>_extract_answer</code> can't parse "hello" as a research title; returns null → same question re-asked.</td>
+      <td>"Gen Z TikTok marketing effectiveness" (concrete title).</td>
+    </tr>
+    <tr>
+      <td>"I dont understand"</td>
+      <td><strong>(Fixed today)</strong> Pre-fix, extraction returned null → loop. Post-fix, clarification branch fires and explains the field with examples.</td>
+      <td>Either ask "explain please" → get contextual help, then answer. Or skip ahead with a guess.</td>
+    </tr>
+    <tr>
+      <td>"yes" before all fields filled</td>
+      <td>Affirmative is only recognized at the <code>_awaiting_confirm</code> step (summary screen). Mid-conversation "yes" becomes the field value verbatim.</td>
+      <td>Wait for the "Here's what we have: ... Confirm and move on?" summary, THEN reply "yes".</td>
+    </tr>
+    <tr>
+      <td>One-word vague answers</td>
+      <td>The LLM extracts what you wrote; "marketing" with no context becomes the literal value. Fine for <code>field</code>, fails for <code>scope</code> or <code>objectives</code>.</td>
+      <td>Match the field's shape: scope = geographic+temporal boundary; objectives = "Measure X / Examine Y / Compare Z" statements.</td>
+    </tr>
+    <tr>
+      <td>Editing message in Studio</td>
+      <td>Studio's Chat tab can't reliably resume <code>interrupt_after</code> graphs. Edits create new threads, not continuations.</td>
+      <td>Use Graph tab → Submit with "As Node" cleared. Or just use localhost:3000.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ──────────────────────────────────────────────────────────────── -->
+<h2>3 · M1 — Ideal exchange (concrete example)</h2>
+<p>Example topic: <code>Gen Z TikTok marketing effectiveness</code>. 7 turns from empty → confirmed. The supervisor + interrupt loop runs once per HUMAN turn shown below.</p>
+
+<div class="convo">
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · turn 1 · field=research_title</div>
+      Hi there! I can help you narrow down your research idea. What's your initial idea for a research title? Don't worry if it's not perfect — we'll polish it together.
+    </div>
+  </div>
+  <div class="turn user">
+    <div class="bubble">
+      <div class="role">human</div>
+      Gen Z TikTok marketing effectiveness
+    </div>
+  </div>
+
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · turn 2 · field=field · card_grid</div>
+      Great start! Which academic field is your research in?
+      <div class="widget">
+        <span class="card">Marketing</span>
+        <span class="card">Communication Studies</span>
+        <span class="card">Consumer Behavior</span>
+        <span class="card">Media Studies</span>
+        <span class="card">Sociology</span>
+        <span class="card">Other / Specify</span>
+      </div>
+    </div>
+  </div>
+  <div class="turn user">
+    <div class="bubble">
+      <div class="role">human</div>
+      Marketing
+    </div>
+  </div>
+
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · turn 3 · field=research_type · card_grid</div>
+      Which research approach fits your question?
+      <div class="widget">
+        <span class="card">Quantitative</span>
+        <span class="card">Qualitative</span>
+        <span class="card">Mixed</span>
+        <span class="card">Other / Specify</span>
+      </div>
+    </div>
+  </div>
+  <div class="turn user">
+    <div class="bubble">
+      <div class="role">human</div>
+      Quantitative
+    </div>
+  </div>
+
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · turn 4 · field=target_population</div>
+      Who is your target population for this study?
+    </div>
+  </div>
+  <div class="turn user">
+    <div class="bubble">
+      <div class="role">human</div>
+      Vietnamese Gen Z aged 16–25 who use TikTok daily
+    </div>
+  </div>
+
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · turn 5 · field=scope</div>
+      What's the scope of your study — geographically, temporally, or by platform feature?
+    </div>
+  </div>
+  <div class="turn user">
+    <div class="bubble">
+      <div class="role">human</div>
+      Vietnam only, 2023–2024 data, focused on short-form video ads
+    </div>
+  </div>
+
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · turn 6 · field=objectives</div>
+      What are your research objectives — what do you want to measure or examine?
+    </div>
+  </div>
+  <div class="turn user">
+    <div class="bubble">
+      <div class="role">human</div>
+      Measure correlation between TikTok ad engagement (likes, shares, comments) and purchase intent.
+      Examine moderating effects of brand familiarity and perceived authenticity.
+    </div>
+  </div>
+
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · turn 7 · field=research_questions</div>
+      Finally — what research questions will guide your study?
+    </div>
+  </div>
+  <div class="turn user">
+    <div class="bubble">
+      <div class="role">human</div>
+      RQ1: How does TikTok ad engagement type predict purchase intent among Vietnamese Gen Z?
+      RQ2: Does brand familiarity moderate the engagement → purchase intent relationship?
+    </div>
+  </div>
+
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · summary · _awaiting_confirm</div>
+      Here's what we have:<br>
+      • <strong>research_title</strong>: "Gen Z TikTok marketing effectiveness"<br>
+      • <strong>field</strong>: "Marketing"<br>
+      • <strong>research_type</strong>: "quantitative"<br>
+      • <strong>target_population</strong>: "Vietnamese Gen Z aged 16–25 who use TikTok daily"<br>
+      • <strong>scope</strong>: "Vietnam only, 2023–2024 data, focused on short-form video ads"<br>
+      • <strong>objectives</strong>: "Measure correlation..."<br>
+      • <strong>research_questions</strong>: ["RQ1: ...", "RQ2: ..."]<br><br>
+      Confirm and move on?
+    </div>
+  </div>
+  <div class="turn user">
+    <div class="bubble">
+      <div class="role">human</div>
+      yes
+    </div>
+  </div>
+
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 → supervisor · transition</div>
+      Confirmed M1. Moving on to M2 — Literature Review.
+    </div>
+  </div>
+</div>
+
+<div class="fields">
+  <div class="field"><span class="mark">✓</span> <span class="name">research_title</span> <span class="kind">free text</span></div>
+  <div class="field"><span class="mark">✓</span> <span class="name">field</span> <span class="kind">card_grid</span></div>
+  <div class="field"><span class="mark">✓</span> <span class="name">research_type</span> <span class="kind">card_grid</span></div>
+  <div class="field"><span class="mark">✓</span> <span class="name">target_population</span> <span class="kind">free text</span></div>
+  <div class="field"><span class="mark">✓</span> <span class="name">scope</span> <span class="kind">free text</span></div>
+  <div class="field"><span class="mark">✓</span> <span class="name">objectives</span> <span class="kind">free text</span></div>
+  <div class="field"><span class="mark">✓</span> <span class="name">research_questions</span> <span class="kind">list[str]</span></div>
+  <div class="field"><span class="mark">✓</span> <span class="name">confirmed_at</span> <span class="kind">timestamp</span></div>
+</div>
+
+<!-- ──────────────────────────────────────────────────────────────── -->
+<h2>4 · Asking for clarification (newly supported)</h2>
+<p>Any of these mid-question and the agent now explains the field grounded in your already-filled state, then re-asks with concrete examples. No more silent loops.</p>
+
+<div class="convo">
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · field=scope</div>
+      What's the scope of your study — geographically, temporally, or by platform feature?
+    </div>
+  </div>
+  <div class="turn user">
+    <div class="bubble">
+      <div class="role">human</div>
+      I don't understand?
+    </div>
+  </div>
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · clarification branch · _awaiting_field stays = scope</div>
+      Scope means the boundaries of your study — for example, since you're researching Gen Z + TikTok in Vietnam, scope could be "Vietnamese users in Ho Chi Minh City, 2023–2024, focusing on beauty &amp; lifestyle ads" or "Global Gen Z, 12-month period, all branded-content categories". What scope do you want to focus on?
+    </div>
+  </div>
+  <div class="turn user">
+    <div class="bubble">
+      <div class="role">human</div>
+      Vietnam only, 2023-2024, short-form ads
+    </div>
+  </div>
+</div>
+
+<div class="note good">
+  <strong>Trigger phrases:</strong> "explain", "what does that mean", "I don't understand", "what is", "clarify", "elaborate", "for example", bare <code>?</code> / <code>??</code> / <code>???</code>. Vietnamese: "giải thích", "không hiểu", "là gì", "ví dụ", "rõ hơn".
+</div>
+
+<!-- ──────────────────────────────────────────────────────────────── -->
+<h2>5 · Delegating to the agent (already supported)</h2>
+<p>When you genuinely don't have a preference, say so — the agent picks a coherent value grounded in what you've already filled, instead of looping.</p>
+
+<div class="convo">
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · field=research_type</div>
+      Which research approach fits your question?
+    </div>
+  </div>
+  <div class="turn user">
+    <div class="bubble">
+      <div class="role">human</div>
+      you decide
+    </div>
+  </div>
+  <div class="turn ai">
+    <div class="bubble">
+      <div class="role">M1 · delegation branch</div>
+      Got it — I'll go with <strong>quantitative</strong> for <code>research_type</code>. We can refine that later.<br><br>
+      [Then asks the next question — target_population.]
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <strong>Trigger phrases:</strong> "you decide", "you suggest", "you recommend", "I don't know", "no idea", "up to you", "surprise me", "your call", "anything works". Vietnamese: "tùy bạn", "tôi không biết", "tùy ý".
+</div>
+
+<!-- ──────────────────────────────────────────────────────────────── -->
+<h2>6 · M2 → M3 → M4 → M5 in one breath</h2>
+<p>Same hub-and-spoke pattern — supervisor routes, each module owns its slice. Here's what to expect once M1 closes.</p>
+
+<h3>M2 — Literature Review</h3>
+<p>Four internal phases, all conversational:</p>
+<ol>
+  <li><strong>familiarize</strong> — "Have you uploaded papers? Skip / upload."</li>
+  <li><strong>research_state</strong> — agent drafts a summary of where the field stands (calls <code>scout_citations</code> tool).</li>
+  <li><strong>gap_analysis</strong> — list of candidate gaps, you confirm which ones to chase.</li>
+  <li><strong>reference_confirm</strong> — per-reference page-number verification.</li>
+</ol>
+<p>Output: <code>m2_literature = { research_state, research_gaps[], references[] }</code> → supervisor routes to M3.</p>
+
+<h3>M3 — Research Design (paradigm-aware)</h3>
+<p>Field walk diverges based on paradigm (chosen first, default inferred from M1's <code>research_type</code>):</p>
+<pre>quantitative:  design → tool → conceptual_model → scale_items → sample_size → sampling
+qualitative:   design → tool → themes → interview_guide → purposive_criteria → sample_size → sampling
+mixed:         mixed_design_type → [quant flow] → [qual flow] → sample_size → sampling</pre>
+<p>Cards for <code>tool</code> / <code>design</code> / <code>mixed_design_type</code> are now LLM-generated dynamically — they adapt to your paradigm + RQ.</p>
+
+<h3>M4 — Data Analysis</h3>
+<p>Detects data type from the paste-text the user provides, generates an outline of analysis steps, runs each step, interprets results, and supports ad-hoc requests like "also run a t-test on age groups". Output: <code>m4_analysis = { data_type, outline[], results{}, custom_analyses[] }</code>.</p>
+
+<h3>M5 — Writing &amp; Export</h3>
+<p>Composes chapters per-section (per Q-S3 brainstorm decision), validates draft + citations, formats per the requested style, compiles PDF, exports DOCX. Output lives in S3; the artifact URLs come back as <code>m5_writing.export_artifacts</code>.</p>
+
+<!-- ──────────────────────────────────────────────────────────────── -->
+<h2>7 · If you're stuck mid-M1 right now</h2>
+
+<div class="note good">
+  <strong>1. Pull state via the inspector.</strong> See exactly what M1 has confirmed and what it's awaiting:
+  <pre>api/.venv/bin/python inspect_thread.py --latest</pre>
+  Look for <code>_awaiting_field</code> in m1_topic — that's the field the agent is currently asking about. Your next message will be extracted as that field's value.
+</div>
+
+<div class="note good">
+  <strong>2. Use the trigger phrases.</strong> If the agent's question is unclear, type <code>explain</code> or <code>?</code>. If you genuinely don't have a preference, type <code>you decide</code> or <code>tùy bạn</code>.
+</div>
+
+<div class="note good">
+  <strong>3. Use localhost:3000 — not Studio.</strong> Studio's Chat tab can't resume <code>interrupt_after</code> graphs reliably. The production UI handles the full conversation natively.
+</div>
+
+<div class="note warn">
+  <strong>4. Start a fresh thread.</strong> Stale threads carry confused state across code changes. If you restarted dev.sh after a fix shipped, old threads still run the old M1 code path until they hit a new node.
+</div>
+
+<div class="note bad">
+  <strong>5. Last resort — reset M1.</strong> If you need to clear M1 entirely (rare): hit <code>POST /api/v1/projects/&lt;id&gt;/reset?module=M1</code> or just delete the project and start over. Faster than fighting a wedged thread.
+</div>
+
+<footer>
+  Generated by Claude · open this file in any browser · for live debugging use <code>api/.venv/bin/python inspect_thread.py --latest</code>
+</footer>
+
+</div><!-- /.wrap -->
+</body>
+</html>

@@ -7,13 +7,25 @@ from orchestrator.agents.m5_writing import M5Agent
 from orchestrator.state import ContextStore
 
 
-def test_is_rewrite_request_detects_keywords():
+def test_is_rewrite_request_uses_llm_classifier(monkeypatch):
+    """LLM-based detection: trust the classifier's `{rewrite: true|false}`.
+
+    Pre-refactor this asserted that specific keywords ("rewrite", "less formal",
+    "expand") matched. With LLM detection, semantics matter not substrings — so
+    we mock the LLM and verify the helper round-trips its decision.
+    """
     agent = M5Agent()
+    fake = MagicMock()
+    monkeypatch.setattr(M5Agent, "_get_llm", lambda self: fake)
+
+    fake.invoke.return_value.content = '{"rewrite": true}'
     assert agent._is_rewrite_request([HumanMessage("rewrite chapter 3")]) is True
-    assert agent._is_rewrite_request([HumanMessage("make it less formal")]) is True
-    assert agent._is_rewrite_request([HumanMessage("expand the methodology")]) is True
+
+    fake.invoke.return_value.content = '{"rewrite": false}'
     assert agent._is_rewrite_request([HumanMessage("yes, confirm")]) is False
-    assert agent._is_rewrite_request([HumanMessage("looks good")]) is False
+
+    # Empty messages → False without any LLM call.
+    assert agent._is_rewrite_request([]) is False
 
 
 def test_identify_chapter_maps_aliases():
@@ -114,6 +126,11 @@ def test_step_routes_rewrite_request_to_handle_rewrite(monkeypatch):
         "uncited_warnings": [],
     }
     monkeypatch.setattr(m5_mod, "rewrite_chapter", fake_rewrite)
+
+    # LLM-based _is_rewrite_request: mock to return true so step() routes here.
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = '{"rewrite": true}'
+    monkeypatch.setattr(M5Agent, "_get_llm", lambda self: fake_llm)
 
     agent = M5Agent()
     state = {

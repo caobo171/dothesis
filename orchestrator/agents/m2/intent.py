@@ -1,15 +1,20 @@
-"""M2 per-phase intent classifier.
+"""M2 per-phase intent classifier — LLM-first, no keyword catches.
 
-Hybrid rules-first / LLM-fallback. In auto mode, always returns confirm.
+Auto mode short-circuits to confirm. Interactive mode always asks gemini-2.5-flash
+to pick the action; regex still extracts structured data (gap IDs, page numbers)
+because those are bounded patterns, not natural-language phrasing.
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 from typing import Literal
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 PhaseKey = Literal[
@@ -30,27 +35,6 @@ class PhaseIntent(BaseModel):
     custom_gap_text: str = ""
 
 
-_CONFIRM_WORDS = {
-    "yes", "y", "ok", "okay", "looks good", "confirm", "go", "continue",
-    "đồng ý", "ok rồi", "tiếp tục", "tốt rồi",
-}
-_REFINE_KEYWORDS = ("redo", "regenerate", "change", "focus on", "instead",
-                    "làm lại", "đổi", "tập trung vào")
-_NAV_KEYWORDS_TO_PHASE: dict[str, PhaseKey] = {
-    "back to research state": "research_state",
-    "back to research": "research_state",
-    "back to gap": "gap_analysis",
-    "back to references": "reference_confirm",
-    "redo familiarize": "familiarize",
-    "go to research state": "research_state",
-    "go to gap": "gap_analysis",
-    "quay lại nghiên cứu": "research_state",
-    "quay lại gap": "gap_analysis",
-}
-_SKIP_ALL_WORDS = {"skip all", "skip the rest", "bỏ qua tất cả"}
-_SKIP_WORDS = {"skip", "next", "bỏ qua"}
-
-
 def _intent_llm():
     return ChatGoogleGenerativeAI(
         model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
@@ -64,58 +48,53 @@ def classify_phase_intent(
     current_phase: PhaseKey,
     mode: Literal["interactive", "auto"],
 ) -> PhaseIntent:
-    # Auto mode always advances — no user confirmation needed
+    # Auto mode always advances — no user confirmation needed.
     if mode == "auto":
         return PhaseIntent(action="confirm")
 
-    text = (last_user_message or "").strip().lower()
-
-    # Navigation back to a prior phase takes highest priority
-    for kw, target in _NAV_KEYWORDS_TO_PHASE.items():
-        if kw in text:
-            return PhaseIntent(action="navigate", target_phase=target)
-
-    # Phase 3: gap selection or custom gap insertion
-    if current_phase == "gap_analysis":
-        ids = re.findall(r"\bgap\s*(\d+)\b", text)
-        if ids:
-            return PhaseIntent(action="select", selected_ids=ids)
-        if "custom gap" in text or "add gap" in text:
-            return PhaseIntent(action="add_custom_gap",
-                                custom_gap_text=last_user_message)
-
-    # Phase 4: skip/skip-all/page-correction rules
-    if current_phase == "reference_confirm":
-        if any(kw in text for kw in _SKIP_ALL_WORDS):
-            return PhaseIntent(action="skip_all")
-        page_match = re.search(r"page\s+(\d+)", text)
-        if page_match and ("correct" in text or "actually" in text):
-            return PhaseIntent(action="correct_page",
-                                corrected_page=int(page_match.group(1)))
-        if any(kw in text for kw in _SKIP_WORDS):
-            return PhaseIntent(action="skip")
-
-    # Generic refine keywords
-    if any(kw in text for kw in _REFINE_KEYWORDS):
-        return PhaseIntent(action="refine", refinement_text=last_user_message)
-
-    # Confirm words: exact match, prefix, or as a whole word within the text
-    # e.g. "looks good, continue" should match "continue" even mid-sentence
-    if any(
-        text == w or text.startswith(w + " ") or
-        re.search(r"\b" + re.escape(w) + r"\b", text)
-        for w in _CONFIRM_WORDS
-    ):
+    text = (last_user_message or "").strip()
+    if not text:
         return PhaseIntent(action="confirm")
 
-    # Ambiguous — fall back to LLM structured-output classification
+    # Regex extracts structured data (bounded patterns, not language matching).
+    # These overlay on top of the LLM-classified action below.
+    selected_ids = re.findall(r"\bgap\s*(\d+)\b", text.lower())
+    page_match = re.search(r"page\s+(\d+)", text.lower())
+
+    prompt = (
+        f"You are classifying a user's reply during M2 Literature Review, "
+        f"phase '{current_phase}'.\n"
+        f"User reply: {text}\n\n"
+        f"Pick the SINGLE best action:\n"
+        f"- confirm: agrees with current output / wants to advance (yes / sure / "
+        f"looks good / move on / đồng ý / etc.)\n"
+        f"- refine: wants the agent to redo or rework with different guidance "
+        f"(e.g. 'focus on X instead', 'redo this', 'change Y')\n"
+        f"- navigate: wants to jump back to an earlier phase (e.g. 'go back to "
+        f"the gap step', 'redo the research state'). Set target_phase to one "
+        f"of: familiarize / research_state / gap_analysis / reference_confirm / "
+        f"output_gen.\n"
+        f"- select: picking specific gap IDs (gap_analysis phase only)\n"
+        f"- skip: skip the current reference (reference_confirm phase only)\n"
+        f"- skip_all: skip ALL remaining references\n"
+        f"- correct_page: providing a correct page number\n"
+        f"- add_custom_gap: adding a user-defined gap (gap_analysis phase only). "
+        f"Set custom_gap_text to the user's message.\n\n"
+        f"For 'refine', set refinement_text to the user's message."
+    )
     try:
         llm = _intent_llm().with_structured_output(PhaseIntent)
-        prompt = (
-            f"Classify the user's intent in M2 Literature Review phase '{current_phase}'.\n"
-            f"User message: {last_user_message}\n"
-            "If unclear, default to 'refine' with the message as refinement_text."
-        )
-        return llm.invoke(prompt)
-    except Exception:
+        intent = llm.invoke(prompt)
+        # Backfill structured data from regex when the LLM didn't extract it.
+        if intent.action == "select" and not intent.selected_ids and selected_ids:
+            intent.selected_ids = selected_ids
+        if intent.action == "correct_page" and intent.corrected_page is None and page_match:
+            intent.corrected_page = int(page_match.group(1))
+        if intent.action == "add_custom_gap" and not intent.custom_gap_text:
+            intent.custom_gap_text = last_user_message
+        if intent.action == "refine" and not intent.refinement_text:
+            intent.refinement_text = last_user_message
+        return intent
+    except Exception:  # noqa: BLE001 - LLM failure falls back to refine
+        logger.exception("M2 phase-intent classification failed; defaulting to refine")
         return PhaseIntent(action="refine", refinement_text=last_user_message)
