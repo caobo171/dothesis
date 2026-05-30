@@ -122,9 +122,9 @@ class M5Agent(ModuleAgent):
         # Auto-mode: let base class _auto_fill produce the chapters, then
         # replace any LLM-hallucinated export_artifacts with REAL S3 uploads.
         if state.get("mode") == "auto":
-            base_result = super().step(state)
-            # Auto-fill may return chapters as a list; normalize to the schema's
-            # name-keyed dict so storage + export get a consistent shape.
+            # Per-chapter composition (not the monolithic _auto_fill, which 504'd).
+            base_result = self._auto_compose_chapters(state)
+            # Defensive: normalize to the schema's name-keyed dict.
             if base_result.context_patch.get("chapters"):
                 base_result.context_patch["chapters"] = self._normalize_chapters(
                     base_result.context_patch["chapters"])
@@ -391,6 +391,41 @@ class M5Agent(ModuleAgent):
     def render_hint_for_field(self, field_name: str, partial: dict | None = None) -> dict | None:
         # SP6 has no widgets; chapter prose renders as plain markdown
         return None
+
+    def _auto_compose_chapters(self, state) -> ModuleStepResult:
+        """Auto-mode chapter composition — one LLM call PER chapter (like the
+        interactive path), NOT a single monolithic _auto_fill request.
+
+        The base _auto_fill generated all 6 chapters in one giant call, which hit
+        Gemini 504 DEADLINE_EXCEEDED and killed M5 in auto runs. Composing chapter
+        by chapter keeps each request small and reliable. Stamps confirmed_at and
+        transitions (auto mode has no user confirm step).
+        """
+        context = self._render_context or {}
+        references = self._collect_references(context)
+        chapters: dict[str, dict] = {}
+        for name in _CHAPTER_ORDER:
+            chapters[name] = compose_chapter.invoke({
+                "chapter_name": name,
+                "paradigm": context.get("paradigm") or "quantitative",
+                "context_slice": context,
+                "references": references,
+                "citation_style": context.get("citation_style", "apa7"),
+                "language": context.get("language", "en"),
+            })
+        bib = compile_bibliography.invoke({
+            "references": references,
+            "citation_style": context.get("citation_style", "apa7"),
+        })
+        return ModuleStepResult(
+            assistant_message="[auto] Composed 6 chapters + bibliography.",
+            context_patch={
+                "chapters": chapters,
+                "bibliography": bib,
+                "confirmed_at": datetime.now(timezone.utc).isoformat(),
+            },
+            transition=True,
+        )
 
     def _compose_all_chapters(self, state, partial):
         """Loop all 6 chapters, compose each, emit one AIMessage per chapter +

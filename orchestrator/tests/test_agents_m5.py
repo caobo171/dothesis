@@ -44,25 +44,20 @@ def test_m5_build_sections_survives_list_chapters():
     assert intro["text"] == "hi"
 
 
-def test_m5_auto_produces_chapters_and_artifacts(monkeypatch):
-    """In auto mode, the LLM produces the chapters payload; M5Agent.step() then
-    calls compile_pdf + export_docx to actually upload to S3 (single code
-    path with interactive mode)."""
+def test_m5_auto_composes_each_chapter_separately_and_exports(monkeypatch):
+    """Auto mode composes each chapter in its OWN compose_chapter call (6 calls)
+    rather than one monolithic _auto_fill request — which hit Gemini 504
+    DEADLINE_EXCEEDED for a full 6-chapter generation — then exports to S3."""
     from orchestrator.agents import m5_writing as m5_mod
-    chapters = {n: {"name": n, "prose": f"# {n}\nContent"}
-                for n in ("intro", "lit_review", "methodology",
-                          "results", "discussion", "conclusion")}
-    payload = {
-        "chapters": chapters,
-        "bibliography": "Bass, A. (1990).",
-        # LLM may hallucinate this — we intercept and replace.
-        "export_artifacts": [{"kind": "docx", "s3_key": "hallucinated",
-                              "download_url": "x", "size_bytes": 0, "uri": ""}],
-        "sections": [],
-    }
-    fake_llm = MagicMock()
-    fake_llm.invoke.return_value.content = json.dumps(payload)
-    monkeypatch.setattr(M5Agent, "_get_llm", lambda self: fake_llm)
+
+    fake_compose = MagicMock()
+    fake_compose.invoke.side_effect = lambda p: {
+        "name": p["chapter_name"], "prose": f"# {p['chapter_name']}\nContent"}
+    monkeypatch.setattr(m5_mod, "compose_chapter", fake_compose)
+
+    fake_bib = MagicMock()
+    fake_bib.invoke.return_value = "Bass, A. (1990)."
+    monkeypatch.setattr(m5_mod, "compile_bibliography", fake_bib)
 
     fake_docx = MagicMock()
     fake_docx.invoke.return_value = {"s3_key": "projects/p/exports/thesis-real.docx", "size_bytes": 512}
@@ -83,17 +78,14 @@ def test_m5_auto_produces_chapters_and_artifacts(monkeypatch):
     }
     res = M5Agent().step(state)
     assert res.transition is True
-    assert "chapters" in res.context_patch
-    # All 6 chapter keys present
+    # Composed per-chapter: one compose_chapter call per chapter, no monolith.
+    assert fake_compose.invoke.call_count == 6
     assert set(res.context_patch["chapters"].keys()) == {
         "intro", "lit_review", "methodology", "results", "discussion", "conclusion",
     }
-    # export_artifacts REPLACED with real upload results — not the hallucinated value
-    artifacts = res.context_patch["export_artifacts"]
-    keys = {a["s3_key"] for a in artifacts}
+    assert "confirmed_at" in res.context_patch
+    # export_artifacts populated with real upload results.
+    keys = {a["s3_key"] for a in res.context_patch["export_artifacts"]}
     assert "projects/p/exports/thesis-real.docx" in keys
     assert "projects/p/exports/thesis-real.pdf" in keys
-    assert "hallucinated" not in keys
-    # Tools were called with project_id
-    assert fake_docx.invoke.called
-    assert fake_pdf.invoke.called
+    assert fake_docx.invoke.called and fake_pdf.invoke.called
