@@ -59,3 +59,26 @@ def test_artifacts_endpoint_reflects_seeded_topic(client):
     body = client.get(f"/api/v1/projects/{pid}/artifacts").json()
     assert body["topic"] == "done"
     assert body["literature"] == "ready"
+
+
+def test_import_seeds_context_and_returns_readiness(client):
+    pid = _auth_and_project(client)
+    r = client.post(f"/api/v1/projects/{pid}/import",
+                    json={"slices": {"m1_topic": _FULL_TOPIC}})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["topic"] == "done"
+    assert body["literature"] == "ready"
+    # And it persisted — a fresh readiness GET reflects it.
+    body2 = client.get(f"/api/v1/projects/{pid}/artifacts").json()
+    assert body2["topic"] == "done"
+
+
+def test_import_tags_source_imported(client):
+    pid = _auth_and_project(client)
+    client.post(f"/api/v1/projects/{pid}/import",
+                json={"slices": {"m1_topic": _FULL_TOPIC}})
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, pid)
+        assert cs.m1_topic["_source"] == "imported"

@@ -43,6 +43,13 @@ class ProjectOut(BaseModel):
     updated_at: Any
 
 
+class ImportBody(BaseModel):
+    """Seed existing work into a project. `slices` maps context_store field names
+    (m1_topic, m2_literature, m3_design, m4_analysis, m5_writing) to their content;
+    unknown keys are ignored by merge_import."""
+    slices: dict[str, dict] = Field(default_factory=dict)
+
+
 class CreateThreadBody(BaseModel):
     name: str = Field(default="New thread", min_length=1, max_length=200)
 
@@ -162,6 +169,37 @@ def get_artifacts(project_id: uuid.UUID,
     _owned_project(db, user, project_id)
     from orchestrator.artifacts import readiness
     return readiness(_orch_context_store(db, project_id))
+
+
+@router.post("/projects/{project_id}/import")
+def import_work(project_id: uuid.UUID, body: ImportBody,
+                user: User = Depends(current_user),
+                db: Session = Depends(db_session)) -> dict[str, str]:
+    """Seed the project's context_store from a student's existing work, then
+    return the updated readiness map.
+
+    The first half of "enter at any step": drop in a topic + a methodology and
+    the system records them (tagged _source=imported) and tells you what's now
+    ready vs still blocked. (The planner that ROUTES to a chosen step + backfills
+    missing prerequisites lands in a later phase.)
+    """
+    _owned_project(db, user, project_id)
+    from orchestrator.artifacts import readiness
+    from orchestrator.intake import merge_import
+
+    merged = merge_import(_orch_context_store(db, project_id), body.slices)
+    cs = db.get(ContextStore, project_id)
+    if cs is None:
+        cs = ContextStore(project_id=project_id)
+        db.add(cs)
+    # Reassign (new dicts) so SQLAlchemy persists the JSONB columns.
+    cs.m1_topic = merged.m1_topic
+    cs.m2_literature = merged.m2_literature
+    cs.m3_design = merged.m3_design
+    cs.m4_analysis = merged.m4_analysis
+    cs.m5_writing = merged.m5_writing
+    db.commit()
+    return readiness(merged)
 
 
 # ----------------------------------------------------------------------------
