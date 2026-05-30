@@ -79,3 +79,36 @@ def dod_topic(slice_: dict) -> DoD:
     ))
     gaps += _empty_lists(slice_, ("objectives", "research_questions"))
     return DoD(done=not gaps, gaps=gaps)
+
+
+def dod_design(slice_: dict) -> DoD:
+    """M3 design: common fields + paradigm-specific artifacts.
+
+    Mirrors M3Output._require_by_paradigm (orchestrator/schemas/m3.py) but as a
+    content check over the persisted dict rather than a pydantic validator —
+    quantitative needs conceptual_model + scale_items; qualitative needs themes
+    + interview_guide + purposive_criteria; mixed needs both plus mixed_design_type.
+    """
+    slice_ = slice_ or {}
+    gaps = _missing_strings(slice_, ("paradigm", "design", "tool", "sampling_strategy"))
+    size = slice_.get("target_sample_size")
+    if not (isinstance(size, int) and not isinstance(size, bool) and size > 0):
+        gaps.append("missing target_sample_size")
+
+    paradigm = slice_.get("paradigm")
+    if paradigm == "quantitative":
+        if not slice_.get("conceptual_model"):
+            gaps.append("missing conceptual_model")
+        gaps += _empty_lists(slice_, ("scale_items",))
+    elif paradigm == "qualitative":
+        gaps += _empty_lists(slice_, ("themes", "purposive_criteria"))
+        if not slice_.get("interview_guide"):
+            gaps.append("missing interview_guide")
+    elif paradigm == "mixed":
+        gaps += _missing_strings(slice_, ("mixed_design_type",))
+        if not slice_.get("conceptual_model"):
+            gaps.append("missing conceptual_model")
+        gaps += _empty_lists(slice_, ("scale_items", "themes", "purposive_criteria"))
+        if not slice_.get("interview_guide"):
+            gaps.append("missing interview_guide")
+    return DoD(done=not gaps, gaps=gaps)
