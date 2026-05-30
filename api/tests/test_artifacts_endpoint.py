@@ -82,3 +82,18 @@ def test_import_tags_source_imported(client):
     with sf() as db:
         cs = db.get(ContextStore, pid)
         assert cs.m1_topic["_source"] == "imported"
+
+
+def test_assess_endpoint_returns_detection_and_preview(client, monkeypatch):
+    pid = _auth_and_project(client)
+    monkeypatch.setattr("orchestrator.intake.assess_work",
+                        lambda text, llm=None: {"m1_topic": _FULL_TOPIC})
+    r = client.post(f"/api/v1/projects/{pid}/assess",
+                    json={"text": "Here is my thesis draft so far ..."})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["detected"]["m1_topic"]["research_title"] == "X"
+    assert body["readiness_if_applied"]["topic"] == "done"
+    # Dry-run: nothing is committed until the client calls /import.
+    after = client.get(f"/api/v1/projects/{pid}/artifacts").json()
+    assert after["topic"] == "ready"

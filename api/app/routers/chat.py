@@ -50,6 +50,11 @@ class ImportBody(BaseModel):
     slices: dict[str, dict] = Field(default_factory=dict)
 
 
+class AssessBody(BaseModel):
+    """Free-form existing work to classify into proposed slices."""
+    text: str = Field(..., min_length=1)
+
+
 class CreateThreadBody(BaseModel):
     name: str = Field(default="New thread", min_length=1, max_length=200)
 
@@ -200,6 +205,26 @@ def import_work(project_id: uuid.UUID, body: ImportBody,
     cs.m5_writing = merged.m5_writing
     db.commit()
     return readiness(merged)
+
+
+@router.post("/projects/{project_id}/assess")
+def assess(project_id: uuid.UUID, body: AssessBody,
+           user: User = Depends(current_user),
+           db: Session = Depends(db_session)) -> dict:
+    """Classify pasted existing work into PROPOSED artifact slices (dry-run).
+
+    Returns the detected slices plus the readiness map *if* they were applied —
+    so the UI can show "we found a topic + a methodology; import these?" The
+    student reviews/edits, then POSTs /import to actually commit. Nothing is
+    persisted here (never silently seed assessed work).
+    """
+    _owned_project(db, user, project_id)
+    from orchestrator.artifacts import readiness
+    from orchestrator.intake import assess_work, merge_import
+
+    detected = assess_work(body.text)
+    preview = merge_import(_orch_context_store(db, project_id), detected)
+    return {"detected": detected, "readiness_if_applied": readiness(preview)}
 
 
 # ----------------------------------------------------------------------------
