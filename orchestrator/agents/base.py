@@ -508,6 +508,58 @@ class ModuleAgent(ABC):
             )
         return {"intent": "answer", "value": None}
 
+    def _answer_and_anchor(self, state, intent: str, field_name: str, partial: dict) -> str:
+        """Concierge reply: address the user's digression, then steer back.
+
+        Handles off_topic / meta / frustration the human way — never ignore,
+        never just re-ask. One LLM call produces: a brief acknowledgement/answer
+        suited to the intent, a bridge, and a re-ask of the pending field. The
+        caller re-attaches the field's widget so returning is a one-click action.
+
+        Decision: previously off_topic fell straight through to _ask_next_question,
+        which re-asked the field with NO acknowledgement of what the user said —
+        cold and robotic. Answering first (then anchoring) is what makes the agent
+        feel human while still keeping the task on track.
+        """
+        desc = self._field_description(field_name)
+        context = json.dumps(
+            {k: v for k, v in partial.items() if not k.startswith("_")},
+            default=str, ensure_ascii=False,
+        )
+        recent = self._recent_dialogue(state.get("messages") or [])
+        guidance = {
+            "off_topic": (
+                "The user asked something off-topic. Answer it in ONE short "
+                "sentence (or say you'll handle it automatically later if it's a "
+                "downstream concern), then gently bring them back."
+            ),
+            "meta": (
+                "The user asked a process/meta question (how long, what are you "
+                "doing, how many steps left). Answer briefly and reassuringly "
+                "from the context, then bring them back."
+            ),
+            "frustration": (
+                "The user sounds frustrated or anxious. Reply with brief, genuine "
+                "empathy and remind them you can do the heavy lifting (offer to "
+                "draft or pick sensible defaults so it's low-effort), then gently "
+                "bring them back."
+            ),
+        }.get(intent, "Acknowledge briefly, then bring them back to the question.")
+        prompt = (
+            f"{self.system_prompt}\n\n"
+            f"You are guiding a student through a research-project intake and are "
+            f"currently waiting for them to provide the field '{field_name}' "
+            f"({desc}).\n"
+            f"Recent conversation:\n{recent}\n\n"
+            f"Already-filled context:\n{context}\n\n"
+            f"{guidance}\n\n"
+            f"Write a SHORT, warm, human reply (2-3 sentences max). End by "
+            f"re-asking for '{field_name}' in one friendly line. Match the user's "
+            f"language (English or Vietnamese). Prose only — no markdown headers "
+            f"or bullets."
+        )
+        return self._get_llm().invoke(prompt).content.strip()
+
     def _explain_and_reask(self, field_name: str, partial: dict) -> str:
         """Produce a friendly explanation of `field_name` + re-ask the question.
 

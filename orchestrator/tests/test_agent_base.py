@@ -66,6 +66,23 @@ def test_classify_recognizes_meta_and_frustration(monkeypatch, intent_value):
     assert out["intent"] == intent_value
 
 
+def test_answer_and_anchor_returns_concierge_message(monkeypatch):
+    agent = _ToyAgent()
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(
+        content="Good question! I'll handle citations later. "
+                "Back to it — what's your title?"
+    )
+    monkeypatch.setattr(_ToyAgent, "_get_llm", lambda self: fake_llm)
+
+    state = _state([HumanMessage(content="does APA need a DOI?")])
+    msg = agent._answer_and_anchor(state, "off_topic", "title", {"answer": "Y"})
+    assert "title" in msg.lower()
+    # The pending field must reach the LLM prompt.
+    prompt = fake_llm.invoke.call_args[0][0]
+    assert "title" in prompt
+
+
 def test_interactive_asks_for_first_missing_field(monkeypatch):
     agent = _ToyAgent()
     fake_llm = MagicMock()
