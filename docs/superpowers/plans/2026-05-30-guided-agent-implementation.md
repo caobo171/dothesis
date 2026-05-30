@@ -485,7 +485,7 @@ git commit -m "feat(orchestrator): feed recent-dialogue window to intent classif
 
 **Acceptance:** import a partial thesis (topic+design only) → `GET artifacts` shows topic/design done, `analysis` ready, chapters blocked; start-at `analysis` opens there.
 
-**Detailed bite-sized plan:** authored here when Phase 2 starts.
+**STATUS: ✅ DONE (import + readiness)** — `orchestrator/intake.py:merge_import`, `GET /projects/{id}/artifacts` + `POST /projects/{id}/import` in `api/app/routers/chat.py`, tests in `orchestrator/tests/test_intake.py` + `api/tests/test_artifacts_endpoint.py`. **`POST /threads/start-at/{artifact}` DEFERRED** — it needs the planner wired into the graph to honour a target (see Phase 5).
 
 ---
 
@@ -543,7 +543,7 @@ git commit -m "feat(orchestrator): feed recent-dialogue window to intent classif
 
 **Acceptance:** all existing flow tests pass with the planner; targeting an artifact with missing deps triggers backfill; "first ready" matches old sequential behavior when no target is set.
 
-**Detailed bite-sized plan:** authored here when Phase 5 starts.
+**STATUS: 🟡 PARTIAL — planner brain DONE, graph wiring PENDING.** `orchestrator/planner.py:plan_next(cs, target=None)` is built + tested (`orchestrator/tests/test_planner.py`): returns `work` / `backfill` / `already_done` / `done` over the DAG; a blocked target yields the deepest ready prerequisite. It is **pure and NOT yet wired into the graph** — swapping `route_from_supervisor`/`next_unconfirmed_module` for it is **behaviour-changing on the live flow** and must be done under supervision with the full interactive + integration suites green (this is the routing that the M2 "stuck" bug lived in). Wiring + the `start-at` endpoint are the remaining work.
 
 ---
 
