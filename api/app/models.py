@@ -204,6 +204,10 @@ class Thread(Base):
     parent_thread_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     forked_at_message_id: Mapped[int | None] = mapped_column(BigInteger)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
+    # When set (an artifact key like "analysis"), this thread targets that
+    # deliverable: the planner routes toward it on the first turn (enter-at-any-
+    # step). Seeded once into the graph state, then owned by the checkpoint.
+    target_artifact: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_active_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

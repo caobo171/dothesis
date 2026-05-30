@@ -225,6 +225,32 @@ def create_thread(project_id: uuid.UUID, body: CreateThreadBody,
     return t
 
 
+@router.post("/projects/{project_id}/threads/start-at/{artifact}",
+             response_model=ThreadOut)
+def start_at(project_id: uuid.UUID, artifact: str,
+             user: User = Depends(current_user),
+             db: Session = Depends(db_session)):
+    """Open a thread that targets a specific artifact (enter-at-any-step).
+
+    The planner routes toward `artifact` on the first turn — backfilling any
+    missing prerequisites and skipping unneeded modules. `artifact` must be a
+    known artifact key (topic, literature, design, analysis, ch_*).
+    """
+    _owned_project(db, user, project_id)
+    from orchestrator.artifacts import ARTIFACTS
+    if artifact not in {a.key for a in ARTIFACTS}:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "unknown_artifact",
+                              "message": f"unknown artifact: {artifact}"}},
+        )
+    t = Thread(project_id=project_id, name=f"Start at {artifact}",
+               langgraph_thread_id=str(uuid.uuid4()), status="active",
+               target_artifact=artifact)
+    db.add(t); db.commit(); db.refresh(t)
+    return t
+
+
 @router.get("/threads/{thread_id}", response_model=ThreadOut)
 def get_thread(thread_id: uuid.UUID,
                user: User = Depends(current_user),
@@ -330,6 +356,12 @@ async def send_message(thread_id: uuid.UUID,
             if is_first_turn:
                 graph_input["context_store"] = initial_context_store
                 graph_input["project_id"] = t.project_id
+                # Enter-at-any-step: seed the thread's target so the supervisor's
+                # planner routes toward it (and backfills prerequisites). Seeded
+                # only on the first turn — the checkpoint owns it afterwards and
+                # the supervisor clears it once the target is reached.
+                if t.target_artifact:
+                    graph_input["target_artifact"] = t.target_artifact
             async for event in graph.astream(
                 graph_input,
                 config=config,

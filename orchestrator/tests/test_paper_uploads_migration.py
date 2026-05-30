@@ -32,7 +32,9 @@ def test_paper_uploads_migration_up_down_up(alembic_env):
               "page_count", "uploaded_at"):
         assert c in cols, f"missing column {c}"
 
-    _alembic(["downgrade", "-1"])
+    # Downgrade to the revision BEFORE paper_uploads (explicit, not "-1", so this
+    # stays correct as later migrations stack on top of head).
+    _alembic(["downgrade", "20260526_orch01"])
     insp = inspect(eng)
     assert "paper_uploads" not in insp.get_table_names()
 
