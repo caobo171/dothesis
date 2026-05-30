@@ -63,12 +63,26 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
     ]
     tmp = Path(os.getenv("ORCHESTRATOR_SCRATCH", "/tmp/orchestrator_scratch"))
     tmp.mkdir(parents=True, exist_ok=True)
-    result = research_citations_via_api(
-        model=_get_llm(),
-        research_topics=research_topics,
-        output_path=tmp / "scout_raw.md",
-        target_minimum=min_n,
-    )
+    llm = _get_llm()
+    try:
+        result = research_citations_via_api(
+            model=llm,
+            research_topics=research_topics,
+            output_path=tmp / "scout_raw.md",
+            target_minimum=min_n,
+        )
+    except ValueError:
+        # The engine raises its quality gate (and discards results) when it finds
+        # fewer than ~70% of target_minimum. The gate is only a threshold — it
+        # doesn't change how hard the search ran — so retry with a minimal target
+        # to RETURN whatever citations were found. A few real citations in the
+        # lit review beat zero; the alternative was M2 silently degrading to none.
+        result = research_citations_via_api(
+            model=llm,
+            research_topics=research_topics,
+            output_path=tmp / "scout_raw.md",
+            target_minimum=1,
+        )
     citations = result.get("citations", [])
     return [
         {

@@ -32,6 +32,30 @@ def test_scout_citations_calls_engine_with_min_n(monkeypatch):
     assert out[0]["title"] == "Paper A"
 
 
+def test_scout_citations_retries_with_low_target_on_quality_gate(monkeypatch):
+    """When the engine raises the quality gate (too few citations), scout retries
+    with a minimal target so the found citations are kept, not discarded."""
+    calls = []
+    fake_result = {"citations": [
+        MagicMock(title="Paper A", authors="Wang", year=2011, source="J", url="http://x"),
+        MagicMock(title="Paper B", authors="Bass", year=1985, source="J", url=None),
+    ]}
+
+    def fake_research(model, research_topics, output_path, target_minimum, **kw):
+        calls.append(target_minimum)
+        if target_minimum > 1:
+            raise ValueError("QUALITY GATE FAILED (INSUFFICIENT CITATIONS)")
+        return fake_result
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature.research_citations_via_api", fake_research)
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+
+    out = scout_citations.invoke({"topic": "TikTok Gen Z", "min_n": 20})
+    assert calls == [20, 1]  # tried 20 (gate), retried with 1
+    assert {c["title"] for c in out} == {"Paper A", "Paper B"}
+
+
 def test_summarize_paper_reads_file_and_calls_llm(tmp_path, monkeypatch):
     pdf = tmp_path / "paper.txt"
     pdf.write_text("This paper studies X. Key findings: A, B, C.")
