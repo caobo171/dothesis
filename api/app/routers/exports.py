@@ -52,7 +52,9 @@ def download_export(
     s3 = s3_from_env()
     signed_url = s3.generate_presigned_url(
         "get_object",
-        Params={"Bucket": os.environ["AWS_S3_BUCKET"], "Key": expected_key},
+        # Project convention is S3_BUCKET; AWS_S3_BUCKET kept as a fallback.
+        Params={"Bucket": os.environ.get("S3_BUCKET") or os.environ["AWS_S3_BUCKET"],
+                "Key": expected_key},
         ExpiresIn=300,
     )
     return RedirectResponse(url=signed_url, status_code=302)

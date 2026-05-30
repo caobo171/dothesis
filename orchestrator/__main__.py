@@ -28,11 +28,15 @@ logger = logging.getLogger("orchestrator")
 
 
 def _require_aws_s3_bucket():
-    """SP6: M5 export uploads to S3; refuse to start without a configured bucket."""
-    if not os.environ.get("AWS_S3_BUCKET"):
+    """SP6: M5 export uploads to S3; refuse to start without a configured bucket.
+
+    Reads S3_BUCKET (the project convention, set by job_runner) with the legacy
+    AWS_S3_BUCKET as a fallback.
+    """
+    if not (os.environ.get("S3_BUCKET") or os.environ.get("AWS_S3_BUCKET")):
         raise SystemExit(
-            "AWS_S3_BUCKET env var is required for M5 export artifacts. "
-            "Set it (e.g. AWS_S3_BUCKET=opendraft-dev) and re-run."
+            "S3_BUCKET env var is required for M5 export artifacts. "
+            "Set it (e.g. S3_BUCKET=opendraft-dev) and re-run."
         )
 
 

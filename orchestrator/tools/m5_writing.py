@@ -65,7 +65,11 @@ def _upload_to_s3(local_path: str, project_id: str, kind: str, filename: str) ->
     separate stat call, and avoids a second open() after write.
     """
     s3 = s3_from_env()
-    bucket = os.environ["AWS_S3_BUCKET"]
+    # The project convention is S3_BUCKET (settings.py, job_runner, uploads,
+    # engine all use it); job_runner sets S3_BUCKET when launching this auto
+    # subprocess. Reading AWS_S3_BUCKET here silently broke M5 export in the real
+    # flow. Prefer S3_BUCKET, keep AWS_S3_BUCKET as a back-compat fallback.
+    bucket = os.environ.get("S3_BUCKET") or os.environ["AWS_S3_BUCKET"]
     s3_key = f"projects/{project_id}/exports/{filename}"
     content_type = _CONTENT_TYPES[kind]
     body = Path(local_path).read_bytes()
