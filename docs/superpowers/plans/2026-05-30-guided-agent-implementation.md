@@ -543,7 +543,12 @@ git commit -m "feat(orchestrator): feed recent-dialogue window to intent classif
 
 **Acceptance:** all existing flow tests pass with the planner; targeting an artifact with missing deps triggers backfill; "first ready" matches old sequential behavior when no target is set.
 
-**STATUS: 🟡 PARTIAL — planner brain DONE, graph wiring PENDING.** `orchestrator/planner.py:plan_next(cs, target=None)` is built + tested (`orchestrator/tests/test_planner.py`): returns `work` / `backfill` / `already_done` / `done` over the DAG; a blocked target yields the deepest ready prerequisite. It is **pure and NOT yet wired into the graph** — swapping `route_from_supervisor`/`next_unconfirmed_module` for it is **behaviour-changing on the live flow** and must be done under supervision with the full interactive + integration suites green (this is the routing that the M2 "stuck" bug lived in). Wiring + the `start-at` endpoint are the remaining work.
+**STATUS: 🟢 MOSTLY DONE — planner built + wired (target-driven); `start-at` endpoint remaining.**
+- `orchestrator/planner.py:plan_next(cs, target=None)` — `work`/`backfill`/`already_done`/`done` over the DAG (`test_planner.py`).
+- `readiness` now treats `confirmed_at` as done (prevents looping on a confirmed-but-imperfect slice).
+- `artifact_to_module()` maps artifact → M1-M5.
+- `supervisor_node` consults the planner **only when `state.target_artifact` is set** — routes toward the target, backfills prerequisites, skips unneeded modules, clears the target when reached. **Default sequential flow is byte-for-byte unchanged** (graph + supervisor suites green). This was the safe wiring: the planner *augments* routing for the targeting case rather than replacing `next_unconfirmed_module` wholesale (which would have collided with the confirm-gate semantics).
+- **REMAINING — `POST /threads/start-at/{artifact}`:** needs a `Thread.target_artifact` column (migration) + `send_message` to seed `graph_input["target_artifact"]` on the first turn (same pattern as the context_store seed). Deferred as a discrete, schema-touching step.
 
 ---
 
