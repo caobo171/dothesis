@@ -508,7 +508,12 @@ git commit -m "feat(orchestrator): feed recent-dialogue window to intent classif
 **STATUS: 🟡 SPIKE DONE — nuanced GO, gate needs refinement.** `orchestrator/backfill.py:reconstruct_artifact` + eval harness `orchestrator/evals/backfill_eval.py` (tests `orchestrator/tests/test_backfill.py`). Eval on 3 realistic enter-at-analysis fixtures (PLS-SEM, SPSS regression, thematic):
 - **Plausibility 10/10 on all 3** — the *structural/identifying* fields (paradigm, design method, tool, sample size, conceptual model) are inferred correctly from the analysis evidence. The core inference works.
 - **Full `dod_design` 0/3** — but only because the *detail* fields (`scale_items`, `interview_guide`, `themes` list) genuinely can't be inferred from analysis output, and the function correctly **did not fabricate** them.
-- **Conclusion:** the full-confirm DoD is the WRONG gate for a reconstructed prerequisite. **Decision needed (D1b):** gate reconstruction on a lighter "structural DoD" (the inferrable skeleton) + user confirm, surfacing the un-inferrable detail fields as "fill these / not needed" — rather than requiring full-confirm completeness. Graph wiring deferred until that gate is decided.
+- **Conclusion:** the full-confirm DoD is the WRONG gate for a reconstructed prerequisite. **D1b DECIDED — structural gate.**
+
+**STATUS: 🟢 STRUCTURAL-GATE RECONSTRUCTION SHIPPED (additive).**
+- `dod_design_structural` — the lighter gate (paradigm/design/tool/sampling/N, not detail artifacts).
+- `POST /projects/{id}/reconstruct/{artifact}` — proposes the reconstructed candidate + `ready_to_confirm` (structural gate) + `review` fields; dry-run, client confirms then `/import`. Tests: `test_artifacts.py`, `api/tests/test_artifacts_endpoint.py`.
+- **Deferred (deliberately):** firing reconstruction *automatically* during in-graph backfill routing (instead of the endpoint-driven propose→confirm→import). That's the behaviour-changing in-module step; the endpoint flow delivers the capability safely first.
 
 ---
 
