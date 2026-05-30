@@ -39,6 +39,19 @@ def _state(messages, partial=None, mode="interactive"):
     }
 
 
+def test_recent_dialogue_windows_last_turns_and_labels_roles():
+    agent = _ToyAgent()
+    msgs = [
+        HumanMessage(content="m1"), AIMessage(content="a1"),
+        HumanMessage(content="m2"), AIMessage(content="a2"),
+        HumanMessage(content="m3"),
+    ]
+    transcript = agent._recent_dialogue(msgs, max_msgs=3)
+    # Only the last 3 messages, oldest-first, labelled by role.
+    assert "m1" not in transcript
+    assert transcript == "User: m2\nAssistant: a2\nUser: m3"
+
+
 def test_interactive_asks_for_first_missing_field(monkeypatch):
     agent = _ToyAgent()
     fake_llm = MagicMock()

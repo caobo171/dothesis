@@ -415,6 +415,23 @@ class ModuleAgent(ABC):
             # Fall back to using the raw user message as the value.
             return last_user
 
+    def _recent_dialogue(self, messages: list[BaseMessage], max_msgs: int = 8) -> str:
+        """Compact transcript of the last few turns, for reference resolution.
+
+        The conversation layer (intent classifier, concierge) needs recent
+        context — "the second one", "yes", "like I said" are meaningless from a
+        single message. We pass a WINDOW (last `max_msgs`), never the whole
+        thread, to cap cost and avoid the LLM latching onto stale instructions.
+        The AUTHORITATIVE task state still comes from the structured partial, not
+        from this transcript.
+        """
+        recent = [m for m in messages if isinstance(m, (HumanMessage, AIMessage))][-max_msgs:]
+        lines = []
+        for m in recent:
+            role = "User" if isinstance(m, HumanMessage) else "Assistant"
+            lines.append(f"{role}: {text_of(m)}")
+        return "\n".join(lines)
+
     def _classify_user_intent(self, state, field_name: str, partial: dict) -> dict:
         """One LLM call to classify the user's intent + extract the answer.
 
