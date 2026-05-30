@@ -171,6 +171,16 @@ def test_readiness_through_analysis_unlocks_early_chapters():
     assert r["ch_discussion"] == "blocked"  # needs ch_results first
 
 
+def test_readiness_confirmed_slice_counts_as_done_even_if_dod_incomplete():
+    # A confirmed module is user-approved → "done" for routing/progress, even if
+    # the content-only DoD would still flag gaps. Prevents the planner looping on
+    # a confirmed-but-imperfect slice.
+    cs = ContextStore(m1_topic={"research_title": "X", "confirmed_at": "2026-05-30T00:00:00Z"})
+    r = readiness(cs)
+    assert r["topic"] == "done"
+    assert r["literature"] == "ready"
+
+
 def test_readiness_fully_populated_all_done():
     cs = ContextStore(
         m1_topic=_FULL_TOPIC, m2_literature=_FULL_LITERATURE,

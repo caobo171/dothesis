@@ -205,7 +205,10 @@ def readiness(context_store) -> dict[str, str]:
     done: dict[str, bool] = {}
     for art in ARTIFACTS:
         slice_ = getattr(context_store, art.slice, None) or {}
-        done[art.key] = art.dod(slice_).done
+        # A user-confirmed slice is "done" regardless of the content-only DoD —
+        # confirmation is the authoritative approval signal in the live flow, and
+        # this stops the planner looping on a confirmed-but-imperfect slice.
+        done[art.key] = bool(slice_.get("confirmed_at")) or art.dod(slice_).done
 
     status: dict[str, str] = {}
     for art in ARTIFACTS:
