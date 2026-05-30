@@ -44,6 +44,16 @@ def _seed_from_outer(outer_state: dict, db: Session) -> M2SubGraphState:
         sub["selected_gap_ids"] = [str(i) for i in range(len(m2["research_gaps"]))]
     if m2.get("citation_list"):
         sub["citation_list"] = m2["citation_list"]
+
+    # Restore the FULL working sub-state persisted by the previous interactive
+    # turn (phase pointer + per-phase scratch). Applied last so it wins over the
+    # coarse business-field restores above. Without this the wrapper rebuilt a
+    # fresh sub-state every turn — current_phase reset to "familiarize" — so M2
+    # could never advance past phase 1 (the phase-amnesia half of the
+    # "stuck after confirming M1" bug). See _flatten_to_m2_output for the writer.
+    phase_state = m2.get("_phase_state")
+    if phase_state:
+        sub.update(phase_state)
     return sub
 
 
@@ -75,4 +85,23 @@ def _flatten_to_m2_output(sub_state: M2SubGraphState) -> dict[str, Any]:
     }
     if sub_state.get("current_phase") == "DONE":
         out["confirmed_at"] = datetime.now(timezone.utc).isoformat()
+    else:
+        # Mid-M2: persist the full working sub-state (minus the inputs that
+        # _seed_from_outer re-derives each turn, and minus `messages` which hold
+        # non-JSON-serialisable BaseMessage objects) so the next turn resumes
+        # exactly where this one paused. Underscore-prefixed key → ignored by the
+        # base agent's summary/printing helpers and never mistaken for a real
+        # M2Output business field.
+        out["_phase_state"] = {
+            k: v for k, v in sub_state.items() if k not in _SEEDED_INPUT_KEYS
+        }
     return out
+
+
+# Inputs that _seed_from_outer rebuilds from outer state on every M2 entry, so
+# they must NOT be frozen into the persisted _phase_state (research_title etc.
+# could legitimately change; messages aren't JSON-serialisable).
+_SEEDED_INPUT_KEYS = frozenset({
+    "project_id", "thread_id", "research_title", "research_type",
+    "language", "paper_uris", "messages", "mode",
+})

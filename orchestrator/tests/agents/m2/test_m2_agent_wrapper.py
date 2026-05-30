@@ -2,7 +2,7 @@
 from unittest.mock import MagicMock
 
 import pytest
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from orchestrator.state import ContextStore
 
@@ -61,24 +61,77 @@ def test_m2_agent_runs_sub_graph_to_done(monkeypatch):
     assert "confirmed_at" in patch_dict
 
 
-def test_m2_agent_partial_state_does_not_transition(monkeypatch):
-    """Sub-graph paused at a phase interrupt — wrapper returns transition=False."""
-    from orchestrator.agents.m2 import M2Agent
-    fake_subgraph = MagicMock()
-    fake_subgraph.invoke.return_value = {
-        "current_phase": "research_state",
-        "research_state_draft": "partial",
-        "messages": [HumanMessage(content="What's your topic?")],
-    }
-    monkeypatch.setattr(
-        "orchestrator.agents.m2.agent.get_m2_graph", lambda interactive: fake_subgraph
-    )
-    monkeypatch.setattr(
-        "orchestrator.agents.m2.agent._open_db_session",
-        lambda: _FakeDbSession(),
-    )
+def test_m2_interactive_first_turn_asks_question_and_persists_phase(monkeypatch):
+    """Interactive M2 dispatches phase functions directly (no interrupt sub-graph).
 
-    agent = M2Agent()
-    result = agent.step(_outer_state(mode="interactive"))
+    First turn: phase 1 asks its question and stays put (waiting on the user).
+    The wrapper must surface that real question (not an empty string) and persist
+    the phase pointer in context_patch['_phase_state'] so the next turn resumes.
+    """
+    from orchestrator.agents.m2 import M2Agent
+    from orchestrator.agents.m2.phases import phase1_familiarize
+
+    def fake_p1(state):
+        # First call: ask about uploads, leave current_phase unchanged → pause.
+        return {"messages": [AIMessage(content="Do you have papers to upload?")],
+                "current_phase": "familiarize", "has_uploaded_papers": None}
+    monkeypatch.setattr(phase1_familiarize, "run", fake_p1)
+    monkeypatch.setattr(
+        "orchestrator.agents.m2.agent._open_db_session", lambda: _FakeDbSession())
+
+    result = M2Agent().step(_outer_state(mode="interactive"))
     assert result.transition is False
     assert result.needs_user_reply is True
+    assert "papers" in result.assistant_message.lower()
+    assert result.context_patch["_phase_state"]["current_phase"] == "familiarize"
+
+
+def test_m2_interactive_advances_and_runs_next_phase_same_turn(monkeypatch):
+    """When the resuming phase advances without a message, the wrapper keeps
+    running phases in the same turn until one pauses with a question — so the
+    user never sees an empty turn, and the new phase pointer is persisted."""
+    from orchestrator.agents.m2 import M2Agent
+    from orchestrator.agents.m2.phases import phase1_familiarize, phase2_research_state
+
+    def fake_p1(state):
+        # Resume: user said "no papers" → advance, emit nothing.
+        return {"current_phase": "research_state", "has_uploaded_papers": False}
+
+    def fake_p2(state):
+        # First research_state call: synthesize + ask, stay put.
+        return {"messages": [AIMessage(content="Here is the research state — confirm?")],
+                "current_phase": "research_state", "research_state_draft": "draft"}
+    monkeypatch.setattr(phase1_familiarize, "run", fake_p1)
+    monkeypatch.setattr(phase2_research_state, "run", fake_p2)
+    monkeypatch.setattr(
+        "orchestrator.agents.m2.agent._open_db_session", lambda: _FakeDbSession())
+
+    st = _outer_state(mode="interactive")
+    st["context_store"].m2_literature = {"_phase_state": {"current_phase": "familiarize"}}
+    st["messages"] = [HumanMessage(content="no I don't have papers")]
+
+    result = M2Agent().step(st)
+    assert result.transition is False
+    assert "confirm" in result.assistant_message.lower()
+    assert result.context_patch["_phase_state"]["current_phase"] == "research_state"
+
+
+def test_m2_interactive_reaching_done_transitions(monkeypatch):
+    """When a phase advances to DONE, the wrapper transitions (stamps confirmed_at)."""
+    from orchestrator.agents.m2 import M2Agent
+    from orchestrator.agents.m2.phases import phase5_output_gen
+
+    def fake_p5(state):
+        return {"current_phase": "DONE", "ch2_draft": "Ch2 text",
+                "citation_list": [{"author": "X", "year": 2024}]}
+    monkeypatch.setattr(phase5_output_gen, "run", fake_p5)
+    monkeypatch.setattr(
+        "orchestrator.agents.m2.agent._open_db_session", lambda: _FakeDbSession())
+
+    st = _outer_state(mode="interactive")
+    st["context_store"].m2_literature = {"_phase_state": {"current_phase": "output_gen"}}
+
+    result = M2Agent().step(st)
+    assert result.transition is True
+    assert "confirmed_at" in result.context_patch
+    assert result.context_patch["literature_review_doc"] == "Ch2 text"

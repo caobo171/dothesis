@@ -7,7 +7,11 @@ from langchain_core.messages import HumanMessage
 from orchestrator.agents.m2.state import fresh_state
 
 
-def _state(mode="interactive", paper_uris=None, user_msg="start"):
+# First-call default is an EMPTY user message: in the real flow M2 is entered
+# with no message of its own (the triggering "yes" belonged to M1's confirm), so
+# phase 1 asks its opening question rather than classifying a stale reply. A
+# non-empty user_msg simulates a RESUME turn where the user answered phase 1.
+def _state(mode="interactive", paper_uris=None, user_msg=""):
     s = fresh_state(
         project_id="p", thread_id="t", research_title="X",
         research_type="quantitative", language="en",

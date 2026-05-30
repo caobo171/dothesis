@@ -40,6 +40,15 @@ class OrchestratorState(TypedDict, total=False):
     mode: Mode
     user_intent: str | None
     pending_confirmations: list[str]
+    # Set by each module node to the inverse of ModuleStepResult.transition:
+    # True  → the module paused for user input (route the turn to END),
+    # False → the module finished/transitioned (route back to supervisor to
+    #         advance to the next module within the same turn).
+    # This is the UNIVERSAL pause signal. It replaces the old heuristic that
+    # sniffed _awaiting_field/_awaiting_confirm out of a module's context slice —
+    # that only worked for base-loop modules (M1/M4/M5) and made M2/M3 (which
+    # keep their own phase markers) loop supervisor↔module forever.
+    _module_paused: bool
 
 
 _MODULE_TO_FIELD = {

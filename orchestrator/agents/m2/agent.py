@@ -7,9 +7,12 @@ outer graph sees a uniform interface.
 """
 from __future__ import annotations
 
+from langchain_core.messages import HumanMessage
+
 from orchestrator.agents.base import ModuleAgent, ModuleStepResult
 from orchestrator.agents.m2.graph import get_m2_graph
 from orchestrator.agents.m2.translation import _flatten_to_m2_output, _seed_from_outer
+from orchestrator.message_utils import text_of
 from orchestrator.schemas.m2 import M2Output
 from orchestrator.tools.m2_literature import (
     compile_citations, find_research_gaps, scout_citations,
@@ -45,29 +48,112 @@ class M2Agent(ModuleAgent):
         with _open_db_session() as db:
             sub_state = _seed_from_outer(state, db)
 
-        is_interactive = state.get("mode", "interactive") == "interactive"
-        sub_graph = get_m2_graph(interactive=is_interactive)
-        # Use thread_id::m2 so the sub-graph checkpoint is scoped under the outer thread.
-        # Fall back to "unknown" if caller did not set thread_id (e.g. unit tests).
+        if state.get("mode", "interactive") != "interactive":
+            return self._auto_step(state, sub_state)
+        return self._interactive_step(state, sub_state)
+
+    def _auto_step(self, state, sub_state) -> ModuleStepResult:
+        """Auto-mode: run the M2 sub-graph straight through to DONE.
+
+        Auto-mode compiles the sub-graph with no interrupts, so a single invoke
+        walks every phase to completion — this path works as-is and stays
+        sub-graph-driven. (Interactive can't use it: interrupt_before pauses
+        BEFORE a phase runs, so it never produces the phase's question.)
+        """
+        sub_graph = get_m2_graph(interactive=False)
         outer_thread = state.get("thread_id") or "unknown"
         config = {"configurable": {"thread_id": f"{outer_thread}::m2"}}
         final = sub_graph.invoke(sub_state, config=config)
+        return ModuleStepResult(
+            assistant_message=(
+                f"M2 complete — {len(final.get('citation_list', []))} citations, "
+                f"draft of Chapter 2 ready."
+            ),
+            context_patch=_flatten_to_m2_output(final),
+            transition=final.get("current_phase") == "DONE",
+        )
 
-        if final.get("current_phase") == "DONE":
+    def _interactive_step(self, state, sub_state) -> ModuleStepResult:
+        """Interactive: dispatch the M2 phase functions directly, one chat turn
+        at a time, with phase state persisted through the outer context store.
+
+        Decision: the M2 sub-graph's interactive mode used interrupt_before on
+        every phase node, which pauses BEFORE the node runs — so the wrapper's
+        single invoke produced no question (empty reply), and re-seeding a fresh
+        sub-state each turn reset current_phase to "familiarize" (phase amnesia).
+        Together with the outer routing loop that was the "stuck after confirming
+        M1" bug. The phase .run() functions are already standalone (the phase
+        tests call them directly), so we drive them here without the checkpointed
+        sub-graph: run phases until one PAUSES (leaves current_phase unchanged →
+        it's waiting on the user) or we reach DONE. Each phase runs at most once
+        per turn, so the user's reply is consumed only by the first (resuming)
+        phase; any later phase reached this turn is a fresh first-call that emits
+        its own opening question.
+        """
+        from orchestrator.agents.m2.phases import (
+            phase1_familiarize, phase2_research_state, phase3_gap_analysis,
+            phase4_reference_confirm, phase5_output_gen,
+        )
+        phase_modules = {
+            "familiarize": phase1_familiarize,
+            "research_state": phase2_research_state,
+            "gap_analysis": phase3_gap_analysis,
+            "reference_confirm": phase4_reference_confirm,
+            "output_gen": phase5_output_gen,
+        }
+
+        # Seed the user's latest message ONLY when resuming M2 (a prior turn
+        # already persisted _phase_state, i.e. M2 asked something and this reply
+        # answers it). On the FIRST entry to M2 the triggering message was M1's
+        # confirmation ("yes"), which the supervisor used to advance into M2 in
+        # the SAME turn — feeding that "yes" to phase 1's intent classifier made
+        # it skip the opening question and barrel into phase 2's citation scout.
+        # On first entry we pass no message so phase 1 just asks its question.
+        m2_slice = state["context_store"].m2_literature or {}
+        is_resume = "_phase_state" in m2_slice
+        last_user = next(
+            (m for m in reversed(state.get("messages") or [])
+             if isinstance(m, HumanMessage)),
+            None,
+        )
+        sub_state["messages"] = (
+            [HumanMessage(content=text_of(last_user))]
+            if (is_resume and last_user) else []
+        )
+
+        emitted: list = []
+        # Bounded by the number of phases (+1) — a phase that doesn't advance
+        # breaks the loop, so at most one run per distinct phase. The cap is a
+        # belt-and-braces guard against a phase that both advances AND loops.
+        for _ in range(len(phase_modules) + 1):
+            phase = sub_state.get("current_phase", "familiarize")
+            if phase == "DONE":
+                break
+            patch = phase_modules[phase].run(sub_state)
+            sub_state = {**sub_state, **patch}
+            emitted.extend(patch.get("messages") or [])
+            # The first phase has now consumed the user's reply — clear it so a
+            # later phase reached this same turn treats itself as a first-call
+            # rather than re-interpreting the stale reply as its own answer.
+            sub_state["messages"] = []
+            if sub_state.get("current_phase", phase) == phase:
+                break  # phase stayed put → waiting on the user → pause the turn
+
+        out = _flatten_to_m2_output(sub_state)
+        if sub_state.get("current_phase") == "DONE":
             return ModuleStepResult(
                 assistant_message=(
-                    f"M2 complete — {len(final.get('citation_list', []))} citations, "
-                    f"draft of Chapter 2 ready."
+                    f"M2 complete — {len(sub_state.get('citation_list', []))} "
+                    f"citations, draft of Chapter 2 ready."
                 ),
-                context_patch=_flatten_to_m2_output(final),
+                context_patch=out,
                 transition=True,
             )
 
-        msgs = final.get("messages") or []
-        latest = msgs[-1].content if msgs else ""
+        latest = text_of(emitted[-1]) if emitted else ""
         return ModuleStepResult(
             assistant_message=latest,
-            context_patch=_flatten_to_m2_output(final),
+            context_patch=out,
             transition=False,
             needs_user_reply=True,
         )

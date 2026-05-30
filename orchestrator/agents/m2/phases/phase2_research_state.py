@@ -1,6 +1,7 @@
 """Phase 2 — Research_State."""
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -18,9 +19,29 @@ _STYLE = (_PROMPT_DIR / "_style.md").read_text()
 
 _PHASE_KEY = "research_state"
 
+logger = logging.getLogger(__name__)
+
 
 def _regen_cap() -> int:
     return int(os.getenv("M2_REGEN_CAP", "5"))
+
+
+def _safe_scout(topic: str) -> list[dict]:
+    """Scout citations, but never let a scout failure crash the chat turn.
+
+    The scout tool raises (e.g. ValueError on its citation quality-gate, or when
+    its search-provider API keys are missing) when it can't gather enough
+    sources. That's a best-effort enrichment step, not a hard requirement for the
+    conversation to continue — a hard crash here surfaced to the user as the M2
+    turn producing no reply (i.e. "stuck"). Degrade to an empty citation list and
+    let synthesis proceed; the user can refine or upload papers afterwards.
+    """
+    try:
+        return _scout(topic)
+    except Exception:  # noqa: BLE001 - scout is best-effort; must not wedge M2
+        logger.warning("M2 phase2 scout failed for %r; continuing with no "
+                       "auto-sourced citations", topic, exc_info=True)
+        return []
 
 
 def _get_llm():
@@ -61,7 +82,7 @@ def run(state: M2SubGraphState) -> dict:
 
     # Auto mode: scout → synthesize → advance in one shot
     if mode == "auto":
-        citations = state.get("research_state_citations") or _scout(state.get("research_title", ""))
+        citations = state.get("research_state_citations") or _safe_scout(state.get("research_title", ""))
         new_state = dict(state)
         new_state["research_state_citations"] = citations
         draft = _synthesize(new_state, refinements=[])
@@ -80,7 +101,7 @@ def run(state: M2SubGraphState) -> dict:
 
     # First call: no draft yet — scout citations and synthesize
     if not state.get("research_state_draft"):
-        citations = _scout(state.get("research_title", ""))
+        citations = _safe_scout(state.get("research_title", ""))
         new_state = dict(state)
         new_state["research_state_citations"] = citations
         draft = _synthesize(new_state, refinements=state.get("research_state_refinements", []))

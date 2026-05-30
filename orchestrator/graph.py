@@ -87,6 +87,10 @@ def _agent_node_factory(module_key: str):
         return {
             "messages": messages,
             "context_store": cs,
+            # Universal pause signal for the conditional edge below. transition
+            # True → module advanced (go to supervisor); False → module is
+            # waiting on the user (end the turn). See OrchestratorState.
+            "_module_paused": not result.transition,
         }
 
     # Assign a meaningful __name__ for LangGraph's graph visualisation / logging.
@@ -105,21 +109,29 @@ def _make_route_after_module(module_key: str):
     intuitive "confirm and immediately see the next step" UX.
 
     With the conditional edge:
-      - If the module emitted a question (sets _awaiting_field / _awaiting_confirm)
-        → route to END, ending the astream. Checkpoint preserves state for the
-        next user message.
-      - If the module just transitioned (confirmed_at stamped, no awaiting flags)
-        → route back to supervisor, which then routes to the next module IN THE
-        SAME ASTREAM CALL. M2 emits its first question, hits its own routing,
-        and END fires. The user sees M1's confirmation + M2's first question
-        in a single turn.
+      - If the module paused for user input (ModuleStepResult.transition is
+        False → state["_module_paused"] is True) → route to END, ending the
+        astream. Checkpoint preserves state for the next user message.
+      - If the module just transitioned (transition True) → route back to
+        supervisor, which then routes to the next module IN THE SAME ASTREAM
+        CALL. M2 emits its first question, hits its own routing, and END fires.
+        The user sees M1's confirmation + M2's first question in a single turn.
+
+    Decision: key off the universal _module_paused flag (written by every module
+    node from ModuleStepResult.transition) rather than sniffing per-module
+    _awaiting_field / _awaiting_confirm markers out of the context slice. The
+    old marker-sniffing only recognised the base ModuleAgent clarification loop
+    (M1/M4/M5); M2 and M3 carry their own phase pointers and never set those
+    markers, so the router mistook a paused M2 for a finished M2 and looped
+    supervisor↔M2 until GraphRecursionError — which the chat router swallowed,
+    leaving the user with no reply (the "stuck forever after confirming M1" bug).
     """
+    # module_key is closed over for parity with the rest of the factory family
+    # and to keep the per-edge function names distinct in graph visualisations.
+    _ = module_key
+
     def _route(state: OrchestratorState) -> str:
-        cs = state["context_store"]
-        slice_ = getattr(cs, _MODULE_FIELD[module_key], None) or {}
-        if "_awaiting_field" in slice_ or "_awaiting_confirm" in slice_:
-            return "end"
-        return "supervisor"
+        return "end" if state.get("_module_paused") else "supervisor"
     return _route
 
 

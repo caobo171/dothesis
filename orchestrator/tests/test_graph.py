@@ -94,6 +94,50 @@ def test_graph_routes_to_correct_first_unconfirmed(monkeypatch):
         assert getattr(final["context_store"], m) is not None
 
 
+def test_graph_pauses_when_module_pauses_without_awaiting_markers(monkeypatch):
+    """Regression: a module that pauses for user input via transition=False but
+    does NOT set the base-loop _awaiting_field/_awaiting_confirm markers (e.g.
+    M2, whose phase state lives in its own keys) must still pause — route to END.
+
+    Before the fix, _make_route_after_module detected "module paused" only by
+    sniffing _awaiting_* markers in the context slice, so M2 looked "finished"
+    and the graph looped supervisor↔module until GraphRecursionError, which the
+    chat router swallowed → the user saw no reply and was stuck forever.
+    The route now keys off the universal ModuleStepResult.transition contract.
+    """
+    from orchestrator.agents.base import ModuleStepResult
+    from orchestrator.agents.m1_topic import M1Agent
+
+    def fake_step(self, state):
+        # Mimics M2's pause: a question, no _awaiting_* markers, no confirmed_at.
+        return ModuleStepResult(
+            assistant_message="Do you have papers to upload?",
+            context_patch={"current_phase": "familiarize"},
+            transition=False, needs_user_reply=True,
+        )
+    monkeypatch.setattr(M1Agent, "step", fake_step)
+
+    # Pre-confirm M2-M5 so the supervisor routes straight to M1.
+    cs = ContextStore(**{
+        m: {"confirmed_at": "2026-05-26"}
+        for m in ("m2_literature", "m3_design", "m4_analysis", "m5_writing")
+    })
+    g = build_graph(interactive=True, checkpointer=MemorySaver())
+    # Low recursion_limit so a routing loop surfaces as GraphRecursionError fast.
+    final = g.invoke({
+        "messages": [HumanMessage(content="hi")],
+        "current_module": "M1",
+        "context_store": cs,
+        "mode": "interactive",
+        "user_intent": None,
+        "pending_confirmations": [],
+    }, config={"configurable": {"thread_id": "pause-no-markers"},
+               "recursion_limit": 8})
+
+    ai = [m for m in final["messages"] if m.__class__.__name__ == "AIMessage"]
+    assert any("papers" in m.content.lower() for m in ai)
+
+
 def test_graph_node_attaches_tool_calls_json_to_ai_message(monkeypatch):
     """When ModuleStepResult.tool_calls_json is set, the emitted AIMessage
     should carry the same dict in additional_kwargs['tool_calls_json']."""

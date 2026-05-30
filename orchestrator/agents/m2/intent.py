@@ -61,10 +61,30 @@ def classify_phase_intent(
     selected_ids = re.findall(r"\bgap\s*(\d+)\b", text.lower())
     page_match = re.search(r"page\s+(\d+)", text.lower())
 
+    # Phase-specific decision context. The generic action list below describes
+    # actions by their reference_confirm/gap_analysis meaning, which leaves the
+    # familiarize phase (a simple "use my papers vs. let you search" fork) with
+    # no clean mapping — e.g. "no papers, just use AI search" got classified as
+    # refine/navigate and the phase re-asked forever. Spelling out the fork lets
+    # the model map both branches onto confirm/skip, which phase 1 advances on.
+    phase_context = {
+        "familiarize": (
+            "In THIS phase the user decides whether to use their uploaded papers "
+            "or let you search for sources. Map their reply:\n"
+            "- confirm: use the uploaded papers (yes / use them / go ahead).\n"
+            "- skip: they have no papers or want you to search instead "
+            "(no papers / just use AI search / I don't have any / proceed / "
+            "search for me).\n"
+            "Either branch ADVANCES — only avoid confirm/skip if the user is "
+            "asking a question or wants to do something else entirely.\n\n"
+        ),
+    }.get(current_phase, "")
+
     prompt = (
         f"You are classifying a user's reply during M2 Literature Review, "
         f"phase '{current_phase}'.\n"
         f"User reply: {text}\n\n"
+        f"{phase_context}"
         f"Pick the SINGLE best action:\n"
         f"- confirm: agrees with current output / wants to advance (yes / sure / "
         f"looks good / move on / đồng ý / etc.)\n"
