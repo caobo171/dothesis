@@ -96,13 +96,45 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         projectId={projectId}
         hasChapters={hasChapters}
       />
-      <MessageList
-        messages={messages}
-        streamingText={inflight ? streamingText : ""}
-        streamingModuleTag={null}
-        inflight={inflight}
-        onWidgetSelect={onWidgetSelect}
-      />
+      {project && messages.length === 0 && !inflight ? (
+        // An empty thread is confusing — especially for an auto-drafted project,
+        // where all the content lives in the editor + progress panel, not in chat.
+        // Point the user to the right place instead of showing a blank pane.
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-6 text-gray-500">
+          {hasChapters ? (
+            <>
+              <p className="text-lg font-semibold text-gray-800">✨ This thesis was auto-drafted</p>
+              <p className="mt-1 text-sm max-w-md">
+                All modules are complete — the draft lives in the editor and the
+                progress panel. Open the editor to read it, or type below to
+                refine any section.
+              </p>
+              <a
+                href={`/chat/projects/${projectId}/editor`}
+                className="mt-4 inline-flex items-center gap-2 py-2 px-4 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 transition-colors"
+              >
+                Open editor →
+              </a>
+            </>
+          ) : (
+            <>
+              <p className="text-lg font-semibold text-gray-800">Start your thesis</p>
+              <p className="mt-1 text-sm max-w-md">
+                Type your research topic below and I&apos;ll guide you step by
+                step — or hit Auto-draft to generate a full draft.
+              </p>
+            </>
+          )}
+        </div>
+      ) : (
+        <MessageList
+          messages={messages}
+          streamingText={inflight ? streamingText : ""}
+          streamingModuleTag={null}
+          inflight={inflight}
+          onWidgetSelect={onWidgetSelect}
+        />
+      )}
       <ChatInput onSubmit={send} onFileDrop={onFileDrop} disabled={inflight} />
 
       <AutoDraftModal
