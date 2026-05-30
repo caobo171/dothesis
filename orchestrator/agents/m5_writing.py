@@ -123,6 +123,11 @@ class M5Agent(ModuleAgent):
         # replace any LLM-hallucinated export_artifacts with REAL S3 uploads.
         if state.get("mode") == "auto":
             base_result = super().step(state)
+            # Auto-fill may return chapters as a list; normalize to the schema's
+            # name-keyed dict so storage + export get a consistent shape.
+            if base_result.context_patch.get("chapters"):
+                base_result.context_patch["chapters"] = self._normalize_chapters(
+                    base_result.context_patch["chapters"])
             if base_result.transition and base_result.context_patch.get("chapters"):
                 project_id = str(state.get("project_id") or "")
                 if project_id:
@@ -325,13 +330,42 @@ class M5Agent(ModuleAgent):
             return prose
         return prose[:idx]
 
+    @staticmethod
+    def _normalize_chapters(chapters) -> dict:
+        """Coerce auto-fill's chapters into the schema's {name: {prose}} dict.
+
+        Regression guard: the auto-fill LLM sometimes returns `chapters` as a
+        LIST of chapter dicts (e.g. {"title": "Chapter 1: Introduction", ...})
+        instead of the name-keyed dict, which crashed downstream `.get` calls.
+        Map list items onto _CHAPTER_ORDER by name/title match, falling back to
+        positional order.
+        """
+        if isinstance(chapters, dict):
+            return chapters
+        if not isinstance(chapters, list):
+            return {}
+        out: dict = {}
+        for i, ch in enumerate(chapters):
+            if not isinstance(ch, dict):
+                continue
+            raw = str(ch.get("name") or ch.get("title") or "").lower()
+            name = next(
+                (c for c in _CHAPTER_ORDER if c in raw or c.replace("_", " ") in raw),
+                None,
+            )
+            if name is None and i < len(_CHAPTER_ORDER):
+                name = _CHAPTER_ORDER[i]
+            if name:
+                out[name] = ch
+        return out
+
     def _build_sections_for_export(self, partial: dict) -> list[dict]:
         """Assemble the per-chapter section list passed to compile_pdf/export_docx.
 
         Strips uncited-warning blockquotes so editorial notices don't appear in
         the exported thesis docx/pdf (they remain visible in chat bubbles).
         """
-        chapters = partial.get("chapters", {})
+        chapters = self._normalize_chapters(partial.get("chapters", {}))
         sections = [
             {"name": name,
              "text": self._strip_uncited_warnings(

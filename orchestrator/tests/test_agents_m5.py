@@ -9,6 +9,41 @@ from orchestrator.agents.m5_writing import M5Agent
 from orchestrator.state import ContextStore
 
 
+def test_m5_normalize_chapters_coerces_autofill_list_to_dict():
+    """Regression: auto-fill sometimes returns `chapters` as a LIST of chapter
+    dicts (with 'title') instead of the schema's name-keyed dict — which crashed
+    _build_sections_for_export with 'list object has no attribute get'."""
+    agent = M5Agent()
+    chapters_list = [
+        {"title": "Chapter 1: Introduction", "prose": "intro text"},
+        {"title": "Chapter 2: Literature Review", "prose": "lit text"},
+        {"title": "Chapter 3: Methodology", "prose": "method text"},
+        {"title": "Chapter 4: Results", "prose": "results text"},
+        {"title": "Chapter 5: Discussion", "prose": "disc text"},
+        {"title": "Chapter 6: Conclusion", "prose": "concl text"},
+    ]
+    out = agent._normalize_chapters(chapters_list)
+    assert isinstance(out, dict)
+    assert out["intro"]["prose"] == "intro text"
+    assert out["lit_review"]["prose"] == "lit text"
+    assert out["methodology"]["prose"] == "method text"
+    assert out["conclusion"]["prose"] == "concl text"
+
+
+def test_m5_normalize_chapters_passthrough_dict():
+    agent = M5Agent()
+    d = {"intro": {"prose": "x"}}
+    assert agent._normalize_chapters(d) == d
+
+
+def test_m5_build_sections_survives_list_chapters():
+    agent = M5Agent()
+    sections = agent._build_sections_for_export(
+        {"chapters": [{"title": "Chapter 1: Introduction", "prose": "hi"}]})
+    intro = next(s for s in sections if s["name"] == "intro")
+    assert intro["text"] == "hi"
+
+
 def test_m5_auto_produces_chapters_and_artifacts(monkeypatch):
     """In auto mode, the LLM produces the chapters payload; M5Agent.step() then
     calls compile_pdf + export_docx to actually upload to S3 (single code
