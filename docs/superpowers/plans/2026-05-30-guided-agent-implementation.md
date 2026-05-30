@@ -505,7 +505,10 @@ git commit -m "feat(orchestrator): feed recent-dialogue window to intent classif
 
 **Acceptance:** for the fixture cases, reconstructed `design` passes `dod_design` and a human rates it plausible ≥ N% of the time (set the bar with product). Explicitly a **go/no-go gate** for the rest of "enter anywhere".
 
-**Detailed bite-sized plan:** authored here when Phase 3 starts — **and** expect to iterate on approach, not just code.
+**STATUS: 🟡 SPIKE DONE — nuanced GO, gate needs refinement.** `orchestrator/backfill.py:reconstruct_artifact` + eval harness `orchestrator/evals/backfill_eval.py` (tests `orchestrator/tests/test_backfill.py`). Eval on 3 realistic enter-at-analysis fixtures (PLS-SEM, SPSS regression, thematic):
+- **Plausibility 10/10 on all 3** — the *structural/identifying* fields (paradigm, design method, tool, sample size, conceptual model) are inferred correctly from the analysis evidence. The core inference works.
+- **Full `dod_design` 0/3** — but only because the *detail* fields (`scale_items`, `interview_guide`, `themes` list) genuinely can't be inferred from analysis output, and the function correctly **did not fabricate** them.
+- **Conclusion:** the full-confirm DoD is the WRONG gate for a reconstructed prerequisite. **Decision needed (D1b):** gate reconstruction on a lighter "structural DoD" (the inferrable skeleton) + user confirm, surfacing the un-inferrable detail fields as "fill these / not needed" — rather than requiring full-confirm completeness. Graph wiring deferred until that gate is decided.
 
 ---
 
