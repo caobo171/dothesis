@@ -46,3 +46,36 @@ class Artifact:
     slice: str
     depends_on: tuple[str, ...]
     dod: Callable[[dict], DoD]
+
+
+# ---------------------------------------------------------------------------
+# DoD validators — deterministic content checks per artifact slice.
+# Each receives the slice dict (or {} when the slice is None/untouched) and
+# returns a DoD whose `gaps` always mention the offending field name, so the
+# planner/intake can surface them directly.
+# ---------------------------------------------------------------------------
+
+def _missing_strings(slice_: dict, fields: tuple[str, ...]) -> list[str]:
+    """Gaps for required string fields that are absent or blank."""
+    return [
+        f"missing {f}" for f in fields
+        if not (isinstance(slice_.get(f), str) and slice_.get(f).strip())
+    ]
+
+
+def _empty_lists(slice_: dict, fields: tuple[str, ...]) -> list[str]:
+    """Gaps for required list fields that are absent or empty."""
+    return [
+        f"{f} is empty" for f in fields
+        if not (isinstance(slice_.get(f), list) and slice_.get(f))
+    ]
+
+
+def dod_topic(slice_: dict) -> DoD:
+    """M1 topic: title/field/type/population/scope set + ≥1 objective & RQ."""
+    slice_ = slice_ or {}
+    gaps = _missing_strings(slice_, (
+        "research_title", "field", "research_type", "target_population", "scope",
+    ))
+    gaps += _empty_lists(slice_, ("objectives", "research_questions"))
+    return DoD(done=not gaps, gaps=gaps)
