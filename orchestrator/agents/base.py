@@ -486,7 +486,10 @@ class ModuleAgent(ABC):
             f"The user was asked to provide a value for the field '{field_name}'.\n"
             f"Field type/description: {desc}\n"
             f"Already-filled fields (context):\n{context}\n\n"
-            f"User's reply:\n{last_user}\n\n"
+            f"Recent conversation (for resolving references like 'the first one', "
+            f"'yes', 'like I said'):\n"
+            f"{self._recent_dialogue(state.get('messages') or [])}\n\n"
+            f"User's reply (the message to classify):\n{last_user}\n\n"
             f"Classify the user's intent. Return ONLY a JSON object:\n"
             f'  {{"intent": "<one of>", "value": <extracted value if intent="answer", else null>}}\n\n'
             f"Intent options (pick the SINGLE best match):\n"

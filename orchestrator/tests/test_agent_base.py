@@ -115,6 +115,22 @@ def test_off_topic_answers_then_reasks_same_field(monkeypatch):
     assert "bring them back" in concierge_prompt
 
 
+def test_classifier_prompt_includes_recent_window(monkeypatch):
+    agent = _ToyAgent()
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(content='{"intent": "answer", "value": "X"}')
+    monkeypatch.setattr(_ToyAgent, "_get_llm", lambda self: fake_llm)
+
+    state = _state([
+        AIMessage(content="Pick one: survey or interview?"),
+        HumanMessage(content="the first one"),
+    ])
+    agent._classify_user_intent(state, "title", {})
+    prompt = fake_llm.invoke.call_args[0][0]
+    # The classifier must see the prior assistant turn to resolve "the first one".
+    assert "survey or interview" in prompt
+
+
 def test_interactive_asks_for_first_missing_field(monkeypatch):
     agent = _ToyAgent()
     fake_llm = MagicMock()
