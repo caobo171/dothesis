@@ -69,6 +69,23 @@ def _owned_project(db: Session, user: User, project_id: uuid.UUID) -> Project:
     return p
 
 
+def _orch_context_store(db: Session, project_id: uuid.UUID):
+    """Build an orchestrator ContextStore from the project's DB row.
+
+    Single chokepoint reused by the artifact/import endpoints (and mirrors the
+    seed the chat router builds for the first graph turn).
+    """
+    from orchestrator.state import ContextStore as OrchestratorContextStore
+    cs = db.get(ContextStore, project_id)
+    return OrchestratorContextStore(
+        m1_topic=(cs.m1_topic if cs else None),
+        m2_literature=(cs.m2_literature if cs else None),
+        m3_design=(cs.m3_design if cs else None),
+        m4_analysis=(cs.m4_analysis if cs else None),
+        m5_writing=(cs.m5_writing if cs else None),
+    )
+
+
 def _serialize_project(db: Session, p: Project) -> ProjectOut:
     cs = db.get(ContextStore, p.id)
     return ProjectOut(
@@ -129,6 +146,22 @@ def get_project(project_id: uuid.UUID,
                 db: Session = Depends(db_session)):
     p = _owned_project(db, user, project_id)
     return _serialize_project(db, p)
+
+
+@router.get("/projects/{project_id}/artifacts")
+def get_artifacts(project_id: uuid.UUID,
+                  user: User = Depends(current_user),
+                  db: Session = Depends(db_session)) -> dict[str, str]:
+    """Readiness map for every thesis artifact: done / ready / blocked.
+
+    Powers the "enter at any step" UI — the frontend can show which deliverables
+    are finished, which are ready to start now, and which are still blocked by
+    unmet prerequisites. Computed from the artifact dependency DAG
+    (orchestrator/artifacts.py) over the project's persisted context_store.
+    """
+    _owned_project(db, user, project_id)
+    from orchestrator.artifacts import readiness
+    return readiness(_orch_context_store(db, project_id))
 
 
 # ----------------------------------------------------------------------------
