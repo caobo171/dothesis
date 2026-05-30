@@ -172,6 +172,25 @@ ARTIFACTS: tuple[Artifact, ...] = (
 )
 
 
+_ARTIFACT_BY_KEY = {a.key: a for a in ARTIFACTS}
+
+# Maps each context_store slice to the graph module that owns it. Used to turn
+# an artifact-level planner decision into a module-level routing target.
+_SLICE_TO_MODULE = {
+    "m1_topic": "M1", "m2_literature": "M2", "m3_design": "M3",
+    "m4_analysis": "M4", "m5_writing": "M5",
+}
+
+
+def artifact_to_module(key: str) -> str:
+    """Return the graph module (M1-M5) that owns the given artifact.
+
+    Chapters all map to M5 (which owns chapter composition). Lets the supervisor
+    route to a module from an artifact-level planner decision.
+    """
+    return _SLICE_TO_MODULE[_ARTIFACT_BY_KEY[key].slice]
+
+
 def readiness(context_store) -> dict[str, str]:
     """Classify every artifact as 'done' | 'ready' | 'blocked'.
 

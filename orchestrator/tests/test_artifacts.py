@@ -1,7 +1,7 @@
 """Tests for the artifact dependency DAG + definition-of-done validators."""
 from orchestrator.artifacts import (
-    ARTIFACTS, Artifact, DoD, dod_analysis, dod_chapter, dod_design,
-    dod_literature, dod_topic, readiness,
+    ARTIFACTS, Artifact, DoD, artifact_to_module, dod_analysis, dod_chapter,
+    dod_design, dod_literature, dod_topic, readiness,
 )
 from orchestrator.state import ContextStore
 
@@ -178,6 +178,21 @@ def test_readiness_fully_populated_all_done():
         m5_writing=_FULL_CHAPTERS,
     )
     assert set(readiness(cs).values()) == {"done"}
+
+
+def test_artifact_to_module_maps_each_artifact():
+    assert artifact_to_module("topic") == "M1"
+    assert artifact_to_module("literature") == "M2"
+    assert artifact_to_module("design") == "M3"
+    assert artifact_to_module("analysis") == "M4"
+    # Every chapter routes to M5 (M5 owns chapter composition).
+    assert artifact_to_module("ch_methodology") == "M5"
+    assert artifact_to_module("ch_conclusion") == "M5"
+
+
+def test_artifact_to_module_every_registered_artifact_resolves():
+    for a in ARTIFACTS:
+        assert artifact_to_module(a.key) in {"M1", "M2", "M3", "M4", "M5"}
 
 
 def test_artifacts_registry_keys_unique_and_deps_resolve():
