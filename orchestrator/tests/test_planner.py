@@ -1,4 +1,6 @@
 """Tests for the artifact-DAG planner (deterministic next-best-action)."""
+import pytest
+
 from orchestrator.planner import Decision, plan_next
 from orchestrator.state import ContextStore
 
@@ -50,3 +52,38 @@ def test_plan_next_all_done_is_done():
     d = plan_next(_full_cs())
     assert d.action == "done"
     assert d.artifact is None
+
+
+def test_plan_next_target_blocked_backfills_deepest_ready_prereq():
+    # Student wants 'analysis' but nothing is done → backfill 'topic' first.
+    d = plan_next(ContextStore(), target="analysis")
+    assert d.action == "backfill"
+    assert d.artifact == "topic"
+    assert d.toward == "analysis"
+
+
+def test_plan_next_target_blocked_backfills_design_when_upstream_done():
+    cs = ContextStore(m1_topic=_FULL_TOPIC, m2_literature=_FULL_LIT)
+    d = plan_next(cs, target="analysis")
+    assert d.action == "backfill"
+    assert d.artifact == "design"
+    assert d.toward == "analysis"
+
+
+def test_plan_next_target_ready_works_on_it():
+    cs = ContextStore(m1_topic=_FULL_TOPIC, m2_literature=_FULL_LIT,
+                      m3_design=_FULL_DESIGN)
+    d = plan_next(cs, target="analysis")
+    assert d.action == "work"
+    assert d.artifact == "analysis"
+
+
+def test_plan_next_target_already_done():
+    d = plan_next(_full_cs(), target="topic")
+    assert d.action == "already_done"
+    assert d.artifact == "topic"
+
+
+def test_plan_next_unknown_target_raises():
+    with pytest.raises(KeyError):
+        plan_next(ContextStore(), target="nonsense")
