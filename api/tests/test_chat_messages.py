@@ -1,7 +1,7 @@
 """Tests for the SSE message streaming endpoint."""
 import asyncio
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -49,6 +49,10 @@ def test_send_message_persists_user_msg_and_streams_reply(client, monkeypatch):
     fake_graph.astream.return_value = _async_iter([
         {"M1": {"messages": [AIMessage(content="Hello! What's your topic?")]}},
     ])
+    # send_message awaits graph.aget_state(...) for first-turn detection + the
+    # post-run context_store sync, so it must be an async mock. (values={} → the
+    # turn is treated as first-turn and the DB sync is a no-op.)
+    fake_graph.aget_state = AsyncMock(return_value=MagicMock(values={}))
     monkeypatch.setattr(
         "orchestrator.graph.get_interactive_graph", lambda: fake_graph
     )
