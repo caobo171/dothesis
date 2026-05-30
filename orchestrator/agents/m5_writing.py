@@ -76,6 +76,7 @@ class M5Agent(ModuleAgent):
             "scope": m1.get("scope"),
             "literature_review_doc": m2.get("literature_review_doc", ""),
             "research_gaps": m2.get("research_gaps", []),
+            "citation_list": m2.get("citation_list", []),
             "design": m3.get("design"),
             "tool": m3.get("tool"),
             "conceptual_model": m3.get("conceptual_model"),
@@ -101,8 +102,17 @@ class M5Agent(ModuleAgent):
         for gap in context.get("research_gaps", []):
             for paper in gap.get("supporting_papers", []):
                 key = (paper.get("author", ""), str(paper.get("year", "")))
-                if key not in seen:
+                if key != ("", "") and key not in seen:
                     seen[key] = paper
+        # Fall back to the M2 citation_list (the scout's finds) so chapters still
+        # cite when the gaps carry no attached papers — common in auto mode, where
+        # gaps are generated without page-level supporting papers.
+        for c in context.get("citation_list", []):
+            author = c.get("author") or c.get("authors") or ""
+            key = (author, str(c.get("year", "")))
+            if author and key not in seen:
+                seen[key] = {"author": author, "year": c.get("year"),
+                             "title": c.get("title"), "source": c.get("source")}
         return list(seen.values())
 
     def _latest_user_message(self, messages) -> str:

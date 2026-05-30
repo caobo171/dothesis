@@ -81,7 +81,11 @@ def _flatten_to_m2_output(sub_state: M2SubGraphState) -> dict[str, Any]:
         "propositions": [] if research_type == "quantitative"
                          else sub_state.get("propositions", []),
         "literature_review_doc": sub_state.get("ch2_draft") or "",
-        "citation_list": sub_state.get("citation_list", []),
+        # Fall back to the scout's research-state citations when no formal
+        # citation_list was compiled, so the references survive into M5 (otherwise
+        # the scout's finds were used only for the synthesis text and then lost).
+        "citation_list": (sub_state.get("citation_list")
+                          or sub_state.get("research_state_citations") or []),
     }
     if sub_state.get("current_phase") == "DONE":
         out["confirmed_at"] = datetime.now(timezone.utc).isoformat()

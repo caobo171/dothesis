@@ -30,6 +30,33 @@ def test_m5_normalize_chapters_coerces_autofill_list_to_dict():
     assert out["conclusion"]["prose"] == "concl text"
 
 
+def test_m5_collect_references_falls_back_to_citation_list():
+    """When gaps carry no supporting_papers (common in auto mode), references
+    fall back to the M2 citation_list so chapters still cite the scout's finds."""
+    agent = M5Agent()
+    refs = agent._collect_references({
+        "research_gaps": [],
+        "citation_list": [
+            {"authors": "Carolin et al.", "year": 2025, "title": "X"},
+            {"author": "Bass", "year": 1985},
+        ],
+    })
+    pairs = {(r.get("author"), str(r.get("year"))) for r in refs}
+    assert ("Carolin et al.", "2025") in pairs
+    assert ("Bass", "1985") in pairs
+
+
+def test_m5_collect_references_prefers_gap_papers_and_adds_citation_list():
+    agent = M5Agent()
+    refs = agent._collect_references({
+        "research_gaps": [{"supporting_papers": [{"author": "Wang", "year": 2011, "page": 5}]}],
+        "citation_list": [{"author": "Bass", "year": 1985}],
+    })
+    pairs = {(r.get("author"), str(r.get("year"))) for r in refs}
+    assert ("Wang", "2011") in pairs    # gap paper preserved
+    assert ("Bass", "1985") in pairs    # citation_list merged in
+
+
 def test_m5_normalize_chapters_passthrough_dict():
     agent = M5Agent()
     d = {"intro": {"prose": "x"}}
