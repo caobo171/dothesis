@@ -210,6 +210,36 @@ def artifact_to_module(key: str) -> str:
     return _SLICE_TO_MODULE[_ARTIFACT_BY_KEY[key].slice]
 
 
+def dependents_closure(key: str) -> set[str]:
+    """All artifacts that transitively depend on `key` (reverse of depends_on).
+
+    Used to compute what's affected when an upstream artifact changes — the basis
+    for "editing this step may invalidate these later steps".
+    """
+    seen: set[str] = set()
+    stack = [a.key for a in ARTIFACTS if key in a.depends_on]
+    while stack:
+        k = stack.pop()
+        if k in seen:
+            continue
+        seen.add(k)
+        stack.extend(a.key for a in ARTIFACTS if k in a.depends_on)
+    return seen
+
+
+def stale_after_change(context_store, changed_key: str) -> list[str]:
+    """Completed downstream artifacts that may need review after `changed_key`
+    changes — i.e. the done dependents of the changed artifact, in DAG order.
+
+    Not-yet-done dependents are ignored (there's nothing committed to invalidate).
+    Makes "go back and edit an early step" safe by surfacing the blast radius.
+    """
+    status = readiness(context_store)
+    affected = dependents_closure(changed_key)
+    return [a.key for a in ARTIFACTS
+            if a.key in affected and status.get(a.key) == "done"]
+
+
 def readiness(context_store) -> dict[str, str]:
     """Classify every artifact as 'done' | 'ready' | 'blocked'.
 

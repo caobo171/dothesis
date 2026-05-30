@@ -1,7 +1,8 @@
 """Tests for the artifact dependency DAG + definition-of-done validators."""
 from orchestrator.artifacts import (
-    ARTIFACTS, Artifact, DoD, artifact_to_module, dod_analysis, dod_chapter,
-    dod_design, dod_design_structural, dod_literature, dod_topic, readiness,
+    ARTIFACTS, Artifact, DoD, artifact_to_module, dependents_closure, dod_analysis,
+    dod_chapter, dod_design, dod_design_structural, dod_literature, dod_topic,
+    readiness, stale_after_change,
 )
 from orchestrator.state import ContextStore
 
@@ -211,6 +212,36 @@ def test_readiness_fully_populated_all_done():
         m5_writing=_FULL_CHAPTERS,
     )
     assert set(readiness(cs).values()) == {"done"}
+
+
+def test_dependents_closure_of_topic_includes_all_downstream():
+    deps = dependents_closure("topic")
+    assert "literature" in deps
+    assert "design" in deps           # design depends on topic (+literature)
+    assert "ch_intro" in deps
+    assert "topic" not in deps        # never itself
+
+
+def test_dependents_closure_of_analysis_excludes_upstream():
+    deps = dependents_closure("analysis")
+    assert "ch_results" in deps
+    assert "ch_conclusion" in deps
+    assert "design" not in deps       # design is UPstream of analysis
+    assert "topic" not in deps
+
+
+def test_stale_after_change_returns_done_dependents():
+    # topic + design confirmed. Changing topic → design (done, depends on topic)
+    # may need review.
+    cs = ContextStore(m1_topic=_FULL_TOPIC, m3_design={"confirmed_at": "x"})
+    stale = stale_after_change(cs, "topic")
+    assert "design" in stale
+    assert "literature" not in stale  # literature isn't done → nothing to invalidate
+
+
+def test_stale_after_change_empty_when_no_done_dependents():
+    cs = ContextStore(m1_topic=_FULL_TOPIC)  # only topic done
+    assert stale_after_change(cs, "topic") == []
 
 
 def test_artifact_to_module_maps_each_artifact():
