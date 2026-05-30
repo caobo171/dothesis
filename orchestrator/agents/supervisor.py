@@ -44,6 +44,32 @@ def _rule_based(state: OrchestratorState) -> RouteDecision:
 
 def supervisor_node(state: OrchestratorState) -> dict:
     """Returns a state patch with the updated current_module."""
+    # Targeted routing (enter-at-any-step): when the user is heading for a
+    # specific artifact, let the planner pick the next step toward it —
+    # backfilling missing prerequisites — instead of the sequential rule. Active
+    # ONLY when target_artifact is set, so the default flow is byte-for-byte
+    # unchanged. Cleared once the target is reached (resume normal sequence).
+    target = state.get("target_artifact")
+    target_reached = False
+    if target:
+        from orchestrator.artifacts import artifact_to_module
+        from orchestrator.planner import plan_next
+        try:
+            pdec = plan_next(state["context_store"], target=target)
+        except KeyError:
+            pdec = None  # unknown target → drop it, resume normal routing
+        if pdec and pdec.action in ("work", "backfill"):
+            module = artifact_to_module(pdec.artifact)
+            return {
+                "current_module": module,
+                "pending_confirmations": [RouteDecision(
+                    next_module=module,
+                    reason=f"targeting {target}: {pdec.reason}",
+                    needs_user_acknowledgement=(pdec.action == "backfill"),
+                ).model_dump_json()],
+            }
+        target_reached = True  # already_done / done / unknown → clear below
+
     decision = _rule_based(state)
 
     if state.get("mode") == "interactive":
@@ -75,10 +101,13 @@ def supervisor_node(state: OrchestratorState) -> dict:
             except Exception:
                 logger.exception("supervisor intent classifier failed; falling back to rules")
 
-    return {
+    patch = {
         "current_module": decision.next_module,
         "pending_confirmations": [decision.model_dump_json()],
     }
+    if target_reached:
+        patch["target_artifact"] = None  # drop the reached target; resume sequence
+    return patch
 
 
 def route_from_supervisor(state: OrchestratorState) -> str:

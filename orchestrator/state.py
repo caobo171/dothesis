@@ -49,6 +49,11 @@ class OrchestratorState(TypedDict, total=False):
     # that only worked for base-loop modules (M1/M4/M5) and made M2/M3 (which
     # keep their own phase markers) loop supervisor↔module forever.
     _module_paused: bool
+    # When set (an artifact key like "analysis"), the supervisor routes via the
+    # planner toward this artifact — backfilling missing prerequisites — instead
+    # of the sequential rule. Cleared once the target is reached. This is how
+    # "enter at any step" drives the graph; None = normal sequential flow.
+    target_artifact: str | None
 
 
 _MODULE_TO_FIELD = {

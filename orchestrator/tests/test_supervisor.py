@@ -16,6 +16,47 @@ def _state(messages, cs=None, mode="interactive"):
     }
 
 
+def test_supervisor_target_routes_to_ready_chapter_skipping_modules():
+    # topic + literature confirmed. Target = ch_lit_review (needs only literature,
+    # which is done) → ready → route M5. The sequential rule would go to M3.
+    cs = ContextStore(m1_topic={"confirmed_at": "x"},
+                      m2_literature={"confirmed_at": "x"})
+    state = _state([], cs=cs)
+    state["target_artifact"] = "ch_lit_review"
+    out = supervisor_node(state)
+    assert out["current_module"] == "M5"
+
+
+def test_supervisor_target_methodology_skips_analysis():
+    # topic + literature + design confirmed. Target = ch_methodology (needs only
+    # design) → ready → M5. Sequential would route to M4 (analysis).
+    cs = ContextStore(m1_topic={"confirmed_at": "x"},
+                      m2_literature={"confirmed_at": "x"},
+                      m3_design={"confirmed_at": "x"})
+    state = _state([], cs=cs)
+    state["target_artifact"] = "ch_methodology"
+    out = supervisor_node(state)
+    assert out["current_module"] == "M5"
+
+
+def test_supervisor_target_backfills_blocked_prerequisite():
+    # Target = analysis, nothing done → backfill topic first → M1.
+    state = _state([], cs=ContextStore())
+    state["target_artifact"] = "analysis"
+    out = supervisor_node(state)
+    assert out["current_module"] == "M1"
+
+
+def test_supervisor_clears_target_once_reached():
+    # Target = analysis, already confirmed → reached → clear + resume sequential.
+    cs = ContextStore(m4_analysis={"confirmed_at": "x"})
+    state = _state([], cs=cs)
+    state["target_artifact"] = "analysis"
+    out = supervisor_node(state)
+    assert "target_artifact" in out and out["target_artifact"] is None
+    assert out["current_module"] == "M1"
+
+
 def test_supervisor_routes_to_first_unconfirmed_in_auto():
     cs = ContextStore(m1_topic={"confirmed_at": "2026-05-26"},
                       m2_literature={"confirmed_at": "2026-05-26"})
