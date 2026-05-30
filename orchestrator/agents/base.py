@@ -273,6 +273,22 @@ class ModuleAgent(ABC):
                     tool_calls_json=self.render_hint_for_field(awaiting_field, partial),
                 )
 
+            if intent in {"off_topic", "meta", "frustration"}:
+                # Concierge: address the digression like a human, then steer back
+                # to the SAME field. Re-attach the field's widget so returning is
+                # one click. The field stays pending — we captured no value.
+                # Replaces the old behavior where off_topic silently re-asked with
+                # no acknowledgement of what the user just said (cold/robotic).
+                message = self._answer_and_anchor(state, intent, awaiting_field, partial)
+                partial["_awaiting_field"] = awaiting_field
+                return ModuleStepResult(
+                    assistant_message=message,
+                    context_patch=partial,
+                    transition=False,
+                    needs_user_reply=True,
+                    tool_calls_json=self.render_hint_for_field(awaiting_field, partial),
+                )
+
             if intent == "delegation":
                 # User asked the agent to pick. Generate a reasonable value
                 # and stash a notice for the next assistant message.
@@ -292,7 +308,7 @@ class ModuleAgent(ABC):
                 if value is not None:
                     partial[awaiting_field] = value
             # navigation: supervisor will re-route on the next graph tick.
-            # off_topic: ignore the reply, _ask_next_question re-asks below.
+            # off_topic / meta / frustration are handled above (answer-then-anchor).
 
         # Continue clarification: find the next missing field or summarize for confirm.
         result = self._ask_next_question(partial)

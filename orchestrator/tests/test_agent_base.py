@@ -83,6 +83,38 @@ def test_answer_and_anchor_returns_concierge_message(monkeypatch):
     assert "title" in prompt
 
 
+def test_off_topic_answers_then_reasks_same_field(monkeypatch):
+    """A digression while awaiting a field → concierge reply that re-asks the
+    SAME field (not advance, not silently re-ask, not store the digression)."""
+    agent = _ToyAgent()
+    fake_llm = MagicMock()
+    fake_llm.invoke.side_effect = [
+        AIMessage(content='{"intent": "off_topic", "value": null}'),          # classify
+        AIMessage(content="Ha, weather's nice! Anyway — what's your title?"),  # concierge
+    ]
+    monkeypatch.setattr(_ToyAgent, "_get_llm", lambda self: fake_llm)
+
+    state = _state(
+        [AIMessage(content="What is the title?"),
+         HumanMessage(content="btw what's the weather?")],
+        partial={"_awaiting_field": "title"},
+    )
+    result = agent.step(state)
+    assert result.transition is False
+    assert result.needs_user_reply is True
+    assert "title" in result.assistant_message.lower()
+    # Field stays pending so the next turn resumes correctly...
+    assert result.context_patch.get("_awaiting_field") == "title"
+    # ...and the digression was NOT stored as the field value.
+    assert result.context_patch.get("title") is None
+    # The reply must come from the concierge (answer-then-anchor), whose prompt
+    # uniquely carries the user's digression (recent dialogue) AND the bridge
+    # guidance — the old silent-re-ask path (_ask_next_question) carries neither.
+    concierge_prompt = fake_llm.invoke.call_args_list[1][0][0]
+    assert "weather" in concierge_prompt
+    assert "bring them back" in concierge_prompt
+
+
 def test_interactive_asks_for_first_missing_field(monkeypatch):
     agent = _ToyAgent()
     fake_llm = MagicMock()
