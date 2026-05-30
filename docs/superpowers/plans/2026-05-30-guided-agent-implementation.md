@@ -453,8 +453,10 @@ git commit -m "feat(orchestrator): feed recent-dialogue window to intent classif
 - Create: `orchestrator/tests/test_artifacts.py`.
 - (Read-only) reference `orchestrator/schemas/m{1..5}.py` for field names.
 
-**Artifact list (decision D5 default — finer than M5; M1–M4 as-is initially):**
-`topic`, `framework`, `gaps`, `design`, `analysis`, `ch_intro`, `ch_lit_review`, `ch_methodology`, `ch_results`, `ch_discussion`, `ch_conclusion` — with dependencies per [`docs/design/guided-agent-architecture.md` §3.1](../../design/guided-agent-architecture.md#31-model-the-thesis-as-an-artifact-dag-not-a-5-step-line).
+**Artifact list — AS BUILT (decision D5: M1–M4 single artifacts, M5 split per chapter):**
+`topic`, `literature`, `design`, `analysis`, `ch_intro`, `ch_lit_review`, `ch_methodology`, `ch_results`, `ch_discussion`, `ch_conclusion`. Dependencies wired in `orchestrator/artifacts.py:ARTIFACTS`. (Splitting M2 into `framework`/`gaps` — per [design §3.1](../../design/guided-agent-architecture.md#31-model-the-thesis-as-an-artifact-dag-not-a-5-step-line) — is a later refinement; v1 keeps `literature` as one artifact.)
+
+**STATUS: ✅ DONE** — `orchestrator/artifacts.py` + `orchestrator/tests/test_artifacts.py` (20 tests). `DoD`/`Artifact` dataclasses, `dod_topic/literature/design/analysis/chapter` validators, `ARTIFACTS` registry, and `readiness(context_store) -> {key: done|ready|blocked}`. Purely additive; nothing routes on it yet.
 
 **Task outline (each TDD):**
 1. `DoD` dataclass (`done: bool`, `gaps: list[str]`) + test.
