@@ -5,7 +5,10 @@ import useSWR from "swr";
 import { swrFetcher } from "../../lib/api";
 
 export default function PapersPage() {
-  const { data: papers = [], error, isLoading } = useSWR("/papers", swrFetcher);
+  // Drafts ARE the orchestrator projects (the actual thesis flow). Previously
+  // this read the legacy engine's /papers, so auto-drafted theses were invisible
+  // here even though "New Paper" creates orchestrator projects.
+  const { data: papers = [], error, isLoading } = useSWR("/projects", swrFetcher);
 
   return (
     <section className="space-y-6 max-w-6xl mx-auto w-full">
@@ -81,8 +84,12 @@ export default function PapersPage() {
   );
 }
 
+// Orchestrator projects: complete when current_module === "DONE".
+function _projectStatus(p) {
+  return p.current_module === "DONE" ? "done" : (p.status || "draft");
+}
+
 function PaperRow({ p, index }) {
-  const tab = p.status === "done" ? "editor" : "run";
   return (
     <tr className="border-b border-ink-100 hover:bg-ink-50/50 transition-colors">
       <td className="py-5 pr-3 whitespace-nowrap text-sm text-ink-500">
@@ -90,20 +97,20 @@ function PaperRow({ p, index }) {
       </td>
       <td className="py-5">
         <span className="text-sm text-ink-900 block truncate max-w-[300px] lg:max-w-[400px]">
-          {p.title || "Untitled"}
+          {p.name || "Untitled"}
         </span>
       </td>
-      <td className="py-5 text-sm text-ink-500">{p.level || "—"}</td>
-      <td className="py-5"><StatusBadge status={p.status} /></td>
+      <td className="py-5 text-sm text-ink-500">{p.field || "—"}</td>
+      <td className="py-5"><StatusBadge status={_projectStatus(p)} /></td>
       <td className="py-5 whitespace-nowrap text-left text-sm text-ink-500">
         {p.updated_at ? new Date(p.updated_at).toLocaleDateString("en-GB") : "—"}
       </td>
       <td className="py-5 pl-6 whitespace-nowrap text-left">
         <Link
-          href={`/paper/${p.id}?tab=${tab}`}
+          href={`/chat/projects/${p.id}`}
           className="inline-flex items-center px-4 py-1.5 border border-primary-600 text-primary-600 text-sm font-medium rounded-full hover:bg-primary-50 transition-colors"
         >
-          View Detail
+          Open
         </Link>
       </td>
     </tr>
@@ -111,27 +118,26 @@ function PaperRow({ p, index }) {
 }
 
 function PaperMobileRow({ p, index }) {
-  const tab = p.status === "done" ? "editor" : "run";
   return (
     <div className="py-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm text-ink-400 shrink-0">{index.toString().padStart(2, "0")}.</span>
-            <span className="text-sm font-medium text-ink-900 truncate">{p.title || "Untitled"}</span>
+            <span className="text-sm font-medium text-ink-900 truncate">{p.name || "Untitled"}</span>
           </div>
           <div className="mt-1 ml-7 flex items-center gap-2">
-            <StatusBadge status={p.status} />
+            <StatusBadge status={_projectStatus(p)} />
             <span className="text-xs text-ink-400">
               {p.updated_at ? new Date(p.updated_at).toLocaleDateString("en-GB") : "—"}
             </span>
           </div>
         </div>
         <Link
-          href={`/paper/${p.id}?tab=${tab}`}
+          href={`/chat/projects/${p.id}`}
           className="inline-flex items-center px-3 py-1 border border-primary-600 text-primary-600 text-xs font-medium rounded-full hover:bg-primary-50 transition-colors shrink-0"
         >
-          View
+          Open
         </Link>
       </div>
     </div>
