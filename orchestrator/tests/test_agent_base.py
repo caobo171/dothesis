@@ -52,6 +52,20 @@ def test_recent_dialogue_windows_last_turns_and_labels_roles():
     assert transcript == "User: m2\nAssistant: a2\nUser: m3"
 
 
+@pytest.mark.parametrize("intent_value", ["meta", "frustration"])
+def test_classify_recognizes_meta_and_frustration(monkeypatch, intent_value):
+    agent = _ToyAgent()
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(
+        content=f'{{"intent": "{intent_value}", "value": null}}'
+    )
+    monkeypatch.setattr(_ToyAgent, "_get_llm", lambda self: fake_llm)
+
+    state = _state([HumanMessage(content="how long will this take?")])
+    out = agent._classify_user_intent(state, "title", {"answer": "Y"})
+    assert out["intent"] == intent_value
+
+
 def test_interactive_asks_for_first_missing_field(monkeypatch):
     agent = _ToyAgent()
     fake_llm = MagicMock()

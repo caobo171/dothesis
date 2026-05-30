@@ -483,7 +483,12 @@ class ModuleAgent(ABC):
             f'- "delegation": the user wants you to pick for them (e.g. "you\n'
             f'  decide", "I don\'t have a preference", "surprise me", "tùy bạn").\n'
             f'- "navigation": user wants to go back / skip / redo / jump elsewhere.\n'
-            f'- "off_topic": user is asking about something unrelated to the field.\n\n'
+            f'- "off_topic": user is asking about something unrelated to the field.\n'
+            f'- "meta": the user is asking about the PROCESS itself — how long this\n'
+            f"  will take, what you're doing, how many steps remain, whether they\n"
+            f"  can save and come back.\n"
+            f'- "frustration": the user is venting, stressed, anxious, or expressing\n'
+            f"  doubt/overwhelm rather than answering the question.\n\n"
             f"CRITICAL: a long multi-item reply that happens to contain words\n"
             f'like "what is" or "for example" inside the answer content is\n'
             f'STILL "answer" — those keywords are part of the user\'s content.\n\n'
@@ -493,7 +498,8 @@ class ModuleAgent(ABC):
             raw = self._get_llm().invoke(prompt).content
             data = json.loads(_strip_code_fence(raw))
             intent = data.get("intent")
-            if intent in {"answer", "clarification", "delegation", "navigation", "off_topic"}:
+            if intent in {"answer", "clarification", "delegation",
+                          "navigation", "off_topic", "meta", "frustration"}:
                 return {"intent": intent, "value": data.get("value")}
         except Exception:  # noqa: BLE001 - classifier failure is best-effort
             logger.exception(
