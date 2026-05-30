@@ -227,6 +227,35 @@ def assess(project_id: uuid.UUID, body: AssessBody,
     return {"detected": detected, "readiness_if_applied": readiness(preview)}
 
 
+@router.post("/projects/{project_id}/reconstruct/{artifact}")
+def reconstruct(project_id: uuid.UUID, artifact: str,
+                user: User = Depends(current_user),
+                db: Session = Depends(db_session)) -> dict:
+    """Propose a reconstructed slice for a SKIPPED prerequisite (dry-run).
+
+    Infers `artifact` from the student's existing work and returns the candidate,
+    whether it clears the gate to confirm, and which fields to review. For
+    `design` the gate is the lighter STRUCTURAL one (the Phase-3 eval showed the
+    detail artifacts can't be inferred and shouldn't block); other artifacts use
+    their full DoD. Never auto-committed — the student confirms, then /import.
+    """
+    _owned_project(db, user, project_id)
+    from orchestrator.artifacts import _ARTIFACT_BY_KEY, dod_design_structural
+    from orchestrator.backfill import reconstruct_artifact
+    if artifact not in _ARTIFACT_BY_KEY:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "unknown_artifact",
+                              "message": f"unknown artifact: {artifact}"}},
+        )
+    candidate = reconstruct_artifact(artifact, _orch_context_store(db, project_id))
+    gate = {"design": dod_design_structural}.get(
+        artifact, _ARTIFACT_BY_KEY[artifact].dod)
+    result = gate(candidate)
+    return {"artifact": artifact, "candidate": candidate,
+            "ready_to_confirm": result.done, "review": result.gaps}
+
+
 # ----------------------------------------------------------------------------
 # Threads
 # ----------------------------------------------------------------------------

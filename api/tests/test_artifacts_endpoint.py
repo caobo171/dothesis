@@ -97,3 +97,32 @@ def test_assess_endpoint_returns_detection_and_preview(client, monkeypatch):
     # Dry-run: nothing is committed until the client calls /import.
     after = client.get(f"/api/v1/projects/{pid}/artifacts").json()
     assert after["topic"] == "ready"
+
+
+def test_reconstruct_endpoint_proposes_candidate_with_structural_gate(client, monkeypatch):
+    pid = _auth_and_project(client)
+    _seed_slice(pid,
+                m1_topic={"research_title": "X", "research_type": "quantitative"},
+                m4_analysis={"data_type_detected": "SmartPLS", "results": {"p": {}}})
+    monkeypatch.setattr(
+        "orchestrator.backfill.reconstruct_artifact",
+        lambda key, cs, llm=None: {
+            "paradigm": "quantitative", "design": "PLS-SEM", "tool": "SmartPLS",
+            "sampling_strategy": "convenience", "target_sample_size": 237,
+            "_source": "reconstructed",
+        },
+    )
+    r = client.post(f"/api/v1/projects/{pid}/reconstruct/design")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["candidate"]["design"] == "PLS-SEM"
+    assert body["ready_to_confirm"] is True   # structural gate passes the skeleton
+    # Dry-run: not committed.
+    after = client.get(f"/api/v1/projects/{pid}/artifacts").json()
+    assert after["design"] != "done"
+
+
+def test_reconstruct_endpoint_rejects_unknown_artifact(client):
+    pid = _auth_and_project(client)
+    r = client.post(f"/api/v1/projects/{pid}/reconstruct/bogus")
+    assert r.status_code == 422
