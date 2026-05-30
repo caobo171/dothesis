@@ -44,11 +44,13 @@ def test_argparse_routes_auto_vs_resume(tmp_path):
     assert args.auto_draft is False
 
 
-def test_subprocess_refuses_without_aws_s3_bucket(tmp_path):
-    """SP6: subprocess must refuse to start without AWS_S3_BUCKET set.
+def test_subprocess_refuses_without_s3_bucket(tmp_path):
+    """SP6: subprocess must refuse to start without an S3 bucket configured.
     M5 export is mandatory and S3-only — the check fires after argparse parses
-    valid args, before any real work begins."""
-    env = {k: v for k, v in os.environ.items() if k != "AWS_S3_BUCKET"}
+    valid args, before any real work begins. Reads S3_BUCKET (project convention)
+    with AWS_S3_BUCKET as a legacy fallback, so neither may be set."""
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("S3_BUCKET", "AWS_S3_BUCKET")}
     # Provide a valid arg set so argparse succeeds; the env check should fire next.
     brief = tmp_path / "b.json"
     brief.write_text('{"topic": "x"}')
@@ -60,7 +62,7 @@ def test_subprocess_refuses_without_aws_s3_bucket(tmp_path):
     )
     assert res.returncode != 0
     combined = (res.stdout + res.stderr).lower()
-    assert "aws_s3_bucket" in combined
+    assert "s3_bucket" in combined
 
 
 def test_sigterm_handler_writes_paused_event(tmp_path, monkeypatch):

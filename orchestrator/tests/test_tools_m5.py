@@ -41,7 +41,7 @@ def test_compile_pdf_writes_artifact(tmp_path, monkeypatch):
 
     fake_s3 = MagicMock()
     monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
-    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+    monkeypatch.setenv("S3_BUCKET", "test-bucket")
 
     captured = {}
     def fake_compile(sections, output_path, **kw):
@@ -70,7 +70,7 @@ def test_export_docx_writes_artifact(tmp_path, monkeypatch):
 
     fake_s3 = MagicMock()
     monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
-    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+    monkeypatch.setenv("S3_BUCKET", "test-bucket")
 
     def fake_docx(sections, output_path, **kw):
         Path(output_path).write_bytes(b"PK\x03\x04 docx fake")
@@ -120,7 +120,7 @@ def test_upload_to_s3_writes_correct_key_and_deletes_local(tmp_path, monkeypatch
 
     fake_s3 = MagicMock()
     monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
-    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+    monkeypatch.setenv("S3_BUCKET", "test-bucket")
 
     local = tmp_path / "thesis-abc123.docx"
     local.write_bytes(b"fake docx content")
@@ -146,7 +146,7 @@ def test_upload_to_s3_pdf_content_type(tmp_path, monkeypatch):
 
     fake_s3 = MagicMock()
     monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
-    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+    monkeypatch.setenv("S3_BUCKET", "test-bucket")
 
     local = tmp_path / "thesis-x.pdf"
     local.write_bytes(b"%PDF-1.4")
@@ -160,7 +160,7 @@ def test_compile_pdf_uploads_to_s3_and_returns_key(monkeypatch):
 
     fake_s3 = MagicMock()
     monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
-    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+    monkeypatch.setenv("S3_BUCKET", "test-bucket")
 
     def fake_compile_via_engine(sections, output_path, **kw):
         Path(output_path).write_bytes(b"%PDF-1.4\nfake")
@@ -184,7 +184,7 @@ def test_export_docx_uploads_to_s3_and_returns_key(monkeypatch):
 
     fake_s3 = MagicMock()
     monkeypatch.setattr(m5_writing, "s3_from_env", lambda: fake_s3)
-    monkeypatch.setenv("AWS_S3_BUCKET", "test-bucket")
+    monkeypatch.setenv("S3_BUCKET", "test-bucket")
 
     def fake_export_via_engine(sections, output_path, **kw):
         Path(output_path).write_bytes(b"PK\x03\x04 fake docx")
