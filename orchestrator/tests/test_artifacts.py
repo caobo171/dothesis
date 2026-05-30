@@ -1,7 +1,7 @@
 """Tests for the artifact dependency DAG + definition-of-done validators."""
 from orchestrator.artifacts import (
     ARTIFACTS, Artifact, DoD, artifact_to_module, dod_analysis, dod_chapter,
-    dod_design, dod_literature, dod_topic, readiness,
+    dod_design, dod_design_structural, dod_literature, dod_topic, readiness,
 )
 from orchestrator.state import ContextStore
 
@@ -78,6 +78,29 @@ def test_dod_design_empty_slice_reports_paradigm_gap():
     result = dod_design({})
     assert result.done is False
     assert any("paradigm" in g for g in result.gaps)
+
+
+_DESIGN_SKELETON = {
+    "paradigm": "quantitative", "design": "PLS-SEM", "tool": "SmartPLS",
+    "sampling_strategy": "convenience", "target_sample_size": 237,
+}  # NOTE: no conceptual_model / scale_items (the un-inferrable detail)
+
+
+def test_dod_design_structural_passes_on_skeleton_without_detail():
+    # The structural gate accepts a reconstructed skeleton even with no detail
+    # artifacts — those can't be inferred from analysis and are filled later.
+    assert dod_design_structural(_DESIGN_SKELETON).done is True
+
+
+def test_dod_design_full_still_fails_on_same_skeleton():
+    # Contrast: the FULL gate still demands the paradigm-specific detail.
+    assert dod_design(_DESIGN_SKELETON).done is False
+
+
+def test_dod_design_structural_flags_missing_skeleton_field():
+    result = dod_design_structural({"paradigm": "quantitative", "design": "PLS-SEM"})
+    assert result.done is False
+    assert any("tool" in g for g in result.gaps)
 
 
 _FULL_LITERATURE = {

@@ -114,6 +114,25 @@ def dod_design(slice_: dict) -> DoD:
     return DoD(done=not gaps, gaps=gaps)
 
 
+def dod_design_structural(slice_: dict) -> DoD:
+    """Lighter gate for a RECONSTRUCTED design — structural/identifying fields
+    only (paradigm, method, tool, sampling, sample size), NOT the detail
+    artifacts (conceptual_model/scale_items/themes/interview_guide) that can't be
+    inferred from downstream analysis.
+
+    The Phase-3 eval showed reconstruction nails the skeleton but (correctly) does
+    not fabricate the detail fields, so the full `dod_design` is the wrong bar for
+    accepting a reconstructed prerequisite. This gate lets a confirmed skeleton
+    unblock downstream work; the detail fields are surfaced for review/fill.
+    """
+    slice_ = slice_ or {}
+    gaps = _missing_strings(slice_, ("paradigm", "design", "tool", "sampling_strategy"))
+    size = slice_.get("target_sample_size")
+    if not (isinstance(size, int) and not isinstance(size, bool) and size > 0):
+        gaps.append("missing target_sample_size")
+    return DoD(done=not gaps, gaps=gaps)
+
+
 def dod_literature(slice_: dict) -> DoD:
     """M2 literature: synthesis + ≥1 gap + framework + Ch2 draft + ≥1 citation."""
     slice_ = slice_ or {}
