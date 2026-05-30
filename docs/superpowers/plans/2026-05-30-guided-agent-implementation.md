@@ -524,7 +524,7 @@ git commit -m "feat(orchestrator): feed recent-dialogue window to intent classif
 
 **Acceptance:** paste a Chapter-3 draft → intake seeds `design` (and maybe `topic`), planner places the user at `analysis`/writing.
 
-**Detailed bite-sized plan:** authored here when Phase 4 starts.
+**STATUS: 🟢 ASSESSMENT AGENT DONE; in-graph triage node deferred.** `orchestrator/intake.py:assess_work(text, llm=None)` LLM-classifies pasted free-form work into proposed slices (drops unknown keys, degrades to `{}`); `POST /projects/{id}/assess` returns `{detected, readiness_if_applied}` as a dry-run for the UI to review before `POST /import` commits. Tests: `orchestrator/tests/test_intake.py`, `api/tests/test_artifacts_endpoint.py`. **Deferred:** wiring assessment as an in-graph `intake` node that auto-runs on a fresh project (the endpoint-driven flow covers the core use case for now).
 
 ---
 
