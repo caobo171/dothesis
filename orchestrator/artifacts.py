@@ -152,3 +152,48 @@ def dod_chapter(chapter_name: str) -> Callable[[dict], DoD]:
             return DoD(done=True, gaps=[])
         return DoD(done=False, gaps=[f"chapter '{chapter_name}' has no prose yet"])
     return _dod
+
+
+# ---------------------------------------------------------------------------
+# The DAG. v1: M1-M4 are single artifacts (D5 "as-is"); M5 splits into chapters.
+# `depends_on` references other artifact keys (validated by the registry test).
+# ---------------------------------------------------------------------------
+ARTIFACTS: tuple[Artifact, ...] = (
+    Artifact("topic",          "m1_topic",      (),                            dod_topic),
+    Artifact("literature",     "m2_literature", ("topic",),                    dod_literature),
+    Artifact("design",         "m3_design",     ("topic", "literature"),       dod_design),
+    Artifact("analysis",       "m4_analysis",   ("design",),                   dod_analysis),
+    Artifact("ch_intro",       "m5_writing",    ("topic", "literature"),       dod_chapter("intro")),
+    Artifact("ch_lit_review",  "m5_writing",    ("literature",),               dod_chapter("lit_review")),
+    Artifact("ch_methodology", "m5_writing",    ("design",),                   dod_chapter("methodology")),
+    Artifact("ch_results",     "m5_writing",    ("analysis",),                 dod_chapter("results")),
+    Artifact("ch_discussion",  "m5_writing",    ("ch_results", "topic"),       dod_chapter("discussion")),
+    Artifact("ch_conclusion",  "m5_writing",    ("ch_discussion", "analysis"), dod_chapter("conclusion")),
+)
+
+
+def readiness(context_store) -> dict[str, str]:
+    """Classify every artifact as 'done' | 'ready' | 'blocked'.
+
+    - done:    its DoD validator passes on the current slice content
+    - ready:   not done, but ALL prerequisites are done → safe to work on
+    - blocked: not done and at least one prerequisite is unmet
+
+    Pure function over a ContextStore. This is what the planner (later phase)
+    walks to pick the next-best action and to detect which prerequisites a
+    targeted artifact needs backfilled.
+    """
+    done: dict[str, bool] = {}
+    for art in ARTIFACTS:
+        slice_ = getattr(context_store, art.slice, None) or {}
+        done[art.key] = art.dod(slice_).done
+
+    status: dict[str, str] = {}
+    for art in ARTIFACTS:
+        if done[art.key]:
+            status[art.key] = "done"
+        elif all(done.get(dep, False) for dep in art.depends_on):
+            status[art.key] = "ready"
+        else:
+            status[art.key] = "blocked"
+    return status

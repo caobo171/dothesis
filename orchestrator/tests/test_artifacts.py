@@ -1,7 +1,9 @@
 """Tests for the artifact dependency DAG + definition-of-done validators."""
 from orchestrator.artifacts import (
-    Artifact, DoD, dod_analysis, dod_chapter, dod_design, dod_literature, dod_topic,
+    ARTIFACTS, Artifact, DoD, dod_analysis, dod_chapter, dod_design,
+    dod_literature, dod_topic, readiness,
 )
+from orchestrator.state import ContextStore
 
 
 _FULL_TOPIC = {
@@ -125,6 +127,66 @@ def test_dod_chapter_done_when_prose_present():
 def test_dod_chapter_gap_when_missing_or_blank():
     assert dod_chapter("results")({"chapters": {}}).done is False
     assert dod_chapter("results")({"chapters": {"results": {"prose": "   "}}}).done is False
+
+
+_FULL_ANALYSIS = {
+    "data_type_detected": "SmartPLS",
+    "analysis_outline": {"sections": ["descriptives"]},
+    "results": {"step1": {"step_name": "descriptives"}},
+}
+_FULL_CHAPTERS = {
+    "chapters": {
+        name: {"prose": f"{name} text"}
+        for name in ("intro", "lit_review", "methodology",
+                     "results", "discussion", "conclusion")
+    }
+}
+
+
+def test_readiness_empty_only_topic_ready():
+    r = readiness(ContextStore())
+    assert r["topic"] == "ready"
+    assert r["literature"] == "blocked"
+    assert r["design"] == "blocked"
+    assert r["ch_methodology"] == "blocked"
+
+
+def test_readiness_topic_done_unlocks_literature_only():
+    r = readiness(ContextStore(m1_topic=_FULL_TOPIC))
+    assert r["topic"] == "done"
+    assert r["literature"] == "ready"
+    assert r["design"] == "blocked"  # design needs literature too
+
+
+def test_readiness_through_analysis_unlocks_early_chapters():
+    cs = ContextStore(
+        m1_topic=_FULL_TOPIC, m2_literature=_FULL_LITERATURE,
+        m3_design=_FULL_DESIGN_QUANT, m4_analysis=_FULL_ANALYSIS,
+    )
+    r = readiness(cs)
+    assert r["analysis"] == "done"
+    assert r["ch_methodology"] == "ready"
+    assert r["ch_results"] == "ready"
+    assert r["ch_intro"] == "ready"
+    assert r["ch_discussion"] == "blocked"  # needs ch_results first
+
+
+def test_readiness_fully_populated_all_done():
+    cs = ContextStore(
+        m1_topic=_FULL_TOPIC, m2_literature=_FULL_LITERATURE,
+        m3_design=_FULL_DESIGN_QUANT, m4_analysis=_FULL_ANALYSIS,
+        m5_writing=_FULL_CHAPTERS,
+    )
+    assert set(readiness(cs).values()) == {"done"}
+
+
+def test_artifacts_registry_keys_unique_and_deps_resolve():
+    keys = [a.key for a in ARTIFACTS]
+    assert len(keys) == len(set(keys))          # no duplicate keys
+    known = set(keys)
+    for a in ARTIFACTS:
+        for dep in a.depends_on:
+            assert dep in known, f"{a.key} depends on unknown artifact {dep}"
 
 
 def test_dod_and_artifact_dataclasses():
