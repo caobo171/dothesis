@@ -28,7 +28,9 @@ type ChapterDict = Record<string, {
 
 
 function _toPendingEdits(raw: ChapterDict[string]["pending_edits"]) {
-  return raw.map(e => ({
+  // Auto-composed chapters (and any chapter that's never had a chat edit) may
+  // omit pending_edits entirely — guard against undefined so the editor renders.
+  return (raw ?? []).map(e => ({
     id: e.id,
     source: e.source,
     oldText: e.old_text,
