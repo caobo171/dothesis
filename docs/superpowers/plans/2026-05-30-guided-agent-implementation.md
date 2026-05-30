@@ -485,7 +485,7 @@ git commit -m "feat(orchestrator): feed recent-dialogue window to intent classif
 
 **Acceptance:** import a partial thesis (topic+design only) → `GET artifacts` shows topic/design done, `analysis` ready, chapters blocked; start-at `analysis` opens there.
 
-**STATUS: ✅ DONE (import + readiness)** — `orchestrator/intake.py:merge_import`, `GET /projects/{id}/artifacts` + `POST /projects/{id}/import` in `api/app/routers/chat.py`, tests in `orchestrator/tests/test_intake.py` + `api/tests/test_artifacts_endpoint.py`. **`POST /threads/start-at/{artifact}` DEFERRED** — it needs the planner wired into the graph to honour a target (see Phase 5).
+**STATUS: ✅ DONE** — `orchestrator/intake.py:merge_import`, `GET /projects/{id}/artifacts`, `POST /projects/{id}/import`, and `POST /projects/{id}/threads/start-at/{artifact}` (in `api/app/routers/chat.py`). Tests: `orchestrator/tests/test_intake.py`, `api/tests/test_artifacts_endpoint.py`, `api/tests/test_start_at.py`.
 
 ---
 
@@ -548,7 +548,9 @@ git commit -m "feat(orchestrator): feed recent-dialogue window to intent classif
 - `readiness` now treats `confirmed_at` as done (prevents looping on a confirmed-but-imperfect slice).
 - `artifact_to_module()` maps artifact → M1-M5.
 - `supervisor_node` consults the planner **only when `state.target_artifact` is set** — routes toward the target, backfills prerequisites, skips unneeded modules, clears the target when reached. **Default sequential flow is byte-for-byte unchanged** (graph + supervisor suites green). This was the safe wiring: the planner *augments* routing for the targeting case rather than replacing `next_unconfirmed_module` wholesale (which would have collided with the confirm-gate semantics).
-- **REMAINING — `POST /threads/start-at/{artifact}`:** needs a `Thread.target_artifact` column (migration) + `send_message` to seed `graph_input["target_artifact"]` on the first turn (same pattern as the context_store seed). Deferred as a discrete, schema-touching step.
+- **`POST /projects/{id}/threads/start-at/{artifact}` ✅ DONE** — adds `threads.target_artifact` (model + Alembic `20260530_target01`); `send_message` seeds `graph_input["target_artifact"]` on the first turn; the supervisor then routes toward the target and clears it when reached. Tests: `api/tests/test_start_at.py`.
+
+**Phase 5 STATUS: ✅ DONE.** Enter-at-any-step works end-to-end: `start-at` → target seeded → planner backfills prerequisites → target reached → resume sequential. The full-replacement of `next_unconfirmed_module` for the *default* (untargeted) flow was intentionally NOT done — the planner augments routing only when a target is set, so the proven sequential flow is untouched.
 
 ---
 
