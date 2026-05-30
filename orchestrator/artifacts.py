@@ -112,3 +112,43 @@ def dod_design(slice_: dict) -> DoD:
         if not slice_.get("interview_guide"):
             gaps.append("missing interview_guide")
     return DoD(done=not gaps, gaps=gaps)
+
+
+def dod_literature(slice_: dict) -> DoD:
+    """M2 literature: synthesis + ≥1 gap + framework + Ch2 draft + ≥1 citation."""
+    slice_ = slice_ or {}
+    gaps = _missing_strings(slice_, (
+        "research_state_summary", "theoretical_framework", "literature_review_doc",
+    ))
+    gaps += _empty_lists(slice_, ("research_gaps", "citation_list"))
+    return DoD(done=not gaps, gaps=gaps)
+
+
+def dod_analysis(slice_: dict) -> DoD:
+    """M4 analysis: a detected data type, an outline, ≥1 result.
+
+    Mirrors M4Output._require_artifacts_on_confirm: qualitative additionally
+    needs qual_codes + qual_themes.
+    """
+    slice_ = slice_ or {}
+    gaps = _missing_strings(slice_, ("data_type_detected",))
+    if not slice_.get("analysis_outline"):
+        gaps.append("missing analysis_outline")
+    if not slice_.get("results"):
+        gaps.append("results is empty")
+    if slice_.get("data_type_detected") == "Qualitative":
+        gaps += _empty_lists(slice_, ("qual_codes", "qual_themes"))
+    return DoD(done=not gaps, gaps=gaps)
+
+
+def dod_chapter(chapter_name: str) -> Callable[[dict], DoD]:
+    """Factory: DoD for one M5 chapter — done when m5_writing.chapters[name].prose
+    is non-blank. Chapters are separate artifacts so a student stuck on a single
+    chapter can be placed precisely (Decision D5)."""
+    def _dod(slice_: dict) -> DoD:
+        chapters = (slice_ or {}).get("chapters") or {}
+        prose = (chapters.get(chapter_name) or {}).get("prose")
+        if isinstance(prose, str) and prose.strip():
+            return DoD(done=True, gaps=[])
+        return DoD(done=False, gaps=[f"chapter '{chapter_name}' has no prose yet"])
+    return _dod

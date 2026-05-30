@@ -1,5 +1,7 @@
 """Tests for the artifact dependency DAG + definition-of-done validators."""
-from orchestrator.artifacts import Artifact, DoD, dod_design, dod_topic
+from orchestrator.artifacts import (
+    Artifact, DoD, dod_analysis, dod_chapter, dod_design, dod_literature, dod_topic,
+)
 
 
 _FULL_TOPIC = {
@@ -74,6 +76,55 @@ def test_dod_design_empty_slice_reports_paradigm_gap():
     result = dod_design({})
     assert result.done is False
     assert any("paradigm" in g for g in result.gaps)
+
+
+_FULL_LITERATURE = {
+    "research_state_summary": "Current research shows...",
+    "research_gaps": [{"description": "no Gen Z studies"}],
+    "theoretical_framework": "Theory of Planned Behavior",
+    "literature_review_doc": "Chapter 2 draft...",
+    "citation_list": [{"author": "Bass", "year": 1985}],
+}
+
+
+def test_dod_literature_complete_is_done():
+    assert dod_literature(_FULL_LITERATURE).done is True
+
+
+def test_dod_literature_missing_gaps_is_a_gap():
+    result = dod_literature({**_FULL_LITERATURE, "research_gaps": []})
+    assert result.done is False
+    assert any("research_gaps" in g for g in result.gaps)
+
+
+def test_dod_analysis_quant_complete_is_done():
+    slice_ = {
+        "data_type_detected": "SmartPLS",
+        "analysis_outline": {"sections": ["descriptives"]},
+        "results": {"step1": {"step_name": "descriptives"}},
+    }
+    assert dod_analysis(slice_).done is True
+
+
+def test_dod_analysis_qualitative_requires_codes_and_themes():
+    slice_ = {
+        "data_type_detected": "Qualitative",
+        "analysis_outline": {"sections": ["coding"]},
+        "results": {"s1": {"step_name": "coding"}},
+    }
+    result = dod_analysis(slice_)
+    assert result.done is False
+    assert any("qual_codes" in g for g in result.gaps)
+
+
+def test_dod_chapter_done_when_prose_present():
+    slice_ = {"chapters": {"methodology": {"prose": "Our design uses..."}}}
+    assert dod_chapter("methodology")(slice_).done is True
+
+
+def test_dod_chapter_gap_when_missing_or_blank():
+    assert dod_chapter("results")({"chapters": {}}).done is False
+    assert dod_chapter("results")({"chapters": {"results": {"prose": "   "}}}).done is False
 
 
 def test_dod_and_artifact_dataclasses():
