@@ -47,6 +47,16 @@ export function useChat(threadId: string) {
     .map(e => (e as unknown as { payload: WidgetHint }).payload)
     .at(-1)) ?? null;
 
+  // P4: collect live engine progress events (M2 phase2 scout, etc.) so the
+  // UI can render a banner with what's happening right now instead of a
+  // bare typing dot during the 30-60s wait. Most recent event is the
+  // primary message; the previous ones stay in the list for fade-out.
+  const streamingProgress = stream.state.events
+    .filter(e => e.type === "progress")
+    .map(e => (e as unknown as {
+      payload: { stage: string; message: string };
+    }).payload);
+
   const send = async (text: string) => {
     // Optimistic update: show user message immediately before server confirms
     const optimistic: Message = {
@@ -71,6 +81,7 @@ export function useChat(threadId: string) {
     messages: messages ?? [],
     streamingText,
     streamingToolCalls,
+    streamingProgress,
     inflight: stream.state.inflight,
     error: stream.state.error,
     send,

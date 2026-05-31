@@ -46,6 +46,28 @@ describe("useChat", () => {
     expect(result.current.streamingText).toBe("reply");
   });
 
+  test("collects progress SSE events into streamingProgress", async () => {
+    server.use(
+      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+      http.post("/api/v1/threads/t1/messages", () => streamResponse([
+        'data: {"type":"progress","payload":{"stage":"scout.start","message":"Searching..."}}\n\n',
+        'data: {"type":"progress","payload":{"stage":"scout.api_chain","message":"API chain: A → B"}}\n\n',
+        'data: {"type":"token","text":"Done."}\n\n',
+        'data: {"type":"done"}\n\n',
+      ])),
+    );
+
+    const { result } = renderHook(() => useChat("t1"), { wrapper });
+    await waitFor(() => expect(result.current.messages).toEqual([]));
+    await act(async () => { await result.current.send("hello"); });
+
+    expect(result.current.streamingProgress).toHaveLength(2);
+    expect(result.current.streamingProgress[0].stage).toBe("scout.start");
+    expect(result.current.streamingProgress[1].message).toBe("API chain: A → B");
+    // Token streamed as well — progress and tokens coexist.
+    expect(result.current.streamingText).toBe("Done.");
+  });
+
   test("collects tool_calls SSE event into streamingToolCalls", async () => {
     server.use(
       http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),

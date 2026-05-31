@@ -21,7 +21,7 @@ const fetcher = async (url: string) => {
 
 
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
-  const { messages, streamingText, inflight, send } = useChat(threadId);
+  const { messages, streamingText, streamingProgress, inflight, send } = useChat(threadId);
   // SP6.5: include m5_writing.chapters so we can gate the "Open editor" link in
   // ChatHeader — the link must only appear once at least one chapter exists.
   const { data: project } = useSWR<{
@@ -131,6 +131,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
           messages={messages}
           streamingText={inflight ? streamingText : ""}
           streamingModuleTag={null}
+          streamingProgress={inflight ? streamingProgress : []}
           inflight={inflight}
           onWidgetSelect={onWidgetSelect}
         />

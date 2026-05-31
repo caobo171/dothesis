@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { MessageBubble } from "./MessageBubble";
+import { ProgressBubble, ProgressItem } from "./ProgressBubble";
 import { StreamingBubble } from "./StreamingBubble";
 import { ThinkingBubble } from "./ThinkingBubble";
 import type { Message } from "./hooks/useChat";
@@ -12,12 +13,19 @@ export function MessageList({
   messages,
   streamingText,
   streamingModuleTag,
+  streamingProgress = [],
   inflight = false,
   onWidgetSelect,
 }: {
   messages: Message[];
   streamingText: string;
   streamingModuleTag: string | null;
+  /**
+   * Live engine-progress events for this in-flight stream. Used to render
+   * ProgressBubble in place of ThinkingBubble while M2 phase2's citation
+   * scout (or any other long backend stage) is running.
+   */
+  streamingProgress?: ProgressItem[];
   /**
    * SSE stream is open and we're waiting on the first token. When true and
    * streamingText is empty, ThinkingBubble fills the silence so the user
@@ -58,9 +66,17 @@ export function MessageList({
       {streamingText ? (
         <StreamingBubble text={streamingText} moduleTag={streamingModuleTag} />
       ) : inflight ? (
-        // No tokens have arrived yet but the SSE stream is open — show the
-        // "thinking" indicator so the user knows something is happening.
-        <ThinkingBubble moduleTag={streamingModuleTag} />
+        // No tokens yet but the stream is open. If the backend sent any
+        // engine-progress events, render the ProgressBubble (live engine
+        // stage); otherwise the bare ThinkingBubble.
+        streamingProgress.length > 0 ? (
+          <ProgressBubble
+            progress={streamingProgress}
+            moduleTag={streamingModuleTag}
+          />
+        ) : (
+          <ThinkingBubble moduleTag={streamingModuleTag} />
+        )
       ) : null}
       <div ref={endRef} />
     </div>

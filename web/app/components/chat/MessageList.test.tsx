@@ -20,6 +20,43 @@ describe("MessageList", () => {
     expect(screen.getByText("streaming reply")).toBeTruthy();
     expect(screen.getByText("M2")).toBeTruthy();
   });
+
+  test("renders ProgressBubble when in-flight with progress but no tokens yet", () => {
+    // P4: M2 phase2's 30-60s scout used to show only the typing dot. With
+    // engine progress streamed, the bubble shows the live line(s).
+    render(
+      <MessageList
+        messages={[]}
+        streamingText=""
+        streamingModuleTag="M2"
+        inflight={true}
+        streamingProgress={[
+          { stage: "scout.start", message: "Searching for citations..." },
+          { stage: "scout.api_chain", message: "API chain: gemini → crossref" },
+        ]}
+      />
+    );
+    expect(screen.getByTestId("progress-bubble")).toBeTruthy();
+    // Latest line is the headline; previous one is faded but present.
+    expect(screen.getByText("API chain: gemini → crossref")).toBeTruthy();
+    expect(screen.getByText("Searching for citations...")).toBeTruthy();
+    // No bare thinking-bubble when progress is available.
+    expect(screen.queryByTestId("thinking-bubble")).toBeNull();
+  });
+
+  test("falls back to ThinkingBubble when in-flight but no progress yet", () => {
+    render(
+      <MessageList
+        messages={[]}
+        streamingText=""
+        streamingModuleTag={null}
+        inflight={true}
+        streamingProgress={[]}
+      />
+    );
+    expect(screen.getByTestId("thinking-bubble")).toBeTruthy();
+    expect(screen.queryByTestId("progress-bubble")).toBeNull();
+  });
 });
 
 import type { CardGridHint } from "./widgets/types";
