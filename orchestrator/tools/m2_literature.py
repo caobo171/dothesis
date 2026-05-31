@@ -104,7 +104,12 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
             "title": _field(c, "title"),
             "authors": _field(c, "authors"),
             "year": _field(c, "year"),
-            "source": _field(c, "source"),
+            # The engine's Citation class exposes `.api_source` (the API the
+            # citation came from — Crossref/OpenAlex/Semantic Scholar). Reading
+            # `.source` always returned None and broke any downstream filter on
+            # this field. Try api_source first; keep `source` as a back-compat
+            # path in case anything else (or a dict ingest) uses it.
+            "source": _field(c, "api_source") or _field(c, "source"),
             "url": _field(c, "url"),
             "doi": _field(c, "doi"),
         }

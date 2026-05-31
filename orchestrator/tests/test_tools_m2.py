@@ -38,6 +38,21 @@ class _Cite:
             setattr(self, k, v)
 
 
+def test_scout_reads_api_source_attribute(monkeypatch):
+    """B3: engine's Citation class exposes `.api_source` (not `.source`).
+    scout_citations was reading `.source` and getting None for every citation,
+    so downstream code that filtered on `source` dropped them all. Read
+    api_source, with source as a back-compat fallback."""
+    cite = _Cite(title="Paper A", authors="Wang", year=2011,
+                 api_source="Crossref",  # ← the real attribute name
+                 url=None, doi="10.1/x")
+    monkeypatch.setattr("orchestrator.tools.m2_literature.research_citations_via_api",
+                        lambda **kw: {"citations": [cite]})
+    monkeypatch.setattr("orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    out = scout_citations.invoke({"topic": "X", "min_n": 5})
+    assert out[0]["source"] == "Crossref"
+
+
 def test_scout_topic_count_env_overrides_default(monkeypatch):
     """M2_SCOUT_TOPIC_COUNT lets the sim (or anything else) cut scout to 1
     research-topic for speed, without changing production defaults (3)."""
