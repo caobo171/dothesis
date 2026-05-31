@@ -142,6 +142,21 @@ class ModuleAgent(ABC):
         """
         return int(os.getenv("ORCHESTRATOR_LLM_MAX_SECONDS", "25"))
 
+    def _bounded(self, prompt, *, retries: int = 0):
+        """Wall-clock-bounded shorthand for an LLM .invoke(prompt) call.
+
+        Used everywhere in the hot path so a Gemini stall in ANY interactive-
+        turn LLM call (classify intent, extract answer, ask next question,
+        is_affirmative, generate cards/lists, explain/anchor) cannot freeze
+        the whole graph turn — every caller already has an except-block that
+        catches BoundedInvokeTimeout (subclass of Exception) and falls back.
+        """
+        return bounded_invoke(
+            self._get_llm(), prompt,
+            max_seconds=self._llm_max_seconds(),
+            retries=retries,
+        )
+
     def render_hint_for_field(self, field_name: str, partial: dict | None = None) -> dict | None:
         """Return a widget render hint for the next question, or None for free-text.
 
@@ -225,7 +240,7 @@ class ModuleAgent(ABC):
             f"Respond with ONLY a JSON array of strings. No prose, no markdown."
         )
         try:
-            raw = self._get_llm().invoke(prompt).content
+            raw = self._bounded(prompt).content
             data = json.loads(_strip_code_fence(raw))
             if isinstance(data, list):
                 return [str(x).strip() for x in data if x]
@@ -269,7 +284,7 @@ class ModuleAgent(ABC):
             f"No prose, no markdown."
         )
         try:
-            raw = self._get_llm().invoke(prompt).content
+            raw = self._bounded(prompt).content
             data = json.loads(_strip_code_fence(raw))
             if not isinstance(data, list):
                 return []
@@ -395,7 +410,7 @@ class ModuleAgent(ABC):
             f"Already filled (do not change): "
             f"{json.dumps({k:v for k,v in partial.items() if k in required}, default=str)}"
         )
-        resp = self._get_llm().invoke(prompt).content
+        resp = self._bounded(prompt).content
         try:
             filled = json.loads(_strip_code_fence(resp))
         except (json.JSONDecodeError, TypeError):
@@ -499,7 +514,7 @@ class ModuleAgent(ABC):
             f"User reply: {last_user}"
         )
         try:
-            data = json.loads(_strip_code_fence(self._get_llm().invoke(prompt).content))
+            data = json.loads(_strip_code_fence(self._bounded(prompt).content))
             return data.get("value")
         except (json.JSONDecodeError, TypeError):
             # Fall back to using the raw user message as the value.
@@ -588,7 +603,7 @@ class ModuleAgent(ABC):
             f"No prose. No markdown. JSON only."
         )
         try:
-            raw = self._get_llm().invoke(prompt).content
+            raw = self._bounded(prompt).content
             data = json.loads(_strip_code_fence(raw))
             intent = data.get("intent")
             if intent in {"answer", "clarification", "delegation",
@@ -651,7 +666,7 @@ class ModuleAgent(ABC):
             f"language (English or Vietnamese). Prose only — no markdown headers "
             f"or bullets."
         )
-        return self._get_llm().invoke(prompt).content.strip()
+        return self._bounded(prompt).content.strip()
 
     def _explain_and_reask(self, field_name: str, partial: dict) -> str:
         """Produce a friendly explanation of `field_name` + re-ask the question.
@@ -681,7 +696,7 @@ class ModuleAgent(ABC):
             f"recent message (English or Vietnamese). Respond with prose only — "
             f"no markdown headers, no bullets."
         )
-        return self._get_llm().invoke(prompt).content.strip()
+        return self._bounded(prompt).content.strip()
 
     def _suggest_field_value(self, field_name: str, partial: dict):
         """User asked the agent to choose. Generate one reasonable value via LLM.
@@ -702,7 +717,7 @@ class ModuleAgent(ABC):
             f"Respond with ONLY a JSON object: {{\"value\": <the value>}}."
         )
         try:
-            data = json.loads(_strip_code_fence(self._get_llm().invoke(prompt).content))
+            data = json.loads(_strip_code_fence(self._bounded(prompt).content))
             return data.get("value")
         except (json.JSONDecodeError, TypeError):
             return None
@@ -746,7 +761,7 @@ class ModuleAgent(ABC):
             f'Respond with ONLY a JSON object: {{"confirm": true|false}}.'
         )
         try:
-            raw = self._get_llm().invoke(prompt).content
+            raw = self._bounded(prompt).content
             data = json.loads(_strip_code_fence(raw))
             return bool(data.get("confirm"))
         except Exception:  # noqa: BLE001 - LLM/JSON failure is best-effort
