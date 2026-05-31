@@ -38,6 +38,26 @@ class _Cite:
             setattr(self, k, v)
 
 
+def test_scout_passes_use_deep_research_and_topic(monkeypatch):
+    """B4: enable upstream's deep-research planner (50+ queries from topic+scope)
+    instead of our hand-rolled 3 topic variants. Without this, 'gen Z + titok
+    affectiveness' searched 3 near-identical typo'd variants → 0 hits."""
+    captured = {}
+    def fake_research(**kw):
+        captured.update(kw)
+        return {"citations": []}
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature.research_citations_via_api", fake_research)
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    # Both retries should also pass deep_research; isolate first call by
+    # raising ValueError-via-mocking only on attempts > 1.
+    scout_citations.invoke({"topic": "TikTok engagement Gen Z purchase", "min_n": 20})
+    assert captured.get("use_deep_research") is True
+    assert captured.get("topic") == "TikTok engagement Gen Z purchase"
+    assert captured.get("scope") == "TikTok engagement Gen Z purchase"
+
+
 def test_scout_reads_api_source_attribute(monkeypatch):
     """B3: engine's Citation class exposes `.api_source` (not `.source`).
     scout_citations was reading `.source` and getting None for every citation,

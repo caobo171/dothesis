@@ -72,11 +72,19 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
     tmp.mkdir(parents=True, exist_ok=True)
     llm = _get_llm()
     try:
+        # B4 use_deep_research=True: matches upstream opendraft. Enables the
+        # engine's DeepResearchPlanner which expands the topic into 50+ varied
+        # queries (vs our hand-rolled 3), routes them through Crossref/OpenAlex/
+        # Semantic Scholar/Gemini Grounded. The hand-rolled research_topics are
+        # passed too as a seed (engine uses them if planner output is thin).
         result = research_citations_via_api(
             model=llm,
             research_topics=research_topics,
             output_path=tmp / "scout_raw.md",
             target_minimum=min_n,
+            use_deep_research=True,
+            topic=topic,
+            scope=topic,
         )
     except ValueError:
         # The engine raises its quality gate (and discards results) when it finds
@@ -89,6 +97,9 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
             research_topics=research_topics,
             output_path=tmp / "scout_raw.md",
             target_minimum=1,
+            use_deep_research=True,
+            topic=topic,
+            scope=topic,
         )
     citations = result.get("citations", [])
 
