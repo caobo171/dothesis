@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -82,6 +83,32 @@ def _scout(topic: str, min_n: int = 20) -> list[dict]:
     return scout_citations.invoke({"topic": topic, "min_n": min_n})
 
 
+_PAGE_PLACEHOLDER_RE = re.compile(
+    # Match the optional comma + space, then 'p.' or 'pp.' (optional), then
+    # whitespace and the placeholder token. We bind the whole ', p. page?' or
+    # ', [page?]' or 'p.?' shapes so deleting the match leaves the surrounding
+    # punctuation tidy.
+    r"(?:,\s*)?"                                  # optional leading ', '
+    r"(?:\[)?"                                    # optional opening '['
+    r"(?:p\.?\s*)?"                               # optional 'p.' or 'p'
+    r"(?:page\s*\?|\?)"                           # the placeholder itself
+    r"(?:\])?"                                    # optional closing ']'
+    , re.IGNORECASE,
+)
+
+
+def _scrub_page_placeholders(text: str) -> str:
+    """Strip '[page?]', 'p. page?', 'p.?', etc. from synthesized prose.
+
+    Defense-in-depth: the M2 style guide tells the model to OMIT the page
+    when unknown, but models drift. Without this cleanup, the user sees
+    '(Vickery, 2023, [page?])' four times in a single paragraph (the exact
+    bug report Z). Real numeric pages like 'p. 118' survive — only the
+    placeholder shapes are removed.
+    """
+    return _PAGE_PLACEHOLDER_RE.sub("", text)
+
+
 def _max_synth_seconds() -> int:
     """Wall-clock cap for one synthesize call. Default 90s — generous enough
     for Gemini's normal range but short enough that a stalled call (5+ min)
@@ -133,17 +160,38 @@ def _synthesize(state: M2SubGraphState, refinements: list[str]) -> str:
     refinement_block = ""
     if refinements:
         refinement_block = "User refinements:\n" + "\n".join(f"- {r}" for r in refinements)
+    n = len(citations)
+    # Z: explicit per-call steer. The previous prompt let the model cite the
+    # same paper four times because nothing budgeted distinct sources. Now we
+    # name the floor ("at least N") and forbid the placeholder shapes that
+    # the style guide already told it to avoid (belt-and-braces — model
+    # compliance drops when only one place mentions the rule).
+    diversity_floor = max(3, min(n, n // 2 + 1)) if n else 0
+    diversity_note = (
+        f"You have {n} citations available below. Weave in as many distinct "
+        f"sources as you can — at least {diversity_floor} different "
+        f"author-year pairs should appear in your synthesis. Do NOT cite the "
+        f"same source repeatedly when others are relevant. Cite as "
+        f"(Author, Year). NEVER include a placeholder page marker (e.g. a "
+        f"question mark in brackets, or 'p.' followed by '?'). If you don't "
+        f"have the page number, omit the page reference entirely."
+    ) if n else ""
     user_prompt = (
         f"{_STYLE}\n\n{_PROMPT}\n\n"
         f"Topic: {state.get('research_title')}\n"
         f"Research type: {state.get('research_type')}\n"
         f"Language: {state.get('language')}\n\n"
+        f"{diversity_note}\n\n"
         f"Citations available:\n{_citations_block(citations)}\n\n"
         f"{refinement_block}"
     )
     try:
-        return bounded_invoke(_get_llm(), user_prompt,
-                              max_seconds=_max_synth_seconds(), retries=0).content
+        raw = bounded_invoke(_get_llm(), user_prompt,
+                             max_seconds=_max_synth_seconds(), retries=0).content
+        # Z: scrub leftover placeholder markers even when the model obeys the
+        # prompt 90% of the time. One '[page?]' in an otherwise good draft
+        # still looks broken to the user.
+        return _scrub_page_placeholders(raw)
     except BoundedInvokeTimeout:
         logger.warning("M2 phase2 synthesize hit %ss wall-clock cap; using template",
                        _max_synth_seconds())

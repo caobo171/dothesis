@@ -18,6 +18,74 @@ def _state(mode="interactive", user_msg="continue", **overrides):
     return s
 
 
+def test_synthesis_scrubs_page_placeholder_markers(monkeypatch):
+    """Z: the user saw '(Vickery, 2023, [page?])' four times in a row in M2's
+    output. The LLM emits '[page?]' / 'p. page?' / '(p.?)' shapes when it
+    doesn't know the page (which is always, for API-sourced citations — no
+    PDF, no page). Strip those markers post-synthesis so the user sees a
+    clean '(Vickery, 2023)' instead.
+
+    Defense-in-depth: the prompt also tells the model not to write them,
+    but we don't trust the model to obey 100% of the time."""
+    from orchestrator.agents.m2.phases import phase2_research_state as p2
+    dirty = (
+        "Recent work (Vickery, 2023, [page?]) shows that engagement "
+        "rises sharply (Vickery, 2023, p. page?). Other studies "
+        "(Smith, 2020, [page ?]) corroborate this, and (Jones 2021, p.?) "
+        "extends the finding."
+    )
+    clean = p2._scrub_page_placeholders(dirty)
+    assert "[page?]" not in clean
+    assert "page?" not in clean
+    assert "p. ?" not in clean
+    assert "p.?" not in clean
+    # The citation itself must survive — only the bogus page marker is removed.
+    assert "(Vickery, 2023)" in clean
+    assert "(Smith, 2020)" in clean
+    assert "(Jones 2021)" in clean
+
+
+def test_synthesis_scrub_preserves_real_page_numbers():
+    """Z: 'p. 118' is a real page reference — only placeholder shapes get
+    stripped, not legitimate numeric pages from PDF-sourced citations."""
+    from orchestrator.agents.m2.phases import phase2_research_state as p2
+    real = "Vickery (2023, p. 118) argues that authenticity matters."
+    assert p2._scrub_page_placeholders(real) == real
+
+
+def test_synthesize_prompt_pushes_for_multiple_distinct_citations(monkeypatch):
+    """Z: with 10 citations available, the model only cited Vickery 4×. The
+    prompt now explicitly tells the model to weave in as many distinct
+    sources as it can. Test the prompt text reaches the LLM unchanged."""
+    from orchestrator.agents.m2.phases import phase2_research_state as p2
+    captured = {}
+    def fake_invoke(llm, prompt, **kw):
+        captured["prompt"] = prompt
+        class R: content = "draft"
+        return R()
+    monkeypatch.setattr(p2, "bounded_invoke", fake_invoke)
+    monkeypatch.setattr(p2, "_get_llm", lambda: MagicMock())
+
+    state = {
+        "research_title": "T", "research_type": "quantitative", "language": "en",
+        "research_state_citations": [
+            {"authors": f"A{i}", "year": 2020 + i, "title": f"P{i}"}
+            for i in range(10)
+        ],
+    }
+    p2._synthesize(state, refinements=[])
+    prompt = captured["prompt"]
+    # ROOT CAUSE: the previous style guide TOLD the model to write [page?] for
+    # unknown pages — so it did, four times in a row. That instruction MUST be
+    # gone. (Style guide still tells the model to be honest about pages —
+    # just to OMIT the marker, not embed a placeholder.)
+    assert "[page?]" not in prompt
+    # And the prompt must tell the model to weave many distinct sources, not
+    # cite the same one repeatedly.
+    lowered = prompt.lower()
+    assert "as many distinct" in lowered or "weave" in lowered or "spread" in lowered
+
+
 def test_phase2_blocks_with_clear_message_when_scout_empty_and_no_papers(monkeypatch):
     """B1: when scout returns [] AND no papers uploaded, phase2 must NOT
     advance to gap_analysis. It must emit a clear 'couldn't find citations'
