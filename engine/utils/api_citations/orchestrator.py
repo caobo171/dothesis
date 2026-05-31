@@ -16,7 +16,23 @@ from pydantic import ValidationError
 
 # Safe print function that handles broken pipes (worker runs with stdio: 'ignore')
 def safe_print(*args, **kwargs):
-    """Print wrapper that catches BrokenPipeError and respects verbosity settings."""
+    """Print wrapper that catches BrokenPipeError and respects verbosity settings.
+
+    Side-channel: also fans out to engine.utils.progress so a chat-router
+    listener (or any other binder) can surface the line as a structured
+    progress event without having to capture stdout. The hook is a no-op
+    when no listener is bound, so terminal-only callers see no behavior
+    change.
+    """
+    # Surface progress to any registered listener BEFORE the verbosity
+    # check — a chat-router binder still wants the events even when the
+    # engine is configured for quiet stdout.
+    try:
+        from engine.utils import progress as _progress
+        _progress._safe_print_hook(args, end=kwargs.get("end", "\n"))
+    except Exception:  # noqa: BLE001 — progress is best-effort
+        pass
+
     # In quiet mode, suppress detailed research output
     if not _verbose_research:
         return
