@@ -76,3 +76,5 @@ web/tsconfig.tsbuildinfo
 
 # LangGraph Studio (langgraph dev) local checkpoint store
 .langgraph_api/
+
+.claude/*.lock

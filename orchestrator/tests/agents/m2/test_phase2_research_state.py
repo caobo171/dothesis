@@ -18,6 +18,28 @@ def _state(mode="interactive", user_msg="continue", **overrides):
     return s
 
 
+def test_phase2_synthesize_falls_back_to_template_on_llm_timeout(monkeypatch):
+    """When the synthesize LLM call exceeds the wall-clock budget, phase2 must
+    still produce a research_state_draft (templated from citations) so M2
+    doesn't hang the graph turn."""
+    from orchestrator.agents.base import BoundedInvokeTimeout
+    from orchestrator.agents.m2.phases import phase2_research_state as p2
+
+    monkeypatch.setattr(p2, "_scout", lambda *a, **kw: [
+        {"authors": "Wang", "year": 2011, "title": "Trust"},
+        {"authors": "Bass", "year": 1985, "title": "Leadership"},
+    ])
+    # Force the bounded synthesize call to raise a timeout (simulates Gemini
+    # hanging past the wall-clock cap).
+    monkeypatch.setattr(p2, "bounded_invoke",
+                        lambda *a, **kw: (_ for _ in ()).throw(BoundedInvokeTimeout("test")))
+
+    patch = p2.run(_state())
+    draft = patch.get("research_state_draft") or ""
+    assert draft, "must produce a draft even on LLM timeout"
+    assert "Wang" in draft or "Bass" in draft, "templated fallback should cite the scout finds"
+
+
 def test_phase2_first_call_scouts_and_synthesizes(monkeypatch):
     from orchestrator.agents.m2.phases import phase2_research_state
 

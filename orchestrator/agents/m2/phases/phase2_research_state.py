@@ -8,6 +8,7 @@ from pathlib import Path
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from orchestrator.agents.base import BoundedInvokeTimeout, bounded_invoke
 from orchestrator.agents.m2.intent import classify_phase_intent
 from orchestrator.agents.m2.state import M2SubGraphState
 from orchestrator.message_utils import text_of
@@ -56,13 +57,54 @@ def _scout(topic: str, min_n: int = 20) -> list[dict]:
     return scout_citations.invoke({"topic": topic, "min_n": min_n})
 
 
-def _synthesize(state: M2SubGraphState, refinements: list[str]) -> str:
-    # Uses the module-level _get_llm() so tests can monkeypatch it
-    citations = state.get("research_state_citations", [])
-    citations_block = "\n".join(
+def _max_synth_seconds() -> int:
+    """Wall-clock cap for one synthesize call. Default 90s — generous enough
+    for Gemini's normal range but short enough that a stalled call (5+ min)
+    falls back to the template instead of hanging M2 indefinitely."""
+    return int(os.getenv("M2_SYNTHESIZE_MAX_SECONDS", "90"))
+
+
+def _citations_block(citations: list) -> str:
+    return "\n".join(
         f"- {c.get('authors', '?')} ({c.get('year', '?')}). {c.get('title', '?')}."
         for c in citations[:30]
     )
+
+
+def _templated_synthesis(state: M2SubGraphState, citations: list,
+                         refinements: list[str], reason: str = "") -> str:
+    """Deterministic fallback when the LLM synthesize times out / fails.
+
+    Always produces a usable research_state_draft so M2 can advance — the agent
+    can re-synthesize later in interactive mode if the user refines. Cites the
+    scout's actual finds so M5's chapter composition has real references.
+    """
+    title = state.get("research_title", "this topic")
+    rtype = state.get("research_type", "study")
+    bullets = _citations_block(citations) or "- (no auto-sourced citations available)"
+    refines = ("\n\nRefinements requested: " + "; ".join(refinements)) if refinements else ""
+    note = f"\n\n_Note: auto-templated synthesis — {reason}._" if reason else ""
+    return (
+        f"## Current state of research — {title}\n\n"
+        f"The current literature on \"{title}\" — examined here from a {rtype} "
+        f"perspective — draws on the following sources:\n\n"
+        f"{bullets}\n\n"
+        f"These works together establish the conceptual and empirical groundwork "
+        f"for the present study. Further synthesis (theoretical lenses, debates, "
+        f"and gaps) will be developed in subsequent iterations.{refines}{note}"
+    )
+
+
+def _synthesize(state: M2SubGraphState, refinements: list[str]) -> str:
+    """Generate the research-state writeup. Bounded LLM call + safe fallback.
+
+    Gemini's invoke() occasionally takes 5+ minutes for a single call (its
+    internal retries respect per-RPC timeouts but the wall-clock blows out),
+    which used to hang the entire M2 turn. bounded_invoke caps the wall-clock
+    and on timeout/error we fall back to a templated synthesis built from the
+    citations — M2 always advances, never hangs the graph.
+    """
+    citations = state.get("research_state_citations", [])
     refinement_block = ""
     if refinements:
         refinement_block = "User refinements:\n" + "\n".join(f"- {r}" for r in refinements)
@@ -71,10 +113,21 @@ def _synthesize(state: M2SubGraphState, refinements: list[str]) -> str:
         f"Topic: {state.get('research_title')}\n"
         f"Research type: {state.get('research_type')}\n"
         f"Language: {state.get('language')}\n\n"
-        f"Citations available:\n{citations_block}\n\n"
+        f"Citations available:\n{_citations_block(citations)}\n\n"
         f"{refinement_block}"
     )
-    return _get_llm().invoke(user_prompt).content
+    try:
+        return bounded_invoke(_get_llm(), user_prompt,
+                              max_seconds=_max_synth_seconds(), retries=0).content
+    except BoundedInvokeTimeout:
+        logger.warning("M2 phase2 synthesize hit %ss wall-clock cap; using template",
+                       _max_synth_seconds())
+        return _templated_synthesis(state, citations, refinements,
+                                    reason=f"LLM exceeded {_max_synth_seconds()}s")
+    except Exception:  # noqa: BLE001 - never let synthesize wedge M2
+        logger.exception("M2 phase2 synthesize failed; using template")
+        return _templated_synthesis(state, citations, refinements,
+                                    reason="LLM error")
 
 
 def run(state: M2SubGraphState) -> dict:

@@ -49,20 +49,24 @@ def bounded_invoke(llm, prompt, *, max_seconds: int = 60,
     """
     last_err: Exception | None = None
     for attempt in range(retries + 1):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        # NB: don't use `with executor:` — its __exit__ does shutdown(wait=True),
+        # which blocks on any leaked worker (the whole point of the timeout is
+        # to NOT wait for stuck threads). Explicit wait=False keeps the cap real.
+        ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        try:
             future = ex.submit(llm.invoke, prompt)
             try:
                 return future.result(timeout=max_seconds)
-            except concurrent.futures.TimeoutError as e:
+            except concurrent.futures.TimeoutError:
                 last_err = BoundedInvokeTimeout(
                     f"bounded_invoke exceeded {max_seconds}s (attempt {attempt+1})")
-                # Cancel best-effort; the worker thread may keep running. We
-                # don't wait for it: that's the whole point of the timeout.
                 future.cancel()
             except Exception as e:  # noqa: BLE001 - retry transient + propagate
                 last_err = e
-            if attempt < retries:
-                time.sleep(backoff_s * (2 ** attempt))
+        finally:
+            ex.shutdown(wait=False)
+        if attempt < retries:
+            time.sleep(backoff_s * (2 ** attempt))
     assert last_err is not None
     raise last_err
 
