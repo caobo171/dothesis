@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from contextlib import contextmanager
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -89,7 +90,7 @@ def _no_citations_help_message(title: str) -> str:
     )
 
 
-def _safe_scout(topic: str) -> list[dict]:
+def _safe_scout(topic: str, emitter=None) -> list[dict]:
     """Scout citations, but never let a scout failure crash the chat turn.
 
     The scout tool raises (e.g. ValueError on its citation quality-gate, or when
@@ -98,13 +99,42 @@ def _safe_scout(topic: str) -> list[dict]:
     conversation to continue — a hard crash here surfaced to the user as the M2
     turn producing no reply (i.e. "stuck"). Degrade to an empty citation list and
     let synthesis proceed; the user can refine or upload papers afterwards.
+
+    P2: when `emitter` is provided (chat router forwards one for streaming
+    requests), bind it for the duration of the scout so engine safe_print
+    lines surface as live progress events. bind_in_executor matches the
+    intent — phase2 runs in a LangGraph executor thread, not the asyncio
+    task that set the outer state's emitter.
     """
     try:
-        return _scout(topic)
+        # First progress beat — tells the user the scout is starting so the
+        # banner shows immediately, before the engine itself has anything
+        # to say. Cheap and worth it; the engine's first safe_print can be
+        # 2-3s into the call.
+        if emitter is not None:
+            try:
+                emitter({"stage": "scout.start",
+                         "message": f"🔍 Searching for citations on \"{topic}\"…"})
+            except Exception:  # noqa: BLE001 — emitter is best-effort
+                pass
+        # Lazy import — keeps engine.utils.progress out of the import path
+        # for non-streaming callers and avoids a circular when the engine
+        # package isn't installed (tests).
+        from engine.utils import progress as _progress
+        ctx = _progress.bind_in_executor(emitter) if emitter is not None else _nullctx()
+        with ctx:
+            return _scout(topic)
     except Exception:  # noqa: BLE001 - scout is best-effort; must not wedge M2
         logger.warning("M2 phase2 scout failed for %r; continuing with no "
                        "auto-sourced citations", topic, exc_info=True)
         return []
+
+
+@contextmanager
+def _nullctx():
+    """Stand-in context manager for the non-streaming path. Saves the call
+    sites from branching on `emitter is None` for the with-statement."""
+    yield
 
 
 def _get_llm():
@@ -244,7 +274,7 @@ def run(state: M2SubGraphState) -> dict:
 
     # Auto mode: scout → synthesize → advance in one shot
     if mode == "auto":
-        citations = state.get("research_state_citations") or _safe_scout(state.get("research_title", ""))
+        citations = state.get("research_state_citations") or _safe_scout(state.get("research_title", ""), emitter=state.get("_progress_emitter"))
         # B1 GATE (auto): if scout came back empty AND no uploaded papers, log
         # loud + leave research_state UNCONFIRMED so the downstream auto chain
         # doesn't silently produce a thesis full of '(Author, Year)' fakes.
@@ -278,7 +308,7 @@ def run(state: M2SubGraphState) -> dict:
 
     # First call: no draft yet — scout citations and synthesize
     if not state.get("research_state_draft"):
-        citations = _safe_scout(state.get("research_title", ""))
+        citations = _safe_scout(state.get("research_title", ""), emitter=state.get("_progress_emitter"))
         # B1 HARD GATE: if scout came back empty AND the user has not uploaded
         # papers, refuse to advance. Without this, phase3 was generating "gaps"
         # with literal placeholder strings ({"author": "Author", "year": "Year",
@@ -325,7 +355,8 @@ def run(state: M2SubGraphState) -> dict:
             return {"current_phase": intent.target_phase or "familiarize"}
         if intent.action == "refine":
             new_terms = (intent.refinement_text or last_user).strip()
-            citations = _safe_scout(new_terms)
+            citations = _safe_scout(new_terms,
+                                    emitter=state.get("_progress_emitter"))
             if citations:
                 # Recovered — clear the flag and synthesize with these citations.
                 new_state = dict(state)

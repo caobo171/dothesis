@@ -58,6 +58,12 @@ class M2SubGraphState(TypedDict, total=False):
     ch2_draft: str | None
     citation_list: list[dict]
 
+    # --- Streaming progress (optional, set by M2Agent from outer state) ---
+    # Per-request callback forwarded from the chat router; phase2 wraps its
+    # scout call with engine.utils.progress.bind() so engine safe_print lines
+    # reach the SSE stream. None / unset → engine runs as before.
+    _progress_emitter: object
+
 
 def fresh_state(
     *,

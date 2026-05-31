@@ -48,6 +48,15 @@ class M2Agent(ModuleAgent):
         with _open_db_session() as db:
             sub_state = _seed_from_outer(state, db)
 
+        # Forward the chat router's progress emitter (if any) into sub_state so
+        # phase2 can bind it around its scout call. Lets the user see engine
+        # research lines stream into the chat instead of staring at a typing
+        # dot for 30-60s. Absent in non-streaming callers (tests, sim, auto
+        # CLI) — phase2 just skips the bind and the engine runs as before.
+        emitter = state.get("_progress_emitter")
+        if emitter is not None:
+            sub_state["_progress_emitter"] = emitter
+
         if state.get("mode", "interactive") != "interactive":
             return self._auto_step(state, sub_state)
         return self._interactive_step(state, sub_state)

@@ -18,6 +18,39 @@ def _state(mode="interactive", user_msg="continue", **overrides):
     return s
 
 
+def test_phase2_emits_scout_start_progress_when_emitter_bound(monkeypatch):
+    """P2: when the chat router forwards a progress emitter via state, phase2
+    must fire at least a 'scout.start' beat the moment the scout begins, so
+    the user sees something happening in the chat instead of an empty typing
+    dot. (The engine fires its own beats during the scout proper; the start
+    beat is the floor.)"""
+    from orchestrator.agents.m2.phases import phase2_research_state as p2
+    monkeypatch.setattr(p2, "_scout", lambda *a, **kw: [
+        {"title": "P", "authors": "X", "year": 2020,
+         "source": "J", "url": None, "doi": None}])
+    monkeypatch.setattr(p2, "_get_llm", lambda: MagicMock())
+    monkeypatch.setattr(p2, "_synthesize", lambda *a, **kw: "synth")
+
+    events: list[dict] = []
+    s = _state()
+    s["_progress_emitter"] = events.append
+    p2.run(s)
+    stages = [e["stage"] for e in events]
+    assert "scout.start" in stages
+
+
+def test_phase2_no_progress_calls_when_no_emitter(monkeypatch):
+    """Sanity: non-streaming callers (tests, sim, auto-mode CLI) pass no
+    emitter — phase2 must run as before with no progress side-effects."""
+    from orchestrator.agents.m2.phases import phase2_research_state as p2
+    monkeypatch.setattr(p2, "_scout", lambda *a, **kw: [])
+    monkeypatch.setattr(p2, "_get_llm", lambda: MagicMock())
+    # _progress_emitter unset in fresh state — run() must complete normally
+    # without trying to call None or import anything fragile.
+    patch = p2.run(_state())
+    assert "research_state_draft" in patch or "_citation_search_failed" in patch
+
+
 def test_synthesis_scrubs_page_placeholder_markers(monkeypatch):
     """Z: the user saw '(Vickery, 2023, [page?])' four times in a row in M2's
     output. The LLM emits '[page?]' / 'p. page?' / '(p.?)' shapes when it

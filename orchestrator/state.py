@@ -1,7 +1,7 @@
 """Orchestrator state model — in-memory graph state + project-shared context store."""
 from __future__ import annotations
 
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 from uuid import UUID
 
 from langchain_core.messages import BaseMessage
@@ -54,6 +54,13 @@ class OrchestratorState(TypedDict, total=False):
     # of the sequential rule. Cleared once the target is reached. This is how
     # "enter at any step" drives the graph; None = normal sequential flow.
     target_artifact: str | None
+    # Per-request progress callback set by the chat router when streaming.
+    # When present, modules wrap long-running engine work (e.g. M2 phase2's
+    # citation scout) with engine.utils.progress.bind(emitter) so engine
+    # safe_print lines reach the SSE stream as live progress events. None
+    # for non-streaming callers (tests, sim, auto-mode CLI) — engine
+    # behavior is unchanged when nothing is bound.
+    _progress_emitter: Any | None  # noqa: type-checker can't see Callable
 
 
 _MODULE_TO_FIELD = {
