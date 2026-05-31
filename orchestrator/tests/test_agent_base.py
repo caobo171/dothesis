@@ -39,6 +39,42 @@ def _state(messages, partial=None, mode="interactive"):
     }
 
 
+def test_bounded_invoke_returns_value_when_fast(monkeypatch):
+    from orchestrator.agents.base import bounded_invoke
+    llm = MagicMock()
+    resp = MagicMock(); resp.content = "ok"
+    llm.invoke.return_value = resp
+    out = bounded_invoke(llm, "p", max_seconds=2)
+    assert out.content == "ok"
+
+
+def test_bounded_invoke_times_out_after_max_seconds():
+    import time as _t
+    from orchestrator.agents.base import BoundedInvokeTimeout, bounded_invoke
+    llm = MagicMock()
+    def _slow(_):
+        _t.sleep(5)
+        return MagicMock(content="late")
+    llm.invoke.side_effect = _slow
+    with pytest.raises(BoundedInvokeTimeout):
+        bounded_invoke(llm, "p", max_seconds=1, retries=0)
+
+
+def test_bounded_invoke_retries_then_succeeds(monkeypatch):
+    from orchestrator.agents.base import bounded_invoke
+    llm = MagicMock()
+    attempts = {"n": 0}
+    def _maybe(_):
+        attempts["n"] += 1
+        if attempts["n"] == 1:
+            raise RuntimeError("transient")
+        return MagicMock(content="recovered")
+    llm.invoke.side_effect = _maybe
+    out = bounded_invoke(llm, "p", max_seconds=2, retries=1, backoff_s=0.01)
+    assert out.content == "recovered"
+    assert attempts["n"] == 2
+
+
 def test_recent_dialogue_windows_last_turns_and_labels_roles():
     agent = _ToyAgent()
     msgs = [

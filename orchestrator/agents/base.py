@@ -1,9 +1,11 @@
 """ModuleAgent base — shared clarification loop for all 5 module nodes."""
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 import os
+import time
 from abc import ABC
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -18,6 +20,51 @@ from orchestrator.message_utils import text_of
 from orchestrator.state import OrchestratorState, get_module_slice
 
 logger = logging.getLogger(__name__)
+
+
+class BoundedInvokeTimeout(TimeoutError):
+    """Raised when a bounded_invoke call exceeds its wall-clock budget."""
+
+
+def bounded_invoke(llm, prompt, *, max_seconds: int = 60,
+                   retries: int = 1, backoff_s: float = 1.0):
+    """Wall-clock-bounded LLM invoke with bounded retries.
+
+    Why this exists: Gemini's client occasionally takes 5+ minutes for a single
+    invoke (its internal retries respect per-RPC timeouts but the wall-clock
+    can blow out). LangChain's `timeout=N` on ChatGoogleGenerativeAI is
+    request-level, not wall-clock — so a single agent step could hang for
+    minutes, freezing the whole graph turn. This helper enforces a hard
+    wall-clock cap via a ThreadPoolExecutor.future.result(timeout=...) and
+    retries transient errors with exponential backoff before giving up.
+
+    Trade-off note: on hard timeout the underlying worker thread is not killed
+    (Python can't), so a stuck call leaks one thread for the rest of the
+    process lifetime. For an HTTP-request-scoped graph turn this is acceptable;
+    don't loop this in a long-lived daemon without bounding total threads.
+
+    Raises BoundedInvokeTimeout on timeout, or the last exception after retries
+    are exhausted. The caller is expected to catch and degrade gracefully (e.g.
+    fall back to a templated response).
+    """
+    last_err: Exception | None = None
+    for attempt in range(retries + 1):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(llm.invoke, prompt)
+            try:
+                return future.result(timeout=max_seconds)
+            except concurrent.futures.TimeoutError as e:
+                last_err = BoundedInvokeTimeout(
+                    f"bounded_invoke exceeded {max_seconds}s (attempt {attempt+1})")
+                # Cancel best-effort; the worker thread may keep running. We
+                # don't wait for it: that's the whole point of the timeout.
+                future.cancel()
+            except Exception as e:  # noqa: BLE001 - retry transient + propagate
+                last_err = e
+            if attempt < retries:
+                time.sleep(backoff_s * (2 ** attempt))
+    assert last_err is not None
+    raise last_err
 
 
 @dataclass
