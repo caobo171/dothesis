@@ -27,6 +27,31 @@ def _regen_cap() -> int:
     return int(os.getenv("M2_REGEN_CAP", "5"))
 
 
+def _no_citations_help_message(title: str) -> str:
+    """User-facing help text when scout returns 0 citations.
+
+    Surfaces both likely cause (typos / niche topic) and recovery actions
+    (go back, upload papers, try different keywords). This message replaces
+    the silent fabrication path the user hit on 'gen Z + titok affectiveness'.
+    """
+    safe_title = title if title else "your topic"
+    return (
+        f"⚠ I couldn't find academic citations for **\"{safe_title}\"**.\n\n"
+        "Common causes:\n"
+        "  • typos in the title (e.g. \"titok\" → \"tiktok\", "
+        "\"affectiveness\" → \"effectiveness\")\n"
+        "  • the topic phrasing doesn't match how academic papers index it\n"
+        "  • the topic is genuinely too niche for our citation databases\n\n"
+        "What you can do:\n"
+        "  1. **Go back to refine the title** — say \"go back to topic\"\n"
+        "  2. **Try different search terms** — say \"try X Y Z\" "
+        "and I'll re-search\n"
+        "  3. **Upload academic papers** via the attachment button (📎)\n\n"
+        "I won't continue with empty citations — the literature review "
+        "needs real sources."
+    )
+
+
 def _safe_scout(topic: str) -> list[dict]:
     """Scout citations, but never let a scout failure crash the chat turn.
 
@@ -136,6 +161,21 @@ def run(state: M2SubGraphState) -> dict:
     # Auto mode: scout → synthesize → advance in one shot
     if mode == "auto":
         citations = state.get("research_state_citations") or _safe_scout(state.get("research_title", ""))
+        # B1 GATE (auto): if scout came back empty AND no uploaded papers, log
+        # loud + leave research_state UNCONFIRMED so the downstream auto chain
+        # doesn't silently produce a thesis full of '(Author, Year)' fakes.
+        # The autodraft run will halt here — the caller surfaces this status.
+        if not citations and not state.get("paper_uris"):
+            msg = _no_citations_help_message(state.get("research_title", ""))
+            logger.warning("M2 phase2 [auto]: scout returned 0 citations and no "
+                           "papers uploaded — halting before gap_analysis")
+            return {
+                "research_state_citations": [],
+                "research_state_draft": msg,
+                "_citation_search_failed": True,
+                "research_state_confirmed": False,
+                # NOTE: NOT advancing current_phase — auto run stops here.
+            }
         new_state = dict(state)
         new_state["research_state_citations"] = citations
         draft = _synthesize(new_state, refinements=[])
@@ -155,6 +195,21 @@ def run(state: M2SubGraphState) -> dict:
     # First call: no draft yet — scout citations and synthesize
     if not state.get("research_state_draft"):
         citations = _safe_scout(state.get("research_title", ""))
+        # B1 HARD GATE: if scout came back empty AND the user has not uploaded
+        # papers, refuse to advance. Without this, phase3 was generating "gaps"
+        # with literal placeholder strings ({"author": "Author", "year": "Year",
+        # "page": "page?"}) because the LLM had no real citations to cite and
+        # the prompt asked it to cite anyway. Fail loudly here so the user can
+        # refine the title or upload papers — never silently fabricate.
+        if not citations and not state.get("paper_uris"):
+            msg = _no_citations_help_message(state.get("research_title", ""))
+            return {
+                "research_state_citations": [],
+                "research_state_draft": msg,
+                "_citation_search_failed": True,
+                "research_state_confirmed": False,
+                "messages": [AIMessage(content=msg)],
+            }
         new_state = dict(state)
         new_state["research_state_citations"] = citations
         draft = _synthesize(new_state, refinements=state.get("research_state_refinements", []))
@@ -171,6 +226,43 @@ def run(state: M2SubGraphState) -> dict:
         current_phase=_PHASE_KEY,
         mode="interactive",
     )
+
+    # B1 RECOVERY: if the prior scout failed, the only useful actions are
+    # navigate (back to M1 to fix the title) or refine-with-new-search-terms
+    # (re-runs scout with whatever the user typed). Block confirm — the user
+    # must not be able to lock in an empty research state.
+    if state.get("_citation_search_failed"):
+        if intent.action == "navigate":
+            return {"current_phase": intent.target_phase or "familiarize"}
+        if intent.action == "refine":
+            new_terms = (intent.refinement_text or last_user).strip()
+            citations = _safe_scout(new_terms)
+            if citations:
+                # Recovered — clear the flag and synthesize with these citations.
+                new_state = dict(state)
+                new_state["research_state_citations"] = citations
+                draft = _synthesize(new_state, refinements=[])
+                return {
+                    "research_state_citations": citations,
+                    "research_state_draft": draft,
+                    "_citation_search_failed": False,
+                    "research_state_confirmed": False,
+                    "messages": [AIMessage(content=draft)],
+                }
+            return {
+                "messages": [AIMessage(content=(
+                    f"Still no citations for \"{new_terms[:80]}\". "
+                    "Try different keywords, or upload papers."
+                ))],
+            }
+        # confirm / select / other → re-emit the help message; don't advance.
+        return {
+            "messages": [AIMessage(content=(
+                "I still don't have any citations to work with. Please "
+                "go back to refine the title, give me new search terms, "
+                "or upload papers — I won't advance with empty sources."
+            ))],
+        }
 
     if intent.action == "navigate":
         # Navigate back to a prior phase
