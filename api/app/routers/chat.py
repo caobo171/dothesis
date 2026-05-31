@@ -433,12 +433,34 @@ async def send_message(thread_id: uuid.UUID,
 
     async def gen():
         nonlocal final_module_tag, final_tool_calls
+        import asyncio as _asyncio
         import logging
         log = logging.getLogger(__name__)
+
+        # P3: shared queue multiplexes graph events + engine progress so SSE
+        # ordering reflects real-time chronology (a progress beat emitted
+        # mid-scout reaches the user BEFORE the scout's final node update,
+        # even though astream blocks until the node returns).
+        events_q: _asyncio.Queue = _asyncio.Queue()
+        loop = _asyncio.get_running_loop()
+
+        def progress_emitter(payload: dict) -> None:
+            """Called by engine code via engine.utils.progress; runs on the
+            LangGraph executor thread, NOT the asyncio loop. Bridge back to
+            the loop via call_soon_threadsafe so the queue stays consistent."""
+            try:
+                loop.call_soon_threadsafe(
+                    events_q.put_nowait, ("progress", payload))
+            except Exception:  # noqa: BLE001
+                pass
+
         try:
             graph_input: dict = {
                 "messages": [HumanMessage(content=body.text)],
                 "mode": "interactive",
+                # Forward the per-request progress emitter into graph state.
+                # M2Agent reads it and passes through to phase2's scout.
+                "_progress_emitter": progress_emitter,
             }
             if is_first_turn:
                 graph_input["context_store"] = initial_context_store
@@ -449,11 +471,30 @@ async def send_message(thread_id: uuid.UUID,
                 # the supervisor clears it once the target is reached.
                 if t.target_artifact:
                     graph_input["target_artifact"] = t.target_artifact
-            async for event in graph.astream(
-                graph_input,
-                config=config,
-                stream_mode="updates",
-            ):
+
+            async def _pump_graph():
+                """Drain graph.astream into the shared queue. A sentinel
+                marks completion so the consumer below can exit cleanly."""
+                try:
+                    async for ev in graph.astream(
+                        graph_input, config=config, stream_mode="updates",
+                    ):
+                        await events_q.put(("graph", ev))
+                finally:
+                    await events_q.put(("done", None))
+
+            pump_task = _asyncio.create_task(_pump_graph())
+
+            while True:
+                kind, item = await events_q.get()
+                if kind == "done":
+                    break
+                if kind == "progress":
+                    # Live engine progress (e.g. M2 scout): forward verbatim.
+                    yield sse_pack({"type": "progress", "payload": item})
+                    continue
+                # kind == "graph" — original node-update handling.
+                event = item
                 for node_name, payload in event.items():
                     # LangGraph v1 emits non-dict payloads for special signals like
                     # __interrupt__ (a tuple of Interrupt objects) when the graph is
@@ -483,6 +524,8 @@ async def send_message(thread_id: uuid.UUID,
                         if tc:
                             final_tool_calls = tc
                             yield sse_pack({"type": "tool_calls", "payload": tc})
+            # Re-raise any exception the pump task captured.
+            await pump_task
         except Exception as e:
             # Surface graph failures to the client instead of silently closing the
             # stream. Without this the browser sees an empty SSE response and the

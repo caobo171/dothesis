@@ -38,6 +38,21 @@ def _async_iter(items):
     return _it()
 
 
+# aget_state is awaited in the router; default MagicMock returns a non-
+# awaitable, breaking the call. Each test that fakes the graph uses this
+# helper to stub aget_state with a coroutine returning an empty-state
+# object (so the router treats it as the first turn).
+class _NullState:
+    values = None
+
+
+def _attach_aget_state_stub(fake_graph):
+    async def _aget_state(_config):
+        return _NullState()
+    fake_graph.aget_state = _aget_state
+    return fake_graph
+
+
 def test_stream_emits_tool_calls_event_and_persists(client, monkeypatch):
     pid, tid = _setup(client)
 
@@ -50,7 +65,7 @@ def test_stream_emits_tool_calls_event_and_persists(client, monkeypatch):
         "title": "Pick", "options": [], "columns": 3,
     }
 
-    fake_graph = MagicMock()
+    fake_graph = _attach_aget_state_stub(MagicMock())
     fake_graph.astream.return_value = _async_iter([
         {"M1": {"messages": [ai]}},
     ])
@@ -76,6 +91,49 @@ def test_stream_emits_tool_calls_event_and_persists(client, monkeypatch):
         assert assistants[-1].tool_calls_json is not None
         assert assistants[-1].tool_calls_json["widget_type"] == "card_grid"
         assert assistants[-1].tool_calls_json["field_name"] == "field"
+
+
+def test_stream_forwards_engine_progress_events(client, monkeypatch):
+    """P3: when M2 phase2 binds the chat router's emitter, every safe_print
+    line fires as a structured progress event. The chat router must
+    multiplex those alongside the graph node updates and surface them as
+    SSE `type: progress` lines so the frontend can show a live banner
+    instead of a 30-60s typing dot."""
+    pid, tid = _setup(client)
+    from langchain_core.messages import AIMessage
+
+    async def fake_astream(graph_input, config=None, stream_mode=None):
+        # Simulate the engine emitting two progress lines BEFORE the node's
+        # final message returns. The chat router should forward these
+        # progress events to the SSE stream.
+        emitter = graph_input.get("_progress_emitter")
+        assert emitter is not None, "chat router must forward emitter"
+        emitter({"stage": "scout.start",
+                 "message": "🔍 Searching for citations on \"Gen Z\"…"})
+        emitter({"stage": "scout.api_chain",
+                 "message": "🔀 API chain: gemini_grounded → crossref"})
+        # Tiny yield so the loop has a chance to schedule the queued events
+        # before the final node update lands in the same queue.
+        import asyncio as _aio
+        await _aio.sleep(0)
+        yield {"M2": {"messages": [AIMessage(content="Synthesis ready.")]}}
+
+    fake_graph = _attach_aget_state_stub(MagicMock())
+    fake_graph.astream = fake_astream
+    monkeypatch.setattr(
+        "orchestrator.graph.get_interactive_graph", lambda: fake_graph)
+
+    resp = client.post(
+        f"/api/v1/threads/{tid}/messages",
+        json={"text": "do citations"},
+    )
+    assert resp.status_code == 200
+    body = resp.text
+    # Both progress events surface; the final token still goes through.
+    assert '"type": "progress"' in body or '"type":"progress"' in body
+    assert "Searching for citations" in body
+    assert "API chain" in body
+    assert "Synthesis ready" in body
 
 
 def test_list_messages_returns_tool_calls_json(client, monkeypatch):
@@ -125,7 +183,7 @@ def test_stream_emits_list_editor_tool_calls_event(client, monkeypatch):
         "confirm_label": "Confirm", "reset_label": "Reset to suggested",
     }
 
-    fake_graph = MagicMock()
+    fake_graph = _attach_aget_state_stub(MagicMock())
     fake_graph.astream.return_value = _async_iter([
         {"M3": {"messages": [ai]}},
     ])
@@ -168,7 +226,7 @@ def test_stream_emits_analysis_outline_tool_calls_event(client, monkeypatch):
         "confirm_label": "Confirm", "reset_label": "Reset to suggested",
     }
 
-    fake_graph = MagicMock()
+    fake_graph = _attach_aget_state_stub(MagicMock())
     fake_graph.astream.return_value = _async_iter([
         {"M4": {"messages": [ai]}},
     ])
