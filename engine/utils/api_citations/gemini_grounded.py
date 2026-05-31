@@ -209,7 +209,11 @@ class GeminiGroundedClient(BaseAPIClient):
             load_dotenv()
 
         super().__init__(
-            api_key=api_key or os.getenv('GOOGLE_API_KEY'),
+            # Accept either env name — projects that adopt google-genai later
+            # use GEMINI_API_KEY by convention (e.g. our .env). Same fallback
+            # pattern as engine/config.py:124.
+            api_key=(api_key or os.getenv('GOOGLE_API_KEY')
+                     or os.getenv('GEMINI_API_KEY')),
             base_url='https://generativelanguage.googleapis.com/v1beta/models',
             timeout=timeout,
             max_retries=max_retries
@@ -222,7 +226,8 @@ class GeminiGroundedClient(BaseAPIClient):
 
         if not self.api_key:
             raise ValueError(
-                "GOOGLE_API_KEY not found. Set via environment variable or constructor."
+                "GOOGLE_API_KEY (or GEMINI_API_KEY) not found. "
+                "Set via environment variable or constructor."
             )
 
         # Use Gemini 2.5 Flash for fast grounding with two-step approach

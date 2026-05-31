@@ -107,10 +107,13 @@ class DeepResearchPlanner:
                     "Run: pip install google-genai>=1.0.0"
                 )
 
-            api_key = api_key or os.getenv('GOOGLE_API_KEY')
+            # Accept either env name (same fallback as engine/config.py:124).
+            api_key = (api_key or os.getenv('GOOGLE_API_KEY')
+                       or os.getenv('GEMINI_API_KEY'))
             if not api_key:
                 raise ValueError(
-                    "GOOGLE_API_KEY not found. Set via environment variable or constructor."
+                    "GOOGLE_API_KEY (or GEMINI_API_KEY) not found. "
+                    "Set via environment variable or constructor."
                 )
 
             client = genai.Client(api_key=api_key)
