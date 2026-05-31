@@ -794,11 +794,63 @@ class ModuleAgent(ABC):
         }
 
     def _summarize_for_confirm(self, partial: dict) -> str:
-        """Build a human-readable bullet list of filled fields for the confirm prompt."""
-        return "\n".join(
-            f"- **{k}**: {json.dumps(v, default=str, ensure_ascii=False)[:200]}"
-            for k, v in partial.items() if not k.startswith("_")
-        )
+        """Build a human-readable bullet list of filled fields for the confirm
+        prompt.
+
+        Y: the previous implementation slammed `json.dumps(v)[:200]` on every
+        value — strings got JSON quotes ("Identi" survived from a slice of a
+        nested list), and lists got JSON brackets + commas that ate the
+        budget so the second item truncated mid-word ("What are t"). Per-type
+        rendering instead: strings plain, lists as their own bullets, dicts
+        as key:value lines, and only very long strings get a word-boundary
+        ellipsis. The user sees an actual readable summary.
+        """
+        lines: list[str] = []
+        for k, v in partial.items():
+            if k.startswith("_"):
+                continue
+            lines.append(f"- **{k}**: {self._format_summary_value(v)}")
+        return "\n".join(lines)
+
+    _SUMMARY_VALUE_MAX = 400  # generous: most M1 fields are 1-3 sentences
+
+    def _format_summary_value(self, v) -> str:
+        if isinstance(v, str):
+            return self._truncate_on_word_boundary(v, self._SUMMARY_VALUE_MAX)
+        if isinstance(v, list):
+            if not v:
+                return "(none)"
+            if all(isinstance(item, str) for item in v):
+                bullets = "\n".join(
+                    f"  - {self._truncate_on_word_boundary(s, self._SUMMARY_VALUE_MAX)}"
+                    for s in v
+                )
+                return "\n" + bullets
+            # List of dicts (e.g. supporting_papers): render compact one-line each.
+            bullets = "\n".join(
+                f"  - {self._format_summary_value(item)}" for item in v
+            )
+            return "\n" + bullets
+        if isinstance(v, dict):
+            inner = ", ".join(
+                f"{ik}: {self._format_summary_value(iv)}" for ik, iv in v.items()
+            )
+            return inner
+        # Numbers, bools, dates — plain str() never truncates.
+        return str(v)
+
+    @staticmethod
+    def _truncate_on_word_boundary(s: str, max_len: int) -> str:
+        """Cut at the last whitespace before max_len and append … so the
+        rendered text never ends mid-word. Falls back to a hard cut only if
+        the entire string is one word longer than max_len (unlikely for
+        natural-language M1 fields)."""
+        if len(s) <= max_len:
+            return s
+        cut = s.rfind(" ", 0, max_len)
+        if cut == -1:
+            cut = max_len
+        return s[:cut].rstrip() + "…"
 
     def _required_field_names(self) -> list[str]:
         """Return schema field names that are required, excluding confirmed_at (has a default)."""
