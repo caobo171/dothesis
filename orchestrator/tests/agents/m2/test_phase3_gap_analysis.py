@@ -27,6 +27,56 @@ def _state(mode="interactive", user_msg="start"):
     return s
 
 
+def test_phase3_refuses_to_generate_gaps_without_citations(monkeypatch):
+    """B2: when research_state_citations is empty, phase3 must NOT call the
+    LLM to generate gaps — without source data the LLM fabricates placeholder
+    strings ({'author':'Author','year':'Year'}) which we surface to users as
+    'Citation: Author (Year) page page?'. Refuse cleanly instead."""
+    from orchestrator.agents.m2.phases import phase3_gap_analysis as p3
+    fake_llm = MagicMock()
+    monkeypatch.setattr(p3, "_get_llm", lambda: fake_llm)
+
+    s = _state()
+    s["research_state_citations"] = []  # no citations available
+    patch = p3.run(s)
+
+    fake_llm.invoke.assert_not_called()  # never reached
+    assert patch.get("candidate_gaps") == []
+    # User-visible note that explains why
+    msg = (patch.get("messages") or [MagicMock(content="")])[0].content.lower()
+    assert "citation" in msg or "source" in msg
+
+
+def test_phase3_filters_placeholder_supporting_papers(monkeypatch):
+    """B2 defense-in-depth: even if the LLM is called with real citations and
+    still returns placeholder supporting_papers (literal 'Author'/'X'/'Year'),
+    we filter them out so they never reach the user."""
+    from orchestrator.agents.m2.phases import phase3_gap_analysis as p3
+    fake_llm = MagicMock()
+    # The LLM produces a real description but FAKE supporting_papers.
+    fake_llm.invoke.return_value.content = (
+        '[{"id":"1","description":"Real gap",'
+        '"relevance":"High",'
+        '"supporting_papers":[{"author":"Author","year":"Year","page":"page?"},'
+        '                     {"author":"X","year":2020,"page":12},'
+        '                     {"author":"Wang","year":2011,"page":118}]}]'
+    )
+    monkeypatch.setattr(p3, "_get_llm", lambda: fake_llm)
+
+    s = _state()
+    s["research_state_citations"] = [{"title": "P1", "authors": "Wang", "year": 2011}]
+    patch = p3.run(s)
+
+    gaps = patch["candidate_gaps"]
+    assert len(gaps) == 1
+    papers = gaps[0]["supporting_papers"]
+    # Placeholders filtered; the real one (Wang 2011) survives.
+    authors = {p.get("author") for p in papers}
+    assert "Author" not in authors  # literal placeholder
+    assert "X" not in authors  # generic schema example
+    assert "Wang" in authors
+
+
 def test_phase3_first_call_proposes_gaps(monkeypatch):
     from orchestrator.agents.m2.phases import phase3_gap_analysis
     fake_llm = MagicMock()

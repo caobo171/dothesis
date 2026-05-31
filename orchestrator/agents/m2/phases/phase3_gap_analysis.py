@@ -40,7 +40,53 @@ def _strip_fence(s: str) -> str:
     return s.strip()
 
 
+# Author/year values the LLM produces when it has no real citations.
+# Includes the placeholder strings we saw in the wild ('Author', 'Year', 'page?')
+# and the generic schema-example values from the prompt ('X', 'Y', '...').
+_PLACEHOLDER_AUTHOR_TOKENS = {
+    "author", "x", "y", "z", "...", "…", "n/a", "na",
+    "name", "first", "last", "lastname", "firstname",
+}
+_PLACEHOLDER_YEAR_TOKENS = {"year", "...", "…", "n/a", "na", ""}
+
+
+def _is_real_paper(paper: dict) -> bool:
+    """Heuristic guard against the literal-placeholder strings the LLM emits
+    when it has no real citations to use. Drops papers with author values like
+    'Author', 'X' or year values like 'Year' / 'page?' / non-int strings.
+
+    Conservative: only drops obvious placeholders; real edge cases (e.g.
+    one-word author 'Smith') survive.
+    """
+    if not isinstance(paper, dict):
+        return False
+    author = str(paper.get("author", "")).strip().lower()
+    if not author or author in _PLACEHOLDER_AUTHOR_TOKENS:
+        return False
+    year = paper.get("year")
+    if isinstance(year, str):
+        if year.strip().lower() in _PLACEHOLDER_YEAR_TOKENS:
+            return False
+        try:
+            year = int(year)
+        except ValueError:
+            return False
+    if isinstance(year, int):
+        if year < 1800 or year > 2100:
+            return False
+    elif year is not None:
+        return False
+    return True
+
+
 def _generate_gaps(state: M2SubGraphState, refinements: list[str]) -> list[dict]:
+    # B2 HARD GUARD: never call the LLM if there are no real citations. Without
+    # sources the LLM fabricates placeholder strings ({"author":"Author"}) which
+    # then make their way through phase4 verification as "Citation: Author
+    # (Year) page page?". Refuse instead.
+    if not state.get("research_state_citations"):
+        return []
+
     refinement_block = ""
     if refinements:
         refinement_block = "\nUser constraints:\n" + "\n".join(f"- {r}" for r in refinements)
@@ -52,11 +98,20 @@ def _generate_gaps(state: M2SubGraphState, refinements: list[str]) -> list[dict]
     resp = _get_llm().invoke(user_prompt).content
     try:
         gaps = json.loads(_strip_fence(resp))
-        if isinstance(gaps, list):
-            return [dict(g) for g in gaps]
+        if not isinstance(gaps, list):
+            return []
     except (json.JSONDecodeError, TypeError):
-        pass
-    return []
+        return []
+
+    # B2 defense-in-depth: filter placeholder supporting_papers even if the
+    # LLM was given citations. Some models still slip placeholder JSON in.
+    cleaned: list[dict] = []
+    for g in gaps:
+        gd = dict(g)
+        papers = gd.get("supporting_papers", []) or []
+        gd["supporting_papers"] = [p for p in papers if _is_real_paper(p)]
+        cleaned.append(gd)
+    return cleaned
 
 
 def run(state: M2SubGraphState) -> dict:
@@ -74,6 +129,20 @@ def run(state: M2SubGraphState) -> dict:
     # First call: no gaps proposed yet
     if not state.get("candidate_gaps"):
         gaps = _generate_gaps(state, refinements=state.get("gap_refinements", []))
+        if not gaps:
+            # B2 user-visible message: don't show "Here are the gaps:" with an
+            # empty list. Either there were no citations (phase2 gate should
+            # have caught this, but defense-in-depth) or the LLM returned
+            # nothing usable. Either way, the user needs a clear explanation.
+            text = (
+                "I can't propose research gaps without real citations. "
+                "Please go back to the literature step (say 'go back') and "
+                "give me different search terms, or upload papers."
+            )
+            return {
+                "candidate_gaps": [],
+                "messages": [AIMessage(content=text)],
+            }
         text = "Here are the gaps I found:\n" + "\n".join(
             f"  {g.get('id', i+1)}. {g.get('description', '?')} ({g.get('relevance', 'Medium')})"
             for i, g in enumerate(gaps)
