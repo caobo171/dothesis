@@ -36,9 +36,13 @@ class PhaseIntent(BaseModel):
 
 
 def _intent_llm():
+    # timeout matches base.py:_get_llm; without it, a stalled Gemini call here
+    # could block every M2 interactive turn. See the L1/L2 fixes for the
+    # supervisor + base.py hot-path equivalents.
     return ChatGoogleGenerativeAI(
         model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
         temperature=0.0,
+        timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
     )
 
 
@@ -103,8 +107,16 @@ def classify_phase_intent(
         f"For 'refine', set refinement_text to the user's message."
     )
     try:
+        from orchestrator.agents.base import bounded_invoke
         llm = _intent_llm().with_structured_output(PhaseIntent)
-        intent = llm.invoke(prompt)
+        # Wall-clock-bounded: a stalled Gemini call here would block every M2
+        # interactive turn. The existing except-block degrades to refine on
+        # any failure including BoundedInvokeTimeout, so M2 never hangs.
+        intent = bounded_invoke(
+            llm, prompt,
+            max_seconds=int(os.getenv("ORCHESTRATOR_LLM_MAX_SECONDS", "25")),
+            retries=0,
+        )
         # Backfill structured data from regex when the LLM didn't extract it.
         if intent.action == "select" and not intent.selected_ids and selected_ids:
             intent.selected_ids = selected_ids
