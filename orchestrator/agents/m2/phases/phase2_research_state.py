@@ -12,8 +12,44 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from orchestrator.agents.base import BoundedInvokeTimeout, bounded_invoke
 from orchestrator.agents.m2.intent import classify_phase_intent
 from orchestrator.agents.m2.state import M2SubGraphState
+from orchestrator.agents.widgets import CardGridHint, CardOption
 from orchestrator.message_utils import text_of
 from orchestrator.tools.m2_literature import scout_citations
+
+
+def _confirm_hint() -> dict:
+    """Card grid attached to every synthesis draft (first call AND post-refine).
+
+    W3: 'just type confirm or describe the change' was the hardest UX step in
+    M2 — most users stalled at the draft because they couldn't quickly
+    distinguish 'accept' from 'tweak'. Cards spell it out and route 'Other'
+    through the text input for free-form refinement.
+    """
+    return CardGridHint(
+        widget_type="card_grid",
+        field_name="research_state_confirm",
+        title="What next?",
+        options=[
+            CardOption(
+                value="confirm",
+                label="Confirm — this synthesis works",
+                description="Lock it in and move on to research gaps.",
+            ),
+            CardOption(
+                value="Other",
+                label="Refine — let me describe the change",
+                description=("Tell me what to add, drop, or re-focus and I'll "
+                             "rewrite the synthesis."),
+            ),
+            CardOption(
+                value="navigate",
+                label="Go back to literature search",
+                description=("Re-run citation discovery with different terms "
+                             "before drafting again."),
+            ),
+        ],
+        columns=3,
+    ).model_dump()
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent.parent.parent / "prompts" / "m2"
 _PROMPT = (_PROMPT_DIR / "2_research_state.md").read_text()
@@ -261,11 +297,16 @@ def run(state: M2SubGraphState) -> dict:
         new_state = dict(state)
         new_state["research_state_citations"] = citations
         draft = _synthesize(new_state, refinements=state.get("research_state_refinements", []))
+        # W3: every synthesis draft ships with the confirm/refine/navigate card
+        # grid so the user clicks instead of typing.
+        hint = _confirm_hint()
+        ai = AIMessage(content=draft, additional_kwargs={"tool_calls_json": hint})
         return {
             "research_state_citations": citations,
             "research_state_draft": draft,
             "research_state_confirmed": False,
-            "messages": [AIMessage(content=draft)],
+            "messages": [ai],
+            "tool_calls_json": hint,
         }
 
     # Draft exists: classify what the user wants to do with it
@@ -290,12 +331,18 @@ def run(state: M2SubGraphState) -> dict:
                 new_state = dict(state)
                 new_state["research_state_citations"] = citations
                 draft = _synthesize(new_state, refinements=[])
+                # W3: recovery path also gets the confirm card grid — same UX
+                # whether this is the first draft or the comeback after retry.
+                hint = _confirm_hint()
+                ai = AIMessage(content=draft,
+                               additional_kwargs={"tool_calls_json": hint})
                 return {
                     "research_state_citations": citations,
                     "research_state_draft": draft,
                     "_citation_search_failed": False,
                     "research_state_confirmed": False,
-                    "messages": [AIMessage(content=draft)],
+                    "messages": [ai],
+                    "tool_calls_json": hint,
                 }
             return {
                 "messages": [AIMessage(content=(
@@ -342,11 +389,14 @@ def run(state: M2SubGraphState) -> dict:
         new_state["research_state_refinements"] = refinements
         # Reuse cached citations — no re-scout on refine
         draft = _synthesize(new_state, refinements=refinements)
+        hint = _confirm_hint()  # W3: same cards on the refined draft
+        ai = AIMessage(content=draft, additional_kwargs={"tool_calls_json": hint})
         return {
             "research_state_refinements": refinements,
             "regeneration_count": counts,
             "research_state_draft": draft,
-            "messages": [AIMessage(content=draft)],
+            "messages": [ai],
+            "tool_calls_json": hint,
         }
 
     # Ambiguous input — ask for clarification

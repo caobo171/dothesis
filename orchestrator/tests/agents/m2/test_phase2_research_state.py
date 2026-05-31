@@ -188,6 +188,58 @@ def test_phase2_synthesize_falls_back_to_template_on_llm_timeout(monkeypatch):
     assert "Wang" in draft or "Bass" in draft, "templated fallback should cite the scout finds"
 
 
+def test_phase2_first_call_emits_confirm_refine_navigate_card_grid(monkeypatch):
+    """W3: after the synthesis draft, the user must get cards to decide what
+    to do — typing 'confirm' vs free-form refinement is the most-skipped step
+    today. Cards: Confirm / Refine (Other input) / Go back to literature."""
+    from orchestrator.agents.m2.phases import phase2_research_state as p2
+    monkeypatch.setattr(p2, "_scout", lambda *a, **kw: [
+        {"title": "P", "authors": "Bass", "year": 1985,
+         "source": "J", "url": None, "doi": None}])
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "Synthesis."
+    monkeypatch.setattr(p2, "_get_llm", lambda: fake_llm)
+
+    patch = p2.run(_state())
+    hint = patch.get("tool_calls_json")
+    assert hint is not None, "phase2 first-call should emit a confirm widget"
+    assert hint["widget_type"] == "card_grid"
+    assert hint["field_name"] == "research_state_confirm"
+    values = {o["value"] for o in hint["options"]}
+    # confirm + Other (refine via text input) + navigate-back
+    assert "confirm" in values
+    assert "Other" in values        # opens text input for refinement
+    assert "navigate" in values
+    # And the hint must be attached to the AIMessage so it surfaces to the UI.
+    assert patch["messages"][0].additional_kwargs.get("tool_calls_json") == hint
+
+
+def test_phase2_refined_draft_also_carries_confirm_card_grid(monkeypatch):
+    """W3: after a refine pass the redrawn synthesis must come with the same
+    card grid — otherwise the user can confirm the FIRST draft via cards but
+    is forced into text for the SECOND. Inconsistent UX."""
+    from orchestrator.agents.m2.phases import phase2_research_state as p2
+    monkeypatch.setattr(p2, "_scout", lambda *a, **kw: [])
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "Refined."
+    monkeypatch.setattr(p2, "_get_llm", lambda: fake_llm)
+    # Stub the intent so the refine path runs.
+    from orchestrator.agents.m2 import intent as m2_intent
+    fake = MagicMock()
+    fake.with_structured_output.return_value.invoke.return_value = (
+        m2_intent.PhaseIntent(action="refine", refinement_text="focus on X"))
+    monkeypatch.setattr(m2_intent, "_intent_llm", lambda: fake)
+
+    s = _state(user_msg="focus on X please")
+    s["research_state_draft"] = "old"
+    s["research_state_citations"] = [
+        {"title": "P", "authors": "A", "year": 2020}]
+    patch = p2.run(s)
+    hint = patch.get("tool_calls_json")
+    assert hint is not None
+    assert hint["field_name"] == "research_state_confirm"
+
+
 def test_phase2_first_call_scouts_and_synthesizes(monkeypatch):
     from orchestrator.agents.m2.phases import phase2_research_state
 

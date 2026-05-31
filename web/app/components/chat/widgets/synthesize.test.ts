@@ -47,6 +47,29 @@ describe("synthesizeWidgetSelection", () => {
     )).toBe("Please use AI search to find citations for me.");
   });
 
+  test("research_state_confirm: confirm value maps to a clear yes phrase", () => {
+    expect(synthesizeWidgetSelection(
+      "research_state_confirm", "confirm", "Confirm — this synthesis works",
+    )).toBe("Yes, this synthesis works — let's continue.");
+  });
+
+  test("research_state_confirm: navigate value sends a go-back sentence", () => {
+    expect(synthesizeWidgetSelection(
+      "research_state_confirm", "navigate", "Go back to literature search",
+    )).toBe("Go back to the literature search step.");
+  });
+
+  test("research_state_confirm: free-text from Other becomes a Refine sentence", () => {
+    // After typing in the Other input the widget calls onSelect with the
+    // typed text as both value and label. The synthesizer must route that
+    // into the 'refine' intent — not be mistaken for the preset 'confirm'.
+    expect(synthesizeWidgetSelection(
+      "research_state_confirm",
+      "focus on Self-Determination Theory",
+      "focus on Self-Determination Theory",
+    )).toBe("Refine the synthesis: focus on Self-Determination Theory.");
+  });
+
   test("familiarize_choice: use_papers confirms uploaded sources", () => {
     expect(synthesizeWidgetSelection(
       "familiarize_choice", "use_papers", "Use my 2 uploaded papers",

@@ -34,6 +34,22 @@ export function synthesizeWidgetSelection(
     return `I'll use ${phrase}.`;
   }
 
+  // W3: M2 phase2 confirm/refine/navigate. Preset values get mapped to the
+  // intent classifier's confirm/navigate actions; any other (free-text) value
+  // came from the Other text input and must route to refine.
+  if (fieldName === "research_state_confirm") {
+    switch (value) {
+      case "confirm":
+        return "Yes, this synthesis works — let's continue.";
+      case "navigate":
+        return "Go back to the literature search step.";
+      default:
+        // Free-form refinement from the Other input — keep the typed text
+        // verbatim so the LLM can act on it.
+        return `Refine the synthesis: ${value}.`;
+    }
+  }
+
   // W1: M2 phase1 fork — map the card value to a sentence the phase intent
   // classifier maps to confirm (use_papers) or skip (ai_search, upload_first).
   // The phase1 prompt explicitly mentions these phrasings.
