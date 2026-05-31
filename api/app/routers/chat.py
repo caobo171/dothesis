@@ -176,6 +176,39 @@ def get_artifacts(project_id: uuid.UUID,
     return readiness(_orch_context_store(db, project_id))
 
 
+@router.get("/projects/{project_id}/impact/{artifact}")
+def get_impact(project_id: uuid.UUID, artifact: str,
+               user: User = Depends(current_user),
+               db: Session = Depends(db_session)) -> dict[str, list[str]]:
+    """Blast radius of editing `artifact`: which downstream slices depend on
+    it (full closure) and which DONE ones may need a re-review (stale).
+
+    Powers the 'editing this step invalidates these later steps' UX. Backed
+    by orchestrator.artifacts.{dependents_closure, stale_after_change} —
+    the API is just authn + serialization on top of the existing DAG.
+    422 for unknown artifact keys keeps the error shape consistent with
+    /reconstruct/{artifact}.
+    """
+    _owned_project(db, user, project_id)
+    from orchestrator.artifacts import (
+        _ARTIFACT_BY_KEY, dependents_closure, stale_after_change,
+    )
+    if artifact not in _ARTIFACT_BY_KEY:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422,
+                            detail=f"unknown artifact: {artifact}")
+    cs = _orch_context_store(db, project_id)
+    # Sort both lists by the DAG order baked into ARTIFACTS so the frontend
+    # gets a stable, top-down sequence — easier to reason about than a set.
+    from orchestrator.artifacts import ARTIFACTS
+    closure = dependents_closure(artifact)
+    ordered_deps = [a.key for a in ARTIFACTS if a.key in closure]
+    return {
+        "dependents": ordered_deps,
+        "stale": stale_after_change(cs, artifact),
+    }
+
+
 @router.post("/projects/{project_id}/import")
 def import_work(project_id: uuid.UUID, body: ImportBody,
                 user: User = Depends(current_user),
