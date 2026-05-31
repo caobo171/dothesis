@@ -215,7 +215,14 @@ class ModuleAgent(ABC):
             return None
         options = self._generate_card_options(field_name, partial or {})
         if not options:
-            return None
+            # Reported bug: M1 said 'Pick one of the cards below, or type your
+            # own' but no cards rendered because the dynamic LLM call had
+            # failed/timed out. Static fallback for literal-bounded fields
+            # guarantees something always renders; if the subclass doesn't
+            # define one for this field we still return None.
+            options = self._static_card_options(field_name, partial or {})
+            if not options:
+                return None
         title = self.card_field_titles.get(
             field_name,
             f"Which {field_name.replace('_', ' ')} fits best?",
@@ -270,6 +277,16 @@ class ModuleAgent(ABC):
                 "%s list-item suggestion failed for %s",
                 self.module_key, field_name,
             )
+        return []
+
+    def _static_card_options(self, field_name: str, partial: dict) -> list[CardOption]:
+        """Deterministic fallback options used when the LLM card generator
+        fails (timeout / non-JSON output / no schema-valid entries).
+
+        Subclasses override for literal-bounded fields (e.g. research_type)
+        where the option set is fixed and shouldn't depend on a flaky LLM
+        call. Default returns [] — caller falls back to free-text input.
+        """
         return []
 
     def _generate_card_options(self, field_name: str, partial: dict) -> list[CardOption]:

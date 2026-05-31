@@ -5,6 +5,21 @@ from orchestrator.agents.base import ModuleAgent
 from orchestrator.agents.widgets import CardGridHint, CardOption, ListEditorHint, ListItem
 
 
+# Literal-bounded slot — same defense as M1.research_type. When the dynamic
+# LLM card gen fails this lets the cards still render instead of leaving the
+# user with a 'pick a card' prompt that has no cards.
+_STATIC_MIXED_DESIGN_OPTIONS = [
+    CardOption(value="sequential_explanatory", label="Sequential — Explanatory",
+               description=("Quantitative first, then qualitative to explain the "
+                            "numbers. Most common mixed design.")),
+    CardOption(value="sequential_exploratory", label="Sequential — Exploratory",
+               description=("Qualitative first to surface constructs, then "
+                            "quantitative to test/generalise them.")),
+    CardOption(value="Other", label="Other / Specify",
+               description="Concurrent or another variant — type it in."),
+]
+
+
 def _sampling_strategy_hint() -> dict:
     """Card grid for sampling_strategy — covers the strategies that show up
     in 95% of social-science theses (probability + non-probability) plus
@@ -208,6 +223,12 @@ class M3Agent(ModuleAgent):
             if v is None or v == "" or v == []:
                 return name
         return None
+
+    def _static_card_options(self, field_name, partial):
+        # Defense for the literal-bounded slot — see _STATIC_MIXED_DESIGN_OPTIONS.
+        if field_name == "mixed_design_type":
+            return _STATIC_MIXED_DESIGN_OPTIONS
+        return super()._static_card_options(field_name, partial)
 
     def render_hint_for_field(self, field_name: str, partial: dict | None = None) -> dict | None:
         """Return a widget hint dict for the field, or None for free-text fields.

@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from orchestrator.agents.base import ModuleAgent
+from orchestrator.agents.widgets import CardOption
 from orchestrator.schemas.m1 import M1Output
 from orchestrator.tools.m1_topic import refine_title, suggest_topics
 
@@ -51,3 +52,27 @@ class M1Agent(ModuleAgent):
         "objectives": "Research objectives — edit and confirm",
         "research_questions": "Research questions — edit and confirm",
     }
+
+    # Static fallbacks for literal-bounded card_fields. The dynamic LLM
+    # generator (base._generate_card_options) is best-effort; when it
+    # fails the user used to see the bot promise 'pick a card' with no
+    # cards rendered. The schema literal IS the option set for these
+    # fields, so the fallback is exact, not just plausible.
+    _STATIC_RESEARCH_TYPE_OPTIONS = [
+        CardOption(value="quantitative", label="Quantitative",
+                   description=("Numerical data, statistical tests, "
+                                "hypothesis-driven.")),
+        CardOption(value="qualitative", label="Qualitative",
+                   description=("Themes, interviews, narrative analysis — "
+                                "meaning over numbers.")),
+        CardOption(value="mixed", label="Mixed methods",
+                   description=("Combine quant and qual in one design "
+                                "(sequential or concurrent).")),
+        CardOption(value="Other", label="Other / Specify",
+                   description="Type a custom approach if none above fit."),
+    ]
+
+    def _static_card_options(self, field_name, partial):
+        if field_name == "research_type":
+            return self._STATIC_RESEARCH_TYPE_OPTIONS
+        return super()._static_card_options(field_name, partial)

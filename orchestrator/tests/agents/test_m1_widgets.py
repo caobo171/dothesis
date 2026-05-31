@@ -23,6 +23,27 @@ def _stub_llm_returning(monkeypatch, cards: list[dict]) -> MagicMock:
     return fake
 
 
+def test_research_type_card_grid_renders_even_when_llm_fails(monkeypatch):
+    """Reported bug: the bot said 'Pick one of the cards below, or type your
+    own' but no cards appeared. Root cause: _generate_card_options is itself
+    an LLM call that timed out / returned invalid JSON, so the dynamic
+    options came back empty. For literal-bounded fields like research_type
+    (Literal[quantitative|qualitative|mixed]) the answer is a static
+    fallback — it should ALWAYS render those three options + Other, dynamic
+    LLM or not.
+    """
+    fake = MagicMock()
+    fake.invoke.return_value.content = "not even close to JSON"   # simulate failure
+    monkeypatch.setattr(M1Agent, "_get_llm", lambda self: fake)
+
+    hint = M1Agent().render_hint_for_field(
+        "research_type", partial={"research_title": "Gen Z"})
+    assert hint is not None, "static fallback must produce a hint, not None"
+    values = {o["value"] for o in hint["options"]}
+    # The 3 schema-literal values must appear; Other is the escape hatch.
+    assert {"quantitative", "qualitative", "mixed", "Other"}.issubset(values)
+
+
 def test_field_returns_card_grid_hint(monkeypatch):
     """`field` is opted into card rendering and the LLM cards round-trip cleanly."""
     cards = [

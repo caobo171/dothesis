@@ -95,6 +95,23 @@ def test_card_generation_falls_back_to_none_when_llm_fails(monkeypatch):
     assert M3Agent().render_hint_for_field("tool", partial={"paradigm": "quantitative"}) is None
 
 
+def test_mixed_design_type_falls_back_to_static_when_llm_fails(monkeypatch):
+    """Same bug as M1 — when _generate_card_options times out / returns junk,
+    the literal-bounded mixed_design_type must still render its two schema
+    values + Other instead of the agent promising cards that never show up."""
+    from unittest.mock import MagicMock
+    fake = MagicMock()
+    fake.invoke.return_value.content = "garbage not-json"
+    monkeypatch.setattr(M3Agent, "_get_llm", lambda self: fake)
+
+    hint = M3Agent().render_hint_for_field(
+        "mixed_design_type", partial={"paradigm": "mixed"})
+    assert hint is not None
+    values = {o["value"] for o in hint["options"]}
+    assert {"sequential_explanatory", "sequential_exploratory",
+            "Other"}.issubset(values)
+
+
 def test_sampling_strategy_returns_card_grid_with_common_strategies():
     """W6: sampling_strategy used to fall through to free text. Now ships as a
     card_grid of the standard non-probability + probability strategies plus
