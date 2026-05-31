@@ -5,6 +5,43 @@ from orchestrator.agents.base import ModuleAgent
 from orchestrator.agents.widgets import CardGridHint, CardOption, ListEditorHint, ListItem
 
 
+# Static fallback for `design` per paradigm. Used when the dynamic LLM
+# card gen times out / returns junk — prevents the 'pick the cards' prompt
+# from showing up with no cards. Picked to cover the 90th-percentile
+# theses: regression / SEM for quant; phenomenological etc. for qual.
+_STATIC_DESIGN_QUANT_OPTIONS = [
+    CardOption(value="Linear regression", label="Linear regression",
+               description=("One DV, predictors; assumes linear relations. "
+                            "Analyze in SPSS / R / Stata.")),
+    CardOption(value="Multiple regression", label="Multiple regression",
+               description=("Linear regression with multiple IVs and "
+                            "interaction/control terms.")),
+    CardOption(value="ANOVA", label="ANOVA / ANCOVA",
+               description=("Compare means across groups; covariates "
+                            "via ANCOVA.")),
+    CardOption(value="PLS-SEM", label="PLS-SEM",
+               description=("Partial-least-squares structural equation "
+                            "modeling. Use SmartPLS.")),
+    CardOption(value="CB-SEM", label="CB-SEM",
+               description=("Covariance-based SEM. Use AMOS / lavaan.")),
+    CardOption(value="Other", label="Other / Specify",
+               description="Type a different quant design (e.g. logistic, MLR)."),
+]
+
+_STATIC_DESIGN_QUAL_OPTIONS = [
+    CardOption(value="Thematic Analysis", label="Thematic Analysis",
+               description="Flexible coding-themes approach (Braun & Clarke)."),
+    CardOption(value="Grounded Theory", label="Grounded Theory",
+               description="Iterative theory-building from data."),
+    CardOption(value="Phenomenological", label="Phenomenological",
+               description="Lived experience of participants."),
+    CardOption(value="Case Study", label="Case Study",
+               description="One or a few bounded cases in depth."),
+    CardOption(value="Other", label="Other / Specify",
+               description="Type a different qual design (e.g. Narrative)."),
+]
+
+
 # Literal-bounded slot — same defense as M1.research_type. When the dynamic
 # LLM card gen fails this lets the cards still render instead of leaving the
 # user with a 'pick a card' prompt that has no cards.
@@ -141,7 +178,11 @@ class M3Agent(ModuleAgent):
     card_fields = {"tool", "design", "mixed_design_type"}
     card_field_titles = {
         "tool": "Which analysis tool will you use?",
-        "design": "Which qualitative design fits your study?",
+        # Paradigm-agnostic — the dynamic LLM generator picks the right
+        # design family per partial state (quant → PLS-SEM / regression /
+        # ANOVA / etc.; qual → Thematic / Grounded / Phenomenological /
+        # Case Study).
+        "design": "Which design fits your study?",
         "mixed_design_type": "Which mixed-methods design?",
     }
 
@@ -228,6 +269,14 @@ class M3Agent(ModuleAgent):
         # Defense for the literal-bounded slot — see _STATIC_MIXED_DESIGN_OPTIONS.
         if field_name == "mixed_design_type":
             return _STATIC_MIXED_DESIGN_OPTIONS
+        # `design` has paradigm-specific static fallbacks. Mixed flows pick
+        # the quant set by default — the user will narrow it via their own
+        # walk; both halves of a mixed study still need a quant design.
+        if field_name == "design":
+            paradigm = (partial or {}).get("paradigm")
+            if paradigm == "qualitative":
+                return _STATIC_DESIGN_QUAL_OPTIONS
+            return _STATIC_DESIGN_QUANT_OPTIONS
         return super()._static_card_options(field_name, partial)
 
     def render_hint_for_field(self, field_name: str, partial: dict | None = None) -> dict | None:
@@ -246,10 +295,12 @@ class M3Agent(ModuleAgent):
 
         Free-text fields (sampling_strategy, target_sample_size) return None.
         """
-        # Card-grid hints — delegate to base class dynamic generator.
-        # `design` is qual-only; quant uses free-text driven by the prompt.
-        if field_name == "design" and (partial or {}).get("paradigm") != "qualitative":
-            return None
+        # Card-grid hints — delegate to base class dynamic generator. The
+        # design gate that used to return None for quantitative is gone:
+        # users couldn't pick Linear regression / ANOVA as the design and
+        # were stuck with whatever recommend_methodology suggested (almost
+        # always PLS-SEM). The dynamic LLM card gen, seeded with the
+        # resolved paradigm, picks the right design family.
         if field_name in self.card_fields:
             return super().render_hint_for_field(field_name, partial)
 

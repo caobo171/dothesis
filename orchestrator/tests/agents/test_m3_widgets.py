@@ -45,9 +45,10 @@ def test_tool_returns_card_grid_for_qual(monkeypatch):
     assert {o["value"] for o in hint["options"]} == {"NVivo", "MAXQDA", "Other"}
 
 
-def test_design_card_grid_only_for_qual_paradigm(monkeypatch):
-    """`design` is qual-only. Quant skips the card grid and uses free-text input
-    so recommend_methodology can drive the conversation."""
+def test_design_card_grid_for_qualitative_paradigm(monkeypatch):
+    """Qualitative `design` cards come from dynamic LLM gen seeded on the
+    qual paradigm — typical options are Thematic / Grounded / Phenomenological /
+    Case Study / Other."""
     cards = [
         {"value": "thematic_analysis", "label": "Thematic Analysis", "description": "Codes → themes"},
         {"value": "grounded_theory",    "label": "Grounded Theory",   "description": "Iterative coding"},
@@ -59,12 +60,53 @@ def test_design_card_grid_only_for_qual_paradigm(monkeypatch):
     hint = agent.render_hint_for_field("design", partial={"paradigm": "qualitative"})
     assert hint is not None
     assert hint["field_name"] == "design"
-    assert hint["title"].startswith("Which qualitative design")
 
-    # Quant paradigm → no card grid.
-    assert agent.render_hint_for_field("design", partial={"paradigm": "quantitative"}) is None
-    # Empty partial (paradigm not yet set) → also no card grid.
-    assert agent.render_hint_for_field("design", partial={}) is None
+
+def test_design_card_grid_for_quantitative_paradigm(monkeypatch):
+    """M3-D: quant `design` used to fall through to free text — users had
+    no way to pick Linear regression and were stuck with whatever the LLM
+    methodology recommender (almost always PLS-SEM) suggested. Now quant
+    `design` ships as a card grid driven by the dynamic LLM generator."""
+    cards = [
+        {"value": "Linear regression", "label": "Linear regression",
+         "description": "One DV, predictors"},
+        {"value": "PLS-SEM", "label": "PLS-SEM", "description": "Use SmartPLS"},
+        {"value": "Other", "label": "Other / Specify", "description": "Type"},
+    ]
+    _stub_llm_returning(monkeypatch, cards)
+    hint = M3Agent().render_hint_for_field(
+        "design", partial={"paradigm": "quantitative"})
+    assert hint is not None
+    assert hint["field_name"] == "design"
+    values = {o["value"] for o in hint["options"]}
+    assert "Linear regression" in values
+
+
+def test_design_card_grid_static_fallback_for_quant_includes_regression(monkeypatch):
+    """When the dynamic LLM call returns garbage, the static fallback must
+    still surface Linear regression so the user can pick a non-SEM design
+    and route the rest of M3 toward SPSS/R-friendly tools."""
+    fake = MagicMock()
+    fake.invoke.return_value.content = "not json"
+    monkeypatch.setattr(M3Agent, "_get_llm", lambda self: fake)
+
+    hint = M3Agent().render_hint_for_field(
+        "design", partial={"paradigm": "quantitative"})
+    assert hint is not None
+    values = {o["value"] for o in hint["options"]}
+    assert {"Linear regression", "PLS-SEM", "Other"}.issubset(values)
+
+
+def test_design_card_grid_static_fallback_for_qual_includes_thematic(monkeypatch):
+    fake = MagicMock()
+    fake.invoke.return_value.content = "not json"
+    monkeypatch.setattr(M3Agent, "_get_llm", lambda self: fake)
+
+    hint = M3Agent().render_hint_for_field(
+        "design", partial={"paradigm": "qualitative"})
+    assert hint is not None
+    values = {o["value"] for o in hint["options"]}
+    assert {"Thematic Analysis", "Other"}.issubset(values)
 
 
 def test_mixed_design_type_returns_card_grid(monkeypatch):

@@ -46,13 +46,38 @@ def build_conceptual_model(constructs: list[str], research_question: str) -> dic
     """Build a conceptual model with paths between constructs.
 
     Returns: {constructs, paths: [{from, to, hypothesis}]}.
+
+    User report: when `conceptual_model` is the next M3 field, the user
+    hasn't yet given us any constructs — so render_hint_for_field calls
+    this with constructs=[]. The old prompt phrased the task as 'given
+    constructs and RQ, build paths', which the LLM took to mean 'no
+    constructs → no paths', returning an empty model. The chat then
+    claimed 'I've pre-filled a list of paths' with a blank widget below.
+    Now: if constructs is empty we explicitly ask the LLM to PROPOSE 3-4
+    constructs from the RQ and then connect them — so the list_editor
+    arrives populated and the user can edit instead of starting blank.
     """
     llm = _get_llm()
+    if constructs:
+        task = (
+            "Build a quantitative conceptual model. Given the user's constructs "
+            "and research question, propose paths that connect them."
+        )
+        inputs = f"Constructs: {constructs}\nResearch question: {research_question}"
+    else:
+        task = (
+            "Build a quantitative conceptual model from the research question "
+            "alone. Propose 3-4 latent constructs that the RQ implies, then "
+            "connect them with paths. Every construct must appear in at least "
+            "one path (otherwise it's not part of the model)."
+        )
+        inputs = f"Research question: {research_question}"
     prompt = (
-        "Build a quantitative conceptual model. Given constructs and RQ, return "
-        "ONLY a JSON object: "
-        '{"constructs": [...], "paths": [{"from":"A","to":"B","hypothesis":"H1: ..."}]}.\n\n'
-        f"Constructs: {constructs}\nResearch question: {research_question}"
+        f"{task} Return ONLY a JSON object: "
+        '{"constructs": ["C1", "C2", ...], "paths": '
+        '[{"from":"C1","to":"C2","hypothesis":"H1: C1 positively affects C2"}, '
+        '...]}.\n\n'
+        f"{inputs}"
     )
     try:
         return json.loads(llm.invoke(prompt).content)

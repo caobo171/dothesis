@@ -24,6 +24,48 @@ def test_recommend_methodology_returns_structured(monkeypatch):
     assert out["tool"] == "SmartPLS"
 
 
+def test_build_conceptual_model_with_empty_constructs_asks_llm_to_propose_them(monkeypatch):
+    """User-reported bug: M3 said 'I've pre-filled a list of paths' but the
+    list_editor below was empty. Root cause: render_hint calls
+    build_conceptual_model with constructs=[] (the user hasn't filled the
+    model yet), and the old prompt phrased the task as 'given constructs',
+    so the LLM took empty constructs → no model.
+
+    Now: when constructs is empty the prompt explicitly asks the LLM to
+    PROPOSE constructs from the RQ. Test pins that the prompt sent to the
+    LLM in that case names the inference task."""
+    captured = {}
+    def fake_invoke(prompt):
+        captured["prompt"] = prompt
+        resp = MagicMock()
+        resp.content = json.dumps({
+            "constructs": ["TikTok use", "Brand perception", "Purchase intent"],
+            "paths": [
+                {"from": "TikTok use", "to": "Brand perception",
+                 "hypothesis": "H1"},
+                {"from": "Brand perception", "to": "Purchase intent",
+                 "hypothesis": "H2"},
+            ],
+        })
+        return resp
+    fake_llm = MagicMock()
+    fake_llm.invoke.side_effect = fake_invoke
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+
+    out = build_conceptual_model.invoke({
+        "constructs": [],  # nothing prefilled — the failure case
+        "research_question": "How does TikTok engagement affect Gen Z purchases?",
+    })
+    # Prompt must invite the LLM to invent constructs, not just paths.
+    p = captured["prompt"].lower()
+    assert ("propose" in p and "constructs" in p), (
+        "empty-constructs prompt should ask the LLM to PROPOSE constructs, "
+        f"got: {captured['prompt'][:300]}")
+    # And the model returns a non-empty path list so the list_editor lands
+    # populated, matching the user-facing 'pre-filled' message.
+    assert len(out["paths"]) >= 2
+
+
 def test_build_conceptual_model_returns_constructs_and_paths(monkeypatch):
     fake_llm = MagicMock()
     fake_llm.invoke.return_value.content = json.dumps({
