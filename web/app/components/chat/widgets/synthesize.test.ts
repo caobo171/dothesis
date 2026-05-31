@@ -47,6 +47,32 @@ describe("synthesizeWidgetSelection", () => {
     )).toBe("Please use AI search to find citations for me.");
   });
 
+  test("reference_verify: yes maps to a plain affirmative", () => {
+    expect(synthesizeWidgetSelection(
+      "reference_verify", "yes", "Yes — page is correct",
+    )).toBe("Yes, the page is correct.");
+  });
+
+  test("reference_verify: skip / skip_all are spelled out for the classifier", () => {
+    expect(synthesizeWidgetSelection(
+      "reference_verify", "skip", "Skip — can't verify",
+    )).toBe("Skip this reference.");
+    expect(synthesizeWidgetSelection(
+      "reference_verify", "skip_all", "Skip all remaining",
+    )).toBe("Skip all remaining references.");
+  });
+
+  test("reference_verify: Other-typed page number becomes 'correct page N'", () => {
+    // The backend regex is `page\s+(\d+)`. The user typed '120' or 'p. 120';
+    // either way the synthesizer must wrap it to match.
+    expect(synthesizeWidgetSelection(
+      "reference_verify", "120", "120",
+    )).toBe("The correct page is page 120.");
+    expect(synthesizeWidgetSelection(
+      "reference_verify", "p. 87", "p. 87",
+    )).toBe("The correct page is page 87.");
+  });
+
   test("research_state_confirm: confirm value maps to a clear yes phrase", () => {
     expect(synthesizeWidgetSelection(
       "research_state_confirm", "confirm", "Confirm — this synthesis works",

@@ -34,6 +34,28 @@ export function synthesizeWidgetSelection(
     return `I'll use ${phrase}.`;
   }
 
+  // W4: M2 phase4 reference verification. Preset values map cleanly; the
+  // Other text input carries a page number that gets wrapped into the
+  // 'page <n>' shape the backend regex extracts.
+  if (fieldName === "reference_verify") {
+    switch (value) {
+      case "yes":
+        return "Yes, the page is correct.";
+      case "skip":
+        return "Skip this reference.";
+      case "skip_all":
+        return "Skip all remaining references.";
+      default: {
+        // User typed a page number (possibly with 'p.' prefix). Strip non-
+        // digits and re-emit as 'page N' so the classifier's `page\s+(\d+)`
+        // regex extracts the corrected_page reliably.
+        const n = (value.match(/\d+/) || [""])[0];
+        if (!n) return `Correct page: ${value}.`;
+        return `The correct page is page ${n}.`;
+      }
+    }
+  }
+
   // W3: M2 phase2 confirm/refine/navigate. Preset values get mapped to the
   // intent classifier's confirm/navigate actions; any other (free-text) value
   // came from the Other text input and must route to refine.

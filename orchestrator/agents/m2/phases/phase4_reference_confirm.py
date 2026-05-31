@@ -9,8 +9,63 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from orchestrator.agents.m2.intent import classify_phase_intent
 from orchestrator.agents.m2.state import M2SubGraphState
+from orchestrator.agents.widgets import CardGridHint, CardOption
 from orchestrator.message_utils import text_of
 from orchestrator.tools.m2_literature import verify_page_numbers
+
+
+def _lookup_source_link(ref: dict, citations: list[dict]) -> str | None:
+    """Find a clickable link for `ref` by joining on (last-name, year) against
+    the phase-2 citation pool. Returns the URL if available, else doi.org/<doi>,
+    else None.
+
+    The gap supporting_papers dicts only carry author/year/page — the URL and
+    DOI live in research_state_citations from the API scout. Without this
+    join, the user verifying a page is asked to judge 'Wang 2011 p. 118' with
+    no link, which is exactly the 'really hard to decide' UX the user
+    reported.
+    """
+    ref_last = (ref.get("author") or "").split(",")[0].split()[-1].lower()
+    ref_year = str(ref.get("year") or "").strip()
+    if not ref_last or not ref_year:
+        return None
+    for c in citations or []:
+        authors = (c.get("authors") or "").lower()
+        year = str(c.get("year") or "").strip()
+        if ref_last in authors and year == ref_year:
+            if c.get("url"):
+                return c["url"]
+            if c.get("doi"):
+                return f"https://doi.org/{c['doi']}"
+    return None
+
+
+def _verify_hint() -> dict:
+    """Card grid for the reference-verification question.
+
+    Cards map to the four intent classifier actions for this phase:
+      yes      → confirm the page is right as cited
+      skip     → can't verify; leave the marker but don't claim verified
+      skip_all → bail on every remaining reference
+      Other    → opens text input where the user types the correct page
+                 (the synthesizer wraps it as 'correct page <n>' so the
+                  classifier's regex catches it)."""
+    return CardGridHint(
+        widget_type="card_grid",
+        field_name="reference_verify",
+        title="Does this citation check out?",
+        options=[
+            CardOption(value="yes", label="Yes — page is correct",
+                       description="Lock in the citation as written."),
+            CardOption(value="Other", label="Wrong page — let me type it",
+                       description="Opens an input for the correct page number."),
+            CardOption(value="skip", label="Skip — can't verify",
+                       description="Keep the citation but mark page unverified."),
+            CardOption(value="skip_all", label="Skip all remaining",
+                       description="Stop asking and accept everything as-is."),
+        ],
+        columns=2,
+    ).model_dump()
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent.parent.parent / "prompts" / "m2"
 _PROMPT = (_PROMPT_DIR / "4_reference_confirm.md").read_text()
@@ -70,15 +125,24 @@ def _gather_pending(state: M2SubGraphState) -> list[dict]:
     return pending
 
 
-def _ask_at_cursor(pending: list[dict], cursor: int) -> str:
-    """Format the verification question for the reference at the given cursor."""
+def _ask_at_cursor(pending: list[dict], cursor: int,
+                   citations: list[dict] | None = None) -> str:
+    """Format the verification question for the reference at the given cursor.
+
+    When the phase-2 citations are passed in we look up a DOI/URL for the
+    reference and embed it as a markdown link — gives the user a 1-click
+    way to open the source and check the page themselves instead of
+    guessing.
+    """
     if cursor >= len(pending):
         return ""
     ref = pending[cursor]
+    link = _lookup_source_link(ref, citations or [])
+    link_part = f"  \n📄 Open source: {link}" if link else ""
     return (
-        f"Citation: {ref.get('author')} ({ref.get('year')}), "
-        f"page {ref.get('page')}. Can you verify? "
-        "(yes / correct page <n> / skip / skip all)"
+        f"**Citation:** {ref.get('author')} ({ref.get('year')}), "
+        f"page {ref.get('page')}.{link_part}\n\n"
+        "Does this check out? Pick a card below."
     )
 
 
@@ -115,11 +179,17 @@ def run(state: M2SubGraphState) -> dict:
                 "current_phase": "output_gen",
             }
 
-        # Ask about the first unverified reference
+        # Ask about the first unverified reference — body carries the link,
+        # widget carries the answer cards.
+        citations = state.get("research_state_citations") or []
+        body = _ask_at_cursor(verified_in_advance, cursor, citations)
+        hint = _verify_hint()
+        ai = AIMessage(content=body, additional_kwargs={"tool_calls_json": hint})
         return {
             "pending_page_checks": verified_in_advance,
             "page_check_cursor": cursor,
-            "messages": [AIMessage(content=_ask_at_cursor(verified_in_advance, cursor))],
+            "messages": [ai],
+            "tool_calls_json": hint,
         }
 
     # Subsequent calls: process user's response for the current reference
@@ -181,8 +251,13 @@ def run(state: M2SubGraphState) -> dict:
             "current_phase": "output_gen",
         }
 
+    citations = state.get("research_state_citations") or []
+    body = _ask_at_cursor(pending, new_cursor, citations)
+    hint = _verify_hint()
+    ai = AIMessage(content=body, additional_kwargs={"tool_calls_json": hint})
     return {
         "verified_refs": verified,
         "page_check_cursor": new_cursor,
-        "messages": [AIMessage(content=_ask_at_cursor(pending, new_cursor))],
+        "messages": [ai],
+        "tool_calls_json": hint,
     }

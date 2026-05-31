@@ -25,6 +25,41 @@ def _state(mode="interactive", user_msg="continue"):
     return s
 
 
+def test_phase4_first_call_emits_card_grid_with_doi_link(monkeypatch):
+    """W4: judging a citation by 'Wang (2011) page 118' alone is hard — the
+    user can't tell if the page is right without seeing the actual paper.
+    Phase 4 now (a) renders a clickable DOI/URL link in the message body so
+    the user can verify, and (b) emits a card_grid for the answer (Yes /
+    Skip / Skip all / Wrong page-Other)."""
+    from orchestrator.agents.m2.phases import phase4_reference_confirm
+    monkeypatch.setattr(phase4_reference_confirm, "_auto_verify",
+                        lambda paper_uris, refs: refs)
+    monkeypatch.setattr(phase4_reference_confirm, "_get_llm", lambda: MagicMock())
+
+    s = _state()
+    # Citation pool from phase 2 carries the DOI/URL that supporting_papers omit.
+    s["research_state_citations"] = [
+        {"title": "TL theory", "authors": "Bass, B.", "year": 1985,
+         "source": "Wiley", "url": "https://example.org/bass1985",
+         "doi": "10.1/bass.1985"},
+        {"title": "Engagement", "authors": "Wang, X.", "year": 2011,
+         "source": "Sage", "url": None, "doi": "10.1/wang.2011"},
+    ]
+
+    patch = phase4_reference_confirm.run(s)
+    msg = patch["messages"][0]
+    # The clickable link is in the message body (markdown link OR raw URL).
+    assert "10.1/wang.2011" in msg.content or "doi.org/10.1/wang.2011" in msg.content
+    hint = patch.get("tool_calls_json")
+    assert hint is not None
+    assert hint["widget_type"] == "card_grid"
+    assert hint["field_name"] == "reference_verify"
+    values = {o["value"] for o in hint["options"]}
+    assert {"yes", "skip", "skip_all", "Other"}.issubset(values)
+    # And attached to the AIMessage for the renderer.
+    assert msg.additional_kwargs.get("tool_calls_json") == hint
+
+
 def test_phase4_first_call_populates_queue_and_asks_first(monkeypatch):
     from orchestrator.agents.m2.phases import phase4_reference_confirm
     monkeypatch.setattr(phase4_reference_confirm, "_auto_verify",
