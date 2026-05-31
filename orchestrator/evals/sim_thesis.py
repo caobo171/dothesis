@@ -197,11 +197,18 @@ class Progress:
 class Heartbeat:
     """Background daemon that re-prints the progress bar every N seconds, so
     long-running phases (M2's 7-minute scout, M5's per-chapter composition)
-    don't go silent. No production-code changes — pure test infrastructure."""
+    don't go silent. No production-code changes — pure test infrastructure.
 
-    def __init__(self, prog: Progress, interval_s: int = 30) -> None:
+    Also re-syncs Progress from the graph state on each tick so the bar reflects
+    the CURRENT module (the stream event for a supervisor->module transition
+    doesn't always carry a module-named node, so set_current via stream events
+    alone lags; reading state["current_module"] catches the truth)."""
+
+    def __init__(self, prog: Progress, interval_s: int = 30,
+                 state_provider=None) -> None:
         self._prog = prog
         self._interval = interval_s
+        self._provider = state_provider  # callable -> dict|None
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._loop, daemon=True)
 
@@ -212,15 +219,31 @@ class Heartbeat:
     def stop(self) -> None:
         self._stop.set()
 
+    def set_state_provider(self, fn) -> None:
+        self._provider = fn
+
     def _loop(self) -> None:
         while not self._stop.wait(self._interval):
+            try:
+                if self._provider:
+                    st = self._provider()
+                    if st:
+                        cur = st.get("current_module")
+                        if cur and cur in MODULE_FIELD:
+                            self._prog.set_current(cur)
+                        cs = st.get("context_store")
+                        if cs is not None:
+                            self._prog.update(cs)
+            except Exception:
+                pass
             print(f"  ... heartbeat: {self._prog.bar()}", flush=True)
 
 
 # -----------------------------------------------------------------------------
 # Auto mode — silent end-to-end
 # -----------------------------------------------------------------------------
-def run_auto(brief: dict, prog: Progress) -> tuple[str, Optional[dict], list]:
+def run_auto(brief: dict, prog: Progress,
+             heartbeat: Optional["Heartbeat"] = None) -> tuple[str, Optional[dict], list]:
     from orchestrator.graph import build_graph
     from orchestrator.state import ContextStore
 
@@ -229,6 +252,12 @@ def run_auto(brief: dict, prog: Progress) -> tuple[str, Optional[dict], list]:
     cfg = {"configurable": {"thread_id": proj_id}, "recursion_limit": 60}
     print(f"\nAUTO MODE  project={proj_id}")
     print(f"topic: {brief['topic']}\n")
+
+    # Let the heartbeat sync from the live graph state so the bar reflects the
+    # CURRENT module even between stream-emitted node events (M2 in particular
+    # spends minutes inside a scout call with no intermediate node events).
+    if heartbeat is not None:
+        heartbeat.set_state_provider(lambda: g.get_state(cfg).values)
 
     final = None
     try:
@@ -298,7 +327,8 @@ def make_student(brief: dict):
 
 
 def run_interactive(brief: dict, prog: Progress,
-                    max_turns: int, per_turn_s: int) -> tuple[str, Optional[dict], list]:
+                    max_turns: int, per_turn_s: int,
+                    heartbeat: Optional["Heartbeat"] = None) -> tuple[str, Optional[dict], list]:
     from orchestrator.graph import build_graph
     from orchestrator.state import ContextStore
 
@@ -309,6 +339,8 @@ def run_interactive(brief: dict, prog: Progress,
         "context_store": ContextStore(), "mode": "interactive",
         "current_module": "M1", "project_id": uuid.UUID(proj_id),
     })
+    if heartbeat is not None:
+        heartbeat.set_state_provider(lambda: g.get_state(cfg).values)
     print(f"\nINTERACTIVE MODE  project={proj_id}  max_turns={max_turns}  per_turn={per_turn_s}s")
     print(f"topic: {brief['topic']}\n")
 
@@ -470,10 +502,10 @@ def main() -> None:
     heartbeat.start()
     try:
         if args.mode == "auto":
-            proj_id, final, transcript = run_auto(brief, prog)
+            proj_id, final, transcript = run_auto(brief, prog, heartbeat=heartbeat)
         else:
             proj_id, final, transcript = run_interactive(
-                brief, prog, args.max_turns, args.per_turn_timeout)
+                brief, prog, args.max_turns, args.per_turn_timeout, heartbeat=heartbeat)
     finally:
         heartbeat.stop()
 
