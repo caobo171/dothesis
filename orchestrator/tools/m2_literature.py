@@ -56,11 +56,18 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
     Returns a list of dicts: {title, authors, year, source, url, doi}.
     Backed by engine/utils/agent_runner.research_citations_via_api.
     """
-    research_topics = [
-        f"{topic} fundamentals and background",
-        f"{topic} current state of research",
-        f"{topic} methodology and approaches",
+    # Test seam: M2_SCOUT_TOPIC_COUNT caps how many topic variants we search.
+    # Production default = 3 (broad coverage). The sim sets it to 1 because
+    # each topic variant fans out to multiple citation APIs + an LLM synthesis
+    # call, so dropping from 3->1 cuts M2 wall-clock ~3x without changing
+    # behaviour for real users.
+    _TOPIC_VARIANTS = [
+        "{topic} current state of research",
+        "{topic} fundamentals and background",
+        "{topic} methodology and approaches",
     ]
+    n_topics = max(1, min(3, int(os.getenv("M2_SCOUT_TOPIC_COUNT", "3"))))
+    research_topics = [t.format(topic=topic) for t in _TOPIC_VARIANTS[:n_topics]]
     tmp = Path(os.getenv("ORCHESTRATOR_SCRATCH", "/tmp/orchestrator_scratch"))
     tmp.mkdir(parents=True, exist_ok=True)
     llm = _get_llm()

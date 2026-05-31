@@ -38,6 +38,36 @@ class _Cite:
             setattr(self, k, v)
 
 
+def test_scout_topic_count_env_overrides_default(monkeypatch):
+    """M2_SCOUT_TOPIC_COUNT lets the sim (or anything else) cut scout to 1
+    research-topic for speed, without changing production defaults (3)."""
+    captured = {}
+    def fake_research(model, research_topics, output_path, target_minimum, **kw):
+        captured["topics"] = research_topics
+        return {"citations": []}
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature.research_citations_via_api", fake_research)
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    monkeypatch.setenv("M2_SCOUT_TOPIC_COUNT", "1")
+    scout_citations.invoke({"topic": "X", "min_n": 5})
+    assert len(captured["topics"]) == 1
+
+
+def test_scout_topic_count_defaults_to_three(monkeypatch):
+    captured = {}
+    def fake_research(model, research_topics, output_path, target_minimum, **kw):
+        captured["topics"] = research_topics
+        return {"citations": []}
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature.research_citations_via_api", fake_research)
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    monkeypatch.delenv("M2_SCOUT_TOPIC_COUNT", raising=False)
+    scout_citations.invoke({"topic": "X", "min_n": 5})
+    assert len(captured["topics"]) == 3  # production default unchanged
+
+
 def test_scout_citations_handles_citation_objects_with_falsy_fields(monkeypatch):
     """The engine returns Citation OBJECTS (no .get). A falsy field must not
     trigger a `.get()` fallback that raises AttributeError and crashes the whole

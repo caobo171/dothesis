@@ -107,7 +107,12 @@ def stub_external_tools() -> None:
     """Make the sim runnable without AWS S3 + without M2's PaperUpload DB.
 
     Keep every LLM call REAL so the test exercises the actual orchestrator.
+    Also tighten M2's scout to a single topic variant (production default = 3)
+    so the sim's M2 phase runs in ~2 min instead of ~6 min — the headline
+    end-to-end speedup. Override with M2_SCOUT_TOPIC_COUNT before running.
     """
+    os.environ.setdefault("M2_SCOUT_TOPIC_COUNT", "1")
+
     import orchestrator.agents.m2.agent as m2a
 
     class _FakeDb:
