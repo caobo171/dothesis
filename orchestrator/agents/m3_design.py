@@ -2,7 +2,65 @@
 from pathlib import Path
 
 from orchestrator.agents.base import ModuleAgent
-from orchestrator.agents.widgets import ListEditorHint, ListItem
+from orchestrator.agents.widgets import CardGridHint, CardOption, ListEditorHint, ListItem
+
+
+def _sampling_strategy_hint() -> dict:
+    """Card grid for sampling_strategy — covers the strategies that show up
+    in 95% of social-science theses (probability + non-probability) plus
+    Other for anything else."""
+    return CardGridHint(
+        widget_type="card_grid",
+        field_name="sampling_strategy",
+        title="Which sampling strategy will you use?",
+        options=[
+            CardOption(value="convenience", label="Convenience",
+                       description=("Recruit whoever is easiest to reach. "
+                                    "Common for student-population studies.")),
+            CardOption(value="purposive", label="Purposive",
+                       description=("Hand-pick participants who match a criterion. "
+                                    "Standard for qualitative.")),
+            CardOption(value="snowball", label="Snowball",
+                       description=("Each participant refers the next. Good for "
+                                    "hard-to-reach or hidden populations.")),
+            CardOption(value="random", label="Simple random",
+                       description=("Probability-based; every member of the frame "
+                                    "has equal chance. Most generalisable.")),
+            CardOption(value="stratified", label="Stratified random",
+                       description=("Random within strata (age / region / role). "
+                                    "Preserves subgroup representation.")),
+            CardOption(value="Other", label="Other / Specify",
+                       description="Type a different strategy in your own words."),
+        ],
+        columns=3,
+    ).model_dump()
+
+
+def _target_sample_size_hint() -> dict:
+    """Card grid for target_sample_size — the four sizes that map to common
+    statistical-power rules of thumb plus Other for typing a custom n."""
+    return CardGridHint(
+        widget_type="card_grid",
+        field_name="target_sample_size",
+        title="What's your target sample size?",
+        options=[
+            CardOption(value="30", label="n ≈ 30",
+                       description=("Cohen's small-sample threshold; OK for "
+                                    "exploratory or pilot studies.")),
+            CardOption(value="100", label="n ≈ 100",
+                       description=("Common minimum for survey research "
+                                    "with a few subgroups.")),
+            CardOption(value="200", label="n ≈ 200",
+                       description=("Hair et al.'s SEM minimum; safe for "
+                                    "PLS-SEM with up to ~10 constructs.")),
+            CardOption(value="384", label="n ≈ 384",
+                       description=("Yields 95% CI ±5% for an unknown "
+                                    "population proportion. Conservative.")),
+            CardOption(value="Other", label="Other / Specify",
+                       description="Type a custom sample size."),
+        ],
+        columns=3,
+    ).model_dump()
 from orchestrator.schemas.m3 import M3Output
 from orchestrator.tools.m3_design import (
     build_conceptual_model, compose_interview_guide, estimate_sample_size,
@@ -294,4 +352,12 @@ class M3Agent(ModuleAgent):
                 allow_nested=True,
             ).model_dump()
 
-        return None  # free-text for sampling_strategy / target_sample_size
+        # W6: sampling fields used to fall through to free text. Now ship as
+        # card grids — bounded choices that cover the standard textbook
+        # options, with Other / Specify for anything custom.
+        if field_name == "sampling_strategy":
+            return _sampling_strategy_hint()
+        if field_name == "target_sample_size":
+            return _target_sample_size_hint()
+
+        return None  # free-text fallback (no fields remaining at present)

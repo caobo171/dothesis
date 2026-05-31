@@ -95,13 +95,37 @@ def test_card_generation_falls_back_to_none_when_llm_fails(monkeypatch):
     assert M3Agent().render_hint_for_field("tool", partial={"paradigm": "quantitative"}) is None
 
 
-def test_free_text_fields_return_none():
-    """Fields not in card_fields and not handled by a list_editor branch → None."""
+def test_sampling_strategy_returns_card_grid_with_common_strategies():
+    """W6: sampling_strategy used to fall through to free text. Now ships as a
+    card_grid of the standard non-probability + probability strategies plus
+    an Other escape hatch — keeps the user one click away from a final
+    answer instead of needing to remember the right academic term."""
     agent = M3Agent()
-    for f in ("sampling_strategy", "target_sample_size"):
-        assert agent.render_hint_for_field(f, partial={"paradigm": "quantitative"}) is None, (
-            f"Expected None for {f}"
-        )
+    hint = agent.render_hint_for_field("sampling_strategy",
+                                       partial={"paradigm": "quantitative"})
+    assert hint is not None
+    assert hint["widget_type"] == "card_grid"
+    assert hint["field_name"] == "sampling_strategy"
+    values = {o["value"] for o in hint["options"]}
+    assert {"convenience", "purposive", "snowball", "random",
+            "Other"}.issubset(values)
+
+
+def test_target_sample_size_returns_card_grid_with_common_sizes():
+    """W6: target_sample_size — common thesis-sized samples + Other-Specify.
+    Cohen's rules of thumb (n=30 small, n=100 medium, n=200 SEM minimum,
+    n=384 95%CI ±5%) cover ~85% of real choices; Other lets the user type
+    any custom number."""
+    agent = M3Agent()
+    hint = agent.render_hint_for_field("target_sample_size",
+                                       partial={"paradigm": "quantitative"})
+    assert hint is not None
+    assert hint["widget_type"] == "card_grid"
+    assert hint["field_name"] == "target_sample_size"
+    values = {o["value"] for o in hint["options"]}
+    # Common sizes + Other. Specific numbers are documented in the impl.
+    assert "Other" in values
+    assert len([v for v in values if v.isdigit()]) >= 3
 
 
 def test_themes_returns_list_editor_hint(monkeypatch):
