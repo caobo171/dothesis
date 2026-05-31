@@ -32,6 +32,26 @@ def test_scout_citations_calls_engine_with_min_n(monkeypatch):
     assert out[0]["title"] == "Paper A"
 
 
+class _Cite:
+    def __init__(self, **kw):
+        for k, v in kw.items():
+            setattr(self, k, v)
+
+
+def test_scout_citations_handles_citation_objects_with_falsy_fields(monkeypatch):
+    """The engine returns Citation OBJECTS (no .get). A falsy field must not
+    trigger a `.get()` fallback that raises AttributeError and crashes the whole
+    scout (which then degraded M2 to zero citations)."""
+    cite = _Cite(title="Paper A", authors="Wang", year=2011,
+                 source=None, url=None, doi=None)
+    monkeypatch.setattr("orchestrator.tools.m2_literature.research_citations_via_api",
+                        lambda **kw: {"citations": [cite]})
+    monkeypatch.setattr("orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    out = scout_citations.invoke({"topic": "x", "min_n": 5})
+    assert out[0]["title"] == "Paper A"
+    assert out[0]["source"] is None  # falsy field handled, no crash
+
+
 def test_scout_citations_retries_with_low_target_on_quality_gate(monkeypatch):
     """When the engine raises the quality gate (too few citations), scout retries
     with a minimal target so the found citations are kept, not discarded."""

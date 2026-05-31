@@ -84,14 +84,22 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
             target_minimum=1,
         )
     citations = result.get("citations", [])
+
+    def _field(c, name):
+        # Citations come back as Citation OBJECTS (not dicts). Reading a falsy
+        # field with `getattr(...) or c.get(...)` crashed on objects (no .get),
+        # raising AttributeError that bubbled up and made the WHOLE scout return
+        # nothing — the real reason M2 degraded to zero citations.
+        return c.get(name) if isinstance(c, dict) else getattr(c, name, None)
+
     return [
         {
-            "title": getattr(c, "title", None) or c.get("title"),
-            "authors": getattr(c, "authors", None) or c.get("authors"),
-            "year": getattr(c, "year", None) or c.get("year"),
-            "source": getattr(c, "source", None) or c.get("source"),
-            "url": getattr(c, "url", None) or c.get("url"),
-            "doi": getattr(c, "doi", None) or c.get("doi"),
+            "title": _field(c, "title"),
+            "authors": _field(c, "authors"),
+            "year": _field(c, "year"),
+            "source": _field(c, "source"),
+            "url": _field(c, "url"),
+            "doi": _field(c, "doi"),
         }
         for c in citations
     ]
