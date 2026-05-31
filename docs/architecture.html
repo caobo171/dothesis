@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DoThesis — Architecture (current)</title>
+<style>
+  :root {
+    --bg: #f8fafc; --fg: #0f172a; --muted: #475569; --line: #e2e8f0;
+    --card: #ffffff; --code-bg: #f1f5f9; --code-fg: #1e293b;
+    --accent: #7c3aed; --accent2: #2563eb; --ok: #16a34a; --warn: #ea580c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1220; --fg: #e2e8f0; --muted: #94a3b8; --line: #1e293b;
+      --card: #111a2e; --code-bg: #0f1729; --code-fg: #cbd5e1;
+      --accent: #a78bfa; --accent2: #60a5fa; --ok: #4ade80; --warn: #fb923c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    background: var(--bg); color: var(--fg);
+    margin: 0; padding: 0;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 48px 32px 96px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 32px; }
+  h1 { font-size: 32px; margin: 0 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 22px; margin: 48px 0 12px; letter-spacing: -0.01em;
+       padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 24px 0 8px; color: var(--accent); }
+  p, li { color: var(--fg); }
+  .muted { color: var(--muted); }
+  code, pre, .mono { font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+  code { background: var(--code-bg); color: var(--code-fg); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+  pre {
+    background: var(--code-bg); color: var(--code-fg);
+    padding: 16px 18px; border-radius: 10px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.5;
+    border: 1px solid var(--line);
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px 22px; margin: 12px 0;
+  }
+  .lede { font-size: 17px; color: var(--muted); margin: 0; }
+  .tag {
+    display: inline-block; padding: 2px 9px; border-radius: 99px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent);
+  }
+  .tag.ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+  .tag.warn { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td code { font-size: 12.5px; }
+  .grid2 { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  .diagram {
+    background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 12px; padding: 20px; overflow-x: auto;
+    font-family: "SF Mono", "JetBrains Mono", Menlo, monospace;
+    font-size: 12px; line-height: 1.45; white-space: pre;
+    color: var(--code-fg);
+  }
+  .kbd {
+    display: inline-block; padding: 1px 8px; border: 1px solid var(--line);
+    border-radius: 5px; background: var(--card); font-family: "SF Mono", monospace;
+    font-size: 12px; box-shadow: inset 0 -1px 0 var(--line);
+  }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 32px 0; }
+  ul.tight { margin: 6px 0; }
+  ul.tight li { margin: 3px 0; }
+  .footnote { color: var(--muted); font-size: 13px; }
+  a { color: var(--accent2); text-decoration: none; border-bottom: 1px dashed transparent; }
+  a:hover { border-bottom-color: var(--accent2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="tag">Current state — 2026-05-31</span>
+  <h1>DoThesis architecture</h1>
+  <p class="lede">A single-worker FastAPI process runs the LangGraph orchestrator
+    in-process, talks to Postgres for state and Gemini for LLM calls. Everything
+    you'll see in this doc lives in one Python process per request.</p>
+</header>
+
+<h2>30-second summary</h2>
+<div class="card">
+  <p>The chat → orchestrator → Postgres + Gemini spine is unchanged from the
+    original design. What this session added is <b>three new layers on top of
+    it</b>: a planning layer (artifact DAG, planner, intake, backfill), a set of
+    HTTP endpoints that expose those layers, and a reliability layer
+    (<code>bounded_invoke</code>) that wall-clock-caps every LLM call so a stalled
+    Gemini request can never freeze a turn.</p>
+</div>
+
+<h2>What "worker" means here</h2>
+
+<p>I kept saying "worker" — I mean the <b>uvicorn child process</b> that serves
+HTTP requests. When you run <code>uvicorn --reload</code>, there are two
+processes:</p>
+
+<ul class="tight">
+  <li><b>Parent</b> (reloader) — watches files in <code>--reload-dir</code>,
+    spawns/kills the child.</li>
+  <li><b>Child</b> (worker) — actually serves HTTP. Holds the LangGraph
+    orchestrator in-process. <b>Every Gemini call you saw happens here</b>,
+    in the same thread that's serving the HTTP request.</li>
+</ul>
+
+<p>No Celery, no Redis, no background queue. The only other Python process is
+the on-demand auto-draft subprocess (<code>python -m orchestrator</code>) that
+runs full M1→M5 generation out-of-band when you click the Auto-draft button.</p>
+
+<h2>The big picture</h2>
+
+<div class="diagram">
+┌──────────────────────────────────────────────────────────────────┐
+│  Frontend  (Next.js dev, :3000)                                  │
+│  - chat UI + zero-typing card/list widgets                       │
+│  - SSE consumer for streamed agent replies                       │
+│  - editor view (reads /m5/chapters)                              │
+│  - Drafts list now reads /api/v1/projects                        │
+└───────────────────────┬──────────────────────────────────────────┘
+                        │ HTTP + Server-Sent Events
+                        ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  FastAPI  (uvicorn :7100)  ── this is "the worker"               │
+│  Routers (api/app/routers/chat.py):                              │
+│    POST /messages          → graph.astream() + SSE               │
+│    GET  /artifacts         → readiness over DAG                  │
+│    POST /import            → seed slices from a blob             │
+│    POST /assess            → LLM classify pasted work            │
+│    POST /reconstruct/{art} → propose skipped-prereq backfill     │
+│    POST /threads/start-at/{art} → enter mid-thesis               │
+└───────────────────────┬──────────────────────────────────────────┘
+                        │ in-process graph.astream()
+                        ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  LangGraph orchestrator  (orchestrator/graph.py)                 │
+│                                                                  │
+│   START → _seed → supervisor → {M1│M2│M3│M4│M5│END}              │
+│                                                                  │
+│   supervisor (orchestrator/agents/supervisor.py):                │
+│     • rule-based (next_unconfirmed_module)                       │
+│     • planner override (if target_artifact set)                  │
+│     • nav LLM classifier (skipped on cold-start, bounded 8s)     │
+│                                                                  │
+│   Each module = ModuleAgent (orchestrator/agents/base.py):       │
+│     interactive: _ask_next_question / _classify_user_intent /    │
+│                   _is_affirmative / _generate_card_options …     │
+│     auto:        _auto_fill  (M5 has _auto_compose_chapters)     │
+│     ALL hot-path LLM calls wrapped in bounded_invoke (12s cap)   │
+│                                                                  │
+│   M2 = sub-graph: familiarize → research_state → gap_analysis    │
+│        → reference_confirm → output_gen                          │
+│                                                                  │
+│   Planning layer (added this session):                           │
+│     artifacts.py  — Artifact DAG + DoD validators + readiness    │
+│     planner.py    — plan_next(cs, target) work/backfill/done     │
+│     intake.py     — merge_import + assess_work (LLM classify)    │
+│     backfill.py   — reconstruct_artifact (structural gate)       │
+└──────────┬────────────────────────────────────┬──────────────────┘
+           │                                    │
+           ▼                                    ▼
+   ┌─────────────────┐                ┌──────────────────────┐
+   │  Postgres :5499 │                │  External services   │
+   │                 │                │  - Gemini 2.5 Flash  │
+   │  app tables:    │                │    (langchain-       │
+   │   projects      │                │     google-genai)    │
+   │   threads       │                │  - Crossref API      │
+   │   messages      │                │  - OpenAlex API      │
+   │   context_store │                │  - Semantic Scholar  │
+   │   paper_uploads │                │  - AWS S3 (M5 docx)  │
+   │                 │                │                      │
+   │  langgraph:     │                │  every LLM call      │
+   │   checkpoints   │                │  bounded_invoke      │
+   │   blobs         │                │  wrapped             │
+   │   writes        │                │                      │
+   └─────────────────┘                └──────────────────────┘
+
+   Separate processes (only spawned on demand):
+     ├─ LangGraph Studio  (:8123)   — graph debugger/visualizer
+     └─ Auto-draft subprocess  (`python -m orchestrator`)
+        runs full M1→M5 out-of-band, writes events.jsonl,
+        polled by FastAPI; used by the Auto-draft button
+</div>
+
+<h2>A single "Hello" turn — the request flow</h2>
+
+<div class="card">
+  <ol>
+    <li>Browser → <code>POST /api/v1/threads/{tid}/messages</code> with
+      <code>{"text": "Hello"}</code></li>
+    <li>uvicorn worker's <code>send_message</code> handler:
+      <ul class="tight">
+        <li>Persists the user message to <code>messages</code> table</li>
+        <li>Reads checkpoint via <code>graph.aget_state(config)</code></li>
+        <li>Calls <code>graph.astream(input, config)</code> — yields events
+          as nodes execute</li>
+      </ul>
+    </li>
+    <li>LangGraph runs each node <b>in the same worker process</b>:
+      <ul class="tight">
+        <li><code>_seed</code> — seeds context_store + mode (no LLM)</li>
+        <li><code>supervisor</code> — picks <code>current_module</code>;
+          <span class="tag ok">cold-start skip</span> for the nav classifier
+          when no module has <code>confirmed_at</code> yet</li>
+        <li><code>M1</code> — calls <code>_ask_next_question</code> →
+          <code>bounded_invoke(self._get_llm(), prompt, max_seconds=12)</code>.
+          <b>This is the Gemini call</b> (~2-3 s warm, up to 12 s pathological).</li>
+      </ul>
+    </li>
+    <li>Each node's output is wrapped in an AIMessage; the handler yields
+      <code>data: {"type":"token", ...}</code> SSE lines back to the browser.</li>
+    <li>Browser appends to chat, hides the thinking-dots spinner.</li>
+  </ol>
+</div>
+
+<h3>What's measurable now</h3>
+<p>Every <code>bounded_invoke</code> call logs at INFO:</p>
+<pre>LLM.invoke[supervisor.py:supervisor_node] start (cap=8s attempt=1 prompt_chars=187)
+LLM.invoke[supervisor.py:supervisor_node] OK in 2.34s
+LLM.invoke[base.py:_ask_next_question] start (cap=12s attempt=1 prompt_chars=421)
+LLM.invoke[base.py:_ask_next_question] OK in 1.87s</pre>
+<p>So if something looks slow, you can read the uvicorn console and see exactly
+which call site cost what.</p>
+
+<h2>Module layer (M1–M5)</h2>
+
+<table>
+  <tr><th>Module</th><th>Code</th><th>Produces</th></tr>
+  <tr>
+    <td><b>M1</b> Topic Discovery</td>
+    <td><code>agents/m1_topic.py</code></td>
+    <td><code>m1_topic</code> slice: title, field, type, population, scope,
+      objectives, RQs</td>
+  </tr>
+  <tr>
+    <td><b>M2</b> Literature Review</td>
+    <td><code>agents/m2/</code> (sub-graph)</td>
+    <td><code>m2_literature</code> slice: synthesis, gaps, framework,
+      hypotheses, <code>citation_list</code></td>
+  </tr>
+  <tr>
+    <td><b>M3</b> Research Design</td>
+    <td><code>agents/m3_design.py</code></td>
+    <td><code>m3_design</code> slice: paradigm + paradigm-specific artifacts
+      (conceptual_model / scale_items OR themes / interview_guide)</td>
+  </tr>
+  <tr>
+    <td><b>M4</b> Analysis</td>
+    <td><code>agents/m4_analysis.py</code></td>
+    <td><code>m4_analysis</code> slice: parsed SPSS/SmartPLS results
+      + interpretations</td>
+  </tr>
+  <tr>
+    <td><b>M5</b> Writing &amp; Export</td>
+    <td><code>agents/m5_writing.py</code></td>
+    <td><code>m5_writing</code> slice: 6 chapters + bibliography +
+      docx/pdf S3 artifacts</td>
+  </tr>
+</table>
+
+<p class="muted">All five inherit from <code>ModuleAgent</code> in
+<code>agents/base.py</code>. The base class has the shared clarification loop
+(<code>step()</code>) and every hot-path LLM call goes through
+<code>self._bounded(prompt)</code>.</p>
+
+<h2>Planning layer (added this session)</h2>
+
+<p>The original spine routed strictly M1 → M2 → M3 → M4 → M5 via
+<code>next_unconfirmed_module()</code>. This session added a layer that lets the
+system <b>start anywhere</b>, <b>backfill missing prerequisites</b>, and
+<b>assess pasted work</b> — all without changing the original spine.</p>
+
+<div class="grid2">
+  <div class="card">
+    <h3>artifacts.py</h3>
+    <p>Models the thesis as a <b>directed dependency graph of artifacts</b>
+      (topic, literature, design, analysis, ch_intro, ch_methodology, …).
+      Each artifact has:</p>
+    <ul class="tight">
+      <li><code>depends_on</code> — prerequisite artifacts</li>
+      <li><code>dod(slice)</code> — Definition-of-Done validator</li>
+    </ul>
+    <p><code>readiness(context_store)</code> returns <code>{key →
+      done|ready|blocked}</code> over the whole graph in pure Python.</p>
+  </div>
+
+  <div class="card">
+    <h3>planner.py</h3>
+    <p><code>plan_next(cs, target=None)</code> picks the <b>next-best action</b>
+      from the DAG:</p>
+    <ul class="tight">
+      <li><code>work</code> — an artifact is ready; do it</li>
+      <li><code>backfill</code> — the target is blocked; do this prerequisite
+        first</li>
+      <li><code>already_done</code> / <code>done</code></li>
+    </ul>
+    <p>The supervisor consults the planner <i>only when</i>
+      <code>state.target_artifact</code> is set; default sequential flow is
+      byte-for-byte unchanged.</p>
+  </div>
+
+  <div class="card">
+    <h3>intake.py</h3>
+    <p><code>merge_import(cs, blob)</code> seeds slices from a structured blob
+      (tagged <code>_source="imported"</code>).</p>
+    <p><code>assess_work(text, llm)</code> LLM-classifies pasted free-form
+      work (a draft, abstract, methodology section) into proposed slices —
+      surfaced as a dry-run via <code>POST /assess</code>.</p>
+  </div>
+
+  <div class="card">
+    <h3>backfill.py</h3>
+    <p><code>reconstruct_artifact(key, cs, llm)</code> infers a <b>skipped
+      upstream artifact</b> from the other slices that ARE done (e.g. infer
+      <code>design</code> from a student's existing
+      <code>analysis</code> + <code>topic</code>). Tagged
+      <code>_source="reconstructed"</code> and gated behind
+      <code>dod_design_structural</code> + user confirm.</p>
+  </div>
+</div>
+
+<h2>Reliability layer — <code>bounded_invoke</code></h2>
+
+<p>LangChain's <code>timeout=N</code> on <code>ChatGoogleGenerativeAI</code> is
+<i>per-RPC</i>, not wall-clock. Gemini's internal retries can stretch a single
+<code>invoke()</code> to minutes. This session wrapped <b>every</b>
+hot-path LLM call in <code>bounded_invoke</code>:</p>
+
+<pre>def bounded_invoke(llm, prompt, *, max_seconds=60, retries=1, backoff_s=1.0):
+    """Wall-clock-bounded invoke via ThreadPoolExecutor + future.result(timeout=...)."""
+    ...
+    # On TimeoutError → raise BoundedInvokeTimeout (subclass of TimeoutError → Exception)
+    # Caller's existing except-block catches it and falls back gracefully.</pre>
+
+<p>Where it's wired in:</p>
+<table>
+  <tr><th>Call site</th><th>Default cap</th><th>Env override</th></tr>
+  <tr><td><code>supervisor.py</code> nav classifier</td><td>8 s</td>
+      <td><code>ORCHESTRATOR_NAV_MAX_SECONDS</code></td></tr>
+  <tr><td>every hot-path method in <code>base.py</code>
+      (<code>_ask_next_question</code>, <code>_classify_user_intent</code>,
+      <code>_is_affirmative</code>, <code>_generate_card_options</code>, …)</td>
+      <td>12 s</td>
+      <td><code>ORCHESTRATOR_LLM_MAX_SECONDS</code></td></tr>
+  <tr><td><code>m2/intent.py:classify_phase_intent</code></td><td>12 s</td>
+      <td><code>ORCHESTRATOR_LLM_MAX_SECONDS</code></td></tr>
+  <tr><td><code>m2/phases/phase2_research_state.py:_synthesize</code></td>
+      <td>90 s</td>
+      <td><code>M2_SYNTHESIZE_MAX_SECONDS</code></td></tr>
+</table>
+
+<p>Plus a cold-start fast-path in the supervisor: if <i>no</i> module has
+<code>confirmed_at</code> yet, skip the nav classifier entirely — there's
+nothing to navigate from on a fresh project.</p>
+
+<h2>External services + storage</h2>
+
+<table>
+  <tr><th>Service</th><th>Purpose</th><th>How accessed</th></tr>
+  <tr><td>Postgres :5499</td><td>App tables + LangGraph checkpoints</td>
+      <td>SQLAlchemy + psycopg pool (sync); <code>AsyncPostgresSaver</code> on the chat path</td></tr>
+  <tr><td>Gemini 2.5 Flash</td><td>Every LLM call</td>
+      <td><code>langchain-google-genai</code> → google REST API
+        (~1.3 s direct curl, ~2-3 s through the wrapper)</td></tr>
+  <tr><td>Crossref / OpenAlex / Semantic Scholar</td>
+      <td>M2's citation scout</td>
+      <td><code>orchestrator/tools/m2_literature.py:scout_citations</code> with
+        <code>M2_SCOUT_TOPIC_COUNT</code> knob (default 3, sim sets 1)</td></tr>
+  <tr><td>AWS S3</td><td>M5 docx/pdf export</td>
+      <td><code>orchestrator/tools/m5_writing.py</code>; reads
+        <code>S3_BUCKET</code> env (project convention; <code>AWS_S3_BUCKET</code>
+        kept as legacy fallback)</td></tr>
+</table>
+
+<h2>What you can run / test</h2>
+
+<table>
+  <tr><th>Command</th><th>What it does</th></tr>
+  <tr><td><span class="kbd">./dev.sh</span></td>
+      <td>Boots Next.js + uvicorn + LangGraph Studio</td></tr>
+  <tr><td><span class="kbd">python -m orchestrator.evals.sim_thesis --mode auto</span></td>
+      <td>Silent full-thesis generation, persisted to a viewable project under
+        <code>caotest171</code></td></tr>
+  <tr><td><span class="kbd">python -m orchestrator.evals.sim_thesis --mode interactive</span></td>
+      <td>LLM "student" drives the chat — see the conversation in the UI</td></tr>
+  <tr><td><span class="kbd">python -m orchestrator.evals.backfill_eval</span></td>
+      <td>Scores prerequisite-reconstruction quality on realistic fixtures</td></tr>
+  <tr><td><span class="kbd">pytest orchestrator/tests --ignore=orchestrator/tests/integration -q</span></td>
+      <td>Unit + light-integration suite (~350 tests, no live LLM)</td></tr>
+</table>
+
+<hr>
+
+<p class="footnote">
+  Files referenced: <code>api/app/routers/chat.py</code> ·
+  <code>orchestrator/graph.py</code> · <code>orchestrator/agents/base.py</code> ·
+  <code>orchestrator/agents/supervisor.py</code> ·
+  <code>orchestrator/artifacts.py</code> ·
+  <code>orchestrator/planner.py</code> ·
+  <code>orchestrator/intake.py</code> ·
+  <code>orchestrator/backfill.py</code> ·
+  <code>orchestrator/evals/sim_thesis.py</code>.
+</p>
+
+</div>
+</body>
+</html>
