@@ -41,8 +41,23 @@ def _intent_llm():
 
 def _nav_max_seconds() -> int:
     """Wall-clock cap for the nav classifier; the request-level timeout alone
-    isn't enough (Gemini's internal retries can stretch wall-clock past it)."""
-    return int(os.getenv("ORCHESTRATOR_NAV_MAX_SECONDS", "20"))
+    isn't enough (Gemini's internal retries can stretch wall-clock past it).
+    8s default: a small simple prompt should answer in 1-2s — if Gemini takes
+    longer, the rule-based fallback is fine and the user shouldn't wait."""
+    return int(os.getenv("ORCHESTRATOR_NAV_MAX_SECONDS", "8"))
+
+
+_SLICE_FIELDS = ("m1_topic", "m2_literature", "m3_design",
+                 "m4_analysis", "m5_writing")
+
+
+def _any_module_confirmed(cs) -> bool:
+    """True if at least one module has been confirmed (has confirmed_at)."""
+    for slot in _SLICE_FIELDS:
+        slice_ = getattr(cs, slot, None) or {}
+        if slice_.get("confirmed_at"):
+            return True
+    return False
 
 
 def _rule_based(state: OrchestratorState) -> RouteDecision:
@@ -100,9 +115,13 @@ def supervisor_node(state: OrchestratorState) -> dict:
         mid_question = ("_awaiting_field" in cur_slice
                         or "_awaiting_confirm" in cur_slice
                         or "_phase_state" in cur_slice)
+        # Cold-start fast-path: no module confirmed yet → there's nothing to
+        # navigate FROM, so the classifier's only effect is latency. Crucial for
+        # 'Hello' on a fresh project — used to cost a full Gemini RTT (~8-20s).
+        cold_start = not _any_module_confirmed(state["context_store"])
         # Always ask the LLM whether the user wants cross-module navigation.
         # Confidence threshold (>=0.7) protects against false positives.
-        if last_user and not mid_question:
+        if last_user and not mid_question and not cold_start:
             try:
                 from orchestrator.agents.base import bounded_invoke
                 llm = _intent_llm().with_structured_output(IntentClassification)

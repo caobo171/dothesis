@@ -139,8 +139,12 @@ class ModuleAgent(ABC):
         Used with bounded_invoke so a Gemini stall never blocks the whole
         graph turn. The request-level timeout=20 on _get_llm alone isn't
         enough — Gemini's internal retries can stretch wall-clock past it.
+
+        12s default: Gemini 2.5 Flash normally answers a short prompt in 1-3s.
+        Going much past 8-10s is a sign the API is unhealthy and the user
+        is better served by a templated fallback than a long wait.
         """
-        return int(os.getenv("ORCHESTRATOR_LLM_MAX_SECONDS", "25"))
+        return int(os.getenv("ORCHESTRATOR_LLM_MAX_SECONDS", "12"))
 
     def _bounded(self, prompt, *, retries: int = 0):
         """Wall-clock-bounded shorthand for an LLM .invoke(prompt) call.

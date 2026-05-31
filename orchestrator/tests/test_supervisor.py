@@ -8,6 +8,31 @@ from orchestrator.agents.supervisor import (
 from orchestrator.state import ContextStore
 
 
+def test_supervisor_skips_nav_classifier_on_cold_start(monkeypatch):
+    """Cold-start (no module confirmed yet): the classifier has nothing to do —
+    every artifact is unconfirmed, so the only sensible decision is rule-based
+    (M1 first). Skip the LLM call entirely. This is the fast-path for 'Hello'."""
+    from langchain_core.messages import HumanMessage
+    from unittest.mock import MagicMock
+    from orchestrator.agents import supervisor as sup
+
+    fake_structured = MagicMock()
+    fake_llm = MagicMock()
+    fake_llm.with_structured_output.return_value = fake_structured
+    monkeypatch.setattr(sup, "_intent_llm", lambda: fake_llm)
+
+    out = supervisor_node({
+        "messages": [HumanMessage(content="Hello")],
+        "current_module": "M1", "context_store": ContextStore(),  # cold start
+        "mode": "interactive",
+        "user_intent": None, "pending_confirmations": [],
+    })
+    assert out["current_module"] == "M1"
+    # Classifier must not have been called — no module to navigate FROM.
+    fake_structured.invoke.assert_not_called()
+    fake_llm.with_structured_output.assert_not_called()
+
+
 def test_supervisor_nav_classifier_does_not_block_on_llm_hang(monkeypatch):
     """The headline live-product fix: when Gemini stalls inside the nav
     classifier, the supervisor must still produce a routing decision in
