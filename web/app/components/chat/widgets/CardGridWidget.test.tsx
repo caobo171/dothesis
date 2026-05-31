@@ -43,4 +43,47 @@ describe("CardGridWidget", () => {
     render(<CardGridWidget hint={hint} onSelect={() => {}} />);
     expect(screen.getByTestId("card-grid-field")).toBeTruthy();
   });
+
+  test("clicking Other/Specify opens a text input instead of sending", () => {
+    const onSelect = vi.fn();
+    const hintWithOther: CardGridHint = {
+      widget_type: "card_grid",
+      field_name: "scope",
+      title: "What's the scope?",
+      options: [
+        { value: "Single University", label: "Single University" },
+        { value: "Other", label: "Other / Specify",
+          description: "Define a custom scope" },
+      ],
+    };
+    render(<CardGridWidget hint={hintWithOther} onSelect={onSelect} />);
+    fireEvent.click(screen.getByTestId("card-Other"));
+    // onSelect must NOT have been called yet — input is now visible.
+    expect(onSelect).not.toHaveBeenCalled();
+    const input = screen.getByTestId("card-other-input") as HTMLInputElement;
+    expect(input).toBeTruthy();
+  });
+
+  test("typing in Other input and submitting sends the typed value as the answer", () => {
+    const onSelect = vi.fn();
+    const hintWithOther: CardGridHint = {
+      widget_type: "card_grid",
+      field_name: "scope",
+      title: "What's the scope?",
+      options: [
+        { value: "Single University", label: "Single University" },
+        { value: "Other", label: "Other / Specify" },
+      ],
+    };
+    render(<CardGridWidget hint={hintWithOther} onSelect={onSelect} />);
+    fireEvent.click(screen.getByTestId("card-Other"));
+    const input = screen.getByTestId("card-other-input") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Vietnamese university students nationwide" } });
+    fireEvent.click(screen.getByTestId("card-other-submit"));
+    expect(onSelect).toHaveBeenCalledWith(
+      "scope",
+      "Vietnamese university students nationwide",
+      "Vietnamese university students nationwide",
+    );
+  });
 });
