@@ -68,6 +68,29 @@ describe("useChat", () => {
     expect(result.current.streamingText).toBe("Done.");
   });
 
+  test("surfaces SSE error events via streamingError", async () => {
+    // P6: when the backend yields {type: error, message}, the hook must
+    // expose it so the UI can show a banner — silent failure was the worst
+    // part of the M2 msgpack crash.
+    server.use(
+      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+      http.post("/api/v1/threads/t1/messages", () => streamResponse([
+        'data: {"type":"token","text":"partial"}\n\n',
+        'data: {"type":"error","message":"TypeError: not msgpack serializable"}\n\n',
+        'data: {"type":"done"}\n\n',
+      ])),
+    );
+
+    const { result } = renderHook(() => useChat("t1"), { wrapper });
+    await waitFor(() => expect(result.current.messages).toEqual([]));
+    await act(async () => { await result.current.send("hi"); });
+
+    expect(result.current.streamingError).toBe(
+      "TypeError: not msgpack serializable");
+    // The partial token still arrived — error doesn't wipe streamingText.
+    expect(result.current.streamingText).toBe("partial");
+  });
+
   test("collects tool_calls SSE event into streamingToolCalls", async () => {
     server.use(
       http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),

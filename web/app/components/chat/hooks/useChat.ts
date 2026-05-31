@@ -57,6 +57,16 @@ export function useChat(threadId: string) {
       payload: { stage: string; message: string };
     }).payload);
 
+  // P6: backend yields `{type: error, message}` SSE events when graph.astream
+  // raises (e.g. msgpack serialization, LLM timeouts, provider 5xx). Surface
+  // the latest one so the UI can show a banner — silent failure was the
+  // worst part of the M2 msgpack crash because users couldn't tell anything
+  // had broken; their messages just echoed back with no reply.
+  const streamingError = stream.state.events
+    .filter(e => e.type === "error")
+    .map(e => (e as unknown as { message: string }).message)
+    .at(-1) ?? null;
+
   const send = async (text: string) => {
     // Optimistic update: show user message immediately before server confirms
     const optimistic: Message = {
@@ -82,6 +92,7 @@ export function useChat(threadId: string) {
     streamingText,
     streamingToolCalls,
     streamingProgress,
+    streamingError,
     inflight: stream.state.inflight,
     error: stream.state.error,
     send,

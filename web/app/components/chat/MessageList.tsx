@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { ErrorBubble } from "./ErrorBubble";
 import { MessageBubble } from "./MessageBubble";
 import { ProgressBubble, ProgressItem } from "./ProgressBubble";
 import { StreamingBubble } from "./StreamingBubble";
@@ -14,6 +15,7 @@ export function MessageList({
   streamingText,
   streamingModuleTag,
   streamingProgress = [],
+  streamingError = null,
   inflight = false,
   onWidgetSelect,
 }: {
@@ -26,6 +28,12 @@ export function MessageList({
    * scout (or any other long backend stage) is running.
    */
   streamingProgress?: ProgressItem[];
+  /**
+   * Backend-emitted error message (SSE `type: error`). Rendered as an
+   * ErrorBubble so failures surface as something visible instead of a
+   * silent stream-end (the M2 msgpack crash showed this is bad UX).
+   */
+  streamingError?: string | null;
   /**
    * SSE stream is open and we're waiting on the first token. When true and
    * streamingText is empty, ThinkingBubble fills the silence so the user
@@ -78,6 +86,10 @@ export function MessageList({
           <ThinkingBubble moduleTag={streamingModuleTag} />
         )
       ) : null}
+      {/* Error from this turn — renders after any partial streaming bubble
+          so the user can see whatever the agent managed to say before the
+          failure point (e.g. tokens that arrived before an LLM timeout). */}
+      {streamingError && <ErrorBubble message={streamingError} />}
       <div ref={endRef} />
     </div>
   );

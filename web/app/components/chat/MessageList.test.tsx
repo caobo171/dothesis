@@ -57,6 +57,23 @@ describe("MessageList", () => {
     expect(screen.getByTestId("thinking-bubble")).toBeTruthy();
     expect(screen.queryByTestId("progress-bubble")).toBeNull();
   });
+
+  test("renders ErrorBubble when streamingError is set", () => {
+    // P6: backend SSE `type: error` must surface visibly — the M2 msgpack
+    // crash showed silent failure is the worst possible UX.
+    render(
+      <MessageList
+        messages={[]}
+        streamingText=""
+        streamingModuleTag={null}
+        inflight={false}
+        streamingError="TypeError: Type is not msgpack serializable: function"
+      />
+    );
+    expect(screen.getByTestId("error-bubble")).toBeTruthy();
+    expect(screen.getByText(/msgpack/)).toBeTruthy();
+    expect(screen.getByText("Something went wrong")).toBeTruthy();
+  });
 });
 
 import type { CardGridHint } from "./widgets/types";
