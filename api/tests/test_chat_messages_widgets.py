@@ -104,10 +104,13 @@ def test_stream_forwards_engine_progress_events(client, monkeypatch):
 
     async def fake_astream(graph_input, config=None, stream_mode=None):
         # Simulate the engine emitting two progress lines BEFORE the node's
-        # final message returns. The chat router should forward these
-        # progress events to the SSE stream.
-        emitter = graph_input.get("_progress_emitter")
-        assert emitter is not None, "chat router must forward emitter"
+        # final message returns. P5: the emitter is no longer in graph_input
+        # — it lives in engine.utils.progress's thread_id registry. Look it
+        # up via the configured thread_id (mirrors what M2Agent now does).
+        from engine.utils import progress as _progress
+        thread_id = (config or {}).get("configurable", {}).get("thread_id")
+        emitter = _progress.lookup(thread_id)
+        assert emitter is not None, "chat router must register emitter"
         emitter({"stage": "scout.start",
                  "message": "🔍 Searching for citations on \"Gen Z\"…"})
         emitter({"stage": "scout.api_chain",

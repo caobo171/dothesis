@@ -50,6 +50,52 @@ _state = threading.local()
 EmitterFn = Callable[[dict], None]
 
 
+# Thread-id keyed registry — separate from the per-thread `bind` API.
+#
+# Why: LangGraph persists graph state to a checkpointer (postgres,
+# msgpack-serialized). Putting a Python callable directly into graph state
+# crashes with `TypeError: Type is not msgpack serializable: function`.
+#
+# Solution: the chat router stashes the emitter HERE (keyed by the
+# LangGraph thread_id, which IS serializable) and clears it at end of
+# request. Module code looks it up by reading `state["thread_id"]` and
+# calling `progress.lookup(thread_id)`. Graph state stays clean; the
+# emitter never touches the checkpoint.
+_registry: dict[str, EmitterFn] = {}
+_registry_lock = threading.Lock()
+
+
+def register(thread_id: str, emitter: EmitterFn) -> None:
+    """Bind an emitter to a thread_id for the lifetime of a request.
+
+    Idempotent — repeat registrations overwrite. Call once at the start of
+    a streamed request; pair with `unregister` in a finally block so a
+    failed request can't leak emitters that point to a closed asyncio loop.
+    """
+    with _registry_lock:
+        _registry[str(thread_id)] = emitter
+
+
+def unregister(thread_id: str) -> None:
+    """Drop the emitter for `thread_id`. Safe to call when no binding
+    exists — useful in unconditional `finally` cleanup."""
+    with _registry_lock:
+        _registry.pop(str(thread_id), None)
+
+
+def lookup(thread_id: str | None) -> Optional[EmitterFn]:
+    """Return the emitter for `thread_id`, or None if no one is listening.
+
+    `None`-safe so callers can do
+        emitter = progress.lookup(state.get("thread_id"))
+    even on entry paths that never had a thread_id set.
+    """
+    if thread_id is None:
+        return None
+    with _registry_lock:
+        return _registry.get(str(thread_id))
+
+
 def current_emitter() -> Optional[EmitterFn]:
     """Return the emitter for this thread, or None if nothing is bound.
 

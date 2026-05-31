@@ -1,7 +1,7 @@
 """Orchestrator state model — in-memory graph state + project-shared context store."""
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, TypedDict
+from typing import Annotated, Literal, TypedDict
 from uuid import UUID
 
 from langchain_core.messages import BaseMessage
@@ -54,13 +54,12 @@ class OrchestratorState(TypedDict, total=False):
     # of the sequential rule. Cleared once the target is reached. This is how
     # "enter at any step" drives the graph; None = normal sequential flow.
     target_artifact: str | None
-    # Per-request progress callback set by the chat router when streaming.
-    # When present, modules wrap long-running engine work (e.g. M2 phase2's
-    # citation scout) with engine.utils.progress.bind(emitter) so engine
-    # safe_print lines reach the SSE stream as live progress events. None
-    # for non-streaming callers (tests, sim, auto-mode CLI) — engine
-    # behavior is unchanged when nothing is bound.
-    _progress_emitter: Any | None  # noqa: type-checker can't see Callable
+    # NOTE: progress streaming. The chat router stashes the per-request
+    # emitter in engine.utils.progress's thread_id registry (NOT graph
+    # state) because LangGraph's postgres checkpointer msgpack-serializes
+    # state and chokes on Python callables. M2Agent reads thread_id from
+    # this state and looks up the emitter via progress.lookup() — keeps
+    # state msgpack-clean while the wiring still works end-to-end.
 
 
 _MODULE_TO_FIELD = {

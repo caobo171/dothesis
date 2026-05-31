@@ -88,6 +88,41 @@ def test_safe_print_hook_skips_when_no_emitter():
     progress._safe_print_hook(("anything",), end="\n")  # must not raise
 
 
+def test_registry_register_lookup_unregister_roundtrip():
+    """P5: the thread-id keyed registry is the path used by graph state —
+    callables can't be msgpack-serialized into the LangGraph checkpoint, so
+    M2Agent looks up the emitter via this registry by state['thread_id']
+    instead of carrying it in state."""
+    received: list[dict] = []
+    progress.register("thread-A", received.append)
+
+    fn = progress.lookup("thread-A")
+    assert fn is not None
+    fn({"stage": "x", "message": "hello"})
+    assert received == [{"stage": "x", "message": "hello"}]
+
+    # Lookup is uuid/string agnostic — accepts whatever the graph stores.
+    assert progress.lookup("thread-B") is None
+    assert progress.lookup(None) is None
+
+    progress.unregister("thread-A")
+    assert progress.lookup("thread-A") is None
+    # Idempotent — unregister twice doesn't raise.
+    progress.unregister("thread-A")
+
+
+def test_registry_concurrent_registrations_dont_collide():
+    """Two requests in flight at once must each get their own emitter."""
+    a, b = [], []
+    progress.register("A", a.append)
+    progress.register("B", b.append)
+    progress.lookup("A")({"stage": "x", "message": "from-A"})
+    progress.lookup("B")({"stage": "x", "message": "from-B"})
+    assert a == [{"stage": "x", "message": "from-A"}]
+    assert b == [{"stage": "x", "message": "from-B"}]
+    progress.unregister("A"); progress.unregister("B")
+
+
 def test_safe_print_in_orchestrator_fans_out_to_emitter(capsys):
     """End-to-end: when the engine's `safe_print` is called while an emitter
     is bound, the line appears in BOTH stdout AND the emitter. Stdout

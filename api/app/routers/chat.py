@@ -454,13 +454,19 @@ async def send_message(thread_id: uuid.UUID,
             except Exception:  # noqa: BLE001
                 pass
 
+        # P5: stash the emitter in engine.utils.progress's thread_id registry
+        # — NOT in graph state. LangGraph's postgres checkpointer msgpack-
+        # serializes the state on every step, which crashes on any callable
+        # ('Type is not msgpack serializable: function'). M2Agent fetches
+        # the emitter via the serializable thread_id. Cleanup happens in the
+        # outer finally so a failed request can't leak a stale callback to
+        # the now-closed asyncio loop.
+        from engine.utils import progress as _engine_progress
+        _engine_progress.register(t.langgraph_thread_id, progress_emitter)
         try:
             graph_input: dict = {
                 "messages": [HumanMessage(content=body.text)],
                 "mode": "interactive",
-                # Forward the per-request progress emitter into graph state.
-                # M2Agent reads it and passes through to phase2's scout.
-                "_progress_emitter": progress_emitter,
             }
             if is_first_turn:
                 graph_input["context_store"] = initial_context_store
@@ -536,6 +542,11 @@ async def send_message(thread_id: uuid.UUID,
                 "message": f"{type(e).__name__}: {e}",
             })
             return
+        finally:
+            # Always release the emitter binding — runs on success, exception,
+            # AND generator close (e.g. client disconnect). Pairs with the
+            # register() above; unregister is idempotent.
+            _engine_progress.unregister(t.langgraph_thread_id)
 
         # Persist the assistant reply (full text + any widget hint).
         full = "".join(assistant_chunks)

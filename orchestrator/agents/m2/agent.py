@@ -48,12 +48,17 @@ class M2Agent(ModuleAgent):
         with _open_db_session() as db:
             sub_state = _seed_from_outer(state, db)
 
-        # Forward the chat router's progress emitter (if any) into sub_state so
-        # phase2 can bind it around its scout call. Lets the user see engine
-        # research lines stream into the chat instead of staring at a typing
-        # dot for 30-60s. Absent in non-streaming callers (tests, sim, auto
-        # CLI) — phase2 just skips the bind and the engine runs as before.
-        emitter = state.get("_progress_emitter")
+        # Look up the chat router's progress emitter from the engine.utils.
+        # progress registry keyed by thread_id. CRITICAL: the emitter must NOT
+        # go in graph state — LangGraph's postgres checkpointer msgpack-
+        # serializes state and crashes on functions ('Type is not msgpack
+        # serializable: function'). Registry is per-process, set + cleared by
+        # the chat router around astream; absent in tests / sim / auto CLI.
+        try:
+            from engine.utils import progress as _progress
+            emitter = _progress.lookup(state.get("thread_id"))
+        except Exception:  # noqa: BLE001 — engine progress is best-effort
+            emitter = None
         if emitter is not None:
             sub_state["_progress_emitter"] = emitter
 
