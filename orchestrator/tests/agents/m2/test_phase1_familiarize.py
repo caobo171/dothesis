@@ -76,3 +76,48 @@ def test_phase1_auto_mode_no_papers_also_advances():
     patch = phase1_familiarize.run(_state(mode="auto", paper_uris=[]))
     assert patch.get("has_uploaded_papers") is False
     assert patch.get("current_phase") == "research_state"
+
+
+def test_phase1_first_call_emits_card_grid_widget(monkeypatch):
+    """W1: phase1 must emit interactive cards, not plain prose. The user
+    explicitly asked that every M2 question come with widgets — typing the
+    free-form reply into a chat box was the failure mode (M1 stored
+    'Other / Specify' as the actual scope value).
+
+    No uploads: only two real choices — let AI search, or pause to upload."""
+    from orchestrator.agents.m2.phases import phase1_familiarize
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "Do you have papers to upload?"
+    monkeypatch.setattr(phase1_familiarize, "_get_llm", lambda: fake_llm)
+
+    patch = phase1_familiarize.run(_state())
+    hint = patch.get("tool_calls_json")
+    assert hint is not None, "phase1 should emit a widget hint, not just prose"
+    assert hint["widget_type"] == "card_grid"
+    assert hint["field_name"] == "familiarize_choice"
+    values = {o["value"] for o in hint["options"]}
+    assert "ai_search" in values
+    # The hint must also be attached to the AIMessage so the frontend
+    # WidgetRenderer (which reads additional_kwargs.tool_calls_json) can pick
+    # it up — graph.py:77 propagates that field end-to-end.
+    msg = patch["messages"][0]
+    assert msg.additional_kwargs.get("tool_calls_json") == hint
+
+
+def test_phase1_with_uploads_includes_use_papers_option(monkeypatch):
+    """When the project already has uploaded papers, the card grid must
+    include a 'use my papers' option — otherwise the user can't actually
+    choose to rely on what they uploaded."""
+    from orchestrator.agents.m2.phases import phase1_familiarize
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "I see 2 papers — use them?"
+    monkeypatch.setattr(phase1_familiarize, "_get_llm", lambda: fake_llm)
+
+    patch = phase1_familiarize.run(
+        _state(paper_uris=["s3://b/a.pdf", "s3://b/b.pdf"])
+    )
+    hint = patch.get("tool_calls_json")
+    assert hint is not None
+    values = {o["value"] for o in hint["options"]}
+    assert "use_papers" in values
+    assert "ai_search" in values

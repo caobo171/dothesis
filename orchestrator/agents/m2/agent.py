@@ -151,9 +151,23 @@ class M2Agent(ModuleAgent):
             )
 
         latest = text_of(emitted[-1]) if emitted else ""
+        # W1: surface any widget hint a phase attached (card_grid for phase 1
+        # choices, gap cards for phase 3, …) so graph.py:77 can put it on the
+        # outbound AIMessage and the frontend WidgetRenderer can draw it.
+        # Source of truth: the most recently emitted AIMessage's
+        # additional_kwargs.tool_calls_json — the phase puts it there too, so
+        # this stays consistent even if a phase forgets to include it as a
+        # separate patch key.
+        hint = None
+        if emitted:
+            hint = (getattr(emitted[-1], "additional_kwargs", {}) or {}
+                    ).get("tool_calls_json")
+        if hint is None:
+            hint = sub_state.get("tool_calls_json")
         return ModuleStepResult(
             assistant_message=latest,
             context_patch=out,
             transition=False,
             needs_user_reply=True,
+            tool_calls_json=hint,
         )

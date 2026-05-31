@@ -116,6 +116,32 @@ def test_m2_interactive_advances_and_runs_next_phase_same_turn(monkeypatch):
     assert result.context_patch["_phase_state"]["current_phase"] == "research_state"
 
 
+def test_m2_interactive_propagates_widget_hint_from_phase(monkeypatch):
+    """W1: when a phase emits a `tool_calls_json` hint in its patch (e.g. the
+    card_grid for phase 1's choice), M2Agent must propagate it to
+    ModuleStepResult.tool_calls_json. Without that, graph.py:77 has nothing
+    to attach to additional_kwargs and the frontend renders only plain text
+    — defeating the whole 'interactive components everywhere' principle."""
+    from orchestrator.agents.m2 import M2Agent
+    from orchestrator.agents.m2.phases import phase1_familiarize
+    hint = {"widget_type": "card_grid", "field_name": "familiarize_choice",
+            "title": "Use papers?", "options": [
+                {"value": "ai_search", "label": "AI search"}],
+            "columns": 2}
+
+    def fake_p1(state):
+        from langchain_core.messages import AIMessage
+        return {"messages": [AIMessage(content="Pick one.",
+                                        additional_kwargs={"tool_calls_json": hint})],
+                "current_phase": "familiarize", "tool_calls_json": hint}
+    monkeypatch.setattr(phase1_familiarize, "run", fake_p1)
+    monkeypatch.setattr(
+        "orchestrator.agents.m2.agent._open_db_session", lambda: _FakeDbSession())
+
+    result = M2Agent().step(_outer_state(mode="interactive"))
+    assert result.tool_calls_json == hint
+
+
 def test_m2_interactive_reaching_done_transitions(monkeypatch):
     """When a phase advances to DONE, the wrapper transitions (stamps confirmed_at)."""
     from orchestrator.agents.m2 import M2Agent
