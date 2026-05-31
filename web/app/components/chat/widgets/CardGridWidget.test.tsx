@@ -108,6 +108,55 @@ describe("CardGridWidget", () => {
     );
   });
 
+  test("multi_select mode: clicking Other opens text input (not toggle)", () => {
+    // W5: multi-select grids (phase3 gaps) include an Other escape hatch.
+    // Click must open the typing UI even though we're in multi-select mode,
+    // otherwise the user can't propose a custom gap.
+    const onSelect = vi.fn();
+    const multi: CardGridHint = {
+      widget_type: "card_grid",
+      field_name: "selected_gap_ids",
+      title: "Pick gaps",
+      multi_select: true,
+      options: [
+        { value: "1", label: "Gap A" },
+        { value: "Other", label: "Add a different gap" },
+      ],
+    };
+    render(<CardGridWidget hint={multi} onSelect={onSelect} />);
+    fireEvent.click(screen.getByTestId("card-Other"));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByTestId("card-other-input")).toBeTruthy();
+  });
+
+  test("multi_select mode: submitting Other sends the typed text (not picks)", () => {
+    // When the user picks a custom gap, that's its own intent — we don't
+    // combine it with whatever cards they may have clicked first.
+    const onSelect = vi.fn();
+    const multi: CardGridHint = {
+      widget_type: "card_grid",
+      field_name: "selected_gap_ids",
+      title: "Pick gaps",
+      multi_select: true,
+      options: [
+        { value: "1", label: "Gap A" },
+        { value: "Other", label: "Add a different gap" },
+      ],
+    };
+    render(<CardGridWidget hint={multi} onSelect={onSelect} />);
+    fireEvent.click(screen.getByTestId("card-1"));        // toggled on
+    fireEvent.click(screen.getByTestId("card-Other"));    // opens input
+    fireEvent.change(screen.getByTestId("card-other-input"),
+      { target: { value: "lack of cross-cultural validation" } });
+    fireEvent.click(screen.getByTestId("card-other-submit"));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(
+      "selected_gap_ids",
+      "lack of cross-cultural validation",
+      "lack of cross-cultural validation",
+    );
+  });
+
   test("multi_select mode: clicking the same card again deselects it", () => {
     const onSelect = vi.fn();
     const multi: CardGridHint = {

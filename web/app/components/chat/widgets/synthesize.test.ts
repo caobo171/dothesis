@@ -34,6 +34,30 @@ describe("synthesizeWidgetSelection", () => {
     )).toBe("I'll use gap 1 and gap 3.");
   });
 
+  test("selected_gap_ids: free-text from Other routes to add_custom_gap", () => {
+    // W5: phase3 Other card opens a typed input. Free text should not be
+    // formatted as 'gap <text>' (the intent regex needs digits) — wrap it
+    // unambiguously so the LLM classifier picks add_custom_gap.
+    expect(synthesizeWidgetSelection(
+      "selected_gap_ids",
+      "lack of cross-cultural validation",
+      "lack of cross-cultural validation",
+    )).toBe("Add a new gap: lack of cross-cultural validation.");
+  });
+
+  test("familiarize_choice: free-text from Other becomes a refinement note", () => {
+    // W5: phase1 Other opens an input; the typed value must NOT match the
+    // preset switch arms — route to a 'something else' sentence so the
+    // intent classifier picks refine.
+    expect(synthesizeWidgetSelection(
+      "familiarize_choice",
+      "use these papers but also search journal X",
+      "use these papers but also search journal X",
+    )).toBe(
+      "Something else for the literature step: use these papers but also "
+      + "search journal X.");
+  });
+
   test("selected_gap_ids with a single pick still uses 'gap N'", () => {
     expect(synthesizeWidgetSelection("selected_gap_ids", "2", "Mediator untested"))
       .toBe("I'll use gap 2.");

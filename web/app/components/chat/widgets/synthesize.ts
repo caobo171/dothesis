@@ -22,16 +22,22 @@ export function synthesizeWidgetSelection(
     _confirm: value,
   };
 
-  // W2: M2 phase3 multi-select sends value="1,3" (comma-joined gap IDs). The
-  // backend intent classifier extracts IDs via regex \bgap\s*(\d+)\b, so the
-  // user-message must spell them as "gap 1 and gap 3" — not the raw labels.
+  // W2/W5: M2 phase3 multi-select sends value="1,3" for picked gap IDs, or
+  // free text from the Other input for a custom gap. Dispatch by whether
+  // the value is purely digits + commas + whitespace.
   if (fieldName === "selected_gap_ids") {
-    const ids = value.split(",").map(v => v.trim()).filter(Boolean);
-    if (ids.length === 0) return label;
-    const phrase = ids.length === 1
-      ? `gap ${ids[0]}`
-      : ids.slice(0, -1).map(i => `gap ${i}`).join(", ") + ` and gap ${ids[ids.length - 1]}`;
-    return `I'll use ${phrase}.`;
+    if (/^[\d,\s]+$/.test(value) && /\d/.test(value)) {
+      const ids = value.split(",").map(v => v.trim()).filter(Boolean);
+      const phrase = ids.length === 1
+        ? `gap ${ids[0]}`
+        : ids.slice(0, -1).map(i => `gap ${i}`).join(", ")
+          + ` and gap ${ids[ids.length - 1]}`;
+      return `I'll use ${phrase}.`;
+    }
+    // Free text — route to add_custom_gap. Phrase chosen so the LLM
+    // classifier picks add_custom_gap unambiguously (matches the prompt
+    // example for that action).
+    return `Add a new gap: ${value}.`;
   }
 
   // W4: M2 phase4 reference verification. Preset values map cleanly; the
@@ -72,9 +78,10 @@ export function synthesizeWidgetSelection(
     }
   }
 
-  // W1: M2 phase1 fork — map the card value to a sentence the phase intent
-  // classifier maps to confirm (use_papers) or skip (ai_search, upload_first).
-  // The phase1 prompt explicitly mentions these phrasings.
+  // W1/W5: M2 phase1 fork. Preset values map to confirm/skip per the phase1
+  // intent context; anything else came from the Other text input and must
+  // route to refine (the classifier maps 'something else' off the preset
+  // path to refine).
   if (fieldName === "familiarize_choice") {
     switch (value) {
       case "use_papers":
@@ -85,6 +92,8 @@ export function synthesizeWidgetSelection(
         return "Use my uploaded papers and also add AI-discovered citations.";
       case "upload_first":
         return "I want to upload my own papers first — pause here.";
+      default:
+        return `Something else for the literature step: ${value}.`;
     }
   }
 

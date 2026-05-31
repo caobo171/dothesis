@@ -40,16 +40,20 @@ export function CardGridWidget({
   const multiSelect = hint.multi_select === true;
 
   const handleCardClick = (value: string, label: string) => {
+    // W5: Other is always 'open the input', even in multi-select mode. In a
+    // multi-select grid (e.g. phase3 gaps) the picked set is a fundamentally
+    // different intent from 'I want to add a NEW gap not on this list', so
+    // submitting Other bypasses the picked set entirely.
+    if (value === "Other") {
+      setOtherOpen(true);
+      return;
+    }
     if (multiSelect) {
       setPicked(prev => {
         const next = new Set(prev);
         if (next.has(value)) next.delete(value); else next.add(value);
         return next;
       });
-      return;
-    }
-    if (value === "Other") {
-      setOtherOpen(true);
       return;
     }
     onSelect(hint.field_name, value, label);

@@ -104,6 +104,26 @@ def test_phase1_first_call_emits_card_grid_widget(monkeypatch):
     assert msg.additional_kwargs.get("tool_calls_json") == hint
 
 
+def test_phase1_card_grid_includes_other_option(monkeypatch):
+    """W5: every M2 card grid must have an Other/Specify escape hatch so the
+    user can opt out of the preset choices and type a custom reply. Without
+    it the cards box the user in — they have to ignore the widget and use
+    the chat input, defeating the 'interactive components everywhere'
+    principle."""
+    from orchestrator.agents.m2.phases import phase1_familiarize
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "?"
+    monkeypatch.setattr(phase1_familiarize, "_get_llm", lambda: fake_llm)
+
+    # No uploads case
+    hint_no = phase1_familiarize.run(_state()).get("tool_calls_json")
+    assert "Other" in {o["value"] for o in hint_no["options"]}
+    # With uploads case
+    hint_with = phase1_familiarize.run(
+        _state(paper_uris=["s3://b/a.pdf"])).get("tool_calls_json")
+    assert "Other" in {o["value"] for o in hint_with["options"]}
+
+
 def test_phase1_with_uploads_includes_use_papers_option(monkeypatch):
     """When the project already has uploaded papers, the card grid must
     include a 'use my papers' option — otherwise the user can't actually

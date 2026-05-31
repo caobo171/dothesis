@@ -77,6 +77,20 @@ def test_phase3_filters_placeholder_supporting_papers(monkeypatch):
     assert "Wang" in authors
 
 
+def test_phase3_card_grid_includes_other_option(monkeypatch):
+    """W5: gap card grid must include an Other option that opens text input
+    so the user can describe a gap not in the LLM's list. The synthesizer
+    routes the typed text to the add_custom_gap intent."""
+    from orchestrator.agents.m2.phases import phase3_gap_analysis
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = _GAP_JSON
+    monkeypatch.setattr(phase3_gap_analysis, "_get_llm", lambda: fake_llm)
+
+    hint = phase3_gap_analysis.run(_state()).get("tool_calls_json")
+    values = {o["value"] for o in hint["options"]}
+    assert "Other" in values
+
+
 def test_phase3_first_call_emits_multi_select_card_grid(monkeypatch):
     """W2: phase3 must emit a multi-select card_grid of gap options instead
     of a 'use gap 1 and gap 3' prose prompt. The user explicitly asked that
@@ -96,9 +110,11 @@ def test_phase3_first_call_emits_multi_select_card_grid(monkeypatch):
     assert hint["widget_type"] == "card_grid"
     assert hint["field_name"] == "selected_gap_ids"
     assert hint.get("multi_select") is True
-    # One card per gap, value = gap id, label includes the description
+    # One card per gap, value = gap id, label includes the description.
+    # 'Other' added by W5 is allowed alongside — the gap-IDs subset is what
+    # matters here.
     values = {o["value"] for o in hint["options"]}
-    assert values == {"1", "2"}
+    assert {"1", "2"}.issubset(values)
     # AIMessage must also carry the hint for the frontend to render it.
     msg = patch["messages"][0]
     assert msg.additional_kwargs.get("tool_calls_json") == hint

@@ -56,6 +56,14 @@ def _build_familiarize_hint(paper_uris: list[str]) -> dict:
             description=("Pause here so you can upload PDFs in the project "
                          "page, then come back."),
         ))
+    # W5: escape hatch — lets the user describe an option none of the cards
+    # cover (e.g. 'use the papers AND search a specific journal'). Routed
+    # through the synthesizer as a refine.
+    options.append(CardOption(
+        value="Other",
+        label="Something else — let me describe it",
+        description="Opens a text box for free-form instructions.",
+    ))
     return CardGridHint(
         widget_type="card_grid",
         field_name="familiarize_choice",
@@ -63,7 +71,9 @@ def _build_familiarize_hint(paper_uris: list[str]) -> dict:
                "or both?") if paper_uris else
               "How do you want to source citations for the literature review?",
         options=options,
-        columns=3 if paper_uris else 2,
+        # Width fits the option count: 4 cards with uploads (use/ai/both/
+        # Other), 3 without (ai/upload/Other). Frontend supports 2/3/4 cols.
+        columns=4 if paper_uris else 3,
     ).model_dump()
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent.parent.parent / "prompts" / "m2"

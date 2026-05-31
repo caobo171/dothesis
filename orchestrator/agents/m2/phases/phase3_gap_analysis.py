@@ -28,6 +28,14 @@ def _build_gap_hint(gaps: list[dict]) -> dict:
         )
         for i, g in enumerate(gaps)
     ]
+    # W5: escape hatch — opens text input where the user describes a gap not
+    # in the LLM's list. Routed by the synthesizer into add_custom_gap intent.
+    options.append(CardOption(
+        value="Other",
+        label="Add a different gap",
+        description=("Opens a text box; describe the gap you want addressed "
+                     "and I'll fold it into the list."),
+    ))
     return CardGridHint(
         widget_type="card_grid",
         field_name="selected_gap_ids",
