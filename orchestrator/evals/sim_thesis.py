@@ -32,6 +32,7 @@ import argparse
 import os
 import signal
 import sys
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -159,13 +160,19 @@ def turn_timeout(seconds: int):
 # -----------------------------------------------------------------------------
 # Live progress bar
 # -----------------------------------------------------------------------------
+def _fmt(seconds: int) -> str:
+    m, s = divmod(max(0, seconds), 60)
+    return f"{m}m{s:02d}s" if m else f"{s}s"
+
+
 class Progress:
-    """Per-module status [_, ..., v] + elapsed seconds + current module."""
+    """Per-module status [_, ..., v] + elapsed total + time-in-current-module."""
 
     def __init__(self) -> None:
         self.t0 = time.time()
         self.status = {m: "_" for m in MODULE_FIELD}
         self.current = "M1"
+        self._mod_start = self.t0
 
     def update(self, cs) -> None:
         for m, f in MODULE_FIELD.items():
@@ -176,13 +183,38 @@ class Progress:
                 self.status[m] = "..."
 
     def set_current(self, mod: str) -> None:
-        if mod in self.status:
+        if mod in self.status and mod != self.current:
             self.current = mod
+            self._mod_start = time.time()
 
     def bar(self) -> str:
-        elapsed = int(time.time() - self.t0)
+        total = int(time.time() - self.t0)
+        in_mod = int(time.time() - self._mod_start)
         parts = " ".join(f"[{m} {self.status[m]}]" for m in MODULE_FIELD)
-        return f"{parts}  -> {self.current}  ({elapsed}s)"
+        return f"{parts}  -> {self.current} ({_fmt(in_mod)}, total {_fmt(total)})"
+
+
+class Heartbeat:
+    """Background daemon that re-prints the progress bar every N seconds, so
+    long-running phases (M2's 7-minute scout, M5's per-chapter composition)
+    don't go silent. No production-code changes — pure test infrastructure."""
+
+    def __init__(self, prog: Progress, interval_s: int = 30) -> None:
+        self._prog = prog
+        self._interval = interval_s
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+
+    def start(self) -> None:
+        if self._interval > 0:
+            self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _loop(self) -> None:
+        while not self._stop.wait(self._interval):
+            print(f"  ... heartbeat: {self._prog.bar()}", flush=True)
 
 
 # -----------------------------------------------------------------------------
@@ -421,6 +453,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="Kill a stuck turn after N seconds, retry once (default 120).")
     p.add_argument("--no-persist", action="store_true",
                    help="Skip DB write (just print summary).")
+    p.add_argument("--heartbeat", type=int, default=30,
+                   help="Re-print the progress bar every N seconds during silent "
+                        "phases like M2's scout. 0 to disable (default 30).")
     return p
 
 
@@ -431,11 +466,16 @@ def main() -> None:
 
     t0 = time.time()
     prog = Progress()
-    if args.mode == "auto":
-        proj_id, final, transcript = run_auto(brief, prog)
-    else:
-        proj_id, final, transcript = run_interactive(
-            brief, prog, args.max_turns, args.per_turn_timeout)
+    heartbeat = Heartbeat(prog, interval_s=args.heartbeat)
+    heartbeat.start()
+    try:
+        if args.mode == "auto":
+            proj_id, final, transcript = run_auto(brief, prog)
+        else:
+            proj_id, final, transcript = run_interactive(
+                brief, prog, args.max_turns, args.per_turn_timeout)
+    finally:
+        heartbeat.stop()
 
     if not final:
         print("\nXX no final state — run failed early", flush=True)
