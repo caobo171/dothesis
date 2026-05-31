@@ -8,6 +8,42 @@ from orchestrator.agents.supervisor import (
 from orchestrator.state import ContextStore
 
 
+def test_supervisor_nav_classifier_does_not_block_on_llm_hang(monkeypatch):
+    """The headline live-product fix: when Gemini stalls inside the nav
+    classifier, the supervisor must still produce a routing decision in
+    bounded wall-clock so the turn doesn't hang forever. The classifier's
+    bounded_invoke has a short cap; on timeout we degrade to the rule-based
+    decision rather than blocking."""
+    import time as _t
+    from langchain_core.messages import HumanMessage
+    from unittest.mock import MagicMock
+    from orchestrator.agents import supervisor as sup
+
+    # Real LangChain-shape: with_structured_output(...).invoke(...) — and that
+    # invoke HANGS. The supervisor must not wait for it.
+    fake_structured = MagicMock()
+    def _hang(*_a, **_kw):
+        _t.sleep(60)  # would have hung the turn
+    fake_structured.invoke.side_effect = _hang
+    fake_llm = MagicMock()
+    fake_llm.with_structured_output.return_value = fake_structured
+    monkeypatch.setattr(sup, "_intent_llm", lambda: fake_llm)
+    # Tight cap so the test finishes quickly.
+    monkeypatch.setenv("ORCHESTRATOR_NAV_MAX_SECONDS", "1")
+
+    cs = ContextStore(m1_topic={"confirmed_at": "x"})
+    t0 = _t.time()
+    out = supervisor_node({
+        "messages": [HumanMessage(content="hello")],
+        "current_module": "M1", "context_store": cs, "mode": "interactive",
+        "user_intent": None, "pending_confirmations": [],
+    })
+    elapsed = _t.time() - t0
+    assert elapsed < 5, f"supervisor blocked {elapsed:.1f}s on hung classifier"
+    # Still produces a sensible decision (rule-based fallback).
+    assert out["current_module"] == "M2"  # M1 is confirmed → next is M2
+
+
 def test_supervisor_skips_nav_while_module_mid_question(monkeypatch):
     """When the current module is awaiting an answer, the user's reply is an
     ANSWER, not navigation — the nav classifier must be skipped so domain answers

@@ -30,10 +30,19 @@ class IntentClassification(BaseModel):
 
 
 def _intent_llm():
+    # timeout=20 matches base.py:_get_llm; without it, a stalled Gemini call
+    # could block every single interactive turn (it runs before any module).
     return ChatGoogleGenerativeAI(
         model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
         temperature=0.0,
+        timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
     )
+
+
+def _nav_max_seconds() -> int:
+    """Wall-clock cap for the nav classifier; the request-level timeout alone
+    isn't enough (Gemini's internal retries can stretch wall-clock past it)."""
+    return int(os.getenv("ORCHESTRATOR_NAV_MAX_SECONDS", "20"))
 
 
 def _rule_based(state: OrchestratorState) -> RouteDecision:
@@ -95,11 +104,17 @@ def supervisor_node(state: OrchestratorState) -> dict:
         # Confidence threshold (>=0.7) protects against false positives.
         if last_user and not mid_question:
             try:
+                from orchestrator.agents.base import bounded_invoke
                 llm = _intent_llm().with_structured_output(IntentClassification)
-                intent = llm.invoke(
+                # Wall-clock-bounded: a stalled Gemini call here used to hang
+                # every interactive turn before any module could run.
+                intent = bounded_invoke(
+                    llm,
                     f"Is the user requesting navigation to a specific module "
                     f"(M1=topic, M2=literature, M3=design, M4=analysis, "
-                    f"M5=writing)? Message: {last_user}"
+                    f"M5=writing)? Message: {last_user}",
+                    max_seconds=_nav_max_seconds(),
+                    retries=0,
                 )
                 if intent.wants_navigation and intent.confidence >= 0.7 and intent.target_module:
                     decision = RouteDecision(
