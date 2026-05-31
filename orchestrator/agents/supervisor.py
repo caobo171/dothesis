@@ -10,7 +10,9 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
 from orchestrator.message_utils import text_of
-from orchestrator.state import ModuleKey, OrchestratorState, next_unconfirmed_module
+from orchestrator.state import (
+    ModuleKey, OrchestratorState, get_module_slice, next_unconfirmed_module,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,13 +80,20 @@ def supervisor_node(state: OrchestratorState) -> dict:
              if isinstance(m, HumanMessage)),
             "",
         )
+        # Skip nav classification while the current module is mid-question: the
+        # user's reply is an ANSWER to a field/confirm, not a navigation request.
+        # The classifier over-triggers on domain answers — "PLS-SEM"/"SmartPLS"
+        # wrongly jumped M3→M4, "quantitative survey" jumped to M3 — derailing
+        # the flow. Genuine navigation mid-collection is still caught by the
+        # module's own intent classifier. We only consult the nav classifier when
+        # the current module is NOT awaiting input.
+        cur_slice = get_module_slice(state["context_store"], decision.next_module)
+        mid_question = ("_awaiting_field" in cur_slice
+                        or "_awaiting_confirm" in cur_slice
+                        or "_phase_state" in cur_slice)
         # Always ask the LLM whether the user wants cross-module navigation.
-        # The keyword gate that used to bypass this call has been removed —
-        # user-content like "I want to go back to my marketing question"
-        # contained "go back" but wasn't a navigation request, while phrasings
-        # like "let's revisit the design step" weren't in the keyword list at
-        # all. Confidence threshold (>=0.7) protects against false positives.
-        if last_user:
+        # Confidence threshold (>=0.7) protects against false positives.
+        if last_user and not mid_question:
             try:
                 llm = _intent_llm().with_structured_output(IntentClassification)
                 intent = llm.invoke(

@@ -3,9 +3,35 @@ from unittest.mock import MagicMock
 from langchain_core.messages import HumanMessage
 
 from orchestrator.agents.supervisor import (
-    RouteDecision, route_from_supervisor, supervisor_node,
+    IntentClassification, RouteDecision, route_from_supervisor, supervisor_node,
 )
 from orchestrator.state import ContextStore
+
+
+def test_supervisor_skips_nav_while_module_mid_question(monkeypatch):
+    """When the current module is awaiting an answer, the user's reply is an
+    ANSWER, not navigation — the nav classifier must be skipped so domain answers
+    like 'PLS-SEM' don't wrongly jump to M4."""
+    from langchain_core.messages import HumanMessage
+    from unittest.mock import MagicMock
+    from orchestrator.agents import supervisor as sup
+
+    cs = ContextStore(m1_topic={"confirmed_at": "x"}, m2_literature={"confirmed_at": "x"},
+                      m3_design={"_awaiting_field": "design"})
+    fake_structured = MagicMock()
+    fake_structured.invoke.return_value = IntentClassification(
+        wants_navigation=True, target_module="M4", confidence=0.95)
+    fake_llm = MagicMock()
+    fake_llm.with_structured_output.return_value = fake_structured
+    monkeypatch.setattr(sup, "_intent_llm", lambda: fake_llm)
+
+    out = supervisor_node({
+        "messages": [HumanMessage(content="PLS-SEM")], "current_module": "M3",
+        "context_store": cs, "mode": "interactive",
+        "user_intent": None, "pending_confirmations": [],
+    })
+    assert out["current_module"] == "M3"           # stayed (nav skipped)
+    fake_structured.invoke.assert_not_called()     # classifier not even consulted
 
 
 def _state(messages, cs=None, mode="interactive"):
