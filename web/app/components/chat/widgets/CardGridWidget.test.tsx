@@ -64,6 +64,74 @@ describe("CardGridWidget", () => {
     expect(input).toBeTruthy();
   });
 
+  test("multi_select mode: clicking a card does NOT fire onSelect yet", () => {
+    const onSelect = vi.fn();
+    const multi: CardGridHint = {
+      widget_type: "card_grid",
+      field_name: "selected_gap_ids",
+      title: "Pick gaps",
+      multi_select: true,
+      options: [
+        { value: "1", label: "Gap 1" },
+        { value: "2", label: "Gap 2" },
+      ],
+    };
+    render(<CardGridWidget hint={multi} onSelect={onSelect} />);
+    fireEvent.click(screen.getByTestId("card-1"));
+    expect(onSelect).not.toHaveBeenCalled();
+    // A submit button is now visible to commit the picks
+    expect(screen.getByTestId("card-multi-submit")).toBeTruthy();
+  });
+
+  test("multi_select mode: submit sends comma-joined values and labels", () => {
+    const onSelect = vi.fn();
+    const multi: CardGridHint = {
+      widget_type: "card_grid",
+      field_name: "selected_gap_ids",
+      title: "Pick gaps",
+      multi_select: true,
+      options: [
+        { value: "1", label: "Gap A" },
+        { value: "2", label: "Gap B" },
+        { value: "3", label: "Gap C" },
+      ],
+    };
+    render(<CardGridWidget hint={multi} onSelect={onSelect} />);
+    fireEvent.click(screen.getByTestId("card-1"));
+    fireEvent.click(screen.getByTestId("card-3"));
+    fireEvent.click(screen.getByTestId("card-multi-submit"));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(
+      "selected_gap_ids",
+      "1,3",
+      "Gap A, Gap C",
+    );
+  });
+
+  test("multi_select mode: clicking the same card again deselects it", () => {
+    const onSelect = vi.fn();
+    const multi: CardGridHint = {
+      widget_type: "card_grid",
+      field_name: "selected_gap_ids",
+      title: "Pick gaps",
+      multi_select: true,
+      options: [
+        { value: "1", label: "Gap A" },
+        { value: "2", label: "Gap B" },
+      ],
+    };
+    render(<CardGridWidget hint={multi} onSelect={onSelect} />);
+    fireEvent.click(screen.getByTestId("card-1"));
+    fireEvent.click(screen.getByTestId("card-1"));      // toggle off
+    fireEvent.click(screen.getByTestId("card-2"));
+    fireEvent.click(screen.getByTestId("card-multi-submit"));
+    expect(onSelect).toHaveBeenCalledWith(
+      "selected_gap_ids",
+      "2",
+      "Gap B",
+    );
+  });
+
   test("typing in Other input and submitting sends the typed value as the answer", () => {
     const onSelect = vi.fn();
     const hintWithOther: CardGridHint = {

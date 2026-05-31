@@ -10,7 +10,32 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from orchestrator.agents.m2.intent import classify_phase_intent
 from orchestrator.agents.m2.state import M2SubGraphState
+from orchestrator.agents.widgets import CardGridHint, CardOption
 from orchestrator.message_utils import text_of
+
+
+def _build_gap_hint(gaps: list[dict]) -> dict:
+    """Build a multi-select card_grid where each gap is one card. Users
+    typically pick multiple gaps together (the synthesis chapter often weaves
+    2-3 gaps into one argument), so single-select would force a serial click
+    loop. multi_select=True lets the widget queue selections client-side and
+    only fire once on Submit."""
+    options = [
+        CardOption(
+            value=str(g.get("id", i + 1)),
+            label=str(g.get("description", "?"))[:120],
+            description=f"Relevance: {g.get('relevance', 'Medium')}",
+        )
+        for i, g in enumerate(gaps)
+    ]
+    return CardGridHint(
+        widget_type="card_grid",
+        field_name="selected_gap_ids",
+        title="Which research gaps should this thesis address?",
+        options=options,
+        columns=2,
+        multi_select=True,
+    ).model_dump()
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent.parent.parent / "prompts" / "m2"
 _PROMPT = (_PROMPT_DIR / "3_gap_analysis.md").read_text()
@@ -146,10 +171,16 @@ def run(state: M2SubGraphState) -> dict:
         text = "Here are the gaps I found:\n" + "\n".join(
             f"  {g.get('id', i+1)}. {g.get('description', '?')} ({g.get('relevance', 'Medium')})"
             for i, g in enumerate(gaps)
-        ) + "\n\nWhich would you like to use? (e.g. 'use gap 1 and gap 3')"
+        ) + "\n\nWhich would you like to use? Pick one or more from the cards below."
+        # W2: surface the gap list as a multi-select card_grid. The text above
+        # stays as the conversation log for accessibility and for clients that
+        # haven't rendered widgets, but the cards are the primary UI.
+        hint = _build_gap_hint(gaps)
+        ai = AIMessage(content=text, additional_kwargs={"tool_calls_json": hint})
         return {
             "candidate_gaps": gaps,
-            "messages": [AIMessage(content=text)],
+            "messages": [ai],
+            "tool_calls_json": hint,
         }
 
     last_user = next(

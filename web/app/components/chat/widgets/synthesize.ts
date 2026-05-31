@@ -21,6 +21,35 @@ export function synthesizeWidgetSelection(
     // click round-trips into the confirm/reject path without rephrasing.
     _confirm: value,
   };
+
+  // W2: M2 phase3 multi-select sends value="1,3" (comma-joined gap IDs). The
+  // backend intent classifier extracts IDs via regex \bgap\s*(\d+)\b, so the
+  // user-message must spell them as "gap 1 and gap 3" — not the raw labels.
+  if (fieldName === "selected_gap_ids") {
+    const ids = value.split(",").map(v => v.trim()).filter(Boolean);
+    if (ids.length === 0) return label;
+    const phrase = ids.length === 1
+      ? `gap ${ids[0]}`
+      : ids.slice(0, -1).map(i => `gap ${i}`).join(", ") + ` and gap ${ids[ids.length - 1]}`;
+    return `I'll use ${phrase}.`;
+  }
+
+  // W1: M2 phase1 fork — map the card value to a sentence the phase intent
+  // classifier maps to confirm (use_papers) or skip (ai_search, upload_first).
+  // The phase1 prompt explicitly mentions these phrasings.
+  if (fieldName === "familiarize_choice") {
+    switch (value) {
+      case "use_papers":
+        return "Yes, use my uploaded papers as sources.";
+      case "ai_search":
+        return "Please use AI search to find citations for me.";
+      case "both":
+        return "Use my uploaded papers and also add AI-discovered citations.";
+      case "upload_first":
+        return "I want to upload my own papers first — pause here.";
+    }
+  }
+
   return descriptors[fieldName] ?? label;
 }
 

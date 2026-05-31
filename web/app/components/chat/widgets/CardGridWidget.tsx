@@ -32,7 +32,22 @@ export function CardGridWidget({
   const [otherOpen, setOtherOpen] = useState(false);
   const [otherText, setOtherText] = useState("");
 
+  // Multi-select state — clicks toggle membership in `picked`, and onSelect
+  // only fires once the user clicks Submit. The committed payload joins
+  // values + labels with ',' to match the existing onSelect signature so no
+  // consumer of this widget needs to be aware of the new mode.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const multiSelect = hint.multi_select === true;
+
   const handleCardClick = (value: string, label: string) => {
+    if (multiSelect) {
+      setPicked(prev => {
+        const next = new Set(prev);
+        if (next.has(value)) next.delete(value); else next.add(value);
+        return next;
+      });
+      return;
+    }
     if (value === "Other") {
       setOtherOpen(true);
       return;
@@ -46,6 +61,16 @@ export function CardGridWidget({
     onSelect(hint.field_name, v, v);
   };
 
+  const submitMulti = () => {
+    if (picked.size === 0) return;
+    // Preserve the option order the backend sent (stable for users), not the
+    // click order — keeps the message readable in the chat transcript.
+    const ordered = hint.options.filter(o => picked.has(o.value));
+    const values = ordered.map(o => o.value).join(",");
+    const labels = ordered.map(o => o.label).join(", ");
+    onSelect(hint.field_name, values, labels);
+  };
+
   return (
     <div
       className="mt-3 rounded-lg border border-gray-200 bg-white p-3"
@@ -55,7 +80,9 @@ export function CardGridWidget({
       <div className={`grid gap-2 ${columnClass}`}>
         {hint.options.map(opt => {
           const isOther = opt.value === "Other";
-          const highlighted = isOther && otherOpen;
+          const highlighted =
+            (multiSelect && picked.has(opt.value)) ||
+            (isOther && otherOpen);
           return (
             <button
               key={opt.value}
@@ -78,6 +105,25 @@ export function CardGridWidget({
           );
         })}
       </div>
+
+      {/* Submit button for multi-select mode — only rendered after at least
+          one card has been picked, so a fresh widget shows just the grid. */}
+      {multiSelect && picked.size > 0 && (
+        <div className="mt-3 flex items-center justify-between">
+          <div className="text-xs text-gray-600">
+            {picked.size} selected
+          </div>
+          <button
+            type="button"
+            onClick={submitMulti}
+            disabled={disabled || picked.size === 0}
+            data-testid="card-multi-submit"
+            className="rounded-md bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Confirm selection
+          </button>
+        </div>
+      )}
 
       {/* Inline input that appears when "Other / Specify" is picked. */}
       {otherOpen && (

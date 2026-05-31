@@ -12,6 +12,10 @@ export type CardGridHint = {
   title: string;
   options: CardOption[];
   columns?: number;
+  // When true the widget tracks a Set of picks and only fires onSelect on
+  // Submit, sending a comma-joined string of values + a human-readable label.
+  // Used by M2 phase3 gap selection where users routinely pick 2-3 gaps.
+  multi_select?: boolean;
 };
 
 // SP4: list_editor variant

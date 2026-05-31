@@ -23,6 +23,35 @@ describe("synthesizeWidgetSelection", () => {
     expect(synthesizeWidgetSelection("research_type", "mixed", "Mixed methods"))
       .toBe("I'll use a mixed methods approach.");
   });
+
+  test("selected_gap_ids synthesizes a 'use gap N and gap M' sentence", () => {
+    // W2: multi-select widget sends value="1,3", but the M2 intent classifier
+    // expects the 'gap N' tokens (regex \bgap\s*(\d+)\b). Synthesize a sentence
+    // that includes them explicitly so the click round-trips into the select
+    // action without changing the backend parser.
+    expect(synthesizeWidgetSelection(
+      "selected_gap_ids", "1,3", "No SME context, Mediator untested",
+    )).toBe("I'll use gap 1 and gap 3.");
+  });
+
+  test("selected_gap_ids with a single pick still uses 'gap N'", () => {
+    expect(synthesizeWidgetSelection("selected_gap_ids", "2", "Mediator untested"))
+      .toBe("I'll use gap 2.");
+  });
+
+  test("familiarize_choice: ai_search picks the AI search branch", () => {
+    // W1: phase 1's intent classifier maps 'skip' = use AI search. Synthesize
+    // a sentence that nudges the model toward that mapping unambiguously.
+    expect(synthesizeWidgetSelection(
+      "familiarize_choice", "ai_search", "Let AI search for citations",
+    )).toBe("Please use AI search to find citations for me.");
+  });
+
+  test("familiarize_choice: use_papers confirms uploaded sources", () => {
+    expect(synthesizeWidgetSelection(
+      "familiarize_choice", "use_papers", "Use my 2 uploaded papers",
+    )).toBe("Yes, use my uploaded papers as sources.");
+  });
 });
 
 describe("summarizeList", () => {

@@ -77,6 +77,33 @@ def test_phase3_filters_placeholder_supporting_papers(monkeypatch):
     assert "Wang" in authors
 
 
+def test_phase3_first_call_emits_multi_select_card_grid(monkeypatch):
+    """W2: phase3 must emit a multi-select card_grid of gap options instead
+    of a 'use gap 1 and gap 3' prose prompt. The user explicitly asked that
+    every M2 question come with interactive components, and gap selection is
+    the highest-leverage one — multiple gaps are typically picked together,
+    so multi-select avoids a serial click-confirm loop.
+
+    Each gap becomes one card; the field_name is 'selected_gap_ids'."""
+    from orchestrator.agents.m2.phases import phase3_gap_analysis
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = _GAP_JSON
+    monkeypatch.setattr(phase3_gap_analysis, "_get_llm", lambda: fake_llm)
+
+    patch = phase3_gap_analysis.run(_state())
+    hint = patch.get("tool_calls_json")
+    assert hint is not None, "phase3 should emit a widget hint"
+    assert hint["widget_type"] == "card_grid"
+    assert hint["field_name"] == "selected_gap_ids"
+    assert hint.get("multi_select") is True
+    # One card per gap, value = gap id, label includes the description
+    values = {o["value"] for o in hint["options"]}
+    assert values == {"1", "2"}
+    # AIMessage must also carry the hint for the frontend to render it.
+    msg = patch["messages"][0]
+    assert msg.additional_kwargs.get("tool_calls_json") == hint
+
+
 def test_phase3_first_call_proposes_gaps(monkeypatch):
     from orchestrator.agents.m2.phases import phase3_gap_analysis
     fake_llm = MagicMock()

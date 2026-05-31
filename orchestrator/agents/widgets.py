@@ -28,6 +28,12 @@ class CardGridHint(BaseModel):
     title: str
     options: list[CardOption]
     columns: int = 3
+    # When True the frontend tracks a set of selected card values and only
+    # fires onSelect when the user clicks Submit. Used by phase3 gap selection
+    # because users typically pick multiple gaps together; default False keeps
+    # every existing emitter (M1 scope/field/Other, M3 quant/qual, M5 chapter
+    # picker) on the original fire-on-first-click flow.
+    multi_select: bool = False
 
 
 # --- SP4: list_editor variant -------------------------------------------------

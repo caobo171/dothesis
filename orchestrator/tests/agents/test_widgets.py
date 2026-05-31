@@ -43,6 +43,24 @@ def test_card_grid_hint_model_dump_includes_widget_type():
     assert blob["options"][0]["value"] == "quantitative"
 
 
+def test_card_grid_hint_default_multi_select_is_false():
+    """Default behavior — backwards compatible with every existing emitter.
+    multi_select=True is opt-in for callers like phase3 gap selection."""
+    h = CardGridHint(field_name="x", title="t",
+                     options=[CardOption(value="a", label="A")])
+    assert h.multi_select is False
+
+
+def test_card_grid_hint_multi_select_serializes():
+    """W2: phase3 emits multi_select=True so the React widget renders a
+    Submit-after-multi-click flow instead of fire-on-first-click."""
+    h = CardGridHint(field_name="selected_gap_ids", title="Pick gaps",
+                     options=[CardOption(value="1", label="Gap 1")],
+                     multi_select=True)
+    assert h.multi_select is True
+    assert h.model_dump()["multi_select"] is True
+
+
 def test_card_grid_hint_rejects_empty_options():
     """Pydantic should not allow building a card grid with zero options
     (widget would be unusable). Pydantic doesn't reject empty lists by
