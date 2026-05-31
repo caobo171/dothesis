@@ -9,6 +9,7 @@ import time
 from abc import ABC
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
@@ -47,22 +48,38 @@ def bounded_invoke(llm, prompt, *, max_seconds: int = 60,
     are exhausted. The caller is expected to catch and degrade gracefully (e.g.
     fall back to a templated response).
     """
+    # Caller-aware label for the timing logs so we can tell which call site is
+    # the slow one (supervisor.nav vs M1.ask_next vs M1.classify_intent etc).
+    # Walks one frame up; cheap and only runs at the start of an LLM call.
+    import inspect
+    caller = inspect.stack()[1]
+    label = f"{Path(caller.filename).name}:{caller.function}"
+
     last_err: Exception | None = None
     for attempt in range(retries + 1):
         # NB: don't use `with executor:` — its __exit__ does shutdown(wait=True),
         # which blocks on any leaked worker (the whole point of the timeout is
         # to NOT wait for stuck threads). Explicit wait=False keeps the cap real.
         ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        t0 = time.time()
+        logger.info("LLM.invoke[%s] start (cap=%ss attempt=%d prompt_chars=%d)",
+                    label, max_seconds, attempt + 1, len(str(prompt)))
         try:
             future = ex.submit(llm.invoke, prompt)
             try:
-                return future.result(timeout=max_seconds)
+                result = future.result(timeout=max_seconds)
+                logger.info("LLM.invoke[%s] OK in %.2fs", label, time.time() - t0)
+                return result
             except concurrent.futures.TimeoutError:
                 last_err = BoundedInvokeTimeout(
                     f"bounded_invoke exceeded {max_seconds}s (attempt {attempt+1})")
+                logger.warning("LLM.invoke[%s] TIMEOUT after %.2fs (cap=%ss)",
+                               label, time.time() - t0, max_seconds)
                 future.cancel()
             except Exception as e:  # noqa: BLE001 - retry transient + propagate
                 last_err = e
+                logger.warning("LLM.invoke[%s] ERROR after %.2fs: %s",
+                               label, time.time() - t0, type(e).__name__)
         finally:
             ex.shutdown(wait=False)
         if attempt < retries:
