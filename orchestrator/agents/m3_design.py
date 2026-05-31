@@ -108,9 +108,18 @@ class M3Agent(ModuleAgent):
         )
         # Already-confirmed M3 partials that later list_editor renders depend on
         cls._render_themes = partial.get("themes") or []
-        cls._render_constructs = (partial.get("conceptual_model") or {}).get("constructs", [])
+        cls._render_constructs = self._constructs_from(partial.get("conceptual_model"))
         cls._render_conceptual_model = partial.get("conceptual_model")
         return super().step(state)
+
+    @staticmethod
+    def _constructs_from(conceptual_model) -> list:
+        """Extract the construct list from a conceptual_model that may be a dict
+        ({"constructs": [...]}) OR a bare list of path strings (what the LLM /
+        delegation sometimes returns). Guards against 'list has no attribute get'."""
+        if isinstance(conceptual_model, dict):
+            return conceptual_model.get("constructs", [])
+        return conceptual_model or []
 
     def _resolved_paradigm_key(self, partial: dict) -> str | None:
         """Pick the _FIELDS_BY_PARADIGM key for the current partial state.
