@@ -29,6 +29,27 @@ def _get_llm():
     )
 
 
+def _engine_model():
+    """Native engine-shaped model for the citation pipeline.
+
+    The engine's DeepResearchPlanner + CitationResearcher call
+    `model.generate_content(prompt, generation_config=...)` (raw google-genai
+    interface). LangChain's ChatGoogleGenerativeAI doesn't expose that
+    method, so passing it crashed the planner and the engine silently fell
+    back to 'standard mode with basic queries' — quality regression.
+
+    GeminiModelWrapper IS the engine's native type. Constructing it directly
+    here keeps the planner happy without changing engine internals.
+    Resolves the API key via the same dual-name fallback the rest of the
+    engine uses (B5 fix).
+    """
+    from engine.utils.gemini_client import create_gemini_client
+    return create_gemini_client(
+        model_name=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
+        temperature=0.3,
+    )
+
+
 # Re-exported here so tests can monkeypatch easily — the real import is late
 # (inside the function body) to avoid import-time failures when engine/ is
 # not fully available in test environments.
@@ -70,7 +91,11 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
     research_topics = [t.format(topic=topic) for t in _TOPIC_VARIANTS[:n_topics]]
     tmp = Path(os.getenv("ORCHESTRATOR_SCRATCH", "/tmp/orchestrator_scratch"))
     tmp.mkdir(parents=True, exist_ok=True)
-    llm = _get_llm()
+    # ENGINE-native model — see _engine_model docstring. Reverted from
+    # _get_llm (LangChain) because the planner's `.generate_content()` call
+    # crashed and the engine fell back to a 10-basic-query mode that
+    # under-cited every scout.
+    llm = _engine_model()
     try:
         # B4 use_deep_research=True: matches upstream opendraft. Enables the
         # engine's DeepResearchPlanner which expands the topic into 50+ varied

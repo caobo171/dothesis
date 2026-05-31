@@ -25,6 +25,9 @@ def test_scout_citations_calls_engine_with_min_n(monkeypatch):
     monkeypatch.setattr(
         "orchestrator.tools.m2_literature._get_llm", lambda: MagicMock()
     )
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature._engine_model", lambda: MagicMock()
+    )
 
     out = scout_citations.invoke({"topic": "Transformational leadership", "min_n": 30})
     assert captured["target_minimum"] == 30
@@ -36,6 +39,35 @@ class _Cite:
     def __init__(self, **kw):
         for k, v in kw.items():
             setattr(self, k, v)
+
+
+def test_scout_passes_engine_native_model_not_langchain(monkeypatch):
+    """Q1: the engine's DeepResearchPlanner calls model.generate_content(...).
+    LangChain's ChatGoogleGenerativeAI exposes .invoke(...) instead, so
+    passing it crashed the planner and the engine silently fell back to
+    standard mode with 10 basic queries — every scout under-cited.
+
+    The scout must construct an engine-shaped model (GeminiModelWrapper /
+    create_gemini_client) and pass IT — not a LangChain wrapper."""
+    captured = {}
+    def fake_research(model, research_topics, output_path, target_minimum, **kw):
+        captured["model"] = model
+        return {"citations": []}
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature.research_citations_via_api",
+        fake_research)
+    fake_engine_model = MagicMock()
+    fake_engine_model.generate_content = MagicMock()  # engine interface
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature._engine_model",
+        lambda: fake_engine_model)
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+
+    scout_citations.invoke({"topic": "X", "min_n": 5})
+    assert captured["model"] is fake_engine_model
+    # And it has the .generate_content method the engine needs.
+    assert hasattr(captured["model"], "generate_content")
 
 
 def test_scout_passes_use_deep_research_and_topic(monkeypatch):
@@ -50,6 +82,8 @@ def test_scout_passes_use_deep_research_and_topic(monkeypatch):
         "orchestrator.tools.m2_literature.research_citations_via_api", fake_research)
     monkeypatch.setattr(
         "orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature._engine_model", lambda: MagicMock())
     # Both retries should also pass deep_research; isolate first call by
     # raising ValueError-via-mocking only on attempts > 1.
     scout_citations.invoke({"topic": "TikTok engagement Gen Z purchase", "min_n": 20})
@@ -69,6 +103,7 @@ def test_scout_reads_api_source_attribute(monkeypatch):
     monkeypatch.setattr("orchestrator.tools.m2_literature.research_citations_via_api",
                         lambda **kw: {"citations": [cite]})
     monkeypatch.setattr("orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    monkeypatch.setattr("orchestrator.tools.m2_literature._engine_model", lambda: MagicMock())
     out = scout_citations.invoke({"topic": "X", "min_n": 5})
     assert out[0]["source"] == "Crossref"
 
@@ -84,6 +119,8 @@ def test_scout_topic_count_env_overrides_default(monkeypatch):
         "orchestrator.tools.m2_literature.research_citations_via_api", fake_research)
     monkeypatch.setattr(
         "orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature._engine_model", lambda: MagicMock())
     monkeypatch.setenv("M2_SCOUT_TOPIC_COUNT", "1")
     scout_citations.invoke({"topic": "X", "min_n": 5})
     assert len(captured["topics"]) == 1
@@ -98,6 +135,8 @@ def test_scout_topic_count_defaults_to_three(monkeypatch):
         "orchestrator.tools.m2_literature.research_citations_via_api", fake_research)
     monkeypatch.setattr(
         "orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature._engine_model", lambda: MagicMock())
     monkeypatch.delenv("M2_SCOUT_TOPIC_COUNT", raising=False)
     scout_citations.invoke({"topic": "X", "min_n": 5})
     assert len(captured["topics"]) == 3  # production default unchanged
@@ -112,6 +151,7 @@ def test_scout_citations_handles_citation_objects_with_falsy_fields(monkeypatch)
     monkeypatch.setattr("orchestrator.tools.m2_literature.research_citations_via_api",
                         lambda **kw: {"citations": [cite]})
     monkeypatch.setattr("orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    monkeypatch.setattr("orchestrator.tools.m2_literature._engine_model", lambda: MagicMock())
     out = scout_citations.invoke({"topic": "x", "min_n": 5})
     assert out[0]["title"] == "Paper A"
     assert out[0]["source"] is None  # falsy field handled, no crash
@@ -135,6 +175,8 @@ def test_scout_citations_retries_with_low_target_on_quality_gate(monkeypatch):
         "orchestrator.tools.m2_literature.research_citations_via_api", fake_research)
     monkeypatch.setattr(
         "orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    monkeypatch.setattr(
+        "orchestrator.tools.m2_literature._engine_model", lambda: MagicMock())
 
     out = scout_citations.invoke({"topic": "TikTok Gen Z", "min_n": 20})
     assert calls == [20, 1]  # tried 20 (gate), retried with 1
