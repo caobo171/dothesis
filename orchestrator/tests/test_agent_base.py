@@ -39,6 +39,32 @@ def _state(messages, partial=None, mode="interactive"):
     }
 
 
+def test_step_does_not_hang_when_get_llm_invoke_stalls(monkeypatch):
+    """Regression for the 'simple Hello hangs forever' bug. The first
+    interactive turn calls _ask_next_question -> _get_llm().invoke(prompt),
+    and Gemini can stall there too. step() must return in bounded wall-clock
+    even when the LLM hangs indefinitely (falls back to a deterministic
+    question)."""
+    import time as _t
+    agent = _ToyAgent()
+
+    fake_llm = MagicMock()
+    def _hang(_p):
+        _t.sleep(60)
+    fake_llm.invoke.side_effect = _hang
+    monkeypatch.setattr(_ToyAgent, "_get_llm", lambda self: fake_llm)
+    # tighten the wall-clock cap so the test finishes fast
+    monkeypatch.setenv("ORCHESTRATOR_LLM_MAX_SECONDS", "1")
+
+    state = _state([HumanMessage(content="start")])
+    t0 = _t.time()
+    result = agent.step(state)
+    elapsed = _t.time() - t0
+    assert elapsed < 5, f"step() blocked {elapsed:.1f}s on hung LLM"
+    assert result.transition is False
+    assert result.assistant_message, "must produce SOME question even on LLM hang"
+
+
 def test_bounded_invoke_returns_value_when_fast(monkeypatch):
     from orchestrator.agents.base import bounded_invoke
     llm = MagicMock()

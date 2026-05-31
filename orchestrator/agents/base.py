@@ -132,6 +132,16 @@ class ModuleAgent(ABC):
             timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
         )
 
+    @staticmethod
+    def _llm_max_seconds() -> int:
+        """Wall-clock cap for one LLM invoke from a hot-path method.
+
+        Used with bounded_invoke so a Gemini stall never blocks the whole
+        graph turn. The request-level timeout=20 on _get_llm alone isn't
+        enough — Gemini's internal retries can stretch wall-clock past it.
+        """
+        return int(os.getenv("ORCHESTRATOR_LLM_MAX_SECONDS", "25"))
+
     def render_hint_for_field(self, field_name: str, partial: dict | None = None) -> dict | None:
         """Return a widget render hint for the next question, or None for free-text.
 
@@ -448,7 +458,20 @@ class ModuleAgent(ABC):
             f"for multiple fields at once. Don't restate the whole schema. Already "
             f"filled: {json.dumps({k:v for k,v in partial.items() if not k.startswith('_')}, default=str)[:1000]}"
         )
-        msg = self._get_llm().invoke(prompt).content.strip()
+        # Wall-clock-bounded: a stalled Gemini call here used to hang the
+        # whole turn (the "simple Hello hangs forever" live bug). On timeout
+        # we fall back to a deterministic templated question so the user
+        # always sees a prompt, never an infinite spinner.
+        try:
+            msg = bounded_invoke(
+                self._get_llm(), prompt,
+                max_seconds=self._llm_max_seconds(), retries=0,
+            ).content.strip()
+        except (BoundedInvokeTimeout, Exception):  # noqa: BLE001
+            logger.exception("%s _ask_next_question LLM stalled/failed; "
+                             "using templated question", self.module_key)
+            human = str(missing).replace("_", " ")
+            msg = f"What's your {human}?"
         # SP3: call the hook so subclasses can attach a widget render hint.
         # Pass `partial` so the default LLM card generator can ground its
         # suggestions in what the user has already filled.
