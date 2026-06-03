@@ -14,10 +14,13 @@ def test_quant_walk_order():
     partial["tool"] = "SmartPLS"
     assert agent._next_missing_field(partial) == "conceptual_model"
 
-    partial["conceptual_model"] = {"constructs": ["TL"], "paths": []}
-    assert agent._next_missing_field(partial) == "scale_items"
-
-    partial["scale_items"] = [{"construct": "TL", "items": ["I1"]}]
+    # 2026-06 design merge: conceptual_model carries both paths and per-construct
+    # Likert items as node.questions, so the walk skips the prior scale_items
+    # step entirely and goes straight to target_sample_size.
+    partial["conceptual_model"] = {
+        "nodes": [{"id": "n0", "label": "TL", "questions": ["I1"]}],
+        "edges": [],
+    }
     assert agent._next_missing_field(partial) == "target_sample_size"
 
     partial["target_sample_size"] = 200
@@ -56,9 +59,9 @@ def test_mixed_seq_explanatory_walk_switches_after_design_type():
 
 
 def test_mixed_seq_exploratory_walk_starts_with_qual():
-    """Exploratory order in _FIELDS_BY_PARADIGM is:
+    """Exploratory order in _FIELDS_BY_PARADIGM is (post-2026-06 merge):
     [mixed_design_type, themes, interview_guide, purposive_criteria,
-    design, tool, conceptual_model, scale_items, target_sample_size, sampling_strategy].
+    design, tool, conceptual_model, target_sample_size, sampling_strategy].
     So after mixed_design_type is filled, the next missing field is 'themes'."""
     agent = M3Agent()
     partial = {"paradigm": "mixed", "mixed_design_type": "sequential_exploratory"}

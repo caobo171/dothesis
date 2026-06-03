@@ -17,7 +17,12 @@ _FULL_LIT = {
 _FULL_DESIGN = {
     "paradigm": "quantitative", "design": "PLS-SEM", "tool": "SmartPLS",
     "sampling_strategy": "convenience", "target_sample_size": 200,
-    "conceptual_model": {"c": 1}, "scale_items": [{"i": 1}],
+    # 2026-06 design merge: conceptual_model carries both paths and per-construct
+    # Likert items as node.questions; the standalone scale_items field is gone.
+    "conceptual_model": {
+        "nodes": [{"id": "n0", "label": "A", "questions": ["q1"]}],
+        "edges": [],
+    },
 }
 _FULL_ANALYSIS = {
     "data_type_detected": "SmartPLS", "analysis_outline": {"sections": ["d"]},

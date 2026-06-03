@@ -64,6 +64,21 @@ def test_subclass_override_attaches_hint(monkeypatch):
     assert result.tool_calls_json["field_name"] == "color"
 
 
+def test_empty_llm_content_falls_back_to_templated_question(monkeypatch):
+    """Regression: Gemini occasionally returns content="" without raising
+    (safety filter, transient hiccup). Old code passed the empty string
+    through as `assistant_message` and the user saw a blank bubble — the
+    "stuck at M3→M4" bug where M4's first question never rendered and only
+    M3's prior 'Confirmed M3. Moving on.' was visible. The fallback path
+    must now also fire on empty/whitespace content, not just exceptions."""
+    fake = MagicMock()
+    fake.invoke.return_value.content = "   "  # whitespace only — strips to ""
+    monkeypatch.setattr(_PlainAgent, "_get_llm", lambda self: fake)
+    result = _PlainAgent().step(_state([HumanMessage("start")]))
+    assert result.assistant_message  # non-empty
+    assert "color" in result.assistant_message.lower()  # templated fallback names the field
+
+
 def test_summary_phase_emits_confirm_button_widget(monkeypatch):
     """All fields filled → summary path emits a card_grid with Confirm/Edit
     buttons so the user can one-click move on instead of typing.

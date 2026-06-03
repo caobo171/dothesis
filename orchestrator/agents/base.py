@@ -88,6 +88,64 @@ def bounded_invoke(llm, prompt, *, max_seconds: int = 60,
     raise last_err
 
 
+# ---------------------------------------------------------------------------
+# Per-process LRU cache for LLM-generated card grids / list seeds.
+#
+# Why: _generate_card_options and _generate_list_items are pure functions of
+# (module_key, field_name, non-underscore partial state) — same inputs always
+# warrant the same output (Gemini at temp=0.4 wobbles but the user can't tell
+# the difference between "Quantitative / Qualitative / Mixed" returned twice
+# in the same shape). They fire on EVERY turn that re-renders the same
+# clarification question (widget re-renders, edit-then-back, etc.), so the
+# same field is regenerated multiple times in a single project.
+#
+# Observed pain: a 12s Gemini stall on `research_type` cards (see live log)
+# blocks the whole turn — and the *next* turn would do the same call again
+# even though the partial state hadn't changed. Caching kills the repeat cost
+# and (on cache hit) avoids the chance of hitting an unhealthy upstream at all.
+#
+# Bound: 256 entries process-wide. Per-project state-hash variance is tiny
+# (at most ~10 distinct partial-state snapshots per field per project), so
+# 256 covers many concurrent projects before LRU eviction kicks in.
+_CARD_CACHE_MAX = 256
+_card_cache: dict[tuple[str, str, str], list[Any]] = {}
+_list_cache: dict[tuple[str, str, str], list[str]] = {}
+
+
+def _partial_cache_hash(partial: dict) -> str:
+    """Stable short hash over the user-visible (non-underscore) fields.
+
+    JSON-canonicalize → BLAKE2s. We don't need cryptographic strength — just
+    a deterministic key that survives dict iteration order and survives any
+    non-hashable values (lists, nested dicts) that real partials carry.
+    """
+    canonical = json.dumps(
+        {k: v for k, v in partial.items() if not k.startswith("_")},
+        sort_keys=True, default=str, ensure_ascii=False,
+    )
+    import hashlib
+    return hashlib.blake2s(canonical.encode(), digest_size=8).hexdigest()
+
+
+def _cache_get(cache: dict, key: tuple) -> Any | None:
+    """LRU bump on hit: pop+reinsert moves the key to the end (most-recent)."""
+    if key in cache:
+        value = cache.pop(key)
+        cache[key] = value
+        return value
+    return None
+
+
+def _cache_put(cache: dict, key: tuple, value: Any, max_size: int) -> None:
+    """Insert + evict the oldest entry when over capacity (insertion order
+    in a dict is preserved since 3.7, so iter().next() is the LRU victim)."""
+    if key in cache:
+        cache.pop(key)
+    cache[key] = value
+    while len(cache) > max_size:
+        cache.pop(next(iter(cache)))
+
+
 @dataclass
 class ModuleStepResult:
     """What a module's step() returns to the graph runner."""
@@ -267,11 +325,22 @@ class ModuleAgent(ABC):
             f"starting point, not exhaustive coverage.\n\n"
             f"Respond with ONLY a JSON array of strings. No prose, no markdown."
         )
+        # Mirror the card-grid cache: same (module, field, partial) →
+        # reuse the last successful seed. List items are likewise
+        # idempotent w.r.t. the partial state, and re-renders of the
+        # same widget were repeatedly paying for an LLM call.
+        cache_key = (self.module_key, field_name, _partial_cache_hash(partial))
+        cached = _cache_get(_list_cache, cache_key)
+        if cached is not None:
+            return cached
         try:
             raw = self._bounded(prompt).content
             data = json.loads(_strip_code_fence(raw))
             if isinstance(data, list):
-                return [str(x).strip() for x in data if x]
+                items = [str(x).strip() for x in data if x]
+                if items:
+                    _cache_put(_list_cache, cache_key, items, _CARD_CACHE_MAX)
+                return items
         except Exception:  # noqa: BLE001 - LLM/JSON failure is best-effort
             logger.exception(
                 "%s list-item suggestion failed for %s",
@@ -321,6 +390,14 @@ class ModuleAgent(ABC):
             f"{{\"value\": str, \"label\": str, \"description\": str}} objects. "
             f"No prose, no markdown."
         )
+        # Cache lookup: same (module, field, partial-state) → reuse the
+        # last successful generation. Skips the Gemini call entirely on
+        # hit — the original symptom that motivated this was a 12s
+        # bounded_invoke timeout on a repeat card call.
+        cache_key = (self.module_key, field_name, _partial_cache_hash(partial))
+        cached = _cache_get(_card_cache, cache_key)
+        if cached is not None:
+            return cached
         try:
             raw = self._bounded(prompt).content
             data = json.loads(_strip_code_fence(raw))
@@ -334,6 +411,10 @@ class ModuleAgent(ABC):
                     options.append(CardOption(**entry))
                 except ValidationError:
                     continue
+            # Only cache non-empty results — caching [] would lock in a
+            # transient LLM failure for every future identical call.
+            if options:
+                _cache_put(_card_cache, cache_key, options, _CARD_CACHE_MAX)
             return options
         except Exception:  # noqa: BLE001 - LLM/JSON failure is best-effort
             logger.exception(
@@ -352,7 +433,23 @@ class ModuleAgent(ABC):
         # Interactive: check if we're awaiting a final confirmation from the user.
         if partial.pop("_awaiting_confirm", False):
             if self._is_affirmative(state["messages"]):
-                # User confirmed — stamp confirmed_at and transition to next module.
+                # Completeness contract: before stamping confirmed_at, verify
+                # every required field is actually filled. This used to be
+                # implicit — if we reached _awaiting_confirm, fields were
+                # assumed complete. But users hit "confirm" via the widget
+                # before all required fields were filled in some flows (e.g.
+                # M3 transitioning with empty scale_items, leaving M4 unable
+                # to answer "show me the questionnaire" because the data
+                # never existed). Re-checking here makes transition a
+                # contract, not an assumption — no silent-empty-but-confirmed.
+                still_missing = self._next_missing_field(partial)
+                if still_missing is not None:
+                    logger.warning(
+                        "%s confirm refused: required field '%s' still missing",
+                        self.module_key, still_missing,
+                    )
+                    return self._ask_next_question(partial)
+                # All required fields verified — stamp and transition.
                 partial["confirmed_at"] = datetime.now(timezone.utc).isoformat()
                 return ModuleStepResult(
                     assistant_message=f"Confirmed {self.module_key}. Moving on.",
@@ -366,6 +463,23 @@ class ModuleAgent(ABC):
         awaiting_field = partial.pop("_awaiting_field", None)
         delegated_notice: str | None = None
         if awaiting_field:
+            # Structured widget payload bypass. When the request carries
+            # `pending_widget_payload` whose field_name matches the awaiting
+            # field, the user clicked a rich widget (FlowChart, ListEditor)
+            # that already shipped the value in its on-the-wire shape.
+            # Skip _classify_user_intent + _extract_answer entirely — those
+            # LLM round-trips through the prose summary are lossy for
+            # structured fields (the M3 conceptual_model bug: widget emitted
+            # {nodes:[{label,questions}],edges:[]} but the extractor stored
+            # only {paths:[...]} because the prose label looked like a
+            # bullet list and the schema annotation `dict|None` gave the LLM
+            # zero structural guidance). Trust the JSON; advance.
+            payload = state.get("pending_widget_payload") or {}
+            if (payload.get("field_name") == awaiting_field
+                    and payload.get("value") is not None):
+                partial[awaiting_field] = payload["value"]
+                return self._ask_next_question(partial)
+
             # Single LLM call (gemini-2.5-flash, ~$0.0001/turn) classifies the
             # user's intent + extracts the answer when applicable. Replaces
             # the previous keyword heuristics that were tripping on user
@@ -385,6 +499,28 @@ class ModuleAgent(ABC):
                     transition=False,
                     needs_user_reply=True,
                     tool_calls_json=self.render_hint_for_field(awaiting_field, partial),
+                )
+
+            if intent == "navigation":
+                # User wants to leave this module (revisit a prior one, skip
+                # ahead, redo). Clear the awaiting-field lock so the supervisor's
+                # nav classifier can pick up on the next turn without being
+                # silenced — paired with the supervisor change that removed the
+                # `mid_question` skip. Keep the already-extracted partial intact
+                # so returning here resumes where we left off.
+                # Brief handoff message — no widget. The next supervisor pass
+                # decides the actual target module; we don't try to do it here
+                # because supervisor's nav classifier is the authoritative
+                # cross-module router.
+                return ModuleStepResult(
+                    assistant_message=(
+                        "Sure — which module would you like to revisit? "
+                        "(M1 topic, M2 literature, M3 design, M4 analysis, "
+                        "M5 writing). Say the name and I'll take you there."
+                    ),
+                    context_patch=partial,  # _awaiting_field intentionally NOT re-set
+                    transition=False,
+                    needs_user_reply=True,
                 )
 
             if intent in {"off_topic", "meta", "frustration"}:
@@ -515,6 +651,13 @@ class ModuleAgent(ABC):
         # whole turn (the "simple Hello hangs forever" live bug). On timeout
         # we fall back to a deterministic templated question so the user
         # always sees a prompt, never an infinite spinner.
+        # Also treat empty/whitespace LLM output as a failure: Gemini
+        # occasionally returns content="" (safety-filter trip, transient
+        # API hiccup) WITHOUT raising — observed as the "stuck at M3→M4"
+        # bug where M4's first question never rendered and the user saw
+        # only the prior module's transition message.
+        human = str(missing).replace("_", " ")
+        fallback_msg = f"What's your {human}?"
         try:
             msg = bounded_invoke(
                 self._get_llm(), prompt,
@@ -523,8 +666,12 @@ class ModuleAgent(ABC):
         except (BoundedInvokeTimeout, Exception):  # noqa: BLE001
             logger.exception("%s _ask_next_question LLM stalled/failed; "
                              "using templated question", self.module_key)
-            human = str(missing).replace("_", " ")
-            msg = f"What's your {human}?"
+            msg = fallback_msg
+        if not msg:
+            logger.warning("%s _ask_next_question LLM returned empty content "
+                           "for field=%s; using templated question",
+                           self.module_key, missing)
+            msg = fallback_msg
         # SP3: call the hook so subclasses can attach a widget render hint.
         # Pass `partial` so the default LLM card generator can ground its
         # suggestions in what the user has already filled.
@@ -666,18 +813,50 @@ class ModuleAgent(ABC):
         which re-asked the field with NO acknowledgement of what the user said —
         cold and robotic. Answering first (then anchoring) is what makes the agent
         feel human while still keeping the task on track.
+
+        Cross-module follow-ups: the prompt now ALSO carries the full
+        context_store (every confirmed module slice — M1 topic, M2 lit, M3
+        design, etc.) so that off_topic requests like "show me M3's survey
+        questions as a table" are actually answerable from data the agent
+        already has. Reported pain: agent kept saying 'I can help with that
+        later' for M3 follow-ups while sitting on the M3 data. The LLM is
+        now told to USE that data instead of deferring.
         """
         desc = self._field_description(field_name)
-        context = json.dumps(
+        partial_ctx = json.dumps(
             {k: v for k, v in partial.items() if not k.startswith("_")},
             default=str, ensure_ascii=False,
         )
+        # Full project context — every confirmed module slice. Lets the LLM
+        # answer cross-module follow-ups (e.g. "format M3 questionnaire as
+        # a table" while M4 is waiting on data_paste) using real data,
+        # instead of a generic "I'll handle that later" deflection.
+        cs = state.get("context_store")
+        confirmed_ctx = "{}"
+        if cs is not None:
+            confirmed_ctx = json.dumps(
+                {
+                    "m1_topic": getattr(cs, "m1_topic", None),
+                    "m2_literature": getattr(cs, "m2_literature", None),
+                    "m3_design": getattr(cs, "m3_design", None),
+                    "m4_analysis": getattr(cs, "m4_analysis", None),
+                    "m5_writing": getattr(cs, "m5_writing", None),
+                },
+                default=str, ensure_ascii=False,
+            )[:4000]  # cap to keep token budget sane on long M3 questionnaires
         recent = self._recent_dialogue(state.get("messages") or [])
         guidance = {
             "off_topic": (
-                "The user asked something off-topic. Answer it in ONE short "
-                "sentence (or say you'll handle it automatically later if it's a "
-                "downstream concern), then gently bring them back."
+                "The user asked something not directly about the current field. "
+                "FIRST check the project context below — if the question is a "
+                "follow-up about ANY prior module's confirmed data (e.g. asking "
+                "to view/reformat/explain M1 topic, M2 lit-review, M3 design / "
+                "questionnaire / scale items / themes, etc.), ANSWER IT fully "
+                "using that data — markdown tables, lists, code blocks are fine. "
+                "Only after answering, briefly note what you still need from them "
+                "for the current field. If the question is truly outside the "
+                "project scope, answer in one short sentence (or say you'll "
+                "handle it automatically later), then bring them back."
             ),
             "meta": (
                 "The user asked a process/meta question (how long, what are you "
@@ -697,14 +876,41 @@ class ModuleAgent(ABC):
             f"currently waiting for them to provide the field '{field_name}' "
             f"({desc}).\n"
             f"Recent conversation:\n{recent}\n\n"
-            f"Already-filled context:\n{context}\n\n"
+            f"Current module's partial:\n{partial_ctx}\n\n"
+            f"Full project context (all modules, confirmed slices may be null):\n"
+            f"{confirmed_ctx}\n\n"
             f"{guidance}\n\n"
-            f"Write a SHORT, warm, human reply (2-3 sentences max). End by "
-            f"re-asking for '{field_name}' in one friendly line. Match the user's "
-            f"language (English or Vietnamese). Prose only — no markdown headers "
-            f"or bullets."
+            f"Write a warm, human reply. If you are answering a cross-module "
+            f"follow-up from confirmed data, the answer can be as long as needed "
+            f"(use markdown — tables, lists, code blocks). Otherwise keep it to "
+            f"2-3 sentences. ALWAYS end by re-asking for '{field_name}' in one "
+            f"friendly line. Match the user's language (English or Vietnamese)."
         )
-        return self._bounded(prompt).content.strip()
+        text = self._bounded(prompt).content.strip()
+        # Defense: under noisy prior context (e.g. a leaked sibling-module
+        # bubble) the LLM sometimes drifts off `field_name` entirely — live
+        # bug: text said "choose the software tool" while the widget below
+        # rendered "Which design fits your study?" (thread 6bdf934f), and
+        # the user clicked a design option thinking it was an answer to
+        # design. Belt-and-braces append the canonical question for the
+        # awaiting field (same title the widget uses) so the bubble's text
+        # can never silently disagree with the widget below it. Skip when
+        # the field is already named — the LLM followed instructions and a
+        # second re-ask would just read as duplication.
+        if field_name.lower() not in text.lower():
+            text = f"{text}\n\n{self._canonical_question_for_field(field_name)}"
+        return text
+
+    def _canonical_question_for_field(self, field_name: str) -> str:
+        """Deterministic re-ask line for `_answer_and_anchor` to fall back on
+        when the LLM drifts off the awaiting field. Prefers the widget title
+        when defined so the bubble's text and the rendered widget read as
+        ONE coherent question; otherwise a generic templated re-ask."""
+        if field_name in self.card_field_titles:
+            return self.card_field_titles[field_name]
+        if field_name in self.list_field_titles:
+            return self.list_field_titles[field_name]
+        return f"Could you share your {field_name.replace('_', ' ')}?"
 
     def _explain_and_reask(self, field_name: str, partial: dict) -> str:
         """Produce a friendly explanation of `field_name` + re-ask the question.

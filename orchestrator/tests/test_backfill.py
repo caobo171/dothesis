@@ -17,10 +17,14 @@ def test_reconstruct_design_from_analysis_evidence():
         m4_analysis={"data_type_detected": "SmartPLS",
                      "results": {"path": {"step_name": "structural model"}}},
     )
+    # 2026-06 design merge: scale_items dropped; conceptual_model carries
+    # per-construct Likert items as node.questions, so the reconstructed JSON
+    # ships the new nodes+edges shape (no separate scale_items key).
     llm = _fake_llm(
         '{"paradigm": "quantitative", "design": "PLS-SEM", "tool": "SmartPLS", '
         '"sampling_strategy": "convenience", "target_sample_size": 200, '
-        '"conceptual_model": {"constructs": ["A"]}, "scale_items": [{"item": "q1"}]}'
+        '"conceptual_model": {"nodes": [{"id": "n0", "label": "A", '
+        '"questions": ["q1"]}], "edges": []}}'
     )
     out = reconstruct_artifact("design", cs, llm=llm)
     assert out["paradigm"] == "quantitative"

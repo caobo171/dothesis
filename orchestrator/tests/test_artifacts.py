@@ -38,7 +38,12 @@ def test_dod_topic_empty_objectives_list_is_a_gap():
 _FULL_DESIGN_QUANT = {
     "paradigm": "quantitative", "design": "PLS-SEM", "tool": "SmartPLS",
     "sampling_strategy": "convenience", "target_sample_size": 200,
-    "conceptual_model": {"constructs": ["A", "B"]}, "scale_items": [{"item": "q1"}],
+    # 2026-06 design merge: conceptual_model carries the full graph
+    # (nodes-with-questions + edges); the standalone scale_items field is gone.
+    "conceptual_model": {
+        "nodes": [{"id": "n0", "label": "A", "questions": ["q1"]}],
+        "edges": [],
+    },
 }
 
 
@@ -46,10 +51,13 @@ def test_dod_design_quantitative_complete_is_done():
     assert dod_design(_FULL_DESIGN_QUANT).done is True
 
 
-def test_dod_design_quantitative_missing_scale_items_is_gap():
-    result = dod_design({**_FULL_DESIGN_QUANT, "scale_items": []})
+def test_dod_design_quantitative_missing_conceptual_model_is_gap():
+    """Replaces the prior scale_items-gap test — there's no separate scale_items
+    field anymore. Per-construct Likert items live on conceptual_model.nodes,
+    so an empty/missing conceptual_model is the single gap to surface."""
+    result = dod_design({**_FULL_DESIGN_QUANT, "conceptual_model": {}})
     assert result.done is False
-    assert any("scale_items" in g for g in result.gaps)
+    assert any("conceptual_model" in g for g in result.gaps)
 
 
 def test_dod_design_qualitative_complete_is_done():
@@ -66,7 +74,10 @@ def test_dod_design_mixed_missing_design_type_is_gap():
     slice_ = {
         "paradigm": "mixed", "design": "Sequential", "tool": "SPSS+NVivo",
         "sampling_strategy": "mixed", "target_sample_size": 100,
-        "conceptual_model": {"x": 1}, "scale_items": [{"i": 1}],
+        "conceptual_model": {
+            "nodes": [{"id": "n0", "label": "A", "questions": ["q1"]}],
+            "edges": [],
+        },
         "themes": [{"t": 1}], "interview_guide": {"q": 1},
         "purposive_criteria": [{"c": 1}],  # mixed_design_type absent
     }
@@ -84,7 +95,7 @@ def test_dod_design_empty_slice_reports_paradigm_gap():
 _DESIGN_SKELETON = {
     "paradigm": "quantitative", "design": "PLS-SEM", "tool": "SmartPLS",
     "sampling_strategy": "convenience", "target_sample_size": 237,
-}  # NOTE: no conceptual_model / scale_items (the un-inferrable detail)
+}  # NOTE: no conceptual_model (the un-inferrable detail)
 
 
 def test_dod_design_structural_passes_on_skeleton_without_detail():

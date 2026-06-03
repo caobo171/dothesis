@@ -74,7 +74,22 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     // the agent's free-text extractor can parse. Click thus reuses the
     // existing send path — no new backend protocol needed.
     const text = synthesizeWidgetSelection(fieldName, value, label);
-    void send(text);
+
+    // Rich widgets (FlowChart, ListEditor) emit JSON in `value`. Forward it
+    // as a structured payload so the backend uses it verbatim instead of
+    // round-tripping through LLM text-extraction (which silently dropped
+    // nested shapes like M3's {nodes:[{label,questions}],edges:[]} down to
+    // {paths:[...]}). CardGrid sends bare strings — those parse as JSON
+    // primitives and we don't want to bypass the prose path for them.
+    let widgetPayload: { field_name: string; value: unknown } | undefined;
+    if (value.trim().startsWith("{") || value.trim().startsWith("[")) {
+      try {
+        widgetPayload = { field_name: fieldName, value: JSON.parse(value) };
+      } catch {
+        // Malformed JSON — fall back to prose-only send.
+      }
+    }
+    void send(text, widgetPayload);
   };
 
   const onFileDrop = async (files: File[]) => {

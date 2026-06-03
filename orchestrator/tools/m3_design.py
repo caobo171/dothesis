@@ -8,7 +8,22 @@ import os
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+# bounded_invoke wraps Gemini calls in a wall-clock timeout. Without it, a
+# single hung Gemini call freezes the entire graph turn (Gemini occasionally
+# blocks for 5+ minutes — see base.py:bounded_invoke docstring). User report
+# was "typing dots stay forever" after confirming the conceptual_model card;
+# render_hint_for_field('scale_items') fires N per-construct tool calls
+# sequentially, so any one hang stalls every subsequent turn.
+from orchestrator.agents.base import BoundedInvokeTimeout, bounded_invoke
+
 logger = logging.getLogger(__name__)
+
+
+# Per-call cap for the M3 tools. 30s is generous for a single JSON-shaped
+# Gemini response and short enough that a stuck call surfaces as a fallback
+# (not a UI hang). +1 retry gives transient blips one chance to succeed.
+_TOOL_LLM_MAX_SECONDS = 30
+_TOOL_LLM_RETRIES = 1
 
 
 def _get_llm():
@@ -17,6 +32,42 @@ def _get_llm():
         model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
         temperature=0.3,
     )
+
+
+def _invoke_json(llm, prompt: str):
+    """Wall-clock-bounded LLM invoke + code-fence-tolerant JSON parse.
+
+    Returns the parsed value on success. Raises on timeout / JSON failure so
+    each tool's existing except block can return its field-shaped fallback
+    (the shapes differ per tool — dict vs list vs nested — so a generic
+    helper can't return the right empty default).
+    """
+    resp = bounded_invoke(
+        llm, prompt,
+        max_seconds=_TOOL_LLM_MAX_SECONDS,
+        retries=_TOOL_LLM_RETRIES,
+    )
+    return json.loads(_strip_code_fence(resp.content))
+
+
+def _strip_code_fence(s: str) -> str:
+    """Strip ```json … ``` wrappers from a Gemini response before json.loads.
+
+    Decision/reason: Gemini frequently wraps JSON in markdown code fences even
+    when told "respond with ONLY a JSON object". Without this, json.loads
+    raises → tool falls back to the empty-result default and the M3 widgets
+    render with zero items (user report: M3 conceptual_model card shipped
+    empty after the 7fd07db prompt fix). orchestrator/agents/base.py uses an
+    identical helper for every LLM JSON call; this is the tool-side mirror —
+    duplicated here rather than imported to avoid a tools→agents dependency
+    cycle (agents already import tools).
+    """
+    s = s.strip()
+    if s.startswith("```"):
+        s = s.split("\n", 1)[1] if "\n" in s else s[3:]
+        if s.endswith("```"):
+            s = s[:-3]
+    return s.strip()
 
 
 @tool
@@ -34,10 +85,12 @@ def recommend_methodology(research_question: str, paradigm: str) -> dict:
         f"Research question: {research_question}\nParadigm: {paradigm}"
     )
     try:
-        return json.loads(llm.invoke(prompt).content)
-    except (json.JSONDecodeError, TypeError):
+        return _invoke_json(llm, prompt)
+    except (json.JSONDecodeError, TypeError, BoundedInvokeTimeout, Exception):  # noqa: BLE001
         # Fallback to a safe default so callers always receive a valid dict.
-        logger.warning("recommend_methodology: malformed LLM response, returning default")
+        # BoundedInvokeTimeout / generic Exception covers Gemini hangs and
+        # transient API errors — without this the agent step blocks forever.
+        logger.warning("recommend_methodology: LLM call failed/malformed, returning default")
         return {"design": "regression", "tool": "SPSS", "rationale": "fallback default"}
 
 
@@ -80,10 +133,10 @@ def build_conceptual_model(constructs: list[str], research_question: str) -> dic
         f"{inputs}"
     )
     try:
-        return json.loads(llm.invoke(prompt).content)
-    except (json.JSONDecodeError, TypeError):
+        return _invoke_json(llm, prompt)
+    except (json.JSONDecodeError, TypeError, BoundedInvokeTimeout, Exception):  # noqa: BLE001
         # Return a structurally valid empty-paths model so downstream steps don't crash.
-        logger.warning("build_conceptual_model: malformed LLM response, returning empty paths")
+        logger.warning("build_conceptual_model: LLM call failed/malformed, returning empty paths")
         return {"constructs": constructs, "paths": []}
 
 
@@ -92,6 +145,11 @@ def suggest_scale_items(construct: str, n: int = 5) -> list[dict]:
     """Suggest `n` Likert items measuring the construct.
 
     Returns: [{id, text}, ...].
+
+    Single-construct version, kept for backwards compatibility with the auto-
+    fill schema path that may delegate one construct at a time. The widget
+    render path uses `suggest_scale_items_batch` instead — one LLM call for
+    all constructs rather than N. See that tool's docstring for the why.
     """
     llm = _get_llm()
     prompt = (
@@ -100,11 +158,54 @@ def suggest_scale_items(construct: str, n: int = 5) -> list[dict]:
         f'[{{"id": "C1", "text": "..."}}, ...].'
     )
     try:
-        return list(json.loads(llm.invoke(prompt).content))
-    except (json.JSONDecodeError, TypeError):
+        return list(_invoke_json(llm, prompt))
+    except (json.JSONDecodeError, TypeError, BoundedInvokeTimeout, Exception):  # noqa: BLE001
         # Return empty list rather than crashing; caller can decide whether to retry.
-        logger.warning("suggest_scale_items: malformed LLM response, returning empty list")
+        logger.warning("suggest_scale_items: LLM call failed/malformed, returning empty list")
         return []
+
+
+@tool
+def suggest_scale_items_batch(constructs: list[str], n: int = 5) -> dict:
+    """Suggest `n` Likert items for EACH construct — ONE LLM call total.
+
+    Returns: {<construct_name>: [{id, text}, ...], ...}. Every requested
+    construct is guaranteed to appear as a key (mapped to [] if the LLM
+    dropped it) so the caller can iterate `constructs` directly without
+    key-existence checks.
+
+    Why batch: the per-construct `suggest_scale_items` makes one LLM call per
+    construct. With N=6 constructs that's 6 round trips, ~6× the tokens, and
+    the user-reported 'typing dots forever' hang (any single hung call stalls
+    the whole turn). Batching into one prompt also produces more coherent
+    items because the LLM sees all constructs together and avoids overlapping
+    wording across them.
+    """
+    if not constructs:
+        return {}
+    llm = _get_llm()
+    prompt = (
+        f"For EACH of the constructs below, write {n} validated-style 5-point "
+        "Likert items measuring that construct. Respond with ONLY a JSON object "
+        "keyed by the EXACT construct name as it appears in the list, where "
+        "each value is the array of items:\n"
+        '{"<construct A>": [{"id":"A1","text":"..."}, ...], '
+        '"<construct B>": [{"id":"B1","text":"..."}, ...]}\n\n'
+        f"Constructs: {json.dumps(constructs, ensure_ascii=False)}"
+    )
+    try:
+        out = _invoke_json(llm, prompt)
+        if not isinstance(out, dict):
+            raise TypeError(f"expected JSON object, got {type(out).__name__}")
+        # Normalize: every requested construct gets a list (LLM may drop one
+        # or rename a key; we re-key to the user's exact construct names so
+        # the caller's iteration order matches the rendered widget rows).
+        return {c: list(out.get(c) or []) for c in constructs}
+    except (json.JSONDecodeError, TypeError, BoundedInvokeTimeout, Exception):  # noqa: BLE001
+        logger.warning(
+            "suggest_scale_items_batch: LLM call failed/malformed, "
+            "returning empty per-construct lists for %d constructs", len(constructs))
+        return {c: [] for c in constructs}
 
 
 @tool
@@ -178,9 +279,9 @@ def suggest_themes(research_question: str, paradigm: str,
         f"Literature gaps summary (from M2): {gaps_summary or '(none provided)'}"
     )
     try:
-        return list(json.loads(llm.invoke(prompt).content))
-    except (json.JSONDecodeError, TypeError):
-        logger.warning("suggest_themes: malformed LLM response, returning empty list")
+        return list(_invoke_json(llm, prompt))
+    except (json.JSONDecodeError, TypeError, BoundedInvokeTimeout, Exception):  # noqa: BLE001
+        logger.warning("suggest_themes: LLM call failed/malformed, returning empty list")
         return []
 
 
@@ -209,9 +310,9 @@ def compose_interview_guide(themes: list[dict], research_question: str) -> dict:
         f"Themes: {json.dumps(themes, ensure_ascii=False)}"
     )
     try:
-        return dict(json.loads(llm.invoke(prompt).content))
-    except (json.JSONDecodeError, TypeError):
-        logger.warning("compose_interview_guide: malformed LLM response, returning fallback")
+        return dict(_invoke_json(llm, prompt))
+    except (json.JSONDecodeError, TypeError, BoundedInvokeTimeout, Exception):  # noqa: BLE001
+        logger.warning("compose_interview_guide: LLM call failed/malformed, returning fallback")
         return {
             "sections": [
                 {"phase": "main", "time_minutes": 45,
@@ -243,9 +344,9 @@ def suggest_purposive_criteria(research_question: str,
         f"Research question: {research_question}\nParadigm: {paradigm}"
     )
     try:
-        return dict(json.loads(llm.invoke(prompt).content))
-    except (json.JSONDecodeError, TypeError):
-        logger.warning("suggest_purposive_criteria: malformed LLM response, returning fallback")
+        return dict(_invoke_json(llm, prompt))
+    except (json.JSONDecodeError, TypeError, BoundedInvokeTimeout, Exception):  # noqa: BLE001
+        logger.warning("suggest_purposive_criteria: LLM call failed/malformed, returning fallback")
         return {
             "criteria": ["Participants directly experience the phenomenon under study"],
             "strategies": ["Snowball", "Maximum variation"],

@@ -177,6 +177,82 @@ def test_off_topic_answers_then_reasks_same_field(monkeypatch):
     assert "bring them back" in concierge_prompt
 
 
+def test_answer_and_anchor_includes_cross_module_context(monkeypatch):
+    """Regression: 'show me M3's questionnaire as a table' (asked while M4 is
+    awaiting data_paste) used to get a generic 'I'll handle that later'
+    deflection — _answer_and_anchor only saw the current module's empty
+    partial, not the prior confirmed slices that actually contain the
+    questionnaire text. The prompt must now carry every module slice from
+    context_store so the LLM can answer follow-ups from real data.
+
+    Why we don't assert on the *reply* text: with a real LLM the reply would
+    be the formatted table; with a mock we can only verify the data reached
+    the prompt. That's the contract that mattered for the bug.
+    """
+    agent = _ToyAgent()
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(
+        content="Sure — here's the questionnaire... Anyway, what's your title?"
+    )
+    monkeypatch.setattr(_ToyAgent, "_get_llm", lambda self: fake_llm)
+
+    cs = ContextStore()
+    cs.m3_design = {
+        "design": "PLS-SEM",
+        "questionnaire_text": "Q1: I find this system useful.",
+    }
+    state = {
+        "project_id": None, "thread_id": None,
+        "messages": [HumanMessage(content="Show me the questionnaire as a table")],
+        "current_module": "M1", "context_store": cs, "mode": "interactive",
+        "user_intent": None, "pending_confirmations": [],
+    }
+    agent._answer_and_anchor(state, "off_topic", "title", {})
+    prompt = fake_llm.invoke.call_args[0][0]
+    # The cross-module data must reach the LLM, keyed under its module slice
+    # so the model knows which module it belongs to.
+    assert "m3_design" in prompt
+    assert "questionnaire" in prompt.lower()
+    assert "PLS-SEM" in prompt
+
+
+def test_answer_and_anchor_appends_deterministic_field_reask_when_llm_drifts(monkeypatch):
+    """Live bug: when noisy prior context (e.g. a leaked sibling-module
+    bubble) confuses the LLM into ignoring `field_name`, the assistant text
+    used to disagree with the widget — text said 'choose the software tool'
+    while the rendered card grid asked 'Which design fits your study?'
+    (thread 6bdf934f). The user clicked a design option, the agent treated
+    it as if they'd answered 'software tool', and the conversation de-railed.
+
+    Defense: after the LLM-generated ack, the wrapper deterministically
+    appends the canonical question for `field_name` (the same title the
+    widget uses, when defined). Even if the LLM drifts completely off the
+    field, the user-visible text still names the right one so it can never
+    silently disagree with the widget below it.
+    """
+    class _CardAgent(_ToyAgent):
+        card_fields = {"design"}
+        card_field_titles = {"design": "Which design fits your study?"}
+
+    agent = _CardAgent()
+    fake_llm = MagicMock()
+    # Drifted LLM output — no mention of 'design' anywhere.
+    fake_llm.invoke.return_value = AIMessage(
+        content="Apologies for the confusion — let's pick the software tool first."
+    )
+    monkeypatch.setattr(_CardAgent, "_get_llm", lambda self: fake_llm)
+
+    state = _state([HumanMessage(content="where's my questions list?")])
+    msg = agent._answer_and_anchor(
+        state, "off_topic", "design", {"paradigm": "quantitative"}
+    )
+    # The deterministic re-ask must use the SAME canonical title as the
+    # widget so the bubble text and widget agree on what's being asked.
+    assert "Which design fits your study?" in msg, (
+        f"deterministic re-ask missing from message: {msg!r}"
+    )
+
+
 def test_classifier_prompt_includes_recent_window(monkeypatch):
     agent = _ToyAgent()
     fake_llm = MagicMock()
@@ -262,3 +338,136 @@ def test_interactive_transition_after_confirm(monkeypatch):
     result = agent.step(state)
     assert result.transition is True
     assert "confirmed_at" in result.context_patch
+
+
+def test_structured_widget_payload_bypasses_llm_extraction(monkeypatch):
+    """A widget that emits a structured payload (FlowChart's {nodes,edges},
+    ListEditor's [{text,sub_items}], ...) must skip _classify_user_intent +
+    _extract_answer entirely and use the JSON value as the field value
+    verbatim.
+
+    Why: LLM round-trip through a prose summary is lossy. Repro: M3's
+    conceptual_model widget Confirmed {nodes:[{label,questions}], edges:[]}
+    but state ended up with only {paths:[...]} — the LLM extractor saw the
+    bullet-list label and reconstructed a simpler shape than the widget
+    actually emitted. The fix: when the request carries a
+    `pending_widget_payload` whose field_name matches the awaiting field,
+    trust it as the source of truth.
+    """
+    agent = _ToyAgent()
+    fake_llm = MagicMock()
+    # _ask_next_question (after the bypass) will look for the next missing
+    # required field. `title` is still missing, so we mock the question prompt.
+    fake_llm.invoke.return_value = AIMessage(content="What's the title?")
+    monkeypatch.setattr(_ToyAgent, "_get_llm", lambda self: fake_llm)
+
+    # Track whether the classifier was called — it must NOT be.
+    classify_calls = {"n": 0}
+    orig_classify = _ToyAgent._classify_user_intent
+    def _spy(self, *a, **kw):
+        classify_calls["n"] += 1
+        return orig_classify(self, *a, **kw)
+    monkeypatch.setattr(_ToyAgent, "_classify_user_intent", _spy)
+
+    structured_value = {"nested": ["a", "b"], "n": 2}
+    state = _state(
+        [AIMessage(content="What's your answer?"),
+         HumanMessage(content="My answer is ...")],
+        partial={"_awaiting_field": "answer"},
+    )
+    state["pending_widget_payload"] = {
+        "field_name": "answer",
+        "value": structured_value,
+    }
+
+    result = agent.step(state)
+
+    # Value stored verbatim, no LLM extraction.
+    assert result.context_patch.get("answer") == structured_value
+    assert classify_calls["n"] == 0, "classifier must be bypassed when payload matches"
+
+
+def test_structured_widget_payload_ignored_when_field_mismatch(monkeypatch):
+    """A payload whose field_name doesn't match the awaiting field is stale
+    (e.g. user clicked an earlier widget then typed a free-text reply). It
+    must NOT be consumed — fall through to the normal classify path so the
+    typed reply still gets processed.
+    """
+    agent = _ToyAgent()
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(
+        content='{"intent": "answer", "value": "typed-reply"}'
+    )
+    monkeypatch.setattr(_ToyAgent, "_get_llm", lambda self: fake_llm)
+
+    state = _state(
+        [HumanMessage(content="typed-reply")],
+        partial={"_awaiting_field": "answer"},
+    )
+    state["pending_widget_payload"] = {
+        "field_name": "title",  # mismatched — stale from prior turn
+        "value": "stale",
+    }
+
+    result = agent.step(state)
+    # The stale payload must not have overwritten the awaiting field.
+    assert result.context_patch.get("answer") == "typed-reply"
+
+
+def test_navigation_intent_clears_awaiting_field(monkeypatch):
+    """Architectural fix: when the user's reply is classified as 'navigation'
+    mid-question, the module must clear _awaiting_field so the supervisor's
+    nav classifier can fire on the next turn. Previously navigation was
+    silently dropped — _awaiting_field stayed set, supervisor's mid_question
+    gate skipped the nav classifier, and the user was stuck. Locks in the
+    'I cannot claim it again' fix at the module layer."""
+    agent = _ToyAgent()
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(
+        content='{"intent": "navigation", "value": null}'
+    )
+    monkeypatch.setattr(_ToyAgent, "_get_llm", lambda self: fake_llm)
+
+    state = _state(
+        [AIMessage(content="What is the title?"),
+         HumanMessage(content="actually let me revisit M2")],
+        partial={"_awaiting_field": "title"},
+    )
+    result = agent.step(state)
+    # _awaiting_field MUST be cleared so the next supervisor pass can route
+    # cross-module without being silenced by the mid_question gate.
+    assert "_awaiting_field" not in result.context_patch
+    assert result.needs_user_reply is True
+    assert result.transition is False
+    # The handoff message points the user at module names so the next
+    # supervisor turn has an unambiguous nav signal.
+    assert "M2" in result.assistant_message or "module" in result.assistant_message.lower()
+
+
+def test_confirm_refuses_when_required_field_missing(monkeypatch):
+    """Completeness contract: even if `_awaiting_confirm` is set and the user
+    types 'yes', the module MUST NOT stamp `confirmed_at` while a required
+    field is missing. Reported pain: M3 reached confirm with empty
+    `scale_items`, transitioned, then M4 had no questionnaire to show the
+    user ('M3 missing data … I cannot claim it again'). The fix makes
+    transition a contract — _next_missing_field must return None or we
+    re-ask instead of confirming."""
+    agent = _ToyAgent()
+    fake_llm = MagicMock()
+    # _ask_next_question will fire after the gate refuses confirm; mock its
+    # LLM call so the test isn't sensitive to prompt phrasing.
+    fake_llm.invoke.return_value = AIMessage(content="What is the answer?")
+    monkeypatch.setattr(_ToyAgent, "_get_llm", lambda self: fake_llm)
+
+    # Partial has title filled but `answer` missing — _next_missing_field
+    # should surface 'answer' and block transition.
+    state = _state(
+        [AIMessage(content="Summary: title=X, answer=?. Confirm?"),
+         HumanMessage(content="yes")],
+        partial={"title": "X", "_awaiting_confirm": True},
+    )
+    result = agent.step(state)
+    assert result.transition is False, "must NOT transition with missing required field"
+    assert "confirmed_at" not in result.context_patch
+    # The follow-up question is for the missing field.
+    assert "answer" in result.assistant_message.lower()

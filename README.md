@@ -1,4 +1,13 @@
-<h1 align="center">OpenDraft — AI Research Draft Generator</h1>
+<h1 align="center">DoThesis — Chat-First AI Thesis Assistant</h1>
+
+> **Repo orientation.** This repository now hosts two products in one tree:
+>
+> 1. **DoThesis / ResearchFlow** — the commercial chat-first thesis SaaS. Architecture brief: [`researchflow-architecture-brief.md`](researchflow-architecture-brief.md). Agent contract + gap map: [`AGENTS.md`](AGENTS.md). Surfaces: `api/` (FastAPI), `orchestrator/` (LangGraph agent graph, M1–M5 module agents, Postgres `context_store`), `web/` (Next.js chat UI).
+> 2. **OpenDraft** — the original open-source 19-agent draft-generator CLI (documented below). Still maintained as a standalone product and reused by the SaaS for citation pipelines.
+>
+> The brief's §1 lists **NON-NEGOTIABLE** architecture principles — `AGENTS.md` tracks which ones the current implementation meets and which still need work. **Read both before changing the agent graph, state shape, router, or memory layer.**
+
+<h2 align="center">OpenDraft — AI Research Draft Generator</h2>
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License">

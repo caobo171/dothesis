@@ -378,6 +378,12 @@ def list_messages(thread_id: uuid.UUID, before_id: int | None = None, limit: int
 
 class SendMessageBody(BaseModel):
     text: str = Field(..., min_length=1, max_length=20000)
+    # Structured payload from a rich widget click (FlowChart, ListEditor).
+    # Shape: {"field_name": str, "value": <any JSON>}. When set AND the
+    # backing module is awaiting the same field, the agent uses `value`
+    # verbatim and skips LLM text-extraction. Free-text replies leave this
+    # None so the existing extract-from-prose path runs as before.
+    widget_payload: dict | None = None
 
 
 @router.post("/threads/{thread_id}/messages")
@@ -467,6 +473,20 @@ async def send_message(thread_id: uuid.UUID,
             graph_input: dict = {
                 "messages": [HumanMessage(content=body.text)],
                 "mode": "interactive",
+                # P5: M2's progress emitter is registered above under
+                # t.langgraph_thread_id and fetched by M2Agent via
+                # state.get("thread_id"). Without this write the lookup
+                # returns None on every turn and the search-progress beats
+                # never reach the SSE queue — frontend bubble stays stuck
+                # on "...". Must be re-sent every turn (not just the first)
+                # because the checkpointer replays state but the chat front
+                # door is the only place that knows the thread id at runtime.
+                "thread_id": t.langgraph_thread_id,
+                # Structured-widget bypass: overwrite (None when absent) so a
+                # widget click from a prior turn can't leak into a free-text
+                # turn. ModuleAgent reads this in step() to skip LLM
+                # extraction for fields the widget already shipped as JSON.
+                "pending_widget_payload": body.widget_payload,
             }
             if is_first_turn:
                 graph_input["context_store"] = initial_context_store
@@ -511,6 +531,24 @@ async def send_message(thread_id: uuid.UUID,
                         continue
                     if node_name in {"M1", "M2", "M3", "M4", "M5"}:
                         final_module_tag = node_name
+                    elif node_name == "router_agent_node":
+                        # Graph v2 (ORCHESTRATOR_ROUTER=v2): there's no per-
+                        # module LangGraph node, so the module identity rides
+                        # on state.last_tool_called (set by router_agent_node).
+                        # Read it out of the payload to preserve the module-
+                        # tag contract the DB row + frontend depend on.
+                        last_tool = payload.get("last_tool_called")
+                        if last_tool in {"M1", "M2", "M3", "M4", "M5"}:
+                            final_module_tag = last_tool
+                    # Module tag the frontend renders next to bubbles. v1
+                    # uses the node_name; v2 has only router_agent_node so
+                    # read the underlying module off state.last_tool_called.
+                    if node_name in {"M1", "M2", "M3", "M4", "M5"}:
+                        module_tag = node_name
+                    elif node_name == "router_agent_node":
+                        module_tag = payload.get("last_tool_called")
+                    else:
+                        module_tag = None
                     msgs = payload.get("messages") or []
                     for m in msgs:
                         chunk = getattr(m, "content", "")
@@ -518,7 +556,7 @@ async def send_message(thread_id: uuid.UUID,
                             assistant_chunks.append(chunk)
                             yield sse_pack({
                                 "type": "token",
-                                "module": node_name if node_name != "supervisor" else None,
+                                "module": module_tag,
                                 "text": chunk,
                             })
 

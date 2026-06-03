@@ -12,6 +12,25 @@ import { defaultHandlers } from "./mocks/handlers";
 // See: https://github.com/testing-library/dom-testing-library/issues/987
 (globalThis as any).jest = vi;
 
+// @xyflow/react (used by FlowChartWidget) reads node sizes via ResizeObserver
+// and DOMMatrix on mount. jsdom omits both, so tests rendering the widget
+// would crash on first render. A no-op polyfill is enough — the widget logic
+// we test (initial render, edit panel state, Confirm payload) doesn't depend
+// on actual measured sizes.
+if (typeof (globalThis as any).ResizeObserver === "undefined") {
+  (globalThis as any).ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+if (typeof (globalThis as any).DOMMatrixReadOnly === "undefined") {
+  (globalThis as any).DOMMatrixReadOnly = class {
+    m22 = 1;
+    constructor(_: unknown) {}
+  };
+}
+
 export const server = setupServer(...defaultHandlers);
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));

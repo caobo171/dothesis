@@ -1,6 +1,10 @@
-# OpenDraft Engine
+# OpenDraft Engine (legacy CLI draft generator)
 
-The Python AI engine that powers thesis draft generation. Contains the 19-agent pipeline, citation research, and export functionality.
+The Python AI engine that powers **OpenDraft** — the original 19-agent thesis draft generator. It is a **standalone, one-shot draft pipeline**, NOT the chat-first DoThesis SaaS agent graph.
+
+> If you're working on the chat SaaS (5 modules M1–M5, streaming chat, `context_store`), you want `orchestrator/` + `api/`, not this directory. See [`../AGENTS.md`](../AGENTS.md) and [`../researchflow-architecture-brief.md`](../researchflow-architecture-brief.md).
+
+The engine is kept here because (1) it ships as its own product, and (2) the SaaS reuses its citation-API clients (`utils/api_citations/`) and export utilities. The 19-agent pipeline below is independent of the M1–M5 chat architecture.
 
 ## Structure
 

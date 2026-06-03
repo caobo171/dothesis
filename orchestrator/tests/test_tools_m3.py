@@ -5,7 +5,7 @@ import pytest
 
 from orchestrator.tools.m3_design import (
     build_conceptual_model, estimate_sample_size, recommend_methodology,
-    suggest_scale_items,
+    suggest_scale_items, suggest_scale_items_batch,
 )
 
 
@@ -66,6 +66,65 @@ def test_build_conceptual_model_with_empty_constructs_asks_llm_to_propose_them(m
     assert len(out["paths"]) >= 2
 
 
+def test_build_conceptual_model_returns_fallback_on_llm_timeout(monkeypatch):
+    """Regression for the user-reported 'typing dots stay forever' hang.
+
+    Gemini occasionally blocks for 5+ minutes on a single invoke; without a
+    bounded wrapper the agent step freezes the whole graph turn. Tools must
+    catch BoundedInvokeTimeout (and generic transient errors) and return
+    their safe fallback so the user sees *something* instead of an infinite
+    spinner.
+    """
+    from orchestrator.agents.base import BoundedInvokeTimeout
+
+    def boom(*_a, **_kw):
+        # Simulate Gemini hanging past the wall-clock cap.
+        raise BoundedInvokeTimeout("simulated 30s cap exceeded")
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.side_effect = boom
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+    # Force bounded_invoke to surface the timeout immediately (bypass its
+    # internal retry/backoff so the test doesn't wait).
+    monkeypatch.setattr(
+        "orchestrator.tools.m3_design.bounded_invoke",
+        lambda *a, **kw: (_ for _ in ()).throw(BoundedInvokeTimeout("test")),
+    )
+
+    out = build_conceptual_model.invoke({
+        "constructs": ["A"],
+        "research_question": "Does X affect Y?",
+    })
+    # Fallback shape so downstream rendering keeps a stable schema.
+    assert out == {"constructs": ["A"], "paths": []}
+
+
+def test_build_conceptual_model_strips_markdown_code_fences(monkeypatch):
+    """Regression for the user-reported 'still showing nothing' bug after
+    commit 7fd07db. Gemini frequently wraps its JSON in ```json … ``` fences;
+    json.loads on the raw fenced string raises JSONDecodeError, hits the
+    except branch, and returns the empty-paths fallback. The UI then renders
+    the conceptual_model card with zero items even though the LLM produced a
+    perfectly fine model. Tools must strip code fences before parsing — the
+    same pattern base.py already uses for every JSON call.
+    """
+    fenced = "```json\n" + json.dumps({
+        "constructs": ["A", "B"],
+        "paths": [{"from": "A", "to": "B", "hypothesis": "H1"}],
+    }) + "\n```"
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = fenced
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+
+    out = build_conceptual_model.invoke({
+        "constructs": [],
+        "research_question": "Does TL affect EE?",
+    })
+    # Without fence-stripping this asserts on the empty fallback and fails.
+    assert out["paths"], "fenced LLM JSON should still produce non-empty paths"
+    assert out["paths"][0]["from"] == "A"
+
+
 def test_build_conceptual_model_returns_constructs_and_paths(monkeypatch):
     fake_llm = MagicMock()
     fake_llm.invoke.return_value.content = json.dumps({
@@ -82,6 +141,61 @@ def test_build_conceptual_model_returns_constructs_and_paths(monkeypatch):
     })
     assert "TL" in out["constructs"]
     assert len(out["paths"]) == 2
+
+
+def test_suggest_scale_items_batch_uses_single_llm_call(monkeypatch):
+    """Batch tool must hit Gemini exactly once for N constructs (vs N calls
+    in the legacy per-construct path). This is the whole point of the
+    refactor — fixes the user-reported 'typing dots forever' bug and cuts
+    token spend ~N×.
+    """
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = json.dumps({
+        "TL":    [{"id": "TL1", "text": "My supervisor inspires me."},
+                  {"id": "TL2", "text": "My supervisor articulates a clear vision."}],
+        "EE":    [{"id": "EE1", "text": "I feel engaged at work."}],
+        "Trust": [{"id": "TR1", "text": "I trust my supervisor."}],
+    })
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+
+    out = suggest_scale_items_batch.invoke({
+        "constructs": ["TL", "EE", "Trust"],
+        "n": 5,
+    })
+    # Exactly ONE invoke, regardless of construct count.
+    assert fake_llm.invoke.call_count == 1
+    # Every requested construct is present as a key.
+    assert set(out.keys()) == {"TL", "EE", "Trust"}
+    assert out["TL"][0]["id"] == "TL1"
+    assert out["Trust"][0]["text"].startswith("I trust")
+
+
+def test_suggest_scale_items_batch_normalizes_dropped_constructs(monkeypatch):
+    """If the LLM drops a construct from its response, the tool still ships
+    that key mapped to [] so the caller can iterate the requested constructs
+    without KeyError or skipped widget rows.
+    """
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = json.dumps({
+        "TL": [{"id": "TL1", "text": "..."}],
+        # EE missing entirely — LLM dropped it.
+    })
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+
+    out = suggest_scale_items_batch.invoke({"constructs": ["TL", "EE"], "n": 3})
+    assert out["TL"], "present construct keeps its items"
+    assert out["EE"] == [], "missing construct is normalized to empty list"
+
+
+def test_suggest_scale_items_batch_empty_input_skips_llm(monkeypatch):
+    """No constructs = no LLM call. Avoids a wasted round trip when the
+    conceptual_model is empty (e.g., user hasn't filled it yet)."""
+    fake_llm = MagicMock()
+    monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
+
+    out = suggest_scale_items_batch.invoke({"constructs": [], "n": 5})
+    assert out == {}
+    assert fake_llm.invoke.call_count == 0
 
 
 def test_suggest_scale_items_returns_items(monkeypatch):

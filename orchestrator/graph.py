@@ -293,6 +293,15 @@ async def init_interactive_graph():
     Caches the resulting graph in a module global so subsequent sync
     `get_interactive_graph()` calls hand back the same instance without
     re-running setup.
+
+    ORCHESTRATOR_ROUTER env flag selects topology:
+      - 'v1' (default): supervisor + 5 module spokes (this file).
+      - 'v2': single conversational router node (orchestrator/graph_v2.py).
+
+    Stage-1 migration is dark by default — v2 only runs when the flag is
+    explicitly set, so a rollback is a one-line env-var change. Auto-mode
+    is NOT affected by the flag; get_auto_graph() always uses v1 until
+    Stage-1 Phase C migrates it separately.
     """
     global _interactive_graph
     if _interactive_graph is not None:
@@ -302,7 +311,13 @@ async def init_interactive_graph():
     pool = await _get_async_pool()
     saver = AsyncPostgresSaver(pool)
     await saver.setup()
-    _interactive_graph = build_graph(interactive=True, checkpointer=saver)
+
+    if os.getenv("ORCHESTRATOR_ROUTER", "v1").lower() == "v2":
+        from orchestrator.graph_v2 import build_graph_v2
+        logger.info("interactive graph: using router-agent topology (v2)")
+        _interactive_graph = build_graph_v2(checkpointer=saver)
+    else:
+        _interactive_graph = build_graph(interactive=True, checkpointer=saver)
     return _interactive_graph
 
 

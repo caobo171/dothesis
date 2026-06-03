@@ -87,30 +87,36 @@ def test_m3_output_unconfirmed_partial_is_valid():
         paradigm="quantitative",
         design="PLS-SEM", tool="SmartPLS",
         sampling_strategy="convenience", target_sample_size=200,
-        # No conceptual_model, no scale_items — but confirmed_at not set.
+        # No conceptual_model — but confirmed_at not set, so unconfirmed.
     )
     assert out.confirmed_at is None
 
 
-def test_m3_output_quant_confirm_requires_artifacts():
-    """Setting confirmed_at on a quant paradigm requires conceptual_model + scale_items."""
+def test_m3_output_quant_confirm_requires_conceptual_model():
+    """Setting confirmed_at on a quant paradigm requires conceptual_model
+    (which now carries both paths AND per-construct Likert items as
+    node.questions, since the 2026-06 merge folded the prior scale_items
+    field into the flow_chart shape)."""
     with pytest.raises(ValidationError):
         M3Output(
             paradigm="quantitative",
             design="PLS-SEM", tool="SmartPLS",
             sampling_strategy="convenience", target_sample_size=200,
             confirmed_at=datetime.now(timezone.utc),
-            # missing conceptual_model + scale_items
+            # missing conceptual_model
         )
 
 
-def test_m3_output_quant_confirm_with_artifacts_validates():
+def test_m3_output_quant_confirm_with_conceptual_model_validates():
     out = M3Output(
         paradigm="quantitative",
         design="PLS-SEM", tool="SmartPLS",
         sampling_strategy="convenience", target_sample_size=200,
-        conceptual_model={"constructs": ["TL", "EE"], "paths": []},
-        scale_items=[{"construct": "TL", "items": ["I1", "I2"]}],
+        conceptual_model={
+            "nodes": [{"id": "n0", "label": "TL",
+                       "questions": ["My supervisor inspires me."]}],
+            "edges": [],
+        },
         confirmed_at=datetime.now(timezone.utc),
     )
     assert out.conceptual_model is not None
@@ -145,8 +151,10 @@ def test_m3_output_mixed_confirm_with_full_artifacts_validates():
         sampling_strategy="quant: random N=200; qual: purposive N=12",
         target_sample_size=200,
         mixed_design_type="sequential_explanatory",
-        conceptual_model={"constructs": ["TL"], "paths": []},
-        scale_items=[{"construct": "TL", "items": ["I1"]}],
+        conceptual_model={
+            "nodes": [{"id": "n0", "label": "TL", "questions": ["I1"]}],
+            "edges": [],
+        },
         themes=[{"id": "t1", "theme": "Leadership style", "sub_themes": []}],
         interview_guide={"sections": [{"phase": "main", "questions": []}]},
         purposive_criteria=[{"criterion": "tenure >= 6 months"}],

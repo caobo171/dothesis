@@ -50,6 +50,74 @@ def _nav_max_seconds() -> int:
 _SLICE_FIELDS = ("m1_topic", "m2_literature", "m3_design",
                  "m4_analysis", "m5_writing")
 
+_MODULE_KEYS: tuple[str, ...] = ("M1", "M2", "M3", "M4", "M5")
+
+
+def _awaiting_module_and_field(cs) -> tuple[str | None, str | None]:
+    """Return (module_key, field_name) of whichever slice has _awaiting_field
+    set, or (None, None) if no module is mid-question.
+
+    Used to give the nav classifier the missing context that caused the
+    'PLS-SEM mid-design routes to M4' bug — without the awaiting field in
+    the prompt, the LLM has no way to know the user's reply is an ANSWER
+    rather than a navigation request to a different module.
+    """
+    for key in _MODULE_KEYS:
+        slice_ = get_module_slice(cs, key)
+        field = slice_.get("_awaiting_field")
+        if field:
+            return key, field
+    return None, None
+
+
+def _build_nav_prompt(last_user: str, awaiting_module: str | None,
+                      awaiting_field: str | None) -> str:
+    """Nav classifier prompt. Includes mid-question context when applicable so
+    the classifier doesn't mis-fire domain answers as nav requests.
+
+    Live bug fixed: when M3 was asking for `design` and the user picked
+    'PLS-SEM', the prior one-line prompt sent only the message to Gemini.
+    Gemini saw a M4-flavored term (PLS-SEM is analyzed in SmartPLS, an M4
+    tool) and returned target_module=M4 with high confidence. The
+    cross-module guard in supervisor_node then honored it and jumped the
+    user into M4 mid-design-pick.
+
+    The awaiting-field block tells the classifier the prior probability of
+    'this is an answer to the pending question' is ~1, so domain terms that
+    overlap module vocabularies (PLS-SEM, ANOVA, SmartPLS, convenience
+    sampling, …) are correctly classified as answers, not navigation.
+    Block is conditional — when no module is mid-question we don't want a
+    fake answering bias suppressing legitimate nav.
+    """
+    legend = ("M1=topic, M2=literature, M3=design, "
+              "M4=analysis, M5=writing")
+    head = (
+        f"You decide whether the user is requesting NAVIGATION to a different "
+        f"module of a thesis-writing assistant ({legend}).\n\n"
+        f"User message: \"{last_user}\"\n"
+    )
+    if awaiting_module and awaiting_field:
+        # The phrase 'currently asking the user for' is what the test pins —
+        # anchor on something specific so a future prompt rewrite can't
+        # silently drop the awaiting context (which is the entire point).
+        head += (
+            f"\nContext: module {awaiting_module} is currently asking the "
+            f"user for the field '{awaiting_field}'. The default assumption "
+            f"is that the user's message is an ANSWER to that question.\n"
+            f"Set wants_navigation=true ONLY for explicit cross-module "
+            f"requests like 'go to M2', 'let me redo the topic', 'back to "
+            f"literature'.\n"
+            f"Domain terms that overlap module vocabularies are answers, "
+            f"NOT navigation:\n"
+            f"  - 'PLS-SEM', 'ANOVA', 'regression' while M3 asks `design` "
+            f"→ wants_navigation=false\n"
+            f"  - 'SmartPLS', 'SPSS', 'NVivo' while M3 asks `tool` "
+            f"→ wants_navigation=false\n"
+            f"  - 'convenience', 'purposive' while M3 asks "
+            f"`sampling_strategy` → wants_navigation=false\n"
+        )
+    return head
+
 
 def _any_module_confirmed(cs) -> bool:
     """True if at least one module has been confirmed (has confirmed_at)."""
@@ -104,38 +172,49 @@ def supervisor_node(state: OrchestratorState) -> dict:
              if isinstance(m, HumanMessage)),
             "",
         )
-        # Skip nav classification while the current module is mid-question: the
-        # user's reply is an ANSWER to a field/confirm, not a navigation request.
-        # The classifier over-triggers on domain answers — "PLS-SEM"/"SmartPLS"
-        # wrongly jumped M3→M4, "quantitative survey" jumped to M3 — derailing
-        # the flow. Genuine navigation mid-collection is still caught by the
-        # module's own intent classifier. We only consult the nav classifier when
-        # the current module is NOT awaiting input.
-        cur_slice = get_module_slice(state["context_store"], decision.next_module)
-        mid_question = ("_awaiting_field" in cur_slice
-                        or "_awaiting_confirm" in cur_slice
-                        or "_phase_state" in cur_slice)
         # Cold-start fast-path: no module confirmed yet → there's nothing to
         # navigate FROM, so the classifier's only effect is latency. Crucial for
         # 'Hello' on a fresh project — used to cost a full Gemini RTT (~8-20s).
         cold_start = not _any_module_confirmed(state["context_store"])
-        # Always ask the LLM whether the user wants cross-module navigation.
-        # Confidence threshold (>=0.7) protects against false positives.
-        if last_user and not mid_question and not cold_start:
+        # Architectural shift: we used to skip the nav classifier entirely while
+        # a module was mid-question (`_awaiting_field` / `_awaiting_confirm` set)
+        # to protect against false-positives where domain answers like "PLS-SEM"
+        # got mis-classified as "go to M4". The downside surfaced in user
+        # feedback: once any module set `_awaiting_field`, the user was LOCKED
+        # IN and couldn't revisit a prior module to fix missing data ("M3
+        # missing data … I cannot claim it again"). The new defense is narrower
+        # and lets users navigate any time:
+        #   1. Higher confidence threshold (0.85) — domain answers usually get
+        #      lower scores.
+        #   2. Reject self-routes — if the classifier picks the SAME module
+        #      we'd already route to (via rules), it's almost certainly the
+        #      domain-answer false-positive ("PLS-SEM" while routed-to M3),
+        #      not navigation. Honor only cross-module picks.
+        if last_user and not cold_start:
             try:
                 from orchestrator.agents.base import bounded_invoke
                 llm = _intent_llm().with_structured_output(IntentClassification)
+                # Read which module (if any) is mid-question so the nav
+                # classifier prompt can anchor on the user's most likely
+                # intent (answering vs navigating). See _build_nav_prompt
+                # for the live bug this context fixes.
+                awaiting_module, awaiting_field = _awaiting_module_and_field(
+                    state["context_store"]
+                )
                 # Wall-clock-bounded: a stalled Gemini call here used to hang
                 # every interactive turn before any module could run.
                 intent = bounded_invoke(
                     llm,
-                    f"Is the user requesting navigation to a specific module "
-                    f"(M1=topic, M2=literature, M3=design, M4=analysis, "
-                    f"M5=writing)? Message: {last_user}",
+                    _build_nav_prompt(
+                        last_user, awaiting_module, awaiting_field
+                    ),
                     max_seconds=_nav_max_seconds(),
                     retries=0,
                 )
-                if intent.wants_navigation and intent.confidence >= 0.7 and intent.target_module:
+                if (intent.wants_navigation
+                        and intent.confidence >= 0.85
+                        and intent.target_module
+                        and intent.target_module != decision.next_module):
                     decision = RouteDecision(
                         next_module=intent.target_module,
                         reason=f"user requested {intent.target_module}",

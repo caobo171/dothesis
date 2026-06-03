@@ -2,7 +2,10 @@
 from pathlib import Path
 
 from orchestrator.agents.base import ModuleAgent
-from orchestrator.agents.widgets import CardGridHint, CardOption, ListEditorHint, ListItem
+from orchestrator.agents.widgets import (
+    CardGridHint, CardOption, FlowChartEdge, FlowChartHint, FlowChartNode,
+    ListEditorHint, ListItem,
+)
 
 
 # Static fallback for `design` per paradigm. Used when the dynamic LLM
@@ -117,7 +120,7 @@ from orchestrator.schemas.m3 import M3Output
 from orchestrator.tools.m3_design import (
     build_conceptual_model, compose_interview_guide, estimate_sample_size,
     recommend_methodology, suggest_purposive_criteria, suggest_scale_items,
-    suggest_themes,
+    suggest_scale_items_batch, suggest_themes,
 )
 
 
@@ -129,8 +132,13 @@ _PROMPT = (_PROMPT_DIR / "m3.md").read_text()
 # The agent's _next_missing_field walks the list for the resolved key. Mixed flows
 # compose quant + qual sub-flows — no separate "mixed-only" code path.
 _FIELDS_BY_PARADIGM = {
+    # Design merge (2026-06): scale_items used to be a separate walk step
+    # after conceptual_model. The conceptual_model widget now ships the
+    # full flow_chart (nodes-with-questions + edges) so structure and
+    # measurement land in one bubble — scale_items is dropped from every
+    # walk order and from the schema.
     "quantitative": [
-        "design", "tool", "conceptual_model", "scale_items",
+        "design", "tool", "conceptual_model",
         "target_sample_size", "sampling_strategy",
     ],
     "qualitative": [
@@ -140,7 +148,7 @@ _FIELDS_BY_PARADIGM = {
     "mixed_sequential_explanatory": [
         "mixed_design_type",
         # Quant first
-        "design", "tool", "conceptual_model", "scale_items",
+        "design", "tool", "conceptual_model",
         # Qual second (reuses the same design/tool slots — the agent's prompt
         # explains which phase the field belongs to). A V2 enhancement could
         # split into design_quant/design_qual.
@@ -153,7 +161,7 @@ _FIELDS_BY_PARADIGM = {
         # Qual first
         "themes", "interview_guide", "purposive_criteria",
         # Quant second
-        "design", "tool", "conceptual_model", "scale_items",
+        "design", "tool", "conceptual_model",
         # Shared at the end
         "target_sample_size", "sampling_strategy",
     ],
@@ -228,12 +236,69 @@ class M3Agent(ModuleAgent):
 
     @staticmethod
     def _constructs_from(conceptual_model) -> list:
-        """Extract the construct list from a conceptual_model that may be a dict
-        ({"constructs": [...]}) OR a bare list of path strings (what the LLM /
-        delegation sometimes returns). Guards against 'list has no attribute get'."""
+        """Extract construct names from a stored conceptual_model.
+
+        The model can arrive in several shapes depending on how the LLM
+        extractor parsed the user's 'Confirm' message back into the
+        `conceptual_model: dict | None` field:
+
+          1. {"constructs": ["A", "B"], "paths": [...]}   — ideal, what
+             build_conceptual_model emits directly.
+          2. {"paths": [{"from":"A","to":"B"}, ...]}      — no constructs
+             key. summarizeList for conceptual_model only enumerates paths,
+             so the extractor commonly drops the constructs list.
+          3. [{"from":"A","to":"B"}, ...]                 — bare path-dict
+             list (delegation path).
+          4. ["A → B (H1)", "B → C (H2)"]                 — bare path-string
+             list (LLM-extractor pass-through of the user's confirm message).
+          5. ["A", "B"]                                   — bare construct
+             list (rare; legacy delegation output).
+
+        Reason this matters: scale_items widget render reads constructs to
+        decide how many Likert-item rows to ship. Empty constructs → empty
+        card (user-reported bug). Used in two places: step() to seed the
+        conceptual_model rebuild, and render_hint_for_field('scale_items')
+        to ship one row per construct.
+        """
+        import re as _re
+
+        def _strip_paren_meta(s: str) -> str:
+            # "EE (H1: text)" → "EE" — the parens in our path-string format
+            # always carry the hypothesis label, never part of the construct.
+            return _re.sub(r"\s*\([^)]*\)\s*$", "", s).strip()
+
+        def _from_paths(paths) -> list:
+            seen: list = []
+            for p in paths:
+                if isinstance(p, dict):
+                    for k in ("from", "to"):
+                        v = p.get(k)
+                        if v and v not in seen:
+                            seen.append(v)
+                elif isinstance(p, str):
+                    # Support both Unicode → and ASCII -> separators.
+                    parts = p.split("→") if "→" in p else p.split("->")
+                    for v in parts:
+                        v = _strip_paren_meta(v)
+                        if v and v not in seen:
+                            seen.append(v)
+            return seen
+
+        if conceptual_model is None:
+            return []
         if isinstance(conceptual_model, dict):
-            return conceptual_model.get("constructs", [])
-        return conceptual_model or []
+            if conceptual_model.get("constructs"):
+                return conceptual_model["constructs"]
+            return _from_paths(conceptual_model.get("paths") or [])
+        if isinstance(conceptual_model, list):
+            # Inspect first item to decide path-list vs bare-constructs list.
+            if conceptual_model and isinstance(conceptual_model[0], dict):
+                return _from_paths(conceptual_model)
+            if any(isinstance(x, str) and ("→" in x or "->" in x)
+                   for x in conceptual_model):
+                return _from_paths(conceptual_model)
+            return list(conceptual_model)
+        return []
 
     def _resolved_paradigm_key(self, partial: dict) -> str | None:
         """Pick the _FIELDS_BY_PARADIGM key for the current partial state.
@@ -377,51 +442,86 @@ class M3Agent(ModuleAgent):
             ).model_dump()
 
         if field_name == "conceptual_model":
-            # Decision: build_conceptual_model returns {constructs, paths:[{from,to,hypothesis}]}.
-            # We adapt paths into flat ListItem rows (one per path) because the
-            # student edits hypotheses, not constructs — constructs are derived
-            # from confirmed paths at submission time. hypothesis is stashed in
-            # meta so the frontend can surface it as a tooltip or secondary label.
+            # Design merge (2026-06): one flow_chart widget carries BOTH the
+            # paths (edges) and the per-construct Likert items (node.questions),
+            # replacing the prior two-step list_editor flow. Mirrors Survify's
+            # AdvanceModelType. Reasoning: users need to see structure +
+            # measurement together — splitting them into two bubbles produced
+            # the empty-scale-items bug because the second widget read stale
+            # state, and made every confirm round-trip the conceptual model
+            # twice through the LLM extractor.
+            #
+            # Build order:
+            #   1. Ask build_conceptual_model for {constructs, paths}.
+            #   2. Resolve the canonical construct list (prefer the tool's
+            #      constructs key; fall back to path endpoints — same
+            #      _constructs_from defence used by the prior scale_items
+            #      branch).
+            #   3. ONE batched LLM call for Likert items (regression-guard
+            #      for the 'typing dots forever' bug — see SP4 history).
+            #   4. Emit FlowChartNode per construct (questions attached) and
+            #      FlowChartEdge per path (hypothesis + effect_type carried).
             model = build_conceptual_model.invoke({
                 "constructs": self._render_constructs,
                 "research_question": self._render_research_question,
             })
-            items = []
-            for i, p in enumerate(model.get("paths", [])):
-                items.append(ListItem(
-                    id=f"H{i+1}",
-                    text=f"{p.get('from', '?')} → {p.get('to', '?')}",
-                    meta={"hypothesis": p.get("hypothesis", "")},
-                ))
-            return ListEditorHint(
-                field_name="conceptual_model",
-                title="Conceptual model — paths between constructs",
-                initial_items=items,
-                allow_nested=False,
-            ).model_dump()
+            paths = model.get("paths") or []
+            constructs = (
+                model.get("constructs")
+                or self._constructs_from({"paths": paths})
+                or list(self._render_constructs or [])
+            )
+            suggested_by_construct = suggest_scale_items_batch.invoke(
+                {"constructs": list(constructs), "n": 5}
+            ) if constructs else {}
 
-        if field_name == "scale_items":
-            # Decision: each construct becomes a top-level ListItem; its 5
-            # suggested scale items become sub_items. allow_nested=True so the
-            # student can add/remove items per construct in the editor.
-            cm = self._render_conceptual_model or {}
-            constructs = cm.get("constructs", []) if isinstance(cm, dict) else []
-            items_list: list[ListItem] = []
+            id_by_label: dict[str, str] = {}
+            nodes: list[FlowChartNode] = []
             for c_idx, c in enumerate(constructs):
-                suggested = suggest_scale_items.invoke({"construct": c, "n": 5})
-                items_list.append(ListItem(
-                    id=f"c{c_idx}",
-                    text=c,
-                    sub_items=[
-                        ListItem(id=f"c{c_idx}_i{j}", text=s.get("text", ""))
-                        for j, s in enumerate(suggested)
+                node_id = f"n{c_idx}"
+                id_by_label[c] = node_id
+                nodes.append(FlowChartNode(
+                    id=node_id,
+                    label=c,
+                    questions=[
+                        s.get("text", "")
+                        for s in suggested_by_construct.get(c, [])
+                        if s.get("text")
                     ],
                 ))
-            return ListEditorHint(
-                field_name="scale_items",
-                title="Scale items per construct",
-                initial_items=items_list,
-                allow_nested=True,
+
+            edges: list[FlowChartEdge] = []
+            for i, p in enumerate(paths):
+                src_label = p.get("from", "")
+                tgt_label = p.get("to", "")
+                # Defensive: if a path mentions a construct the model.constructs
+                # list didn't (LLM inconsistency), spawn the missing node now
+                # so the edge has somewhere to attach.
+                for label in (src_label, tgt_label):
+                    if label and label not in id_by_label:
+                        node_id = f"n{len(nodes)}"
+                        id_by_label[label] = node_id
+                        nodes.append(FlowChartNode(
+                            id=node_id, label=label, questions=[],
+                        ))
+                if not (src_label and tgt_label):
+                    continue
+                edges.append(FlowChartEdge(
+                    id=f"H{i+1}",
+                    source=id_by_label[src_label],
+                    target=id_by_label[tgt_label],
+                    hypothesis=p.get("hypothesis", ""),
+                    # Default positive — user can flip on the canvas. Most
+                    # initial LLM hypotheses are positively-framed ('A leads
+                    # to B'); negative paths are rarer and surface during edit.
+                    effect_type="positive",
+                ))
+
+            return FlowChartHint(
+                field_name="conceptual_model",
+                title="Conceptual model — constructs, items, and hypothesis paths",
+                initial_nodes=nodes,
+                initial_edges=edges,
             ).model_dump()
 
         # W6: sampling fields used to fall through to free text. Now ship as

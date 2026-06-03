@@ -54,6 +54,21 @@ class OrchestratorState(TypedDict, total=False):
     # of the sequential rule. Cleared once the target is reached. This is how
     # "enter at any step" drives the graph; None = normal sequential flow.
     target_artifact: str | None
+    # Stage-1 router-graph field. The router agent (orchestrator/agents/
+    # router_agent.py) records the module-tool it just invoked here so the
+    # SSE adapter can stamp the assistant reply with the correct module_tag
+    # (the v1 graph used the LangGraph node_name for this, but the v2 graph
+    # has only one node — router_agent_node — so the module identity has to
+    # ride on state instead). Just a string, msgpack-clean.
+    last_tool_called: str | None
+    # Structured payload from the most recent rich-widget click (FlowChart,
+    # ListEditor, ...). Shape: {"field_name": <schema field>, "value": <any
+    # JSON>}. The chat router sets it from the SendMessageBody on every turn
+    # the user clicked a widget; ModuleAgent consumes it to bypass LLM
+    # text-extraction (lossy for nested shapes — see base.py). None when the
+    # user typed free text. Not a reducer field — the chat router overwrites
+    # each turn, so stale payloads can't leak between turns.
+    pending_widget_payload: dict | None
     # NOTE: progress streaming. The chat router stashes the per-request
     # emitter in engine.utils.progress's thread_id registry (NOT graph
     # state) because LangGraph's postgres checkpointer msgpack-serializes

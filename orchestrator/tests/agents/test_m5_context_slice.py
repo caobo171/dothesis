@@ -13,8 +13,17 @@ def test_extract_context_slice_returns_full_shape():
         m2_literature={"literature_review_doc": "lit text",
                         "research_gaps": [{"description": "g1"}]},
         m3_design={"paradigm": "quantitative", "design": "PLS-SEM",
-                    "tool": "SmartPLS", "conceptual_model": {"constructs": ["TL"]},
-                    "scale_items": [{"construct": "TL", "items": ["I1"]}],
+                    "tool": "SmartPLS",
+                    # 2026-06 design merge: conceptual_model carries both paths
+                    # and per-construct Likert items as node.questions. The
+                    # standalone scale_items field is gone; M5 derives the
+                    # legacy-shaped scale_items list from this for prompt
+                    # back-compat.
+                    "conceptual_model": {
+                        "nodes": [{"id": "n0", "label": "TL",
+                                   "questions": ["I1"]}],
+                        "edges": [],
+                    },
                     "sampling_strategy": "random", "target_sample_size": 200},
         m4_analysis={"data_type_detected": "SmartPLS",
                       "results": {"Outer Loadings": {"step_name": "Outer Loadings"}},
@@ -27,6 +36,10 @@ def test_extract_context_slice_returns_full_shape():
     assert out["tool"] == "SmartPLS"
     assert "Outer Loadings" in out["results"]
     assert out["language"] == "en"
+    # Derived scale_items: post-2026-06-merge the M5 reader pulls per-construct
+    # Likert items off conceptual_model.nodes so M5's methodology chapter prompt
+    # (which still interpolates {scale_items}) stays populated.
+    assert out["scale_items"] == [{"construct": "TL", "items": ["I1"]}]
 
 
 def test_extract_context_slice_handles_none_slices():

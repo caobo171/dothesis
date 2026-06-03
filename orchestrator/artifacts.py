@@ -86,8 +86,11 @@ def dod_design(slice_: dict) -> DoD:
 
     Mirrors M3Output._require_by_paradigm (orchestrator/schemas/m3.py) but as a
     content check over the persisted dict rather than a pydantic validator —
-    quantitative needs conceptual_model + scale_items; qualitative needs themes
-    + interview_guide + purposive_criteria; mixed needs both plus mixed_design_type.
+    quantitative needs conceptual_model (which now carries both paths AND per-
+    construct Likert items as node.questions, since the 2026-06 design merge
+    folded the former scale_items field into the flow_chart shape); qualitative
+    needs themes + interview_guide + purposive_criteria; mixed needs both plus
+    mixed_design_type.
     """
     slice_ = slice_ or {}
     gaps = _missing_strings(slice_, ("paradigm", "design", "tool", "sampling_strategy"))
@@ -99,7 +102,6 @@ def dod_design(slice_: dict) -> DoD:
     if paradigm == "quantitative":
         if not slice_.get("conceptual_model"):
             gaps.append("missing conceptual_model")
-        gaps += _empty_lists(slice_, ("scale_items",))
     elif paradigm == "qualitative":
         gaps += _empty_lists(slice_, ("themes", "purposive_criteria"))
         if not slice_.get("interview_guide"):
@@ -108,7 +110,7 @@ def dod_design(slice_: dict) -> DoD:
         gaps += _missing_strings(slice_, ("mixed_design_type",))
         if not slice_.get("conceptual_model"):
             gaps.append("missing conceptual_model")
-        gaps += _empty_lists(slice_, ("scale_items", "themes", "purposive_criteria"))
+        gaps += _empty_lists(slice_, ("themes", "purposive_criteria"))
         if not slice_.get("interview_guide"):
             gaps.append("missing interview_guide")
     return DoD(done=not gaps, gaps=gaps)
@@ -124,6 +126,9 @@ def dod_design_structural(slice_: dict) -> DoD:
     not fabricate the detail fields, so the full `dod_design` is the wrong bar for
     accepting a reconstructed prerequisite. This gate lets a confirmed skeleton
     unblock downstream work; the detail fields are surfaced for review/fill.
+
+    Detail fields the skeleton skips: conceptual_model (flow_chart: paths +
+    per-construct Likert items), themes, interview_guide.
     """
     slice_ = slice_ or {}
     gaps = _missing_strings(slice_, ("paradigm", "design", "tool", "sampling_strategy"))

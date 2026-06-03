@@ -105,7 +105,18 @@ def _flatten_to_m2_output(sub_state: M2SubGraphState) -> dict[str, Any]:
 # Inputs that _seed_from_outer rebuilds from outer state on every M2 entry, so
 # they must NOT be frozen into the persisted _phase_state (research_title etc.
 # could legitimately change; messages aren't JSON-serialisable).
+#
+# Also exclude `_progress_emitter` — it's a Python callable that M2Agent.step
+# stashes into sub_state from the engine.utils.progress registry. Leaking it
+# into _phase_state lands it inside context_store.m2_literature, where the
+# outer graph's postgres checkpointer chokes on msgpack ("Type is not
+# msgpack serializable: ContextStore" — the outermost type ormsgpack reports
+# when it walks into an unserializable nested function). Same class of bug
+# that commit 14e75f5 fixed for outer state; the catch-all writer here was
+# missed at the time. Always re-attached fresh per-turn by M2Agent.step, so
+# nothing is lost by dropping it from the persisted snapshot.
 _SEEDED_INPUT_KEYS = frozenset({
     "project_id", "thread_id", "research_title", "research_type",
     "language", "paper_uris", "messages", "mode",
+    "_progress_emitter",
 })

@@ -1,8 +1,8 @@
 // web/app/components/chat/widgets/synthesize.test.ts
 import { describe, expect, test } from "vitest";
 import { synthesizeWidgetSelection } from "./synthesize";
-import { summarizeList } from "./synthesize";
-import type { ListItem } from "./types";
+import { summarizeList, summarizeFlowChart } from "./synthesize";
+import type { FlowChartEdge, FlowChartNode, ListItem } from "./types";
 
 describe("synthesizeWidgetSelection", () => {
   test("field synthesizes 'I'd like to study X.'", () => {
@@ -250,5 +250,84 @@ describe("summarizeList — SP5 analysis outline fields", () => {
     const out = summarizeList(items, "analysis_outline");
     expect(out).toContain("1. Step One");
     expect(out).not.toContain("Step One —");
+  });
+});
+
+
+describe("summarizeFlowChart — merged conceptual_model widget", () => {
+  // Design merge (2026-06): conceptual_model widget now ships nodes (with
+  // their Likert items attached) + edges (hypothesis paths). The natural-
+  // language summary must carry BOTH halves so the backend LLM extractor
+  // can rebuild the {nodes:[{label, questions}], edges:[{...}]} shape from
+  // the chat message text alone (the structured JSON value is also sent
+  // but the extractor reads the message body, mirroring summarizeList).
+  const nodes: FlowChartNode[] = [
+    { id: "n0", label: "TL",
+      questions: ["My supervisor inspires me.",
+                  "My supervisor articulates a clear vision."] },
+    { id: "n1", label: "EE", questions: ["I feel engaged at work."] },
+    { id: "n2", label: "Trust", questions: [] },
+  ];
+  const edges: FlowChartEdge[] = [
+    { id: "H1", source: "n0", target: "n1",
+      hypothesis: "H1: TL positively affects EE", effect_type: "positive" },
+    { id: "H2", source: "n0", target: "n2",
+      hypothesis: "H2: TL builds Trust", effect_type: "positive" },
+  ];
+
+  test("emits a labeled paths section + per-construct items section", () => {
+    const out = summarizeFlowChart(nodes, edges, "conceptual_model");
+    // Top-line header that pairs with the existing 'My ...' convention
+    // (objectives, themes, scale_items, ...) so the M3 extractor recognises
+    // the message as a final-state submission rather than a clarification.
+    expect(out.startsWith("My conceptual model:")).toBe(true);
+
+    // Paths section — must resolve source/target ids back to labels so the
+    // extractor sees construct names, not internal ids.
+    expect(out).toContain("Paths:");
+    expect(out).toContain("- TL → EE (H1: TL positively affects EE)");
+    expect(out).toContain("- TL → Trust (H2: TL builds Trust)");
+
+    // Items section — one header per construct that has at least one question;
+    // empty-question constructs are skipped (mirrors the prior scale_items
+    // formatter which only emitted populated constructs).
+    expect(out).toContain("Scale items:");
+    expect(out).toContain("Construct TL:");
+    expect(out).toContain("- My supervisor inspires me.");
+    expect(out).toContain("- My supervisor articulates a clear vision.");
+    expect(out).toContain("Construct EE:");
+    expect(out).toContain("- I feel engaged at work.");
+    // Trust has no questions yet — must NOT appear as a Construct header.
+    expect(out).not.toContain("Construct Trust:");
+  });
+
+  test("negative effect_type is tagged inline so direction round-trips", () => {
+    const negEdges: FlowChartEdge[] = [
+      { id: "H3", source: "n0", target: "n1",
+        hypothesis: "H3: TL reduces burnout", effect_type: "negative" },
+    ];
+    const out = summarizeFlowChart(nodes, negEdges, "conceptual_model");
+    // Direction tag rides alongside the path so the M3 LLM extractor knows
+    // it's a negative hypothesis even when the hypothesis text itself is
+    // ambiguous. Positive is the default and stays unlabeled to keep the
+    // chat message readable.
+    expect(out).toContain("- TL → EE [negative] (H3: TL reduces burnout)");
+  });
+
+  test("edges whose endpoints aren't in nodes use the raw id as a fallback", () => {
+    // Defensive: if the user dragged a temporary edge to an as-yet-unmapped
+    // id, the summary still emits something parseable rather than throwing.
+    const out = summarizeFlowChart(
+      nodes,
+      [{ id: "Hx", source: "ghost", target: "n1", hypothesis: "",
+         effect_type: "positive" }],
+      "conceptual_model",
+    );
+    expect(out).toContain("- ghost → EE");
+  });
+
+  test("empty model still emits the header so the backend sees a final-state submission", () => {
+    const out = summarizeFlowChart([], [], "conceptual_model");
+    expect(out.startsWith("My conceptual model:")).toBe(true);
   });
 });

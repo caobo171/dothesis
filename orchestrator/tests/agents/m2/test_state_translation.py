@@ -124,3 +124,37 @@ def test_flatten_partial_state_omits_confirmed_at():
     }
     out = _flatten_to_m2_output(sub_state)
     assert out.get("confirmed_at") is None
+
+
+def test_flatten_excludes_progress_emitter_from_phase_state():
+    """Regression: M2Agent.step stashes engine.utils.progress's per-request
+    emitter (a Python callable) into sub_state['_progress_emitter']. The
+    catch-all `_phase_state` writer used to include it, and the callable
+    rode into context_store.m2_literature → outer postgres checkpoint →
+    msgpack crash ('Type is not msgpack serializable: ContextStore').
+
+    The emitter is re-attached fresh from the registry on every M2 entry,
+    so dropping it from the persisted snapshot loses nothing. Pinning this
+    contract here so a future refactor can't silently re-introduce the leak.
+    """
+    sub_state = {
+        "current_phase": "research_state",   # mid-M2 → triggers _phase_state path
+        "research_state_draft": "partial",
+        "candidate_gaps": [],
+        "_progress_emitter": lambda payload: None,
+        "research_type": "quantitative",
+    }
+    out = _flatten_to_m2_output(sub_state)
+    assert "_phase_state" in out, "mid-M2 must persist the working sub-state"
+    assert "_progress_emitter" not in out["_phase_state"], (
+        "_progress_emitter must be filtered out — it's an unserializable "
+        "callable that would crash the postgres checkpointer."
+    )
+
+    # Belt-and-braces: round-trip through the actual LangGraph serializer
+    # so a future change to _SEEDED_INPUT_KEYS that re-allows a callable
+    # fails here even if the field name changes.
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+    cs = ContextStore(m2_literature=out)
+    # Should not raise.
+    JsonPlusSerializer().dumps_typed(cs)

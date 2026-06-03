@@ -1,5 +1,5 @@
 // web/app/components/chat/widgets/synthesize.ts
-import type { ListItem } from "./types";
+import type { FlowChartEdge, FlowChartNode, ListItem } from "./types";
 
 /**
  * Build a natural-language user message from a widget selection.
@@ -188,4 +188,65 @@ export function summarizeList(items: ListItem[], fieldName: string): string {
       // Generic bulleted fallback for unknown fields.
       return items.map(i => `- ${i.text}`).join("\n");
   }
+}
+
+
+/**
+ * Build the final-state user message from a FlowChartWidget's confirmed graph.
+ *
+ * Design merge (2026-06): the M3 `conceptual_model` schema field now carries
+ * both hypothesis paths AND per-construct Likert items. The chat message must
+ * convey both halves so the backend's _extract_answer LLM call can rebuild
+ * the merged {nodes:[{label, questions}], edges:[{...}]} shape from the text
+ * alone. We emit two clearly-labeled sections (Paths / Scale items) mirroring
+ * the prior two-widget formatters that the M3 extractor was already trained on.
+ *
+ * Format example:
+ *   My conceptual model:
+ *   Paths:
+ *   - TL → EE (H1: TL positively affects EE)
+ *   - TL → Trust [negative] (H2: TL inversely related to Trust)
+ *   Scale items:
+ *   Construct TL:
+ *   - My supervisor inspires me.
+ *   - My supervisor articulates a clear vision.
+ *   Construct EE:
+ *   - I feel engaged at work.
+ */
+export function summarizeFlowChart(
+  nodes: FlowChartNode[],
+  edges: FlowChartEdge[],
+  _fieldName: string,
+): string {
+  const idToLabel = new Map<string, string>();
+  nodes.forEach(n => idToLabel.set(n.id, n.label));
+
+  const lines: string[] = ["My conceptual model:"];
+
+  if (edges.length > 0) {
+    lines.push("Paths:");
+    edges.forEach(e => {
+      const src = idToLabel.get(e.source) ?? e.source;
+      const tgt = idToLabel.get(e.target) ?? e.target;
+      // Negative direction is the exceptional case — tag it explicitly so the
+      // M3 extractor doesn't fall back to positive (the silent default).
+      // Positive paths stay untagged to keep the chat message readable.
+      const direction = e.effect_type === "negative" ? " [negative]" : "";
+      const h = e.hypothesis ? ` (${e.hypothesis})` : "";
+      lines.push(`- ${src} → ${tgt}${direction}${h}`);
+    });
+  }
+
+  const constructsWithQuestions = nodes.filter(
+    n => Array.isArray(n.questions) && n.questions.length > 0,
+  );
+  if (constructsWithQuestions.length > 0) {
+    lines.push("Scale items:");
+    constructsWithQuestions.forEach(n => {
+      lines.push(`Construct ${n.label}:`);
+      n.questions.forEach(q => lines.push(`- ${q}`));
+    });
+  }
+
+  return lines.join("\n");
 }

@@ -65,8 +65,51 @@ class ListEditorHint(BaseModel):
     reset_label: str = "Reset to suggested"
 
 
+# --- flow_chart variant -------------------------------------------------------
+
+class FlowChartNode(BaseModel):
+    """One node (construct) in a FlowChartHint. `questions` are the Likert /
+    measurement items attached directly to this construct — previously a
+    separate schema field (`scale_items`) which the user had to fill in a
+    second widget step. Merging them onto the node mirrors Survify's
+    AdvanceModelType and lets the user see structure + measurement in one
+    flow chart instead of two disconnected steps."""
+    id: str
+    label: str
+    questions: list[str] = Field(default_factory=list)
+
+
+class FlowChartEdge(BaseModel):
+    """One directed edge (hypothesis path) between two nodes. `hypothesis`
+    carries the natural-language statement the path represents (e.g. 'H1:
+    Transformational Leadership positively influences Engagement'); the
+    frontend usually surfaces it as a tooltip or label on the edge."""
+    id: str
+    source: str
+    target: str
+    hypothesis: str = ""
+    effect_type: Literal["positive", "negative"] = "positive"
+
+
+class FlowChartHint(BaseModel):
+    """Single editable graph: nodes (constructs + their measurement items)
+    plus edges (hypothesis paths). Replaces the prior two-step flow where
+    conceptual_model and scale_items were asked in separate bubbles — the
+    user can now see the whole research model in one place and edit either
+    half without losing the other. Confirm emits the full graph back as
+    the new `conceptual_model` value; `scale_items` is no longer a separate
+    schema field."""
+    widget_type: Literal["flow_chart"] = "flow_chart"
+    field_name: str
+    title: str
+    initial_nodes: list[FlowChartNode]
+    initial_edges: list[FlowChartEdge]
+    confirm_label: str = "Confirm"
+    reset_label: str = "Reset to suggested"
+
+
 # Discriminated union — future variants land here.
 WidgetHint = Annotated[
-    Union[CardGridHint, ListEditorHint],
+    Union[CardGridHint, ListEditorHint, FlowChartHint],
     Field(discriminator="widget_type"),
 ]

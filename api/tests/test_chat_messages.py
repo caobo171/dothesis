@@ -71,3 +71,52 @@ def test_send_message_persists_user_msg_and_streams_reply(client, monkeypatch):
         assert msgs[0].content == "leadership thesis"
         assert msgs[-1].role == "assistant"
         assert "Hello" in msgs[-1].content
+
+
+def test_send_message_passes_thread_id_into_graph_input(client, monkeypatch):
+    """Regression guard: chat.py MUST write `thread_id` into the graph input
+    on every turn. M2's deep-research progress emitter is registered under
+    `langgraph_thread_id` in engine.utils.progress and looked up by M2Agent
+    via `state.get("thread_id")`. Without this write the lookup returns
+    None, the emitter is never called, and the M2 search-progress beats
+    never reach the SSE queue — the chat bubble stays stuck on '...' for
+    the entire (potentially multi-minute) search run.
+
+    Bug originally landed in commit 14e75f5 ('move emitter out of graph
+    state') which switched the lookup site to state.get('thread_id') but
+    forgot to populate the field at the chat front door. This test pins
+    the contract so the wire can't silently rot again.
+    """
+    from langchain_core.messages import AIMessage
+
+    captured: dict = {}
+
+    fake_graph = MagicMock()
+
+    def _record(graph_input, **kwargs):
+        captured["graph_input"] = graph_input
+        return _async_iter([
+            {"M1": {"messages": [AIMessage(content="hi")]}},
+        ])
+    fake_graph.astream.side_effect = _record
+    fake_graph.aget_state = AsyncMock(return_value=MagicMock(values={}))
+    monkeypatch.setattr(
+        "orchestrator.graph.get_interactive_graph", lambda: fake_graph
+    )
+
+    pid, tid = _setup_project(client)
+    resp = client.post(
+        f"/api/v1/threads/{tid}/messages", json={"text": "go"},
+    )
+    assert resp.status_code == 200
+
+    assert "thread_id" in captured["graph_input"], (
+        "graph_input is missing 'thread_id' — M2 progress emitter lookup "
+        "will return None and search-progress beats will not reach SSE."
+    )
+    # Must match the value used at register() time so the lookup hits.
+    sf = get_session_factory()
+    with sf() as db:
+        from app.models import Thread
+        t = db.query(Thread).filter_by(id=tid).one()
+        assert captured["graph_input"]["thread_id"] == t.langgraph_thread_id

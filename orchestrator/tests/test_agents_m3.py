@@ -7,12 +7,33 @@ from orchestrator.state import ContextStore
 
 def test_m3_constructs_from_handles_list_and_dict():
     """Regression: a delegated conceptual_model can come back as a LIST of path
-    strings instead of {constructs: [...]}, which crashed step() with
-    'list object has no attribute get'."""
+    strings instead of {constructs: [...]}, which used to crash step() with
+    'list object has no attribute get'. Helper now also derives construct
+    names from path endpoints across every plausible stored shape so
+    scale_items can render with one row per construct.
+    """
+    # Ideal shape — explicit constructs key.
     assert M3Agent._constructs_from({"constructs": ["A", "B"]}) == ["A", "B"]
+    # Paths-only dict — derive unique endpoints in insertion order.
+    assert M3Agent._constructs_from({"paths": [
+        {"from": "TL", "to": "EE"},
+        {"from": "TL", "to": "Trust"},
+        {"from": "Trust", "to": "EE"},
+    ]}) == ["TL", "EE", "Trust"]
+    # Bare list of path dicts — same derivation.
+    assert M3Agent._constructs_from([
+        {"from": "A", "to": "B"}, {"from": "B", "to": "C"},
+    ]) == ["A", "B", "C"]
+    # Bare list of path STRINGS (ASCII arrow + hypothesis label in parens).
+    # Old behavior returned the raw strings as 'constructs'; new behavior
+    # extracts endpoints and strips the (H<n>) tail.
     assert M3Agent._constructs_from(["PEU -> US (H1)", "PU -> US (H2)"]) == \
-        ["PEU -> US (H1)", "PU -> US (H2)"]
+        ["PEU", "US", "PU"]
+    # Bare list of construct names — pass through unchanged.
+    assert M3Agent._constructs_from(["A", "B"]) == ["A", "B"]
+    # None / empty.
     assert M3Agent._constructs_from(None) == []
+    assert M3Agent._constructs_from({}) == []
 
 
 def test_m3_auto_quantitative(monkeypatch):

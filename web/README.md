@@ -1,6 +1,10 @@
 # DoThesis — Next.js frontend
 
-A Next.js 15 (App Router) port of the DoThesis design — the brand-line frontend for the OpenDraft thesis pipeline.
+Next.js 15 (App Router) frontend for the DoThesis chat-first thesis assistant. Renders the single chat thread + per-module widgets (Card / Grid / ListEditor / FlowChart) emitted by the orchestrator (`../orchestrator/`) via the FastAPI chat router (`../api/app/routers/chat.py`).
+
+> Architecture brief: [`../researchflow-architecture-brief.md`](../researchflow-architecture-brief.md). Agent contract + open gaps: [`../AGENTS.md`](../AGENTS.md). The chat surface is the brief's §1.4 conversation focus — keep "current module is a default context, never a lock" in mind when adding navigation UI.
+
+The legacy per-paper "agent run" / "draft editor" / "citations" views below render output from the OpenDraft engine and remain useful for the standalone draft-generator product (see [`../engine/README.md`](../engine/README.md)). They are NOT part of the M1–M5 chat flow.
 
 ## Run locally
 

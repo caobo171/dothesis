@@ -22,6 +22,31 @@ _PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "m5.md").read_te
 _CHAPTER_ORDER = ["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
 
 
+def _scale_items_from_conceptual_model(cm: dict | None) -> list[dict]:
+    """Derive the legacy `scale_items` list from the merged conceptual_model
+    flow_chart shape ({nodes: [{label, questions}], edges: [...]}). The M3
+    schema dropped the standalone scale_items field in the 2026-06 merge, but
+    the M5 chapter prompts still read {scale_items} in their methodology
+    template — this keeps that prompt populated without the prompt template
+    having to know the new shape.
+
+    Returns [{construct, items}, ...] preserving node insertion order. Nodes
+    with no questions are skipped to mirror the old "only include constructs
+    with measured items" behaviour.
+    """
+    if not isinstance(cm, dict):
+        return []
+    out: list[dict] = []
+    for node in cm.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        questions = [q for q in (node.get("questions") or []) if q]
+        if not questions:
+            continue
+        out.append({"construct": node.get("label", ""), "items": questions})
+    return out
+
+
 class M5Agent(ModuleAgent):
     schema = M5Output
     module_key = "M5"
@@ -80,7 +105,15 @@ class M5Agent(ModuleAgent):
             "design": m3.get("design"),
             "tool": m3.get("tool"),
             "conceptual_model": m3.get("conceptual_model"),
-            "scale_items": m3.get("scale_items"),
+            # Design merge (2026-06): the standalone `scale_items` schema field
+            # is gone. Per-construct Likert items live on conceptual_model
+            # nodes (`conceptual_model.nodes[].questions`). For prompt-template
+            # back-compat, derive a flat scale_items list on the fly so the
+            # M5 chapter prompts that still reference {scale_items} keep
+            # rendering populated instead of "Scale items (quant): None".
+            "scale_items": _scale_items_from_conceptual_model(
+                m3.get("conceptual_model")
+            ),
             "themes": m3.get("themes"),
             "interview_guide": m3.get("interview_guide"),
             "purposive_criteria": m3.get("purposive_criteria"),

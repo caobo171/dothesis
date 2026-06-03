@@ -234,30 +234,79 @@ def test_purposive_criteria_returns_flat_list_editor(monkeypatch):
     assert len(hint["initial_items"]) == 3
 
 
-def test_conceptual_model_returns_list_editor_with_path_adapter(monkeypatch):
-    """build_conceptual_model returns {constructs, paths: [{from,to,hypothesis}]};
-    the agent adapts paths into ListItem rows (one row per path)."""
+def test_conceptual_model_renders_flow_chart_with_nodes_questions_and_edges(monkeypatch):
+    """Design merge (per user request 2026-06-02): conceptual_model + scale_items
+    used to be two separate widgets — first a flat list of paths, then a second
+    bubble asking for Likert items per construct. Splitting them was nonsense
+    because the user needs to see structure + measurement together (mirrors
+    Survify's AdvanceModelType).
+
+    New behaviour: conceptual_model ships ONE flow_chart widget that carries:
+      - nodes: each construct with its suggested Likert questions attached
+      - edges: each hypothesis path with effect_type and the natural-language
+        hypothesis statement
+    The user edits both halves in one place and Confirm emits the merged
+    shape; scale_items is no longer a separate schema field.
+    """
     from unittest.mock import MagicMock
     from orchestrator.agents import m3_design
 
-    fake_tool = MagicMock()
-    fake_tool.invoke.return_value = {
+    fake_model = MagicMock()
+    fake_model.invoke.return_value = {
         "constructs": ["TL", "EE", "Trust"],
         "paths": [
             {"from": "TL", "to": "EE", "hypothesis": "H1: TL positively affects EE"},
             {"from": "TL", "to": "Trust", "hypothesis": "H2: TL builds Trust"},
         ],
     }
-    monkeypatch.setattr(m3_design, "build_conceptual_model", fake_tool)
+    monkeypatch.setattr(m3_design, "build_conceptual_model", fake_model)
+
+    fake_batch = MagicMock()
+    fake_batch.invoke.return_value = {
+        "TL":    [{"id": "TL1", "text": "My supervisor inspires me."},
+                  {"id": "TL2", "text": "My supervisor articulates a clear vision."}],
+        "EE":    [{"id": "EE1", "text": "I feel engaged at work."}],
+        "Trust": [{"id": "TR1", "text": "I trust my supervisor."}],
+    }
+    monkeypatch.setattr(m3_design, "suggest_scale_items_batch", fake_batch)
 
     agent = m3_design.M3Agent()
     m3_design.M3Agent._render_paradigm = "quantitative"
     m3_design.M3Agent._render_research_question = "How does TL affect EE?"
+    m3_design.M3Agent._render_constructs = []
+    m3_design.M3Agent._render_conceptual_model = None
+
     hint = agent.render_hint_for_field("conceptual_model")
-    assert hint["widget_type"] == "list_editor"
+
+    assert hint is not None
+    assert hint["widget_type"] == "flow_chart", (
+        f"conceptual_model must ship flow_chart (got {hint.get('widget_type')!r})"
+    )
     assert hint["field_name"] == "conceptual_model"
-    assert hint["allow_nested"] is False
-    texts = [i["text"] for i in hint["initial_items"]]
-    assert any("TL → EE" in t for t in texts)
-    assert any("TL → Trust" in t for t in texts)
-    assert hint["initial_items"][0]["meta"]["hypothesis"].startswith("H1")
+
+    # Nodes — one per construct, each carrying its suggested Likert items.
+    node_labels = [n["label"] for n in hint["initial_nodes"]]
+    assert node_labels == ["TL", "EE", "Trust"]
+    # Match by label so we don't depend on which id scheme the impl picks.
+    nodes_by_label = {n["label"]: n for n in hint["initial_nodes"]}
+    assert nodes_by_label["TL"]["questions"] == [
+        "My supervisor inspires me.",
+        "My supervisor articulates a clear vision.",
+    ]
+    assert nodes_by_label["EE"]["questions"] == ["I feel engaged at work."]
+
+    # Edges — one per hypothesis path, hypothesis text preserved.
+    assert len(hint["initial_edges"]) == 2
+    edge_texts = {(e["source"], e["target"]): e["hypothesis"]
+                  for e in hint["initial_edges"]}
+    # Source/target reference node ids, not labels — resolve via the node map.
+    id_by_label = {n["label"]: n["id"] for n in hint["initial_nodes"]}
+    assert edge_texts[(id_by_label["TL"], id_by_label["EE"])].startswith("H1")
+    assert edge_texts[(id_by_label["TL"], id_by_label["Trust"])].startswith("H2")
+    # Default effect_type is positive — user can flip on the canvas if needed.
+    assert all(e.get("effect_type") == "positive" for e in hint["initial_edges"])
+
+    # ONE batched LLM call for ALL constructs (regression-guard for the
+    # 'typing dots forever' bug that the prior N-sequential design caused).
+    assert fake_batch.invoke.call_count == 1
+    assert fake_batch.invoke.call_args[0][0]["constructs"] == ["TL", "EE", "Trust"]

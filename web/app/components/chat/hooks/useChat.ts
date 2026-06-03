@@ -67,7 +67,15 @@ export function useChat(threadId: string) {
     .map(e => (e as unknown as { message: string }).message)
     .at(-1) ?? null;
 
-  const send = async (text: string) => {
+  const send = async (
+    text: string,
+    // Structured payload from a rich-widget click (FlowChart, ListEditor).
+    // When set, the backend uses `value` verbatim for `field_name` and
+    // skips LLM extraction — necessary for nested shapes (M3
+    // conceptual_model: {nodes,edges}) the text extractor was silently
+    // flattening to {paths:[...]}.
+    widgetPayload?: { field_name: string; value: unknown },
+  ) => {
     // Optimistic update: show user message immediately before server confirms
     const optimistic: Message = {
       id: -Date.now(),
@@ -80,7 +88,7 @@ export function useChat(threadId: string) {
     await stream.start(`/api/v1/threads/${threadId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, widget_payload: widgetPayload ?? null }),
     });
 
     // Revalidate to replace the optimistic message with server truth
