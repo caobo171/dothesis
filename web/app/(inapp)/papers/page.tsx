@@ -20,13 +20,8 @@ import {
   type Project,
 } from "@/app/components/chat/HomeDashboard";
 import { NewProjectModal } from "@/app/components/chat/NewProjectModal";
+import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 
-
-const fetcher = async (url: string) => {
-  const res = await fetch(`/api/v1${url}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-};
 
 // One coarse status per draft, same precedence as the dashboard card:
 // finished > flagged > started > untouched.
@@ -73,12 +68,12 @@ export default function PapersPage() {
       <div className="flex items-end justify-between gap-2 mb-4 px-0.5">
         <div>
           <h1 className="m-0 text-[22px] font-extrabold tracking-tight font-serif text-ink-900">
-            Drafts
+            Theses
           </h1>
           <div className="text-[12.5px] text-ink-500 mt-1">
             {isLoading
               ? "Loading…"
-              : `${list.length} ${list.length === 1 ? "draft" : "drafts"} in your workspace`}
+              : `${list.length} ${list.length === 1 ? "thesis" : "theses"} in your workspace`}
           </div>
         </div>
         <button
@@ -92,13 +87,13 @@ export default function PapersPage() {
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {(error as Error).message || "Could not load drafts"}
+          {(error as Error).message || "Could not load theses"}
         </div>
       )}
 
       {!isLoading && list.length === 0 && !error && (
         <div className="bg-white rounded-2xl border border-dashed border-ink-200 p-12 text-center">
-          <h2 className="text-base font-bold font-serif text-ink-900">No drafts yet</h2>
+          <h2 className="text-base font-bold font-serif text-ink-900">No theses yet</h2>
           <p className="text-sm text-ink-500 mt-2">
             <button
               type="button"

@@ -28,7 +28,7 @@ def _login(client) -> uuid.UUID:
                  username=f"u{uuid.uuid4().hex[:6]}",
                  password_hash="x", email_verified=True)
         db.add(u); db.commit()
-        client.cookies.set("opendraft_session", create_session(db, u))
+        client.headers["Authorization"] = f"Bearer {create_session(db, u)}"
         return u.id
 
 

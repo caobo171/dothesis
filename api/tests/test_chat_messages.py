@@ -28,7 +28,7 @@ def _setup_project(client) -> tuple[uuid.UUID, uuid.UUID]:
         # create_session returns a signed cookie value; use the correct
         # cookie name expected by deps.py (opendraft_session).
         token = create_session(db, u)
-    client.cookies.set("opendraft_session", token)
+    client.headers["Authorization"] = f"Bearer {token}"
     pid = client.post("/api/v1/projects", json={"name": "T"}).json()["id"]
     tid = client.get(f"/api/v1/projects/{pid}/threads").json()[0]["id"]
     return uuid.UUID(pid), uuid.UUID(tid)

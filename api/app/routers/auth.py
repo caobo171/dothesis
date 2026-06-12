@@ -1,8 +1,19 @@
-from datetime import datetime, timedelta, timezone
-import re
-import uuid
+"""Auth router — access-token only, no session cookies.
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+History: this router used to write `Session` rows and set the
+`opendraft_session` cookie via `_issue_session`. That path is gone — see
+jwt_auth.py for the rationale. Login / signup / verify / google all return
+`{user, access_token, expires_at}` in the response body. The client stores
+the token in localStorage and POSTs it in the body of every authenticated
+request.
+
+The Session table itself is left in place (not dropped) so existing
+migration history stays clean, but no new rows are written.
+"""
+from datetime import datetime, timezone
+import re
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,15 +22,14 @@ from ..auth_tokens import VERIFY_TTL, RESET_TTL, make_verify_token, make_reset_t
 from ..google_auth import verify_google_id_token
 from ..credit_ledger import credit as ledger_credit
 from ..db import db_session
-from ..deps import SESSION_COOKIE, current_user
+from ..deps import current_user
+from ..jwt_auth import AuthedBody, sign_access_token
 from ..mail import send_template
-from ..models import Session as UserSession, User
-from ..security import hash_password, sign_session_id, verify_password
+from ..models import User
+from ..security import hash_password, verify_password
 from ..settings import Settings, get_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-SESSION_TTL = timedelta(days=30)
 
 
 USERNAME_RE = re.compile(r"^[a-zA-Z0-9_]{3,32}$")
@@ -45,6 +55,19 @@ class UserOut(BaseModel):
     created_at: str | None = None
 
 
+class TokenOut(BaseModel):
+    """Wraps the user payload with the issued access token.
+
+    Why expose `expires_at` (epoch seconds) alongside the token: the client
+    needs to know when to re-auth without parsing the JWT. Shipping a
+    decoder to the browser would be wasteful and expose the algorithm
+    choice; one extra integer in the response is cheaper.
+    """
+    user: UserOut
+    access_token: str
+    expires_at: int
+
+
 def _to_out(u: User) -> UserOut:
     from ..admin_config import is_super_admin as _is_admin
     return UserOut(
@@ -57,37 +80,10 @@ def _to_out(u: User) -> UserOut:
     )
 
 
-def _parse_ip(raw: str | None) -> str | None:
-    """Return a valid inet string or None (handles test-client hostnames)."""
-    import ipaddress
-    if not raw:
-        return None
-    try:
-        ipaddress.ip_address(raw)
-        return raw
-    except ValueError:
-        return None
-
-
-def _issue_session(db: Session, user: User, settings: Settings, response: Response, request: Request) -> None:
-    raw_ip = request.client.host if request.client else None
-    sess = UserSession(
-        user_id=user.id,
-        expires_at=datetime.now(timezone.utc) + SESSION_TTL,
-        ip=_parse_ip(raw_ip),
-    )
-    db.add(sess)
-    db.commit()
-    cookie_val = sign_session_id(str(sess.id), secret=settings.session_secret)
-    response.set_cookie(
-        SESSION_COOKIE,
-        cookie_val,
-        max_age=int(SESSION_TTL.total_seconds()),
-        httponly=True,
-        secure=False,  # set True behind HTTPS in production
-        samesite="lax",
-        path="/",
-    )
+def _issue_token(user: User, settings: Settings) -> TokenOut:
+    """Build the TokenOut response. No DB writes — JWTs are stateless."""
+    token, exp = sign_access_token(str(user.id), secret=settings.session_secret)
+    return TokenOut(user=_to_out(user), access_token=token, expires_at=exp)
 
 
 @router.post("/signup", status_code=201)
@@ -122,12 +118,16 @@ def signup(body: SignupRequest,
                   "Confirm your DoThesis email")
     user.last_verify_sent_at = datetime.now(timezone.utc)
     db.commit()
+    # Signup itself doesn't auth the user — they must verify email first.
+    # Returning ok+email matches the old contract; the client redirects to
+    # the "check your email" screen.
     return {"ok": True, "email": email}
 
 
 @router.post("/login")
-def login(body: LoginRequest, request: Request, response: Response,
-          db: Session = Depends(db_session), settings: Settings = Depends(get_settings)) -> UserOut:
+def login(body: LoginRequest,
+          db: Session = Depends(db_session),
+          settings: Settings = Depends(get_settings)) -> TokenOut:
     user = db.scalar(select(User).where(User.email == body.email.lower()))
     if not user:
         raise HTTPException(401, detail={"error": {"code": "bad_credentials",
@@ -143,17 +143,22 @@ def login(body: LoginRequest, request: Request, response: Response,
                                                     "message": "Please verify your email",
                                                     "email": user.email}})
     user.last_login = datetime.now(timezone.utc)
-    _issue_session(db, user, settings, response, request)
-    return _to_out(user)
+    db.commit()
+    return _issue_token(user, settings)
 
 
-class TokenRequest(BaseModel):
+class VerifyRequest(BaseModel):
+    """Email verification — `token` here is the email-verify token (not an
+    access token). The user isn't logged in yet so we can't require
+    `access_token`; this body intentionally does NOT inherit from AuthedBody.
+    """
     token: str
 
 
 @router.post("/verify")
-def verify(body: TokenRequest, request: Request, response: Response,
-           db: Session = Depends(db_session), settings: Settings = Depends(get_settings)):
+def verify(body: VerifyRequest,
+           db: Session = Depends(db_session),
+           settings: Settings = Depends(get_settings)) -> TokenOut:
     try:
         uid = decode_token(body.token, kind="verify", max_age=VERIFY_TTL)
     except ValueError as e:
@@ -164,30 +169,34 @@ def verify(body: TokenRequest, request: Request, response: Response,
     if not user:
         raise HTTPException(400, detail={"error": {"code": "token_invalid",
                                                     "message": "User not found"}})
-    if user.email_verified:
-        _issue_session(db, user, settings, response, request)
-        return {"ok": True, "already_verified": True, "user": _to_out(user).model_dump()}
-
-    user.email_verified = True
-    ledger_credit(db, user, delta=settings.signup_bonus_credits,
-                  reason="signup_bonus", ref_type="user", ref_id=user.id)
+    if not user.email_verified:
+        user.email_verified = True
+        ledger_credit(db, user, delta=settings.signup_bonus_credits,
+                      reason="signup_bonus", ref_type="user", ref_id=user.id)
     user.last_login = datetime.now(timezone.utc)
-    _issue_session(db, user, settings, response, request)
     db.commit()
-    return {"ok": True, "user": _to_out(user).model_dump()}
+    return _issue_token(user, settings)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(response: Response):
-    response.delete_cookie(SESSION_COOKIE, path="/")
+def logout():
+    # Stateless tokens — server has nothing to revoke. The client wipes
+    # localStorage on its end. Endpoint kept for symmetry with the
+    # frontend's logout flow (UX: "logging out…" toast). No body required.
+    return None
 
 
-@router.get("/me")
+@router.post("/me")
 def me(user: User = Depends(current_user)) -> UserOut:
+    # `current_user` reads access_token from body — no need to declare an
+    # explicit AuthedBody parameter here. The endpoint still requires a
+    # body (empty body → 401).
     return _to_out(user)
 
 
 class EmailRequest(BaseModel):
+    """Email-only requests (resend verification, forgot password) — no
+    access token because the user isn't logged in."""
     email: EmailStr
 
 
@@ -257,7 +266,12 @@ def reset_password(body: ResetRequest,
         raise HTTPException(400, detail={"error": {"code": "token_invalid",
                                                     "message": "User not found"}})
     user.password_hash = hash_password(body.new_password)
-    db.query(UserSession).filter(UserSession.user_id == uid).delete()
+    # Note: with stateless JWTs we can't invalidate already-issued tokens
+    # here. Old tokens stay valid for up to 7 days. The new password
+    # blocks future logins via the old credentials, which is the realistic
+    # attack vector; a stolen-then-rotated-password scenario is rare
+    # enough to accept until we add a `token_invalidation_after` column
+    # on User for hard revocation.
     db.commit()
     return {"ok": True}
 
@@ -267,9 +281,9 @@ class GoogleRequest(BaseModel):
 
 
 @router.post("/google")
-def google_signin(body: GoogleRequest, request: Request, response: Response,
+def google_signin(body: GoogleRequest,
                   db: Session = Depends(db_session),
-                  settings: Settings = Depends(get_settings)) -> UserOut:
+                  settings: Settings = Depends(get_settings)) -> TokenOut:
     try:
         info = verify_google_id_token(body.id_token)
     except ValueError as e:
@@ -313,5 +327,4 @@ def google_signin(body: GoogleRequest, request: Request, response: Response,
                       reason="signup_bonus", ref_type="user", ref_id=user.id)
     user.last_login = datetime.now(timezone.utc)
     db.commit()
-    _issue_session(db, user, settings, response, request)
-    return _to_out(user)
+    return _issue_token(user, settings)

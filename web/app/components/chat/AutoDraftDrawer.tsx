@@ -5,13 +5,8 @@ import useSWR from "swr";
 import { X, Pause, Play, XCircle } from "lucide-react";
 import { ModuleProgressDot, type ModuleStatus } from "./ModuleProgressDot";
 import { useAutoDraftRun } from "./hooks/useAutoDraftRun";
+import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 
-
-const fetcher = async (url: string) => {
-  const res = await fetch(`/api/v1${url}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-};
 
 const MODULES = [
   { module: "M1", label: "Topic Discovery" },
@@ -45,9 +40,11 @@ export function AutoDraftDrawer({ runId, onClose }: { runId: string; onClose: ()
     .reduce((acc, e) => acc + ((e as { tokens?: number }).tokens ?? 0), 0);
   const exports = events.find(e => e.type === "job_done") as { exports?: Record<string, string> } | undefined;
 
-  const pause  = async () => { await fetch(`/api/v1/runs/${runId}/pause`,  { method: "POST" }); void mutateRun(); };
-  const resume = async () => { await fetch(`/api/v1/runs/${runId}/resume`, { method: "POST" }); void mutateRun(); };
-  const cancel = async () => { await fetch(`/api/v1/runs/${runId}/cancel`, { method: "POST" }); void mutateRun(); };
+  // Use apiFetch so the access_token (from tokenStore) is injected into
+  // the JSON body. Bare fetch would 401 — no cookie auth anymore.
+  const pause  = async () => { await apiFetch(`/runs/${runId}/pause`,  { method: "POST" }).catch(() => null); void mutateRun(); };
+  const resume = async () => { await apiFetch(`/runs/${runId}/resume`, { method: "POST" }).catch(() => null); void mutateRun(); };
+  const cancel = async () => { await apiFetch(`/runs/${runId}/cancel`, { method: "POST" }).catch(() => null); void mutateRun(); };
 
   return (
     <aside className="fixed right-0 top-14 bottom-0 w-[480px] bg-white border-l border-gray-200 shadow-xl z-40 flex flex-col">

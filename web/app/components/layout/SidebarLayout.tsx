@@ -23,6 +23,8 @@ import clsx from "clsx";
 import Link from "next/link";
 import { Fragment, type PropsWithChildren, useEffect, useState } from "react";
 
+import { apiFetch } from "@/app/lib/api";
+import { tokenStore } from "@/app/lib/tokenStore";
 import { useMe } from "@/app/lib/use-me";
 
 import { Brand } from "./Brand";
@@ -31,7 +33,11 @@ import type { SidebarSection } from "./sections";
 const COLLAPSED_KEY = "opendraft_sidebar_collapsed";
 
 async function logout() {
-  await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" });
+  // tokenStore.clear wipes both localStorage AND the marker cookie that
+  // proxy.js gates routes on. Without that, the next request would still
+  // see the marker cookie and stay on the protected page.
+  try { await apiFetch("/auth/logout", { method: "POST", auth: false }); } catch { /* network error is fine */ }
+  tokenStore.clear();
   window.location.href = "/login";
 }
 

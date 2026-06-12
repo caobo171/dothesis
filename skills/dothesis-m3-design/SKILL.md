@@ -40,7 +40,30 @@ Variables (`nodes`) + relationships (`edges`):
 
 Rules: every construct gets a 1-sentence operational definition traced to an M2
 source; every edge is a hypothesis (labeled H1, H2, …); mediators/moderators/controls
-typed explicitly; ≥5 edges for quantitative, ≥3 for qualitative.
+typed explicitly.
+
+**Default to parsimonious — direct effects first.** A bachelor's or master's thesis
+is well-served by 2–4 direct-effect hypotheses on a single IV → DV (or IV → mediator
+→ DV) tested with **multiple linear regression**. That's the sweet spot for time
+budget, sample-size requirements, and the student's analytical skills.
+
+Add moderators ONLY when there is a clear theoretical reason in the literature AND
+the student explicitly asks for / accepts the added complexity. The cost of every
+moderator: ~30% more sample size, an interaction term to compute and interpret,
+and a more complex write-up. Each moderator must be justified — never add one
+"to make the model richer".
+
+Edge-count guidance:
+- Quantitative, multiple linear regression (default): **2–4 edges** is plenty.
+- Quantitative, mediation/moderation: 4–6 edges; only when the literature demands it.
+- Quantitative, full SEM (PLS-SEM or CB-SEM): 5+ edges; only for graduate-level
+  scope with a real n≥150 sample.
+- Qualitative: 3+ edges.
+
+When proposing the model, START with the parsimonious version. Offer expansion as
+an explicit follow-up question (e.g., *"Want me to add a moderator like X? It would
+raise the sample-size requirement from ~120 to ~180."*) — never silently include
+moderators by default.
 
 ### 3b — Hypotheses
 Each hypothesis: matches one edge · specifies direction or relationship

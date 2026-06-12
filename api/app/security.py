@@ -29,20 +29,20 @@ def verify_session_cookie(cookie_value: str, *, secret: str) -> str:
 
 
 def create_session(db, user) -> str:
-    """Create a DB session row and return a signed cookie value.
+    """Mint a JWT access token for `user`.
 
-    Convenience helper used by tests to authenticate a client without
-    going through the full HTTP signup/login flow.
+    Kept the function name for back-compat with tests that import it.
+    Returns the token string (not a cookie value, not a DB row id) — the
+    test rewrite changed `client.cookies.set(...)` to
+    `client.headers["Authorization"] = f"Bearer {token}"`.
+
+    `db` is unused now but kept in the signature so old call sites pass
+    through unchanged. Will be removed when the test wave that touches
+    each call site lands; doing it lazily avoids a 20-file mechanical
+    diff that this PR is already mid-stream of.
     """
-    from datetime import datetime, timedelta, timezone
-
-    from .models import Session as UserSession
+    from .jwt_auth import sign_access_token
     from .settings import get_settings
-
-    sess = UserSession(
-        user_id=user.id,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=30),
-    )
-    db.add(sess)
-    db.commit()
-    return sign_session_id(str(sess.id), secret=get_settings().session_secret)
+    _ = db  # silence linter — see docstring
+    token, _exp = sign_access_token(str(user.id), secret=get_settings().session_secret)
+    return token

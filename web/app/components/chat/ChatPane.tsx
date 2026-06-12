@@ -11,13 +11,8 @@ import { AutoDraftModal } from "./AutoDraftModal";
 import { AutoDraftDrawer } from "./AutoDraftDrawer";
 import { synthesizeWidgetSelection } from "./widgets/synthesize";
 import type { WidgetSelectHandler } from "./widgets/types";
-
-
-const fetcher = async (url: string) => {
-  const res = await fetch(`/api/v1${url}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-};
+import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
+import { tokenStore } from "@/app/lib/tokenStore";
 
 
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
@@ -63,14 +58,15 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
 
   const confirmAutoDraft = async (topic: string) => {
     setModalOpen(false);
-    const r = await fetch(`/api/v1/projects/${projectId}/runs`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "auto", topic }),
-    });
-    if (r.ok) {
+    try {
+      await apiFetch(`/projects/${projectId}/runs`, {
+        method: "POST",
+        body: { mode: "auto", topic },
+      });
       void mutateRun();
       setDrawerOpen(true);
+    } catch {
+      // Errors surface elsewhere; we just don't open the drawer.
     }
   };
 
@@ -98,10 +94,20 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   };
 
   const onFileDrop = async (files: File[]) => {
+    // FormData uploads can't go through apiFetch (which JSON-encodes the
+    // body). Inject the token as a query string parameter so the request
+    // still authenticates — uploads endpoint accepts auth via the same
+    // body/query/Bearer fallback (see api/app/deps.py:_extract_token).
+    const token = tokenStore.get();
+    const tokenParam = token ? `?access_token=${encodeURIComponent(token)}` : "";
+    const base = process.env.NEXT_PUBLIC_API_BASE || "/api/v1";
     for (const f of files) {
       const fd = new FormData();
       fd.append("file", f);
-      await fetch(`/api/v1/projects/${projectId}/uploads`, { method: "POST", body: fd });
+      await fetch(`${base}/projects/${projectId}/uploads${tokenParam}`, {
+        method: "POST",
+        body: fd,
+      });
     }
   };
 

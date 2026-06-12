@@ -30,7 +30,7 @@ def _auth_and_project(client) -> uuid.UUID:
         db.add(u); db.commit()
         from app.security import create_session
         token = create_session(db, u)
-    client.cookies.set("opendraft_session", token)
+    client.headers["Authorization"] = f"Bearer {token}"
     pid = client.post("/api/v1/projects", json={"name": "T"}).json()["id"]
     return uuid.UUID(pid)
 

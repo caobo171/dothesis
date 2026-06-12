@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import useSWR from "swr";
 
+import { apiFetch } from "@/app/lib/api";
+
 import { OutlineRail, type ChapterName } from "./OutlineRail";
 import { ChapterEditor } from "./ChapterEditor";
 import { SourcesRail } from "./SourcesRail";
@@ -61,11 +63,9 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
     setExporting(true);
     setExportError(null);
     try {
-      const r = await fetch(`/api/v1/projects/${projectId}/m5/export`, { method: "POST" });
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}));
-        throw new Error(body?.detail?.error?.code || `HTTP ${r.status}`);
-      }
+      // apiFetch injects access_token + throws ApiError on non-2xx; replaces
+      // the bare fetch that used to rely on the opendraft_session cookie.
+      await apiFetch(`/projects/${projectId}/m5/export`, { method: "POST" });
       setLastExportAt(new Date());
       setEditsSinceExport(0);
     } catch (e: any) {

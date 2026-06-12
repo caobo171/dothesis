@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { apiFetch } from "../lib/api";
+import { useAuth } from "../lib/auth-context";
 
 function VerifyInner() {
   const params = useSearchParams();
@@ -11,6 +12,11 @@ function VerifyInner() {
   const token = params.get("token") || "";
   const [state, setState] = useState("pending");
   const [errorMsg, setErrorMsg] = useState(null);
+  // Verify is the "second half" of signup — it returns a TokenOut on
+  // success, so we hand the payload to AuthContext.acceptTokenPayload to
+  // persist the access token + hydrate the user. Without this the user
+  // would land on the dashboard logged out and bounce back to /login.
+  const { acceptTokenPayload } = useAuth();
 
   useEffect(() => {
     if (!token) {
@@ -18,8 +24,11 @@ function VerifyInner() {
       setErrorMsg("This verification link is missing the token.");
       return;
     }
-    apiFetch("/auth/verify", { method: "POST", body: { token } })
-      .then(() => {
+    // auth: false because this is the link-email-token flow; the user
+    // doesn't have an access_token yet (that's the whole point).
+    apiFetch("/auth/verify", { method: "POST", body: { token }, auth: false })
+      .then((payload) => {
+        acceptTokenPayload(payload);
         setState("success");
         setTimeout(() => router.push("/"), 1800);
       })

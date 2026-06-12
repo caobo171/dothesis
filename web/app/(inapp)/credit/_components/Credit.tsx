@@ -71,7 +71,7 @@ export default function Credit() {
               <span className="text-lg font-bold text-ink-900">
                 {draftCount === undefined ? "—" : draftCount}
               </span>
-              <span className="text-xs text-ink-500 ml-1">Drafts</span>
+              <span className="text-xs text-ink-500 ml-1">Theses</span>
             </div>
           </div>
           <div className="w-px h-6 bg-ink-200" />

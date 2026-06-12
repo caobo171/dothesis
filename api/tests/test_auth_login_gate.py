@@ -42,7 +42,10 @@ def test_login_verified_succeeds():
     c = _client()
     r = c.post("/api/v1/auth/login", json={"email": "bob@e.com", "password": "supersecret"})
     assert r.status_code == 200
-    assert "opendraft_session" in c.cookies
+    # Was: cookie was set. New contract: TokenOut payload in the body.
+    payload = r.json()
+    assert isinstance(payload.get("access_token"), str) and payload["access_token"]
+    assert isinstance(payload.get("expires_at"), int)
 
 
 def test_login_google_account_bad_password_returns_use_google():

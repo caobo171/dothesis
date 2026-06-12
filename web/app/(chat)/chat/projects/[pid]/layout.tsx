@@ -11,13 +11,7 @@ import {
   type ModuleStatusMap,
   type UploadItem,
 } from "@/app/components/chat/ContextPanel";
-
-
-const fetcher = async (url: string) => {
-  const res = await fetch(`/api/v1${url}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-};
+import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 
 
 export default function ProjectLayout({ children }: { children: ReactNode }) {
@@ -42,24 +36,24 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
   const { data: uploads } = useSWR<UploadItem[]>(`/projects/${pid}/uploads`, fetcher);
 
   const createThread = async () => {
-    const r = await fetch(`/api/v1/projects/${pid}/threads`, {
+    // apiFetch injects access_token into the body — the bare fetch above
+    // used to 401 silently because there's no cookie-session anymore.
+    const t = (await apiFetch(`/projects/${pid}/threads`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "New thread" }),
-    });
-    const t: Thread = await r.json();
+      body: { name: "New thread" },
+    })) as Thread;
     void mutateThreads();
     router.push(`/chat/projects/${pid}/threads/${t.id}`);
   };
 
   return (
     <ChatShellLayout
+      onNewThread={createThread}
       leftPane={
         <ThreadsSidebar
           threads={threads ?? []}
           currentThreadId={currentTid ?? ""}
           onSelectThread={tid => router.push(`/chat/projects/${pid}/threads/${tid}`)}
-          onCreateThread={createThread}
         />
       }
       rightPane={

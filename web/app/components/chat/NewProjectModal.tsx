@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { apiFetch } from "@/app/lib/api";
 
 
 type Props = {
@@ -43,18 +44,16 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/v1/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const code = body?.detail?.error?.code || body?.detail || res.statusText;
-        throw new Error(`Could not create project: ${code}`);
+      // apiFetch handles token injection + JSON parsing + ApiError mapping.
+      try {
+        const project = await apiFetch("/projects", {
+          method: "POST",
+          body: { name: trimmed },
+        });
+        onCreated(project);
+      } catch (err: any) {
+        throw new Error(`Could not create project: ${err.message}`);
       }
-      const project = await res.json();
-      onCreated(project);
     } catch (e: any) {
       setError(e?.message || "Could not create project.");
       setSubmitting(false);

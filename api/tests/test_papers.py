@@ -7,8 +7,27 @@ from app.main import create_app
 
 
 def _signed_in_client():
+    """Build an authenticated TestClient.
+
+    Auth migration: signup no longer auto-issues a session (cookies are
+    gone; tokens are stateless). Tests skip the signup→email-verify→login
+    dance entirely and mint a JWT directly for a seed user — same outcome,
+    no SES dependency. Without this, signup blew up trying to send the
+    verify email through unconfigured SES in CI.
+    """
+    from app.db import get_session_factory
+    from app.models import User
+    from app.security import create_session, hash_password
+    Session = get_session_factory()
+    with Session() as db:
+        u = User(email="u@x.com", username="tester",
+                password_hash=hash_password("supersecret"),
+                email_verified=True, credit=10000)
+        db.add(u)
+        db.commit()
+        token = create_session(db, u)
     c = TestClient(create_app())
-    c.post("/api/v1/auth/signup", json={"email": "u@x.com", "password": "supersecret"})
+    c.headers["Authorization"] = f"Bearer {token}"
     return c
 
 

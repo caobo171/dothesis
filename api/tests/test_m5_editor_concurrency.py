@@ -38,7 +38,7 @@ def _create_user_and_set_cookie(client: TestClient) -> uuid.UUID:
         db.commit()
         db.refresh(u)
         token = create_session(db, u)
-    client.cookies.set("opendraft_session", token)
+    client.headers["Authorization"] = f"Bearer {token}"
     return u.id
 
 

@@ -27,7 +27,7 @@ def _setup_user_and_project(client) -> tuple[uuid.UUID, User]:
                  password_hash="x", email_verified=True)
         db.add(u); db.commit(); db.refresh(u)
         token = create_session(db, u)
-    client.cookies.set("opendraft_session", token)
+    client.headers["Authorization"] = f"Bearer {token}"
     pid = client.post("/api/v1/projects", json={"name": "T"}).json()["id"]
     return uuid.UUID(pid), u
 
@@ -87,6 +87,6 @@ def test_download_404_when_user_does_not_own_project(client, monkeypatch):
                    password_hash="x", email_verified=True)
         db.add(u2); db.commit(); db.refresh(u2)
         token2 = create_session(db, u2)
-    client.cookies.set("opendraft_session", token2)
+    client.headers["Authorization"] = f"Bearer {token2}"
     resp = client.get(f"/api/v1/projects/{pid}/exports/thesis-abc.docx")
     assert resp.status_code == 404

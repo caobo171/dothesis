@@ -23,7 +23,10 @@ def test_google_first_signin_creates_user_with_bonus(monkeypatch):
         c = _client()
         r = c.post("/api/v1/auth/google", json={"id_token": "FAKE"})
     assert r.status_code == 200, r.text
-    assert "opendraft_session" in c.cookies
+    # New contract: TokenOut in the body (no cookie).
+    payload = r.json()
+    assert isinstance(payload.get("access_token"), str) and payload["access_token"]
+    assert isinstance(payload.get("expires_at"), int)
 
     Session = get_session_factory()
     with Session() as s:

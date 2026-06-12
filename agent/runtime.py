@@ -17,8 +17,55 @@ Scoping (the two invariants from the user):
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any, AsyncIterator
+
+
+# Matches a single line at the end of an AI message that turns text into
+# clickable cards. Examples the agent can emit:
+#   [OPTIONS] Có | Không | Chỉnh sửa
+#   [OPTIONS:paradigm] Định lượng | Định tính | Hỗn hợp
+#   [OPTIONS:gap_ids multi] Gap 1 | Gap 2 | Gap 3
+# `field_name` (the `:foo` part) tells the frontend which slice/field the
+# user's pick maps to; defaults to "user_choice" when omitted. `multi`
+# turns on multi-select (commits a comma-joined list on submit).
+_OPTIONS_RE = re.compile(
+    r"\[OPTIONS(?:\s*:\s*(?P<field>[a-zA-Z_][a-zA-Z0-9_]*))?(?P<multi>\s+multi)?\]\s*"
+    r"(?P<options>.+)",
+)
+
+
+def _parse_options_marker(text: str) -> dict | None:
+    """Pull the trailing `[OPTIONS] …` line out of an AI message and shape
+    it into a `CardGridHint`. Returns None when no marker is present.
+
+    Scans backward from the last non-empty line; the marker MUST be on its
+    own line (we don't want to false-match prose that happens to contain
+    the literal text `[OPTIONS]`). If multiple markers appear, only the
+    last one wins — the agent should never emit more than one per turn.
+    """
+    if "[OPTIONS" not in text:
+        return None
+    for raw in reversed(text.rstrip().splitlines()):
+        line = raw.strip()
+        if not line:
+            continue
+        m = _OPTIONS_RE.fullmatch(line)
+        if m is None:
+            # First non-empty line from the bottom isn't a marker → done.
+            return None
+        labels = [s.strip() for s in m.group("options").split("|") if s.strip()]
+        if not labels:
+            return None
+        return {
+            "widget_type": "card_grid",
+            "field_name": m.group("field") or "user_choice",
+            "title": "",  # Empty title — the chat bubble above carries the question.
+            "options": [{"value": lbl, "label": lbl} for lbl in labels],
+            "multi_select": bool(m.group("multi")),
+        }
+    return None
 
 from deepagents import create_deep_agent
 from deepagents.backends.composite import CompositeBackend
@@ -33,15 +80,76 @@ from agent.tools.writing import export_docx, write_pipeline
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
 
-# Short on purpose: identity + the one hard pointer. Domain behavior lives in
-# the skills (progressive disclosure) — duplicating it here would just fight
-# them and bloat every turn.
+# Short on purpose: identity, the one hard pointer to the protocol skill,
+# and the two UI-affordance conventions that the frontend depends on. The
+# conventions are injected EVERY TURN here (rather than only in the skill
+# file) because models routinely ignore instructions they only see after a
+# skill-read, and `read_file("/skills/dothesis/SKILL.md")` is a per-session
+# tool call the agent may skip entirely after the first turn — leaving the
+# chat surface with no [OPTIONS] cards and no Mermaid diagrams. Domain
+# behavior (M1–M5, state protocol) stays in the skill.
 SYSTEM_PROMPT = """\
-You are DoThesis, a thesis/research copilot. Before doing ANY thesis work in a
-conversation, read the `dothesis` skill — it defines the module map (M1–M5),
-the state protocol (read_slice / commit_slice), and which module skill to read
-when. Mirror the user's language (English or Vietnamese). Be warm, concrete,
-and proactive — propose, then let the user decide.
+You are DoThesis, a thesis/research copilot.
+
+# Protocol
+Before doing ANY thesis work in a conversation, read the `dothesis` skill —
+it defines the module map (M1–M5), the state protocol (read_slice /
+commit_slice), and which module skill to read when. Mirror the user's
+language (English or Vietnamese). Be warm, concrete, and proactive — propose,
+then let the user decide.
+
+# UI affordances — ALWAYS use these when applicable
+
+The chat surface renders Markdown. Two conventions turn walls of prose into
+interactions:
+
+## Clickable choices — `[OPTIONS]` marker
+
+When you ask the user to pick among a small enumerable set (confirm / refine /
+yes-no / which-gap / which-paradigm), END the message with one line:
+
+    [OPTIONS] Có | Không | Chỉnh sửa
+
+The frontend turns this into a row of clickable cards. Rules:
+- The marker MUST be the last line of the message.
+- Separate options with ` | ` (pipe). 2–6 options is the sweet spot.
+- `[OPTIONS:field_name]` tags which slice field the pick maps to; defaults to
+  `user_choice` when omitted.
+- `[OPTIONS:gap_ids multi]` enables multi-select (e.g., picking gaps).
+
+Use this whenever the next user reply has a small finite set of valid
+choices. Do NOT use it for open-ended prompts ("Describe your sample…").
+
+## Diagrams — fenced ```mermaid``` blocks
+
+For ANY visual concept — conceptual model, sequence of phases, research
+flow, sampling design, analysis pipeline — emit a Mermaid block. The
+frontend renders it as an SVG diagram. NEVER fall back to ASCII art or
+prose "imagine boxes and arrows" — the user asked for a diagram, you
+have a tool that draws them. Use it.
+
+Example (M3 conceptual model):
+
+```mermaid
+flowchart LR
+    SMU[Mạng xã hội] -->|H1: -| SA[Sự chú ý]
+    SA -->|H2: +| AP[Học tập]
+    SH[Thói quen học tập] -.->|H4: điều tiết| SA
+    AD[Nhận thức xao nhãng] -.->|H5: điều tiết| SA
+```
+
+Supported types: flowchart, sequenceDiagram, classDiagram, stateDiagram,
+erDiagram, gantt, mindmap, pie. Keep labels short — long node text wraps
+awkwardly. When in doubt, draw it.
+
+## Markdown gotchas to avoid
+
+- NEVER write a line that's just `___` or 3+ underscores/dashes to indicate
+  a "fill-in-the-blank" line. Markdown converts that to a horizontal rule
+  that overflows the chat bubble. Use `[____]` (with brackets), `(điền…)`,
+  or "(vui lòng ghi rõ: …)" instead.
+- NEVER use `---` on its own line for the same reason — use bullet
+  separation or a heading instead.
 """
 
 
@@ -136,12 +244,37 @@ async def stream_turn(
     config = {"configurable": {"thread_id": thread_id}}
     payload = {"messages": [{"role": "user", "content": user_text}]}
 
+    # Diagnostic stderr beats — same idea as chat_v3.py's `[v3-emitter]`
+    # diagnostics, but at the agent.astream layer. When a turn ends with
+    # zero tokens / tool events the question is whether deepagents yielded
+    # *anything*: an empty `messages` chunk (Gemini returned no text), an
+    # `updates` chunk with no ToolMessages, or nothing at all (silent
+    # short-circuit). Counting modes + types here pinpoints which.
+    import sys as _sys
+    _mode_counts = {"messages": 0, "updates": 0, "_other": 0}
+    _msg_type_counts: dict[str, int] = {}
+    _seen_any = False
     try:
         async for mode, chunk in agent.astream(
             payload, config=config, stream_mode=["messages", "updates"]
         ):
+            _seen_any = True
+            _mode_counts[mode] = _mode_counts.get(mode, 0) + 1
             if mode == "messages":
                 msg, _meta = chunk
+                # Log the chunk type + content preview so we can see
+                # whether Gemini returned empty strings or no chunks at all.
+                _tname = type(msg).__name__
+                _msg_type_counts[_tname] = _msg_type_counts.get(_tname, 0) + 1
+                _content = getattr(msg, "content", "")
+                _preview_str = (
+                    _content[:60] if isinstance(_content, str)
+                    else f"<{type(_content).__name__}>"
+                )
+                if _msg_type_counts[_tname] <= 3:  # cap log spam
+                    print(f"[agent.stream] messages chunk #{_msg_type_counts[_tname]} "
+                          f"type={_tname} content={_preview_str!r}",
+                          file=_sys.stderr, flush=True)
                 for ev in _events_from_message(msg):
                     yield ev
             elif mode == "updates":
@@ -165,17 +298,6 @@ async def stream_turn(
                                 "preview": _preview(m.content),
                             }
                         else:
-                            # Why also yield tool_start here: the messages-
-                            # mode stream only carries tool_calls on chunks
-                            # the model streams as AIMessageChunk. The
-                            # deepagents middleware path emits tool decisions
-                            # as a complete AIMessage attached to a node-
-                            # update payload, NOT as streamed chunks. Without
-                            # surfacing tool_calls from updates mode too, the
-                            # UI sees `✓ tool_end` flashes with no preceding
-                            # `⚙ tool_start` — the banner stays on a typing
-                            # dot for the whole tool execution window
-                            # (research_scout is 30–90s of silent waiting).
                             for tc in getattr(m, "tool_calls", None) or []:
                                 if tc.get("name"):
                                     yield {
@@ -183,8 +305,29 @@ async def stream_turn(
                                         "name": tc["name"],
                                         "args": tc.get("args") or {},
                                     }
+                            # Parse a `[OPTIONS] a | b | c` marker out of the
+                            # AI message text and surface it as an interactive
+                            # card grid. The agent learns this convention via
+                            # the bootstrap skill — without it, every choice
+                            # has to be typed instead of clicked.
+                            content = getattr(m, "content", "")
+                            if isinstance(content, str):
+                                hint = _parse_options_marker(content)
+                                if hint is not None:
+                                    yield {"type": "tool_calls", "payload": hint}
     except Exception as e:  # surface failures as events — never a dead stream
+        import traceback as _tb
+        print(f"\n=== agent.astream crashed in stream_turn (thread={thread_id}) ===",
+              file=_sys.stderr, flush=True)
+        _tb.print_exc(file=_sys.stderr)
+        print("=== end traceback ===\n", file=_sys.stderr, flush=True)
         yield {"type": "error", "message": f"{type(e).__name__}: {e}"}
+    # End-of-stream telemetry — tells us whether the silent turn was caused
+    # by zero chunks (deepagents returned nothing), or by chunks that
+    # didn't translate to user-facing events (empty strings, non-AI types).
+    print(f"[agent.stream] end seen_any={_seen_any} mode_counts={_mode_counts} "
+          f"msg_types={_msg_type_counts}",
+          file=_sys.stderr, flush=True)
     yield {"type": "done"}
 
 

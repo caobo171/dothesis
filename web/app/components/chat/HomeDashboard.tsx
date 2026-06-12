@@ -19,6 +19,7 @@ import {
 
 import { useMe } from "@/app/lib/use-me";
 import { NewProjectModal } from "./NewProjectModal";
+import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 
 
 // Mirrors ProjectOut from api/app/routers/chat.py. focus + module_status are
@@ -52,13 +53,6 @@ export const MODULES: Array<{ id: ModuleId; slice: SliceKey; label: string }> = 
   { id: "M4", slice: "m4_analysis",   label: "Data Analysis" },
   { id: "M5", slice: "m5_writing",    label: "Writing" },
 ];
-
-const fetcher = async (url: string) => {
-  const res = await fetch(`/api/v1${url}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-};
-
 
 // Same precedence as ContextPanel.statusFor so the home cards and the
 // in-project progress panel never disagree about a module's state:

@@ -1,5 +1,14 @@
 import { NextResponse } from "next/server";
 
+// Route gating happens server-side in this middleware. With JWT auth, the
+// real authoritative token lives in localStorage — which the middleware
+// CAN'T read (it runs on the edge runtime, no DOM). To keep the no-flash
+// redirect behavior we used to get from the opendraft_session cookie, the
+// client mirrors the token presence as a non-HTTPOnly cookie
+// (`dothesis_access_token`, set by web/app/lib/tokenStore.ts). We check
+// only that the cookie EXISTS — its value isn't validated here. If the
+// token is expired or forged, the actual API will 401 and the client wipes
+// both stores. The cookie is a hint for routing, not an auth statement.
 const PUBLIC_PATHS = [
   "/login", "/signup",
   "/verify", "/wait-verify",
@@ -7,12 +16,14 @@ const PUBLIC_PATHS = [
   "/_next", "/favicon.ico",
 ];
 
+const AUTH_MARKER_COOKIE = "dothesis_access_token";
+
 export function proxy(request) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
-  const cookie = request.cookies.get("opendraft_session");
-  if (!cookie) {
+  const marker = request.cookies.get(AUTH_MARKER_COOKIE);
+  if (!marker || !marker.value) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);

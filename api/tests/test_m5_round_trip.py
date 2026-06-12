@@ -36,7 +36,7 @@ def test_rewrite_request_persists_to_message_row(client, monkeypatch):
                  username=f"u{uuid.uuid4().hex[:6]}",
                  password_hash="x", email_verified=True)
         db.add(u); db.commit()
-        client.cookies.set("opendraft_session", create_session(db, u))
+        client.headers["Authorization"] = f"Bearer {create_session(db, u)}"
     pid = client.post("/api/v1/projects", json={"name": "T"}).json()["id"]
     tid = client.get(f"/api/v1/projects/{pid}/threads").json()[0]["id"]
 

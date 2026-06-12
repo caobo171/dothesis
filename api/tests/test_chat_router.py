@@ -26,7 +26,7 @@ def _login_user(client) -> User:
         # create_session returns a signed cookie value; set with the correct
         # cookie name used by deps.py (opendraft_session).
         token = create_session(db, u)
-    client.cookies.set("opendraft_session", token)
+    client.headers["Authorization"] = f"Bearer {token}"
     return u
 
 

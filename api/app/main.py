@@ -83,7 +83,12 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.web_origin],
-        allow_credentials=True,
+        # allow_credentials is False because we no longer use cookies for
+        # auth — the access_token rides in the request JSON body (see
+        # jwt_auth.py and CLAUDE.md). Setting it True would still work but
+        # signal intent inaccurately, since no fetch on the client uses
+        # `credentials: "include"` anymore.
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { apiFetch } from "@/app/lib/api";
+
 
 type Reference = { id: string; author: string; year: string; title?: string };
 
@@ -19,9 +21,9 @@ export function CitePopover({ projectId, onSelect, onClose }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/v1/projects/${projectId}/m5/references`)
-      .then(r => r.json())
-      .then(data => { if (!cancelled) setRefs(data); })
+    // apiFetch injects access_token into the GET query string.
+    apiFetch(`/projects/${projectId}/m5/references`)
+      .then((data: any) => { if (!cancelled) setRefs(data); })
       .catch(() => { if (!cancelled) setRefs([]); });
     return () => { cancelled = true; };
   }, [projectId]);

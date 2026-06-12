@@ -27,7 +27,11 @@ def test_signup_creates_user_without_session_and_sends_email():
                          "password": "supersecret"})
         assert r.status_code == 201, r.text
         assert r.json() == {"ok": True, "email": "alice@e.com"}
-        assert "opendraft_session" not in c.cookies
+        # Signup creates the user but does NOT issue a token — verify
+        # email first. Was previously asserted via cookie absence; the
+        # token-based equivalent is checking the response shape doesn't
+        # include access_token.
+        assert "access_token" not in r.json()
 
     assert sent["to"] == "alice@e.com"
     assert sent["template"] == "verify_email"

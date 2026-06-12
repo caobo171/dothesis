@@ -22,7 +22,7 @@ def _login_and_project(client) -> uuid.UUID:
                  username=f"u{uuid.uuid4().hex[:6]}",
                  password_hash="x", email_verified=True)
         db.add(u); db.commit()
-        client.cookies.set("opendraft_session", create_session(db, u))
+        client.headers["Authorization"] = f"Bearer {create_session(db, u)}"
     return uuid.UUID(client.post("/api/v1/projects", json={"name": "T"}).json()["id"])
 
 

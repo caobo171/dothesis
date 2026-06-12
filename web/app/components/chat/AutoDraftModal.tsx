@@ -3,13 +3,7 @@
 import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { X } from "lucide-react";
-
-
-const fetcher = async (url: string) => {
-  const res = await fetch(`/api/v1${url}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-};
+import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 
 
 export function AutoDraftModal({

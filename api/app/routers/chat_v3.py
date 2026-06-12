@@ -92,6 +92,10 @@ async def send_message_v3(t: Thread, text: str, db: Session) -> StreamingRespons
 
     async def gen():
         chunks: list[str] = []
+        # Captured from `tool_calls` events emitted by the runtime when the
+        # agent included an `[OPTIONS] …` marker. Persisted onto the
+        # Message row so MessageBubble can render the cards on reload.
+        final_tool_calls: dict | None = None
 
         # Engine progress beats (research_scout's 30–90s search) reach the
         # SSE stream through the same registry the graph path used.
@@ -193,6 +197,11 @@ async def send_message_v3(t: Thread, text: str, db: Session) -> StreamingRespons
                     yield sse_pack({"type": "progress", "payload": {
                         "stage": ev["name"], "message": f"✓ {ev['name']}",
                     }})
+                elif kind == "tool_calls":
+                    # Interactive widget hint — render as clickable cards
+                    # in MessageBubble. Captured for persistence below.
+                    final_tool_calls = ev.get("payload")
+                    yield sse_pack({"type": "tool_calls", "payload": final_tool_calls})
                 elif kind == "error":
                     logger.error("agent turn error for thread %s: %s", thread_pk, ev["message"])
                     print(f"[v3] ERROR msg={ev.get('message')!r}",
@@ -233,6 +242,11 @@ async def send_message_v3(t: Thread, text: str, db: Session) -> StreamingRespons
                 conn.execute(Message.__table__.insert().values(
                     thread_id=thread_pk, role="assistant",
                     content=full, module_tag=focus,
+                    # Persist widget hint so MessageBubble renders the
+                    # interactive cards on reload — without this the cards
+                    # would only appear during the in-flight stream and
+                    # vanish after SWR revalidation.
+                    tool_calls_json=final_tool_calls,
                 ))
                 conn.commit()
         yield sse_pack({"type": "done"})

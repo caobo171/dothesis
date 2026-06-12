@@ -3,13 +3,14 @@
 import useSWR from "swr";
 import { useStream } from "./useStream";
 import type { WidgetHint } from "../widgets/types";
+import { apiFetch } from "@/app/lib/api";
+import { tokenStore } from "@/app/lib/tokenStore";
 
 
-const fetcher = async (url: string) => {
-  const res = await fetch(`/api/v1${url}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-};
+// SWR fetcher routed through apiFetch so the access_token rides on the GET
+// (query string) just like every other authenticated read. Replaces the
+// bare fetch("/api/v1...") that was relying on the now-gone session cookie.
+const fetcher = (url: string) => apiFetch(url);
 
 export type Message = {
   id: number;
@@ -89,22 +90,23 @@ export function useChat(threadId: string) {
     // proxy buffers `text/event-stream` chunked responses — engine progress
     // events fire on the backend (visible in dev.sh as [v3-yield] lines)
     // but never reach the browser EventStream until the request closes.
-    // SWR GETs upstream still go through Next; only the SSE channel needs
-    // the direct hop. Reuses NEXT_PUBLIC_API_BASE — the same env that
-    // web/app/lib/api.js and export-tab.jsx already use — so there is one
-    // canonical "direct backend URL" knob, not two.
-    // `credentials: "include"` is required for cross-origin requests so the
-    // opendraft_session cookie travels (CORS at api/app/main.py:85 already
-    // sets allow_credentials=True and pins allow_origins=[WEB_ORIGIN]).
+    // Hitting localhost:7100 directly sidesteps the buffer.
+    // access_token rides in the JSON body (jwt_auth.AuthedBody pattern);
+    // we no longer rely on the opendraft_session cookie, so `credentials`
+    // can stay default and the cross-origin SameSite trap is gone.
     const apiBase = process.env.NEXT_PUBLIC_API_BASE;
     const streamUrl = apiBase
       ? `${apiBase}/threads/${threadId}/messages`
       : `/api/v1/threads/${threadId}/messages`;
+    const accessToken = tokenStore.get();
     await stream.start(streamUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ text, widget_payload: widgetPayload ?? null }),
+      body: JSON.stringify({
+        text,
+        widget_payload: widgetPayload ?? null,
+        access_token: accessToken,
+      }),
     });
 
     // Revalidate to replace the optimistic message with server truth

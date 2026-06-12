@@ -1,4 +1,4 @@
-import { Plus, MessageSquare } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 
 
 export type Thread = {
@@ -12,22 +12,26 @@ export type Thread = {
 };
 
 
-// 2026-06-10 — restyled to the DoThesis.html sidebar idiom: white surface,
-// uppercase section label, rounded rows with primary-50 active state, pill
-// "New thread" button. Behavior unchanged.
+// Threads list. The "+ New thread" button used to live in the bottom
+// footer here; design feedback was that it should be accessible without
+// having to open the threads drawer first. It now sits in
+// ChatShellLayout next to the drawer toggle — see `onNewThread` prop.
+// `onCreateThread` kept on the type for back-compat with tests but is
+// optional now and not rendered inside this component.
 export function ThreadsSidebar({
   threads,
   currentThreadId,
   onSelectThread,
-  onCreateThread,
 }: {
   threads: Thread[];
   currentThreadId: string;
   onSelectThread: (tid: string) => void;
-  onCreateThread: () => void;
+  // Legacy: kept so existing call sites don't have to drop the prop in
+  // the same diff. ChatShellLayout consumes it directly now.
+  onCreateThread?: () => void;
 }) {
   return (
-    <aside className="w-52 border-r border-ink-200 bg-white flex flex-col">
+    <aside className="w-52 bg-white flex flex-col h-full">
       <div className="px-4 pt-3.5 pb-2">
         <h3 className="text-[11px] uppercase tracking-[0.1em] text-ink-500 font-bold">Threads</h3>
       </div>
@@ -47,16 +51,6 @@ export function ThreadsSidebar({
             <span className="truncate">{t.name}</span>
           </button>
         ))}
-      </div>
-      <div className="p-3 border-t border-ink-100">
-        <button
-          type="button"
-          onClick={onCreateThread}
-          aria-label="new thread"
-          className="flex items-center justify-center gap-1.5 w-full py-2 px-2 text-xs font-semibold text-ink-700 hover:bg-ink-50 hover:border-ink-400 rounded-full border border-dashed border-ink-300 transition-colors"
-        >
-          <Plus className="w-3 h-3" /> New thread
-        </button>
       </div>
     </aside>
   );

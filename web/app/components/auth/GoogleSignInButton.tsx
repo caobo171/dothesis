@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import { apiFetch } from "@/app/lib/api";
+import { useAuth } from "@/app/lib/auth-context";
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
@@ -15,6 +16,9 @@ declare global {
 export function GoogleSignInButton({ onError }: { onError?: (msg: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  // /auth/google now returns TokenOut — pipe it through the auth context
+  // so the access_token gets persisted to tokenStore before we navigate.
+  const { acceptTokenPayload } = useAuth();
 
   useEffect(() => {
     if (!CLIENT_ID) return;
@@ -34,7 +38,12 @@ export function GoogleSignInButton({ onError }: { onError?: (msg: string) => voi
         client_id: CLIENT_ID,
         callback: async (resp: any) => {
           try {
-            await apiFetch("/auth/google", { method: "POST", body: { id_token: resp.credential } });
+            const payload = await apiFetch("/auth/google", {
+              method: "POST",
+              body: { id_token: resp.credential },
+              auth: false,
+            });
+            acceptTokenPayload(payload);
             router.push("/");
           } catch (e: any) {
             onError?.(e?.body?.detail?.error?.message || e?.message || "Google sign-in failed");

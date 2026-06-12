@@ -21,7 +21,7 @@ def _setup(client) -> uuid.UUID:
                  password_hash="x", email_verified=True, credit=1000)
         db.add(u); db.commit()
         from app.security import create_session
-        client.cookies.set("opendraft_session", create_session(db, u))
+        client.headers["Authorization"] = f"Bearer {create_session(db, u)}"
     return uuid.UUID(client.post("/api/v1/projects", json={"name": "T"}).json()["id"])
 
 

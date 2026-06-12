@@ -30,7 +30,7 @@ export function useSidebarSections(): SidebarSection[] {
         name: "Workspace",
         options: [
           { name: "Dashboard", href: "/", icon: HomeIcon, default: true },
-          { name: "Drafts", href: "/papers", icon: DocumentTextIcon },
+          { name: "Theses", href: "/papers", icon: DocumentTextIcon },
         ],
       },
       {
