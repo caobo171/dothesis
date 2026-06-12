@@ -4,7 +4,8 @@ import { type ReactNode } from "react";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
 import { ChatShellLayout } from "@/app/components/chat/ChatShellLayout";
-import { ThreadsSidebar, type Thread } from "@/app/components/chat/ThreadsSidebar";
+import type { Thread } from "@/app/components/chat/ThreadsSidebar";
+import { WorkflowSidebar } from "@/app/components/chat/WorkflowSidebar";
 import {
   ContextPanel,
   type ContextStore,
@@ -25,6 +26,7 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
   // type for backward compat during the dual-write window (PR #2b will
   // drop the fallback).
   const { data: project } = useSWR<{
+    name?: string;
     context_store: ContextStore;
     current_module: string;
     focus?: string | null;
@@ -48,12 +50,22 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
 
   return (
     <ChatShellLayout
-      onNewThread={createThread}
+      // Project sidebar — brand + project chip + Threads/Workflow tab toggle.
+      // Threads tab carries the thread list; Workflow tab carries the M1-M5
+      // rail. Single source of project navigation.
       leftPane={
-        <ThreadsSidebar
-          threads={threads ?? []}
-          currentThreadId={currentTid ?? ""}
+        <WorkflowSidebar
+          projectName={project?.name}
+          currentModule={project?.focus ?? project?.current_module}
+          moduleStatus={project?.module_status}
+          threads={threads}
+          currentThreadId={currentTid}
           onSelectThread={tid => router.push(`/chat/projects/${pid}/threads/${tid}`)}
+          onNewThread={createThread}
+          // Default to Threads tab on the bare project page (no thread
+          // selected yet) — the user is shopping for one. Inside a thread,
+          // Workflow is the more useful default.
+          defaultTab={currentTid ? "workflow" : "threads"}
         />
       }
       rightPane={
@@ -62,9 +74,6 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
             m1_topic: null, m2_literature: null, m3_design: null, m4_analysis: null, m5_writing: null,
           }}
           uploads={uploads ?? []}
-          // Prefer focus (brief §1.4 — fluid conversation focus) over
-          // current_module. current_module is the dual-write fallback for
-          // older projects whose focus column is still NULL.
           currentModule={project?.focus ?? project?.current_module}
           moduleStatus={project?.module_status}
         />

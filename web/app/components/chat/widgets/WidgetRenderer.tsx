@@ -3,6 +3,7 @@
 import { CardGridWidget } from "./CardGridWidget";
 import { FlowChartWidget } from "./FlowChartWidget";
 import { ListEditorWidget } from "./ListEditorWidget";
+import { PapersPanel } from "./PapersPanel";
 import type { WidgetHint, WidgetSelectHandler } from "./types";
 
 
@@ -25,6 +26,21 @@ export function WidgetRenderer({
       // Likert items + hypothesis paths in a single canvas). See types.ts
       // for the merge rationale.
       return <FlowChartWidget hint={hint} onSelect={onSelect} disabled={disabled} />;
+    case "papers_panel":
+      // Foundational citations — read-only by default. Wires onCite + onFlag
+      // through `onSelect` so the chat input gets the right action text
+      // (e.g., "Insert cite: <paperId>") without inventing a new transport.
+      return (
+        <PapersPanel
+          hint={hint}
+          onCite={(paperId, quote) =>
+            onSelect("paper_cite", paperId, `Insert citation for ${paperId}: "${quote.slice(0, 60)}…"`)
+          }
+          onFlag={(paperId) =>
+            onSelect("paper_flag", paperId, `Flag paper ${paperId}`)
+          }
+        />
+      );
     default:
       return null;
   }

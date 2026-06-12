@@ -180,11 +180,20 @@ def find_research_gaps(citations: list[dict]) -> list[dict]:
         return []
     cites_block = json.dumps(citations[:50], default=str)[:6000]
     llm = _get_llm()
+    # supporting_papers carry reachability fields (doi / url / title) so
+    # the frontend sidebar can render each citation as a click-to-open
+    # link — without them, the M2 detail modal shows dead rows. Pull the
+    # values from the citation payload that's already in `cites_block`.
     prompt = (
         "Analyze these citations and identify 2-4 specific research gaps. "
         "Respond with ONLY a JSON array, no prose. Schema: "
         '[{"description": "...", "relevance": "High|Medium|Low", '
-        '"supporting_papers": [{"author": "...", "year": 2020}]}].\n\n'
+        '"supporting_papers": [{"author": "first-author et al.", '
+        '"year": 2020, "title": "...", "doi": "10.xxx/yyy", '
+        '"url": "https://..."}]}]. '
+        "For each supporting paper you MUST copy doi, url, and title "
+        "from the matching citation in the list — do not invent values; "
+        "omit a field only if it is genuinely missing from the citation.\n\n"
         f"Citations: {cites_block}"
     )
     resp = llm.invoke(prompt).content

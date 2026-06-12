@@ -1,15 +1,20 @@
-import { ModuleProgressDot, ModuleStatus } from "./ModuleProgressDot";
-import { ContextModuleViewer } from "./ContextModuleViewer";
+"use client";
 
+import { useState } from "react";
+import { AlertTriangle, Clock, ExternalLink } from "lucide-react";
+
+import { SliceModal } from "./SliceModal";
+
+
+// ---- types (kept stable so callers don't change) ---------------------
 
 export type ContextStore = {
-  m1_topic: Record<string, unknown> | null;
-  m2_literature: Record<string, unknown> | null;
-  m3_design: Record<string, unknown> | null;
-  m4_analysis: Record<string, unknown> | null;
-  m5_writing: Record<string, unknown> | null;
+  m1_topic: Record<string, any> | null;
+  m2_literature: Record<string, any> | null;
+  m3_design: Record<string, any> | null;
+  m4_analysis: Record<string, any> | null;
+  m5_writing: Record<string, any> | null;
 };
-
 
 export type UploadItem = {
   id: string;
@@ -20,45 +25,28 @@ export type UploadItem = {
   uploaded_at: string;
 };
 
-
-const MODULES: Array<{ key: keyof ContextStore; module: string; label: string }> = [
-  { key: "m1_topic",      module: "M1", label: "Topic Discovery" },
-  { key: "m2_literature", module: "M2", label: "Literature Review" },
-  { key: "m3_design",     module: "M3", label: "Research Design" },
-  { key: "m4_analysis",   module: "M4", label: "Data Analysis" },
-  { key: "m5_writing",    module: "M5", label: "Writing" },
-];
-
-
-// Brief §1.4 — per-module workflow status from the API (PR #2 wires
-// projects.module_status into the GET /projects/{id} response). Empty
-// dict {} during the dual-write window for projects that haven't seen
-// a turn yet; in that case we fall back to the legacy context-store
-// derivation so the panel still shows something sensible.
 export type ModuleStatusMap = Partial<Record<"M1" | "M2" | "M3" | "M4" | "M5", string>>;
 
-
-// Derive display status. Precedence:
-//   1. module_status[M] === "needs_review" (brief §1.5 ⚠) → needs_attention
-//   2. data.confirmed_at → done
-//   3. isCurrent (the conversation focus) → active
-//   4. otherwise → locked (soft lock per brief §8.4)
-//
-// We don't reuse statusFor for the legacy `active` path because that's
-// derived from `currentModule`/`focus` (passed in), while `needs_review`
-// is a separate signal from the new module_status map that wins over both.
-function statusFor(
-  data: Record<string, unknown> | null,
-  isCurrent: boolean,
-  moduleStatus: string | undefined,
-): ModuleStatus {
-  if (moduleStatus === "needs_review") return "needs_attention";
-  if (!data) return "locked";
-  if (data.confirmed_at) return "done";
-  return isCurrent ? "active" : "locked";
-}
+type SectionStatus = "done" | "in_progress" | "needs_review" | "locked";
 
 
+/**
+ * Right rail — live context_store viewer. Mirrors the design's
+ * `ContextPanel` from babel-05-ec044a3a.jsx:
+ *
+ *   - Header strip: "Context store" + `context_store.json` chip + "{ }"
+ *     raw JSON button
+ *   - Stack of `CtxSection` cards, one per module: a color dot per
+ *     status, label, optional ⚠ marker, and a "▸" toggle button
+ *   - Inside each card: small caps field labels with the actual values
+ *     pulled from the slice (research_title, research_questions,
+ *     research_gaps, hypotheses, methodology, etc.)
+ *   - Footer strip: snapshot timestamp + "View history" link
+ *
+ * The workflow rail (M1–M5 progress) used to live in this same panel —
+ * it moved to WorkflowSidebar on the LEFT. This pane is now read-only
+ * data inspection: what the agent has committed to your project state.
+ */
 export function ContextPanel({
   contextStore,
   uploads,
@@ -68,67 +56,970 @@ export function ContextPanel({
   contextStore: ContextStore;
   uploads: UploadItem[];
   currentModule?: string;
-  // PR #2 wiring — projects.module_status from GET /projects/{id}. Optional
-  // for backward compat with callers that haven't been updated yet; when
-  // absent, statusFor falls back to the legacy derivation.
   moduleStatus?: ModuleStatusMap;
 }) {
-  // Determine active module: explicit override or first unconfirmed module
-  const nextUnconfirmed = MODULES.find(m => !contextStore[m.key]?.confirmed_at)?.module;
-  const active = currentModule ?? nextUnconfirmed;
+  const [showRaw, setShowRaw] = useState(false);
 
-  // 2026-06-10 — DoThesis.html design: the right rail is the module tracker
-  // (numbered status badges + vertical track), with the slice viewers and
-  // uploads below. Palette moved from gray-* to the ink/primary tokens.
+  const sectionStatus = (id: keyof ModuleStatusMap, data: Record<string, any> | null): SectionStatus => {
+    const raw = moduleStatus?.[id];
+    if (raw === "needs_review") return "needs_review";
+    if (raw === "done" || data?.confirmed_at) return "done";
+    if (raw === "in_progress" || id === currentModule) return "in_progress";
+    return "locked";
+  };
+
   return (
-    <aside className="w-72 border-l border-ink-200 bg-white overflow-y-auto">
-      <div className="px-4 pt-3.5 pb-1 flex items-center justify-between">
-        <h3 className="text-[11px] uppercase tracking-[0.1em] text-ink-500 font-bold">Workflow</h3>
-        <span className="text-[11px] text-ink-400">
-          {MODULES.filter(m => contextStore[m.key]?.confirmed_at).length} / {MODULES.length}
+    <aside
+      className="w-[340px] min-w-[340px] border-l border-ink-200 bg-white h-full flex flex-col overflow-hidden"
+      data-testid="context-panel"
+    >
+      {/* Header */}
+      <div className="px-[18px] py-3.5 border-b border-ink-200 flex items-center gap-2">
+        <span className="text-[14px] font-bold">Context store</span>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-[11px] font-semibold font-mono">
+          context_store.json
         </span>
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setShowRaw(s => !s)}
+          aria-label="Toggle raw JSON"
+          title="Raw JSON"
+          className="w-7 h-7 rounded-md text-ink-500 hover:bg-ink-100 hover:text-ink-900 inline-flex items-center justify-center text-[13px] font-mono transition-colors"
+        >
+          {"{}"}
+        </button>
       </div>
-      <div className="px-1.5 py-1.5">
-        {MODULES.map((m, i) => (
-          <ModuleProgressDot
-            key={m.module}
-            module={m.module}
-            label={m.label}
-            isLast={i === MODULES.length - 1}
-            status={statusFor(
-              contextStore[m.key],
-              m.module === active,
-              moduleStatus?.[m.module as keyof ModuleStatusMap],
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
+        {showRaw ? (
+          <pre className="text-[11.5px] font-mono text-ink-700 bg-ink-50 rounded-lg p-3 leading-snug overflow-x-auto">
+            {JSON.stringify(contextStore, null, 2)}
+          </pre>
+        ) : (
+          <>
+            <CtxSection
+              label="M1 · Topic & questions"
+              status={sectionStatus("M1", contextStore.m1_topic)}
+            >
+              <M1Body data={contextStore.m1_topic} />
+            </CtxSection>
+
+            <CtxSection
+              label="M2 · Gaps & hypotheses"
+              status={sectionStatus("M2", contextStore.m2_literature)}
+            >
+              <M2Body data={contextStore.m2_literature} />
+            </CtxSection>
+
+            <CtxSection
+              label="M3 · Methodology & model"
+              status={sectionStatus("M3", contextStore.m3_design)}
+            >
+              <M3Body data={contextStore.m3_design} />
+            </CtxSection>
+
+            <CtxSection
+              label="M4 · Analysis · M5 · Writing"
+              status={
+                // Combined card for two locked-by-default modules. If
+                // either has needs_review, surface the worst.
+                ["M4", "M5"].some(k => moduleStatus?.[k as keyof ModuleStatusMap] === "needs_review")
+                  ? "needs_review"
+                  : ["M4", "M5"].some(k => moduleStatus?.[k as keyof ModuleStatusMap] === "in_progress")
+                    ? "in_progress"
+                    : "locked"
+              }
+            >
+              <div className="text-[12.5px] text-ink-500 leading-snug">
+                Soft-locked — you can ask or start; the agent will prompt if a dependency is missing.
+              </div>
+            </CtxSection>
+
+            {uploads.length > 0 && (
+              <CtxSection label={`Uploads (${uploads.length})`} status="in_progress">
+                <div className="space-y-1">
+                  {uploads.slice(0, 5).map(u => (
+                    <div key={u.id} className="text-[12.5px] text-ink-700 truncate">
+                      📄 {u.filename}
+                      {u.page_count && <span className="text-ink-400 ml-1">· {u.page_count}p</span>}
+                    </div>
+                  ))}
+                  {uploads.length > 5 && (
+                    <div className="text-[11.5px] text-ink-400 pt-1">
+                      +{uploads.length - 5} more…
+                    </div>
+                  )}
+                </div>
+              </CtxSection>
             )}
-          />
-        ))}
+          </>
+        )}
       </div>
-      <div className="px-4 pt-3 pb-1 border-t border-ink-100">
-        <h3 className="text-[11px] uppercase tracking-[0.1em] text-ink-500 font-bold">Context store</h3>
+
+      {/* Footer */}
+      <div className="px-4 py-2.5 border-t border-ink-200 bg-ink-50 flex items-center gap-2 text-[11.5px] text-ink-500">
+        <Clock className="w-3 h-3" />
+        <span>Live · auto-saved</span>
+        <span className="flex-1" />
+        <button
+          type="button"
+          className="text-primary-600 font-semibold text-[12px] hover:underline"
+        >
+          View history
+        </button>
       </div>
-      <div className="py-1">
-        {MODULES.map(m => (
-          <ContextModuleViewer
-            key={m.module}
-            module={m.module}
-            label={m.label}
-            data={contextStore[m.key]}
-          />
-        ))}
-      </div>
-      {uploads.length > 0 && (
-        <div className="px-4 py-3 border-t border-ink-100">
-          <h3 className="text-[11px] uppercase tracking-[0.1em] text-ink-500 font-bold mb-2">
-            Uploads ({uploads.length})
-          </h3>
-          {uploads.map(u => (
-            <div key={u.id} className="text-xs text-ink-700 truncate py-0.5">
-              {u.filename}
-              {u.page_count && <span className="text-ink-400 ml-1">· {u.page_count}p</span>}
-            </div>
-          ))}
-        </div>
-      )}
     </aside>
   );
+}
+
+
+// ---- per-module section card ---------------------------------------
+
+function CtxSection({
+  label,
+  status,
+  children,
+}: {
+  label: string;
+  status: SectionStatus;
+  children: React.ReactNode;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const dot = STATUS_DOT[status];
+  return (
+    <div className="border border-ink-200 rounded-xl bg-white">
+      <button
+        type="button"
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full px-3.5 pt-3 pb-2 flex items-center gap-2 text-left hover:bg-ink-50/60 transition-colors rounded-t-xl"
+      >
+        <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
+        <span className="text-[12.5px] font-bold text-ink-800">{label}</span>
+        <span className="flex-1" />
+        {status === "needs_review" && (
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+        )}
+        <span className="text-ink-400 text-[11px]">{collapsed ? "▸" : "▾"}</span>
+      </button>
+      {!collapsed && <div className="px-3.5 pb-3.5">{children}</div>}
+    </div>
+  );
+}
+
+const STATUS_DOT: Record<SectionStatus, string> = {
+  done:         "bg-emerald-600",
+  in_progress:  "bg-primary-600",
+  needs_review: "bg-amber-600",
+  locked:       "bg-ink-300",
+};
+
+
+// ---- per-section body renderers ------------------------------------
+
+function FieldLabel({
+  name,
+  count,
+  top = false,
+}: {
+  name: string;
+  count?: number | string;
+  // When `top` is true the label is the FIRST field inside a section card
+  // — no top margin. Subsequent labels in the same card pass top={false}
+  // (the default) so they get breathing room between groups.
+  top?: boolean;
+}) {
+  return (
+    <div
+      className={`text-[11px] uppercase tracking-[0.05em] text-ink-500 font-semibold ${
+        top ? "" : "mt-3"
+      }`}
+    >
+      {name}
+      {count != null && <> ({count})</>}
+    </div>
+  );
+}
+
+function KV({ k, v }: { k: string; v: React.ReactNode }) {
+  return (
+    <div className="flex gap-2.5 items-baseline">
+      <span className="min-w-[80px] text-ink-500 text-[12.5px]">{k}</span>
+      <span className="flex-1 text-ink-800 text-[12.5px] font-medium">{v}</span>
+    </div>
+  );
+}
+
+
+function M1Body({ data }: { data: Record<string, any> | null }) {
+  if (!data) return <EmptyHint text="Topic not set yet — start in M1." />;
+  const title = data.research_title;
+  const rqs = (data.research_questions || []) as string[];
+  return (
+    <>
+      {title && (
+        <>
+          <FieldLabel name="research_title" top />
+          <div className="font-serif text-[14px] leading-[1.45] text-ink-900 mt-1">
+            {title}
+          </div>
+        </>
+      )}
+      {rqs.length > 0 && (
+        <>
+          <FieldLabel name="research_questions" count={rqs.length} />
+          <ol className="list-decimal pl-5 mt-1.5 text-[12.5px] text-ink-700 leading-[1.45] space-y-0.5">
+            {rqs.map((q, i) => <li key={i}>{q}</li>)}
+          </ol>
+        </>
+      )}
+      {!title && rqs.length === 0 && <EmptyHint text="No M1 data committed yet." />}
+    </>
+  );
+}
+
+function M2Body({ data }: { data: Record<string, any> | null }) {
+  if (!data) return <EmptyHint text="No literature yet — run M2 scout to gather sources." />;
+  // Loose shapes: agent + engine wrote these at different times; tolerate
+  // either `description`/`text`/`title` for the prose field.
+  type Gap = {
+    id?: string;
+    description?: string; text?: string; title?: string;
+    relevance?: string;
+    confirmed?: boolean;
+    supporting_papers?: Array<any>;
+  };
+  type Hypothesis = { id?: string; text?: string; statement?: string; grounded_in?: string };
+  type Paper = {
+    id?: string; title?: string; authors?: string[] | string;
+    author?: string; year?: number | string;
+    doi?: string; url?: string; source?: string; venue?: string;
+  };
+  const gaps = (data.research_gaps || []) as Gap[];
+  const hypotheses = (data.hypotheses || []) as (Hypothesis | string)[];
+  const sources = (data.citation_list || data.literature_sources || []) as Paper[];
+
+  // Modal state — one selected item at a time. `kind` discriminates the
+  // payload shape so the modal can render the right view.
+  const [modal, setModal] = useState<
+    | { kind: "gap"; index: number }
+    | { kind: "hypothesis"; index: number }
+    | { kind: "sources" }
+    | null
+  >(null);
+
+  const gapText = (g: Gap) => g.description || g.text || g.title || "—";
+  const hypothesisText = (h: Hypothesis | string) =>
+    typeof h === "string" ? h : (h.text || h.statement || "—");
+
+  return (
+    <>
+      {gaps.length > 0 && (
+        <>
+          <FieldLabel name="research_gaps" count={gaps.length} top />
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {gaps.map((g, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setModal({ kind: "gap", index: i })}
+                title={gapText(g)}
+                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors hover:bg-primary-50 ${
+                  g.confirmed
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-ink-100 text-ink-600"
+                }`}
+              >
+                <span className="font-serif font-extrabold text-[11px]">
+                  {g.id ?? `G${i + 1}`}
+                </span>
+                <span className="text-[11.5px] text-ink-700 max-w-[140px] truncate">
+                  {gapText(g)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {hypotheses.length > 0 && (
+        <>
+          <FieldLabel name="hypotheses" count={hypotheses.length} />
+          <ul className="mt-1.5 space-y-1 list-none">
+            {hypotheses.map((h, i) => {
+              const id = typeof h === "string" ? `H${i + 1}` : (h.id ?? `H${i + 1}`);
+              const text = hypothesisText(h);
+              return (
+                <li key={i}>
+                  <button
+                    type="button"
+                    onClick={() => setModal({ kind: "hypothesis", index: i })}
+                    className="w-full text-left text-[12.5px] text-ink-700 px-1.5 py-1 rounded-md hover:bg-primary-50 transition-colors"
+                  >
+                    <span className="font-bold text-primary-700 mr-1.5">{id}</span>
+                    <span className="line-clamp-2">{text}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+
+      {Array.isArray(sources) && sources.length > 0 && (
+        <>
+          <FieldLabel name="literature_sources" />
+          <button
+            type="button"
+            onClick={() => setModal({ kind: "sources" })}
+            className="w-full text-left flex items-center gap-2.5 mt-1 px-1.5 py-1.5 rounded-md hover:bg-primary-50 transition-colors group"
+          >
+            <span className="text-[22px] font-extrabold text-ink-900 tabular-nums">
+              {sources.length}
+            </span>
+            <span className="text-[11.5px] text-ink-500 flex-1">
+              papers · click to view
+            </span>
+            <ExternalLink className="w-3.5 h-3.5 text-ink-400 group-hover:text-primary-600" />
+          </button>
+        </>
+      )}
+
+      {gaps.length === 0 && hypotheses.length === 0 && (!Array.isArray(sources) || sources.length === 0) && (
+        <EmptyHint text="No M2 data committed yet." />
+      )}
+
+      {/* Modal — renders the selected gap / hypothesis / source list with
+          full text + structured details. */}
+      <SliceModal
+        open={modal !== null}
+        title={modalTitle(modal, gaps, hypotheses, sources)}
+        subtitle={modalSubtitle(modal, gaps, hypotheses, sources)}
+        onClose={() => setModal(null)}
+      >
+        {modal?.kind === "gap" && <GapDetail gap={gaps[modal.index]} text={gapText(gaps[modal.index])} />}
+        {modal?.kind === "hypothesis" && (
+          <HypothesisDetail
+            hypothesis={hypotheses[modal.index]}
+            text={hypothesisText(hypotheses[modal.index])}
+          />
+        )}
+        {modal?.kind === "sources" && <SourceList papers={sources} />}
+      </SliceModal>
+    </>
+  );
+}
+
+
+function modalTitle(
+  m: { kind: "gap"; index: number } | { kind: "hypothesis"; index: number } | { kind: "sources" } | null,
+  gaps: any[], hyps: any[], sources: any[],
+): string {
+  if (!m) return "";
+  if (m.kind === "gap") return `${gaps[m.index]?.id ?? `Gap ${m.index + 1}`}`;
+  if (m.kind === "hypothesis") {
+    const h = hyps[m.index];
+    const id = typeof h === "string" ? `H${m.index + 1}` : (h.id ?? `H${m.index + 1}`);
+    return id;
+  }
+  return `Literature sources (${sources.length})`;
+}
+
+function modalSubtitle(
+  m: { kind: "gap"; index: number } | { kind: "hypothesis"; index: number } | { kind: "sources" } | null,
+  _gaps: any[], _hyps: any[], _sources: any[],
+): string | undefined {
+  if (!m) return undefined;
+  if (m.kind === "gap") return "Research gap";
+  if (m.kind === "hypothesis") return "Hypothesis";
+  return "Click any paper to open its source";
+}
+
+
+// --- detail renderers for the modal body ---
+
+function GapDetail({ gap, text }: { gap: any; text: string }) {
+  const supporting: any[] = gap?.supporting_papers ?? [];
+  return (
+    <div className="space-y-3">
+      {gap?.relevance && (
+        <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-[11px] font-semibold">
+          Relevance: {gap.relevance}
+        </div>
+      )}
+      <p className="text-[14px] leading-relaxed text-ink-900">{text}</p>
+      {supporting.length > 0 && (
+        <div>
+          <FieldLabel name={`supporting papers (${supporting.length})`} top />
+          <ul className="mt-2 space-y-1.5">
+            {supporting.map((p: any, i: number) => (
+              <li key={i}>
+                <SourceRow paper={p} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HypothesisDetail({ hypothesis, text }: { hypothesis: any; text: string }) {
+  const grounded = typeof hypothesis === "object" ? hypothesis?.grounded_in : undefined;
+  return (
+    <div className="space-y-3">
+      <p className="text-[14px] leading-relaxed text-ink-900">{text}</p>
+      {grounded && (
+        <div className="border-l-2 border-primary-200 pl-3 text-[12.5px] text-ink-600">
+          <FieldLabel name="grounded in" top />
+          <div className="mt-1">{grounded}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SourceList({ papers }: { papers: any[] }) {
+  if (papers.length === 0) {
+    return <EmptyHint text="No sources yet." />;
+  }
+  return (
+    <ul className="space-y-2">
+      {papers.map((p, i) => (
+        <li key={i}>
+          <SourceRow paper={p} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SourceRow({ paper }: { paper: any }) {
+  // Tolerate different agent/engine field names.
+  const authors = Array.isArray(paper.authors)
+    ? paper.authors.join(", ")
+    : (paper.authors || paper.author || "");
+  const year = paper.year ?? paper.published_year;
+  const title = paper.title ?? "";
+  const venue = paper.venue || paper.source;
+  const url = paper.doi ? `https://doi.org/${paper.doi}` : paper.url;
+  const page = paper.page;
+
+  // Two shapes ride on the same field in M2 commits:
+  //  1. Full paper records from the citation scout — have a `title` (+ usually
+  //     authors/year/doi). Renders as a PDF-thumbnail row with the title as
+  //     the headline.
+  //  2. Compact `supporting_papers` citations from research-gap commits —
+  //     just `{author, year, page}`. With no title we'd render a blank row
+  //     (as the user just saw). Switch to a single-line in-text style
+  //     citation in that case.
+  const isCompactCitation = !title && (authors || year);
+
+  if (isCompactCitation) {
+    const cite = [
+      authors,
+      year ? `(${year})` : null,
+      page != null ? `p.${page}` : null,
+    ].filter(Boolean).join(", ");
+    // Compact citations from supporting_papers ({author, year, page}) have
+    // no DOI/URL of their own. Build a Google Scholar query from
+    // author + year so the row is still clickable — the user can find the
+    // paper themselves without having to retype the citation.
+    const scholarUrl =
+      url ??
+      `https://scholar.google.com/scholar?q=${encodeURIComponent(
+        [authors, year].filter(Boolean).join(" "),
+      )}`;
+    return (
+      <a
+        href={scholarUrl}
+        target="_blank"
+        rel="noreferrer noopener"
+        title={
+          url
+            ? "Open source"
+            : "Search Google Scholar for this citation"
+        }
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-primary-50 transition-colors text-[12.5px] text-ink-700 hover:text-primary-700"
+      >
+        <span>{cite}</span>
+        <ExternalLink className="w-3 h-3" />
+      </a>
+    );
+  }
+
+  const inner = (
+    <div className="flex items-start gap-2.5 text-[13px]">
+      <span className="shrink-0 mt-0.5 w-[20px] h-[24px] rounded-sm bg-primary-50 border border-ink-200 inline-flex items-end justify-center text-[8px] font-extrabold text-primary-700">
+        PDF
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-ink-900 leading-snug">{title || "(untitled)"}</div>
+        <div className="text-[12px] text-ink-500 mt-0.5">
+          {authors || "—"}
+          {year && <> · {year}</>}
+          {venue && <> · <em>{venue}</em></>}
+        </div>
+        {paper.doi && (
+          <div className="text-[11.5px] text-ink-400 font-mono mt-0.5">doi:{paper.doi}</div>
+        )}
+      </div>
+      {url && <ExternalLink className="w-3.5 h-3.5 text-ink-400 shrink-0 mt-1" />}
+    </div>
+  );
+  return url ? (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="block px-2.5 py-2 rounded-lg hover:bg-primary-50 transition-colors"
+    >
+      {inner}
+    </a>
+  ) : (
+    <div className="block px-2.5 py-2">{inner}</div>
+  );
+}
+
+function M3Body({ data }: { data: Record<string, any> | null }) {
+  // Modal state for click-to-show on the rich M3 fields.
+  const [modal, setModal] = useState<
+    | { kind: "methodology" }
+    | { kind: "conceptual_model" }
+    | { kind: "hypotheses"; index: number | null }
+    | { kind: "instrument" }
+    | { kind: "themes" }
+    | { kind: "interview_guide" }
+    | null
+  >(null);
+
+  if (!data) return <EmptyHint text="No methodology set yet — open M3 to design." />;
+
+  const meth = data.methodology;
+  const conceptualModel = data.conceptual_model as { nodes?: any[]; edges?: any[] } | undefined;
+  const hypotheses = (data.hypotheses || []) as Array<{ id?: string; text?: string; statement?: string }>;
+  const questionnaire = data.questionnaire_text as string | undefined;
+  const themes = (data.themes || []) as any[];
+  const interviewGuide = data.interview_guide as Record<string, any> | undefined;
+  const sampling = meth?.sampling || {};
+
+  if (!meth && !conceptualModel && hypotheses.length === 0 && !questionnaire && themes.length === 0 && !interviewGuide) {
+    return <EmptyHint text="No M3 data committed yet." />;
+  }
+
+  return (
+    <>
+      {meth && (
+        <>
+          <button
+            type="button"
+            onClick={() => setModal({ kind: "methodology" })}
+            className="block w-full text-left -mx-1 px-1 py-0.5 rounded-md hover:bg-primary-50 transition-colors group"
+          >
+            <FieldLabel name="methodology" top />
+          </button>
+          <div className="mt-1.5 space-y-1.5">
+            {meth.paradigm && <KV k="Paradigm" v={meth.paradigm} />}
+            {meth.design && <KV k="Design" v={meth.design} />}
+            {meth.tool && <KV k="Tool" v={meth.tool} />}
+            {(sampling.minSize || sampling.targetSize || meth.target_sample_size) && (
+              <KV
+                k="Sample"
+                v={`n ≥ ${sampling.minSize ?? meth.target_sample_size ?? "?"}${
+                  sampling.targetSize ? ` (target ${sampling.targetSize})` : ""
+                }`}
+              />
+            )}
+          </div>
+        </>
+      )}
+
+      {conceptualModel && (conceptualModel.nodes?.length || conceptualModel.edges?.length) ? (
+        <ClickRow
+          name="conceptual_model"
+          summary={`${conceptualModel.nodes?.length ?? 0} constructs · ${conceptualModel.edges?.length ?? 0} edges`}
+          onClick={() => setModal({ kind: "conceptual_model" })}
+        />
+      ) : null}
+
+      {hypotheses.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setModal({ kind: "hypotheses", index: null })}
+            className="block w-full text-left -mx-1 px-1 py-0.5 rounded-md hover:bg-primary-50 transition-colors group"
+          >
+            <FieldLabel name="hypotheses" count={hypotheses.length} />
+          </button>
+          <ul className="mt-1.5 space-y-1 list-none">
+            {hypotheses.slice(0, 3).map((h, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  onClick={() => setModal({ kind: "hypotheses", index: i })}
+                  className="w-full text-left text-[12.5px] text-ink-700 px-1.5 py-1 rounded-md hover:bg-primary-50 transition-colors"
+                >
+                  <span className="font-bold text-primary-700 mr-1.5">
+                    {h.id ?? `H${i + 1}`}
+                  </span>
+                  <span className="line-clamp-1">
+                    {h.text || h.statement || "—"}
+                  </span>
+                </button>
+              </li>
+            ))}
+            {hypotheses.length > 3 && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setModal({ kind: "hypotheses", index: null })}
+                  className="text-[11.5px] text-primary-600 px-1.5 hover:underline"
+                >
+                  +{hypotheses.length - 3} more…
+                </button>
+              </li>
+            )}
+          </ul>
+        </>
+      )}
+
+      {questionnaire && (
+        <ClickRow
+          name="questionnaire_text"
+          summary={`${questionnaire.split(/\s+/).length} words · click to view`}
+          onClick={() => setModal({ kind: "instrument" })}
+        />
+      )}
+
+      {themes.length > 0 && (
+        <ClickRow
+          name="themes"
+          summary={`${themes.length} themes`}
+          onClick={() => setModal({ kind: "themes" })}
+        />
+      )}
+
+      {interviewGuide && (
+        <ClickRow
+          name="interview_guide"
+          summary={`${Object.keys(interviewGuide.questions ?? interviewGuide).length || 0} items`}
+          onClick={() => setModal({ kind: "interview_guide" })}
+        />
+      )}
+
+      {data.needs_review_note && (
+        <div className="mt-2.5 px-2.5 py-2 rounded-lg bg-amber-50 text-amber-800 text-[11.5px] leading-snug font-semibold">
+          ⚠ {data.needs_review_note}
+        </div>
+      )}
+
+      {/* Detail modal */}
+      <SliceModal
+        open={modal !== null}
+        title={m3ModalTitle(modal, hypotheses)}
+        subtitle={m3ModalSubtitle(modal)}
+        onClose={() => setModal(null)}
+      >
+        {modal?.kind === "methodology" && <MethodologyDetail meth={meth} sampling={sampling} />}
+        {modal?.kind === "conceptual_model" && <ConceptualModelDetail model={conceptualModel} />}
+        {modal?.kind === "hypotheses" && (
+          modal.index === null ? <HypothesesList hypotheses={hypotheses} />
+            : <HypothesisDetail hypothesis={hypotheses[modal.index]} text={hypotheses[modal.index].text || hypotheses[modal.index].statement || "—"} />
+        )}
+        {modal?.kind === "instrument" && <InstrumentDetail text={questionnaire ?? ""} />}
+        {modal?.kind === "themes" && <ThemesDetail themes={themes} />}
+        {modal?.kind === "interview_guide" && <InterviewGuideDetail guide={interviewGuide!} />}
+      </SliceModal>
+    </>
+  );
+}
+
+
+// --- M3 modal helpers ---
+
+function m3ModalTitle(
+  m:
+    | { kind: "methodology" }
+    | { kind: "conceptual_model" }
+    | { kind: "hypotheses"; index: number | null }
+    | { kind: "instrument" }
+    | { kind: "themes" }
+    | { kind: "interview_guide" }
+    | null,
+  hypotheses: Array<{ id?: string; text?: string; statement?: string }>,
+): string {
+  if (!m) return "";
+  switch (m.kind) {
+    case "methodology":      return "Methodology";
+    case "conceptual_model": return "Conceptual model";
+    case "hypotheses":
+      if (m.index === null) return `Hypotheses (${hypotheses.length})`;
+      return hypotheses[m.index]?.id ?? `H${m.index + 1}`;
+    case "instrument":       return "Questionnaire";
+    case "themes":           return "Themes";
+    case "interview_guide":  return "Interview guide";
+  }
+}
+
+function m3ModalSubtitle(
+  m:
+    | { kind: "methodology" }
+    | { kind: "conceptual_model" }
+    | { kind: "hypotheses"; index: number | null }
+    | { kind: "instrument" }
+    | { kind: "themes" }
+    | { kind: "interview_guide" }
+    | null,
+): string | undefined {
+  if (!m) return undefined;
+  switch (m.kind) {
+    case "methodology":      return "Paradigm · design · sampling · tool";
+    case "conceptual_model": return "Constructs and hypothesis paths";
+    case "hypotheses":       return m.index === null ? "All committed hypotheses" : "Hypothesis";
+    case "instrument":       return "Full questionnaire text";
+    case "themes":           return "Qualitative themes";
+    case "interview_guide":  return "Interview / focus-group guide";
+  }
+}
+
+
+function ClickRow({
+  name, summary, onClick,
+}: {
+  name: string;
+  summary: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center justify-between gap-2 mt-3 px-2 py-1.5 -mx-1 rounded-md hover:bg-primary-50 transition-colors group"
+    >
+      <div className="flex flex-col items-start min-w-0">
+        <span className="text-[11px] uppercase tracking-[0.05em] text-ink-500 font-semibold">
+          {name}
+        </span>
+        <span className="text-[12px] text-ink-600 mt-0.5 truncate">{summary}</span>
+      </div>
+      <ExternalLink className="w-3.5 h-3.5 text-ink-400 group-hover:text-primary-600 shrink-0" />
+    </button>
+  );
+}
+
+
+// --- M3 detail renderers ---
+
+function MethodologyDetail({ meth, sampling }: { meth: any; sampling: any }) {
+  return (
+    <div className="space-y-3 text-[13.5px]">
+      {meth.paradigm && <KVRich k="Paradigm" v={meth.paradigm} />}
+      {meth.design && <KVRich k="Design" v={meth.design} />}
+      {meth.tool && <KVRich k="Tool" v={meth.tool} />}
+      {meth.sampling_strategy && <KVRich k="Sampling strategy" v={meth.sampling_strategy} />}
+      {(meth.target_sample_size || sampling.minSize || sampling.targetSize) && (
+        <KVRich
+          k="Target sample"
+          v={
+            meth.target_sample_size
+              ? `n ≥ ${meth.target_sample_size}`
+              : `n ≥ ${sampling.minSize ?? "?"}${
+                  sampling.targetSize ? ` (target ${sampling.targetSize})` : ""
+                }`
+          }
+        />
+      )}
+      {meth.mixed_design_type && (
+        <KVRich k="Mixed design" v={meth.mixed_design_type} />
+      )}
+    </div>
+  );
+}
+
+function ConceptualModelDetail({ model }: { model: { nodes?: any[]; edges?: any[] } | undefined }) {
+  const nodes = model?.nodes ?? [];
+  const edges = model?.edges ?? [];
+  return (
+    <div className="space-y-4">
+      {nodes.length > 0 && (
+        <div>
+          <FieldLabel name={`constructs (${nodes.length})`} top />
+          <ul className="mt-2 space-y-2">
+            {nodes.map((n: any, i: number) => (
+              <li key={i} className="border border-ink-200 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-serif font-extrabold text-[11.5px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-700">
+                    {n.id ?? `N${i + 1}`}
+                  </span>
+                  <span className="text-[13.5px] font-semibold text-ink-900">{n.label ?? "—"}</span>
+                  {n.type && (
+                    <span className="text-[11px] uppercase tracking-[0.04em] text-ink-500 font-semibold ml-auto">
+                      {n.type}
+                    </span>
+                  )}
+                </div>
+                {Array.isArray(n.questions) && n.questions.length > 0 && (
+                  <ol className="list-decimal pl-5 mt-2 text-[12.5px] text-ink-700 space-y-0.5">
+                    {n.questions.map((q: string, j: number) => <li key={j}>{q}</li>)}
+                  </ol>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {edges.length > 0 && (
+        <div>
+          <FieldLabel name={`hypothesis paths (${edges.length})`} />
+          <ul className="mt-2 space-y-1.5">
+            {edges.map((e: any, i: number) => {
+              // Two shapes coexist: design's `{from, to, label}` (where
+              // label carries the full "SMU → SA: −" string) and the
+              // schema's `{source, target, hypothesis, effect_type}`. We
+              // try both keys, and only render the X → Y prefix when we
+              // actually have a clean construct pair AND the label
+              // doesn't already include an arrow.
+              const src: string | undefined = e.from ?? e.source;
+              const tgt: string | undefined = e.to ?? e.target;
+              const label: string | undefined = e.label;
+              const labelHasArrow = !!label && /[→\->]/.test(label);
+              const showPathPrefix = src && tgt && !labelHasArrow;
+              return (
+                <li key={i} className="text-[13px] flex items-center gap-2">
+                  {showPathPrefix && (
+                    <span className="font-mono text-ink-500 text-[12.5px]">
+                      {src} → {tgt}
+                    </span>
+                  )}
+                  {e.hypothesis && (
+                    <span className="px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 font-bold text-[11.5px]">
+                      {e.hypothesis}
+                    </span>
+                  )}
+                  {e.effect_type && (
+                    <span
+                      className={`text-[11.5px] font-semibold ${
+                        e.effect_type === "positive" ? "text-emerald-700" : "text-amber-700"
+                      }`}
+                    >
+                      {e.effect_type === "positive" ? "+" : "−"}
+                    </span>
+                  )}
+                  {label && <span className="text-ink-700">{label}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {nodes.length === 0 && edges.length === 0 && (
+        <EmptyHint text="No conceptual-model graph committed yet." />
+      )}
+    </div>
+  );
+}
+
+function HypothesesList({ hypotheses }: { hypotheses: Array<{ id?: string; text?: string; statement?: string }> }) {
+  return (
+    <ul className="space-y-3">
+      {hypotheses.map((h, i) => (
+        <li key={i}>
+          <div className="font-bold text-primary-700 text-[13px]">
+            {h.id ?? `H${i + 1}`}
+          </div>
+          <div className="text-[13.5px] text-ink-900 leading-relaxed mt-0.5">
+            {h.text || h.statement || "—"}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function InstrumentDetail({ text }: { text: string }) {
+  if (!text.trim()) {
+    return <EmptyHint text="Questionnaire is empty." />;
+  }
+  return (
+    <pre className="whitespace-pre-wrap font-serif text-[13.5px] leading-relaxed text-ink-900">
+      {text}
+    </pre>
+  );
+}
+
+function ThemesDetail({ themes }: { themes: any[] }) {
+  return (
+    <ul className="space-y-3">
+      {themes.map((t, i) => (
+        <li key={i}>
+          <div className="font-bold text-primary-700 text-[13px]">
+            {t.id ?? t.name ?? `T${i + 1}`}
+          </div>
+          <div className="text-[13.5px] text-ink-900 leading-relaxed mt-0.5">
+            {t.description ?? t.text ?? "—"}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function InterviewGuideDetail({ guide }: { guide: Record<string, any> }) {
+  // Loose shape: agent commits could be { questions: [...] } or
+  // { sections: [{title, questions: [...]}] } or flat string list.
+  const questions: string[] = guide.questions ?? guide.items ?? [];
+  const sections: Array<{ title?: string; questions?: string[] }> = guide.sections ?? [];
+  if (sections.length > 0) {
+    return (
+      <div className="space-y-4">
+        {sections.map((s, i) => (
+          <div key={i}>
+            {s.title && (
+              <div className="font-bold text-ink-900 text-[13.5px] mb-1.5">{s.title}</div>
+            )}
+            <ol className="list-decimal pl-5 space-y-1 text-[13.5px] text-ink-700">
+              {(s.questions ?? []).map((q, j) => <li key={j}>{q}</li>)}
+            </ol>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (questions.length > 0) {
+    return (
+      <ol className="list-decimal pl-5 space-y-1.5 text-[13.5px] text-ink-700">
+        {questions.map((q, i) => <li key={i}>{q}</li>)}
+      </ol>
+    );
+  }
+  return (
+    <pre className="whitespace-pre-wrap font-mono text-[12.5px] text-ink-700 bg-ink-50 rounded-lg p-3">
+      {JSON.stringify(guide, null, 2)}
+    </pre>
+  );
+}
+
+function KVRich({ k, v }: { k: string; v: React.ReactNode }) {
+  return (
+    <div className="flex gap-3 items-baseline">
+      <span className="min-w-[120px] text-[11px] uppercase tracking-[0.05em] text-ink-500 font-semibold">
+        {k}
+      </span>
+      <span className="flex-1 text-ink-900 font-medium">{v}</span>
+    </div>
+  );
+}
+
+
+function EmptyHint({ text }: { text: string }) {
+  return <div className="text-[12.5px] text-ink-500 leading-snug">{text}</div>;
+}
+
+// `truncate` used to be called by M2Body before gaps moved into a modal —
+// kept here in case other section bodies want it back.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function truncate(s: string, n: number): string {
+  if (s.length <= n) return s;
+  return s.slice(0, n).trimEnd() + "…";
 }

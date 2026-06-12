@@ -2,18 +2,24 @@
 
 import type { ReactNode } from "react";
 import { AnnouncementProvider } from "@/app/components/announcements/AnnouncementProvider";
-import { SidebarLayout } from "@/app/components/layout/SidebarLayout";
-import { useSidebarSections } from "@/app/components/layout/use-sections";
 
-
+/**
+ * Chat surface — no master menu.
+ *
+ * History: this layout used to wrap children in <SidebarLayout> with the
+ * global Dashboard / Theses / Credit nav. Design feedback was that once
+ * you're inside a thesis, the workflow rails (M1–M5) + context store live
+ * in their own project-specific panes (ChatShellLayout's leftPane and
+ * rightPane), and the global nav is just noise. Stripping the shell here
+ * also reclaims ~250px of horizontal space the master menu was eating.
+ *
+ * AnnouncementProvider is kept because announcements are surfaced via a
+ * floating banner inside the chat, not the master menu.
+ */
 export default function ChatRouteLayout({ children }: { children: ReactNode }) {
-  const sections = useSidebarSections();
-  // fullBleed: chat owns its own pane layout + viewport-height math. The
-  // shell's default py-10 + max-w-7xl + gradient backdrop would carve the
-  // chat into a centered column with empty space above the threads list.
   return (
-    <SidebarLayout sections={sections} fullBleed>
-      <AnnouncementProvider>{children}</AnnouncementProvider>
-    </SidebarLayout>
+    <AnnouncementProvider>
+      <div className="h-screen w-screen overflow-hidden bg-white">{children}</div>
+    </AnnouncementProvider>
   );
 }

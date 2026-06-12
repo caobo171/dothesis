@@ -15,6 +15,105 @@ import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
 
 
+/**
+ * Empty-state copy for a thread with no messages yet.
+ *
+ * The text used to be "Start your thesis" no matter what — that read as
+ * a regression to users who had already finished M1/M2 in a previous
+ * thread (the project state is shared across threads). We now base the
+ * copy on what's actually in context_store + module_status, so a new
+ * thread on a partly-complete project picks up where the project is.
+ *
+ * Precedence:
+ *   1. ANY module marked `needs_review` → invite the user to fix the
+ *      flagged module first (that's the most urgent signal in the brief).
+ *   2. M5 has chapters → handled by the caller (the auto-drafted branch
+ *      above this; we never reach `getEmptyStateCopy` in that case).
+ *   3. Otherwise: greet by the "current focus" module — what's the user
+ *      working on right now — and remind them what its job is.
+ *   4. Cold start (no committed slices anywhere) → original "Start your
+ *      thesis" copy.
+ */
+function getEmptyStateCopy(project: {
+  context_store: {
+    m1_topic?: { research_title?: string; confirmed_at?: string } | null;
+    m2_literature?: { confirmed_at?: string } | null;
+    m3_design?: { confirmed_at?: string } | null;
+    m4_analysis?: { confirmed_at?: string } | null;
+    m5_writing?: { confirmed_at?: string } | null;
+  };
+  focus?: string | null;
+  current_module?: string;
+  module_status?: Record<string, string>;
+}): { title: string; body: string } {
+  const cs = project.context_store;
+  const status = project.module_status ?? {};
+  const focus = project.focus ?? project.current_module;
+  const title = cs.m1_topic?.research_title;
+
+  // 1. Needs-review beats everything — surface the worst.
+  const flagged = ["M1", "M2", "M3", "M4", "M5"].find(m => status[m] === "needs_review");
+  if (flagged) {
+    return {
+      title: `${flagged} needs another look`,
+      body:
+        `Something in ${MODULE_LABEL[flagged]} changed upstream — let's revisit it so the rest stays grounded.` +
+        (title ? ` (Project: ${title})` : ""),
+    };
+  }
+
+  // 2. The auto-drafted branch is handled above by the caller. We can't
+  //    reach this point with `hasChapters === true`.
+
+  // 3. Welcome back, based on where the user is.
+  const m1Done = !!cs.m1_topic?.confirmed_at || !!title;
+  const m2Done = !!cs.m2_literature?.confirmed_at;
+  const m3Done = !!cs.m3_design?.confirmed_at;
+  const m4Done = !!cs.m4_analysis?.confirmed_at;
+  if (m1Done || m2Done || m3Done || m4Done) {
+    // Pick the first module that isn't done — that's the next step.
+    const nextModule = !m1Done ? "M1"
+      : !m2Done ? "M2"
+      : !m3Done ? "M3"
+      : !m4Done ? "M4"
+      : "M5";
+    const focusedOn = focus && status[focus] !== "done" ? focus : nextModule;
+    return {
+      title: title
+        ? `Picking up "${title}"`
+        : `Continuing your thesis`,
+      body:
+        `${MODULE_LABEL[focusedOn]} is up next — ${MODULE_HINT[focusedOn]} ` +
+        `Type below to dive in, or ask about any module.`,
+    };
+  }
+
+  // 4. Cold start.
+  return {
+    title: "Start your thesis",
+    body:
+      "Type your research topic below and I'll guide you step by step — " +
+      "or hit Auto-draft to generate a full draft.",
+  };
+}
+
+const MODULE_LABEL: Record<string, string> = {
+  M1: "Topic Discovery",
+  M2: "Literature Review",
+  M3: "Research Design",
+  M4: "Data Analysis",
+  M5: "Writing",
+};
+
+const MODULE_HINT: Record<string, string> = {
+  M1: "tell me the broad area you want to study.",
+  M2: "let's map the literature and find the gaps your hypotheses will plug.",
+  M3: "time to pick the paradigm, design, and instrument.",
+  M4: "ready to crunch the data once you have it.",
+  M5: "let's turn the project into chapters and export.",
+};
+
+
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
   const { messages, streamingText, streamingProgress, streamingError, inflight, send } = useChat(threadId);
   // SP6.5: include m5_writing.chapters so we can gate the "Open editor" link in
@@ -26,9 +125,15 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     focus?: string | null;
     current_module?: string;
     module_status?: Record<string, string>;
+    // Each slice optional; presence + confirmed_at drives the empty-state
+    // copy below. The shapes are loose on purpose — we only read a few
+    // fields and want to tolerate dual-write / partial data.
     context_store: {
-      m1_topic?: { research_title?: string } | null;
-      m5_writing?: { chapters?: Record<string, unknown> } | null;
+      m1_topic?: { research_title?: string; confirmed_at?: string } | null;
+      m2_literature?: { research_state_summary?: string; confirmed_at?: string } | null;
+      m3_design?: { methodology?: { paradigm?: string }; confirmed_at?: string } | null;
+      m4_analysis?: { confirmed_at?: string } | null;
+      m5_writing?: { chapters?: Record<string, unknown>; confirmed_at?: string } | null;
     };
   }>(
     `/projects/${projectId}`, fetcher,
@@ -152,13 +257,15 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
               </a>
             </>
           ) : (
-            <>
-              <p className="text-lg font-semibold text-gray-800">Start your thesis</p>
-              <p className="mt-1 text-sm max-w-md">
-                Type your research topic below and I&apos;ll guide you step by
-                step — or hit Auto-draft to generate a full draft.
-              </p>
-            </>
+            (() => {
+              const copy = getEmptyStateCopy(project);
+              return (
+                <>
+                  <p className="text-lg font-semibold text-gray-800">{copy.title}</p>
+                  <p className="mt-1 text-sm max-w-md">{copy.body}</p>
+                </>
+              );
+            })()
           )}
         </div>
       ) : (
@@ -172,7 +279,16 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
           onWidgetSelect={onWidgetSelect}
         />
       )}
-      <ChatInput onSubmit={send} onFileDrop={onFileDrop} disabled={inflight} />
+      <ChatInput
+        onSubmit={send}
+        onFileDrop={onFileDrop}
+        disabled={inflight}
+        focusModule={project ? (project.focus ?? project.current_module) : undefined}
+        // Hardcoded model label for now — matches what agent/runtime.py
+        // actually loads. Pull from a real /api/v1/me/agent-config endpoint
+        // when that lands so the user sees Claude vs Gemini accurately.
+        modelName={process.env.NEXT_PUBLIC_AGENT_MODEL_LABEL || "Gemini 2.5 Flash"}
+      />
 
       <AutoDraftModal
         open={modalOpen}

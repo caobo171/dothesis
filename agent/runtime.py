@@ -16,6 +16,7 @@ Scoping (the two invariants from the user):
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -66,6 +67,52 @@ def _parse_options_marker(text: str) -> dict | None:
             "multi_select": bool(m.group("multi")),
         }
     return None
+
+
+# Foundational citations panel marker. The agent embeds a JSON payload
+# between `[PAPERS]` and `[/PAPERS]` fences anywhere in its message; we
+# extract it, shape it into a `PapersPanelHint`, and yield a `tool_calls`
+# event for the frontend `PapersPanel` widget to render. The marker text
+# itself is stripped on the client (MessageBubble) so the user only sees
+# the panel.
+#
+# Why JSON inline rather than a tool call: the agent's response is already
+# streaming as Markdown; switching to a tool call mid-stream would require
+# wiring a `display_papers_panel` tool through deepagents, persist the
+# payload twice (tool result + message), and pay an extra LLM turn. The
+# inline marker is the same trick `[OPTIONS]` and ```mermaid``` use.
+_PAPERS_RE = re.compile(
+    r"\[PAPERS\]\s*(?P<payload>\{.*?\})\s*\[/PAPERS\]",
+    re.DOTALL,
+)
+
+
+def _parse_papers_marker(text: str) -> dict | None:
+    """Pull the first `[PAPERS] {json} [/PAPERS]` block out of `text` and
+    shape it into a `PapersPanelHint`. Returns None when no marker is
+    present or the payload is malformed.
+
+    The agent should emit `widget_type` inside the JSON, but for ergonomics
+    we'll inject it here if missing — so the agent only has to write
+    `{camps: [...]}` and we fill in the rest.
+    """
+    if "[PAPERS]" not in text:
+        return None
+    m = _PAPERS_RE.search(text)
+    if m is None:
+        return None
+    try:
+        payload = json.loads(m.group("payload"))
+    except json.JSONDecodeError:
+        # Best-effort: a malformed payload is the agent's mistake, not a
+        # crash-worthy event. The marker text will still be visible in
+        # the message because the client only strips it when the parse
+        # succeeds — that's a useful signal to the agent next turn.
+        return None
+    if not isinstance(payload, dict) or not isinstance(payload.get("camps"), list):
+        return None
+    payload.setdefault("widget_type", "papers_panel")
+    return payload
 
 from deepagents import create_deep_agent
 from deepagents.backends.composite import CompositeBackend
@@ -120,6 +167,58 @@ The frontend turns this into a row of clickable cards. Rules:
 Use this whenever the next user reply has a small finite set of valid
 choices. Do NOT use it for open-ended prompts ("Describe your sample…").
 
+## Foundational citations panel — `[PAPERS] {...} [/PAPERS]`
+
+When you want to show the user a structured list of seminal papers — e.g.,
+the foundational citations behind an M2 literature review, or the sources
+backing a methodology decision — embed a JSON payload between
+`[PAPERS]` and `[/PAPERS]` fences. The frontend renders this as a card
+panel with PDF thumbnails, clickable DOI links, page-cited quotes, and
+per-paper actions (Open PDF, Cite, Flag). The marker text itself is
+hidden in the chat bubble.
+
+Shape:
+```
+[PAPERS]
+{
+  "title": "Foundational citations",
+  "style": "APA 7",
+  "indexed_count": 41,
+  "camps": [
+    {
+      "id": "sor",
+      "label": "STIMULUS-ORGANISM-RESPONSE",
+      "papers": [
+        {
+          "id": "sun-2019",
+          "author": "Sun, Y., Shao, X., Li, X., Guo, Y. & Nie, K.",
+          "year": 2019,
+          "title": "How live streaming influences purchase intentions in social commerce: An IT affordance perspective",
+          "venue": "Electronic Commerce Research and Applications",
+          "vol": "37",
+          "doi": "10.1016/j.elerap.2019.100886",
+          "cites": 612,
+          "page": 41,
+          "quote": "The live streaming context affords four IT affordances — visibility, metavoicing, guidance shopping, and trading — that map onto SOR stimulus.",
+          "seminal": true
+        }
+      ]
+    }
+  ]
+}
+[/PAPERS]
+```
+
+Required: `camps[].label`, `camps[].papers[].id`, `papers[].author`,
+`papers[].year`, `papers[].title`. Everything else is optional but you
+should fill in `doi` (for the clickable title) and `quote` + `page`
+(for the cited blockquote) whenever you have them. The user came for the
+sources — surface them in this panel rather than as prose, and almost
+never as raw URLs in the message text.
+
+When you DON'T have real verified papers yet — when M2 hasn't run
+research_scout — say so plainly, do not invent a panel.
+
 ## Diagrams — fenced ```mermaid``` blocks
 
 For ANY visual concept — conceptual model, sequence of phases, research
@@ -150,6 +249,44 @@ awkwardly. When in doubt, draw it.
   or "(vui lòng ghi rõ: …)" instead.
 - NEVER use `---` on its own line for the same reason — use bullet
   separation or a heading instead.
+- NEVER use Unicode form characters like `☐ ☒ □ ✓` to fake a checkbox or
+  radio button. They render at inconsistent sizes between fonts and look
+  broken next to bullets. Just list the choices as plain bullets.
+
+## Questionnaires & forms in chat — preview vs export
+
+The chat is a PREVIEW surface, not a real form. Don't try to render
+fill-in widgets inside it (checkboxes, fillable Likert tables) — they
+always look ugly. Pick the right shape:
+
+- **Single-answer item** (one question, N choices): list the question, then
+  the choices as plain bullets, then a one-line "(Chọn một)" note. Don't
+  put `☐` or `[ ]` before each option.
+
+  Example:
+  > 1. Mỗi ngày bạn dành bao nhiêu thời gian cho mạng xã hội?
+  >    - Dưới 1 giờ
+  >    - 1–2 giờ
+  >    - 2–3 giờ
+  >    - Trên 4 giờ
+  >    *(Chọn một đáp án)*
+
+- **Likert-scale item** (N statements, all rated 1–5): list the statements
+  numbered. Put the scale legend ABOVE the list once, NOT a 5-column
+  table with `[ ]` cells per row. Multi-column tables wrap badly in chat
+  and the `[ ]` markers look broken.
+
+  Example:
+  > **Thang đo Likert 5 điểm: 1 = Hoàn toàn không đồng ý ··· 5 = Hoàn toàn đồng ý**
+  >
+  > 1. Tôi thường xuyên kiểm tra mạng xã hội khi đang học.
+  > 2. Tôi cảm thấy khó dừng khi đã bắt đầu.
+  > 3. …
+
+- **Actual fillable file**: when the user wants to take the survey to the
+  field, call `export_docx(kind="questionnaire", …)` — that's what
+  questionnaire DOCX export exists for. Tell the user the file is ready;
+  do not paste the entire form back into chat.
 """
 
 
@@ -312,7 +449,19 @@ async def stream_turn(
                             # has to be typed instead of clicked.
                             content = getattr(m, "content", "")
                             if isinstance(content, str):
-                                hint = _parse_options_marker(content)
+                                # Two marker shapes can ride on the same
+                                # message: [OPTIONS] (clickable choices,
+                                # always last line) and [PAPERS] (the
+                                # foundational-citations panel, anywhere
+                                # inline). When both are present, the
+                                # papers panel wins — choices are usually a
+                                # follow-up question the user can also type,
+                                # but the papers panel carries the actual
+                                # citation links the user came for.
+                                hint = (
+                                    _parse_papers_marker(content)
+                                    or _parse_options_marker(content)
+                                )
                                 if hint is not None:
                                     yield {"type": "tool_calls", "payload": hint}
     except Exception as e:  # surface failures as events — never a dead stream

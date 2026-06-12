@@ -89,20 +89,32 @@ const _markdownComponents = {
     <table className="my-1.5 border-collapse text-[13.5px]">{children}</table>
   ),
   th: ({ children }: { children?: ReactNode }) => (
-    <th className="border border-ink-200 px-2 py-1 text-left bg-ink-50 font-semibold">{children}</th>
+    // Header cells get whitespace-nowrap because they're typically labels
+    // like "Phát biểu" / "1" / "2" / … that should never wrap.
+    <th className="border border-ink-200 px-2 py-1 text-left bg-ink-50 font-semibold whitespace-nowrap">{children}</th>
   ),
   td: ({ children }: { children?: ReactNode }) => (
-    <td className="border border-ink-200 px-2 py-1 align-top">{children}</td>
+    // Don't break `[ ]`, `[x]`, or single tokens across lines — they're
+    // common in Likert-scale tables the agent emits and break cell layout.
+    // Statement cells (the leftmost column) wrap normally because they
+    // hold long prose; the `[&:not(:first-child)]:whitespace-nowrap`
+    // selector keeps that column wrappable while clamping the rating
+    // columns.
+    <td className="border border-ink-200 px-2 py-1 align-top [&:not(:first-child)]:whitespace-nowrap [&:not(:first-child)]:text-center">{children}</td>
   ),
   // Blockquote — soft left rail.
   blockquote: ({ children }: { children?: ReactNode }) => (
     <blockquote className="my-1 border-l-2 border-ink-200 pl-2 text-ink-600">{children}</blockquote>
   ),
-  // `<hr>` from a bare `___` markdown line was spilling outside the bubble
-  // because the underlying `<hr>` element ignores `inline-block` parent
-  // constraints in some browser layout modes. `w-full` + `block` clamps it
-  // to the bubble's content box.
-  hr: () => <hr className="block w-full my-2 border-ink-200" />,
+  // Suppress `<hr>` entirely. The agent occasionally emits `___` or `---`
+  // lines (Gemini uses them as visual separators or thinks they're
+  // fill-in-the-blank markers in questionnaires) — markdown then converts
+  // them to horizontal rules that look broken inside a chat bubble. The
+  // agent never has a real semantic reason to render an HR; killing the
+  // element entirely is cheaper than per-case formatting fights. The
+  // system prompt also instructs the agent not to emit `___`/`---` lines
+  // for new messages, but this swallows the existing persisted ones.
+  hr: () => null,
 };
 
 /**
@@ -115,6 +127,10 @@ const _markdownComponents = {
  * recognizes — keep them in sync.
  */
 const _OPTIONS_LINE = /^\s*\[OPTIONS(?:\s*:\s*\w+)?(?:\s+multi)?\]\s*.+$/m;
+// `[PAPERS] {json} [/PAPERS]` — the JSON payload is parsed server-side and
+// surfaces as a PapersPanel widget below the bubble. We strip the marker
+// from the rendered text so the user doesn't see the raw block.
+const _PAPERS_BLOCK = /\[PAPERS\][\s\S]*?\[\/PAPERS\]/g;
 
 function _stripOptionsMarker(text: string): string {
   // Only strip the marker if it appears as the LAST non-empty line.
@@ -131,10 +147,14 @@ function _stripOptionsMarker(text: string): string {
   return text;
 }
 
+function _stripMarkers(text: string): string {
+  return _stripOptionsMarker(text.replace(_PAPERS_BLOCK, "")).trim();
+}
+
 function _renderMarkdown(text: string) {
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={_markdownComponents}>
-      {_stripOptionsMarker(text)}
+      {_stripMarkers(text)}
     </ReactMarkdown>
   );
 }

@@ -10,7 +10,31 @@ description: Use when doing a literature review, finding or analyzing papers, id
 You own this slice:
 - `literature_sources: Source[]` — papers in the project (title, authors, year, DOI,
   abstract, key claims, methods, findings, page refs, `verified` flag)
-- `research_gaps: CitedGap[]` — each gap with `supporting_papers: [{sourceId, pages}]`
+- `research_gaps: CitedGap[]` — each gap with `supporting_papers: PaperReference[]`
+
+`PaperReference` shape (REQUIRED on every supporting_papers entry):
+
+```
+{
+  "author": "Sun et al.",                           // first-author + " et al."
+  "year": 2019,
+  "page": 41,                                       // optional page anchor
+  "quote": "…",                                     // optional page-cited extract
+  "verified": true,                                 // toolchain validated
+  "title": "How live streaming influences …",       // canonical title
+  "doi": "10.1016/j.elerap.2019.100886",            // bare DOI (no scheme)
+  "url": "https://www.sciencedirect.com/…"          // direct landing page
+}
+```
+
+**At least one of `doi`, `url`, or `title` MUST be set on every supporting
+paper.** Without one, the frontend can't render the citation as a clickable
+link and the context-store sidebar shows a dead row. When you commit a gap,
+look up the paper's DOI / URL from the project's `literature_sources`
+slice — the scout already stored it there. If a citation is only available
+by author+year (e.g., the user dictated it in chat), set `title` to your
+best reconstruction so the frontend can at least search Google Scholar
+sensibly.
 
 Unlike M1/M3/M5 (single-pass wizards), **you are a chat loop**. Phases progress as the
 user works through the literature.

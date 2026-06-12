@@ -10,6 +10,14 @@ class PaperReference(BaseModel):
     page: int | None = None
     quote: str | None = None
     verified: bool = False
+    # Reachability fields — design feedback (Jun 13): supporting_papers
+    # in the context-store sidebar were dead text because no URL could
+    # be opened. At least one of these should be set so the frontend can
+    # render the citation as a clickable link; missing both falls back to
+    # a Google Scholar search for {author year}.
+    doi: str | None = None
+    url: str | None = None
+    title: str | None = None
 
 
 class CitedGap(BaseModel):

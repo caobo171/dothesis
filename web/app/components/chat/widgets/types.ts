@@ -69,8 +69,47 @@ export type FlowChartHint = {
   reset_label?: string;
 };
 
+// Foundational citations panel (Home.html design). Surfaces a structured
+// view of seminal papers grouped by theoretical camp, each with a page-
+// cited quote and clickable DOI / PDF links. Emitted by the v3 agent via
+// the `[PAPERS] {json} [/PAPERS]` marker (see agent/runtime.py).
+export type PapersPanelPaper = {
+  id: string;                  // stable id (used by onCite/onFlag callbacks)
+  author: string;              // first-author or "Author et al."
+  year: number | string;
+  title: string;
+  venue?: string;              // journal/conference name
+  vol?: string;                // volume/issue/pages
+  doi?: string;                // bare DOI ("10.1016/…") — UI prepends https://doi.org/
+  pdf_url?: string;            // direct PDF link; UI appends #page=N when page is set
+  cites?: number;              // citation count
+  page?: number;               // page the quote came from
+  quote?: string;              // the page-cited extract (rendered as a blockquote)
+  seminal?: boolean;           // adds the ⭐ corner badge
+};
+
+export type PapersPanelCamp = {
+  id: string;                  // stable id (used for collapse state)
+  label: string;               // ALL-CAPS header text ("STIMULUS-ORGANISM-RESPONSE")
+  papers: PapersPanelPaper[];
+};
+
+export type PapersPanelHint = {
+  widget_type: "papers_panel";
+  title?: string;              // header label (defaults to "Foundational citations")
+  style?: string;              // citation-style label shown top-right ("APA 7")
+  indexed_count?: number;      // shown next to the seminal count
+  footer_note?: string;        // small line in the footer strip
+  camps: PapersPanelCamp[];
+};
+
+
 // Discriminated union — future variants (e.g. canvas_editor) land here.
-export type WidgetHint = CardGridHint | ListEditorHint | FlowChartHint;
+export type WidgetHint =
+  | CardGridHint
+  | ListEditorHint
+  | FlowChartHint
+  | PapersPanelHint;
 
 export type WidgetSelectHandler = (
   fieldName: string,
