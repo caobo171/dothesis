@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from orchestrator.agents.base import ModuleAgent
+from orchestrator.agents.shapes import WizardAgent
 from orchestrator.agents.widgets import (
     CardGridHint, CardOption, FlowChartEdge, FlowChartHint, FlowChartNode,
     ListEditorHint, ListItem,
@@ -168,9 +169,11 @@ _FIELDS_BY_PARADIGM = {
 }
 
 
-class M3Agent(ModuleAgent):
+class M3Agent(WizardAgent, ModuleAgent):
+    # PR #5 — Wizard shape per brief §3 (wizard refactor follows in #5b).
     schema = M3Output
     module_key = "M3"
+    slice_field = "m3_design"  # brief §6 — ModuleHandler contract
     system_prompt = _PROMPT
     tools = [
         recommend_methodology, build_conceptual_model, suggest_scale_items,
@@ -223,7 +226,16 @@ class M3Agent(ModuleAgent):
         # the M2 sub-graph's internal "candidate_gaps" gets translated out.
         m1 = state["context_store"].m1_topic or {}
         m2 = state["context_store"].m2_literature or {}
-        cls._render_research_question = (m1.get("research_questions") or [""])[0]
+        # Defensive unwrap: pre-fix the widget bypass stored ListEditor's
+        # {id,text,sub_items,meta} dict shape into m1_topic.research_questions
+        # (schema is list[str]). Threads written before base._normalize_widget_value
+        # landed still have that dict shape on disk. Keep the read tolerant so
+        # those threads don't crash downstream tools (build_conceptual_model
+        # takes research_question: str — passing a dict raises pydantic).
+        _rq_first = (m1.get("research_questions") or [""])[0]
+        if isinstance(_rq_first, dict):
+            _rq_first = _rq_first.get("text", "")
+        cls._render_research_question = _rq_first or ""
         gaps = m2.get("research_gaps") or []
         cls._render_gaps_summary = "; ".join(
             g.get("description", "") for g in gaps[:3]

@@ -9,13 +9,16 @@
  * mode in the M2 msgpack crash where every turn vanished into the void.
  */
 export function ErrorBubble({ message }: { message: string }) {
+  // Deliberately NOT AssistantFrame: an error is system feedback, not an
+  // agent turn — the red card without the DoThesis avatar/name makes that
+  // distinction readable at a glance.
   return (
     <div
-      className="flex justify-start mb-3"
+      className="flex justify-start py-3 pl-[46px]"
       data-role="assistant"
       data-testid="error-bubble"
     >
-      <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-red-50 border border-red-200 px-4 py-3 text-sm">
+      <div className="max-w-[80%] rounded-[18px] rounded-tl-[4px] bg-red-50 border border-red-200 px-[18px] py-3.5 text-sm">
         <div className="flex items-start gap-2">
           <span aria-hidden="true" className="text-red-500 text-base leading-none mt-0.5">
             ⚠

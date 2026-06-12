@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=70.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dothesis-agent"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+  # Deep agent runtime (v3 architecture — docs/architecture/2026-06-10).
+  "deepagents>=0.6.8,<0.7",
+  "langchain-anthropic>=1.4.0,<2",
+  # Whitelisted stats ops (run_stats tool).
+  "pandas>=2.0",
+  "scipy>=1.11",
+  "pyreadstat>=1.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+]
+
+[tool.setuptools]
+# Same editable-install pattern as orchestrator/pyproject.toml: the package
+# lives at repo-root/agent/, mapped explicitly so `pip install -e agent`
+# exposes `import agent.runtime` from the api process.
+package-dir = {"agent" = "../agent"}
+packages = [
+    "agent",
+    "agent.tools",
+]

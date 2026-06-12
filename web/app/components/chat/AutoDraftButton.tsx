@@ -12,7 +12,7 @@ export type RunStatus =
 
 
 const _CONFIG: Record<string, { label: string; icon: typeof Sparkles; className: string }> = {
-  none:     { label: "Auto-draft",         icon: Sparkles,    className: "bg-purple-600 hover:bg-purple-700 text-white" },
+  none:     { label: "Auto-draft",         icon: Sparkles,    className: "bg-primary-600 hover:bg-primary-700 text-white" },
   running:  { label: "Auto-drafting…",     icon: Loader,      className: "bg-amber-500 hover:bg-amber-600 text-white" },
   paused:   { label: "Resume",             icon: Play,        className: "bg-amber-500 hover:bg-amber-600 text-white" },
   done:     { label: "Done · Download",    icon: CheckCircle2,className: "bg-green-600 hover:bg-green-700 text-white" },
@@ -37,7 +37,7 @@ export function AutoDraftButton({ runStatus, onClick }: { runStatus: RunStatus; 
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${cfg.className}`}
+      className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-colors ${cfg.className}`}
     >
       <Icon className={`w-4 h-4 ${runStatus === "running" ? "animate-spin" : ""}`} />
       {cfg.label}

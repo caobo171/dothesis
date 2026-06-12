@@ -31,7 +31,9 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
 from orchestrator.agents.router_agent import route_turn
-from orchestrator.state import OrchestratorState
+from orchestrator.state import (
+    OrchestratorState, compute_status_map, propagate_needs_review,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +72,68 @@ def router_agent_node(state: OrchestratorState) -> dict:
     patch in the SAME shape v1's _agent_node_factory emits. That shape
     parity is what lets the SSE adapter stay (mostly) unchanged.
     """
-    picked, result = route_turn(state)
+    # PR #2b — route_turn now also returns the intent (continue/read/mutate).
+    # Older callers got (picked, result); handle both shapes so a stubbed
+    # route_turn in tests doesn't have to know about the third element.
+    routed = route_turn(state)
+    if len(routed) == 3:
+        picked, result, intent = routed
+    else:
+        picked, result = routed                                # type: ignore[misc]
+        intent = "continue"
 
-    cs = state["context_store"].model_copy(deep=True)
+    # Snapshot the PRE-mutate context store for propagation decisions.
+    # propagate_needs_review walks status BEFORE this turn's writes — we want
+    # to flag downstream modules that WERE done, not modules that this very
+    # turn just touched.
+    pre_cs = state["context_store"]
+
+    cs = pre_cs.model_copy(deep=True)
     setattr(cs, _MODULE_FIELD[picked], result.context_patch)
+
+    # Brief §1.5 — intent classification + propagation.
+    #
+    # We classify per-turn from (focus, picked, slice_changed) rather than
+    # asking the LLM for an explicit intent label. Rationale:
+    #   - The LLM already picked `target` (via route_turn). Adding a second
+    #     classification call would double the routing latency for no gain.
+    #   - The picked vs focus comparison is deterministic and matches the
+    #     brief's "mutate to a non-focus module" definition exactly.
+    #   - Read intent (no write, no focus shift) is NOT handled in this PR —
+    #     today's route_turn always invokes the module step. A follow-up
+    #     adds the read handler + a third intent.
+    #
+    # The "did the slice actually change?" guard prevents propagation on
+    # turns where the module step paused for user input without writing
+    # (e.g. clarification questions) — those aren't mutates per §1.5.
+    focus = state.get("focus")
+    slice_changed = result.context_patch != (getattr(pre_cs, _MODULE_FIELD[picked]) or {})
+    # Defense in depth: intent=='read' MUST never propagate, even if a
+    # future read_handler accidentally returns a modified slice. Belt-and-
+    # braces — the no-write guard alone would catch it, but explicit
+    # intent gating means a code review can spot a regression without
+    # tracing through the slice-comparison logic.
+    is_cross_module_mutate = (
+        intent == "mutate"
+        and slice_changed
+        and focus is not None
+        and picked != focus
+    )
+
+    if is_cross_module_mutate:
+        # Propagate against the PRE-mutate store — that's where the "was it
+        # done before this edit?" check lives. The resulting downstream
+        # markers then merge into the post-mutate slice via model_copy.
+        propagated = propagate_needs_review(pre_cs, mutated=picked)
+        # Bring the downstream slice markers across — re-apply our own
+        # context_patch on top so the picked module's writes win.
+        for m_field in (
+            "m1_topic", "m2_literature", "m3_design",
+            "m4_analysis", "m5_writing",
+        ):
+            if m_field == _MODULE_FIELD[picked]:
+                continue
+            setattr(cs, m_field, getattr(propagated, m_field))
 
     ai = AIMessage(content=result.assistant_message)
     if result.tool_calls_json:
@@ -82,6 +142,26 @@ def router_agent_node(state: OrchestratorState) -> dict:
     messages = [ai]
     if result.extra_messages:
         messages.extend(result.extra_messages)
+
+    # Focus follows the brief §1.5 rule:
+    #   - cold-start (focus=None) → seed from picked (first turn's module is
+    #     the initial focus, by definition).
+    #   - mutate (cross-module write) → shift focus to target.
+    #   - read → leave focus alone (brief §1.5: "focus stays put").
+    #   - continue (same-module work) → leave focus alone.
+    # Read explicitly skipped from the focus shift even when target != focus;
+    # that's the whole point of read vs mutate.
+    if focus is None:
+        new_focus = picked
+    elif is_cross_module_mutate:
+        new_focus = picked
+    else:
+        new_focus = focus
+
+    # Recompute the status map AFTER the mutate + propagation. Persisted on
+    # state so callers (the chat router, the UI sidebar) see the post-turn
+    # truth without re-deriving it from context_store themselves.
+    new_status = compute_status_map(cs)
 
     return {
         "messages": messages,
@@ -92,6 +172,10 @@ def router_agent_node(state: OrchestratorState) -> dict:
         # only one node so the identity has to ride on state.
         "current_module": picked,
         "last_tool_called": picked,
+        # Brief §1.4 — focus + status carried on state. PR #2 starts writing
+        # them; downstream PRs (web UI, persistence) start reading.
+        "focus": new_focus,
+        "status": new_status,
         # _module_paused kept for API parity: True when the module is
         # waiting on the user. In v1 this drove the conditional edge
         # back to supervisor vs END; in v2 we always END after the

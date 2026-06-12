@@ -49,7 +49,7 @@ def test_cold_start_short_circuits_to_m1_without_llm(monkeypatch):
     monkeypatch.setattr(router_agent, "_router_llm",
                         lambda: (_ for _ in ()).throw(AssertionError("LLM called")))
 
-    picked, result = router_agent.route_turn(_state([HumanMessage(content="Hello")]))
+    picked, result, _intent = router_agent.route_turn(_state([HumanMessage(content="Hello")]))
     assert picked == "M1"
     assert result.assistant_message == "ok"
     m1.step.assert_called_once()
@@ -69,7 +69,7 @@ def test_awaiting_field_short_circuits_to_that_module(monkeypatch):
     monkeypatch.setattr(router_agent, "_router_llm",
                         lambda: (_ for _ in ()).throw(AssertionError("LLM called")))
 
-    picked, _ = router_agent.route_turn(_state(
+    picked, _, _intent = router_agent.route_turn(_state(
         [HumanMessage(content="PLS-SEM")], cs=cs))
     assert picked == "M3"  # NOT M4 — the regression case
     m3.step.assert_called_once()
@@ -93,7 +93,7 @@ def test_llm_pick_dispatches_chosen_module(monkeypatch):
     fake_llm.bind_tools.return_value = fake_bound
     monkeypatch.setattr(router_agent, "_router_llm", lambda: fake_llm)
 
-    picked, result = router_agent.route_turn(_state(
+    picked, result, _intent = router_agent.route_turn(_state(
         [HumanMessage(content="run the analysis")], cs=cs))
     assert picked == "M4"
     assert result.assistant_message == "m4 reply"
@@ -114,7 +114,7 @@ def test_llm_failure_falls_back_to_next_unconfirmed(monkeypatch):
     fake_llm.bind_tools.return_value = fake_bound
     monkeypatch.setattr(router_agent, "_router_llm", lambda: fake_llm)
 
-    picked, result = router_agent.route_turn(_state(
+    picked, result, _intent = router_agent.route_turn(_state(
         [HumanMessage(content="anything")], cs=cs))
     assert picked == "M2"
     assert result.assistant_message == "m2 reply"
@@ -134,7 +134,7 @@ def test_llm_returns_no_tool_calls_falls_back(monkeypatch):
     fake_llm.bind_tools.return_value = fake_bound
     monkeypatch.setattr(router_agent, "_router_llm", lambda: fake_llm)
 
-    picked, _ = router_agent.route_turn(_state(
+    picked, _, _intent = router_agent.route_turn(_state(
         [HumanMessage(content="anything")], cs=cs))
     assert picked == "M2"
 
@@ -152,7 +152,7 @@ def test_llm_picks_unknown_tool_falls_back(monkeypatch):
     fake_llm.bind_tools.return_value = fake_bound
     monkeypatch.setattr(router_agent, "_router_llm", lambda: fake_llm)
 
-    picked, _ = router_agent.route_turn(_state(
+    picked, _, _intent = router_agent.route_turn(_state(
         [HumanMessage(content="anything")], cs=cs))
     assert picked == "M2"
 
@@ -175,7 +175,7 @@ def test_done_falls_back_to_m5(monkeypatch):
     fake_llm.bind_tools.return_value = fake_bound
     monkeypatch.setattr(router_agent, "_router_llm", lambda: fake_llm)
 
-    picked, result = router_agent.route_turn(_state(
+    picked, result, _intent = router_agent.route_turn(_state(
         [HumanMessage(content="edit chapter 3")], cs=cs))
     assert picked == "M5"
     assert result.assistant_message == "post-done reply"

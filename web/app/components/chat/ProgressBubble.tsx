@@ -1,3 +1,5 @@
+import { AssistantFrame } from "./MessageBubble";
+
 /**
  * Live engine-progress indicator.
  *
@@ -28,48 +30,36 @@ export function ProgressBubble({
   const last = visible[visible.length - 1];
 
   return (
-    <div
-      className="flex justify-start mb-3"
-      data-role="assistant"
-      data-testid="progress-bubble"
-    >
-      <div className="max-w-[70%] rounded-2xl rounded-bl-sm bg-gray-50 text-gray-900 px-4 py-3 border border-gray-200 min-w-[280px]">
-        {moduleTag && (
-          <div className="text-[10px] uppercase tracking-wider text-gray-400 mb-2">
-            {moduleTag}
+    <AssistantFrame moduleTag={moduleTag} data-testid="progress-bubble">
+      <div className="flex flex-col gap-1 text-sm min-w-[260px]">
+        {/* Earlier entries — muted so the eye lands on the latest line.
+            Capped at last 4 so the bubble doesn't grow unbounded; the
+            raw stream stays in useChat.streamingProgress in case a
+            future debug view wants to show them all. */}
+        {visible.slice(0, -1).map((p, i) => (
+          <div
+            key={i}
+            className="text-xs text-ink-400 truncate"
+            data-testid="progress-line-prev"
+          >
+            {p.message}
+          </div>
+        ))}
+
+        {/* Latest line — bold, with a small animated indicator. */}
+        {last && (
+          <div
+            className="flex items-center gap-2 text-ink-900"
+            data-testid="progress-line-current"
+          >
+            <span
+              className="h-2 w-2 rounded-full bg-primary-500 animate-pulse"
+              aria-hidden="true"
+            />
+            <span className="truncate">{last.message}</span>
           </div>
         )}
-
-        <div className="flex flex-col gap-1 text-sm">
-          {/* Earlier entries — muted so the eye lands on the latest line.
-              Capped at last 4 so the bubble doesn't grow unbounded; the
-              raw stream stays in useChat.streamingProgress in case a
-              future debug view wants to show them all. */}
-          {visible.slice(0, -1).map((p, i) => (
-            <div
-              key={i}
-              className="text-xs text-gray-400 truncate"
-              data-testid="progress-line-prev"
-            >
-              {p.message}
-            </div>
-          ))}
-
-          {/* Latest line — bold, with a small animated indicator. */}
-          {last && (
-            <div
-              className="flex items-center gap-2 text-gray-900"
-              data-testid="progress-line-current"
-            >
-              <span
-                className="h-2 w-2 rounded-full bg-purple-500 animate-pulse"
-                aria-hidden="true"
-              />
-              <span className="truncate">{last.message}</span>
-            </div>
-          )}
-        </div>
       </div>
-    </div>
+    </AssistantFrame>
   );
 }

@@ -33,7 +33,46 @@ async def lifespan(app: FastAPI):
             import logging
             logging.exception("orchestrator graph init failed (continuing without it)")
 
+        # Brief §1.8 — register the SQL sink for the token meter so every
+        # metered_invoke call gets persisted to token_ledger. Wired in
+        # lifespan (not at import) because the meter only matters when the
+        # orchestrator is enabled; eval-only processes don't need it.
+        try:
+            _register_token_meter_sink()
+        except Exception:
+            import logging
+            logging.exception("token meter sink registration failed")
+
     yield
+
+
+def _register_token_meter_sink() -> None:
+    """Hook the orchestrator's token meter to the api DB session.
+
+    The sink runs in the LLM-invoke thread (bounded_invoke uses a
+    ThreadPoolExecutor), so we open a fresh short-lived session per
+    write rather than sharing one with the request handler — cleaner
+    lifetime and avoids leaking a thread-local Session reference.
+    """
+    from orchestrator.token_meter import LedgerEntry, register_sink
+    from .db import get_session_factory
+    from .models import TokenLedger
+
+    def _sink(entry: LedgerEntry) -> None:
+        sf = get_session_factory()
+        with sf() as db:
+            db.add(TokenLedger(
+                project_id=entry.project_id,
+                action_kind=entry.action_kind,
+                model=entry.model,
+                prompt_tokens=entry.prompt_tokens,
+                completion_tokens=entry.completion_tokens,
+                reserved=entry.reserved,
+                duration_ms=entry.duration_ms,
+            ))
+            db.commit()
+
+    register_sink(_sink)
 
 
 def create_app() -> FastAPI:

@@ -24,9 +24,9 @@ describe("AutoDraftDrawer", () => {
     render(<AutoDraftDrawer runId="r1" onClose={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("dot-M1")).toHaveClass("bg-green-500");
+      expect(screen.getByTestId("dot-M1")).toHaveClass("bg-[var(--ok-fg)]");
     });
-    expect(screen.getByTestId("dot-M2")).toHaveClass("bg-amber-500");
+    expect(screen.getByTestId("dot-M2")).toHaveClass("bg-primary-600");
   });
 
   test("close button fires onClose", async () => {

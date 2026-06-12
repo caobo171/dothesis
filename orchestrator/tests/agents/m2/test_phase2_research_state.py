@@ -372,6 +372,103 @@ def test_phase2_navigate_back_to_familiarize(monkeypatch):
     assert patch.get("current_phase") == "familiarize"
 
 
+def test_phase2_navigate_to_same_phase_clears_draft_and_emits_redo_prompt(monkeypatch):
+    # User clicks "Go back to literature search" while ALREADY in
+    # research_state. The intent classifier returns target_phase=research_state
+    # (same as current). Without the fix, this returned {"current_phase":
+    # "research_state"} with no messages → _interactive_step's loop broke on
+    # unchanged phase, emitted blank assistant message, frontend stuck on a
+    # blank bubble. The fix interprets target==current-phase as "redo this
+    # phase" — clears draft + citations + refinements, emits a prompt asking
+    # for new search terms, and sets _rescout_pending so the next scout
+    # uses the user's reply as the topic.
+    from orchestrator.agents.m2.phases import phase2_research_state
+    from orchestrator.agents.m2 import intent as m2_intent
+    monkeypatch.setattr(phase2_research_state, "_get_llm", lambda: MagicMock())
+
+    fake_structured = MagicMock()
+    fake_structured.invoke.return_value = m2_intent.PhaseIntent(
+        action="navigate", target_phase="research_state",
+    )
+    fake_intent = MagicMock()
+    fake_intent.with_structured_output.return_value = fake_structured
+    monkeypatch.setattr(m2_intent, "_intent_llm", lambda: fake_intent)
+
+    s = _state(user_msg="Go back to the literature search step.")
+    s["research_state_draft"] = "old synthesis text"
+    s["research_state_citations"] = [{"title": "P1"}]
+    patch = phase2_research_state.run(s)
+
+    # Critical: a message MUST be emitted — empty messages was the bug.
+    assert patch.get("messages"), (
+        "navigate to same phase must emit a message; empty messages is the "
+        "'stuck on blank bubble' regression"
+    )
+    text = patch["messages"][0].content
+    assert "redo" in text.lower() or "literature search" in text.lower()
+    # Draft + citations cleared so next first-call re-scouts.
+    assert patch.get("research_state_draft") is None
+    assert patch.get("research_state_citations") is None
+    # Rescout flag set so the next user message is used as new terms.
+    assert patch.get("_rescout_pending") is True
+    # current_phase NOT changed — we stay in research_state.
+    assert "current_phase" not in patch
+
+
+def test_phase2_rescout_uses_user_message_as_topic(monkeypatch):
+    # After the navigate-to-same-phase patch fires, the next turn's first-
+    # call branch must scout with the USER'S new terms, not the original
+    # research_title. Otherwise "redo with different terms" silently uses
+    # the same title.
+    from orchestrator.agents.m2.phases import phase2_research_state
+    scouted_topics = []
+    monkeypatch.setattr(phase2_research_state, "_scout",
+                        lambda topic, **kw: (
+                            scouted_topics.append(topic) or
+                            [{"title": "New Paper", "authors": "X", "year": 2024}]
+                        ))
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "Synthesized."
+    monkeypatch.setattr(phase2_research_state, "_get_llm", lambda: fake_llm)
+
+    s = _state(user_msg="youtube engagement instead")
+    s["research_title"] = "Gen Z TikTok"            # original M1 title
+    s["research_state_draft"] = None                # cleared by prior turn
+    s["research_state_citations"] = None
+    s["_rescout_pending"] = True                    # set by prior turn
+    patch = phase2_research_state.run(s)
+
+    # Scouted with the USER'S terms, not the original title.
+    assert "youtube engagement" in scouted_topics[0]
+    # Flag cleared so subsequent first-calls fall back to research_title.
+    assert patch.get("_rescout_pending") is False
+
+
+def test_phase2_rescout_same_sentinel_keeps_original_title(monkeypatch):
+    # User reply "same" → re-scout with original research_title. This is
+    # the escape hatch for users who clicked redo but actually want the
+    # same terms (e.g. they hit it by accident).
+    from orchestrator.agents.m2.phases import phase2_research_state
+    scouted_topics = []
+    monkeypatch.setattr(phase2_research_state, "_scout",
+                        lambda topic, **kw: (
+                            scouted_topics.append(topic) or
+                            [{"title": "P", "authors": "X", "year": 2024}]
+                        ))
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value.content = "Synthesized."
+    monkeypatch.setattr(phase2_research_state, "_get_llm", lambda: fake_llm)
+
+    s = _state(user_msg="same")
+    s["research_title"] = "Gen Z TikTok"
+    s["research_state_draft"] = None
+    s["_rescout_pending"] = True
+    phase2_research_state.run(s)
+    assert scouted_topics[0] == "Gen Z TikTok", (
+        "'same' sentinel must fall back to research_title"
+    )
+
+
 def test_phase2_auto_mode_one_shot(monkeypatch):
     """Auto mode happy path: scout finds citations → synthesize → advance."""
     from orchestrator.agents.m2.phases import phase2_research_state

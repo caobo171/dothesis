@@ -44,6 +44,58 @@ def test_migration_up_down_up_clean(alembic_env):
     _alembic(["upgrade", "head"])  # re-up must be idempotent
 
 
+def test_projects_has_focus_and_module_status_columns(alembic_env):
+    # PR #1 of the target architecture (brief §1.4) — `focus` and
+    # `module_status` are added to projects. Pinning them here so a
+    # future migration can't silently drop them; the columns are the
+    # foundation PR #2 (router) and PR #4 (memory) build on.
+    _alembic(["downgrade", "base"])
+    _alembic(["upgrade", "head"])
+    eng = create_engine(alembic_env)
+    insp = inspect(eng)
+    cols = {c["name"]: c for c in insp.get_columns("projects")}
+    assert "focus" in cols, "projects.focus missing"
+    assert cols["focus"]["nullable"] is True, (
+        "projects.focus must be nullable so dual-write window works "
+        "(callers fall back to current_module when NULL)"
+    )
+    assert "module_status" in cols, "projects.module_status missing"
+    assert cols["module_status"]["nullable"] is False, (
+        "projects.module_status is non-null with default '{}' — "
+        "compute_status_map output writes here on every turn"
+    )
+
+
+def test_focus_backfilled_from_current_module(alembic_env):
+    # Existing projects keep working: focus seeded from current_module so
+    # the dual-write window sees consistent routing data even before PR #2
+    # cuts callers over to focus.
+    _alembic(["downgrade", "base"])
+    eng = create_engine(alembic_env)
+    _alembic(["upgrade", "20260530_target01"])
+    with eng.begin() as cx:
+        cx.execute(text(
+            "INSERT INTO users(id,email,username,password_hash) "
+            "VALUES (gen_random_uuid(),'t2@x','tester2','x')"
+        ))
+        uid = cx.execute(text("SELECT id FROM users LIMIT 1")).scalar()
+        # current_module='M3' simulates a live project mid-flow.
+        cx.execute(text(
+            "INSERT INTO projects(id,user_id,name,current_module) "
+            "VALUES (gen_random_uuid(), :uid, 'p', 'M3')"
+        ), {"uid": uid})
+
+    _alembic(["upgrade", "head"])
+    with eng.begin() as cx:
+        row = cx.execute(text(
+            "SELECT focus, module_status FROM projects LIMIT 1"
+        )).one()
+    assert row.focus == "M3", "focus must be backfilled from current_module"
+    # module_status defaults to '{}' — recomputed by compute_status_map on
+    # the next turn rather than mirrored in SQL.
+    assert row.module_status == {}
+
+
 def test_papers_backfill_into_projects(alembic_env):
     _alembic(["downgrade", "base"])
     eng = create_engine(alembic_env)

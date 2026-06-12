@@ -25,11 +25,11 @@ export function FileDropZone({
         const files = Array.from(e.dataTransfer.files);
         if (files.length > 0) onFileDrop(files);
       }}
-      className={`relative ${dragging ? "ring-2 ring-purple-400 ring-offset-1" : ""}`}
+      className={`relative ${dragging ? "ring-2 ring-primary-500 ring-offset-1" : ""}`}
     >
       {children}
       {dragging && (
-        <div className="absolute inset-0 bg-purple-50/80 pointer-events-none flex items-center justify-center text-sm text-purple-700 font-medium z-10">
+        <div className="absolute inset-0 bg-primary-50/80 pointer-events-none flex items-center justify-center text-sm text-primary-700 font-medium z-10">
           Drop PDFs here
         </div>
       )}

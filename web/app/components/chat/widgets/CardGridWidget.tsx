@@ -77,33 +77,36 @@ export function CardGridWidget({
 
   return (
     <div
-      className="mt-3 rounded-lg border border-gray-200 bg-white p-3"
+      className="mt-3 rounded-[14px] border border-ink-200 bg-ink-50/60 p-3"
       data-testid={`card-grid-${hint.field_name}`}
     >
-      <div className="text-xs font-semibold text-gray-700 mb-2">{hint.title}</div>
+      <div className="text-xs font-bold text-ink-700 mb-2">{hint.title}</div>
       <div className={`grid gap-2 ${columnClass}`}>
-        {hint.options.map(opt => {
+        {/* Key includes the index: historical messages contain widgets with
+            duplicate option values (e.g. two "quantitative" cards from the
+            old graph era), which triggers React's duplicate-key warning. */}
+        {hint.options.map((opt, idx) => {
           const isOther = opt.value === "Other";
           const highlighted =
             (multiSelect && picked.has(opt.value)) ||
             (isOther && otherOpen);
           return (
             <button
-              key={opt.value}
+              key={`${opt.value}-${idx}`}
               type="button"
               disabled={disabled}
               onClick={() => handleCardClick(opt.value, opt.label)}
               data-testid={`card-${opt.value}`}
               className={[
-                "text-left rounded-md border px-3 py-2",
-                "hover:border-purple-400 hover:bg-purple-50",
+                "text-left rounded-xl border bg-white px-3 py-2",
+                "hover:border-primary-500 hover:bg-primary-50",
                 "disabled:opacity-50 disabled:cursor-not-allowed transition-colors",
-                highlighted ? "border-purple-500 bg-purple-50" : "border-gray-200",
+                highlighted ? "border-primary-600 bg-primary-50" : "border-ink-200",
               ].join(" ")}
             >
-              <div className="text-sm font-medium text-gray-900">{opt.label}</div>
+              <div className="text-sm font-semibold text-ink-900">{opt.label}</div>
               {opt.description && (
-                <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">{opt.description}</div>
+                <div className="text-xs text-ink-500 mt-0.5 line-clamp-2">{opt.description}</div>
               )}
             </button>
           );
@@ -114,7 +117,7 @@ export function CardGridWidget({
           one card has been picked, so a fresh widget shows just the grid. */}
       {multiSelect && picked.size > 0 && (
         <div className="mt-3 flex items-center justify-between">
-          <div className="text-xs text-gray-600">
+          <div className="text-xs text-ink-500">
             {picked.size} selected
           </div>
           <button
@@ -122,7 +125,7 @@ export function CardGridWidget({
             onClick={submitMulti}
             disabled={disabled || picked.size === 0}
             data-testid="card-multi-submit"
-            className="rounded-md bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-full bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Confirm selection
           </button>
@@ -141,14 +144,14 @@ export function CardGridWidget({
             data-testid="card-other-input"
             disabled={disabled}
             autoFocus
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
+            className="flex-1 rounded-md border border-ink-300 px-3 py-2 text-sm focus:border-primary-600 focus:outline-none focus:ring-1 focus:ring-primary-600 disabled:opacity-50"
           />
           <button
             type="button"
             onClick={submitOther}
             disabled={disabled || !otherText.trim()}
             data-testid="card-other-submit"
-            className="rounded-md bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-full bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Send
           </button>

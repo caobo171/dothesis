@@ -11,6 +11,12 @@ from langchain_core.messages import HumanMessage
 
 from orchestrator.agents.base import ModuleAgent, ModuleStepResult
 from orchestrator.agents.m2.graph import get_m2_graph
+# PR #5: M2 declared as the PhaseChat shape per brief §3. ModuleAgent
+# stays in the MRO so the legacy step() helpers (clarification dispatch,
+# widget render hints) keep working — PhaseChatAgent.step is abstract but
+# is provided by ModuleAgent further down the MRO. The shape declaration
+# documents the contract without disturbing behavior.
+from orchestrator.agents.shapes import PhaseChatAgent
 from orchestrator.agents.m2.translation import _flatten_to_m2_output, _seed_from_outer
 from orchestrator.message_utils import text_of
 from orchestrator.schemas.m2 import M2Output
@@ -37,9 +43,14 @@ def _open_db_session():
     return sf()
 
 
-class M2Agent(ModuleAgent):
+class M2Agent(PhaseChatAgent, ModuleAgent):
+    # PhaseChatAgent FIRST in the MRO so isinstance(M2Agent(), PhaseChatAgent)
+    # is True (shapes assertion) but ModuleAgent.step() resolves first when
+    # walked for the actual implementation — Python ABC accepts this because
+    # PhaseChatAgent.step is abstract and ModuleAgent.step is concrete.
     schema = M2Output
     module_key = "M2"
+    slice_field = "m2_literature"  # brief §6 — ModuleHandler contract
     system_prompt = _PROMPT
     tools = [scout_citations, summarize_paper, find_research_gaps,
              compile_citations, verify_page_numbers]
@@ -61,6 +72,25 @@ class M2Agent(ModuleAgent):
             emitter = None
         if emitter is not None:
             sub_state["_progress_emitter"] = emitter
+            # Always-fires entry beat. Without this, M2 turns that don't
+            # run scout (gap_analysis / reference_confirm / output_gen
+            # phases — any "do it" after the first research_state confirm)
+            # leave the UI on a typing dot for the whole LLM call: those
+            # phases have no per-step heartbeats of their own. This single
+            # emit is the smallest change that guarantees ProgressBubble
+            # gets one event per M2 turn so the user sees we're working.
+            current_phase = (
+                (state.get("context_store").m2_literature or {}).get("_phase_state", {}).get("current_phase")
+                or "familiarize"
+            ) if state.get("context_store") else "familiarize"
+            try:
+                emitter({
+                    "stage": "m2.phase",
+                    "message": f"📚 M2 — running {current_phase} phase…",
+                    "phase": current_phase,
+                })
+            except Exception:  # noqa: BLE001 — emitter is best-effort
+                pass
 
         if state.get("mode", "interactive") != "interactive":
             return self._auto_step(state, sub_state)

@@ -10,6 +10,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -186,6 +187,18 @@ class Project(Base):
     research_approach: Mapped[str | None] = mapped_column(String(16))
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="draft")
     current_module: Mapped[str] = mapped_column(String(8), nullable=False, server_default="M1")
+    # Brief §1.4 — conversation focus, separate from current_module. Nullable
+    # during the dual-write window (PR #1): callers fall back to current_module
+    # when focus is NULL. PR #2's router rewrite makes focus canonical and
+    # demotes current_module to a shadow column scheduled for removal.
+    focus: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # Brief §1.4 — per-module workflow status map. JSONB Dict[ModuleId, str]
+    # where str ∈ {locked, in_progress, done, needs_review}. Derived from
+    # context_store via orchestrator.state.compute_status_map and persisted
+    # here for fast UI reads — NEVER the source of truth.
+    module_status: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -246,6 +259,46 @@ class PaperUpload(Base):
     page_count: Mapped[int | None] = mapped_column(Integer)
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class TokenLedger(Base):
+    """Brief §1.8 — one row per metered LLM call. Powers the per-action
+    pricing table and cost forensics. No FK back to projects so rows
+    survive a project DELETE (historical record, not active state).
+    """
+    __tablename__ = "token_ledger"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    action_kind: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    model: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    reserved: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+
+class VersionHistory(Base):
+    """Brief §2 — append-only snapshots of context_store slice writes.
+
+    One row per mutate. The previous row for the same (project_id,
+    slice_field) IS the 'before' value, so we only persist 'after' —
+    halves JSONB bytes for the same read semantics.
+    """
+    __tablename__ = "version_history"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    slice_field: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    slice_after: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
     )
 
 

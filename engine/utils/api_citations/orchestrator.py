@@ -431,9 +431,14 @@ class CitationResearcher:
                 safe_print(f"    → Querying {apis_str} in parallel...", end=" ", flush=True)
             results: List[Tuple[Optional[Dict[str, Any]], str]] = []
 
+            # submit_with_context carries the parent thread's progress
+            # emitter binding into each per-API worker so safe_print lines
+            # like "→ Trying Gemini Grounded…" surface on the chat SSE
+            # stream. Plain executor.submit would drop the contextvar.
+            from engine.utils.progress import submit_with_context
             with ThreadPoolExecutor(max_workers=4) as executor:
                 futures = {
-                    executor.submit(self._search_api, api, topic): api
+                    submit_with_context(executor, self._search_api, api, topic): api
                     for api in parallel_apis
                 }
                 try:

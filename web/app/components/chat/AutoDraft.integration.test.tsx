@@ -54,10 +54,11 @@ describe("AutoDraft integration", () => {
     // Confirm
     fireEvent.click(screen.getByRole("button", { name: /^start auto-draft$/i }));
 
-    // Drawer opens; module dot turns green after module_complete event
+    // Drawer opens; module badge turns green after module_complete event
+    // (design-token class from the 2026-06-10 DoThesis.html restyle)
     await waitFor(() => screen.getByText(/run r1/i), { timeout: 5000 });
     await waitFor(() => {
-      expect(screen.getByTestId("dot-M1")).toHaveClass("bg-green-500");
+      expect(screen.getByTestId("dot-M1")).toHaveClass("bg-[var(--ok-fg)]");
     }, { timeout: 5000 });
 
     // After job_done, download links appear

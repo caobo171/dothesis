@@ -477,7 +477,19 @@ class ModuleAgent(ABC):
             payload = state.get("pending_widget_payload") or {}
             if (payload.get("field_name") == awaiting_field
                     and payload.get("value") is not None):
-                partial[awaiting_field] = payload["value"]
+                # Normalize ListEditor's ListItem-dict shape against the
+                # schema annotation. The widget always emits
+                # [{id,text,sub_items,meta}, ...], but some schema fields
+                # are list[str] (M1.research_questions, M1.objectives) while
+                # others are list[dict] (M3.themes, M3.purposive_criteria).
+                # Without this flatten, list[str] fields end up holding
+                # dicts in the slice and crash any downstream tool that
+                # takes the first item as a str (see m3_design ->
+                # build_conceptual_model: research_question=<dict> ->
+                # pydantic ValidationError).
+                partial[awaiting_field] = self._normalize_widget_value(
+                    awaiting_field, payload["value"],
+                )
                 return self._ask_next_question(partial)
 
             # Single LLM call (gemini-2.5-flash, ~$0.0001/turn) classifies the
@@ -1089,6 +1101,38 @@ class ModuleAgent(ABC):
             if v is None or v == "" or v == []:
                 return name
         return None
+
+    def _normalize_widget_value(self, field_name: str, value):
+        """Normalize a widget payload value to match the schema's field type.
+
+        ListEditor emits a uniform list[{id,text,sub_items,meta}] regardless
+        of the destination schema, but M1's research_questions/objectives
+        (and any future list[str] field) want flat strings. Without this,
+        the dict shape leaks into the slice and downstream consumers that
+        unwrap items[0] expecting a str crash on type validation.
+
+        Only list[str] (and Optional[list[str]]) is flattened — list[dict]
+        fields like M3.themes keep the full ListItem shape because they
+        depend on sub_items/meta.
+        """
+        from typing import Union, get_args, get_origin
+
+        field = self.schema.model_fields.get(field_name)
+        if field is None:
+            return value
+        ann = field.annotation
+        # Unwrap Optional[X] / Union[X, None] to the first non-None arg.
+        if get_origin(ann) is Union:
+            non_none = [a for a in get_args(ann) if a is not type(None)]
+            if non_none:
+                ann = non_none[0]
+        if get_origin(ann) is list and get_args(ann) == (str,):
+            if isinstance(value, list):
+                return [
+                    (v.get("text", "") if isinstance(v, dict) else v)
+                    for v in value
+                ]
+        return value
 
     def _field_description(self, field_name: str) -> str:
         f = self.schema.model_fields.get(field_name)

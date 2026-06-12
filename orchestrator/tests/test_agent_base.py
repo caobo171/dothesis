@@ -414,6 +414,93 @@ def test_structured_widget_payload_ignored_when_field_mismatch(monkeypatch):
     assert result.context_patch.get("answer") == "typed-reply"
 
 
+def test_widget_payload_normalizes_list_str_field(monkeypatch):
+    """Regression: ListEditor confirms emit list[{id,text,sub_items,meta}],
+    but schemas like M1Output.research_questions are list[str]. Without
+    normalization the dict shape leaks into the slice and downstream tools
+    that take `research_question: str` (e.g. M3's build_conceptual_model)
+    receive a dict and crash pydantic.
+
+    Decision: normalize at the widget bypass site against the schema
+    annotation — flatten ListItem dicts to their .text when the field is
+    list[str]. list[dict] fields (M3 themes, purposive_criteria) must be
+    left untouched.
+    """
+    class _StrListOutput(BaseModel):
+        research_questions: list[str] = Field(..., min_length=1)
+        confirmed_at: datetime | None = None
+
+    class _StrListAgent(ModuleAgent):
+        schema = _StrListOutput
+        module_key = "M1"
+        tools = []
+        system_prompt = "agent"
+
+    agent = _StrListAgent()
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(content="next question")
+    monkeypatch.setattr(_StrListAgent, "_get_llm", lambda self: fake_llm)
+
+    cs = ContextStore(m1_topic={"_awaiting_field": "research_questions"})
+    state = {
+        "project_id": None, "thread_id": None,
+        "messages": [HumanMessage(content="confirmed via widget")],
+        "current_module": "M1", "context_store": cs,
+        "mode": "interactive", "user_intent": None,
+        "pending_confirmations": [],
+        "pending_widget_payload": {
+            "field_name": "research_questions",
+            "value": [
+                {"id": "rq_0", "text": "How does X affect Y?",
+                 "sub_items": [], "meta": None},
+                {"id": "rq_1", "text": "What moderates Z?",
+                 "sub_items": [], "meta": None},
+            ],
+        },
+    }
+    result = agent.step(state)
+    stored = result.context_patch.get("research_questions")
+    assert stored == ["How does X affect Y?", "What moderates Z?"], (
+        f"list[str] field must be flattened from ListItem dicts; got {stored!r}"
+    )
+
+
+def test_widget_payload_preserves_list_dict_field(monkeypatch):
+    """Counterpart to the list[str] test: when a schema field IS list[dict]
+    (M3 themes, purposive_criteria), the ListItem dicts must be stored
+    verbatim — flattening to text would discard sub_items/meta."""
+    class _DictListOutput(BaseModel):
+        themes: list[dict] = Field(...)
+        confirmed_at: datetime | None = None
+
+    class _DictListAgent(ModuleAgent):
+        schema = _DictListOutput
+        module_key = "M3"
+        tools = []
+        system_prompt = "agent"
+
+    agent = _DictListAgent()
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(content="next question")
+    monkeypatch.setattr(_DictListAgent, "_get_llm", lambda self: fake_llm)
+
+    items = [
+        {"id": "t_0", "text": "Theme A",
+         "sub_items": [{"id": "t_0_s0", "text": "sub"}], "meta": None},
+    ]
+    cs = ContextStore(m3_design={"_awaiting_field": "themes"})
+    state = {
+        "project_id": None, "thread_id": None,
+        "messages": [HumanMessage(content="confirmed")],
+        "current_module": "M3", "context_store": cs,
+        "mode": "interactive", "user_intent": None,
+        "pending_confirmations": [],
+        "pending_widget_payload": {"field_name": "themes", "value": items},
+    }
+    result = agent.step(state)
+    assert result.context_patch.get("themes") == items
+
+
 def test_navigation_intent_clears_awaiting_field(monkeypatch):
     """Architectural fix: when the user's reply is classified as 'navigation'
     mid-question, the module must clear _awaiting_field so the supervisor's

@@ -19,6 +19,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as
 # Safe print function that handles broken pipes and respects CLI quiet mode
 def safe_print(*args, **kwargs):
     """Print wrapper that catches BrokenPipeError and respects CLI quiet mode."""
+    # Side-channel: fan out to any chat-router listener BEFORE the CLI-quiet
+    # check, so streaming requests still get the line even when stdout is
+    # suppressed. Matches the pattern in api_citations/orchestrator.safe_print.
+    try:
+        from engine.utils import progress as _progress
+        _progress._safe_print_hook(args, end=kwargs.get("end", "\n"))
+    except Exception:  # noqa: BLE001 — progress is best-effort
+        pass
+
     # Check verbosity setting from orchestrator (CLI quiet mode)
     try:
         from utils.api_citations.orchestrator import _verbose_research
@@ -896,9 +905,15 @@ def research_citations_via_api(
         """Research a single topic with timeout. Returns (idx, topic, list_of_citations, error_or_None)."""
         idx, research_topic = topic_with_idx
         try:
-            # Wrap in executor for timeout control
+            # Wrap in executor for timeout control. submit_with_context
+            # carries the chat router's progress emitter into the worker
+            # so the per-topic `🔍 Researching: …` prints surface as live
+            # SSE events; plain submit() would drop the contextvar.
+            from engine.utils.progress import submit_with_context
             with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(researcher.research_citation, research_topic)
+                future = submit_with_context(executor,
+                                             researcher.research_citation,
+                                             research_topic)
                 try:
                     citations_list = future.result(timeout=per_topic_timeout_seconds)
                     return (idx, research_topic, citations_list, None)
@@ -936,9 +951,16 @@ def research_citations_via_api(
             if verbose:
                 safe_print(f"\n📦 Processing batch {batch_start // BATCH_SIZE + 1} ({len(batch)} topics)...")
 
-            # Execute batch in parallel
+            # Execute batch in parallel. submit_with_context wraps each
+            # work item in copy_context().run so the worker inherits the
+            # parent thread's progress emitter binding (set by M2's
+            # bind_in_executor) — without this every per-topic safe_print
+            # call sees current_emitter() == None and the chat SSE stays
+            # silent for the full batch.
+            from engine.utils.progress import submit_with_context
             with ThreadPoolExecutor(max_workers=PARALLEL_WORKERS) as executor:
-                futures = {executor.submit(_research_single_topic, item): item for item in batch}
+                futures = {submit_with_context(executor, _research_single_topic, item): item
+                           for item in batch}
 
                 for future in as_completed(futures):
                     idx, research_topic, citations_list, error = future.result()
@@ -999,9 +1021,19 @@ def research_citations_via_api(
                 safe_print(f"[{idx}/{len(research_topics)}] 🔎 {research_topic[:65]}{'...' if len(research_topic) > 65 else ''}")
 
             try:
-                # Wrap in executor for timeout control
+                # Wrap in executor for timeout control. submit_with_context
+                # carries the chat router's progress emitter into the worker
+                # so research_citation's per-API safe_print lines surface as
+                # live SSE events; the sibling parallel path (line ~962) was
+                # patched, but this sequential timeout-wrapper path was the
+                # silence the v3 audit caught — without it, scouts that take
+                # the non-PARALLEL_WORKERS branch (or have one straggler per
+                # batch) emit nothing to the UI for the full 30–90s wait.
+                from engine.utils.progress import submit_with_context
                 with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(researcher.research_citation, research_topic)
+                    future = submit_with_context(executor,
+                                                 researcher.research_citation,
+                                                 research_topic)
                     try:
                         citations_list = future.result(timeout=per_topic_timeout_seconds)
                     except FuturesTimeoutError:

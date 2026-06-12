@@ -205,7 +205,7 @@ def test_suggest_scale_items_returns_items(monkeypatch):
         {"id": "TL2", "text": "My supervisor leads by example."},
     ])
     monkeypatch.setattr("orchestrator.tools.m3_design._get_llm", lambda: fake_llm)
-    items = suggest_scale_items.invoke({"construct": "Transformational Leadership"})
+    items = suggest_scale_items.invoke({"construct_name": "Transformational Leadership"})
     assert len(items) == 2
     assert items[0]["id"] == "TL1"
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  ReactFlow, Background, Controls,
+  ReactFlow, Background, Controls, useNodesState, useEdgesState,
   type Edge as RFEdge, type Node as RFNode,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -28,23 +28,19 @@ function cloneEdges(edges: FlowChartEdge[]): EditableEdge[] {
 }
 
 
-/**
- * Auto-layout the nodes in a horizontal row so the canvas always shows
- * something usable on first render, regardless of how many constructs the
- * tool suggested. The user can drag-rearrange after — xyflow tracks
- * position locally; we don't persist it because the schema's `nodes` shape
- * only carries label + questions, not layout.
- */
-function nodesToReactFlow(nodes: EditableNode[]): RFNode[] {
-  const SPACING_X = 200;
-  return nodes.map((n, i) => ({
+// Layout spacing for the initial row layout. Y stays at 0 until the user
+// drags — xyflow owns position state after that.
+const SPACING_X = 220;
+
+// Bare RF node shell — position assigned by the sync layer, data label
+// recomputed every sync so renames/item-count changes flow through.
+function rfNodeFor(n: EditableNode, position: { x: number; y: number }): RFNode {
+  return {
     id: n.id,
-    position: { x: i * SPACING_X, y: 0 },
+    position,
     data: { label: `${n.label || "(unnamed)"}${
       n.questions.length ? ` · ${n.questions.length} items` : ""
     }` },
-    // Light styling so the visual matches the chat aesthetic without
-    // pulling in extra CSS.
     style: {
       background: "#f5f3ff",
       border: "1px solid #c4b5fd",
@@ -52,7 +48,7 @@ function nodesToReactFlow(nodes: EditableNode[]): RFNode[] {
       padding: 8,
       fontSize: 12,
     },
-  }));
+  };
 }
 
 
@@ -87,8 +83,43 @@ export function FlowChartWidget({
   const [edges, setEdges] = useState<EditableEdge[]>(
     () => cloneEdges(hint.initial_edges));
 
-  const rfNodes = useMemo(() => nodesToReactFlow(nodes), [nodes]);
-  const rfEdges = useMemo(() => edgesToReactFlow(edges), [edges]);
+  // ReactFlow-owned node state. Keeping positions here (instead of
+  // re-deriving from `nodes` every render) is what makes drag persist —
+  // the previous implementation recomputed RF nodes from data each render
+  // and clobbered the dragged x/y back to {i*SPACING_X, 0} on the next
+  // tick, making the canvas feel frozen. onNodesChange is wired into
+  // ReactFlow so drag/select events flow back into this state.
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState<RFNode>(
+    hint.initial_nodes.map((n, i) => rfNodeFor(
+      { ...n, questions: [...(n.questions ?? [])] },
+      { x: i * SPACING_X, y: 0 },
+    )),
+  );
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<RFEdge>(
+    edgesToReactFlow(hint.initial_edges),
+  );
+
+  // Sync data → RF nodes whenever constructs change (add/remove/rename/
+  // item-count). Positions of existing nodes are preserved by id; brand-new
+  // nodes get an initial row slot to the right of the current rightmost x.
+  useEffect(() => {
+    setRfNodes(prev => {
+      const byId = new Map(prev.map(p => [p.id, p]));
+      const maxX = prev.reduce((m, p) => Math.max(m, p.position.x), 0);
+      return nodes.map((n, i) => {
+        const existing = byId.get(n.id);
+        const position = existing
+          ? existing.position
+          : { x: maxX + SPACING_X, y: i * 20 };
+        return rfNodeFor(n, position);
+      });
+    });
+  }, [nodes, setRfNodes]);
+
+  // Edges don't carry layout — recompute fully from data on every change.
+  useEffect(() => {
+    setRfEdges(edgesToReactFlow(edges));
+  }, [edges, setRfEdges]);
 
   // --- Node ops ---
   const addNode = () => {
@@ -180,12 +211,16 @@ export function FlowChartWidget({
       <div className="text-xs font-semibold text-gray-700 mb-2">{hint.title}</div>
 
       <div className="rounded-md border border-gray-200 bg-gray-50"
-           style={{ height: 240 }}>
+           style={{ height: 320 }}>
         <ReactFlow
           nodes={rfNodes}
           edges={rfEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           nodesDraggable
+          nodesConnectable={false}
           fitView
+          minZoom={0.2}
           proOptions={{ hideAttribution: true }}
         >
           <Background />
@@ -207,7 +242,7 @@ export function FlowChartWidget({
               ) : (
                 <input
                   type="text"
-                  className="text-sm text-gray-900 flex-1 bg-transparent outline-none border-b border-transparent focus:border-purple-400 font-medium"
+                  className="text-sm text-gray-900 flex-1 bg-transparent outline-none border-b border-transparent focus:border-primary-500 font-medium"
                   value={n.label}
                   onChange={e => editNodeLabel(n.id, e.target.value)}
                   placeholder="Construct name…"
@@ -237,7 +272,7 @@ export function FlowChartWidget({
                       <span>•</span>
                       <input
                         type="text"
-                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-purple-400"
+                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-primary-500"
                         value={q}
                         onChange={e => editQuestion(n.id, i, e.target.value)}
                         data-testid={`flow-node-${n.id}-q${i}-input`}
@@ -257,7 +292,7 @@ export function FlowChartWidget({
               {!disabled && (
                 <button
                   type="button"
-                  className="text-xs text-gray-500 border border-dashed border-gray-300 rounded px-2 py-0.5 hover:bg-purple-50"
+                  className="text-xs text-gray-500 border border-dashed border-gray-300 rounded px-2 py-0.5 hover:bg-primary-50"
                   onClick={() => addQuestion(n.id)}
                   data-testid={`flow-node-${n.id}-add-question`}
                 >
@@ -270,7 +305,7 @@ export function FlowChartWidget({
         {!disabled && (
           <button
             type="button"
-            className="w-full text-sm text-gray-500 border border-dashed border-gray-300 rounded-md py-1.5 hover:bg-purple-50 hover:border-purple-400"
+            className="w-full text-sm text-gray-500 border border-dashed border-gray-300 rounded-md py-1.5 hover:bg-primary-50 hover:border-primary-500"
             onClick={addNode}
             data-testid="flow-chart-add-node"
           >
@@ -347,7 +382,7 @@ export function FlowChartWidget({
             ) : (
               <input
                 type="text"
-                className="w-full text-xs text-gray-700 bg-transparent outline-none border-b border-gray-200 focus:border-purple-400"
+                className="w-full text-xs text-gray-700 bg-transparent outline-none border-b border-gray-200 focus:border-primary-500"
                 value={e.hypothesis}
                 onChange={ev => editEdgeField(e.id, "hypothesis", ev.target.value)}
                 placeholder="Hypothesis statement (e.g. H1: A positively affects B)"
@@ -359,7 +394,7 @@ export function FlowChartWidget({
         {!disabled && (
           <button
             type="button"
-            className="w-full text-sm text-gray-500 border border-dashed border-gray-300 rounded-md py-1.5 hover:bg-purple-50 hover:border-purple-400"
+            className="w-full text-sm text-gray-500 border border-dashed border-gray-300 rounded-md py-1.5 hover:bg-primary-50 hover:border-primary-500"
             onClick={addEdge}
             data-testid="flow-chart-add-edge"
           >
@@ -380,7 +415,7 @@ export function FlowChartWidget({
           </button>
           <button
             type="button"
-            className="text-xs font-medium text-white bg-purple-600 border border-purple-600 rounded-md px-3 py-1 hover:bg-purple-700"
+            className="text-xs font-medium text-white bg-primary-600 border border-primary-600 rounded-full px-3 py-1 hover:bg-primary-700"
             onClick={confirm}
             data-testid="flow-chart-confirm"
           >

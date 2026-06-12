@@ -85,9 +85,25 @@ export function useChat(threadId: string) {
     };
     void mutate([...(messages ?? []), optimistic], false);
 
-    await stream.start(`/api/v1/threads/${threadId}/messages`, {
+    // Bypass Next.js dev rewrites for the streaming POST. Turbopack's HTTP
+    // proxy buffers `text/event-stream` chunked responses — engine progress
+    // events fire on the backend (visible in dev.sh as [v3-yield] lines)
+    // but never reach the browser EventStream until the request closes.
+    // SWR GETs upstream still go through Next; only the SSE channel needs
+    // the direct hop. Reuses NEXT_PUBLIC_API_BASE — the same env that
+    // web/app/lib/api.js and export-tab.jsx already use — so there is one
+    // canonical "direct backend URL" knob, not two.
+    // `credentials: "include"` is required for cross-origin requests so the
+    // opendraft_session cookie travels (CORS at api/app/main.py:85 already
+    // sets allow_credentials=True and pins allow_origins=[WEB_ORIGIN]).
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE;
+    const streamUrl = apiBase
+      ? `${apiBase}/threads/${threadId}/messages`
+      : `/api/v1/threads/${threadId}/messages`;
+    await stream.start(streamUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ text, widget_payload: widgetPayload ?? null }),
     });
 

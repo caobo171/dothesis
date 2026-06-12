@@ -16,7 +16,20 @@ logger = logging.getLogger(__name__)
 
 # Safe print function that handles broken pipes (worker runs with stdio: 'ignore')
 def safe_print(*args, **kwargs):
-    """Print wrapper that catches BrokenPipeError when stdout is closed."""
+    """Print wrapper that catches BrokenPipeError when stdout is closed.
+
+    Side-channel: fan out to any chat-router listener via
+    engine.utils.progress so Gemini-Grounded's per-API-call lines (e.g.
+    `→ Trying Gemini Grounded (Google Search)…`) reach the SSE stream.
+    Matches the pattern in agent_runner.safe_print + api_citations/
+    orchestrator.safe_print — without it, Gemini-Grounded was the silent
+    gap in the scout progress feed.
+    """
+    try:
+        from engine.utils import progress as _progress
+        _progress._safe_print_hook(args, end=kwargs.get("end", "\n"))
+    except Exception:  # noqa: BLE001 — progress is best-effort
+        pass
     try:
         print(*args, **kwargs)
     except (BrokenPipeError, OSError):

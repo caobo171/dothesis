@@ -97,13 +97,13 @@ echo "==> running alembic migrations"
 (cd api && "../$VENV_BIN/alembic" upgrade head)
 
 echo "==> starting api on port ${API_PORT:-7100}"
-# Watch api/, engine/ AND orchestrator/ — the chat router + LangGraph agents
-# import from orchestrator/, and uvicorn's --reload only picks up directories
-# explicitly listed via --reload-dir. Without orchestrator/ in the list, edits
-# to agent/tool code (model names, prompts, graph topology) need a manual
-# kill + restart to take effect.
+# Watch api/, engine/, orchestrator/, AND the v3 deep agent (agent/ runtime +
+# skills/ SKILL.md files) — uvicorn's --reload only picks up directories
+# explicitly listed via --reload-dir. Without these, edits to agent/tool/skill
+# code need a manual kill + restart to take effect.
 (cd api && "../$VENV_BIN/uvicorn" app.main:app --reload \
   --reload-dir app --reload-dir ../engine --reload-dir ../orchestrator \
+  --reload-dir ../agent --reload-dir ../skills \
   --port "${API_PORT:-7100}") &
 API_PID=$!
 
@@ -114,7 +114,13 @@ if [ ! -d web/node_modules ]; then
 fi
 
 echo "==> starting web on port ${WEB_PORT:-3000}"
-(cd web && npm run dev) &
+# Clear Next.js's incremental build cache before every boot. The api side
+# (uvicorn + langgraph CLI watchfiles) emits "N changes detected" repeatedly
+# during development, which trips Next.js dev's route-map regenerator and
+# sometimes leaves it serving a 404 for legitimate routes (e.g.
+# /chat/projects/[pid]/threads/[tid]). Wiping .next costs ~100ms and the
+# first compile after restart pays for itself within seconds.
+(cd web && rm -rf .next && npm run dev) &
 WEB_PID=$!
 
 # --- 3. LangGraph Studio (optional visualizer) ---
@@ -126,7 +132,20 @@ WEB_PID=$!
 STUDIO_PID=""
 if [ -x "$VENV_BIN/langgraph" ] && [ "${STUDIO_ENABLED:-true}" = "true" ]; then
   echo "==> starting langgraph studio on port ${STUDIO_PORT:-8123}"
-  "$VENV_BIN/langgraph" dev --no-browser --port "${STUDIO_PORT:-8123}" &
+  # The "N changes detected" log spam comes from langgraph_runtime_inmem's
+  # checkpoint pickles (.langgraph_api/*.pckl) being written every graph
+  # step and watchfiles narrating them at INFO. The checkpoint dir is
+  # hardcoded to cwd; a previous attempt to relocate it via cwd-switching
+  # broke graph loading (langgraph.json's `./orchestrator/...` paths
+  # resolve against the process cwd, not the config file). The lever
+  # that actually works: langgraph_api/logging.py reads LOG_LEVEL (default
+  # INFO) and pins it on the ROOT logger, which is what makes the
+  # third-party watchfiles.main INFO logs leak. Setting LOG_LEVEL=WARNING
+  # only on the langgraph dev process silences root INFO without
+  # affecting the rest of the dev stack — warnings/errors still surface,
+  # so a real graph reload failure won't be hidden.
+  LOG_LEVEL=WARNING "$VENV_BIN/langgraph" dev --no-browser \
+    --port "${STUDIO_PORT:-8123}" &
   STUDIO_PID=$!
   echo "    → studio UI: https://smith.langchain.com/studio/?baseUrl=http://localhost:${STUDIO_PORT:-8123}"
 elif [ ! -x "$VENV_BIN/langgraph" ]; then

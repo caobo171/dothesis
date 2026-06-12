@@ -1,122 +1,76 @@
-# AGENTS.md — DoThesis / ResearchFlow architecture & agent contract
+# AGENTS.md — DoThesis architecture & agent contract (v3)
 
-> **Source of truth:** `researchflow-architecture-brief.md` (the brief).
-> This file is the **agent-facing operational map**: how the brief lands in this codebase, where the implementation matches, and where it diverges.
+> **Architecture:** [`docs/architecture/2026-06-10-deepagent-skills-architecture.md`](docs/architecture/2026-06-10-deepagent-skills-architecture.md) — the deep-agent + skills redesign. This file is the **agent-facing operational map** of that architecture in this codebase.
+>
+> Historical context: the v2 brief ([`researchflow-architecture-brief.md`](researchflow-architecture-brief.md)) and its state-machine fix design ([`docs/architecture/2026-06-03-researchflow-target-architecture.md`](docs/architecture/2026-06-03-researchflow-target-architecture.md)) are **superseded**. v3 deliberately reversed the brief's "state machine, not a free agent" principle; everything else the brief cared about survives as deterministic code (see the invariants table below).
 
-DoThesis is the commercial chat-first SaaS built on top of the OpenDraft engine. The student talks to one assistant in one thread and moves freely across **5 modules**:
+DoThesis is the commercial chat-first thesis SaaS. The student talks to **one deep agent** (LangChain deepagents) whose domain expertise is packaged as **skills** with progressive disclosure, moving freely across 5 modules:
 
-| Key | Module | Output owned (ContextStore field) |
-|-----|--------|-----------------------------------|
-| M1  | Topic Discovery | `m1_topic` |
-| M2  | Literature Review | `m2_literature` |
-| M3  | Research Design | `m3_design` |
-| M4  | Data Analysis | `m4_analysis` |
-| M5  | Writing | `m5_writing` |
+| Key | Module | Skill | Owns (flat context_store keys) |
+|-----|--------|-------|-------------------------------|
+| M1  | Topic Discovery | `skills/dothesis-m1-topic/` | `research_title`, `research_questions` |
+| M2  | Literature Review | `skills/dothesis-m2-literature/` | `literature_sources`, `research_gaps` |
+| M3  | Research Design | `skills/dothesis-m3-design/` | `conceptual_model`, `hypotheses`, `methodology`, `instrument` |
+| M4  | Data Analysis | `skills/dothesis-m4-analysis/` | `analysis_outline`, `analysis_results` |
+| M5  | Writing | `skills/dothesis-m5-writing/` | `final_sections` |
 
----
-
-## Stack note — language is just tooling
-
-The brief (§7) recommends Next.js + Vercel AI SDK + Claude. This codebase uses Python (FastAPI + LangGraph) + Gemini Flash + Next.js (frontend only). **That is a tooling choice, not an architectural violation.** The brief's §1 principles are the contract; they MUST hold regardless of language.
-
-Surfaces in this repo:
-
-- `api/` — FastAPI. HTTP entry: projects, threads, chat SSE, exports, billing.
-- `orchestrator/` — Python agent graph. 5 module agents, supervisor (v1) or router_agent (v2), Postgres-backed state.
-- `web/` — Next.js 15 frontend. Renders the chat thread + per-module widgets.
-- `engine/` — Legacy OpenDraft CLI (19-agent draft pipeline). Independent of the chat SaaS — kept for the standalone draft-generator product and reused for citation utilities.
+Plus `skills/dothesis/` (root: state protocol + routing semantics — read first every conversation) and `skills/dothesis-bootstrap/` (one-time entry wizard).
 
 ---
 
-## §1 Non-negotiables — status against the brief
+## Surfaces
 
-The brief calls these NON-NEGOTIABLE. Treat any ❌ below as a MUST-FIX before further feature work.
+- `agent/` — **the v3 runtime.** `runtime.py` (create_deep_agent factory + `stream_turn` SSE-shaped event stream), `state.py` (guarded ProjectStateStore: ownership, version snapshots, focus shift, needs_review propagation), `tools/` (research_scout, parse_reference, run_stats whitelist, write_pipeline/export_docx seams, state tools), `cli.py` (spike CLI).
+- `skills/` — the 8 DoThesis skills (deepagents SKILL.md layout). Source of truth for module behavior; the Claude.ai bundle in `dothesis_v2/` is the zero-infra distribution of the same skills.
+- `api/` — FastAPI. Chat SSE (`routers/chat.py` → `routers/chat_v3.py` when `DOTHESIS_AGENT_V3=1`), `agent_state.py` (DB-backed store mapping flat keys ↔ context_store slice columns), projects/threads/uploads/billing.
+- `web/` — Next.js 15. Chat UI (DoThesis.html design), dashboard, module tracker. Consumes the same SSE vocabulary from either brain.
+- `engine/` — the research + writing muscle. `utils/deep_research.py` + `utils/api_citations/` back M2's `research_scout`; the draft pipeline (structure→compose→citations→compile→validate + docx post-processor) backs M5's `write_pipeline`/`export_docx`.
+- `orchestrator/` — **legacy graph (v1/v2), being strangled.** Serves chat turns only when `DOTHESIS_AGENT_V3` is off. `orchestrator/tools/m2_literature.py` is still load-bearing (research_scout reuses it); `shapes.py` schemas survive as commit validation. Do not invest new feature work here.
 
-| # | Principle (brief §1) | Status | Where it lives / what's missing |
-|---|---|---|---|
-| 1 | State machine, not a free agent | ✅ | `orchestrator/graph.py` (v1: supervisor + 5 spokes), `orchestrator/graph_v2.py` (v2: router_agent + module tools). One module per turn — no open-ended ReAct loop. |
-| 2 | `context_store` is the single source of truth | ✅ | Postgres JSONB table `context_store` per project (`api/migrations/versions/20260526_add_orchestrator_tables.py`). Modeled as `orchestrator.state.ContextStore`. |
-| 3 | DB is the checkpoint — **do NOT reach for a checkpoint framework (LangGraph etc.)** | ❌ MUST-FIX | We DO use LangGraph's `PostgresSaver` / `AsyncPostgresSaver` for checkpointing (`orchestrator/graph.py:_get_pool`, `init_interactive_graph`). The brief's intent — resume falls out of `context_store` + per-module status, not a checkpoint framework — is violated. Fix path: drop the checkpointer, drive resume from `context_store` + `messages` table directly. |
-| 4 | Conversation focus ≠ workflow state. Current module is a **default context, never a lock**. | ❌ MUST-FIX | We only have `OrchestratorState.current_module` and `projects.current_module`. There is no separate `focus` field, and no per-module `status: locked \| in_progress \| done \| needs_review` map. Today "confirmed" is encoded by a `confirmed_at` timestamp inside each slice — there is no `needs_review` state to set. Fix path: add `project.focus`, add `project.status: Record<ModuleId, ModuleStatus>`, route off `focus` (not `current_module`). |
-| 5 | Reads are free; mutates shift focus + flag downstream `needs_review ⚠` | ❌ MUST-FIX | The router (v1 supervisor / v2 `router_agent.py`) picks a module and runs `agent.step()`. It does NOT classify `intent ∈ {continue, read, mutate}`, never returns a `read` that answers from a slice without invoking the module, and never propagates `invalidates` to downstream modules. `target_artifact` + `orchestrator/planner.py` exists but only backfills prerequisites — it does not flag downstream `needs_review` on a mutate. Fix path: introduce `RouteDecision { intent, target, changesFocus }`; for `read`, answer from the target slice and **change nothing**; for `mutate`, write + shift focus + mark M(target+1..M5) `needs_review`. |
-| 6 | "Reads all previous messages" via **layered memory**, not by stuffing the transcript every turn | ❌ MUST-FIX | We rely on LangGraph state + recent messages only. No `FULL_MODE_CEILING` switch, no recent-window + retrieval + rolling-summaries assembly (brief §5), no pgvector table, no async compaction on turn-commit, no `ContextStore.module_summaries`. Today this is invisibly broken on long threads — a thesis project will eventually overflow. Fix path: implement FULL MODE first (just send the whole transcript while it fits — perfect recall, zero machinery), then add the tiered path keyed off `FULL_MODE_CEILING`. |
-| 7 | Three interaction shapes — don't treat all modules as "an agent" (brief §3) | ❌ MUST-FIX | All 5 modules inherit `orchestrator/agents/base.py:ModuleAgent` and run the same clarification chat loop. The brief says **M1, M3, M5 should be wizards** (one structured-output call against a Zod/Pydantic schema → write a validated slice), **M2 a chat loop with phases** (✅ implemented — `orchestrator/agents/m2/` + `orchestrator/prompts/m2/1_familiarize.md`…`5_output_gen.md`), **M4 a pipeline that actually runs stats**. We have only the M2 shape — bent to fit M1/M3/M5. Fix path: split `ModuleAgent` into `WizardAgent` (M1/M3/M5) and `PhaseChatAgent` (M2) and `PipelineAgent` (M4). |
-| 8 | Token metering wraps the actual LLM call | ❌ MUST-FIX | No `TokenLedger` on `Project`. `bounded_invoke` in `orchestrator/agents/base.py` caps wall-clock but does not estimate → reserve → reconcile against real usage. Per-action pricing therefore cannot be trusted to match cost. Fix path: meter at the LangChain/Gemini call boundary, persist to a `token_ledger` table, reconcile on every turn. |
+## Runtime selection
 
-### Other contract gaps (non-§1 but called out elsewhere in the brief)
-
-| Where | Gap | Status |
-|---|---|---|
-| §2 | `version_history` — append-only snapshots of `context_store` | ❌ Not implemented. `context_store` table updates in place. |
-| §3 / §8 | M4 sandboxed Python stats (pandas / scipy / statsmodels / pingouin in gVisor/Firecracker or a network-less container) | ❌ Not implemented. M4 currently parses pasted text (`orchestrator/tools/m4_parsers/`) and asks the LLM to interpret — it does NOT execute statistics on raw data. This is also the §8 security surface (prompt-injection → arbitrary Python) and must be sandboxed before raw-data upload ships. |
-| §7 | Python sidecar — GROBID for PDF→references, pyreadstat for `.sav`/`.spv` | ❌ Not implemented. Citation APIs (CrossRef/OpenAlex/SemanticScholar/arXiv) live in `engine/utils/api_citations/` but the academic-PDF → structured-reference path is hand-rolled, not GROBID. |
-| §9 | Entry wizard / `bootstrapProject` | 🟡 Partial. `orchestrator/intake.py` has `merge_import` (deterministic seed) + `assess_work` (LLM classify pasted prose into slices). Dependency-hole reconciliation (model present + gaps absent → `M2 = needs_review`) is **not** wired because `needs_review` (gap #4) doesn't exist yet. |
-| §7 | Redis + BullMQ for async file parsing / batch paper analysis / compaction | ❌ Not implemented. Long work runs inline or via the engine subprocess. |
-
-### Already in good shape
-
-- M2 phase machine (`familiarization → research_state → gap_analysis → reference_confirm → output_gen`) — `orchestrator/agents/m2/phases/` + `orchestrator/prompts/m2/`.
-- Widget render-hint protocol (Card/Grid/ListEditor/FlowChart) — `orchestrator/agents/widgets.py` + `web/app/components/chat/widgets/`. Mutate-on-confirm + dynamic LLM-grounded card options.
-- `target_artifact` + `orchestrator/planner.py` + `orchestrator/artifacts.py` — enter-at-any-step via prerequisite backfill (still needs to be paired with `needs_review` propagation per §1.5).
-- `orchestrator.message_utils`, `orchestrator/agents/base.py:bounded_invoke` — wall-clock-bounded Gemini calls + transient retry.
-- Projects / threads / messages schema with `context_store` JSONB — matches brief §2 shape.
+`DOTHESIS_AGENT_V3=1` (set in `.env`) → chat turns served by the deep agent. Unset/0 → legacy graph_v2/v1 per `ORCHESTRATOR_ROUTER`. Rollback is the env var; the two runtimes use disjoint checkpoint namespaces (`v3:<thread_id>` vs `<thread_id>`) over the same Postgres saver.
 
 ---
 
-## Module agent contract (today)
+## Invariants (NON-NEGOTIABLE) and where each is enforced
 
-Every module agent in `orchestrator/agents/` implements `ModuleAgent.step(state) -> ModuleStepResult`:
+| Invariant | Enforced by |
+|---|---|
+| `context_store` is the single source of truth, **project-scoped** (shared by every thread/session of a project) | `agent/state.py:ProjectStateStore` (file-backed, CLI) / `api/app/agent_state.py:DbProjectStateStore` (Postgres slice columns + `projects.module_status`/`focus`) |
+| The ONLY write path is `commit_slice` | Tool boundary — validates slice ownership (`SLICE_OWNERSHIP`), snapshots version, applies, shifts focus, flags downstream. The agent never free-writes the state file. |
+| Read = free; mutate = focus shift + downstream `needs_review` ⚠ | `commit_slice` propagation over the static DAG (M1→M2..M5, M2→M3..M5, M3→M4,M5, M4→M5); only *started* modules get flagged. `read_slice` never mutates. |
+| Soft locks, never walls | Skill instructions (`skills/dothesis/SKILL.md` invariants section) |
+| No fabricated sources / numbers / prose mechanics | Tools over memory: papers via `research_scout`/`parse_reference` (engine validation), stats via `run_stats` (whitelisted ops only — the whitelist IS the security boundary), docs via `write_pipeline`/`export_docx` |
+| Long turns stay alive over SSE | `agent/runtime.py:stream_turn` yields token/tool_start/tool_end/error/done events; `api/app/routers/chat_v3.py` bridges them onto the existing SSE channel (tool activity rides `progress` → live ProgressBubble) |
+| Token metering wraps the LLM call | `orchestrator/token_meter.py` — middleware integration for the agent path is **pending** (next: wrap the model in `build_agent`) |
 
-```python
-@dataclass
-class ModuleStepResult:
-    assistant_message: str          # text shown to the user
-    context_patch: dict             # write into the owning slice (e.g. m3_design)
-    transition: bool                # True → module finished this turn; False → waiting on user
-    tool_calls_json: dict | None    # widget render hint (Card/Grid/ListEditor/FlowChart)
-    extra_messages: list[BaseMessage] | None  # M4 step emissions
-```
+**When updating any code**: keep the comment-the-reasoning rule — non-obvious decisions get a short `# Decision: ...` (or prose) block.
 
-`ContextStore` field per module is fixed (`orchestrator/state.py:_MODULE_TO_FIELD`); a module writes ONLY into its own slice. The router (v1 supervisor or v2 router_agent) is the single place that decides which module owns the next turn.
-
-**When updating an agent**: keep the comment-the-reasoning rule — non-obvious decisions get a short `# Decision: ...` block.
+**When updating a skill**: skill name == directory name, description ≤1024 chars, body <500 lines; heavy detail goes in `references/`. Behavioral edits land in `skills/` first, back-port to `dothesis_v2/` for the Claude.ai bundle.
 
 ---
 
-## Graphs — v1 vs v2
+## v3 migration status (strangler)
 
-Selected by `ORCHESTRATOR_ROUTER` env (`v1` default, `v2` opt-in):
-
-- **v1** (`orchestrator/graph.py`): START → `_seed` → `supervisor` → (`M1`|`M2`|`M3`|`M4`|`M5`|END). Conditional edge per module back to supervisor or END based on `_module_paused`. Used by both interactive (FastAPI chat) and auto-mode (subprocess `python -m orchestrator`).
-- **v2** (`orchestrator/graph_v2.py`): START → `_seed` → `router_agent_node` → END. One node, one tool call per turn. Closer to the brief's §4 router, but still missing the `(intent, target, changesFocus)` shape (see gap #5).
-
-Both share `_MODULE_FIELD`, the seed node, and the module agents themselves — only routing differs.
-
----
-
-## Build order (brief §10) — where we are
-
-1. ✅ Project + `context_store` schema + version snapshots → **partial** (no `version_history` yet).
-2. ✅ Single chat thread, FULL transcript mode, one module end-to-end.
-3. ✅ ModuleHandler interface + 5 handlers — but shape #1 only (chat loop). Wizard (M1/M3/M5) + Pipeline (M4) still pending (gap #7).
-4. 🟡 Entry wizard — `intake.py` exists; dependency-hole reconciliation gated on gap #4.
-5. 🟡 Router — v2 exists but no `(intent, target)` classification (gap #5).
-6. ❌ Read vs mutate + downstream `needs_review` propagation (gap #5).
-7. ❌ Token meter (gap #8).
-8. ❌ Tiered memory (gap #6).
-9. ❌ Python sidecar (GROBID / pyreadstat / sandboxed stats) (gaps §3/§7/§8).
+| Step | Status |
+|---|---|
+| 1. CLI spike (skills + state tools + runtime) | ✅ verified live — bootstrap → M1 wizard with real commits |
+| 2. Engine tools | ✅ `research_scout` (reuses the proven m2_literature path), `parse_reference` (Crossref + PDF), `run_stats` (6 whitelisted ops). 🟡 `write_pipeline`/`export_docx` are honest not-wired seams — the engine's draft path needs a job-context adapter. |
+| 3. Web behind flag | ✅ `DOTHESIS_AGENT_V3=1` → `chat_v3.py`; state lands in the same rows the web reads (module tracker, ContextPanel, dashboard unchanged) |
+| 4. Middleware parity | ❌ token metering + HITL interrupts + per-turn budget caps |
+| 5. Cutover & deletion of the graph | ❌ after soak; delete router_agent, module agent classes, graph_v2 |
+| 6. Later | auto-draft runs converge on a `writer` subagent; tiered memory; version_history table wiring for DbProjectStateStore |
 
 ---
 
 ## Where to look
 
-- Brief: `researchflow-architecture-brief.md`
-- Graph + state: `orchestrator/graph.py`, `orchestrator/graph_v2.py`, `orchestrator/state.py`
-- Module agents: `orchestrator/agents/m1_topic.py`, `m2/`, `m3_design.py`, `m4_analysis.py`, `m5_writing.py`
-- Routers: `orchestrator/agents/supervisor.py` (v1), `orchestrator/agents/router_agent.py` (v2)
-- Schemas (Pydantic): `orchestrator/schemas/m{1..5}.py`
-- Tools: `orchestrator/tools/m{1..5}_*.py`
-- Prompts: `orchestrator/prompts/m{1..5}.md` (+ `prompts/m2/<phase>.md`)
-- Intake / planner / artifacts: `orchestrator/intake.py`, `orchestrator/planner.py`, `orchestrator/artifacts.py`
-- HTTP surface: `api/app/routers/chat.py`, `api/app/models.py`, `api/migrations/versions/20260526_add_orchestrator_tables.py`
+- Architecture: `docs/architecture/2026-06-10-deepagent-skills-architecture.md`
+- Runtime + tools: `agent/runtime.py`, `agent/state.py`, `agent/tools/`
+- Skills: `skills/*/SKILL.md` (+ `skills/README.md` for the v2-bundle deltas)
+- API bridge: `api/app/routers/chat_v3.py`, `api/app/agent_state.py`
+- Engine muscle: `engine/utils/deep_research.py`, `engine/utils/api_citations/`, `engine/phases/`, `engine/utils/docx_post_processor.py`
+- Tests: `agent/tests/`, `api/tests/test_agent_state.py`, `api/tests/test_chat_v3.py`
+- Legacy graph (flag-off path only): `orchestrator/graph.py`, `orchestrator/graph_v2.py`, `orchestrator/agents/`
 - Frontend chat: `web/app/components/chat/`

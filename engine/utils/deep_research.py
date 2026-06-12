@@ -11,11 +11,21 @@ from typing import Tuple
 
 
 def _research_print(*args, **kwargs):
-    """Print only if verbose research mode is enabled."""
-    # Import at call time to get current value (not import-time snapshot)
-    from .api_citations.orchestrator import _verbose_research
-    if _verbose_research:
-        print(*args, **kwargs)
+    """Print + fan out to the progress emitter.
+
+    Bug fix: this used raw print(), which bypassed safe_print's progress
+    side-channel — so the deep-research planning phase (the 30+ second
+    silent stretch users see at the start of M2 scout) emitted nothing
+    to the chat frontend. Routing through safe_print restores the chain
+    safe_print → _safe_print_hook → emit → registered emitter, same as
+    the rest of the engine's progress prints.
+    """
+    # safe_print is the canonical progress-tapped print. It checks
+    # _verbose_research internally, so callers don't need to duplicate
+    # that gate here — and it ALSO fires the progress hook even when
+    # verbose mode is off (the chat router still wants the events).
+    from .api_citations.orchestrator import safe_print
+    safe_print(*args, **kwargs)
 
 # Gemini finish_reason codes
 # 1 = STOP (normal), 2 = SAFETY, 3 = MAX_TOKENS, 4 = RECITATION
@@ -193,9 +203,16 @@ class DeepResearchPlanner:
                             },
                         )
                 
-                    # Execute with timeout wrapper
+                    # Execute with timeout wrapper. submit_with_context
+                    # carries the chat router's progress emitter ContextVar
+                    # into the worker so any safe_print/logger lines emitted
+                    # during the planner's Gemini call surface as live SSE
+                    # events instead of going silent for the up to
+                    # planning_timeout-second wait (default 60s on first
+                    # attempt). Bare submit() loses the ContextVar.
+                    from engine.utils.progress import submit_with_context
                     with ThreadPoolExecutor(max_workers=1) as executor:
-                        future = executor.submit(_generate_with_timeout)
+                        future = submit_with_context(executor, _generate_with_timeout)
                         try:
                             response = future.result(timeout=planning_timeout)
                         except FuturesTimeoutError:

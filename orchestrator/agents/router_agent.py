@@ -54,6 +54,9 @@ from orchestrator.agents.base import ModuleStepResult, bounded_invoke
 from orchestrator.agents.module_tools import (
     _AGENT_BY_KEY, _CURRENT_STATE, _TOOL_RESULTS, ALL_TOOLS,
 )
+from orchestrator.agents.read_handler import (
+    Intent, classify_intent_heuristic, read_slice,
+)
 from orchestrator.message_utils import text_of
 from orchestrator.state import (
     OrchestratorState, get_module_slice, next_unconfirmed_module,
@@ -203,12 +206,23 @@ def _pick_module_via_llm(state: OrchestratorState) -> str:
     return picked
 
 
-def route_turn(state: OrchestratorState) -> tuple[str, ModuleStepResult]:
-    """Drive ONE conversational turn: pick the right module-tool, run it,
-    return (module_key, ModuleStepResult).
+def route_turn(state: OrchestratorState) -> tuple[str, ModuleStepResult, Intent]:
+    """Drive ONE conversational turn: pick target module, classify intent,
+    dispatch read OR step, return (module_key, ModuleStepResult, intent).
 
-    The graph_v2 node wraps this and translates the result into the same
-    state-patch shape the v1 graph's _agent_node_factory emits.
+    Brief §1.5 — three intents:
+      - continue: target == focus → run module.step() (normal work)
+      - read:     target != focus AND user is asking ABOUT it → run
+                  read_slice (returns a ModuleStepResult with empty
+                  context_patch so no downstream code writes the slice)
+      - mutate:   target != focus AND user wants to edit → run
+                  module.step() (graph_v2 then propagates needs_review)
+
+    The intent return value lets graph_v2.router_agent_node skip the
+    propagation block when intent == 'read' (defense in depth — the
+    no-write guard already covers it, but an explicit intent flag means
+    no surprise propagation if a future read_handler change starts
+    writing the slice).
 
     Mode handling: auto-mode is NOT migrated in Stage 1 (per the
     architectural plan). graph_v2 routes interactive-mode traffic only;
@@ -218,20 +232,24 @@ def route_turn(state: OrchestratorState) -> tuple[str, ModuleStepResult]:
     """
     cs = state["context_store"]
 
-    # Short-circuit 1: cold-start → M1, no LLM call.
+    # Short-circuit 1: cold-start → M1, no LLM call. Always continue.
     if not _any_module_confirmed(cs):
         logger.debug("router: cold-start short-circuit → M1")
         picked = "M1"
+        intent: Intent = "continue"
     else:
         # Short-circuit 2: a module is mid-question (`_awaiting_field` set)
         # → that module owns this turn. Prevents domain answers like
         # "PLS-SEM" from being mis-classified by the LLM as a nav request.
+        # Always continue — the user is answering, not asking or editing.
         awaiting = _awaiting_module(cs)
         if awaiting is not None:
             logger.debug("router: awaiting-field short-circuit → %s", awaiting)
             picked = awaiting
+            intent = "continue"
         else:
             picked = _pick_module_via_llm(state)
+            intent = "continue"  # default; overridden below when cross-module
 
     # next_unconfirmed_module can return "DONE" when everything is
     # confirmed; we don't have a tool for that. In that case the LLM
@@ -244,6 +262,51 @@ def route_turn(state: OrchestratorState) -> tuple[str, ModuleStepResult]:
     if picked == "DONE":
         picked = "M5"
 
+    # Intent classification — only matters for cross-module turns
+    # (target != focus). Same-module work is always 'continue'. Brief §1.5
+    # explicitly scopes read/mutate to cross-module interactions.
+    focus = state.get("focus")
+    last_user = next(
+        (text_of(m) for m in reversed(state.get("messages") or [])
+         if isinstance(m, HumanMessage)),
+        "",
+    )
+    if focus is not None and picked != focus and intent == "continue":
+        # Try heuristic first — read prefixes / edit verbs are unambiguous.
+        # LLM intent classification could go here as a fallback (per the
+        # design doc's 3-tool tool_choice), but the heuristic catches the
+        # cases from the brief's §4 worked example, so we ship the cheap
+        # path now and add LLM fallback if production turns up ambiguous
+        # cases the heuristic misses.
+        heur = classify_intent_heuristic(last_user, target_is_focus=False)
+        if heur == "read":
+            intent = "read"
+        elif heur == "mutate":
+            intent = "mutate"
+        else:
+            # No clear signal → treat cross-module as mutate by default.
+            # Safer than read in the ambiguous case: a missed mutate
+            # leaves stale downstream needs_review unflagged (bad), while
+            # a "mutate" that doesn't actually write the slice is caught
+            # by the no-write guard in graph_v2 → no propagation, no harm.
+            intent = "mutate"
+
+    # Dispatch.
+    if intent == "read":
+        text = read_slice(picked, last_user, cs)
+        # Wrap in a ModuleStepResult shaped like a paused module turn so
+        # graph_v2 emits the AI message without writing a slice. transition
+        # = True because the read is complete (no follow-up); context_patch
+        # = the existing slice unchanged so the no-write guard recognizes
+        # this as a non-mutate.
+        result = ModuleStepResult(
+            assistant_message=text,
+            context_patch=get_module_slice(cs, picked),
+            transition=True,
+            needs_user_reply=False,
+        )
+        return picked, result, intent
+
     agent = _AGENT_BY_KEY[picked]
     result = agent.step(state)
-    return picked, result
+    return picked, result, intent

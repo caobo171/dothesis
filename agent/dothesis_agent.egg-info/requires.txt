@@ -1,0 +1,8 @@
+deepagents<0.7,>=0.6.8
+langchain-anthropic<2,>=1.4.0
+pandas>=2.0
+scipy>=1.11
+pyreadstat>=1.2
+
+[dev]
+pytest>=8.3

@@ -33,19 +33,32 @@ the emitter callback to bridge back to async land.
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import logging
 import threading
 from typing import Callable, Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
-# Per-thread emitter. None when no one is listening; engine code then
-# behaves exactly as before (just stdout). This is a `threading.local`
-# rather than a contextvar because LangGraph runs sync graph nodes in
-# its executor pool, and contextvars don't propagate to executor threads
-# without explicit `copy_context().run(...)` plumbing — which we don't
-# control.
-_state = threading.local()
+# Active emitter, scoped to the current execution context.
+#
+# History: this was a `threading.local` because the old assumption was
+# that contextvars don't propagate to executor threads. They DO —
+# `concurrent.futures.ThreadPoolExecutor.submit` captures the calling
+# context (see PEP 567), and `asyncio.to_thread` does the same. The
+# threading.local approach silently dropped events whenever the engine's
+# citation-scout spawned worker threads for batched topic lookups: the
+# parent thread bound the emitter, the workers ran `safe_print` →
+# `_safe_print_hook` → `current_emitter()` and got None, so the per-topic
+# `🔍 Researching: …` lines never reached the SSE stream.
+#
+# ContextVar fixes the scout case (workers inherit) while leaving the
+# explicit thread_id-keyed `_registry` below as the durable lookup path
+# for code that has no access to the parent context — e.g. M2Agent.step
+# running in a LangGraph sync node, which only sees `state["thread_id"]`.
+_emitter_cv: contextvars.ContextVar[Optional["EmitterFn"]] = (
+    contextvars.ContextVar("progress_emitter", default=None)
+)
 
 EmitterFn = Callable[[dict], None]
 
@@ -97,12 +110,14 @@ def lookup(thread_id: str | None) -> Optional[EmitterFn]:
 
 
 def current_emitter() -> Optional[EmitterFn]:
-    """Return the emitter for this thread, or None if nothing is bound.
+    """Return the emitter for the current context, or None if nothing is bound.
 
     Engine code uses this through `emit()`; direct callers may also poll it
-    if they need to know whether progress streaming is active.
+    if they need to know whether progress streaming is active. Backed by a
+    ContextVar — propagates across `ThreadPoolExecutor.submit`,
+    `asyncio.to_thread`, and any `copy_context().run(...)` boundary.
     """
-    return getattr(_state, "emitter", None)
+    return _emitter_cv.get()
 
 
 def emit(stage: str, message: str, **meta) -> None:
@@ -126,22 +141,22 @@ def emit(stage: str, message: str, **meta) -> None:
 
 @contextlib.contextmanager
 def bind(emitter: EmitterFn) -> Iterator[None]:
-    """Bind `emitter` as the active progress sink for THIS thread only.
+    """Bind `emitter` as the active progress sink for the current context.
 
     Use as a context manager around the work whose progress you want
     streamed. On exit the previous emitter (if any) is restored.
 
-    Reminder: `threading.local` is per-OS-thread. If the work you wrap
-    here spawns sub-threads, those sub-threads will NOT inherit the
-    binding. Use `bind_in_executor` from the spawn site if you need
-    propagation.
+    Propagation: backed by a ContextVar, so sub-threads spawned via
+    `ThreadPoolExecutor.submit` inherit the binding (PEP 567). This means
+    the engine's batched citation scout — which runs per-topic lookups on
+    worker threads — surfaces every `🔍 Researching: …` line through the
+    emitter without each worker having to re-bind.
     """
-    prev = getattr(_state, "emitter", None)
-    _state.emitter = emitter
+    token = _emitter_cv.set(emitter)
     try:
         yield
     finally:
-        _state.emitter = prev
+        _emitter_cv.reset(token)
 
 
 @contextlib.contextmanager
@@ -150,17 +165,42 @@ def bind_in_executor(emitter: EmitterFn) -> Iterator[None]:
 
     The chat router runs in an asyncio task on the main thread, but
     LangGraph's sync node functions run in `asyncio.to_thread` executor
-    threads. Calling `bind` from the main task doesn't help: the engine
-    code running in the executor thread sees its own (empty)
-    `threading.local`. The fix is to call `bind_in_executor` AT THE
-    START of the node function (or wherever sync engine work begins) so
-    the binding lives in the right thread.
+    threads. With the ContextVar-backed `bind`, the asyncio task's
+    binding propagates into `to_thread` automatically — so calling this
+    inside the node body is technically redundant for that hop. It's
+    kept as a deliberate re-bind because (a) it documents intent at the
+    sync/async boundary and (b) it survives codepaths that explicitly
+    drop or reset the parent context.
 
     Identical behavior to `bind` — separate name just to make the intent
     obvious at call sites that span thread boundaries.
     """
     with bind(emitter):
         yield
+
+
+def submit_with_context(executor, fn, *args, **kwargs):
+    """Submit `fn` to a `concurrent.futures.Executor` carrying the caller's
+    ContextVars.
+
+    Why this exists: `ThreadPoolExecutor.submit` does NOT auto-propagate
+    contextvars to its worker threads (PEP 567 only mandates that for
+    asyncio Tasks). Without this wrapper, the engine's batched citation
+    scout submits `_research_single_topic` to a 5-worker pool; the parent
+    thread's `progress.bind(...)` binding stays on the parent and every
+    worker sees `current_emitter() == None`. Result: the per-topic
+    `🔍 Researching: …` lines fall on the floor, the SSE stream goes
+    quiet for ~4 min, and the frontend banner stalls.
+
+    Wrapping the call as `ctx.run(fn, *args)` runs `fn` inside a copy of
+    the caller's context, so the worker sees the parent's emitter and
+    every `safe_print → _safe_print_hook → emit` chain fires.
+
+    Use this everywhere the engine spawns worker threads that should
+    surface progress.
+    """
+    ctx = contextvars.copy_context()
+    return executor.submit(ctx.run, fn, *args, **kwargs)
 
 
 def _safe_print_hook(args: tuple, end: str) -> None:

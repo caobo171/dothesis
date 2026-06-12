@@ -91,7 +91,7 @@ export function ListEditorWidget({
               ) : (
                 <input
                   type="text"
-                  className="text-sm text-gray-900 flex-1 bg-transparent outline-none border-b border-transparent focus:border-purple-400"
+                  className="text-sm text-gray-900 flex-1 bg-transparent outline-none border-b border-transparent focus:border-primary-500"
                   value={item.text}
                   onChange={e => editItemText(item.id, e.target.value)}
                   placeholder="Type item text..."
@@ -121,7 +121,7 @@ export function ListEditorWidget({
                         <span>•</span>
                         <input
                           type="text"
-                          className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-purple-400"
+                          className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-primary-500"
                           value={sub.text}
                           onChange={e => editSubItemText(item.id, sub.id, e.target.value)}
                           data-testid={`list-sub-${sub.id}-input`}
@@ -141,7 +141,7 @@ export function ListEditorWidget({
                 {!disabled && (
                   <button
                     type="button"
-                    className="text-xs text-gray-500 border border-dashed border-gray-300 rounded px-2 py-0.5 hover:bg-purple-50"
+                    className="text-xs text-gray-500 border border-dashed border-gray-300 rounded px-2 py-0.5 hover:bg-primary-50"
                     onClick={() => addSubItem(item.id)}
                     data-testid={`list-item-${item.id}-add-sub`}
                   >
@@ -156,7 +156,7 @@ export function ListEditorWidget({
         {!disabled && (
           <button
             type="button"
-            className="w-full text-sm text-gray-500 border border-dashed border-gray-300 rounded-md py-1.5 hover:bg-purple-50 hover:border-purple-400"
+            className="w-full text-sm text-gray-500 border border-dashed border-gray-300 rounded-md py-1.5 hover:bg-primary-50 hover:border-primary-500"
             onClick={addItem}
             data-testid="list-editor-add"
           >
@@ -177,7 +177,7 @@ export function ListEditorWidget({
           </button>
           <button
             type="button"
-            className="text-xs font-medium text-white bg-purple-600 border border-purple-600 rounded-md px-3 py-1 hover:bg-purple-700"
+            className="text-xs font-medium text-white bg-primary-600 border border-primary-600 rounded-full px-3 py-1 hover:bg-primary-700"
             onClick={confirm}
             data-testid="list-editor-confirm"
           >

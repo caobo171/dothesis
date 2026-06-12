@@ -24,8 +24,8 @@ describe("ContextPanel", () => {
 
   test("M1 confirmed → done; M2 locked", () => {
     render(<ContextPanel contextStore={_baseCtx} uploads={[]} />);
-    expect(screen.getByTestId("dot-M1")).toHaveClass("bg-green-500");
-    expect(screen.getByTestId("dot-M2")).toHaveClass("bg-gray-300");
+    expect(screen.getByTestId("dot-M1")).toHaveClass("bg-[var(--ok-fg)]");
+    expect(screen.getByTestId("dot-M2")).toHaveClass("bg-ink-200");
   });
 
   test("clicking a confirmed module shows its content", () => {
@@ -37,6 +37,39 @@ describe("ContextPanel", () => {
     expect(m1Viewer).toBeTruthy();
     fireEvent.click(m1Viewer!);
     expect(screen.getByText(/research_title/i)).toBeTruthy();
+  });
+
+  test("module_status needs_review renders amber ⚠ badge (brief §1.5)", () => {
+    // Brief §1.5: when an upstream mutate flags M3 as needs_review, the
+    // panel must surface a review badge regardless of whether M3 had been
+    // confirmed before (which would otherwise show green). Reuses the
+    // existing `needs_attention` ModuleStatus so no theming work is needed.
+    render(
+      <ContextPanel
+        contextStore={{
+          m1_topic: { confirmed_at: "2026-06-03" },
+          m2_literature: { confirmed_at: "2026-06-03" },
+          // M3 was confirmed before the upstream M2 mutate hit it —
+          // confirmed_at is still set, but module_status now flags review.
+          m3_design: { confirmed_at: "2026-06-03" },
+          m4_analysis: null,
+          m5_writing: null,
+        }}
+        uploads={[]}
+        moduleStatus={{ M1: "done", M2: "done", M3: "needs_review", M4: "locked", M5: "locked" }}
+      />,
+    );
+    expect(screen.getByTestId("dot-M3")).toHaveClass("bg-[var(--pause-bg)]");
+    // Sanity: confirmed-and-not-flagged stays green.
+    expect(screen.getByTestId("dot-M1")).toHaveClass("bg-[var(--ok-fg)]");
+  });
+
+  test("missing module_status falls back to legacy context-store derivation", () => {
+    // Old projects (no turn yet → module_status is {}) must keep rendering
+    // sensibly — no red dots for empty modules, just the legacy locked/done/active.
+    render(<ContextPanel contextStore={_baseCtx} uploads={[]} />);
+    expect(screen.getByTestId("dot-M1")).toHaveClass("bg-[var(--ok-fg)]");  // confirmed
+    expect(screen.getByTestId("dot-M2")).toHaveClass("bg-ink-200");  // locked
   });
 
   test("uploads list shows filenames", () => {

@@ -4,6 +4,7 @@ Mounted under /api/v1 by main.py only when ORCHESTRATOR_ENABLED=true.
 """
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Any
 
@@ -38,6 +39,14 @@ class ProjectOut(BaseModel):
     citation_style: str
     status: str
     current_module: str
+    # Brief §1.4 — conversation focus (distinct from current_module). Nullable
+    # during the dual-write window of PR #1/#2: clients can fall back to
+    # current_module when focus is None.
+    focus: str | None = None
+    # Brief §1.4 — per-module workflow status (locked|in_progress|done|needs_review).
+    # JSONB Dict[ModuleId, str]; '{}' until the first orchestrator turn writes
+    # the computed status back via compute_status_map.
+    module_status: dict = Field(default_factory=dict)
     context_store: dict
     created_at: Any
     updated_at: Any
@@ -104,6 +113,12 @@ def _serialize_project(db: Session, p: Project) -> ProjectOut:
         id=p.id, name=p.name, field=p.field, language=p.language,
         citation_style=p.citation_style, status=p.status,
         current_module=p.current_module,
+        # PR #1/#2 — surface the new focus + module_status columns. focus
+        # falls back to current_module on the client side when None during
+        # the dual-write window; module_status defaults to {} until the
+        # first orchestrator turn populates it.
+        focus=p.focus,
+        module_status=p.module_status or {},
         context_store={
             "m1_topic":      cs.m1_topic      if cs else None,
             "m2_literature": cs.m2_literature if cs else None,
@@ -401,6 +416,13 @@ async def send_message(thread_id: uuid.UUID,
         raise HTTPException(404, detail={"error": {"code": "not_found"}})
     _owned_project(db, user, t.project_id)
 
+    # v3 deep agent (docs/architecture/2026-06-10): when the flag is on, the
+    # skills-driven agent serves the turn instead of graph_v2 — same SSE
+    # contract, state lands in the same rows. Rollback = unset the env var.
+    if os.getenv("DOTHESIS_AGENT_V3", "0") == "1":
+        from .chat_v3 import send_message_v3
+        return await send_message_v3(t, body.text, db)
+
     # 1. Persist the user message.
     db.add(Message(thread_id=thread_id, role="user", content=body.text))
     db.commit()
@@ -454,6 +476,16 @@ async def send_message(thread_id: uuid.UUID,
             """Called by engine code via engine.utils.progress; runs on the
             LangGraph executor thread, NOT the asyncio loop. Bridge back to
             the loop via call_soon_threadsafe so the queue stays consistent."""
+            # Diagnostic stderr beat — temporary instrumentation so we can
+            # tell whether the silent UI is caused by (a) no events reaching
+            # the chat router at all (engine side broken) or (b) events
+            # reaching the router but never rendered (frontend side). If you
+            # see "[emitter]" lines in dev.sh during a run, the SSE pipe is
+            # alive and the bug is in the frontend; if not, the engine isn't
+            # firing emits. Remove once root cause is pinned.
+            import sys as _sys
+            print(f"[emitter] stage={payload.get('stage')!r} msg={payload.get('message','')[:80]!r}",
+                  file=_sys.stderr, flush=True)
             try:
                 loop.call_soon_threadsafe(
                     events_q.put_nowait, ("progress", payload))
@@ -491,6 +523,20 @@ async def send_message(thread_id: uuid.UUID,
             if is_first_turn:
                 graph_input["context_store"] = initial_context_store
                 graph_input["project_id"] = t.project_id
+                # Brief §1.4 — seed the conversation focus. Dual-write window:
+                # fall back to current_module while older projects still have
+                # NULL focus (the PR #1 migration backfills focus from
+                # current_module, but rows inserted before the migration's
+                # UPDATE pass can still be NULL). Seeded only on the first
+                # turn; the checkpoint owns it afterwards, same as
+                # context_store. PR #2's router writes focus back on every
+                # mutate (cross-module shift) — the persist block below
+                # syncs it back to the DB row.
+                p_for_focus = db.get(Project, t.project_id)
+                if p_for_focus is not None:
+                    graph_input["focus"] = (
+                        p_for_focus.focus or p_for_focus.current_module
+                    )
                 # Enter-at-any-step: seed the thread's target so the supervisor's
                 # planner routes toward it (and backfills prerequisites). Seeded
                 # only on the first turn — the checkpoint owns it afterwards and
@@ -575,6 +621,19 @@ async def send_message(thread_id: uuid.UUID,
             # stream. Without this the browser sees an empty SSE response and the
             # user thinks the assistant just didn't reply.
             log.exception("graph.astream crashed for thread %s", thread_id)
+            # Belt-and-braces: also print to stderr directly. When logger
+            # propagation gets misconfigured (uvicorn quiet mode, structlog
+            # hijack, etc.), log.exception goes to /dev/null silently — and
+            # then the only signal of a graph crash is the red ErrorBubble
+            # in the UI with no traceback to debug from. traceback.print_exc
+            # writes to sys.stderr unconditionally, so the dev.sh console
+            # always carries the trace.
+            import sys
+            import traceback as _tb
+            print(f"\n=== graph.astream crashed for thread {thread_id} ===",
+                  file=sys.stderr, flush=True)
+            _tb.print_exc(file=sys.stderr)
+            print("=== end traceback ===\n", file=sys.stderr, flush=True)
             yield sse_pack({
                 "type": "error",
                 "message": f"{type(e).__name__}: {e}",
@@ -604,7 +663,8 @@ async def send_message(thread_id: uuid.UUID,
         # checkpoint is the source of truth between turns; the DB row is the
         # cross-thread durable copy.
         final_state = await graph.aget_state(config)
-        cs_after = (final_state.values or {}).get("context_store") if final_state else None
+        state_values = (final_state.values or {}) if final_state else {}
+        cs_after = state_values.get("context_store")
         if cs_after is not None:
             with db.bind.connect() as conn:
                 conn.execute(
@@ -618,6 +678,33 @@ async def send_message(thread_id: uuid.UUID,
                         m5_writing=cs_after.m5_writing,
                     )
                 )
+                # Brief §1.4 — persist focus + status that PR #2's
+                # router_agent_node wrote to state. Same transaction as
+                # context_store so the UI can't observe a torn snapshot
+                # where ⚠ flags exist in module_status but the slice
+                # markers haven't landed yet.
+                #
+                # Done as a separate UPDATE on `projects` because focus +
+                # module_status live on Project, not ContextStore. Only
+                # write when the state values exist — old graph paths
+                # (e.g. v1 supervisor) don't populate focus/status yet,
+                # and we don't want to NULL them out on those turns.
+                focus_after = state_values.get("focus")
+                status_after = state_values.get("status")
+                proj_patch: dict = {}
+                if focus_after:
+                    proj_patch["focus"] = focus_after
+                if status_after is not None:
+                    # ModuleStatusMap → plain dict for JSONB. Skip via
+                    # model_dump() rather than __dict__ so we get the
+                    # validated Pydantic shape, not internal slots.
+                    proj_patch["module_status"] = status_after.model_dump()
+                if proj_patch:
+                    conn.execute(
+                        Project.__table__.update()
+                        .where(Project.__table__.c.id == t.project_id)
+                        .values(**proj_patch)
+                    )
                 conn.commit()
         yield sse_pack({"type": "done"})
 

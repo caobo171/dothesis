@@ -1,11 +1,11 @@
 <h1 align="center">DoThesis — Chat-First AI Thesis Assistant</h1>
 
-> **Repo orientation.** This repository now hosts two products in one tree:
+> **Repo orientation.** This repository hosts two products in one tree:
 >
-> 1. **DoThesis / ResearchFlow** — the commercial chat-first thesis SaaS. Architecture brief: [`researchflow-architecture-brief.md`](researchflow-architecture-brief.md). Agent contract + gap map: [`AGENTS.md`](AGENTS.md). Surfaces: `api/` (FastAPI), `orchestrator/` (LangGraph agent graph, M1–M5 module agents, Postgres `context_store`), `web/` (Next.js chat UI).
-> 2. **OpenDraft** — the original open-source 19-agent draft-generator CLI (documented below). Still maintained as a standalone product and reused by the SaaS for citation pipelines.
+> 1. **DoThesis** — the commercial chat-first thesis SaaS, built as a **deep agent with skills** (LangChain deepagents). One agent, 8 skills (`skills/`), guided by a project-scoped `context_store` with deterministic read/mutate propagation. Architecture: [`docs/architecture/2026-06-10-deepagent-skills-architecture.md`](docs/architecture/2026-06-10-deepagent-skills-architecture.md). Agent contract + migration status: [`AGENTS.md`](AGENTS.md). Surfaces: `agent/` (deep-agent runtime + guarded state + tools), `skills/` (M1–M5 module skills), `api/` (FastAPI, SSE chat), `web/` (Next.js chat UI), `engine/` (research + writing muscle behind the agent's tools). The legacy LangGraph orchestrator (`orchestrator/`) still serves chat when `DOTHESIS_AGENT_V3` is off and is being strangled out.
+> 2. **OpenDraft** — the original open-source 19-agent draft-generator CLI (documented below). Still maintained as a standalone product; its deep-research/citation stack powers the agent's `research_scout` tool and its draft pipeline powers `write_pipeline`/`export_docx`.
 >
-> The brief's §1 lists **NON-NEGOTIABLE** architecture principles — `AGENTS.md` tracks which ones the current implementation meets and which still need work. **Read both before changing the agent graph, state shape, router, or memory layer.**
+> **Read `AGENTS.md` before changing the agent runtime, skills, state shape, or memory layer** — it maps every invariant to the code that enforces it.
 
 <h2 align="center">OpenDraft — AI Research Draft Generator</h2>
 

@@ -52,8 +52,11 @@ export function MessageList({
 
   const isStreaming = Boolean(streamingText);
 
+  // DoThesis.html design: the conversation sits on the ink-50 canvas in a
+  // centered ~880px column, so bubbles don't stretch across wide screens.
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-4 bg-white">
+    <div className="flex-1 overflow-y-auto px-6 py-3 bg-ink-50">
+      <div className="max-w-[880px] mx-auto">
       {messages.map((m, idx) => {
         // SP3: widget on a "spent" message (not last, or streaming in progress)
         // is disabled so the user can't fire a stale selection.
@@ -91,6 +94,7 @@ export function MessageList({
           failure point (e.g. tokens that arrived before an LLM timeout). */}
       {streamingError && <ErrorBubble message={streamingError} />}
       <div ref={endRef} />
+      </div>
     </div>
   );
 }

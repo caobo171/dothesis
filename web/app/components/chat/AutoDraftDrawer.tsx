@@ -78,7 +78,7 @@ export function AutoDraftDrawer({ runId, onClose }: { runId: string; onClose: ()
         <div className="bg-gray-50 rounded-md p-3 text-xs space-y-1 max-h-64 overflow-y-auto font-mono">
           {activity.map((ev, i) => (
             <div key={i} className="text-gray-700">
-              <span className="text-purple-600 mr-2">{(ev as { module?: string }).module ?? "•"}</span>
+              <span className="text-primary-600 mr-2">{(ev as { module?: string }).module ?? "•"}</span>
               {(ev as { text?: string }).text ?? JSON.stringify(ev)}
             </div>
           ))}
@@ -97,7 +97,7 @@ export function AutoDraftDrawer({ runId, onClose }: { runId: string; onClose: ()
               <a
                 key={kind}
                 href={uri as string}
-                className="block text-sm text-purple-600 hover:underline"
+                className="block text-sm text-primary-600 hover:underline"
               >
                 Download {kind.toUpperCase()}
               </a>
@@ -113,7 +113,7 @@ export function AutoDraftDrawer({ runId, onClose }: { runId: string; onClose: ()
           </button>
         )}
         {run?.status === "paused" && (
-          <button onClick={resume} className="flex items-center gap-1 text-sm bg-purple-600 text-white hover:bg-purple-700 px-3 py-1.5 rounded">
+          <button onClick={resume} className="flex items-center gap-1 text-sm bg-primary-600 text-white hover:bg-primary-700 px-3 py-1.5 rounded">
             <Play className="w-4 h-4" /> Resume
           </button>
         )}

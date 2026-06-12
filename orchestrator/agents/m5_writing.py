@@ -6,6 +6,7 @@ from uuid import uuid4
 from langchain_core.messages import AIMessage, HumanMessage
 
 from orchestrator.agents.base import ModuleAgent, ModuleStepResult
+from orchestrator.agents.shapes import WizardAgent
 from orchestrator.message_utils import text_of
 from orchestrator.schemas.m5 import M5Output, ExportArtifact
 from orchestrator.schemas.m5_editor import PendingEdit
@@ -47,9 +48,11 @@ def _scale_items_from_conceptual_model(cm: dict | None) -> list[dict]:
     return out
 
 
-class M5Agent(ModuleAgent):
+class M5Agent(WizardAgent, ModuleAgent):
+    # PR #5 — Wizard shape per brief §3 (wizard refactor follows in #5b).
     schema = M5Output
     module_key = "M5"
+    slice_field = "m5_writing"  # brief §6 — ModuleHandler contract
     system_prompt = _PROMPT
     tools = [
         compose_chapter, compose_section, rewrite_chapter,
@@ -141,7 +144,16 @@ class M5Agent(ModuleAgent):
         # cite when the gaps carry no attached papers — common in auto mode, where
         # gaps are generated without page-level supporting papers.
         for c in context.get("citation_list", []):
-            author = c.get("author") or c.get("authors") or ""
+            # Scout shape (engine/prompts/01_research/scout.md): authors is a
+            # list[str]. Older/hand-written entries may use a plain string under
+            # either "author" or "authors". Coerce to a single string here so
+            # (a) the dedupe key stays hashable (a list-element tuple isn't),
+            # and (b) downstream citation rendering doesn't have to branch.
+            raw_author = c.get("author") or c.get("authors") or ""
+            if isinstance(raw_author, list):
+                author = ", ".join(str(a) for a in raw_author if a)
+            else:
+                author = str(raw_author)
             key = (author, str(c.get("year", "")))
             if author and key not in seen:
                 seen[key] = {"author": author, "year": c.get("year"),

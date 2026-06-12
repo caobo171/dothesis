@@ -35,9 +35,11 @@ def test_bind_restores_prior_emitter_on_exit():
 
 
 def test_bind_is_per_thread_not_inherited_by_spawned_threads():
-    """threading.local does NOT propagate across threads. This is the precise
-    reason bind_in_executor exists — callers spanning a thread boundary must
-    re-bind on the other side."""
+    """A bare `threading.Thread` does NOT copy contextvars to its target —
+    only `ThreadPoolExecutor.submit` and `asyncio.to_thread` do (PEP 567).
+    Documenting that boundary: callers that hand-roll a Thread still need
+    to re-bind on the other side; the `bind`→ContextVar swap only buys
+    automatic propagation for the executor cases."""
     received_main: list[dict] = []
     received_child: list[dict] = []
 
@@ -52,6 +54,50 @@ def test_bind_is_per_thread_not_inherited_by_spawned_threads():
         t.join()
     assert received_child == [{"saw_emitter": False}]
     assert received_main == []   # child's emit went nowhere
+
+
+def test_plain_executor_submit_does_not_propagate_emitter():
+    """Document the limitation that motivates submit_with_context: a bare
+    `ThreadPoolExecutor.submit` does NOT carry ContextVars to its worker
+    (PEP 567 only mandates that for asyncio Tasks). If we relied on the
+    plain submit, the engine's batched scout would silently drop progress
+    even with the ContextVar binding."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    received: list[dict] = []
+
+    def worker():
+        progress.emit("scout.topic", "worker")
+        return progress.current_emitter() is not None
+
+    with progress.bind(received.append):
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            saw_emitter = ex.submit(worker).result()
+    assert saw_emitter is False
+    assert received == []
+
+
+def test_submit_with_context_propagates_emitter_to_workers():
+    """The fix path: `progress.submit_with_context(executor, fn)` wraps fn
+    with copy_context().run so the worker sees the parent's emitter
+    binding. This is the call the engine's batch scout MUST use at every
+    executor.submit site that should surface progress."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    received: list[dict] = []
+
+    def worker(label: str):
+        progress.emit("scout.topic", label)
+        return progress.current_emitter() is not None
+
+    with progress.bind(received.append):
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            futures = [progress.submit_with_context(ex, worker, lbl)
+                       for lbl in ("a", "b", "c", "d")]
+            results = [f.result() for f in futures]
+    assert results == [True, True, True, True]
+    messages = sorted(p["message"] for p in received)
+    assert messages == ["a", "b", "c", "d"]
 
 
 def test_emitter_exception_is_swallowed():

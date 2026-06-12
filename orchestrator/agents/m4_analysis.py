@@ -1,7 +1,15 @@
-"""M4 — Data Analysis agent (SP5 adaptive analysis with paste-text parsers)."""
+"""M4 — Data Analysis agent (SP5 adaptive analysis with paste-text parsers).
+
+PR #5 — declared as the Pipeline shape per brief §3. Today's implementation
+still uses paste-text parsers + LLM interpretation; brief §8's sandboxed
+Python stats (pandas/scipy/statsmodels/pingouin in gVisor or a network-less
+container) is a separate downstream PR. The shape declaration pins the
+contract so that PR can't drift back into chat-loop territory.
+"""
 from pathlib import Path
 
 from orchestrator.agents.base import ModuleAgent
+from orchestrator.agents.shapes import PipelineAgent
 from orchestrator.message_utils import text_of
 from orchestrator.schemas.m4 import M4Output
 from orchestrator.tools.m4_analysis import (
@@ -33,9 +41,12 @@ _FIELDS_BY_OUTLINE_TYPE = {
 _PSEUDO_FIELDS = {"_run_execution", "_run_qual_pipeline", "_summary"}
 
 
-class M4Agent(ModuleAgent):
+class M4Agent(PipelineAgent, ModuleAgent):
+    # PipelineAgent first for the isinstance shape assertion; ModuleAgent
+    # provides the concrete step() until the sandbox-DSL refactor lands.
     schema = M4Output
     module_key = "M4"
+    slice_field = "m4_analysis"  # brief §6 — ModuleHandler contract
     system_prompt = _PROMPT
     tools = [
         detect_data_type, generate_analysis_outline, run_analysis_step,

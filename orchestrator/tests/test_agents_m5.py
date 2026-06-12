@@ -46,6 +46,30 @@ def test_m5_collect_references_falls_back_to_citation_list():
     assert ("Bass", "1985") in pairs
 
 
+def test_m5_collect_references_handles_authors_as_list():
+    """The engine scout emits citation_list entries with `authors: list[str]`
+    (see engine/prompts/01_research/scout.md spec). Without normalizing, the
+    dedupe key was (list, str) — tuple with an unhashable list — and `key
+    not in seen` crashed with TypeError. Regression for the M5 compose-all
+    crash on thread ab4198a1.
+    """
+    agent = M5Agent()
+    refs = agent._collect_references({
+        "research_gaps": [],
+        "citation_list": [
+            {"authors": ["John Smith", "Mary Johnson"], "year": 2024,
+             "title": "Y"},
+        ],
+    })
+    assert len(refs) == 1
+    assert refs[0]["year"] == 2024
+    assert isinstance(refs[0]["author"], str)
+    # Joined author string keeps both names recognisable for downstream
+    # citation rendering.
+    assert "Smith" in refs[0]["author"]
+    assert "Johnson" in refs[0]["author"]
+
+
 def test_m5_collect_references_prefers_gap_papers_and_adds_citation_list():
     agent = M5Agent()
     refs = agent._collect_references({

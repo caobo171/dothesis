@@ -141,8 +141,8 @@ def build_conceptual_model(constructs: list[str], research_question: str) -> dic
 
 
 @tool
-def suggest_scale_items(construct: str, n: int = 5) -> list[dict]:
-    """Suggest `n` Likert items measuring the construct.
+def suggest_scale_items(construct_name: str, n: int = 5) -> list[dict]:
+    """Suggest `n` Likert items measuring the named construct.
 
     Returns: [{id, text}, ...].
 
@@ -150,11 +150,16 @@ def suggest_scale_items(construct: str, n: int = 5) -> list[dict]:
     fill schema path that may delegate one construct at a time. The widget
     render path uses `suggest_scale_items_batch` instead — one LLM call for
     all constructs rather than N. See that tool's docstring for the why.
+
+    Parameter name: was `construct`, renamed to `construct_name` because the
+    bare `construct` shadows pydantic.BaseModel.construct in the args-schema
+    LangChain's @tool decorator builds from this signature, which throws a
+    UserWarning on every server start. Semantics unchanged.
     """
     llm = _get_llm()
     prompt = (
         f"Write {n} validated-style Likert items (5-point) measuring the construct "
-        f"'{construct}'. Respond with ONLY a JSON array: "
+        f"'{construct_name}'. Respond with ONLY a JSON array: "
         f'[{{"id": "C1", "text": "..."}}, ...].'
     )
     try:

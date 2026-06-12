@@ -117,6 +117,20 @@ def _safe_scout(topic: str, emitter=None) -> list[dict]:
                          "message": f"🔍 Searching for citations on \"{topic}\"…"})
             except Exception:  # noqa: BLE001 — emitter is best-effort
                 pass
+        else:
+            # Diagnostic: when the chat router DID register an emitter but
+            # M2Agent.step's lookup returned None (or the sub_state lost the
+            # _progress_emitter key in transit), we'd silently drop every
+            # scout progress line — the "frontend stuck on ..." bug. Log
+            # loudly so the next time this happens we can pin the cause
+            # without rerunning with --verbose.
+            logger.warning(
+                "M2 phase2 _safe_scout called with emitter=None — "
+                "progress streaming will be silent for this scout. "
+                "Likely cause: outer state['thread_id'] was missing when "
+                "M2Agent.step looked up the emitter, or sub_state lost "
+                "the _progress_emitter key during phase iteration."
+            )
         # Lazy import — keeps engine.utils.progress out of the import path
         # for non-streaming callers and avoids a circular when the engine
         # package isn't installed (tests).
@@ -135,6 +149,31 @@ def _nullctx():
     """Stand-in context manager for the non-streaming path. Saves the call
     sites from branching on `emitter is None` for the with-statement."""
     yield
+
+
+def _beat(state, stage: str, message: str, **meta) -> None:
+    """Fire one progress heartbeat to the chat router's emitter.
+
+    Why: the engine's stdout fan-out into progress (via api_citations/
+    orchestrator.safe_print → progress._safe_print_hook) only fires on the
+    thread that bound the emitter. Scout's ThreadPoolExecutor batches run on
+    worker threads with no binding, so the SSE stream goes silent for ~4 min
+    even though the engine is happily printing. After scout, _synthesize is
+    one synchronous LLM call (up to M2_SYNTHESIZE_MAX_SECONDS, default 90s)
+    with NO prints at all — pure silence.
+
+    These explicit beats at phase boundaries (scout.done, synth.start,
+    synth.done) guarantee the UI sees the M2 wrapper make progress between
+    the only update it gets from astream (the final node return). Best-
+    effort: never raise into phase logic, never block on emitter errors.
+    """
+    em = state.get("_progress_emitter")
+    if em is None:
+        return
+    try:
+        em({"stage": stage, "message": message, **meta})
+    except Exception:  # noqa: BLE001 — progress is best-effort
+        pass
 
 
 def _get_llm():
@@ -308,7 +347,23 @@ def run(state: M2SubGraphState) -> dict:
 
     # First call: no draft yet — scout citations and synthesize
     if not state.get("research_state_draft"):
-        citations = _safe_scout(state.get("research_title", ""), emitter=state.get("_progress_emitter"))
+        # Rescout path: when the user clicked "Go back to literature search"
+        # on the prior turn, the navigate handler set _rescout_pending=True
+        # and cleared the draft. THIS turn's last_user message is the new
+        # search terms — if it's non-empty and not the sentinel 'same', use
+        # it as the scout topic. Otherwise fall back to research_title from
+        # M1 (covers both the original first-scout AND the "same" sentinel).
+        if state.get("_rescout_pending") and last_user and last_user.lower().strip() != "same":
+            scout_topic = last_user
+        else:
+            scout_topic = state.get("research_title", "")
+        citations = _safe_scout(scout_topic, emitter=state.get("_progress_emitter"))
+        # Heartbeat: scout returned. Tells the user "search is done, now I'm
+        # writing." Without this beat the UI banner sits on the last scout
+        # progress line (or the bare typing dot) for the full synth window.
+        _beat(state, "scout.done",
+              f"✅ Found {len(citations)} citations — drafting the research-state summary…",
+              count=len(citations))
         # B1 HARD GATE: if scout came back empty AND the user has not uploaded
         # papers, refuse to advance. Without this, phase3 was generating "gaps"
         # with literal placeholder strings ({"author": "Author", "year": "Year",
@@ -322,11 +377,22 @@ def run(state: M2SubGraphState) -> dict:
                 "research_state_draft": msg,
                 "_citation_search_failed": True,
                 "research_state_confirmed": False,
+                # Clear the rescout flag on BOTH branches — once we've
+                # consumed the user's "redo" intent we don't want stale
+                # next-message-is-search-terms semantics persisting.
+                "_rescout_pending": False,
                 "messages": [AIMessage(content=msg)],
             }
         new_state = dict(state)
         new_state["research_state_citations"] = citations
+        # Heartbeat pair: brackets the silent LLM call. _synthesize can take
+        # up to M2_SYNTHESIZE_MAX_SECONDS (90s default) with no stdout, so
+        # without these beats the UI looks frozen between scout.done and the
+        # final AIMessage landing.
+        _beat(state, "synth.start",
+              "✍️ Synthesizing the literature into a research-state draft…")
         draft = _synthesize(new_state, refinements=state.get("research_state_refinements", []))
+        _beat(state, "synth.done", "📝 Draft ready — formatting reply…")
         # W3: every synthesis draft ships with the confirm/refine/navigate card
         # grid so the user clicks instead of typing.
         hint = _confirm_hint()
@@ -335,6 +401,7 @@ def run(state: M2SubGraphState) -> dict:
             "research_state_citations": citations,
             "research_state_draft": draft,
             "research_state_confirmed": False,
+            "_rescout_pending": False,
             "messages": [ai],
             "tool_calls_json": hint,
         }
@@ -357,11 +424,18 @@ def run(state: M2SubGraphState) -> dict:
             new_terms = (intent.refinement_text or last_user).strip()
             citations = _safe_scout(new_terms,
                                     emitter=state.get("_progress_emitter"))
+            _beat(state, "scout.done",
+                  f"✅ Found {len(citations)} citations on the new query — "
+                  "drafting…",
+                  count=len(citations))
             if citations:
                 # Recovered — clear the flag and synthesize with these citations.
                 new_state = dict(state)
                 new_state["research_state_citations"] = citations
+                _beat(state, "synth.start",
+                      "✍️ Synthesizing the refined search into a draft…")
                 draft = _synthesize(new_state, refinements=[])
+                _beat(state, "synth.done", "📝 Draft ready — formatting reply…")
                 # W3: recovery path also gets the confirm card grid — same UX
                 # whether this is the first draft or the comeback after retry.
                 hint = _confirm_hint()
@@ -391,8 +465,38 @@ def run(state: M2SubGraphState) -> dict:
         }
 
     if intent.action == "navigate":
-        # Navigate back to a prior phase
-        return {"current_phase": intent.target_phase or "familiarize"}
+        target = intent.target_phase or "familiarize"
+        # "Go back to literature search" card sends target = research_state
+        # (i.e. THIS phase). Returning {"current_phase": "research_state"}
+        # is a no-op — the _interactive_step loop breaks on unchanged phase
+        # and the wrapper emits an EMPTY assistant message → frontend stuck
+        # on a blank bubble. Interpret target==current-phase as a "redo
+        # this phase" request instead: clear the draft + citations so the
+        # next user message hits the first-call path and re-scouts.
+        if target == _PHASE_KEY:
+            return {
+                "research_state_draft": None,
+                "research_state_citations": None,
+                "research_state_refinements": [],
+                # Flag the next first-call scout to use the user's NEXT
+                # message as the topic instead of research_title. Cleared
+                # when the scout fires (see first-call branch above).
+                "_rescout_pending": True,
+                "messages": [AIMessage(content=(
+                    "Okay — let's redo the literature search. What search "
+                    "terms or topic refinement should I use this time? "
+                    "(Or reply 'same' to re-run with the same title.)"
+                ))],
+            }
+        # Genuine cross-phase navigation. Emit an acknowledgement so the
+        # user sees the transition immediately, then the loop iterates
+        # into the target phase which will emit its own opening question.
+        return {
+            "current_phase": target,
+            "messages": [AIMessage(content=(
+                f"Going back to the {target.replace('_', ' ')} step."
+            ))],
+        }
 
     if intent.action == "confirm":
         return {
@@ -419,7 +523,10 @@ def run(state: M2SubGraphState) -> dict:
         new_state = dict(state)
         new_state["research_state_refinements"] = refinements
         # Reuse cached citations — no re-scout on refine
+        _beat(state, "synth.start",
+              "✍️ Re-synthesizing with your refinements…")
         draft = _synthesize(new_state, refinements=refinements)
+        _beat(state, "synth.done", "📝 Refined draft ready — formatting reply…")
         hint = _confirm_hint()  # W3: same cards on the refined draft
         ai = AIMessage(content=draft, additional_kwargs={"tool_calls_json": hint})
         return {

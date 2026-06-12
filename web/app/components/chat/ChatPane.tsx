@@ -24,8 +24,13 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   const { messages, streamingText, streamingProgress, streamingError, inflight, send } = useChat(threadId);
   // SP6.5: include m5_writing.chapters so we can gate the "Open editor" link in
   // ChatHeader — the link must only appear once at least one chapter exists.
+  // focus/current_module/module_status drive the header's focus chip (design's
+  // focus bar: "M2 · Literature Review · In progress").
   const { data: project } = useSWR<{
     name: string;
+    focus?: string | null;
+    current_module?: string;
+    module_status?: Record<string, string>;
     context_store: {
       m1_topic?: { research_title?: string } | null;
       m5_writing?: { chapters?: Record<string, unknown> } | null;
@@ -105,6 +110,12 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
       <ChatHeader
         projectName={project?.name ?? "…"}
         threadName={thread?.name ?? "…"}
+        focusModule={project ? (project.focus ?? project.current_module) : undefined}
+        focusStatus={
+          project
+            ? project.module_status?.[project.focus ?? project.current_module ?? ""] ?? "in_progress"
+            : undefined
+        }
         autoDraftButton={
           <AutoDraftButton runStatus={latestRun?.run?.status ?? null} onClick={onAutoDraftClick} />
         }
@@ -124,11 +135,14 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
                 progress panel. Open the editor to read it, or type below to
                 refine any section.
               </p>
+              {/* Distinct label from the header's "Open editor" button — two
+                  identically-named links to the same target read as a bug to
+                  screen readers (and broke the getByRole query in tests). */}
               <a
                 href={`/chat/projects/${projectId}/editor`}
-                className="mt-4 inline-flex items-center gap-2 py-2 px-4 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 transition-colors"
+                className="mt-4 inline-flex items-center gap-2 py-2 px-5 bg-primary-600 text-white text-sm font-semibold rounded-full hover:bg-primary-700 transition-colors"
               >
-                Open editor →
+                Read your draft →
               </a>
             </>
           ) : (

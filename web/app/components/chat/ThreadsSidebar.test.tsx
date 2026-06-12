@@ -19,7 +19,7 @@ describe("ThreadsSidebar", () => {
   test("highlights current thread", () => {
     render(<ThreadsSidebar threads={_threads} currentThreadId="t1" onSelectThread={() => {}} onCreateThread={() => {}} />);
     const mainItem = screen.getByText("Main").closest("button");
-    expect(mainItem).toHaveClass("bg-purple-50");
+    expect(mainItem).toHaveClass("bg-primary-50");
   });
 
   test("click selects thread", () => {

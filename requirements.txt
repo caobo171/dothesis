@@ -35,3 +35,9 @@ langgraph>=1.2.0,<2
 langgraph-checkpoint>=4.1.0,<5
 langgraph-checkpoint-postgres>=3.1.0,<4
 langchain-google-genai>=4.1.0,<5
+
+# === Deep agent runtime (v3 architecture — docs/architecture/2026-06-10) ===
+# Skills-driven agent replacing graph_v2; pinned minor because the skills/
+# backend API surface is still moving upstream.
+deepagents>=0.6.8,<0.7
+langchain-anthropic>=1.4.0,<2

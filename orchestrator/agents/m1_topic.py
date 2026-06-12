@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from orchestrator.agents.base import ModuleAgent
+from orchestrator.agents.shapes import WizardAgent
 from orchestrator.agents.widgets import CardOption
 from orchestrator.schemas.m1 import M1Output
 from orchestrator.tools.m1_topic import refine_title, suggest_topics
@@ -11,9 +12,15 @@ _PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _PROMPT = (_PROMPT_DIR / "m1.md").read_text()
 
 
-class M1Agent(ModuleAgent):
+class M1Agent(WizardAgent, ModuleAgent):
+    # PR #5 — declared as the Wizard shape per brief §3. The wizard refactor
+    # (one structured-output call per turn, no clarification loop) is the
+    # follow-up PR #5b; ModuleAgent's concrete step() resolves via MRO until
+    # then. The shape declaration pins the contract so the refactor PR can
+    # be reviewed against an explicit isinstance check.
     schema = M1Output
     module_key = "M1"
+    slice_field = "m1_topic"  # brief §6 — ModuleHandler contract
     system_prompt = _PROMPT
     tools = [suggest_topics, refine_title]
 
