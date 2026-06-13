@@ -34,6 +34,14 @@ from pydantic import BaseModel, Field
 # follow-up — see CLAUDE.md / the migration plan.
 ACCESS_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60
 
+# Stream tokens ride in the URL of browser-GET-only endpoints (EventSource SSE
+# + <a download>), which cannot carry a JSON body. Decision: keep them very
+# short-lived (120s) and bound to ONE resource via `scope`, so a leaked URL is
+# useful only for that resource for ~2 min and can NOT unlock the JSON API
+# (verify_stream_token requires typ=="stream"). Not strictly single-use:
+# EventSource reconnects reopen the same URL, so one-time use would break SSE.
+STREAM_TOKEN_TTL_SECONDS = 120
+
 # JWT algorithm: HS256 is symmetric (server signs + verifies with the same
 # secret). Asymmetric (RS256) would let other services verify without the
 # secret, but we have only one API process today; revisit when that changes.
@@ -83,6 +91,56 @@ def verify_access_token(token: str, *, secret: str) -> AccessTokenClaims:
     if not isinstance(sub, str) or not isinstance(iat, int) or not isinstance(exp, int):
         raise ValueError("malformed token claims")
     return AccessTokenClaims(user_id=sub, issued_at=iat, expires_at=exp)
+
+
+@dataclass(slots=True)
+class StreamTokenClaims:
+    user_id: str
+    scope: str
+    expires_at: int
+
+
+def sign_stream_token(user_id: str, *, scope: str, secret: str,
+                      ttl_seconds: int = STREAM_TOKEN_TTL_SECONDS) -> tuple[str, int]:
+    """Sign a short-lived, resource-scoped token for a browser-GET endpoint.
+
+    `scope` binds the token to one resource+action (e.g. "job:<id>",
+    "paper-export:<id>:<fmt>", "project-export:<id>/<filename>"). Returns
+    (token, expires_at_epoch).
+    """
+    now = int(time.time())
+    exp = now + ttl_seconds
+    payload: dict[str, Any] = {
+        "sub": str(user_id), "scope": scope, "typ": "stream",
+        "iat": now, "exp": exp,
+    }
+    return _jwt.encode(payload, secret, algorithm=_JWT_ALGO), exp
+
+
+def verify_stream_token(token: str, *, expected_scope: str,
+                        secret: str) -> StreamTokenClaims:
+    """Verify a stream token AND that it was minted for `expected_scope`.
+
+    Raises ValueError on bad signature / malformed / expired / wrong typ /
+    scope mismatch. Scope is checked here (not just by the caller) so a token
+    minted for resource A can never be replayed against resource B.
+    """
+    try:
+        payload = _jwt.decode(token, secret, algorithms=[_JWT_ALGO])
+    except _jwt.ExpiredSignatureError as e:
+        raise ValueError("stream token expired") from e
+    except _jwt.InvalidTokenError as e:
+        raise ValueError(f"bad stream token: {e}") from e
+    if payload.get("typ") != "stream":
+        raise ValueError("not a stream token")
+    sub = payload.get("sub")
+    scope = payload.get("scope")
+    exp = payload.get("exp")
+    if not isinstance(sub, str) or not isinstance(scope, str) or not isinstance(exp, int):
+        raise ValueError("malformed stream token claims")
+    if scope != expected_scope:
+        raise ValueError(f"stream token scope mismatch: {scope!r} != {expected_scope!r}")
+    return StreamTokenClaims(user_id=sub, scope=scope, expires_at=exp)
 
 
 class AuthedBody(BaseModel):
