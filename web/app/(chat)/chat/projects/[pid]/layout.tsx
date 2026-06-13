@@ -37,6 +37,17 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
   );
   const { data: uploads } = useSWR<UploadItem[]>(`/projects/${pid}/uploads`, fetcher);
 
+  // Credit totals: thread (right panel) + project (left panel). POST per the
+  // POST-only convention; refreshes on focus so the totals catch up after a
+  // response without extra plumbing from ChatPane.
+  const postFetcher = (url: string) => apiFetch(url, { method: "POST" });
+  const { data: threadCredits } = useSWR<{ total_credits: number; total_tokens: number }>(
+    currentTid ? `/threads/${currentTid}/credits` : null, postFetcher,
+  );
+  const { data: projectCredits } = useSWR<{ total_credits: number; total_tokens: number }>(
+    `/projects/${pid}/credits`, postFetcher,
+  );
+
   const createThread = async () => {
     // apiFetch injects access_token into the body — the bare fetch above
     // used to 401 silently because there's no cookie-session anymore.
@@ -66,6 +77,7 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
           // selected yet) — the user is shopping for one. Inside a thread,
           // Workflow is the more useful default.
           defaultTab={currentTid ? "workflow" : "threads"}
+          projectCredits={projectCredits?.total_credits}
         />
       }
       rightPane={
@@ -76,6 +88,7 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
           uploads={uploads ?? []}
           currentModule={project?.focus ?? project?.current_module}
           moduleStatus={project?.module_status}
+          threadCredits={currentTid ? threadCredits?.total_credits : undefined}
         />
       }
     >

@@ -49,6 +49,34 @@ function _formatBytes(n: number): string {
  * - Renders as a small pill below the message, so the affordance is
  *   discoverable without crowding the bubble itself.
  */
+// Per-response cost + latency, shown next to the Copy button. Hidden until the
+// backend has recorded a duration (legacy / user / in-flight rows have 0).
+function ResponseMeta({
+  costCredits,
+  durationMs,
+}: {
+  costCredits?: number;
+  durationMs?: number;
+}) {
+  if (!durationMs && !costCredits) return null;
+  const seconds = durationMs ? (durationMs / 1000).toFixed(1) : null;
+  return (
+    <span className="inline-flex items-center gap-2 text-[11.5px] text-ink-400">
+      {typeof costCredits === "number" && costCredits > 0 && (
+        <span title="Credits spent on this response">
+          {costCredits} {costCredits === 1 ? "credit" : "credits"}
+        </span>
+      )}
+      {seconds && (
+        <>
+          <span aria-hidden className="text-ink-300">·</span>
+          <span title="Response time">{seconds}s</span>
+        </>
+      )}
+    </span>
+  );
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -370,6 +398,9 @@ export type MessageBubbleProps = {
   toolCallsJson?: WidgetHint | null;
   onWidgetSelect?: WidgetSelectHandler;
   widgetDisabled?: boolean;
+  // Per-response cost + latency, shown in the assistant footer next to Copy.
+  costCredits?: number;
+  durationMs?: number;
   children?: ReactNode;
 };
 
@@ -381,6 +412,8 @@ export function MessageBubble({
   toolCallsJson,
   onWidgetSelect,
   widgetDisabled,
+  costCredits,
+  durationMs,
   children,
 }: MessageBubbleProps) {
   const isUser = role === "user";
@@ -425,7 +458,15 @@ export function MessageBubble({
   }
 
   return (
-    <AssistantFrame moduleTag={moduleTag} footer={<CopyButton text={content} />}>
+    <AssistantFrame
+      moduleTag={moduleTag}
+      footer={
+        <div className="flex items-center gap-3">
+          <CopyButton text={content} />
+          <ResponseMeta costCredits={costCredits} durationMs={durationMs} />
+        </div>
+      }
+    >
       <div className="prose-tight text-[14.5px]">{_renderMarkdown(content)}</div>
       {toolCallsJson && onWidgetSelect && (
         <WidgetRenderer

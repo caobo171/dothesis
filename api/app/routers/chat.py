@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..db import db_session, get_session_factory
@@ -364,6 +365,48 @@ def get_thread(thread_id: uuid.UUID,
     return t
 
 
+@router.post("/threads/{thread_id}/credits")
+def thread_credits(thread_id: uuid.UUID,
+                   user: User = Depends(current_user),
+                   db: Session = Depends(db_session)):
+    """Total credits + tokens spent across this thread's responses.
+
+    POST per the project's POST-only convention. Powers the right panel's
+    thread cost summary; sums the per-message cost the v3 chat router records.
+    """
+    t = db.get(Thread, thread_id)
+    if not t:
+        raise HTTPException(404, detail={"error": {"code": "not_found"}})
+    _owned_project(db, user, t.project_id)
+    row = db.query(
+        func.coalesce(func.sum(Message.cost_credits), 0),
+        func.coalesce(func.sum(Message.total_tokens), 0),
+    ).filter(Message.thread_id == thread_id).one()
+    return {"total_credits": int(row[0]), "total_tokens": int(row[1])}
+
+
+@router.post("/projects/{project_id}/credits")
+def project_credits(project_id: uuid.UUID,
+                    user: User = Depends(current_user),
+                    db: Session = Depends(db_session)):
+    """Total credits + tokens spent across ALL threads of this project.
+
+    Powers the left panel's project cost summary. Joins messages → threads so
+    the sum spans every conversation in the project.
+    """
+    _owned_project(db, user, project_id)
+    row = (
+        db.query(
+            func.coalesce(func.sum(Message.cost_credits), 0),
+            func.coalesce(func.sum(Message.total_tokens), 0),
+        )
+        .join(Thread, Thread.id == Message.thread_id)
+        .filter(Thread.project_id == project_id)
+        .one()
+    )
+    return {"total_credits": int(row[0]), "total_tokens": int(row[1])}
+
+
 @router.get("/threads/{thread_id}/messages")
 def list_messages(thread_id: uuid.UUID, before_id: int | None = None, limit: int = 50,
                   user: User = Depends(current_user),
@@ -382,6 +425,8 @@ def list_messages(thread_id: uuid.UUID, before_id: int | None = None, limit: int
     return [
         {"id": m.id, "role": m.role, "content": m.content,
          "module_tag": m.module_tag, "tool_calls_json": m.tool_calls_json,
+         "cost_credits": m.cost_credits, "duration_ms": m.duration_ms,
+         "total_tokens": m.total_tokens,
          "created_at": m.created_at.isoformat()}
         for m in reversed(rows)
     ]

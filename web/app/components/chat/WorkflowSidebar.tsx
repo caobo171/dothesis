@@ -75,6 +75,7 @@ export function WorkflowSidebar({
   onSelectThread,
   onNewThread,
   defaultTab,
+  projectCredits,
 }: {
   projectName?: string;
   projectSubtitle?: string;
@@ -83,6 +84,8 @@ export function WorkflowSidebar({
   tokenBalance?: number;
   tokenCap?: number;
   tier?: string;
+  /** Total credits spent across the whole project — shown at the bottom. */
+  projectCredits?: number;
   // Threads tab data. When `threads` is undefined the Threads tab is
   // hidden entirely and the sidebar becomes workflow-only (used on the
   // editor page where threads aren't relevant).
@@ -241,6 +244,17 @@ export function WorkflowSidebar({
               }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Project credit total — sum of every response's cost across all
+          threads of this project. */}
+      {typeof projectCredits === "number" && (
+        <div className="px-4 py-3 border-t border-ink-200 flex items-center justify-between text-[12px]">
+          <span className="text-ink-500">Tổng credits dự án</span>
+          <span className="font-bold text-ink-900 tabular-nums">
+            {projectCredits.toLocaleString()}
+          </span>
         </div>
       )}
     </aside>

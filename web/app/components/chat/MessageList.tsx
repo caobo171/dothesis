@@ -121,6 +121,8 @@ export function MessageList({
               toolCallsJson={m.tool_calls_json}
               onWidgetSelect={onWidgetSelect}
               widgetDisabled={widgetDisabled}
+              costCredits={m.cost_credits}
+              durationMs={m.duration_ms}
             />
           );
         })}

@@ -118,13 +118,29 @@ export type AttachmentsHint = {
   attachments: AttachmentChipMeta[];
 };
 
+// Export artifact download card (Claude-artifact style). Emitted by the v3
+// runtime when export_docx succeeds, persisted on the assistant Message so the
+// DOCX/PDF download links appear IN the chat message, not only the panel.
+export type ExportArtifact = {
+  kind: string;              // "docx" | "pdf"
+  download_url: string;      // /api/v1/projects/{pid}/exports/{filename}
+  size_bytes?: number;
+  s3_key?: string;
+};
+
+export type ExportArtifactsHint = {
+  widget_type: "export_artifacts";
+  artifacts: ExportArtifact[];
+};
+
 // Discriminated union — future variants (e.g. canvas_editor) land here.
 export type WidgetHint =
   | CardGridHint
   | ListEditorHint
   | FlowChartHint
   | PapersPanelHint
-  | AttachmentsHint;
+  | AttachmentsHint
+  | ExportArtifactsHint;
 
 export type WidgetSelectHandler = (
   fieldName: string,

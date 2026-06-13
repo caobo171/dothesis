@@ -99,6 +99,7 @@ def make_writing_tools(store) -> list:
             except Exception:
                 logger.exception("export_docx: load_full_context_store failed")
         references = ((full_cs or {}).get("m2_literature") or {}).get("literature_sources") or []
+        language = ((full_cs or {}).get("m1_topic") or {}).get("language") or "vi"
 
         # No draft yet → generate one from the upstream modules. But FIRST
         # check the project actually has the data a qualified thesis needs.
@@ -154,7 +155,7 @@ def make_writing_tools(store) -> list:
                 logger.exception("export_docx: persisting generated draft failed")
 
         try:
-            artifacts = run_export(sections, str(project_id), references=references)
+            artifacts = run_export(sections, str(project_id), references=references, language=language)
         except Exception as e:
             logger.exception("export_docx: run_export failed")
             return json.dumps({"error": "export_failed", "detail": str(e)})
@@ -173,12 +174,14 @@ def make_writing_tools(store) -> list:
             "ok": True,
             "generated": generated,
             "artifacts": artifacts,
-            "message": (
-                "Drafted all chapters and exported them — DOCX and PDF are "
-                "ready in the Context store panel."
-                if generated else
-                "DOCX and PDF are ready in the Context store panel."
-            ),
+            # Instruction to the agent, NOT user-facing copy — the agent must
+            # write its OWN confirmation in the conversation's language (the
+            # user got an English message parroted from here before). A download
+            # card is already rendered in the chat message, so keep it short.
+            "instruction": "Export succeeded. Reply with a SHORT confirmation "
+                           "in the user's language (Vietnamese if they wrote in "
+                           "Vietnamese). Do NOT paste chapter text. The DOCX/PDF "
+                           "download buttons are already shown in your message.",
         }, ensure_ascii=False)
 
     return [export_docx]

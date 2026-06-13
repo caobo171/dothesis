@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import useSWR, { mutate as globalMutate } from "swr";
 import { useStream } from "./useStream";
 import type { WidgetHint } from "../widgets/types";
 // (WidgetHint imported above is reused for the optimistic-message cast
@@ -20,6 +20,10 @@ export type Message = {
   content: string;
   module_tag?: string | null;
   tool_calls_json?: WidgetHint | null;
+  // Per-response cost + latency (assistant rows). Shown in the message footer.
+  cost_credits?: number;
+  duration_ms?: number;
+  total_tokens?: number;
   created_at: string;
 };
 
@@ -126,6 +130,14 @@ export function useChat(threadId: string) {
 
     // Revalidate to replace the optimistic message with server truth
     void mutate();
+    // Refresh the thread + project credit totals (rendered in the side panels
+    // by the layout) now that this response recorded its cost. Key-matcher
+    // mutate hits both `/threads/{id}/credits` and `/projects/{id}/credits`.
+    void globalMutate(
+      key => typeof key === "string" && key.includes("/credits"),
+      undefined,
+      { revalidate: true },
+    );
   };
 
   return {

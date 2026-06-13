@@ -87,6 +87,27 @@ _PAPERS_RE = re.compile(
 )
 
 
+def _parse_export_artifacts(content: Any) -> dict | None:
+    """Shape an export_docx tool result into an `export_artifacts` widget hint.
+
+    The tool returns JSON like {"ok": true, "artifacts": [{kind, download_url,
+    size_bytes, …}]}. We surface those as a download card in the chat message.
+    Returns None unless the result is a successful export with artifacts.
+    """
+    if not isinstance(content, str):
+        return None
+    try:
+        data = json.loads(content)
+    except Exception:
+        return None
+    if not isinstance(data, dict) or not data.get("ok"):
+        return None
+    artifacts = data.get("artifacts") or []
+    if not artifacts:
+        return None
+    return {"widget_type": "export_artifacts", "artifacts": artifacts}
+
+
 def _parse_papers_marker(text: str) -> dict | None:
     """Pull the first `[PAPERS] {json} [/PAPERS]` block out of `text` and
     shape it into a `PapersPanelHint`. Returns None when no marker is
@@ -464,12 +485,32 @@ async def stream_turn(
                     for m in raw_msgs:
                         m_type = getattr(m, "type", None)
                         if m_type == "tool":
+                            _tool_name = getattr(m, "name", "") or ""
                             yield {
                                 "type": "tool_end",
-                                "name": getattr(m, "name", "") or "",
+                                "name": _tool_name,
                                 "preview": _preview(m.content),
                             }
+                            # When the export tool succeeds, surface its
+                            # artifacts as a download card in the chat message
+                            # (Claude-artifact style) — not just the Context
+                            # store panel. Parsed from the tool's JSON result.
+                            if _tool_name == "export_docx":
+                                hint = _parse_export_artifacts(m.content)
+                                if hint is not None:
+                                    yield {"type": "tool_calls", "payload": hint}
                         else:
+                            # Token usage for cost metering. Gemini surfaces
+                            # usage_metadata on the completed AIMessage in the
+                            # updates stream; sum across every LLM step in the
+                            # turn so the per-response cost reflects tool loops.
+                            _usage = getattr(m, "usage_metadata", None)
+                            if _usage:
+                                yield {
+                                    "type": "usage",
+                                    "input_tokens": int(_usage.get("input_tokens", 0) or 0),
+                                    "output_tokens": int(_usage.get("output_tokens", 0) or 0),
+                                }
                             for tc in getattr(m, "tool_calls", None) or []:
                                 if tc.get("name"):
                                     yield {

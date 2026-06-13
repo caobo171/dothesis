@@ -53,9 +53,23 @@ check() {
 
 echo "==> checking M5 export toolchain"
 check pandoc   "pandoc (DOCX formatting)"        "$PANDOC_HINT"
+
 # LibreOffice ships the binary as `soffice` (or `libreoffice` on some distros).
-if command -v soffice >/dev/null 2>&1 || command -v libreoffice >/dev/null 2>&1; then
-  echo "  ✓ libreoffice (DOCX→PDF)"
+# IMPORTANT: don't trust `command -v` alone — a brew cask symlink can survive
+# after the app bundle it points to is deleted (a dangling symlink that exits
+# 0 on `which` but fails the moment you run it). Actually invoke --version so a
+# broken install is reported, not silently passed.
+soffice_bin=""
+if command -v soffice >/dev/null 2>&1; then
+  soffice_bin=soffice
+elif command -v libreoffice >/dev/null 2>&1; then
+  soffice_bin=libreoffice
+fi
+if [ -n "$soffice_bin" ] && "$soffice_bin" --version >/dev/null 2>&1; then
+  echo "  ✓ libreoffice (DOCX→PDF) — $("$soffice_bin" --version 2>/dev/null | head -1)"
+elif [ -n "$soffice_bin" ]; then
+  echo "  ✗ ${soffice_bin} is on PATH but BROKEN (won't run — dangling install?). Reinstall: ${SOFFICE_HINT}"
+  missing=$((missing + 1))
 else
   echo "  ✗ libreoffice/soffice NOT found — PDF export will degrade. Install: ${SOFFICE_HINT}"
   missing=$((missing + 1))

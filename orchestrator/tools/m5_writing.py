@@ -557,6 +557,26 @@ M5_CHAPTER_TITLES = {
     "discussion":  "Chapter 5 — Discussion",
     "conclusion":  "Chapter 6 — Conclusion",
 }
+# Vietnamese chapter titles — the document language must be consistent, so the
+# headings match the (Vietnamese) chapter prose instead of staying English.
+M5_CHAPTER_TITLES_VI = {
+    "intro":       "Chương 1 — Giới thiệu",
+    "lit_review":  "Chương 2 — Tổng quan tài liệu",
+    "methodology": "Chương 3 — Phương pháp nghiên cứu",
+    "results":     "Chương 4 — Kết quả",
+    "discussion":  "Chương 5 — Thảo luận",
+    "conclusion":  "Chương 6 — Kết luận",
+}
+_REFERENCES_TITLE = {"vi": "Tài liệu tham khảo", "en": "References"}
+
+
+def _chapter_titles(language: str) -> dict:
+    """Chapter-title map matching the prose language (vi → Vietnamese)."""
+    return M5_CHAPTER_TITLES_VI if str(language).lower().startswith("vi") else M5_CHAPTER_TITLES
+
+
+def _references_title(language: str) -> str:
+    return _REFERENCES_TITLE["vi"] if str(language).lower().startswith("vi") else _REFERENCES_TITLE["en"]
 
 
 def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
@@ -703,6 +723,7 @@ def compose_all_sections(context_store: dict) -> list[dict]:
     context_slice: dict = {**m1, **m2, **m3, **m4}
     context_slice.setdefault("results", m4.get("analysis_results"))
 
+    titles = _chapter_titles(language)
     out: list[dict] = []
     for name in M5_CHAPTER_ORDER:
         try:
@@ -720,14 +741,14 @@ def compose_all_sections(context_store: dict) -> list[dict]:
             prose = ""
         if not prose.strip():
             prose = _fallback_section(name, context_store)
-        out.append({"title": M5_CHAPTER_TITLES[name], "prose": prose})
+        out.append({"title": titles[name], "prose": prose})
 
     # Append a References section built from the M2 sources, with clickable
     # DOI/URL links. Without this the document has inline "(Author, Year)"
     # citations but no bibliography to back them.
     refs_body = _references_section_body(references)
     if refs_body:
-        out.append({"title": "References", "prose": refs_body})
+        out.append({"title": _references_title(language), "prose": refs_body})
     return out
 
 
@@ -831,7 +852,8 @@ def _artifact_dict(kind: str, pid: str, s3_key: str, size_bytes: int) -> dict:
 
 
 def run_export(sections: list[dict], project_id: str,
-               references: list[dict] | None = None) -> list[dict]:
+               references: list[dict] | None = None,
+               language: str = "en") -> list[dict]:
     """Render docx + pdf, upload to S3, return ContextPanel-ready artifacts.
 
     The single export entrypoint shared by the auto-export hook, the
@@ -839,13 +861,14 @@ def run_export(sections: list[dict], project_id: str,
 
     When `references` is provided, renders via the citeproc path so inline
     "(Author, Year)" citations become clickable links to the auto-generated
-    References section. Falls back to the plain render on any citeproc failure
-    so export never breaks.
+    References section. `language` keeps the generated References heading
+    consistent with the (possibly Vietnamese) document. Falls back to the plain
+    render on any citeproc failure so export never breaks.
     """
     pid = str(project_id)
     if references:
         try:
-            return _run_export_citeproc(sections, pid, references)
+            return _run_export_citeproc(sections, pid, references, language)
         except Exception:
             logger.exception("citeproc export failed — falling back to plain render")
 
@@ -857,23 +880,30 @@ def run_export(sections: list[dict], project_id: str,
     ]
 
 
-def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict]) -> list[dict]:
+# All language variants of the References heading — used to strip a manually
+# built bibliography before citeproc generates its own.
+_ALL_REFERENCE_TITLES = {t.lower() for t in _REFERENCES_TITLE.values()}
+
+
+def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict],
+                         language: str = "en") -> list[dict]:
     """Render DOCX with pandoc citeproc (clickable citations + auto bibliography),
     then convert that DOCX to PDF via LibreOffice so both formats match."""
     csl_items, ly_to_key = _assign_citation_keys(references)
 
-    # Drop any manually-built References section — citeproc generates its own —
-    # and rewrite inline citations to [@key] form in every chapter.
+    # Drop any manually-built References section (any language) — citeproc
+    # generates its own — and rewrite inline citations to [@key] in each chapter.
     body: list[dict] = []
     for s in sections:
-        if (s.get("title") or "").strip().lower() == "references":
+        if (s.get("title") or "").strip().lower() in _ALL_REFERENCE_TITLES:
             continue
         body.append({
             "title": s.get("title", ""),
             "prose": _convert_inline_citations(s.get("prose", ""), ly_to_key),
         })
-    # Trailing heading tells pandoc where to place the generated bibliography.
-    body.append({"title": "References", "prose": ""})
+    # Trailing heading (in the doc's language) tells pandoc where to place the
+    # generated bibliography.
+    body.append({"title": _references_title(language), "prose": ""})
 
     bib_path = _scratch_dir() / f"refs-{uuid4().hex[:8]}.json"
     bib_path.write_text(json.dumps(csl_items, ensure_ascii=False), encoding="utf-8")

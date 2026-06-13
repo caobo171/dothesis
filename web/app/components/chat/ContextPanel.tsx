@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Clock, Download, ExternalLink, FileText } from "lucide-react";
+import { AlertTriangle, Clock, Coins, Download, ExternalLink, FileText } from "lucide-react";
 
 import { SliceModal } from "./SliceModal";
 import { tokenStore } from "@/app/lib/tokenStore";
@@ -53,11 +53,14 @@ export function ContextPanel({
   uploads,
   currentModule,
   moduleStatus,
+  threadCredits,
 }: {
   contextStore: ContextStore;
   uploads: UploadItem[];
   currentModule?: string;
   moduleStatus?: ModuleStatusMap;
+  /** Total credits spent in the current thread — shown in the header. */
+  threadCredits?: number;
 }) {
   const [showRaw, setShowRaw] = useState(false);
 
@@ -79,17 +82,26 @@ export function ContextPanel({
     >
       {/* Header */}
       <div className="px-[18px] py-3.5 border-b border-ink-200 flex items-center gap-2">
-        <span className="text-[14px] font-bold">Context store</span>
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-[11px] font-semibold font-mono">
+        <span className="text-[14px] font-bold shrink-0 whitespace-nowrap">Context store</span>
+        <span className="inline-flex items-center min-w-0 px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-[11px] font-semibold font-mono truncate">
           context_store.json
         </span>
-        <span className="flex-1" />
+        <span className="flex-1 min-w-[6px]" />
+        {typeof threadCredits === "number" && threadCredits > 0 && (
+          <span
+            title="Credits spent in this thread"
+            className="inline-flex items-center gap-1 shrink-0 whitespace-nowrap text-[11px] font-semibold text-amber-600"
+          >
+            <Coins className="w-3 h-3" aria-hidden />
+            {threadCredits.toLocaleString()}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => setShowRaw(s => !s)}
           aria-label="Toggle raw JSON"
           title="Raw JSON"
-          className="w-7 h-7 rounded-md text-ink-500 hover:bg-ink-100 hover:text-ink-900 inline-flex items-center justify-center text-[13px] font-mono transition-colors"
+          className="w-7 h-7 shrink-0 rounded-md text-ink-500 hover:bg-ink-100 hover:text-ink-900 inline-flex items-center justify-center text-[13px] font-mono transition-colors"
         >
           {"{}"}
         </button>

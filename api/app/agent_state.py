@@ -186,6 +186,7 @@ class DbProjectStateStore(ProjectStateStore):
                     return
                 sections = sections_from_m5_slice(cs.m5_writing or {})
                 references = (cs.m2_literature or {}).get("literature_sources") or []
+                language = (cs.m1_topic or {}).get("language") or "vi"
                 if not sections:
                     # M5 done was claimed without usable chapter prose (neither
                     # the chapters shape nor final_sections carried text). The
@@ -197,7 +198,7 @@ class DbProjectStateStore(ProjectStateStore):
                     )
                     return
 
-            artifacts = run_export(sections, str(self.project_id), references=references)
+            artifacts = run_export(sections, str(self.project_id), references=references, language=language)
             self.persist_export_artifacts(artifacts)
             log.info("M5 auto-export completed for project %s", self.project_id)
         except Exception:

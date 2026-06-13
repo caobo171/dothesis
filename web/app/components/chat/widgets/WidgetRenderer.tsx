@@ -1,6 +1,7 @@
 "use client";
 
 import { CardGridWidget } from "./CardGridWidget";
+import { ExportArtifactsCard } from "./ExportArtifactsCard";
 import { FlowChartWidget } from "./FlowChartWidget";
 import { ListEditorWidget } from "./ListEditorWidget";
 import { PapersPanel } from "./PapersPanel";
@@ -46,6 +47,10 @@ export function WidgetRenderer({
           }
         />
       );
+    case "export_artifacts":
+      // DOCX/PDF download card rendered inside the assistant message after a
+      // successful export (Claude-artifact style). Read-only — no onSelect.
+      return <ExportArtifactsCard hint={hint} />;
     default:
       return null;
   }

@@ -176,6 +176,12 @@ async def send_message_v3(
     langgraph_thread_id = t.langgraph_thread_id
 
     async def gen():
+        import time as _time
+        _turn_t0 = _time.monotonic()
+        # Accumulate token usage across every LLM step in the turn (tool loops
+        # included) so the per-response cost reflects the whole turn.
+        _usage_in = 0
+        _usage_out = 0
         chunks: list[str] = []
         # Captured from `tool_calls` events emitted by the runtime when the
         # agent included an `[OPTIONS] …` marker. Persisted onto the
@@ -287,6 +293,11 @@ async def send_message_v3(
                     # in MessageBubble. Captured for persistence below.
                     final_tool_calls = ev.get("payload")
                     yield sse_pack({"type": "tool_calls", "payload": final_tool_calls})
+                elif kind == "usage":
+                    # Token usage for this LLM step — accumulate (don't forward
+                    # mid-stream; the total is persisted + sent in `done`).
+                    _usage_in += int(ev.get("input_tokens", 0) or 0)
+                    _usage_out += int(ev.get("output_tokens", 0) or 0)
                 elif kind == "error":
                     logger.error("agent turn error for thread %s: %s", thread_pk, ev["message"])
                     print(f"[v3] ERROR msg={ev.get('message')!r}",
@@ -316,6 +327,14 @@ async def send_message_v3(
             print(f"[v3] turn done counts={_counts}",
                   file=_sys.stderr, flush=True)
 
+        # Per-response cost + latency. Credits are derived from total tokens at
+        # a fixed rate (chat isn't billed per-token elsewhere, so this is a
+        # transparent display metric): ~1 credit per 1k tokens, min 1 when any
+        # work happened. Shown in the message footer + summed for thread/project.
+        total_tokens = _usage_in + _usage_out
+        duration_ms = int((_time.monotonic() - _turn_t0) * 1000)
+        cost_credits = max(1, round(total_tokens / 1000)) if total_tokens else 0
+
         # Persist the assistant reply, tagged with the post-turn focus so
         # bubbles get their module chip on reload.
         full = "".join(chunks)
@@ -332,9 +351,13 @@ async def send_message_v3(
                     # would only appear during the in-flight stream and
                     # vanish after SWR revalidation.
                     tool_calls_json=final_tool_calls,
+                    cost_credits=cost_credits,
+                    duration_ms=duration_ms,
+                    total_tokens=total_tokens,
                 ))
                 conn.commit()
-        yield sse_pack({"type": "done"})
+        yield sse_pack({"type": "done", "cost_credits": cost_credits,
+                        "duration_ms": duration_ms, "total_tokens": total_tokens})
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache"})
