@@ -18,6 +18,7 @@ type Txn = {
 // Human labels for the ledger `reason` codes written by credit_ledger.
 const REASON_LABEL: Record<string, string> = {
   chat_turn: "Chat / writing run",
+  auto_run: "Auto-approve run",
   paper_run: "Thesis run",
   purchase: "Top-up",
   refund: "Refund",

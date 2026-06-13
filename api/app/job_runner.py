@@ -158,6 +158,13 @@ async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
                     paper = db.get(Paper, job.paper_id)
                     if paper:
                         paper.status = "done"
+                else:
+                    # Auto-approve run finished: charge the LLM tokens it used.
+                    # Only successful runs reach job_done, so failures cost nothing.
+                    try:
+                        _charge_auto_run(db, job)
+                    except Exception:  # noqa: BLE001 — never break the monitor on billing
+                        log.exception("auto-run credit charge failed for job %s", job_id)
             if type_ == "error":
                 job.status = "failed"
                 job.finished_at = datetime.now(timezone.utc)
@@ -216,6 +223,59 @@ def cancel_job(db: Session, job: Job) -> None:
             if paper_user:
                 refund_if_unrefunded(db, paper_user, paper_id=paper.id)
     db.commit()
+
+
+def _charge_auto_run(db: Session, run: Job) -> None:
+    """Charge an auto-approve run for the LLM tokens it actually consumed.
+
+    The orchestrator records every metered call in `token_ledger` (per project).
+    Sum the tokens recorded since this run started, convert at the chat rate
+    (~1 credit / 1k tokens), and debit the project owner — writing a ledger row
+    that shows up on the Transactions page. Idempotent (skips if this run was
+    already charged) and capped at the available balance so a finished run never
+    errors the monitor.
+    """
+    if run.paper_id or not run.project_id or not run.started_at:
+        return
+    from sqlalchemy import func, select
+
+    from .credit_ledger import debit
+    from .models import CreditTransaction, Project, TokenLedger, User
+
+    already = db.scalar(
+        select(CreditTransaction.id).where(
+            CreditTransaction.ref_type == "run",
+            CreditTransaction.ref_id == run.id,
+            CreditTransaction.reason == "auto_run",
+        )
+    )
+    if already:
+        return
+
+    proj = db.get(Project, run.project_id)
+    owner = db.get(User, proj.user_id) if proj else None
+    if owner is None:
+        return
+
+    total_tokens = int(
+        db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(TokenLedger.prompt_tokens + TokenLedger.completion_tokens), 0
+                )
+            ).where(
+                TokenLedger.project_id == run.project_id,
+                TokenLedger.created_at >= run.started_at,
+            )
+        )
+        or 0
+    )
+    if total_tokens <= 0:
+        return
+    cost = max(1, round(total_tokens / 1000))
+    charge = min(cost, owner.credit or 0)
+    if charge > 0:
+        debit(db, owner, delta=charge, reason="auto_run", ref_type="run", ref_id=run.id)
 
 
 def spawn_orchestrator_run(db: Session, run: Job, brief: dict,
