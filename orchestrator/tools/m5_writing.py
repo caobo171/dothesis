@@ -797,9 +797,13 @@ def _assign_citation_keys(references: list[dict]) -> tuple[list[dict], dict]:
 def _convert_inline_citations(prose: str, ly_to_key: dict) -> str:
     """Rewrite "(Author, Year; Author2, Year2)" → pandoc "[@key1; @key2]".
 
-    Only rewrites a parenthetical when EVERY comma-year part maps to a known
-    reference; otherwise the parenthetical is left exactly as written (so
-    "(see Figure 1)" or an unknown citation is never mangled).
+    Accepts both "Author, Year" and "Author Year" (the LLM frequently drops the
+    comma — "(Hilman 2024; Nocker 2024)" — and without this the citation stayed
+    plain text and never became a clickable link in the DOCX/PDF).
+
+    Only rewrites a parenthetical when EVERY part maps to a known reference;
+    otherwise the parenthetical is left exactly as written (so "(see Figure 1)"
+    or an unknown citation is never mangled).
     """
     if not prose or not ly_to_key:
         return prose
@@ -808,7 +812,9 @@ def _convert_inline_citations(prose: str, ly_to_key: dict) -> str:
         parts = [p.strip() for p in m.group(1).split(";")]
         keys: list[str] = []
         for p in parts:
-            cm = re.match(r"^(.*?),\s*(\d{4})$", p)
+            # Author/year separator may be a comma+space OR just a space; an
+            # optional trailing letter handles disambiguated years like "2024a".
+            cm = re.match(r"^(.*?)[,\s]\s*(\d{4})[a-z]?$", p)
             if not cm:
                 return m.group(0)
             key = ly_to_key.get((cm.group(1).strip(), cm.group(2)))
