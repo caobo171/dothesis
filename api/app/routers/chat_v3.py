@@ -22,7 +22,8 @@ from pathlib import Path
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from ..models import Message, PaperUpload, Thread
+from ..credit_ledger import debit
+from ..models import Message, PaperUpload, Project, Thread, User
 from ..sse import sse_pack
 
 logger = logging.getLogger(__name__)
@@ -356,8 +357,32 @@ async def send_message_v3(
                     total_tokens=total_tokens,
                 ))
                 conn.commit()
+
+        # Charge the user for this turn: reduce their balance AND write a ledger
+        # row so the spend shows in /credit/transactions (the per-message
+        # cost_credits above is only a display metric). Use a fresh Session — the
+        # request's db is closed by the time this async generator streams. Charge
+        # at most the available balance so a turn never crashes the stream on an
+        # empty wallet (pre-flight gating before the turn is a follow-up).
+        credit_balance = None
+        if cost_credits > 0:
+            try:
+                with Session(engine) as _s:
+                    proj = _s.get(Project, project_id)
+                    owner = _s.get(User, proj.user_id) if proj else None
+                    if owner is not None:
+                        charge = min(cost_credits, owner.credit or 0)
+                        if charge > 0:
+                            debit(_s, owner, delta=charge, reason="chat_turn",
+                                  ref_type="thread", ref_id=thread_pk)
+                            _s.commit()
+                        credit_balance = owner.credit
+            except Exception:  # noqa: BLE001
+                logger.exception("credit debit failed for thread %s", thread_pk)
+
         yield sse_pack({"type": "done", "cost_credits": cost_credits,
-                        "duration_ms": duration_ms, "total_tokens": total_tokens})
+                        "duration_ms": duration_ms, "total_tokens": total_tokens,
+                        "credit_balance": credit_balance})
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache"})

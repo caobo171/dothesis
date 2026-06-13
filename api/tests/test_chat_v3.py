@@ -21,7 +21,7 @@ def _setup_project(client) -> tuple[uuid.UUID, uuid.UUID]:
     with sf() as db:
         u = User(email=f"u{uuid.uuid4().hex[:6]}@x",
                  username=f"u{uuid.uuid4().hex[:6]}",
-                 password_hash="x", email_verified=True)
+                 password_hash="x", email_verified=True, credit=10000)
         db.add(u); db.commit()
         from app.security import create_session
         token = create_session(db, u)
@@ -68,6 +68,38 @@ def test_v3_turn_streams_and_persists(client, monkeypatch):
         msgs = db.query(Message).filter_by(thread_id=tid).order_by(Message.id).all()
     assert [m.role for m in msgs] == ["user", "assistant"]
     assert msgs[1].content == "Xin chào! Bạn đã có gì cho luận văn?"
+
+
+def test_v3_turn_debits_credits_and_records_transaction(client, monkeypatch):
+    pid, tid = _setup_project(client)
+
+    async def fake_stream_turn(agent, thread_id, text, attachments=None):
+        yield {"type": "token", "text": "hi"}
+        # 3000 tokens → max(1, round(3000/1000)) = 3 credits.
+        yield {"type": "usage", "input_tokens": 1500, "output_tokens": 1500}
+        yield {"type": "done"}
+
+    async def fake_get_agent(db, project_id):
+        return object()
+
+    monkeypatch.setattr("app.routers.chat_v3._get_agent", fake_get_agent)
+    monkeypatch.setattr("agent.runtime.stream_turn", fake_stream_turn)
+
+    resp = client.post(f"/api/v1/threads/{tid}/messages", json={"text": "hello"})
+    assert resp.status_code == 200
+    assert '"type": "done"' in resp.text
+
+    from app.models import CreditTransaction, Project
+    sf = get_session_factory()
+    with sf() as db:
+        proj = db.get(Project, pid)
+        owner = db.get(User, proj.user_id)
+        assert owner.credit == 10000 - 3  # balance reduced
+        txns = (db.query(CreditTransaction)
+                  .filter_by(user_id=owner.id, reason="chat_turn").all())
+        assert len(txns) == 1
+        assert txns[0].delta == -3
+        assert str(txns[0].ref_id) == str(tid)
 
 
 def test_v3_error_event_surfaces(client, monkeypatch):
