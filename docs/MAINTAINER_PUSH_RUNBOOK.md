@@ -2,7 +2,7 @@
 
 Date: 2026-02-16
 
-This runbook standardizes push hygiene for `federicodeponte/opendraft` and prevents account/credential drift.
+This runbook standardizes push hygiene for `federicodeponte/dothesis` and prevents account/credential drift.
 
 ## 0) Commit hygiene standard
 

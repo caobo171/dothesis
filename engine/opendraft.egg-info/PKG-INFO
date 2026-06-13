@@ -1,15 +1,15 @@
 Metadata-Version: 2.4
-Name: opendraft
+Name: dothesis
 Version: 1.6.21
 Summary: Generate master-level research papers with real citations in minutes
 Author: Federico De Ponte
 Maintainer: Federico De Ponte
 License: MIT
-Project-URL: Homepage, https://opendraft.xyz
-Project-URL: Documentation, https://github.com/federicodeponte/opendraft/tree/main/docs
-Project-URL: Repository, https://github.com/federicodeponte/opendraft
-Project-URL: Changelog, https://github.com/federicodeponte/opendraft/blob/main/CHANGELOG.md
-Project-URL: Bug Tracker, https://github.com/federicodeponte/opendraft/issues
+Project-URL: Homepage, https://dothesis.xyz
+Project-URL: Documentation, https://github.com/federicodeponte/dothesis/tree/main/docs
+Project-URL: Repository, https://github.com/federicodeponte/dothesis
+Project-URL: Changelog, https://github.com/federicodeponte/dothesis/blob/main/CHANGELOG.md
+Project-URL: Bug Tracker, https://github.com/federicodeponte/dothesis/issues
 Keywords: academic-writing,draft,ai,research,citation-management,llm,pdf-generation,scholarly
 Classifier: Development Status :: 4 - Beta
 Classifier: Intended Audience :: Science/Research
@@ -49,7 +49,7 @@ Requires-Dist: isort>=5.12.0; extra == "dev"
 Provides-Extra: docker
 Requires-Dist: streamlit>=1.28.0; extra == "docker"
 Provides-Extra: all
-Requires-Dist: opendraft[dev,docker]; extra == "all"
+Requires-Dist: dothesis[dev,docker]; extra == "all"
 
 # OpenDraft Engine
 
@@ -76,7 +76,7 @@ engine/
 │   ├── 04_validate/        # Skeptic, Verifier, Referee
 │   ├── 05_refine/          # Citation Verifier, Voice, Entropy, Polish
 │   └── 06_enhance/         # Abstract Generator, Enhancer
-└── opendraft/              # CLI tools
+└── dothesis/              # CLI tools
 ```
 
 ## Usage

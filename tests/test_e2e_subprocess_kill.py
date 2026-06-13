@@ -151,7 +151,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     import os
-    os.chdir(Path(__file__).parent.parent)  # CD to opendraft root
+    os.chdir(Path(__file__).parent.parent)  # CD to dothesis root
 
     success = run_mock_pipeline(
         output_dir=Path(args.output_dir),

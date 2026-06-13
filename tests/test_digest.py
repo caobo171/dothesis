@@ -119,14 +119,14 @@ class TestDigestCLI:
 
     def test_cli_file_not_found(self):
         """Test CLI error when file not found."""
-        from opendraft.cli import run_digest_command
+        from dothesis.cli import run_digest_command
 
         result = run_digest_command(["/nonexistent/file.pdf"])
         assert result == 1
 
     def test_cli_help(self, capsys):
         """Test CLI help output."""
-        from opendraft.cli import run_digest_command
+        from dothesis.cli import run_digest_command
 
         with pytest.raises(SystemExit) as exc_info:
             run_digest_command(["--help"])
@@ -137,7 +137,7 @@ class TestDigestCLI:
 
     def test_cli_voice_choices(self):
         """Test that voice argument accepts valid choices."""
-        from opendraft.cli import run_digest_command
+        from dothesis.cli import run_digest_command
 
         # Invalid voice should fail
         with pytest.raises(SystemExit):

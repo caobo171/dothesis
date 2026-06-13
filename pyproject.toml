@@ -3,13 +3,13 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "opendraft"
+name = "dothesis"
 version = "1.7.2"
 description = "Open-source AI research draft generator with 19 specialized agents and verified citations"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Federico De Ponte", email = "federico@opendraft.xyz"}
+    {name = "Federico De Ponte", email = "federico@dothesis.xyz"}
 ]
 keywords = [
     "academic writing",
@@ -40,10 +40,10 @@ requires-python = ">=3.10"
 
 [project.urls]
 Homepage = "https://openpaper.dev"
-Repository = "https://github.com/federicodeponte/opendraft"
-Documentation = "https://github.com/federicodeponte/opendraft#readme"
-Issues = "https://github.com/federicodeponte/opendraft/issues"
-Changelog = "https://github.com/federicodeponte/opendraft/blob/master/CHANGELOG.md"
+Repository = "https://github.com/federicodeponte/dothesis"
+Documentation = "https://github.com/federicodeponte/dothesis#readme"
+Issues = "https://github.com/federicodeponte/dothesis/issues"
+Changelog = "https://github.com/federicodeponte/dothesis/blob/master/CHANGELOG.md"
 
 [project.optional-dependencies]
 pdf = ["PyPDF2", "pdfplumber"]

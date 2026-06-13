@@ -35,7 +35,7 @@
 - [ ] Unit tests pass (`pytest`)
 - [ ] E2E tests pass (if applicable)
 - [ ] Manual testing completed
-- [ ] All checks pass (`opendraft verify`)
+- [ ] All checks pass (`dothesis verify`)
 
 **Test details:**
 

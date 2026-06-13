@@ -73,7 +73,7 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
     setExportError(null);
     try {
       // apiFetch injects access_token + throws ApiError on non-2xx; replaces
-      // the bare fetch that used to rely on the opendraft_session cookie.
+      // the bare fetch that used to rely on the dothesis_session cookie.
       await apiFetch(`/projects/${projectId}/m5/export`, { method: "POST" });
       setLastExportAt(new Date());
       setEditsSinceExport(0);

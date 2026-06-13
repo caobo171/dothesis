@@ -319,7 +319,7 @@ student_id: "{yaml_student_id}"
 project_type: "{draft_type}"
 word_count: "{word_count:,} words"
 pages: "{pages_estimate}"
-generated_by: "OpenDraft AI - https://github.com/federicodeponte/opendraft"
+generated_by: "OpenDraft AI - https://github.com/federicodeponte/dothesis"
 ---
 
 ## Abstract

@@ -30,7 +30,7 @@ import { useMe } from "@/app/lib/use-me";
 import { Brand } from "./Brand";
 import type { SidebarSection } from "./sections";
 
-const COLLAPSED_KEY = "opendraft_sidebar_collapsed";
+const COLLAPSED_KEY = "dothesis_sidebar_collapsed";
 
 async function logout() {
   // tokenStore.clear wipes both localStorage AND the marker cookie that

@@ -26,9 +26,9 @@ if sys.version_info < (3, 10):
     print(f"  {PURPLE}│{RESET}                                                             {PURPLE}│{RESET}")
     print(f"  {PURPLE}│{RESET}   {BOLD}To fix, run:{RESET}                                              {PURPLE}│{RESET}")
     print(f"  {PURPLE}│{RESET}                                                             {PURPLE}│{RESET}")
-    print(f"  {PURPLE}│{RESET}   {CYAN}conda create -n opendraft python=3.11 -y{RESET}                  {PURPLE}│{RESET}")
-    print(f"  {PURPLE}│{RESET}   {CYAN}conda activate opendraft{RESET}                                  {PURPLE}│{RESET}")
-    print(f"  {PURPLE}│{RESET}   {CYAN}pip install opendraft{RESET}                                     {PURPLE}│{RESET}")
+    print(f"  {PURPLE}│{RESET}   {CYAN}conda create -n dothesis python=3.11 -y{RESET}                  {PURPLE}│{RESET}")
+    print(f"  {PURPLE}│{RESET}   {CYAN}conda activate dothesis{RESET}                                  {PURPLE}│{RESET}")
+    print(f"  {PURPLE}│{RESET}   {CYAN}pip install dothesis{RESET}                                     {PURPLE}│{RESET}")
     print(f"  {PURPLE}│{RESET}                                                             {PURPLE}│{RESET}")
     print(f"  {PURPLE}╰─────────────────────────────────────────────────────────────╯{RESET}")
     print()
@@ -48,7 +48,7 @@ import json
 from pathlib import Path
 
 # Lazy import for version (fast, local file)
-from opendraft.version import __version__
+from dothesis.version import __version__
 
 # Background module preloader for faster generation start
 _preload_future = None
@@ -71,7 +71,7 @@ def start_preloading():
         executor.shutdown(wait=False)
 
 # Config directory for storing API keys
-CONFIG_DIR = Path.home() / '.opendraft'
+CONFIG_DIR = Path.home() / '.dothesis'
 CONFIG_FILE = CONFIG_DIR / 'config.json'
 
 # ANSI color codes
@@ -106,7 +106,7 @@ def get_friendly_error(e: Exception) -> tuple:
     if 'api key not valid' in error_str or 'invalid api key' in error_str:
         return (
             "Your API key is invalid or expired.",
-            f"Run {c.CYAN}opendraft setup{c.RESET} to enter a new key."
+            f"Run {c.CYAN}dothesis setup{c.RESET} to enter a new key."
         )
 
     if 'api_key_invalid' in error_str or 'permission_denied' in error_str:
@@ -179,7 +179,7 @@ def get_friendly_error(e: Exception) -> tuple:
     if 'weasyprint' in error_str or 'cairo' in error_str or 'pango' in error_str:
         return (
             "PDF library not properly installed.",
-            f"Run {c.CYAN}opendraft verify{c.RESET} to check dependencies."
+            f"Run {c.CYAN}dothesis verify{c.RESET} to check dependencies."
         )
 
     # File/permission errors
@@ -206,7 +206,7 @@ def get_friendly_error(e: Exception) -> tuple:
     if 'recursion' in error_str or 'maximum recursion' in error_str:
         return (
             "Something went wrong (recursion limit).",
-            "Please report this at github.com/federicodeponte/opendraft/issues"
+            "Please report this at github.com/federicodeponte/dothesis/issues"
         )
 
     # JSON parsing errors (malformed API response)
@@ -227,7 +227,7 @@ def get_friendly_error(e: Exception) -> tuple:
     if 'no such file' in error_str or 'file not found' in error_str:
         return (
             "A required file is missing.",
-            f"Try reinstalling: {c.CYAN}pip install --force-reinstall opendraft{c.RESET}"
+            f"Try reinstalling: {c.CYAN}pip install --force-reinstall dothesis{c.RESET}"
         )
 
     # No friendly version found
@@ -258,7 +258,7 @@ def print_friendly_error(e: Exception):
         print(f"  {c.RED}✗{c.RESET} {error_str}")
         print()
         print(f"  {c.GRAY}If this keeps happening, report at:{c.RESET}")
-        print(f"  {c.CYAN}https://github.com/federicodeponte/opendraft/issues{c.RESET}")
+        print(f"  {c.CYAN}https://github.com/federicodeponte/dothesis/issues{c.RESET}")
         print()
 
 
@@ -390,7 +390,7 @@ def run_setup():
     os.environ['GOOGLE_API_KEY'] = api_key
 
     print()
-    print(f"  {c.GREEN}✓{c.RESET} API key saved to {c.GRAY}~/.opendraft/config.json{c.RESET}")
+    print(f"  {c.GREEN}✓{c.RESET} API key saved to {c.GRAY}~/.dothesis/config.json{c.RESET}")
     print()
     return True
 
@@ -652,7 +652,7 @@ def run_interactive():
         print(f"  {c.GRAY}You'll see progress updates below.{c.RESET}")
         print()
 
-        output_dir = Path.cwd() / 'opendraft_output'
+        output_dir = Path.cwd() / 'dothesis_output'
 
         pdf_path, docx_path = generate_draft(
             topic=topic,
@@ -725,7 +725,7 @@ def run_tldr_command(argv):
     c = Colors
 
     parser = argparse.ArgumentParser(
-        prog="opendraft tldr",
+        prog="dothesis tldr",
         description="Generate 5-bullet TL;DR summary for any paper"
     )
     parser.add_argument("document", help="Path to document (PDF, MD, or TXT)")
@@ -783,7 +783,7 @@ def run_digest_command(argv):
     c = Colors
 
     parser = argparse.ArgumentParser(
-        prog="opendraft digest",
+        prog="dothesis digest",
         description="Generate 60-second audio digest for any paper"
     )
     parser.add_argument("document", help="Path to document (PDF, MD, or TXT)")
@@ -860,7 +860,7 @@ def run_revise_command(argv):
     c = Colors
 
     parser = argparse.ArgumentParser(
-        prog="opendraft revise",
+        prog="dothesis revise",
         description="Revise an existing draft with AI assistance"
     )
     parser.add_argument("target", help="Path to draft folder or markdown file")
@@ -884,7 +884,7 @@ def run_revise_command(argv):
 
     # Ensure API key is set
     if not has_api_key():
-        print(f"  {c.YELLOW}!{c.RESET} Run {c.BOLD}opendraft setup{c.RESET} first.\n")
+        print(f"  {c.YELLOW}!{c.RESET} Run {c.BOLD}dothesis setup{c.RESET} first.\n")
         return 1
 
     if not os.getenv('GOOGLE_API_KEY'):
@@ -941,7 +941,7 @@ def run_data_command(argv):
     c = Colors
 
     parser = argparse.ArgumentParser(
-        prog="opendraft data",
+        prog="dothesis data",
         description="Fetch research data from World Bank, Eurostat, or Our World in Data"
     )
     parser.add_argument("provider", choices=["worldbank", "eurostat", "owid", "search", "list"],
@@ -971,10 +971,10 @@ def run_data_command(argv):
                 print(f"  {c.CYAN}{key:12}{c.RESET} {info['name']} - {info['description']}")
             print()
             print(f"  {c.GRAY}Examples:{c.RESET}")
-            print(f"    opendraft data search GDP")
-            print(f"    opendraft data worldbank NY.GDP.MKTP.CD --countries USA;DEU;FRA")
-            print(f"    opendraft data owid covid-19")
-            print(f"    opendraft data eurostat nama_10_gdp")
+            print(f"    dothesis data search GDP")
+            print(f"    dothesis data worldbank NY.GDP.MKTP.CD --countries USA;DEU;FRA")
+            print(f"    dothesis data owid covid-19")
+            print(f"    dothesis data eurostat nama_10_gdp")
             print()
             return 0
 
@@ -1061,40 +1061,40 @@ def main():
             return run_data_command(sys.argv[2:])
 
     parser = argparse.ArgumentParser(
-        prog="opendraft",
+        prog="dothesis",
         description="AI-Powered Research Paper Generator",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 {Colors.BOLD}Usage:{Colors.RESET}
-  opendraft                    Interactive mode (recommended)
-  opendraft setup              Configure API key + verify installation
-  opendraft verify             Check system dependencies (PDF, LaTeX)
-  opendraft "Your Topic"       Quick generate
-  opendraft tldr <file>        Generate 5-bullet TL;DR for any paper
-  opendraft digest <file>      Generate 60-second audio digest
-  opendraft revise <folder> "instructions"   Revise existing draft
-  opendraft data <provider> <query>          Fetch research datasets
+  dothesis                    Interactive mode (recommended)
+  dothesis setup              Configure API key + verify installation
+  dothesis verify             Check system dependencies (PDF, LaTeX)
+  dothesis "Your Topic"       Quick generate
+  dothesis tldr <file>        Generate 5-bullet TL;DR for any paper
+  dothesis digest <file>      Generate 60-second audio digest
+  dothesis revise <folder> "instructions"   Revise existing draft
+  dothesis data <provider> <query>          Fetch research datasets
 
 {Colors.BOLD}Examples:{Colors.RESET}
-  opendraft "Impact of AI on Education"
-  opendraft "Climate Change" --level phd --lang de
-  opendraft tldr paper.pdf
-  opendraft digest paper.pdf --voice josh
-  opendraft "Neural Networks" --expose              Quick research overview
-  opendraft revise ./output "make the intro longer"
-  opendraft data worldbank NY.GDP.MKTP.CD --countries USA;DEU
+  dothesis "Impact of AI on Education"
+  dothesis "Climate Change" --level phd --lang de
+  dothesis tldr paper.pdf
+  dothesis digest paper.pdf --voice josh
+  dothesis "Neural Networks" --expose              Quick research overview
+  dothesis revise ./output "make the intro longer"
+  dothesis data worldbank NY.GDP.MKTP.CD --countries USA;DEU
 
 {Colors.BOLD}Languages:{Colors.RESET}
   en, de, es, fr, it, pt, nl, zh, ja, ko, ru, ar
 
-{Colors.GRAY}https://opendraft.xyz{Colors.RESET}
+{Colors.GRAY}https://dothesis.xyz{Colors.RESET}
         """
     )
 
     parser.add_argument(
         "--version", "-v",
         action="version",
-        version=f"opendraft {__version__}"
+        version=f"dothesis {__version__}"
     )
 
     parser.add_argument(
@@ -1182,13 +1182,13 @@ def main():
             print()
             print(f"  {c.BOLD}Verifying installation...{c.RESET}")
             print()
-            from opendraft.verify import verify_installation
+            from dothesis.verify import verify_installation
             return verify_installation()
         return 1
 
     # Handle 'verify' command
     if args.topic and args.topic.lower() == 'verify':
-        from opendraft.verify import verify_installation
+        from dothesis.verify import verify_installation
         return verify_installation()
 
 
@@ -1201,7 +1201,7 @@ def main():
     print_header()
 
     if not has_api_key():
-        print(f"  {c.YELLOW}!{c.RESET} Run {c.BOLD}opendraft setup{c.RESET} first.\n")
+        print(f"  {c.YELLOW}!{c.RESET} Run {c.BOLD}dothesis setup{c.RESET} first.\n")
         return 1
 
     if not os.getenv('GOOGLE_API_KEY'):
@@ -1256,7 +1256,7 @@ def main():
         print(f"  {c.GRAY}You'll see progress updates below.{c.RESET}")
         print()
 
-        output_dir = args.output or Path.cwd() / 'opendraft_output'
+        output_dir = args.output or Path.cwd() / 'dothesis_output'
         output_type = 'expose' if args.expose else 'full'
 
         # Handle resume from checkpoint

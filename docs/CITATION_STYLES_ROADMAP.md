@@ -51,7 +51,7 @@ CLI Selection → CitationDatabase → CitationCompiler → Formatted Output
 |------|---------|-------|
 | `engine/utils/citation_database.py` | Citation data model, CitationStyle type | ~325 |
 | `engine/utils/citation_compiler.py` | Formatting logic | ~550 |
-| `engine/opendraft/cli.py` | User style selection | ~1200 |
+| `engine/dothesis/cli.py` | User style selection | ~1200 |
 
 ### CitationStyle Type Definition
 
@@ -547,7 +547,7 @@ Full NALT style guide available at: `/Users/federicodeponte/Downloads/NALT Style
 
 ## OpenPaper Backend Comparison
 
-Compared `/Users/federicodeponte/opendraft/engine` with `/Users/federicodeponte/Downloads/openpaper/backend/engine`.
+Compared `/Users/federicodeponte/dothesis/engine` with `/Users/federicodeponte/Downloads/openpaper/backend/engine`.
 
 ### Complete File Comparison
 

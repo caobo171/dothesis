@@ -45,7 +45,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          legacy_pins="$(git grep -n 'google-generativeai' -- requirements.txt engine/requirements.txt engine/pyproject.toml engine/opendraft.egg-info/requires.txt engine/opendraft.egg-info/PKG-INFO || true)"
+          legacy_pins="$(git grep -n 'google-generativeai' -- requirements.txt engine/requirements.txt engine/pyproject.toml engine/dothesis.egg-info/requires.txt engine/dothesis.egg-info/PKG-INFO || true)"
           if [[ -n "$legacy_pins" ]]; then
             echo "Deprecated google-generativeai pins found:"
             echo "$legacy_pins"

@@ -5,7 +5,7 @@ This module handles the creation of downloadable ZIP bundles that include:
 - PDF and DOCX exports
 - Markdown file
 
-The ZIP structure matches opendraft's simple, direct approach:
+The ZIP structure matches dothesis's simple, direct approach:
 - Designed for easy distribution and download
 - Contains the 3 essential exports: PDF, DOCX, MD
 
@@ -32,7 +32,7 @@ class ZipBundleManager:
     """
     Creates ZIP bundles containing research exports (PDF, DOCX, MD).
 
-    Follows opendraft's simple, direct approach:
+    Follows dothesis's simple, direct approach:
     - ZIP contains just the essential 3 files at root level
     - Easy to download and use
     - All files are in the root of the ZIP (no subfolders)

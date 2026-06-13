@@ -12,7 +12,7 @@
 1. A logged-in user can submit a thesis brief from the Wizard and have the real `engine.draft_generator.generate_draft()` pipeline run end-to-end.
 2. The AgentRun page reflects real pipeline progress in real time — live activity feed, phase states, chapter progress.
 3. After completion, the user can view the generated draft (read-only), inspect verified citations, and download PDF / DOCX / LaTeX / Markdown / ZIP exports.
-4. All artifacts persist in AWS S3 (existing `fillformposts` bucket, `opendraft/` prefix); jobs and users persist in Postgres.
+4. All artifacts persist in AWS S3 (existing `fillformposts` bucket, `dothesis/` prefix); jobs and users persist in Postgres.
 5. The existing engine source is unchanged in spirit. Only a thin `engine/__main__.py` entrypoint is added.
 6. The existing `web/` component visual design is unchanged — except the Sidebar drops the Billing and Affiliate entries (one-line edit). Only data sources, routing, and auth are added.
 
@@ -51,7 +51,7 @@ Local development: real AWS S3 is used directly (no MinIO). Postgres is user-pro
 
 ## 3. API surface (FastAPI)
 
-All routes mounted under `/api/v1`. Auth via httpOnly secure session cookie (`opendraft_session`). JSON request/response except SSE.
+All routes mounted under `/api/v1`. Auth via httpOnly secure session cookie (`dothesis_session`). JSON request/response except SSE.
 
 ### Auth
 ```
@@ -179,9 +179,9 @@ Append-only activity feed. Indexed on `(job_id, id)` for cheap SSE replay.
 | meta_json | jsonb                     | for typed payloads (progress, exports list, ...) |
 
 ### S3 layout
-The bucket is the existing AWS S3 bucket `fillformposts` in `ap-southeast-1` (shared infrastructure). All OpenDraft objects live under a top-level `opendraft/` prefix to keep them isolated from other tenants of the bucket.
+The bucket is the existing AWS S3 bucket `fillformposts` in `ap-southeast-1` (shared infrastructure). All OpenDraft objects live under a top-level `dothesis/` prefix to keep them isolated from other tenants of the bucket.
 ```
-s3://fillformposts/opendraft/users/{user_id}/papers/{paper_id}/jobs/{job_id}/
+s3://fillformposts/dothesis/users/{user_id}/papers/{paper_id}/jobs/{job_id}/
     exports/draft.pdf
     exports/draft.docx
     exports/draft.tex
@@ -202,8 +202,8 @@ The engine source is not refactored. The integration lives in a single new file:
 python -m engine \
     --job-id <uuid> \
     --paper-id <uuid> \
-    --workdir /var/lib/opendraft/jobs/<uuid> \
-    --brief-json /var/lib/opendraft/jobs/<uuid>/brief.json
+    --workdir /var/lib/dothesis/jobs/<uuid> \
+    --brief-json /var/lib/dothesis/jobs/<uuid>/brief.json
 ```
 
 Behavior:
@@ -262,7 +262,7 @@ All visual design unchanged. Only data sources, routing, and auth are added.
 ## 7. Repository layout (after this spec lands)
 
 ```
-opendraft/
+dothesis/
 ├── api/                       # NEW — FastAPI service
 │   ├── app/
 │   │   ├── main.py            # FastAPI app + router includes
@@ -309,10 +309,10 @@ Required env vars (loaded from `.env` at the repo root):
 
 | Var | Value source | Notes |
 |---|---|---|
-| `DATABASE_URL` | user-provided | e.g. `postgresql+psycopg://opendraft:opendraft@localhost:5432/opendraft` |
+| `DATABASE_URL` | user-provided | e.g. `postgresql+psycopg://dothesis:dothesis@localhost:5432/dothesis` |
 | `AWS_REGION` | `survify-backend/.env` (`AWS_REGION`) | `ap-southeast-1` |
 | `S3_BUCKET` | `survify-backend/.env` (`BUCKET_NAME`) | `fillformposts` (shared bucket) |
-| `S3_PREFIX` | new constant | `opendraft/` — isolates this project's objects |
+| `S3_PREFIX` | new constant | `dothesis/` — isolates this project's objects |
 | `AWS_ACCESS_KEY` | `survify-backend/.env` (`AWS_ACCESS_KEY`) | |
 | `AWS_SECRET_KEY` | `survify-backend/.env` (`AWS_SECRET_KEY`) | |
 | `SESSION_SECRET` | reuse `JWT_ENCODE_USER_KEY` from survify .env, or generate fresh | signs session cookie |
@@ -320,7 +320,7 @@ Required env vars (loaded from `.env` at the repo root):
 | `OPENAI_API_KEY` | `survify-backend/.env` | passed through to engine subprocesses |
 | `ANTHROPIC_API_KEY` | user-provided | optional; needed for Claude models in the wizard |
 
-The S3 bucket `fillformposts` is shared with other products — all OpenDraft writes must go under the `opendraft/` prefix and must never list / delete anything outside it. The S3 client wrapper enforces this prefix on every call.
+The S3 bucket `fillformposts` is shared with other products — all OpenDraft writes must go under the `dothesis/` prefix and must never list / delete anything outside it. The S3 client wrapper enforces this prefix on every call.
 
 ---
 

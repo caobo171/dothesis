@@ -15,13 +15,13 @@
 **API (`api/app/`):**
 - New: `pricing.py` — `PACKAGES` list, `PAPER_COST` dict, `TIER_TO_MODEL` map, helper `paper_cost(level, tier)` and `resolve_model(tier)`.
 - New: `credit_ledger.py` — pure-DB helpers: `debit(user, delta, reason, ref_type, ref_id)`, `credit(user, delta, reason, ref_type, ref_id)`, `refund_if_unrefunded(user, paper_id)`, with `SELECT … FOR UPDATE`.
-- New: `polar_client.py` — thin wrapper around Polar SDK: `create_checkout(order, return_url, cancel_url)`, `verify_webhook(payload, signature)`. Stubbable for tests via env flag `OPENDRAFT_PAYMENTS=dummy`.
+- New: `polar_client.py` — thin wrapper around Polar SDK: `create_checkout(order, return_url, cancel_url)`, `verify_webhook(payload, signature)`. Stubbable for tests via env flag `DOTHESIS_PAYMENTS=dummy`.
 - New: `routers/credit.py` — `GET /packages`, `POST /checkout`, `POST /polar/webhook`, `GET /orders`, `GET /transactions`.
 - Modify: `models.py` — add `Paper.model_tier`, new `Order` model, new `CreditTransaction` model.
 - Modify: `routers/papers.py` — replace `ALLOWED_MODELS` with `ALLOWED_TIERS = {"standard", "premium"}`; accept `model_tier` in `PaperCreate`; remove `model` from API; compute cost; deduct; resolve model server-side before spawning job.
 - Modify: `job_runner.py` — in the `error`, cancel and `canceled` paths, call `credit_ledger.refund_if_unrefunded(...)`.
 - Modify: `main.py` — register `credit` router.
-- Modify: `settings.py` — add `polar_access_token`, `polar_webhook_secret`, `polar_server`, `opendraft_base_url`, `opendraft_payments` (=`polar`|`dummy`).
+- Modify: `settings.py` — add `polar_access_token`, `polar_webhook_secret`, `polar_server`, `dothesis_base_url`, `dothesis_payments` (=`polar`|`dummy`).
 - New migration: `migrations/versions/<rev>_credit_schema.py` — adds `papers.model_tier`, `orders` table, `credit_transactions` table.
 
 **API tests (`api/tests/`):**
@@ -144,7 +144,7 @@ def test_resolve_model_raises_on_bad_tier():
 
 
 def test_resolve_model_env_override(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_PREMIUM_MODEL", "gpt-5-custom")
+    monkeypatch.setenv("DOTHESIS_PREMIUM_MODEL", "gpt-5-custom")
     # Re-import to pick up env at module init? We use the helper, which reads env each call.
     from app.pricing import resolve_model as r
     assert r("premium") == "gpt-5-custom"
@@ -216,8 +216,8 @@ PAPER_COST: dict[tuple[str, str], int] = {
 
 
 # Tier→model defaults. Overridable per-tier via env vars:
-#   OPENDRAFT_STANDARD_MODEL (default "gemini-flash")
-#   OPENDRAFT_PREMIUM_MODEL  (default "gpt-5")
+#   DOTHESIS_STANDARD_MODEL (default "gemini-flash")
+#   DOTHESIS_PREMIUM_MODEL  (default "gpt-5")
 TIER_TO_MODEL: dict[str, str] = {
     "standard": "gemini-flash",
     "premium":  "gpt-5",
@@ -238,7 +238,7 @@ def paper_cost(level: str, tier: str) -> int:
 def resolve_model(tier: str) -> str:
     if tier not in ALLOWED_TIERS:
         raise ValueError(f"unknown tier: {tier!r}")
-    env_key = f"OPENDRAFT_{tier.upper()}_MODEL"
+    env_key = f"DOTHESIS_{tier.upper()}_MODEL"
     return os.environ.get(env_key) or TIER_TO_MODEL[tier]
 ```
 
@@ -659,14 +659,14 @@ In `api/app/settings.py`, add these fields to the `Settings` BaseSettings class:
     polar_access_token: str = ""
     polar_webhook_secret: str = ""
     polar_server: str = "sandbox"           # "sandbox" | "production"
-    opendraft_base_url: str = "http://localhost:3000"
-    opendraft_payments: str = "polar"        # "polar" | "dummy"
+    dothesis_base_url: str = "http://localhost:3000"
+    dothesis_payments: str = "polar"        # "polar" | "dummy"
 ```
 
 - [ ] **Step 3: Create `api/app/polar_client.py`**
 
 ```python
-"""Polar payment integration. Falls back to dummy URLs when OPENDRAFT_PAYMENTS=dummy."""
+"""Polar payment integration. Falls back to dummy URLs when DOTHESIS_PAYMENTS=dummy."""
 from __future__ import annotations
 
 import hashlib
@@ -689,7 +689,7 @@ class PolarError(Exception):
 
 def _is_dummy(settings: Settings | None = None) -> bool:
     settings = settings or get_settings()
-    return settings.opendraft_payments == "dummy" or not settings.polar_access_token
+    return settings.dothesis_payments == "dummy" or not settings.polar_access_token
 
 
 def create_checkout(order: "Order", *, return_url: str, cancel_url: str) -> tuple[str, str]:
@@ -697,7 +697,7 @@ def create_checkout(order: "Order", *, return_url: str, cancel_url: str) -> tupl
     settings = get_settings()
     if _is_dummy(settings):
         cid = f"dummy_{uuid.uuid4().hex}"
-        url = f"{settings.opendraft_base_url}/credit?polar=dummy&order={order.id}"
+        url = f"{settings.dothesis_base_url}/credit?polar=dummy&order={order.id}"
         log.warning("polar dummy mode — order %s gets fake checkout %s", order.id, cid)
         return cid, url
 
@@ -830,7 +830,7 @@ def test_checkout_rejects_unknown_package(client, _admin_user_signup):
 
 
 def test_polar_webhook_credits_user_idempotently(client, _admin_user_signup, monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_PAYMENTS", "dummy")
+    monkeypatch.setenv("DOTHESIS_PAYMENTS", "dummy")
     # Seed a pending order
     Session = get_session_factory()
     with Session() as s:
@@ -945,8 +945,8 @@ def checkout(
     db.flush()  # so order.id is set
 
     settings = get_settings()
-    return_url = f"{settings.opendraft_base_url}/credit?polar=success"
-    cancel_url = f"{settings.opendraft_base_url}/credit?polar=cancel"
+    return_url = f"{settings.dothesis_base_url}/credit?polar=success"
+    cancel_url = f"{settings.dothesis_base_url}/credit?polar=cancel"
     try:
         checkout_id, url = create_checkout(order, return_url=return_url, cancel_url=cancel_url)
     except PolarError as e:
@@ -1827,7 +1827,7 @@ cd web && npm run dev
 - [ ] **Step 2: Manual click-through**
 
 1. Sign up as `cao.nv17@gmail.com`. Verify `/credit` shows "0 Credit".
-2. With `OPENDRAFT_PAYMENTS=dummy` in the API env, click "Buy" on Starter — redirected to `/credit?polar=dummy&order=...`. (Real Polar flow requires Polar account; dummy mode just generates a fake URL.)
+2. With `DOTHESIS_PAYMENTS=dummy` in the API env, click "Buy" on Starter — redirected to `/credit?polar=dummy&order=...`. (Real Polar flow requires Polar account; dummy mode just generates a fake URL.)
 3. In a separate terminal, simulate the Polar webhook:
    ```
    curl -X POST http://localhost:7100/api/v1/credit/polar/webhook \

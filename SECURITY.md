@@ -8,7 +8,7 @@
 
 ## Reporting a Vulnerability
 
-Please report security vulnerabilities via [GitHub's private vulnerability reporting](https://github.com/federicodeponte/opendraft/security/advisories/new).
+Please report security vulnerabilities via [GitHub's private vulnerability reporting](https://github.com/federicodeponte/dothesis/security/advisories/new).
 
 We will respond within 48 hours.
 

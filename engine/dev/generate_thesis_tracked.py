@@ -216,7 +216,7 @@ def main():
     global TRACKING_STATS
 
     print("=" * 70)
-    print("🎓 OPENDRAFT THESIS GENERATOR - WITH FULL API TRACKING")
+    print("🎓 DOTHESIS THESIS GENERATOR - WITH FULL API TRACKING")
     print("=" * 70)
     print()
 

@@ -5,7 +5,7 @@ from app.mail import send_template
 
 
 def test_dummy_mode_when_mail_from_blank(monkeypatch, caplog):
-    monkeypatch.setenv("OPENDRAFT_MAIL_FROM", "")
+    monkeypatch.setenv("DOTHESIS_MAIL_FROM", "")
     from app import settings as settings_mod
     settings_mod._settings = None
 
@@ -25,8 +25,8 @@ def test_dummy_mode_when_mail_from_blank(monkeypatch, caplog):
 
 
 def test_real_mode_calls_ses(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_MAIL_FROM", "DoThesis <noreply@x.com>")
-    monkeypatch.setenv("OPENDRAFT_MAIL", "")
+    monkeypatch.setenv("DOTHESIS_MAIL_FROM", "DoThesis <noreply@x.com>")
+    monkeypatch.setenv("DOTHESIS_MAIL", "")
     from app import settings as settings_mod
     settings_mod._settings = None
     # Also reset the cached ses client so it picks up the new region/creds for this test

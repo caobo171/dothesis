@@ -670,7 +670,7 @@ def research_citations_via_api(
         # #region agent log
         import json as json_lib
         import time as time_lib
-        debug_log_path = "/tmp/opendraft_debug.log"
+        debug_log_path = "/tmp/dothesis_debug.log"
         try:
             with open(debug_log_path, "a") as f:
                 f.write(json_lib.dumps({
@@ -1048,7 +1048,7 @@ def research_citations_via_api(
                     # #region agent log
                     # Note: json, time, os already imported at module level
                     try:
-                        debug_log_path = os.getenv('DEBUG_LOG_PATH', '/tmp/opendraft/debug.log')
+                        debug_log_path = os.getenv('DEBUG_LOG_PATH', '/tmp/dothesis/debug.log')
                         os.makedirs(os.path.dirname(debug_log_path), exist_ok=True)
                         with open(debug_log_path, 'a') as f:
                             f.write(json.dumps({
@@ -1121,7 +1121,7 @@ def research_citations_via_api(
     # #region agent log
     # Note: json, time, os already imported at module level
     try:
-        debug_log_path = os.getenv('DEBUG_LOG_PATH', '/tmp/opendraft/debug.log')
+        debug_log_path = os.getenv('DEBUG_LOG_PATH', '/tmp/dothesis/debug.log')
         with open(debug_log_path, 'a') as f:
             f.write(json.dumps({
                 "sessionId": "debug-session",

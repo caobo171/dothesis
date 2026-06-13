@@ -175,7 +175,7 @@ class DeepResearchPlanner:
             import json as json_lib
             import time as time_lib
             try:
-                debug_log_path = "/tmp/opendraft_debug.log"
+                debug_log_path = "/tmp/dothesis_debug.log"
                 with open(debug_log_path, "a") as f:
                     f.write(json_lib.dumps({
                         "timestamp": int(time_lib.time() * 1000),
@@ -315,7 +315,7 @@ class DeepResearchPlanner:
             try:
                 import json as json_lib
                 import time as time_lib
-                debug_log_path = "/tmp/opendraft_debug.log"
+                debug_log_path = "/tmp/dothesis_debug.log"
                 with open(debug_log_path, "a") as f:
                     f.write(json_lib.dumps({
                         "timestamp": int(time_lib.time() * 1000),
@@ -336,7 +336,7 @@ class DeepResearchPlanner:
             try:
                 import json as json_lib
                 import time as time_lib
-                debug_log_path = "/tmp/opendraft_debug.log"
+                debug_log_path = "/tmp/dothesis_debug.log"
                 with open(debug_log_path, "a") as f:
                     f.write(json_lib.dumps({
                         "timestamp": int(time_lib.time() * 1000),

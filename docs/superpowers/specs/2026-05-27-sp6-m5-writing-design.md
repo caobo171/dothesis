@@ -697,7 +697,7 @@ if not os.environ.get("AWS_S3_BUCKET"):
 `dev.sh` gets a comment near the env-var section:
 
 ```bash
-# SP6: M5 exports require an S3 bucket. Set AWS_S3_BUCKET=opendraft-dev in your
+# SP6: M5 exports require an S3 bucket. Set AWS_S3_BUCKET=dothesis-dev in your
 # .env or shell, plus AWS_ACCESS_KEY + AWS_SECRET_KEY. For local dev without
 # real S3, run minio (https://min.io) and point AWS_* at it.
 ```

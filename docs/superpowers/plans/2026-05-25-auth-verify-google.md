@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship Survify-style auth in opendraft: email-verified signup with SES-delivered confirmation links, password reset, "Sign in with Google", and account auto-linking.
+**Goal:** Ship Survify-style auth in dothesis: email-verified signup with SES-delivered confirmation links, password reset, "Sign in with Google", and account auto-linking.
 
 **Architecture:** Backend adds three small modules (`mail.py`, `auth_tokens.py`, `google_auth.py`) and extends `routers/auth.py` with five new endpoints (`/verify`, `/resend-verification`, `/forgot-password`, `/reset-password`, `/google`). Login is blocked until `email_verified=True`. Tokens for email links are `itsdangerous`-signed JWT-style strings (no DB row). Frontend gets four new pages plus a `GoogleSignInButton` component built on Google Identity Services. Sessions remain cookie-based for app traffic; JWT tokens are only used inside email links.
 
@@ -59,19 +59,19 @@ Run from `api/`: `.\.venv\Scripts\python.exe -m pytest -q --tb=no 2>&1 | findstr
 
 - [ ] **Step 1: Add the five new fields**
 
-Insert after the existing `opendraft_payments` line:
+Insert after the existing `dothesis_payments` line:
 
 ```python
-    mail_from: str = Field(alias="OPENDRAFT_MAIL_FROM", default="")
-    mail_region: str = Field(alias="OPENDRAFT_MAIL_REGION", default="ap-southeast-1")
-    opendraft_mail: str = Field(alias="OPENDRAFT_MAIL", default="")
-    google_client_id: str = Field(alias="OPENDRAFT_GOOGLE_CLIENT_ID", default="")
-    signup_bonus_credits: int = Field(alias="OPENDRAFT_SIGNUP_BONUS_CREDITS", default=100)
+    mail_from: str = Field(alias="DOTHESIS_MAIL_FROM", default="")
+    mail_region: str = Field(alias="DOTHESIS_MAIL_REGION", default="ap-southeast-1")
+    dothesis_mail: str = Field(alias="DOTHESIS_MAIL", default="")
+    google_client_id: str = Field(alias="DOTHESIS_GOOGLE_CLIENT_ID", default="")
+    signup_bonus_credits: int = Field(alias="DOTHESIS_SIGNUP_BONUS_CREDITS", default=100)
 ```
 
 - [ ] **Step 2: Verify**
 
-Run: `cd api && .\.venv\Scripts\python.exe -c "from app.settings import get_settings; s = get_settings(); print(s.mail_from, s.mail_region, s.opendraft_mail, s.google_client_id, s.signup_bonus_credits)"`
+Run: `cd api && .\.venv\Scripts\python.exe -c "from app.settings import get_settings; s = get_settings(); print(s.mail_from, s.mail_region, s.dothesis_mail, s.google_client_id, s.signup_bonus_credits)"`
 Expected: ` ap-southeast-1   100`
 
 - [ ] **Step 3: Commit**
@@ -385,7 +385,7 @@ from app.mail import send_template
 
 
 def test_dummy_mode_when_mail_from_blank(monkeypatch, caplog):
-    monkeypatch.setenv("OPENDRAFT_MAIL_FROM", "")
+    monkeypatch.setenv("DOTHESIS_MAIL_FROM", "")
     # Force re-init of settings
     from app import settings as settings_mod
     settings_mod._settings = None
@@ -407,8 +407,8 @@ def test_dummy_mode_when_mail_from_blank(monkeypatch, caplog):
 
 
 def test_real_mode_calls_ses(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_MAIL_FROM", "DoThesis <noreply@x.com>")
-    monkeypatch.setenv("OPENDRAFT_MAIL", "")
+    monkeypatch.setenv("DOTHESIS_MAIL_FROM", "DoThesis <noreply@x.com>")
+    monkeypatch.setenv("DOTHESIS_MAIL", "")
     from app import settings as settings_mod
     settings_mod._settings = None
 
@@ -483,7 +483,7 @@ def _render(template: str, vars: dict) -> str:
 
 def send_html(to: str, subject: str, html: str) -> bool:
     s = get_settings()
-    if s.opendraft_mail == "dummy" or not s.mail_from:
+    if s.dothesis_mail == "dummy" or not s.mail_from:
         log.warning("mail dummy mode → to=%s subject=%s body=%s",
                     to, subject, html[:400])
         return True
@@ -640,7 +640,7 @@ from app.google_auth import verify_google_id_token
 
 
 def test_returns_normalized_user_info(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    monkeypatch.setenv("DOTHESIS_GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
     from app import settings as settings_mod
     settings_mod._settings = None
 
@@ -659,7 +659,7 @@ def test_returns_normalized_user_info(monkeypatch):
 
 
 def test_raises_on_bad_token(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_GOOGLE_CLIENT_ID", "x")
+    monkeypatch.setenv("DOTHESIS_GOOGLE_CLIENT_ID", "x")
     from app import settings as settings_mod
     settings_mod._settings = None
     with patch("app.google_auth.gid.verify_oauth2_token", side_effect=ValueError("bad")):
@@ -765,7 +765,7 @@ def test_signup_creates_user_without_session_and_sends_email():
         assert r.status_code == 201, r.text
         assert r.json() == {"ok": True, "email": "alice@e.com"}
         # No session cookie
-        assert "opendraft_session" not in c.cookies
+        assert "dothesis_session" not in c.cookies
 
     assert sent["to"] == "alice@e.com"
     assert sent["template"] == "verify_email"
@@ -981,7 +981,7 @@ def test_login_verified_succeeds():
     c = _client()
     r = c.post("/api/v1/auth/login", json={"email": "bob@e.com", "password": "supersecret"})
     assert r.status_code == 200
-    assert "opendraft_session" in c.cookies
+    assert "dothesis_session" in c.cookies
 
 
 def test_login_google_account_bad_password_returns_use_google():
@@ -1092,7 +1092,7 @@ def _seed(email, **kw):
 
 
 def test_verify_flips_flag_and_grants_bonus(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_SIGNUP_BONUS_CREDITS", "100")
+    monkeypatch.setenv("DOTHESIS_SIGNUP_BONUS_CREDITS", "100")
     from app import settings as sm; sm._settings = None
     uid = _seed("alice@e.com", email_verified=False)
     tok = make_verify_token(uid)
@@ -1577,8 +1577,8 @@ def _client():
 
 
 def test_google_first_signin_creates_user_with_bonus(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_SIGNUP_BONUS_CREDITS", "100")
-    monkeypatch.setenv("OPENDRAFT_GOOGLE_CLIENT_ID", "test-id")
+    monkeypatch.setenv("DOTHESIS_SIGNUP_BONUS_CREDITS", "100")
+    monkeypatch.setenv("DOTHESIS_GOOGLE_CLIENT_ID", "test-id")
     from app import settings as sm; sm._settings = None
 
     fake_info = {"email": "new@gmail.com", "google_id": "g_99", "name": "New User"}
@@ -1586,7 +1586,7 @@ def test_google_first_signin_creates_user_with_bonus(monkeypatch):
         c = _client()
         r = c.post("/api/v1/auth/google", json={"id_token": "FAKE"})
     assert r.status_code == 200, r.text
-    assert "opendraft_session" in c.cookies
+    assert "dothesis_session" in c.cookies
 
     Session = get_session_factory()
     with Session() as s:
@@ -1834,7 +1834,7 @@ export function GoogleSignInButton({ onError }: { onError?: (msg: string) => voi
         type="button"
         disabled
         className="w-full rounded-xl border border-ink-200 px-4 py-2.5 text-sm font-medium text-ink-400 cursor-not-allowed"
-        title="OPENDRAFT_GOOGLE_CLIENT_ID is not set"
+        title="DOTHESIS_GOOGLE_CLIENT_ID is not set"
       >
         Google sign-in (not configured)
       </button>
@@ -2536,8 +2536,8 @@ git commit -m "feat(web): reset-password page"
 Add to `.env`:
 
 ```
-OPENDRAFT_MAIL=dummy
-OPENDRAFT_GOOGLE_CLIENT_ID=
+DOTHESIS_MAIL=dummy
+DOTHESIS_GOOGLE_CLIENT_ID=
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=
 ```
 
@@ -2581,7 +2581,7 @@ Expected: all pass (28+ tests across the new suites).
 
 - [ ] **Step 7: Manual Google flow (optional — only if you set up an OAuth client)**
 
-1. Set `OPENDRAFT_GOOGLE_CLIENT_ID=<your.apps.googleusercontent.com>` in `.env`.
+1. Set `DOTHESIS_GOOGLE_CLIENT_ID=<your.apps.googleusercontent.com>` in `.env`.
 2. Set `NEXT_PUBLIC_GOOGLE_CLIENT_ID=<same value>`.
 3. Restart the stack.
 4. From `/login` or `/signup`, click the rendered Google button.
@@ -2596,7 +2596,7 @@ If any manual click-through revealed bugs and you patched them, commit. Otherwis
 
 ## Done criteria
 
-- API: `/api/v1/auth/{signup,login,verify,resend-verification,forgot-password,reset-password,google,logout,me}` all live. Login is gated by `email_verified`. Verifying flips the flag and grants `OPENDRAFT_SIGNUP_BONUS_CREDITS` exactly once. Google creates-or-links accounts. Mailer dummy-mode logs HTML when `OPENDRAFT_MAIL_FROM` is blank.
+- API: `/api/v1/auth/{signup,login,verify,resend-verification,forgot-password,reset-password,google,logout,me}` all live. Login is gated by `email_verified`. Verifying flips the flag and grants `DOTHESIS_SIGNUP_BONUS_CREDITS` exactly once. Google creates-or-links accounts. Mailer dummy-mode logs HTML when `DOTHESIS_MAIL_FROM` is blank.
 - Web: 6 auth pages all in Tailwind. `GoogleSignInButton` renders the GSI button when configured and a disabled placeholder otherwise. Signup → wait-verify → verify → dashboard works end-to-end in dummy-mail mode using terminal logs.
 - All new pytest suites pass.
 

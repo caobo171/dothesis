@@ -5,7 +5,7 @@
 
 ## Goal
 
-Bring opendraft's auth in line with Survify: real email verification on signup, password reset by email, and a "Sign in with Google" button. Block login until verification, grant signup-bonus credits on first verified login, and auto-link Google accounts to existing email accounts when the email matches.
+Bring dothesis's auth in line with Survify: real email verification on signup, password reset by email, and a "Sign in with Google" button. Block login until verification, grant signup-bonus credits on first verified login, and auto-link Google accounts to existing email accounts when the email matches.
 
 ## Non-goals
 
@@ -20,7 +20,7 @@ Bring opendraft's auth in line with Survify: real email verification on signup, 
 - **Email delivery:** AWS SESv2 via `boto3`, reusing the same `AWS_ACCESS_KEY`/`AWS_SECRET_KEY` already used for S3.
 - **Verification gate:** block login until verified. Signup does NOT issue a session.
 - **Token format:** signed JWT-style tokens via `itsdangerous.URLSafeTimedSerializer` (already vendored for session cookies). Verify TTL = 24h, reset TTL = 60min.
-- **Signup bonus:** `OPENDRAFT_SIGNUP_BONUS_CREDITS` (default 100), granted on first verified login (email path) or first Google sign-in.
+- **Signup bonus:** `DOTHESIS_SIGNUP_BONUS_CREDITS` (default 100), granted on first verified login (email path) or first Google sign-in.
 - **Google flow:** Google Identity Services (GSI) first-party button; `id_token` posted to backend; backend verifies via `google-auth` Python lib.
 - **Signup fields:** `username + email + password`. Username required and unique.
 
@@ -79,7 +79,7 @@ Single class `Mailer` with two static methods:
 - `send_html(to: str, subject: str, html: str) -> bool` — builds a SESv2 `SendEmailCommand` (Simple content, HTML body, UTF-8). From address is `settings.mail_from` (e.g. `DoThesis <noreply@dothesis.app>`). Returns `True` on success, `False` and logs on failure (never raises — auth flows should not break on a flaky email).
 - `send_template(to: str, template: str, vars: dict, subject: str) -> bool` — loads `mail_templates/<template>.html`, substitutes `{{key}}` for each var, calls `send_html`.
 
-**Dummy mode**: when `settings.mail_from` is empty OR `settings.opendraft_mail` is `"dummy"`, the wrapper logs the rendered HTML and returns `True` without touching SES. Lets local dev work without AWS creds.
+**Dummy mode**: when `settings.mail_from` is empty OR `settings.dothesis_mail` is `"dummy"`, the wrapper logs the rendered HTML and returns `True` without touching SES. Lets local dev work without AWS creds.
 
 ```python
 # api/app/mail.py (sketch)
@@ -112,7 +112,7 @@ def _render(template: str, vars: dict) -> str:
 def send_template(to: str, template: str, vars: dict, subject: str) -> bool:
     s = get_settings()
     html = _render(template, vars)
-    if s.opendraft_mail == "dummy" or not s.mail_from:
+    if s.dothesis_mail == "dummy" or not s.mail_from:
         log.warning("mail dummy mode → %s: %s\n%s", to, subject, html[:400])
         return True
     try:
@@ -316,7 +316,7 @@ Two files in `api/app/mail_templates/`. Pure HTML with inline CSS. No web fonts 
 ## Google flow (end-to-end)
 
 ```
-Browser                              opendraft API                 Google
+Browser                              dothesis API                 Google
    │                                                                 │
    │ click "Sign in with Google"                                     │
    ├──── GSI popup ─────────────────────────────────────────────────►│
@@ -325,11 +325,11 @@ Browser                              opendraft API                 Google
    │
    │ POST /api/v1/auth/google {id_token}
    ├────────────────────────────►│ verify id_token via google-auth lib
-   │                             │ (audience check = OPENDRAFT_GOOGLE_CLIENT_ID)
+   │                             │ (audience check = DOTHESIS_GOOGLE_CLIENT_ID)
    │                             │   ├─ look up by google_id
    │                             │   ├─ else look up by email (link, auto-verify)
    │                             │   └─ else create new (verified, +bonus credits)
-   │                             │ issue opendraft_session cookie
+   │                             │ issue dothesis_session cookie
    │                             │ update last_login
    │ user object                 │
    │◄────────────────────────────┤
@@ -350,7 +350,7 @@ Browser                              opendraft API                 Google
 ```python
 mail_from: str = ""                  # e.g. "DoThesis <noreply@dothesis.app>"
 mail_region: str = "ap-southeast-1"
-opendraft_mail: str = ""             # "" | "dummy"
+dothesis_mail: str = ""             # "" | "dummy"
 google_client_id: str = ""
 signup_bonus_credits: int = 100
 ```
@@ -364,7 +364,7 @@ Web env:
 
 ### Backend (pytest)
 
-All Mailer calls are patched (`unittest.mock.patch("app.mail.send_template")`) so nothing actually hits SES. One narrow `test_mail.py` exercises the real SES client only when `OPENDRAFT_RUN_SES_LIVE_TESTS=1` (off in CI).
+All Mailer calls are patched (`unittest.mock.patch("app.mail.send_template")`) so nothing actually hits SES. One narrow `test_mail.py` exercises the real SES client only when `DOTHESIS_RUN_SES_LIVE_TESTS=1` (off in CI).
 
 - `test_auth_signup_verify.py` — signup returns 201 + no cookie + `email_verified=False`. `/verify` flips the flag, grants bonus. Second `/verify` is idempotent. Expired token → 400.
 - `test_auth_login_gate.py` — login on unverified → 403 `unverified`. Login on verified → 200 + cookie + bonus already granted (so balance reflects it).
@@ -394,7 +394,7 @@ No automated tests this round. Manual smoke checklist in the implementation plan
 4. Update frontend pages + add `GoogleSignInButton`.
 5. Update `proxy.ts` PUBLIC_PATHS.
 6. Manual smoke pass with dummy-mail mode (no SES creds yet).
-7. (Deploy-time) add real `OPENDRAFT_MAIL_FROM`, AWS SES verified identity, and `OPENDRAFT_GOOGLE_CLIENT_ID`.
+7. (Deploy-time) add real `DOTHESIS_MAIL_FROM`, AWS SES verified identity, and `DOTHESIS_GOOGLE_CLIENT_ID`.
 
 ## Risks / open questions
 

@@ -2285,7 +2285,7 @@ def _require_aws_s3_bucket():
     if not os.environ.get("AWS_S3_BUCKET"):
         raise SystemExit(
             "AWS_S3_BUCKET env var is required for M5 export artifacts. "
-            "Set it (e.g. AWS_S3_BUCKET=opendraft-dev) and re-run."
+            "Set it (e.g. AWS_S3_BUCKET=dothesis-dev) and re-run."
         )
 ```
 
@@ -2297,7 +2297,7 @@ Add a comment near the existing env-var section. Find a sensible location in `de
 
 ```bash
 # SP6: M5 export uploads to S3 (mandatory for both interactive + auto-mode).
-# Set AWS_S3_BUCKET=opendraft-dev (plus AWS_ACCESS_KEY + AWS_SECRET_KEY)
+# Set AWS_S3_BUCKET=dothesis-dev (plus AWS_ACCESS_KEY + AWS_SECRET_KEY)
 # in your .env. For local dev without real S3, run minio (https://min.io)
 # and point AWS_* at it. The orchestrator subprocess refuses to start
 # without AWS_S3_BUCKET.
@@ -2358,7 +2358,7 @@ def _setup_user_and_project(client) -> tuple[uuid.UUID, User]:
                  password_hash="x", email_verified=True)
         db.add(u); db.commit(); db.refresh(u)
         token = create_session(db, u)
-    client.cookies.set("opendraft_session", token)
+    client.cookies.set("dothesis_session", token)
     pid = client.post("/api/v1/projects", json={"name": "T"}).json()["id"]
     return uuid.UUID(pid), u
 
@@ -2418,7 +2418,7 @@ def test_download_404_when_user_does_not_own_project(client, monkeypatch):
                    password_hash="x", email_verified=True)
         db.add(u2); db.commit(); db.refresh(u2)
         token2 = create_session(db, u2)
-    client.cookies.set("opendraft_session", token2)
+    client.cookies.set("dothesis_session", token2)
     resp = client.get(f"/api/v1/projects/{pid}/exports/thesis-abc.docx")
     assert resp.status_code == 404
 ```
@@ -2569,7 +2569,7 @@ def test_rewrite_request_persists_to_message_row(client, monkeypatch):
                  username=f"u{uuid.uuid4().hex[:6]}",
                  password_hash="x", email_verified=True)
         db.add(u); db.commit()
-        client.cookies.set("opendraft_session", create_session(db, u))
+        client.cookies.set("dothesis_session", create_session(db, u))
     pid = client.post("/api/v1/projects", json={"name": "T"}).json()["id"]
     tid = client.get(f"/api/v1/projects/{pid}/threads").json()[0]["id"]
 

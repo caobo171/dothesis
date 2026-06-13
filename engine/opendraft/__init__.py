@@ -4,7 +4,7 @@ OpenDraft - AI-Powered Academic Writing Framework
 Generate publication-ready theses with 15 specialized AI agents and 200M+ research papers.
 """
 
-from opendraft.version import __version__
+from dothesis.version import __version__
 
 __author__ = "Federico De Ponte"
 __license__ = "MIT"

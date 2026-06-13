@@ -59,8 +59,8 @@ def checkout(
     db.flush()
 
     settings = get_settings()
-    return_url = f"{settings.opendraft_base_url}/credit?polar=success"
-    cancel_url = f"{settings.opendraft_base_url}/credit?polar=cancel"
+    return_url = f"{settings.dothesis_base_url}/credit?polar=success"
+    cancel_url = f"{settings.dothesis_base_url}/credit?polar=cancel"
     try:
         checkout_id, url = create_checkout(order, return_url=return_url, cancel_url=cancel_url)
     except PolarError as e:

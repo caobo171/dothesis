@@ -64,7 +64,7 @@ const HelpCard = () => (
     <p>Prompts, exemplar theses, and shortcuts — all in one place.</p>
     <a
       className="help-btn primary"
-      href="https://github.com/federicodeponte/opendraft#readme"
+      href="https://github.com/federicodeponte/dothesis#readme"
       target="_blank"
       rel="noreferrer"
     >

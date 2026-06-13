@@ -36,7 +36,7 @@ def _require_aws_s3_bucket():
     if not (os.environ.get("S3_BUCKET") or os.environ.get("AWS_S3_BUCKET")):
         raise SystemExit(
             "S3_BUCKET env var is required for M5 export artifacts. "
-            "Set it (e.g. S3_BUCKET=opendraft-dev) and re-run."
+            "Set it (e.g. S3_BUCKET=dothesis-dev) and re-run."
         )
 
 

@@ -87,7 +87,7 @@ def check_api_keys():
     if not found_any:
         print("\n   ⚠️  WARNING: No API keys configured!")
         print("   You need at least one LLM API key to generate theses.")
-        print("   See: https://github.com/federicodeponte/opendraft#setup")
+        print("   See: https://github.com/federicodeponte/dothesis#setup")
 
     return found_any
 
@@ -193,7 +193,7 @@ def verify_installation():
         print("\nTroubleshooting:")
         print("  - Install missing dependencies: pip install -e .")
         print("  - Configure API keys in .env file")
-        print("  - See: https://github.com/federicodeponte/opendraft#troubleshooting")
+        print("  - See: https://github.com/federicodeponte/dothesis#troubleshooting")
         return 1
 
 

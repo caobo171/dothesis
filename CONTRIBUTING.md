@@ -6,8 +6,8 @@ Thanks for your interest in contributing to OpenDraft!
 
 ```bash
 # Clone the repo
-git clone https://github.com/federicodeponte/opendraft.git
-cd opendraft
+git clone https://github.com/federicodeponte/dothesis.git
+cd dothesis
 
 # Install dependencies
 pip install -e ./engine[dev]
@@ -25,9 +25,9 @@ cd engine && pytest tests/ -v
 ## Code Structure
 
 ```
-opendraft/
+dothesis/
 ├── engine/           # Main Python package
-│   ├── opendraft/    # CLI and entry points
+│   ├── dothesis/    # CLI and entry points
 │   ├── phases/       # Pipeline phases (research, structure, compose, etc.)
 │   ├── utils/        # Utilities (citations, retry, export, etc.)
 │   └── tests/        # Test suite

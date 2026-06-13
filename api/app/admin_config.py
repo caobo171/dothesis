@@ -15,7 +15,7 @@ _SEED: frozenset[str] = frozenset({
 
 
 def _load_extra_emails() -> frozenset[str]:
-    raw = os.environ.get("OPENDRAFT_SUPER_ADMIN_EMAILS", "").strip()
+    raw = os.environ.get("DOTHESIS_SUPER_ADMIN_EMAILS", "").strip()
     if not raw:
         return frozenset()
     return frozenset(e.strip().lower() for e in raw.split(",") if e.strip())

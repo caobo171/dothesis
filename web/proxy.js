@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 // Route gating happens server-side in this middleware. With JWT auth, the
 // real authoritative token lives in localStorage — which the middleware
 // CAN'T read (it runs on the edge runtime, no DOM). To keep the no-flash
-// redirect behavior we used to get from the opendraft_session cookie, the
+// redirect behavior we used to get from the dothesis_session cookie, the
 // client mirrors the token presence as a non-HTTPOnly cookie
 // (`dothesis_access_token`, set by web/app/lib/tokenStore.ts). We check
 // only that the cookie EXISTS — its value isn't validated here. If the

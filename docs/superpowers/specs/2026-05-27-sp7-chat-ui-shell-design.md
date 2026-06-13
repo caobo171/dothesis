@@ -48,7 +48,7 @@ Ship a new Next.js route group (`web/app/(chat)/`) with:
 - **State management:** SWR for queries; `useState`/reducer + `useStream` for in-flight streams. No new global state library.
 - **Auto-draft:** Launcher button in chat header. Click → confirmation modal → spawn run → slide-out drawer subscribes to `/runs/{id}/events`.
 - **Routing:** New `(chat)` route group; routes are `/chat`, `/chat/projects/[pid]`, `/chat/projects/[pid]/threads/[tid]`. `(inapp)` and existing wizard untouched.
-- **Auth:** Reuses existing `opendraft_session` cookie + redirect-to-login behavior in `swrFetcher`.
+- **Auth:** Reuses existing `dothesis_session` cookie + redirect-to-login behavior in `swrFetcher`.
 
 ---
 

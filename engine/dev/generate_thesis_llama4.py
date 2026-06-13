@@ -145,7 +145,7 @@ def main():
     global TRACKING_STATS
 
     print("=" * 70)
-    print("OPENDRAFT THESIS GENERATOR - LLAMA 4 MAVERICK")
+    print("DOTHESIS THESIS GENERATOR - LLAMA 4 MAVERICK")
     print("=" * 70)
     print()
 

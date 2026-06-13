@@ -26,7 +26,7 @@ def _setup_project(client) -> tuple[uuid.UUID, uuid.UUID]:
         db.add(u); db.commit()
         from app.security import create_session
         # create_session returns a signed cookie value; use the correct
-        # cookie name expected by deps.py (opendraft_session).
+        # cookie name expected by deps.py (dothesis_session).
         token = create_session(db, u)
     client.headers["Authorization"] = f"Bearer {token}"
     pid = client.post("/api/v1/projects", json={"name": "T"}).json()["id"]

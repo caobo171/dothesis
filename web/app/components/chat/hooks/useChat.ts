@@ -110,7 +110,7 @@ export function useChat(threadId: string) {
     // but never reach the browser EventStream until the request closes.
     // Hitting localhost:7100 directly sidesteps the buffer.
     // access_token rides in the JSON body (jwt_auth.AuthedBody pattern);
-    // we no longer rely on the opendraft_session cookie, so `credentials`
+    // we no longer rely on the dothesis_session cookie, so `credentials`
     // can stay default and the cross-origin SameSite trap is gone.
     const apiBase = process.env.NEXT_PUBLIC_API_BASE;
     const streamUrl = apiBase
@@ -138,6 +138,9 @@ export function useChat(threadId: string) {
       undefined,
       { revalidate: true },
     );
+    // The turn debited the user's balance — revalidate /auth/me so the
+    // dashboard + sidebar credit balance reflect the spend immediately.
+    void globalMutate("/auth/me");
   };
 
   return {

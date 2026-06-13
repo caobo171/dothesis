@@ -70,7 +70,7 @@ export function GoogleSignInButton({ onError }: { onError?: (msg: string) => voi
         type="button"
         disabled
         className="w-full rounded-xl border border-ink-200 px-4 py-2.5 text-sm font-medium text-ink-400 cursor-not-allowed"
-        title="OPENDRAFT_GOOGLE_CLIENT_ID is not set"
+        title="DOTHESIS_GOOGLE_CLIENT_ID is not set"
       >
         Google sign-in (not configured)
       </button>

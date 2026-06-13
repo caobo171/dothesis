@@ -31,7 +31,7 @@ LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
 
 # Log file paths
-MAIN_LOG_FILE = LOG_DIR / "opendraft.log"
+MAIN_LOG_FILE = LOG_DIR / "dothesis.log"
 ERROR_LOG_FILE = LOG_DIR / "errors.log"
 
 # Log format

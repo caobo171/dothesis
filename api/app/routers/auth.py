@@ -1,7 +1,7 @@
 """Auth router — access-token only, no session cookies.
 
 History: this router used to write `Session` rows and set the
-`opendraft_session` cookie via `_issue_session`. That path is gone — see
+`dothesis_session` cookie via `_issue_session`. That path is gone — see
 jwt_auth.py for the rationale. Login / signup / verify / google all return
 `{user, access_token, expires_at}` in the response body. The client stores
 the token in localStorage and POSTs it in the body of every authenticated

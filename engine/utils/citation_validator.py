@@ -53,7 +53,7 @@ class CitationValidator:
             response = requests.get(
                 f"{self.crossref_api_base}{doi_clean}",
                 timeout=self.timeout,
-                headers={'User-Agent': 'OpenDraft/1.3 (https://github.com/federicodeponte/opendraft)'}
+                headers={'User-Agent': 'OpenDraft/1.3 (https://github.com/federicodeponte/dothesis)'}
             )
             return response.status_code == 200
         except requests.exceptions.RequestException:

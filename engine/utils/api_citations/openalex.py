@@ -52,7 +52,7 @@ class OpenAlexClient(BaseAPIClient):
             logger.debug("OpenAlex: No API key, using polite pool (10 req/sec)")
 
         # OpenAlex asks for email in User-Agent for polite pool
-        polite_email = os.getenv('OPENALEX_EMAIL', 'opendraft@users.noreply.github.com')
+        polite_email = os.getenv('OPENALEX_EMAIL', 'dothesis@users.noreply.github.com')
 
         super().__init__(
             base_url="https://api.openalex.org",

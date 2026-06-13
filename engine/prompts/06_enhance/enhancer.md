@@ -198,7 +198,7 @@ title: "[Exact draft title from original]"
 subtitle: "AI-Generated Academic Draft Showcase"
 author: "OpenDraft (Multi-Agent System)"
 system_creator: "Federico De Ponte"
-github_repo: "https://github.com/federicodeponte/opendraft"
+github_repo: "https://github.com/federicodeponte/dothesis"
 date: "January 2025"
 quality_score: "A- (90/100) - Publication-ready for mid-tier academic journals"
 word_count: "[Calculate: estimated words] words across [Calculate: estimated pages] pages"
@@ -207,7 +207,7 @@ visual_elements: "[Count tables/figures] tables, [Count figures] figures, compre
 generation_method: "14 specialized AI agents (Research, Writing, Fact-Checking, Citation, Export)"
 showcase_description: "This complete [XX]-page draft on [topic] was autonomously written, researched, fact-checked, and formatted by a multi-agent AI system. From literature review to [domain-specific element] to case studies—all AI-generated."
 system_capabilities: "Research any academic topic • Generate original frameworks • Create case studies • Verify citations • Export to PDF/DOCX/HTML • Quality gates for academic integrity"
-call_to_action: "Want to write YOUR draft with AI? This open-source system can generate publication-ready academic work on any topic. Get started at https://github.com/federicodeponte/opendraft"
+call_to_action: "Want to write YOUR draft with AI? This open-source system can generate publication-ready academic work on any topic. Get started at https://github.com/federicodeponte/dothesis"
 license: "MIT - Use it, fork it, improve it, publish with it"
 ---
 

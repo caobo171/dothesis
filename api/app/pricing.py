@@ -72,5 +72,5 @@ def paper_cost(level: str, tier: str) -> int:
 def resolve_model(tier: str) -> str:
     if tier not in ALLOWED_TIERS:
         raise ValueError(f"unknown tier: {tier!r}")
-    env_key = f"OPENDRAFT_{tier.upper()}_MODEL"
+    env_key = f"DOTHESIS_{tier.upper()}_MODEL"
     return os.environ.get(env_key) or TIER_TO_MODEL[tier]

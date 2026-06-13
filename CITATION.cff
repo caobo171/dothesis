@@ -6,7 +6,7 @@ abstract: "Open-source AI research draft generator with 19 specialized agents, v
 authors:
   - family-names: "De Ponte"
     given-names: "Federico"
-repository-code: "https://github.com/federicodeponte/opendraft"
+repository-code: "https://github.com/federicodeponte/dothesis"
 url: "https://openpaper.dev"
 license: MIT
 keywords:

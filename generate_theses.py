@@ -158,7 +158,7 @@ def generate_thesis(thesis_info, index):
 
 if __name__ == "__main__":
     print("="*80)
-    print("OPENDRAFT THESIS BATCH GENERATION")
+    print("DOTHESIS THESIS BATCH GENERATION")
     print("Generating 5 Master's Level Theses")
     print("="*80)
 
@@ -174,7 +174,7 @@ if __name__ == "__main__":
                 "topic": thesis["topic"][:50] + "...",
                 "success": True,
                 "pdf": None,
-                "zip": f"/Users/federicodeponte/opendraft/thesis_outputs/{thesis['folder']}.zip"
+                "zip": f"/Users/federicodeponte/dothesis/thesis_outputs/{thesis['folder']}.zip"
             })
             continue
         success, pdf, zip_file = generate_thesis(thesis, i)

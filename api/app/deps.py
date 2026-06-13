@@ -1,6 +1,6 @@
 """Auth dependencies — reads access_token from request body.
 
-History: this file used to read `opendraft_session` cookie and look up a row
+History: this file used to read `dothesis_session` cookie and look up a row
 in the Session table. That path is gone — see jwt_auth.py for the why.
 
 The `current_user` dependency below works for any POST endpoint whose body

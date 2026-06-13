@@ -6,7 +6,7 @@ from app.google_auth import verify_google_id_token
 
 
 def test_returns_normalized_user_info(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    monkeypatch.setenv("DOTHESIS_GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
     from app import settings as settings_mod
     settings_mod._settings = None
 
@@ -25,7 +25,7 @@ def test_returns_normalized_user_info(monkeypatch):
 
 
 def test_raises_on_bad_token(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_GOOGLE_CLIENT_ID", "x")
+    monkeypatch.setenv("DOTHESIS_GOOGLE_CLIENT_ID", "x")
     from app import settings as settings_mod
     settings_mod._settings = None
     with patch("app.google_auth.gid.verify_oauth2_token", side_effect=ValueError("bad")):

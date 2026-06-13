@@ -9,14 +9,14 @@ from app.s3 import S3Client
 def s3():
     with mock_aws():
         boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="testbucket")
-        yield S3Client(bucket="testbucket", prefix="opendraft/", region="us-east-1",
+        yield S3Client(bucket="testbucket", prefix="dothesis/", region="us-east-1",
                         access_key="x", secret_key="y")
 
 
 def test_put_and_get_url_use_prefix(s3):
     s3.put_object("foo.txt", b"hi", content_type="text/plain")
     url = s3.presigned_get("foo.txt", expires_in=60)
-    assert "opendraft/foo.txt" in url
+    assert "dothesis/foo.txt" in url
 
 
 def test_refuses_keys_with_dotdot(s3):

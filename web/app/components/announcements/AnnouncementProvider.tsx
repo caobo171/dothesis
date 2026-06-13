@@ -29,7 +29,7 @@ export function AnnouncementProvider({ children }: { children: ReactNode }) {
       const ageMs = Date.now() - new Date(created).getTime();
       if (ageMs > FIRST_LOGIN_TTL_HOURS * 3600 * 1000) return;
     }
-    const key = `opendraft_first_announcement_${me.data.id}`;
+    const key = `dothesis_first_announcement_${me.data.id}`;
     if (window.localStorage.getItem(key)) return;
     window.localStorage.setItem(key, "1");
     setShowFirstLogin(true);
@@ -38,7 +38,7 @@ export function AnnouncementProvider({ children }: { children: ReactNode }) {
   // login_banner: once per day per user per announcement id
   useEffect(() => {
     if (!data?.login_banner || !me.data) return;
-    const key = `opendraft_login_banner_${me.data.id}_${data.login_banner.id}`;
+    const key = `dothesis_login_banner_${me.data.id}_${data.login_banner.id}`;
     const stored = window.localStorage.getItem(key);
     const startOfToday = new Date().setHours(0, 0, 0, 0);
     if (stored && parseInt(stored, 10) >= startOfToday) return;

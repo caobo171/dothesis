@@ -358,7 +358,7 @@ In conclusion {cite_4}. Future work should explore more.
         assert missing == {"{cite_3}"}
 
     @pytest.mark.skipif(
-        not Path.home().joinpath(".opendraft/config.json").exists(),
+        not Path.home().joinpath(".dothesis/config.json").exists(),
         reason="No API key configured"
     )
     def test_call_gemini_revise_preserves_citations_live(self):
@@ -367,7 +367,7 @@ In conclusion {cite_4}. Future work should explore more.
         import json
 
         # Load API key
-        config_path = Path.home() / ".opendraft/config.json"
+        config_path = Path.home() / ".dothesis/config.json"
         if config_path.exists():
             config = json.loads(config_path.read_text())
             os.environ["GOOGLE_API_KEY"] = config.get("google_api_key", "")

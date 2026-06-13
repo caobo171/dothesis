@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bring up the OpenDraft dev stack:
+# Bring up the DoThesis dev stack:
 #   1. Postgres in Docker (docker compose)
 #   2. FastAPI (uvicorn --reload)
 #   3. Next.js (next dev)
@@ -56,19 +56,27 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 echo "==> ensuring postgres is up"
-"${DOCKER_COMPOSE[@]}" up -d postgres
+# --remove-orphans cleans up containers from a renamed/removed service (e.g. the
+# old opendraft-postgres left over after the opendraft→dothesis rename) so they
+# can't linger and hold the host port.
+"${DOCKER_COMPOSE[@]}" up -d --remove-orphans postgres
 
 echo "==> waiting for postgres to accept connections"
-for i in {1..30}; do
-  if docker exec opendraft-postgres pg_isready -U opendraft -d opendraft >/dev/null 2>&1; then
+# 90s, not 30s: the FIRST run after the volume is (re)created has to run initdb
+# and create the dothesis role/db, which routinely takes >30s — so a fresh
+# checkout / a volume rename used to fail here. Steady-state startup is seconds.
+PG_READY=0
+for _ in $(seq 1 90); do
+  if docker exec dothesis-postgres pg_isready -U dothesis -d dothesis >/dev/null 2>&1; then
+    PG_READY=1
     break
   fi
   sleep 1
-  if [ "$i" = 30 ]; then
-    echo "postgres did not become ready in 30s; check 'docker logs opendraft-postgres'" >&2
-    exit 1
-  fi
 done
+if [ "$PG_READY" != "1" ]; then
+  echo "postgres did not become ready in 90s; check 'docker logs dothesis-postgres'" >&2
+  exit 1
+fi
 
 # --- 1. API ---
 # Detect Windows venv layout

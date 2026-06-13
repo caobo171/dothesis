@@ -502,7 +502,7 @@ class SerperClient(BaseAPIClient):
         """Fetch metadata from CrossRef using DOI."""
         try:
             api_url = f"https://api.crossref.org/works/{doi}"
-            headers = {'User-Agent': 'OpenDraft/1.0 (mailto:support@opendraft.ai)'}
+            headers = {'User-Agent': 'OpenDraft/1.0 (mailto:support@dothesis.ai)'}
 
             response = self.validation_session.get(api_url, headers=headers, timeout=10)
             if not response.ok:

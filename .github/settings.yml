@@ -1,9 +1,9 @@
 # GitHub Repository Settings
 
 repository:
-  name: opendraft
+  name: dothesis
   description: "🎓 Generate publication-ready academic theses with 15 specialized AI agents and 200M+ research papers. 95%+ citation success. MIT licensed."
-  homepage: "https://opendraft-landing.vercel.app"
+  homepage: "https://dothesis-landing.vercel.app"
   topics:
     - academic-writing
     - draft-generator

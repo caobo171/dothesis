@@ -12,7 +12,7 @@ from moto import mock_aws
 def env_with_s3(monkeypatch):
     monkeypatch.setenv("AWS_REGION", "us-east-1")
     monkeypatch.setenv("S3_BUCKET", "smoke-bucket")
-    monkeypatch.setenv("S3_PREFIX", "opendraft/")
+    monkeypatch.setenv("S3_PREFIX", "dothesis/")
     monkeypatch.setenv("AWS_ACCESS_KEY", "x")
     monkeypatch.setenv("AWS_SECRET_KEY", "y")
 

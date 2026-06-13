@@ -14,7 +14,7 @@
 
 ## Conventions for every task
 
-- All paths are absolute from repo root: `C:/DFolder/cao_projects/opendraft/`.
+- All paths are absolute from repo root: `C:/DFolder/cao_projects/dothesis/`.
 - Python: `python --version` must be 3.10+. All `api/` commands assume `cd api/` unless otherwise stated.
 - Node: `npm --version` 10+. All `web/` commands assume `cd web/`.
 - Commit messages follow the existing style: `area: short summary`.
@@ -29,12 +29,12 @@ Create `.env` once before starting Task 1:
 
 ```env
 # Postgres — provision your own (Neon/Supabase/RDS/docker)
-DATABASE_URL=postgresql+psycopg://opendraft:opendraft@localhost:5432/opendraft
+DATABASE_URL=postgresql+psycopg://dothesis:dothesis@localhost:5432/dothesis
 
 # AWS S3 (values to source from your own secrets vault — do NOT commit real keys)
 AWS_REGION=ap-southeast-1
 S3_BUCKET=<your-bucket-name>
-S3_PREFIX=opendraft/
+S3_PREFIX=dothesis/
 AWS_ACCESS_KEY=<your-aws-access-key>
 AWS_SECRET_KEY=<your-aws-secret-key>
 
@@ -129,7 +129,7 @@ Add `.env` to `.gitignore` if not already there.
 
 ```toml
 [project]
-name = "opendraft-api"
+name = "dothesis-api"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
@@ -185,7 +185,7 @@ class Settings(BaseSettings):
 
     aws_region: str = Field(alias="AWS_REGION")
     s3_bucket: str = Field(alias="S3_BUCKET")
-    s3_prefix: str = Field(alias="S3_PREFIX", default="opendraft/")
+    s3_prefix: str = Field(alias="S3_PREFIX", default="dothesis/")
     aws_access_key: str = Field(alias="AWS_ACCESS_KEY")
     aws_secret_key: str = Field(alias="AWS_SECRET_KEY")
 
@@ -662,14 +662,14 @@ from app.s3 import S3Client
 def s3():
     with mock_aws():
         boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="testbucket")
-        yield S3Client(bucket="testbucket", prefix="opendraft/", region="us-east-1",
+        yield S3Client(bucket="testbucket", prefix="dothesis/", region="us-east-1",
                         access_key="x", secret_key="y")
 
 
 def test_put_and_get_url_use_prefix(s3):
     s3.put_object("foo.txt", b"hi", content_type="text/plain")
     url = s3.presigned_get("foo.txt", expires_in=60)
-    assert "opendraft/foo.txt" in url
+    assert "dothesis/foo.txt" in url
 
 
 def test_refuses_keys_with_dotdot(s3):
@@ -836,7 +836,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def _signer(secret: str) -> Signer:
-    return Signer(secret, salt="opendraft-session")
+    return Signer(secret, salt="dothesis-session")
 
 
 def sign_session_id(session_id: str, *, secret: str) -> str:
@@ -888,18 +888,18 @@ from .models import Session as UserSession, User
 from .security import verify_session_cookie
 from .settings import Settings, get_settings
 
-SESSION_COOKIE = "opendraft_session"
+SESSION_COOKIE = "dothesis_session"
 
 
 def current_user(
-    opendraft_session: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+    dothesis_session: str | None = Cookie(default=None, alias=SESSION_COOKIE),
     settings: Settings = Depends(get_settings),
     db: Session = Depends(db_session),
 ) -> User:
-    if not opendraft_session:
+    if not dothesis_session:
         raise HTTPException(status_code=401, detail={"error": {"code": "unauthenticated", "message": "login required"}})
     try:
-        sid = verify_session_cookie(opendraft_session, secret=settings.session_secret)
+        sid = verify_session_cookie(dothesis_session, secret=settings.session_secret)
     except ValueError as e:
         raise HTTPException(status_code=401, detail={"error": {"code": "bad_session", "message": str(e)}})
     sess = db.get(UserSession, sid)
@@ -1054,7 +1054,7 @@ def test_signup_login_me_logout_flow():
     r = c.post("/api/v1/auth/signup", json={"email": "a@b.com", "password": "supersecret"})
     assert r.status_code == 201, r.text
     assert r.json()["email"] == "a@b.com"
-    assert c.cookies.get("opendraft_session")
+    assert c.cookies.get("dothesis_session")
 
     r = c.get("/api/v1/auth/me")
     assert r.status_code == 200
@@ -2490,7 +2490,7 @@ def test_streamer_emits_activity(tmp_path: Path):
 ```bash
 mkdir -p engine/tests
 touch engine/tests/__init__.py
-cd C:/DFolder/cao_projects/opendraft
+cd C:/DFolder/cao_projects/dothesis
 python -m pytest engine/tests/test_job_io.py -v
 ```
 Expected: 3 passed.
@@ -2608,7 +2608,7 @@ class _Client:
 def s3_from_env() -> _Client:
     return _Client(
         bucket=os.environ["S3_BUCKET"],
-        prefix=os.environ.get("S3_PREFIX", "opendraft/"),
+        prefix=os.environ.get("S3_PREFIX", "dothesis/"),
         region=os.environ["AWS_REGION"],
         ak=os.environ["AWS_ACCESS_KEY"],
         sk=os.environ["AWS_SECRET_KEY"],
@@ -2635,7 +2635,7 @@ from moto import mock_aws
 def env_with_s3(monkeypatch):
     monkeypatch.setenv("AWS_REGION", "us-east-1")
     monkeypatch.setenv("S3_BUCKET", "smoke-bucket")
-    monkeypatch.setenv("S3_PREFIX", "opendraft/")
+    monkeypatch.setenv("S3_PREFIX", "dothesis/")
     monkeypatch.setenv("AWS_ACCESS_KEY", "x")
     monkeypatch.setenv("AWS_SECRET_KEY", "y")
 
@@ -2829,7 +2829,7 @@ export function middleware(request) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
-  const cookie = request.cookies.get("opendraft_session");
+  const cookie = request.cookies.get("dothesis_session");
   if (!cookie) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -3634,7 +3634,7 @@ Coverage check against the spec (`docs/superpowers/specs/2026-05-23-web-engine-m
 | §3 Quotas | 6, 7 |
 | §4 users / sessions tables | 2, 5 |
 | §4 papers / jobs / job_events tables | 2, 7, 8 |
-| §4 S3 layout `opendraft/users/.../jobs/...` | 3, 10, 11 |
+| §4 S3 layout `dothesis/users/.../jobs/...` | 3, 10, 11 |
 | §5 `engine/__main__.py` | 11 |
 | §5 JobMonitor + pubsub + recovery | 8, 9 |
 | §5 cancel | 8, 9 |

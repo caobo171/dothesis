@@ -14,8 +14,8 @@ def _client():
 
 
 def test_google_first_signin_creates_user_with_bonus(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_SIGNUP_BONUS_CREDITS", "100")
-    monkeypatch.setenv("OPENDRAFT_GOOGLE_CLIENT_ID", "test-id")
+    monkeypatch.setenv("DOTHESIS_SIGNUP_BONUS_CREDITS", "100")
+    monkeypatch.setenv("DOTHESIS_GOOGLE_CLIENT_ID", "test-id")
     from app import settings as sm; sm._settings = None
 
     fake_info = {"email": "new@gmail.com", "google_id": "g_99", "name": "New User"}

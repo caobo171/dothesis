@@ -9,7 +9,7 @@ const AuthContext = createContext(null);
 /**
  * Auth state for the React tree.
  *
- * Migration note: the backend used to set an opendraft_session cookie on
+ * Migration note: the backend used to set an dothesis_session cookie on
  * login. It now returns { user, access_token, expires_at } and the client
  * is responsible for persisting the token. See web/app/lib/tokenStore.ts.
  */

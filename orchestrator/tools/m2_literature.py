@@ -97,7 +97,7 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
     # under-cited every scout.
     llm = _engine_model()
     try:
-        # B4 use_deep_research=True: matches upstream opendraft. Enables the
+        # B4 use_deep_research=True: matches upstream dothesis. Enables the
         # engine's DeepResearchPlanner which expands the topic into 50+ varied
         # queries (vs our hand-rolled 3), routes them through Crossref/OpenAlex/
         # Semantic Scholar/Gemini Grounded. The hand-rolled research_topics are

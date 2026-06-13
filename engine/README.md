@@ -27,7 +27,7 @@ engine/
 │   ├── 04_validate/        # Skeptic, Verifier, Referee
 │   ├── 05_refine/          # Citation Verifier, Voice, Entropy, Polish
 │   └── 06_enhance/         # Abstract Generator, Enhancer
-└── opendraft/              # CLI tools
+└── dothesis/              # CLI tools
 ```
 
 ## Usage

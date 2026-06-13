@@ -1,5 +1,5 @@
 /**
- * Access-token store — replaces the opendraft_session cookie path.
+ * Access-token store — replaces the dothesis_session cookie path.
  *
  * Storage:
  *   - localStorage: the canonical token. Read on every authenticated fetch.

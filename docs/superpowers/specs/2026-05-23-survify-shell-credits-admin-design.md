@@ -5,7 +5,7 @@
 
 ## Goal
 
-Adopt Survify's layout chrome (sidebar + sticky header), credit-pack billing flow, and admin section in `opendraft/web` and `opendraft/api`, while keeping the existing FastAPI engine (papers/jobs/exports/SSE) untouched.
+Adopt Survify's layout chrome (sidebar + sticky header), credit-pack billing flow, and admin section in `dothesis/web` and `dothesis/api`, while keeping the existing FastAPI engine (papers/jobs/exports/SSE) untouched.
 
 ## Non-goals
 
@@ -13,7 +13,7 @@ Adopt Survify's layout chrome (sidebar + sticky header), credit-pack billing flo
 - Migrating every existing page (Dashboard, Wizard, PaperShell, DraftEditor, Citations, ExportTab, AgentRun, Billing) to the new stack in this change. Those keep working under the new shell; per-page Tailwind/TS migration is a follow-up.
 - Marketing/landing pages — public surfaces are out of scope.
 
-## Stack changes (`opendraft/web`)
+## Stack changes (`dothesis/web`)
 
 Add the following dev dependencies:
 
@@ -28,7 +28,7 @@ Add the following dev dependencies:
 Files:
 
 - `tsconfig.json` — Next.js defaults, `paths: { "@/*": ["./app/*", "./*"] }`.
-- `tailwind.config.ts` — content globs cover `app/**/*.{ts,tsx,js,jsx}`. Extend theme `colors.primary` from the existing `--blue-*` tokens in `globals.css` so Survify's `primary-50/600/...` classes resolve to opendraft's electric blue.
+- `tailwind.config.ts` — content globs cover `app/**/*.{ts,tsx,js,jsx}`. Extend theme `colors.primary` from the existing `--blue-*` tokens in `globals.css` so Survify's `primary-50/600/...` classes resolve to dothesis's electric blue.
 - `postcss.config.js` — tailwind + autoprefixer.
 - `app/globals.css` — keep the CSS-variable design system (used by existing pages); add `@tailwind base/components/utilities` at the top.
 
@@ -82,7 +82,7 @@ Direct port of `survify-frontend/components/layout/sidebar/sidebar-layout.tsx`:
 - Help Center card pinned bottom (text changed for Opendraft: "Find docs" → GitHub README, "Contact Coach" → `mailto:cao.nguyen@wele-learn.com`).
 - Sticky top bar: mobile burger, search slot (empty placeholder for now), bell button (notification dropdown stub), user menu with avatar + email + "Sign out".
 
-Brand swap: replace Survify logo PNGs with opendraft's `BrandMark` from `app/components/shared.jsx`, lifted into a `<Brand />` component.
+Brand swap: replace Survify logo PNGs with dothesis's `BrandMark` from `app/components/shared.jsx`, lifted into a `<Brand />` component.
 
 ### Section config
 
@@ -139,7 +139,7 @@ The backend resolves the tier to a concrete provider/model:
 # api/app/pricing.py
 TIER_TO_MODEL = {
     "standard": "gemini-flash",
-    "premium":  "gpt-5",     # configurable via env: OPENDRAFT_PREMIUM_MODEL
+    "premium":  "gpt-5",     # configurable via env: DOTHESIS_PREMIUM_MODEL
 }
 ```
 
@@ -231,7 +231,7 @@ Two endpoints + one webhook:
   1. Look up `Order` by `polar_checkout_id`. Idempotent (no-op if already paid).
   2. In one transaction: set `orders.status='paid'`, `orders.paid_at=now()`, `orders.polar_order_id=...`; insert `credit_transactions` with positive delta; `UPDATE users SET credit = credit + N`.
 
-Env vars: `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_SERVER` (sandbox|production), `OPENDRAFT_BASE_URL` (for return URLs).
+Env vars: `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_SERVER` (sandbox|production), `DOTHESIS_BASE_URL` (for return URLs).
 
 Success/cancel URLs route back to `/credit?polar=success` and `/credit?polar=cancel`. The Credit page already shows a success banner when `?polar=success` is present (Survify code).
 
@@ -252,7 +252,7 @@ On terminal job failure (status transitions to `failed`/`canceled`) inside `job_
 
 ### Frontend
 
-Port `(inapp)/credit/page.tsx`, `_components/Credit.tsx`, `_components/PricePackages.tsx` and `components/common/PricingPackages.tsx` from Survify. Strip Paddle code paths; keep Polar only. Replace `useMe()`/`useMyForms()`/`useMyOrders()` calls with opendraft equivalents:
+Port `(inapp)/credit/page.tsx`, `_components/Credit.tsx`, `_components/PricePackages.tsx` and `components/common/PricingPackages.tsx` from Survify. Strip Paddle code paths; keep Polar only. Replace `useMe()`/`useMyForms()`/`useMyOrders()` calls with dothesis equivalents:
 
 - `useMe()` — wrap `AuthContext` in a SWR-backed hook returning `{ id, email, username, credit, is_super_admin }`.
 - `useMyForms()` → drop (no surveys).
@@ -277,7 +277,7 @@ def is_super_admin(user: "User") -> bool:
     return user.email.lower() in SUPER_ADMIN_EMAILS
 ```
 
-The list can also be extended from an env var `OPENDRAFT_SUPER_ADMIN_EMAILS` (comma-separated) at process start, so deploys can grant admin without a code change — but the source of truth is the constant in code.
+The list can also be extended from an env var `DOTHESIS_SUPER_ADMIN_EMAILS` (comma-separated) at process start, so deploys can grant admin without a code change — but the source of truth is the constant in code.
 
 - `require_admin(user = Depends(current_user))` raises 403 unless `is_super_admin(user)` is true.
 - `/api/me` returns `is_super_admin` as a derived boolean, never persisted.
@@ -309,7 +309,7 @@ UI: searchable table → click row → slide-over drawer with grant form. The `i
 
 - Full CRUD: `GET/POST/PATCH/DELETE /api/admin/announcements`.
 - Fields: kind (radio: first-login / login-banner), title, body (textarea), image_url, cta_label/url, active toggle, starts_at/ends_at.
-- User-side fetch: `GET /api/announcements/me` returns at most one `first_login` (if user account < 48h old) and one currently-active `login_banner`. Front-end stores `localStorage` keys (`opendraft_first_annoucement_<user>`, `opendraft_login_annoucement_<user>_<id>`) to throttle (once per user for first-login; once per day for login-banner).
+- User-side fetch: `GET /api/announcements/me` returns at most one `first_login` (if user account < 48h old) and one currently-active `login_banner`. Front-end stores `localStorage` keys (`dothesis_first_annoucement_<user>`, `dothesis_login_annoucement_<user>_<id>`) to throttle (once per user for first-login; once per day for login-banner).
 
 ### `/admin/orders`
 
@@ -345,7 +345,7 @@ Each step is independently testable and reversible.
 
 ## Risks / open questions
 
-- **Polar account setup** — needs an account, products, webhook secret. Until those exist, checkout returns a fake URL in dev (env-flagged `OPENDRAFT_PAYMENTS=dummy`).
+- **Polar account setup** — needs an account, products, webhook secret. Until those exist, checkout returns a fake URL in dev (env-flagged `DOTHESIS_PAYMENTS=dummy`).
 - **Existing pages styling drift** — wrapping `.jsx` pages in the new Tailwind shell may produce visual inconsistencies on hover/focus states. Acceptable until the per-page migration follow-up.
 - **Refund race** — if a job fails during cancel, the refund logic must be guarded by `SELECT FOR UPDATE` on the paper row plus a check that no refund ledger row exists yet.
 - **Pricing tuning** — placeholders only. Real numbers come from product/finance later.

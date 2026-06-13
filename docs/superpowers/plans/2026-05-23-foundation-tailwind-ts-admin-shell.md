@@ -31,7 +31,7 @@
 - Modify: `app/layout.jsx` → `app/layout.tsx`.
 - New: `app/components/layout/SidebarLayout.tsx` — ported Survify shell.
 - New: `app/components/layout/sections.ts` — section/nav type definitions.
-- New: `app/components/layout/Brand.tsx` — opendraft brand mark + wordmark.
+- New: `app/components/layout/Brand.tsx` — dothesis brand mark + wordmark.
 - New: `app/lib/use-me.ts` — SWR hook for current user.
 - New: `app/lib/types.ts` — shared `Me` type.
 - New route group: `app/(inapp)/layout.tsx` — user-shell layout.
@@ -99,13 +99,13 @@ def test_admin_check_is_case_insensitive():
 
 
 def test_env_var_extends_allowlist(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_SUPER_ADMIN_EMAILS", "extra1@x.com, EXTRA2@y.com")
+    monkeypatch.setenv("DOTHESIS_SUPER_ADMIN_EMAILS", "extra1@x.com, EXTRA2@y.com")
     extras = _load_extra_emails()
     assert extras == frozenset({"extra1@x.com", "extra2@y.com"})
 
 
 def test_env_var_empty_returns_empty_set(monkeypatch):
-    monkeypatch.delenv("OPENDRAFT_SUPER_ADMIN_EMAILS", raising=False)
+    monkeypatch.delenv("DOTHESIS_SUPER_ADMIN_EMAILS", raising=False)
     assert _load_extra_emails() == frozenset()
 ```
 
@@ -135,7 +135,7 @@ _SEED: frozenset[str] = frozenset({
 
 
 def _load_extra_emails() -> frozenset[str]:
-    raw = os.environ.get("OPENDRAFT_SUPER_ADMIN_EMAILS", "").strip()
+    raw = os.environ.get("DOTHESIS_SUPER_ADMIN_EMAILS", "").strip()
     if not raw:
         return frozenset()
     return frozenset(e.strip().lower() for e in raw.split(",") if e.strip())
@@ -863,7 +863,7 @@ import { useMe } from "@/app/lib/use-me";
 import { Brand } from "./Brand";
 import type { SidebarSection } from "./sections";
 
-const COLLAPSED_KEY = "opendraft_sidebar_collapsed";
+const COLLAPSED_KEY = "dothesis_sidebar_collapsed";
 
 async function logout() {
   await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" });
@@ -1497,7 +1497,7 @@ git commit -m "feat(web): admin route group with allowlist gate"
 - [ ] **Step 1: Read the proxy**
 
 Run: `cat web/proxy.js`
-Confirm the matcher does NOT explicitly exclude `/admin`; it just enforces `opendraft_session` cookie. The admin layout's React-side gate handles role check.
+Confirm the matcher does NOT explicitly exclude `/admin`; it just enforces `dothesis_session` cookie. The admin layout's React-side gate handles role check.
 
 - [ ] **Step 2: No code change required**
 
@@ -1542,7 +1542,7 @@ If steps above surfaced bugs and you patched them, commit a final clean-up. Othe
 
 ## Done criteria
 
-- API: `cao.nv17@gmail.com` (and any email in `OPENDRAFT_SUPER_ADMIN_EMAILS`) is recognised as super-admin by `/api/v1/auth/me`. New `User` columns `credit` and `username` exist (nullable username, credit default 0). `require_admin` dep raises 403 for non-admins and returns the user for admins. Test suite passes.
+- API: `cao.nv17@gmail.com` (and any email in `DOTHESIS_SUPER_ADMIN_EMAILS`) is recognised as super-admin by `/api/v1/auth/me`. New `User` columns `credit` and `username` exist (nullable username, credit default 0). `require_admin` dep raises 403 for non-admins and returns the user for admins. Test suite passes.
 - Web: Tailwind classes resolve. `tsc --noEmit` clean. Existing pages (dashboard, wizard, paper detail) render inside the new sidebar shell. `/admin` routes are 403-gated by allowlist email. Sidebar collapse persists in localStorage.
 - Visual smoke-tested in a real browser by an admin and a non-admin user.
 

@@ -417,7 +417,7 @@ class OutputAuditor:
 
 def main():
     print("="*70)
-    print("OPENDRAFT OUTPUT AUDITOR")
+    print("DOTHESIS OUTPUT AUDITOR")
     print("="*70)
 
     if not has_api_key():

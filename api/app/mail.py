@@ -40,7 +40,7 @@ def _render(template: str, vars: dict) -> str:
 
 def send_html(to: str, subject: str, html: str) -> bool:
     s = get_settings()
-    if s.opendraft_mail == "dummy" or not s.mail_from:
+    if s.dothesis_mail == "dummy" or not s.mail_from:
         log.warning("mail dummy mode to=%s subject=%s body=%s",
                     to, subject, html[:400])
         return True

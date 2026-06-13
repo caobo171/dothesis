@@ -17,7 +17,7 @@
 ### 1. Multiple Entry Point Scripts - FIXED
 - **Status:** Deleted 8 obsolete hardcoded topic scripts
 - **Remaining:** 3 dev scripts moved to `engine/dev/` (tracked, llama4, gptoss)
-- **Solution:** Use CLI: `opendraft "Your Topic" --level master`
+- **Solution:** Use CLI: `dothesis "Your Topic" --level master`
 
 ### 5. No Inter-Phase Validation - FIXED
 - **Status:** Added validation after each pipeline phase
@@ -32,7 +32,7 @@
 ### Citation Bug - FIXED
 - **Problem:** Citations rendered as `{cite_cite_001}` instead of `{cite_001}`
 - **Location:** `phases/citations.py` line 128
-- **PR:** https://github.com/scailetech/opendraft/pull/25
+- **PR:** https://github.com/scailetech/dothesis/pull/25
 
 ### 4. Circular Imports - FIXED
 - **Problem:** `phases/compile.py` and `phases/citations.py` imported from `draft_generator.py`
@@ -43,7 +43,7 @@
 - **Problem:** Long pipeline runs (10-30 min) cannot recover from failure
 - **Solution:** Added checkpoint system that saves state after each phase
 - **Files:** `utils/checkpoint.py`, `draft_generator.py`
-- **Usage:** `opendraft "topic" --resume /path/to/checkpoint.json`
+- **Usage:** `dothesis "topic" --resume /path/to/checkpoint.json`
 - **Features:**
   - Saves checkpoint.json after each phase (research, structure, citations, compose, validate)
   - Resumes from any phase, skips completed work
@@ -116,7 +116,7 @@
   - 35% faster for 50+ citations
 
 ### Data Fetching (World Bank, Eurostat, OWID) - ADDED
-- **Ported from:** V3's `opendraft/data_fetch.py`
+- **Ported from:** V3's `dothesis/data_fetch.py`
 - **File:** `utils/data_fetch.py`
 - **Features:**
   - World Bank API: Development indicators (GDP, population, education, etc.)
@@ -124,14 +124,14 @@
   - Our World in Data: Open research datasets (COVID, life expectancy, etc.)
   - Search functionality for indicator discovery
   - Automatic CSV export to workspace
-- **CLI:** `opendraft data <provider> <query>`
+- **CLI:** `dothesis data <provider> <query>`
 - **Examples:**
-  - `opendraft data search GDP`
-  - `opendraft data worldbank NY.GDP.MKTP.CD --countries USA;DEU`
-  - `opendraft data owid covid-19`
+  - `dothesis data search GDP`
+  - `dothesis data worldbank NY.GDP.MKTP.CD --countries USA;DEU`
+  - `dothesis data owid covid-19`
 
 ### Draft Revision Feature - ADDED
-- **Ported from:** V3's `opendraft/revise.py`
+- **Ported from:** V3's `dothesis/revise.py`
 - **File:** `utils/revise.py`
 - **Features:**
   - Revise existing drafts with natural language instructions
@@ -139,8 +139,8 @@
   - Automatic versioning (v2, v3, v4...)
   - Quality scoring before/after revision
   - PDF and DOCX export of revised version
-- **CLI:** `opendraft revise <folder> "instructions"`
-- **Example:** `opendraft revise ./output "make the introduction longer"`
+- **CLI:** `dothesis revise <folder> "instructions"`
+- **Example:** `dothesis revise ./output "make the introduction longer"`
 
 ---
 
@@ -244,7 +244,7 @@ V1 remains 7x smaller and easier to maintain.
 - [x] Add to `--help` output (already present)
 - [x] Expose: clearly label output as "Research Exposé"
 
-**WhatsApp Integration:** Already done in `opendraft-whatsapp`:
+**WhatsApp Integration:** Already done in `dothesis-whatsapp`:
 - `"topic quick"` → expose mode
 - Send PDF + `tldr` → 5-bullet summary
 - Send PDF + `digest` → audio voice message

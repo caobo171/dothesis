@@ -6,7 +6,7 @@ reads that field, calls `verify_access_token`, and returns the User row.
 Stateless — no Session table lookup, no cookie machinery.
 
 Why this exists:
-- The old `opendraft_session` cookie path made cross-origin SSE fragile.
+- The old `dothesis_session` cookie path made cross-origin SSE fragile.
   Browsers refused to forward the cookie to localhost:7100 (Next.js dev was
   serving from localhost:3006) without `SameSite=None; Secure` — which
   doesn't work over http. Tokens in the request body sidestep all of that.

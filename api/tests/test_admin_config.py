@@ -26,11 +26,11 @@ def test_admin_check_is_case_insensitive():
 
 
 def test_env_var_extends_allowlist(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_SUPER_ADMIN_EMAILS", "extra1@x.com, EXTRA2@y.com")
+    monkeypatch.setenv("DOTHESIS_SUPER_ADMIN_EMAILS", "extra1@x.com, EXTRA2@y.com")
     extras = _load_extra_emails()
     assert extras == frozenset({"extra1@x.com", "extra2@y.com"})
 
 
 def test_env_var_empty_returns_empty_set(monkeypatch):
-    monkeypatch.delenv("OPENDRAFT_SUPER_ADMIN_EMAILS", raising=False)
+    monkeypatch.delenv("DOTHESIS_SUPER_ADMIN_EMAILS", raising=False)
     assert _load_extra_emails() == frozenset()

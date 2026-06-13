@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'engine'))
 # Change to engine directory for proper .env loading
 os.chdir(os.path.join(os.path.dirname(__file__), 'engine'))
 
-from opendraft.draft_generator import generate_draft
+from dothesis.draft_generator import generate_draft
 
 THESIS_TOPIC = """Entrepreneurial Accelerator Programmes: Critical Success Factors and Their Impact on Startup Development
 

@@ -1,4 +1,4 @@
-"""Polar payment integration. Falls back to dummy URLs when OPENDRAFT_PAYMENTS=dummy."""
+"""Polar payment integration. Falls back to dummy URLs when DOTHESIS_PAYMENTS=dummy."""
 from __future__ import annotations
 
 import hashlib
@@ -21,7 +21,7 @@ class PolarError(Exception):
 
 def _is_dummy(settings: Settings | None = None) -> bool:
     settings = settings or get_settings()
-    return settings.opendraft_payments == "dummy" or not settings.polar_access_token
+    return settings.dothesis_payments == "dummy" or not settings.polar_access_token
 
 
 def create_checkout(order: "Order", *, return_url: str, cancel_url: str) -> tuple[str, str]:
@@ -29,7 +29,7 @@ def create_checkout(order: "Order", *, return_url: str, cancel_url: str) -> tupl
     settings = get_settings()
     if _is_dummy(settings):
         cid = f"dummy_{uuid.uuid4().hex}"
-        url = f"{settings.opendraft_base_url}/credit?polar=dummy&order={order.id}"
+        url = f"{settings.dothesis_base_url}/credit?polar=dummy&order={order.id}"
         log.warning("polar dummy mode — order %s gets fake checkout %s", order.id, cid)
         return cid, url
 

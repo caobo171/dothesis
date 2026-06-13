@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/Open%20Source-100%25-brightgreen.svg" alt="Open Source">
-  <img src="https://img.shields.io/github/stars/federicodeponte/opendraft?style=social" alt="GitHub stars">
+  <img src="https://img.shields.io/github/stars/federicodeponte/dothesis?style=social" alt="GitHub stars">
 </p>
 
 <p align="center">
@@ -55,11 +55,11 @@
 ## Table of Contents
 
 - [At a Glance](#at-a-glance)
-- [What is OpenDraft?](#what-is-opendraft)
+- [What is OpenDraft?](#what-is-dothesis)
 - [Try it free — no installation](#try-it-free--no-installation)
-- [Why OpenDraft Exists](#why-opendraft-exists)
-- [What OpenDraft is NOT](#what-opendraft-is-not)
-- [OpenDraft vs ChatGPT](#opendraft-vs-chatgpt)
+- [Why OpenDraft Exists](#why-dothesis-exists)
+- [What OpenDraft is NOT](#what-dothesis-is-not)
+- [OpenDraft vs ChatGPT](#dothesis-vs-chatgpt)
 - [How It Works](#how-it-works)
 - [Features](#features)
 - [Quick Start](#quick-start)
@@ -211,13 +211,13 @@ Generate a concise 5-bullet summary of any paper in seconds:
 
 ```bash
 # As a subcommand
-opendraft tldr paper.pdf
+dothesis tldr paper.pdf
 
 # Or standalone
-opendraft-tldr paper.pdf
+dothesis-tldr paper.pdf
 
 # Output to file
-opendraft tldr paper.pdf -o summary.md
+dothesis tldr paper.pdf -o summary.md
 ```
 
 Each bullet follows academic structure: thesis, key finding, method, implication, limitation.
@@ -228,21 +228,21 @@ Generate a podcast-style audio summary you can listen to:
 
 ```bash
 # Generate script + audio
-opendraft digest paper.pdf
+dothesis digest paper.pdf
 
 # Choose a different voice (rachel, adam, josh, elli, bella)
-opendraft digest paper.pdf --voice adam
+dothesis digest paper.pdf --voice adam
 
 # Script only (no audio)
-opendraft digest paper.pdf --no-audio
+dothesis digest paper.pdf --no-audio
 
 # Specify output directory
-opendraft digest paper.pdf -o output/
+dothesis digest paper.pdf -o output/
 ```
 
 **Requirements:**
 - Digest audio requires an [ElevenLabs API key](https://elevenlabs.io/) set as `ELEVENLABS_API_KEY`
-- PDF reading requires the optional `pdf` extra: `pip install opendraft[pdf]`
+- PDF reading requires the optional `pdf` extra: `pip install dothesis[pdf]`
 
 Both tools work with any academic paper (PDF, Markdown, or plain text), not just OpenDraft-generated documents.
 
@@ -254,16 +254,16 @@ Fetch research data from major statistical APIs directly into your workflow:
 
 ```bash
 # Search for indicators
-opendraft data search GDP
+dothesis data search GDP
 
 # Fetch World Bank data
-opendraft data worldbank NY.GDP.MKTP.CD --countries USA;DEU --start 2020 --end 2023
+dothesis data worldbank NY.GDP.MKTP.CD --countries USA;DEU --start 2020 --end 2023
 
 # Fetch EU statistics (Eurostat)
-opendraft data eurostat nama_10_gdp
+dothesis data eurostat nama_10_gdp
 
 # Fetch Our World in Data datasets
-opendraft data owid covid-19
+dothesis data owid covid-19
 ```
 
 **Supported providers:**
@@ -281,7 +281,7 @@ Revise existing drafts with AI assistance:
 
 ```bash
 # Revise a draft with natural language instructions
-opendraft revise ./output "Make the introduction longer and add more context"
+dothesis revise ./output "Make the introduction longer and add more context"
 
 # The revised draft is saved as draft_v2.md (with PDF/DOCX exports)
 ```
@@ -300,7 +300,7 @@ Features:
 Generate a quick research overview instead of a full draft:
 
 ```bash
-opendraft "Neural Networks in Healthcare" --expose
+dothesis "Neural Networks in Healthcare" --expose
 ```
 
 This produces a research expose with:
@@ -326,13 +326,13 @@ Generate a 5-bullet summary of any academic paper in seconds:
 
 ```bash
 # Summarize a PDF
-opendraft tldr paper.pdf
+dothesis tldr paper.pdf
 
 # Summarize a markdown file
-opendraft tldr draft.md
+dothesis tldr draft.md
 
 # Save to file
-opendraft tldr paper.pdf --output summary.md
+dothesis tldr paper.pdf --output summary.md
 ```
 
 Output:
@@ -356,10 +356,10 @@ Generate a 60-second audio summary using ElevenLabs TTS:
 
 ```bash
 # Generate audio digest (requires ElevenLabs API key)
-opendraft digest paper.pdf
+dothesis digest paper.pdf
 
 # Choose a voice
-opendraft digest paper.pdf --voice adam
+dothesis digest paper.pdf --voice adam
 
 # Available voices: rachel (default), adam, josh, elli, bella
 ```
@@ -379,8 +379,8 @@ Output: `paper_digest.mp3` - a professional narration summarizing the key points
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/federicodeponte/opendraft.git
-cd opendraft
+git clone https://github.com/federicodeponte/dothesis.git
+cd dothesis
 pip install -r requirements.txt
 ```
 
@@ -431,9 +431,9 @@ See `engine/README.md` for detailed API documentation.
 
 See what OpenDraft produces:
 
-📄 **[Download Sample PDF](https://opendraft.xyz/examples/Why_Academic_Thesis_AI_Saves_The_World.pdf)** (60 pages, 18k words, 40+ citations)
+📄 **[Download Sample PDF](https://dothesis.xyz/examples/Why_Academic_Thesis_AI_Saves_The_World.pdf)** (60 pages, 18k words, 40+ citations)
 
-📝 **[Download Sample Word](https://opendraft.xyz/examples/Why_Academic_Thesis_AI_Saves_The_World.docx)**
+📝 **[Download Sample Word](https://dothesis.xyz/examples/Why_Academic_Thesis_AI_Saves_The_World.docx)**
 
 Generated in ~15 minutes with verified citations from real academic papers.
 
@@ -442,13 +442,13 @@ Generated in ~15 minutes with verified citations from real academic papers.
 ## Project Structure
 
 ```
-opendraft/
+dothesis/
 ├── engine/
 │   ├── draft_generator.py    # Main 19-agent pipeline
 │   ├── config.py             # Model & API settings
 │   ├── prompts/              # Agent instruction templates
 │   ├── utils/                # Citations, export, helpers
-│   └── opendraft/            # Core agent modules
+│   └── dothesis/            # Core agent modules
 ├── examples/                 # Sample thesis outputs
 ├── requirements.txt          # Python dependencies
 └── README.md
@@ -553,10 +553,10 @@ Maintainer workflow docs:
 
 ## Links
 
-- 🌐 **Website:** [opendraft.xyz](https://opendraft.xyz)
+- 🌐 **Website:** [dothesis.xyz](https://dothesis.xyz)
 - 🚀 **Free Hosted Version:** [OpenPaper.dev](https://openpaper.dev)
-- 💬 **Discussions:** [GitHub Discussions](https://github.com/federicodeponte/opendraft/discussions)
-- 🐛 **Issues:** [Report Bug](https://github.com/federicodeponte/opendraft/issues)
+- 💬 **Discussions:** [GitHub Discussions](https://github.com/federicodeponte/dothesis/discussions)
+- 🐛 **Issues:** [Report Bug](https://github.com/federicodeponte/dothesis/issues)
 - 🗒️ **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 - 📜 **License:** [MIT](LICENSE)
 
@@ -572,5 +572,5 @@ Maintainer workflow docs:
 
 <p align="center">
   <b>If OpenDraft helps your research, please star the repo!</b><br><br>
-  <a href="https://github.com/federicodeponte/opendraft">⭐ Star on GitHub</a>
+  <a href="https://github.com/federicodeponte/dothesis">⭐ Star on GitHub</a>
 </p>

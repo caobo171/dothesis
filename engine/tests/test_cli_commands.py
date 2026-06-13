@@ -14,12 +14,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 class TestReviseCommand:
-    """Tests for opendraft revise CLI command."""
+    """Tests for dothesis revise CLI command."""
 
     def test_revise_help(self):
         """Test that revise --help works."""
         result = subprocess.run(
-            [sys.executable, "-m", "opendraft.cli", "revise", "--help"],
+            [sys.executable, "-m", "dothesis.cli", "revise", "--help"],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent
@@ -31,7 +31,7 @@ class TestReviseCommand:
     def test_revise_missing_target(self):
         """Test that missing target shows error."""
         result = subprocess.run(
-            [sys.executable, "-m", "opendraft.cli", "revise"],
+            [sys.executable, "-m", "dothesis.cli", "revise"],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent
@@ -42,7 +42,7 @@ class TestReviseCommand:
     def test_revise_nonexistent_path(self):
         """Test that nonexistent path shows error."""
         result = subprocess.run(
-            [sys.executable, "-m", "opendraft.cli", "revise", "/nonexistent/path", "instructions"],
+            [sys.executable, "-m", "dothesis.cli", "revise", "/nonexistent/path", "instructions"],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent
@@ -52,12 +52,12 @@ class TestReviseCommand:
 
 
 class TestDataCommand:
-    """Tests for opendraft data CLI command."""
+    """Tests for dothesis data CLI command."""
 
     def test_data_help(self):
         """Test that data list works."""
         result = subprocess.run(
-            [sys.executable, "-m", "opendraft.cli", "data", "list"],
+            [sys.executable, "-m", "dothesis.cli", "data", "list"],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent
@@ -70,7 +70,7 @@ class TestDataCommand:
     def test_data_missing_query(self):
         """Test that missing query shows error."""
         result = subprocess.run(
-            [sys.executable, "-m", "opendraft.cli", "data", "worldbank"],
+            [sys.executable, "-m", "dothesis.cli", "data", "worldbank"],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent
@@ -81,7 +81,7 @@ class TestDataCommand:
     def test_data_search_works(self):
         """Test that search command executes."""
         result = subprocess.run(
-            [sys.executable, "-m", "opendraft.cli", "data", "search", "gdp"],
+            [sys.executable, "-m", "dothesis.cli", "data", "search", "gdp"],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent,

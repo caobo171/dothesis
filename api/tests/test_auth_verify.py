@@ -25,7 +25,7 @@ def _seed(email, **kw):
 
 
 def test_verify_flips_flag_and_grants_bonus(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_SIGNUP_BONUS_CREDITS", "100")
+    monkeypatch.setenv("DOTHESIS_SIGNUP_BONUS_CREDITS", "100")
     from app import settings as sm; sm._settings = None
     uid = _seed("alice@e.com", email_verified=False)
     tok = make_verify_token(uid)

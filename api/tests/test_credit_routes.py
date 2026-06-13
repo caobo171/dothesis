@@ -65,7 +65,7 @@ def test_checkout_rejects_unknown_package(client_with_user):
 
 
 def test_polar_webhook_credits_user_idempotently(buyer, monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_PAYMENTS", "dummy")
+    monkeypatch.setenv("DOTHESIS_PAYMENTS", "dummy")
     Session = get_session_factory()
     with Session() as s:
         order = Order(

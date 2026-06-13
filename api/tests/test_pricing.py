@@ -66,6 +66,6 @@ def test_resolve_model_raises_on_bad_tier():
 
 
 def test_resolve_model_env_override(monkeypatch):
-    monkeypatch.setenv("OPENDRAFT_PREMIUM_MODEL", "gpt-5-custom")
+    monkeypatch.setenv("DOTHESIS_PREMIUM_MODEL", "gpt-5-custom")
     from app.pricing import resolve_model as r
     assert r("premium") == "gpt-5-custom"

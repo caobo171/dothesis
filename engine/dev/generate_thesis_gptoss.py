@@ -167,7 +167,7 @@ def main():
     global TRACKING_STATS
 
     print("=" * 70)
-    print("OPENDRAFT THESIS GENERATOR - LLAMA 4 MAVERICK + SERPER")
+    print("DOTHESIS THESIS GENERATOR - LLAMA 4 MAVERICK + SERPER")
     print("Fully Open Source / Gemini-Free Pipeline (128K context)")
     print("=" * 70)
     print()

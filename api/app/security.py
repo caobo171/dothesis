@@ -14,7 +14,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def _signer(secret: str) -> Signer:
-    return Signer(secret, salt="opendraft-session")
+    return Signer(secret, salt="dothesis-session")
 
 
 def sign_session_id(session_id: str, *, secret: str) -> str:

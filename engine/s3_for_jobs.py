@@ -28,7 +28,7 @@ class _Client:
 def s3_from_env() -> _Client:
     return _Client(
         bucket=os.environ["S3_BUCKET"],
-        prefix=os.environ.get("S3_PREFIX", "opendraft/"),
+        prefix=os.environ.get("S3_PREFIX", "dothesis/"),
         region=os.environ["AWS_REGION"],
         ak=os.environ["AWS_ACCESS_KEY"],
         sk=os.environ["AWS_SECRET_KEY"],

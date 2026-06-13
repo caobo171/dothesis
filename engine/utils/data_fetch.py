@@ -27,7 +27,7 @@ from utils.retry import retry
 logger = logging.getLogger(__name__)
 
 # Cache settings
-CACHE_DIR = Path.home() / ".opendraft" / "data_cache"
+CACHE_DIR = Path.home() / ".dothesis" / "data_cache"
 CACHE_TTL_SECONDS = 24 * 60 * 60  # 24 hours
 
 

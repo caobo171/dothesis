@@ -2,7 +2,7 @@
 set -euo pipefail
 
 EXPECTED_GH_USER="${EXPECTED_GH_USER:-federicodeponte}"
-EXPECTED_REMOTE="${EXPECTED_REMOTE:-https://github.com/federicodeponte/opendraft.git}"
+EXPECTED_REMOTE="${EXPECTED_REMOTE:-https://github.com/federicodeponte/dothesis.git}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"

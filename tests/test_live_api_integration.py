@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "engine"))
 GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     # Try to load from config file
-    config_file = Path.home() / ".opendraft" / "config.json"
+    config_file = Path.home() / ".dothesis" / "config.json"
     if config_file.exists():
         try:
             config = json.loads(config_file.read_text())

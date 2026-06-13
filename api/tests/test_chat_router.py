@@ -24,7 +24,7 @@ def _login_user(client) -> User:
         db.add(u); db.commit()
         from app.security import create_session
         # create_session returns a signed cookie value; set with the correct
-        # cookie name used by deps.py (opendraft_session).
+        # cookie name used by deps.py (dothesis_session).
         token = create_session(db, u)
     client.headers["Authorization"] = f"Bearer {token}"
     return u
