@@ -30,7 +30,8 @@ def _setup_project(client) -> tuple[uuid.UUID, uuid.UUID]:
         token = create_session(db, u)
     client.headers["Authorization"] = f"Bearer {token}"
     pid = client.post("/api/v1/projects", json={"name": "T"}).json()["id"]
-    tid = client.get(f"/api/v1/projects/{pid}/threads").json()[0]["id"]
+    # GET→POST migration: list route renamed to /threads/list (POST).
+    tid = client.post(f"/api/v1/projects/{pid}/threads/list").json()[0]["id"]
     return uuid.UUID(pid), uuid.UUID(tid)
 
 

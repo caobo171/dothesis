@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..credit_ledger import InsufficientCredit, debit
 from ..db import db_session
-from ..deps import current_user
+from ..deps import current_user, stream_user_factory
 from ..job_runner import spawn_job
 from ..models import CreditTransaction, Job, Paper, User
 from ..pricing import paper_cost, resolve_model
@@ -79,7 +79,9 @@ def _paper_to_out(p: Paper, latest: Job | None) -> PaperOut:
     )
 
 
-@router.get("", response_model=list[PaperOut])
+# Renamed from GET "" → POST "/list": POST "" already creates a paper, so the
+# list read needs a distinct path. Token rides in the body (read by current_user).
+@router.post("/list", response_model=list[PaperOut])
 def list_papers(user: User = Depends(current_user), db: Session = Depends(db_session)):
     rows = db.scalars(select(Paper).where(Paper.user_id == user.id).order_by(desc(Paper.updated_at))).all()
     out = []
@@ -170,7 +172,7 @@ async def create_paper(body: PaperCreate, user: User = Depends(current_user), db
     return CreateResp(paper_id=str(paper.id), job_id=str(job.id))
 
 
-@router.get("/{paper_id}")
+@router.post("/{paper_id}")
 def get_paper(paper_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(db_session)):
     p = db.get(Paper, paper_id)
     if not p or p.user_id != user.id:
@@ -360,7 +362,7 @@ def _split_frontmatter(text: str) -> tuple[dict, str]:
     return meta, body
 
 
-@router.get("/{paper_id}/draft")
+@router.post("/{paper_id}/draft")
 def get_draft(paper_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(db_session)):
     p, job_id = _require_done_paper(db, user, paper_id)
     settings = get_settings()
@@ -402,7 +404,7 @@ def _md_to_html(md: str) -> str:
         return "<pre>" + md.replace("<", "&lt;") + "</pre>"
 
 
-@router.get("/{paper_id}/citations")
+@router.post("/{paper_id}/citations")
 def get_citations(paper_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(db_session)):
     p, job_id = _require_done_paper(db, user, paper_id)
     s3 = get_s3_from_settings(get_settings())
@@ -451,7 +453,7 @@ EXPORT_FORMATS = {
 }
 
 
-@router.get("/{paper_id}/exports")
+@router.post("/{paper_id}/exports")
 def list_exports(paper_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(db_session)):
     p, job_id = _require_done_paper(db, user, paper_id)
     s3 = get_s3_from_settings(get_settings())
@@ -483,8 +485,13 @@ def list_exports(paper_id: uuid.UUID, user: User = Depends(current_user), db: Se
 
 
 @router.get("/{paper_id}/exports/{fmt}")
-def download_export(paper_id: uuid.UUID, fmt: str,
-                     user: User = Depends(current_user), db: Session = Depends(db_session)):
+def download_export(
+    paper_id: uuid.UUID, fmt: str,
+    # GET-only (browser <a download>). Auth via a short-lived ?st= token scoped
+    # to this paper+format, keeping the long-lived JWT out of the URL/logs.
+    user: User = Depends(stream_user_factory(
+        lambda paper_id, fmt: f"paper-export:{paper_id}:{fmt}")),
+    db: Session = Depends(db_session)):
     if fmt not in EXPORT_FORMATS:
         raise HTTPException(404, detail={"error": {"code": "unknown_format", "message": fmt}})
     p, job_id = _require_done_paper(db, user, paper_id)

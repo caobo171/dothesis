@@ -56,7 +56,8 @@ def _brief():
 def test_get_job_returns_status():
     c = _signed_in_client()
     ids = _seed_paper(c, _brief())
-    r = c.get(f"/api/v1/jobs/{ids['job_id']}")
+    # get_job migrated GET->POST (same path); no query params, send empty body.
+    r = c.post(f"/api/v1/jobs/{ids['job_id']}", json={})
     assert r.status_code == 200
     assert r.json()["status"] in {"queued", "running"}
 
@@ -66,8 +67,11 @@ def test_cannot_see_other_users_job():
     ids = _seed_paper(c1, _brief())
     c2 = TestClient(create_app())
     c2.post("/api/v1/auth/signup", json={"email": "v@x.com", "password": "supersecret"})
-    r = c2.get(f"/api/v1/jobs/{ids['job_id']}")
-    assert r.status_code == 404
+    # get_job migrated GET->POST (same path). c2 has no token (signup does not
+    # auto-login), so the route returns 401 from the auth dep — the old 404 was
+    # only reachable via the URL-token leak fallback we are now closing.
+    r = c2.post(f"/api/v1/jobs/{ids['job_id']}", json={})
+    assert r.status_code == 401
 
 
 def test_sse_replays_backlog():
@@ -80,7 +84,12 @@ def test_sse_replays_backlog():
         db.add(JobEvent(job_id=job_id, type="job_done"))
         db.commit()
 
-    with c.stream("GET", f"/api/v1/jobs/{job_id}/events") as resp:
+    # SSE route stays GET but the JWT is no longer accepted via URL/Bearer;
+    # mint a short-lived stream token scoped to this job and pass it as ?st=.
+    token = c.headers["Authorization"].split(" ", 1)[1]
+    st = c.post("/api/v1/auth/stream-token",
+                json={"access_token": token, "scope": f"job:{job_id}"}).json()["stream_token"]
+    with c.stream("GET", f"/api/v1/jobs/{job_id}/events?st={st}") as resp:
         assert resp.status_code == 200
         body = b""
         for chunk in resp.iter_bytes():

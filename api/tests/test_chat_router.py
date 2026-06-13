@@ -49,7 +49,9 @@ def test_create_project_returns_id_and_default_thread(client):
 def test_get_project_returns_context_store_snapshot(client):
     _login_user(client)
     project_id = client.post("/api/v1/projects", json={"name": "X"}).json()["id"]
-    r = client.get(f"/api/v1/projects/{project_id}")
+    # GET→POST migration: read-only route now POST (same path) so the auth
+    # token never rides in a URL. Bearer header still authenticates.
+    r = client.post(f"/api/v1/projects/{project_id}")
     assert r.status_code == 200
     assert r.json()["current_module"] == "M1"
     assert "context_store" in r.json()
@@ -58,7 +60,8 @@ def test_get_project_returns_context_store_snapshot(client):
 def test_list_threads_for_project(client):
     _login_user(client)
     project_id = client.post("/api/v1/projects", json={"name": "X"}).json()["id"]
-    r = client.get(f"/api/v1/projects/{project_id}/threads")
+    # GET→POST migration: list route renamed to /threads/list (POST).
+    r = client.post(f"/api/v1/projects/{project_id}/threads/list")
     assert r.status_code == 200
     assert len(r.json()) == 1
 
@@ -70,12 +73,15 @@ def test_create_additional_thread_in_project(client):
                     json={"name": "Alt methodology"})
     assert r.status_code == 200
     assert r.json()["name"] == "Alt methodology"
-    threads = client.get(f"/api/v1/projects/{project_id}/threads").json()
+    # GET→POST migration: list route renamed to /threads/list (POST).
+    threads = client.post(f"/api/v1/projects/{project_id}/threads/list").json()
     assert len(threads) == 2
 
 
 def test_disabled_when_flag_off(monkeypatch):
     monkeypatch.delenv("ORCHESTRATOR_ENABLED", raising=False)
     c = TestClient(create_app())
-    r = c.get("/api/v1/projects/00000000-0000-0000-0000-000000000000")
+    # GET→POST migration: get_project is now POST (same path). The disabled
+    # flag → 404 intent is unchanged via the same route.
+    r = c.post("/api/v1/projects/00000000-0000-0000-0000-000000000000")
     assert r.status_code == 404

@@ -33,7 +33,7 @@ def client_with_user(buyer):
 
 def test_packages_returns_all_three():
     client = TestClient(create_app())
-    r = client.get("/api/v1/credit/packages")
+    r = client.post("/api/v1/credit/packages")
     assert r.status_code == 200
     data = r.json()
     ids = {p["id"] for p in data}

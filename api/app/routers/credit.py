@@ -20,7 +20,7 @@ from ..settings import get_settings
 router = APIRouter(prefix="/credit", tags=["credit"])
 
 
-@router.get("/packages")
+@router.post("/packages")
 def packages():
     return [
         {
@@ -120,7 +120,7 @@ async def polar_webhook(
     return {"ok": True}
 
 
-@router.get("/orders")
+@router.post("/orders")
 def list_my_orders(
     user: User = Depends(current_user),
     db: Session = Depends(db_session),
@@ -143,7 +143,7 @@ def list_my_orders(
     ]
 
 
-@router.get("/transactions")
+@router.post("/transactions")
 def list_my_transactions(
     user: User = Depends(current_user),
     db: Session = Depends(db_session),

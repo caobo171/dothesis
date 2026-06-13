@@ -28,15 +28,20 @@ def _serialize(u: User) -> dict:
     }
 
 
-@router.get("")
-def list_users(
-    page: int = 1,
-    page_size: int = 20,
-    q: str | None = None,
-    db: Session = Depends(db_session),
-):
-    page = max(1, page)
-    page_size = max(1, min(100, page_size))
+# POST-only reads: list filters ride in the JSON body (with the access_token,
+# read by current_user via the router-level require_admin dep) so no token or
+# filter ever lands in a URL. Extra fields (access_token) are ignored.
+class ListUsersBody(BaseModel):
+    page: int = 1
+    page_size: int = 20
+    q: str | None = None
+
+
+@router.post("")
+def list_users(body: ListUsersBody, db: Session = Depends(db_session)):
+    page = max(1, body.page)
+    page_size = max(1, min(100, body.page_size))
+    q = body.q
     stmt = select(User)
     if q:
         like = f"%{q.lower()}%"
@@ -53,7 +58,7 @@ def list_users(
     }
 
 
-@router.get("/{user_id}")
+@router.post("/{user_id}")
 def get_user(user_id: uuid.UUID, db: Session = Depends(db_session)):
     u = db.get(User, user_id)
     if not u:

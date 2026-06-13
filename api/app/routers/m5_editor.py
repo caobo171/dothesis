@@ -30,7 +30,7 @@ def _m5_slice(db: Session, project_id: uuid.UUID) -> dict:
     return (cs.m5_writing or {}) if cs else {}
 
 
-@router.get("/projects/{project_id}/m5/chapters")
+@router.post("/projects/{project_id}/m5/chapters")
 def list_chapters(
     project_id: uuid.UUID,
     user: User = Depends(current_user),
@@ -130,7 +130,7 @@ def _reference_id(ref: dict) -> str:
     return hashlib.sha1(raw).hexdigest()[:16]
 
 
-@router.get("/projects/{project_id}/m5/references")
+@router.post("/projects/{project_id}/m5/references")
 def list_references(
     project_id: uuid.UUID,
     user: User = Depends(current_user),

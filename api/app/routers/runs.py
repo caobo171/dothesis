@@ -22,6 +22,18 @@ class StartRunBody(BaseModel):
     citation_style: str | None = None
 
 
+# POST-only read bodies. Filters that used to be query params now ride in the
+# JSON body (the access_token rides there too, read by current_user) so no token
+# ever lands in a URL. Extra fields (access_token) are ignored by pydantic.
+class EstimateRunBody(BaseModel):
+    topic: str = ""
+
+
+class ListRunsBody(BaseModel):
+    latest: bool = False
+    limit: int = 50
+
+
 def _owned_project(db: Session, user: User, project_id: uuid.UUID) -> Project:
     p = db.get(Project, project_id)
     if not p or p.user_id != user.id:
@@ -37,9 +49,9 @@ def _owned_run(db: Session, user: User, run_id: uuid.UUID) -> Job:
     return j
 
 
-@router.get("/projects/{project_id}/runs/estimate")
+@router.post("/projects/{project_id}/runs/estimate")
 def estimate_run(project_id: uuid.UUID,
-                 topic: str = "",
+                 body: EstimateRunBody,
                  user: User = Depends(current_user),
                  db: Session = Depends(db_session)):
     """Estimate token cost for an auto-mode run on this topic.
@@ -48,7 +60,7 @@ def estimate_run(project_id: uuid.UUID,
     plus 25 tokens per character of topic.
     """
     _owned_project(db, user, project_id)
-    estimated = 17_500 + len(topic) * 25
+    estimated = 17_500 + len(body.topic) * 25
     return {
         "estimated_tokens": estimated,
         "credit_balance": user.credit,
@@ -70,14 +82,17 @@ def _serialize_run(j: Job) -> dict:
     }
 
 
-@router.get("/projects/{project_id}/runs")
+# Renamed from GET /projects/{id}/runs → POST .../runs/list: a POST .../runs
+# already exists for starting a run, so the list read needs a distinct path.
+@router.post("/projects/{project_id}/runs/list")
 def list_runs(project_id: uuid.UUID,
-              latest: bool = False,
-              limit: int = 50,
+              body: ListRunsBody,
               user: User = Depends(current_user),
               db: Session = Depends(db_session)):
-    """List runs for a project. ?latest=true returns {run: <most-recent>} or {run: null}."""
+    """List runs for a project. latest=true returns {run: <most-recent>} or {run: null}."""
     _owned_project(db, user, project_id)
+    latest = body.latest
+    limit = body.limit
     # Order by started_at desc (NULLS LAST) so queued jobs that haven't started
     # yet sort after running/done jobs with real timestamps.
     q = (db.query(Job)
@@ -140,7 +155,7 @@ def resume_run(run_id: uuid.UUID,
     return {"status": run.status}
 
 
-@router.get("/runs/{run_id}")
+@router.post("/runs/{run_id}")
 def get_run(run_id: uuid.UUID,
             user: User = Depends(current_user),
             db: Session = Depends(db_session)):

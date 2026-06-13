@@ -10,7 +10,7 @@ from app.models import Announcement, User
 def admin():
     Session = get_session_factory()
     with Session() as s:
-        u = User(email="cao.nv17@gmail.com", password_hash="x", credit=0)
+        u = User(email="cao.nv17@gmail.com", username="admin", password_hash="x", credit=0)
         s.add(u)
         s.commit()
         return u
@@ -36,7 +36,8 @@ def test_create_and_list_announcement(admin):
         ann = r.json()
         assert ann["kind"] == "login_banner"
 
-        r2 = client.get("/api/v1/admin/announcements")
+        # List read migrated GET /admin/announcements -> POST /admin/announcements/list.
+        r2 = client.post("/api/v1/admin/announcements/list", json={})
         assert r2.status_code == 200
         items = r2.json()["items"]
         assert any(a["id"] == ann["id"] for a in items)

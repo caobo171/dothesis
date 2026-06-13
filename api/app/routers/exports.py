@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from ..db import db_session
-from ..deps import current_user
+from ..deps import stream_user_factory
 from ..models import ContextStore, Project, User
 from ..routers.uploads import s3_from_env
 
@@ -35,7 +35,10 @@ def _owned_project(db: Session, user: User, project_id: uuid.UUID) -> Project:
 @router.get("/projects/{project_id}/exports/{filename}")
 def download_export(
     project_id: uuid.UUID, filename: str,
-    user: User = Depends(current_user),
+    # GET-only (browser <a download>). Auth via a short-lived ?st= token scoped
+    # to exactly this artifact, keeping the long-lived JWT out of the URL/logs.
+    user: User = Depends(stream_user_factory(
+        lambda project_id, filename: f"project-export:{project_id}/{filename}")),
     db: Session = Depends(db_session),
 ):
     """302-redirect to a fresh 5-minute signed URL for the requested artifact."""

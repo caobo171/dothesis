@@ -10,7 +10,7 @@ from app.models import Order, User
 def admin():
     Session = get_session_factory()
     with Session() as s:
-        u = User(email="cao.nv17@gmail.com", password_hash="x", credit=0)
+        u = User(email="cao.nv17@gmail.com", username="admin", password_hash="x", credit=0)
         s.add(u)
         s.commit()
         return u
@@ -26,7 +26,7 @@ def _as(user):
 def test_admin_orders_lists(admin):
     Session = get_session_factory()
     with Session() as s:
-        buyer = User(email="b@e.com", password_hash="x", credit=0)
+        buyer = User(email="b@e.com", username="buyer", password_hash="x", credit=0)
         s.add(buyer)
         s.flush()
         s.add(Order(
@@ -38,7 +38,7 @@ def test_admin_orders_lists(admin):
 
     client, app = _as(admin)
     try:
-        r = client.get("/api/v1/admin/orders")
+        r = client.post("/api/v1/admin/orders", json={})
         assert r.status_code == 200
         data = r.json()
         assert data["total"] >= 1

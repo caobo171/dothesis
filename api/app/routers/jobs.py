@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import db_session
-from ..deps import current_user
+from ..deps import current_user, stream_user_factory
 from ..job_runner import cancel_job, start_monitor
 from ..models import Job, JobEvent, Paper, User
 from ..pubsub import pubsub
@@ -36,7 +36,7 @@ def _owned_job(db: Session, user: User, job_id: uuid.UUID) -> Job:
     return j
 
 
-@router.get("/{job_id}")
+@router.post("/{job_id}")
 def get_job(job_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(db_session)):
     j = _owned_job(db, user, job_id)
     return {
@@ -58,8 +58,14 @@ def cancel(job_id: uuid.UUID, user: User = Depends(current_user), db: Session = 
 
 
 @router.get("/{job_id}/events")
-async def stream_events(job_id: uuid.UUID, since: int = 0,
-                        user: User = Depends(current_user), db: Session = Depends(db_session)):
+async def stream_events(
+    job_id: uuid.UUID, since: int = 0,
+    # GET-only (EventSource can't carry a body/header and auto-reconnects).
+    # Auth via a short-lived ?st= token scoped to THIS job, not the long-lived
+    # JWT — keeps the JWT out of URLs/access logs.
+    user: User = Depends(stream_user_factory(lambda job_id: f"job:{job_id}")),
+    db: Session = Depends(db_session),
+):
     j = _owned_job(db, user, job_id)
     if j.status in {"queued", "running"}:
         start_monitor(job_id)

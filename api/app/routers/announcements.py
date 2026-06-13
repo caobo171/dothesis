@@ -37,7 +37,7 @@ def _pick_one(db: Session, kind: str) -> Announcement | None:
     return db.scalar(stmt)
 
 
-@router.get("/me")
+@router.post("/me")
 def announcements_for_me(
     user: User = Depends(current_user),
     db: Session = Depends(db_session),

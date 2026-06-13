@@ -32,7 +32,7 @@ def test_me_returns_active_banner(regular_user):
 
     client, app = _as(regular_user)
     try:
-        r = client.get("/api/v1/announcements/me")
+        r = client.post("/api/v1/announcements/me")
         assert r.status_code == 200
         data = r.json()
         assert data["login_banner"]["title"] == "Hi"
@@ -49,7 +49,7 @@ def test_inactive_banner_not_returned(regular_user):
 
     client, app = _as(regular_user)
     try:
-        r = client.get("/api/v1/announcements/me")
+        r = client.post("/api/v1/announcements/me")
         assert r.status_code == 200
         assert r.json()["login_banner"] is None
     finally:
@@ -65,7 +65,7 @@ def test_expired_banner_not_returned(regular_user):
 
     client, app = _as(regular_user)
     try:
-        r = client.get("/api/v1/announcements/me")
+        r = client.post("/api/v1/announcements/me")
         assert r.status_code == 200
         assert r.json()["login_banner"] is None
     finally:

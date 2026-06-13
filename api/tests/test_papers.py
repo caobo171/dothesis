@@ -47,7 +47,8 @@ def _brief():
 
 def test_list_papers_empty():
     c = _signed_in_client()
-    r = c.get("/api/v1/papers")
+    # GET /api/v1/papers was migrated to POST /api/v1/papers/list (post-only endpoints).
+    r = c.post("/api/v1/papers/list", json={})
     assert r.status_code == 200
     assert r.json() == []
 
@@ -82,7 +83,8 @@ def test_list_paper_includes_created():
     c = _signed_in_client()
     with patch("app.routers.papers.spawn_job"):
         c.post("/api/v1/papers", json=_brief())
-    r = c.get("/api/v1/papers")
+    # GET /api/v1/papers was migrated to POST /api/v1/papers/list (post-only endpoints).
+    r = c.post("/api/v1/papers/list", json={})
     assert r.status_code == 200
     assert len(r.json()) == 1
     assert r.json()[0]["title"].startswith("Algorithmic")
@@ -90,4 +92,5 @@ def test_list_paper_includes_created():
 
 def test_unauthenticated_returns_401():
     c = TestClient(create_app())
-    assert c.get("/api/v1/papers").status_code == 401
+    # GET /api/v1/papers was migrated to POST /api/v1/papers/list (post-only endpoints).
+    assert c.post("/api/v1/papers/list", json={}).status_code == 401

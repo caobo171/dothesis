@@ -56,6 +56,11 @@ def _seed_done_paper(client):
         job.status = "done"
         paper.status = "done"
         db.commit()
+        # expire_on_commit defaults to True, so commit expires every attribute;
+        # touch the fields callers read (paper.id/user_id, job.id) while the
+        # session is still open so they're loaded before the instance detaches.
+        # Otherwise _put() lazy-loads them post-close → DetachedInstanceError.
+        _ = (paper.id, paper.user_id, job.id)
         return paper, job
 
 
@@ -81,7 +86,8 @@ def test_draft_returns_markdown_and_chapters(_s3):
     c = _signed_in_client()
     p, j = _seed_done_paper(c)
     _put(_s3, p, j, "exports/draft.md", b"# Title\n\n## Introduction\n\nhi\n\n## Methods\n\nok\n", "text/markdown")
-    r = c.get(f"/api/v1/papers/{p.id}/draft")
+    # draft route migrated GET->POST (post-only endpoints).
+    r = c.post(f"/api/v1/papers/{p.id}/draft")
     assert r.status_code == 200
     data = r.json()
     assert "Introduction" in data["markdown"]
@@ -94,7 +100,8 @@ def test_citations_returns_list(_s3):
     bib = [{"key": "k1", "title": "Paper One", "authors": ["A. Doe"], "year": 2024,
              "doi": "10.1/x", "source": "CrossRef", "venue": "Journal"}]
     _put(_s3, p, j, "research/bibliography.json", json.dumps(bib).encode(), "application/json")
-    r = c.get(f"/api/v1/papers/{p.id}/citations")
+    # citations route migrated GET->POST (post-only endpoints).
+    r = c.post(f"/api/v1/papers/{p.id}/citations")
     assert r.status_code == 200
     assert r.json()[0]["title"] == "Paper One"
 
@@ -103,7 +110,8 @@ def test_exports_lists_only_present_formats(_s3):
     c = _signed_in_client()
     p, j = _seed_done_paper(c)
     _put(_s3, p, j, "exports/draft.pdf", b"%PDF-1.4 fake", "application/pdf")
-    r = c.get(f"/api/v1/papers/{p.id}/exports")
+    # exports list route migrated GET->POST (post-only endpoints).
+    r = c.post(f"/api/v1/papers/{p.id}/exports")
     assert r.status_code == 200
     formats = [e["format"] for e in r.json()]
     assert formats == ["pdf"]
@@ -113,6 +121,11 @@ def test_download_returns_302(_s3):
     c = _signed_in_client()
     p, j = _seed_done_paper(c)
     _put(_s3, p, j, "exports/draft.pdf", b"%PDF-1.4 fake", "application/pdf")
-    r = c.get(f"/api/v1/papers/{p.id}/exports/pdf", follow_redirects=False)
+    # Download stays GET but the JWT is no longer accepted in the URL; mint a
+    # short-lived scoped stream token and pass it via ?st= (post-only endpoints).
+    token = c.headers["Authorization"].split(" ", 1)[1]
+    st = c.post("/api/v1/auth/stream-token",
+                json={"access_token": token, "scope": f"paper-export:{p.id}:pdf"}).json()["stream_token"]
+    r = c.get(f"/api/v1/papers/{p.id}/exports/pdf?st={st}", follow_redirects=False)
     assert r.status_code == 302
     assert "draft.pdf" in r.headers["location"]

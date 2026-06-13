@@ -100,7 +100,7 @@ def test_list_uploads_returns_project_scoped(client, monkeypatch):
         client.post(f"/api/v1/projects/{pid}/uploads",
                     files={"file": ("a.pdf", f, "application/pdf")})
 
-    r = client.get(f"/api/v1/projects/{pid}/uploads")
+    r = client.post(f"/api/v1/projects/{pid}/uploads/list")
     assert r.status_code == 200
     items = r.json()
     assert len(items) == 1
@@ -137,7 +137,7 @@ def test_get_upload_text_returns_extracted_body(client, monkeypatch):
             files={"file": ("a.pdf", f, "application/pdf")},
         ).json()["upload_id"]
 
-    r = client.get(f"/api/v1/uploads/{upload_id}/text")
+    r = client.post(f"/api/v1/uploads/{upload_id}/text")
     assert r.status_code == 200
     assert "extracted" in r.text
 

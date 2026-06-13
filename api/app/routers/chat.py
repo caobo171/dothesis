@@ -150,7 +150,10 @@ def create_project(body: CreateProjectBody,
     return _serialize_project(db, p)
 
 
-@router.get("/projects", response_model=list[ProjectOut])
+# Renamed from GET /projects → POST /projects/list: POST /projects already
+# creates a project, so the list read needs a distinct path. Token rides in the
+# JSON body (read by current_user), never the URL.
+@router.post("/projects/list", response_model=list[ProjectOut])
 def list_projects(user: User = Depends(current_user),
                   db: Session = Depends(db_session)):
     """Return the current user's projects, most recently updated first.
@@ -168,7 +171,7 @@ def list_projects(user: User = Depends(current_user),
     return [_serialize_project(db, p) for p in projects]
 
 
-@router.get("/projects/{project_id}", response_model=ProjectOut)
+@router.post("/projects/{project_id}", response_model=ProjectOut)
 def get_project(project_id: uuid.UUID,
                 user: User = Depends(current_user),
                 db: Session = Depends(db_session)):
@@ -176,7 +179,7 @@ def get_project(project_id: uuid.UUID,
     return _serialize_project(db, p)
 
 
-@router.get("/projects/{project_id}/artifacts")
+@router.post("/projects/{project_id}/artifacts")
 def get_artifacts(project_id: uuid.UUID,
                   user: User = Depends(current_user),
                   db: Session = Depends(db_session)) -> dict[str, str]:
@@ -192,7 +195,7 @@ def get_artifacts(project_id: uuid.UUID,
     return readiness(_orch_context_store(db, project_id))
 
 
-@router.get("/projects/{project_id}/impact/{artifact}")
+@router.post("/projects/{project_id}/impact/{artifact}")
 def get_impact(project_id: uuid.UUID, artifact: str,
                user: User = Depends(current_user),
                db: Session = Depends(db_session)) -> dict[str, list[str]]:
@@ -309,7 +312,9 @@ def reconstruct(project_id: uuid.UUID, artifact: str,
 # Threads
 # ----------------------------------------------------------------------------
 
-@router.get("/projects/{project_id}/threads", response_model=list[ThreadOut])
+# Renamed from GET → POST .../threads/list: POST .../threads already creates a
+# thread, so the list read needs a distinct path.
+@router.post("/projects/{project_id}/threads/list", response_model=list[ThreadOut])
 def list_threads(project_id: uuid.UUID,
                  user: User = Depends(current_user),
                  db: Session = Depends(db_session)):
@@ -354,7 +359,7 @@ def start_at(project_id: uuid.UUID, artifact: str,
     return t
 
 
-@router.get("/threads/{thread_id}", response_model=ThreadOut)
+@router.post("/threads/{thread_id}", response_model=ThreadOut)
 def get_thread(thread_id: uuid.UUID,
                user: User = Depends(current_user),
                db: Session = Depends(db_session)):
@@ -407,10 +412,20 @@ def project_credits(project_id: uuid.UUID,
     return {"total_credits": int(row[0]), "total_tokens": int(row[1])}
 
 
-@router.get("/threads/{thread_id}/messages")
-def list_messages(thread_id: uuid.UUID, before_id: int | None = None, limit: int = 50,
+# Renamed from GET → POST .../messages/list: POST .../messages already posts a
+# message, so the read needs a distinct path. Pagination filters ride in the
+# JSON body (alongside the access_token, read by current_user).
+class ListMessagesBody(BaseModel):
+    before_id: int | None = None
+    limit: int = 50
+
+
+@router.post("/threads/{thread_id}/messages/list")
+def list_messages(thread_id: uuid.UUID, body: ListMessagesBody,
                   user: User = Depends(current_user),
                   db: Session = Depends(db_session)):
+    before_id = body.before_id
+    limit = body.limit
     t = db.get(Thread, thread_id)
     if not t:
         raise HTTPException(404, detail={"error": {"code": "not_found"}})
@@ -764,7 +779,7 @@ async def send_message(thread_id: uuid.UUID,
 # Thread state SSE stream (SP7 T1)
 # ----------------------------------------------------------------------------
 
-@router.get("/threads/{thread_id}/state")
+@router.post("/threads/{thread_id}/state")
 async def state_stream(thread_id: uuid.UUID,
                        user: User = Depends(current_user),
                        db: Session = Depends(db_session)):

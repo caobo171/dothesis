@@ -13,7 +13,8 @@ from app.models import CreditTransaction, User
 def admin_user():
     Session = get_session_factory()
     with Session() as s:
-        u = User(email="cao.nv17@gmail.com", password_hash="x", credit=0)
+        # username is NOT NULL / unique in the schema; seed it explicitly.
+        u = User(email="cao.nv17@gmail.com", username="admin", password_hash="x", credit=0)
         s.add(u)
         s.commit()
         return u
@@ -23,7 +24,7 @@ def admin_user():
 def non_admin_user():
     Session = get_session_factory()
     with Session() as s:
-        u = User(email="alice@example.com", password_hash="x", credit=0)
+        u = User(email="alice@example.com", username="alice", password_hash="x", credit=0)
         s.add(u)
         s.commit()
         return u
@@ -39,7 +40,7 @@ def _as(user):
 def test_non_admin_gets_403(non_admin_user):
     client, app = _as(non_admin_user)
     try:
-        r = client.get("/api/v1/admin/users")
+        r = client.post("/api/v1/admin/users", json={})
         assert r.status_code == 403
     finally:
         app.dependency_overrides.clear()
@@ -49,12 +50,13 @@ def test_list_users(admin_user):
     Session = get_session_factory()
     with Session() as s:
         for i in range(3):
-            s.add(User(email=f"u{i}@e.com", password_hash="x", credit=100*i))
+            s.add(User(email=f"u{i}@e.com", username=f"u{i}", password_hash="x", credit=100*i))
         s.commit()
 
     client, app = _as(admin_user)
     try:
-        r = client.get("/api/v1/admin/users?page=1&page_size=10")
+        # list migrated GET->POST (same path); filters move into the JSON body.
+        r = client.post("/api/v1/admin/users", json={"page": 1, "page_size": 10})
         assert r.status_code == 200
         data = r.json()
         assert data["page"] == 1
@@ -69,12 +71,12 @@ def test_list_users(admin_user):
 def test_list_users_search(admin_user):
     Session = get_session_factory()
     with Session() as s:
-        s.add(User(email="findme@example.com", password_hash="x", credit=0))
+        s.add(User(email="findme@example.com", username="findme", password_hash="x", credit=0))
         s.commit()
 
     client, app = _as(admin_user)
     try:
-        r = client.get("/api/v1/admin/users?q=findme")
+        r = client.post("/api/v1/admin/users", json={"q": "findme"})
         assert r.status_code == 200
         items = r.json()["items"]
         assert len(items) == 1
@@ -86,7 +88,7 @@ def test_list_users_search(admin_user):
 def test_grant_credit_appends_ledger_and_updates_balance(admin_user):
     Session = get_session_factory()
     with Session() as s:
-        target = User(email="target@e.com", password_hash="x", credit=50)
+        target = User(email="target@e.com", username="target", password_hash="x", credit=50)
         s.add(target)
         s.commit()
         target_id = target.id
@@ -116,7 +118,7 @@ def test_get_user_returns_detail(admin_user):
 
     client, app = _as(admin_user)
     try:
-        r = client.get(f"/api/v1/admin/users/{target_id}")
+        r = client.post(f"/api/v1/admin/users/{target_id}", json={})
         assert r.status_code == 200
         body = r.json()
         assert body["email"] == "detail@e.com"

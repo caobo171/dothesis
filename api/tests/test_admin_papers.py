@@ -11,7 +11,7 @@ from app.models import Paper, User
 def admin():
     Session = get_session_factory()
     with Session() as s:
-        u = User(email="cao.nv17@gmail.com", password_hash="x", credit=0)
+        u = User(email="cao.nv17@gmail.com", username="admin", password_hash="x", credit=0)
         s.add(u)
         s.commit()
         return u
@@ -27,7 +27,7 @@ def _as(user):
 def test_admin_papers_lists_all(admin):
     Session = get_session_factory()
     with Session() as s:
-        owner = User(email="own@e.com", password_hash="x", credit=0)
+        owner = User(email="own@e.com", username="owner", password_hash="x", credit=0)
         s.add(owner)
         s.flush()
         for i in range(3):
@@ -40,7 +40,7 @@ def test_admin_papers_lists_all(admin):
 
     client, app = _as(admin)
     try:
-        r = client.get("/api/v1/admin/papers")
+        r = client.post("/api/v1/admin/papers", json={})
         assert r.status_code == 200
         data = r.json()
         assert data["total"] >= 3

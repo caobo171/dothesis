@@ -46,7 +46,8 @@ def _seed_slice(pid, **slices):
 
 def test_artifacts_endpoint_empty_project_topic_ready(client):
     pid = _auth_and_project(client)
-    r = client.get(f"/api/v1/projects/{pid}/artifacts")
+    # GET→POST migration: read-only route now POST (same path).
+    r = client.post(f"/api/v1/projects/{pid}/artifacts")
     assert r.status_code == 200
     body = r.json()
     assert body["topic"] == "ready"
@@ -56,7 +57,7 @@ def test_artifacts_endpoint_empty_project_topic_ready(client):
 def test_artifacts_endpoint_reflects_seeded_topic(client):
     pid = _auth_and_project(client)
     _seed_slice(pid, m1_topic=_FULL_TOPIC)
-    body = client.get(f"/api/v1/projects/{pid}/artifacts").json()
+    body = client.post(f"/api/v1/projects/{pid}/artifacts").json()
     assert body["topic"] == "done"
     assert body["literature"] == "ready"
 
@@ -69,8 +70,8 @@ def test_import_seeds_context_and_returns_readiness(client):
     body = r.json()
     assert body["topic"] == "done"
     assert body["literature"] == "ready"
-    # And it persisted — a fresh readiness GET reflects it.
-    body2 = client.get(f"/api/v1/projects/{pid}/artifacts").json()
+    # And it persisted — a fresh readiness read reflects it.
+    body2 = client.post(f"/api/v1/projects/{pid}/artifacts").json()
     assert body2["topic"] == "done"
 
 
@@ -95,7 +96,7 @@ def test_assess_endpoint_returns_detection_and_preview(client, monkeypatch):
     assert body["detected"]["m1_topic"]["research_title"] == "X"
     assert body["readiness_if_applied"]["topic"] == "done"
     # Dry-run: nothing is committed until the client calls /import.
-    after = client.get(f"/api/v1/projects/{pid}/artifacts").json()
+    after = client.post(f"/api/v1/projects/{pid}/artifacts").json()
     assert after["topic"] == "ready"
 
 
@@ -118,7 +119,7 @@ def test_reconstruct_endpoint_proposes_candidate_with_structural_gate(client, mo
     assert body["candidate"]["design"] == "PLS-SEM"
     assert body["ready_to_confirm"] is True   # structural gate passes the skeleton
     # Dry-run: not committed.
-    after = client.get(f"/api/v1/projects/{pid}/artifacts").json()
+    after = client.post(f"/api/v1/projects/{pid}/artifacts").json()
     assert after["design"] != "done"
 
 
@@ -143,7 +144,8 @@ def test_impact_endpoint_lists_dependents_and_stale(client):
                                "literature_review_doc": "doc",
                                "_source": "imported",
                                "confirmed_at": "2026-05-31"})
-    r = client.get(f"/api/v1/projects/{pid}/impact/topic")
+    # GET→POST migration: read-only impact route now POST (same path).
+    r = client.post(f"/api/v1/projects/{pid}/impact/topic")
     assert r.status_code == 200
     body = r.json()
     # Dependents closure of topic includes literature + everything downstream.
@@ -159,14 +161,14 @@ def test_impact_endpoint_empty_stale_when_nothing_done_downstream(client):
     still lists the full closure so the UI can show the potential impact."""
     pid = _auth_and_project(client)
     _seed_slice(pid, m1_topic=_FULL_TOPIC)
-    body = client.get(f"/api/v1/projects/{pid}/impact/topic").json()
+    body = client.post(f"/api/v1/projects/{pid}/impact/topic").json()
     assert body["stale"] == []
     assert "literature" in body["dependents"]  # closure still populated
 
 
 def test_impact_endpoint_rejects_unknown_artifact(client):
     pid = _auth_and_project(client)
-    r = client.get(f"/api/v1/projects/{pid}/impact/bogus")
+    r = client.post(f"/api/v1/projects/{pid}/impact/bogus")
     assert r.status_code == 422
 
 
@@ -178,5 +180,5 @@ def test_impact_endpoint_requires_project_ownership(client):
     avoid leaking project existence)."""
     _auth_and_project(client)
     other = uuid.uuid4()
-    r = client.get(f"/api/v1/projects/{other}/impact/topic")
+    r = client.post(f"/api/v1/projects/{other}/impact/topic")
     assert r.status_code == 404

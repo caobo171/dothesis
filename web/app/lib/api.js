@@ -1,4 +1,7 @@
-// Tokens travel in the request body for POSTs, query string for GETs.
+// Tokens travel in the request body for POSTs. The API is POST-only, so the
+// JWT never rides in a URL (it would otherwise leak into server access logs).
+// The two browser-GET-only paths (SSE + file download) use a short-lived,
+// resource-scoped stream token minted via /auth/stream-token instead.
 // See web/app/lib/tokenStore.ts + api/app/jwt_auth.py for the design.
 import { tokenStore } from "./tokenStore";
 
@@ -46,17 +49,26 @@ export async function apiFetch(path, opts = {}) {
 
   if (token) {
     if (method === "GET" || method === "HEAD") {
-      const sep = url.includes("?") ? "&" : "?";
-      url = `${url}${sep}access_token=${encodeURIComponent(token)}`;
+      // Authenticated GETs no longer exist (POST-only). The only GETs left are
+      // unauthenticated (e.g. /health) or the SSE/download routes that mint a
+      // scoped ?st= token via openEventStream/buildDownloadHref — we never put
+      // the long-lived JWT in a URL here.
     } else {
-      // POST family — fold the token into the JSON body. If the caller
-      // already passed a JSON string, parse / merge / re-stringify.
+      // POST family — fold any ?query from the path AND the token into the JSON
+      // body, so SWR keys can keep their familiar `path?query` shape while the
+      // token (and filters) stay out of the URL.
+      const qIndex = url.indexOf("?");
+      let qparams = {};
+      if (qIndex >= 0) {
+        qparams = Object.fromEntries(new URLSearchParams(url.slice(qIndex + 1)));
+        url = url.slice(0, qIndex);
+      }
       if (typeof body === "string") {
         try { body = JSON.parse(body); } catch { body = {}; }
       } else if (body == null) {
         body = {};
       }
-      body = { ...body, access_token: token };
+      body = { ...qparams, ...body, access_token: token };
     }
   }
 
@@ -97,38 +109,54 @@ export async function apiFetch(path, opts = {}) {
   return parsed;
 }
 
-/** SWR fetcher uses GET semantics — the token rides in the query string. */
+/** SWR fetcher. Reads are POST now (POST-only API): the token rides in the body
+ * and any `?query` baked into the SWR key is folded into the body by apiFetch. */
 export function swrFetcher(path) {
-  return apiFetch(path);
+  return apiFetch(path, { method: "POST" });
+}
+
+/** Mint a short-lived token scoped to ONE resource, for a browser-GET endpoint
+ * (SSE or <a download>) that can't carry a JSON body. */
+export async function mintStreamToken(scope) {
+  const { stream_token } = await apiFetch("/auth/stream-token", {
+    method: "POST",
+    body: { scope },
+  });
+  return stream_token;
 }
 
 /**
- * Job-event stream. Used to ride on EventSource + a cookie; EventSource
- * can't set custom headers and doesn't expose a way to put the token in
- * a POST body either. We pass the token via the URL so EventSource's
- * built-in reconnection still works. For first-class SSE (chat) the
- * useStream hook uses fetch-streaming and pulls the token from the body.
+ * Job-event stream over EventSource. EventSource is GET-only and can't set a
+ * body/header, AND it auto-reconnects by reopening the same URL — so auth rides
+ * in the URL as a short-lived, job-scoped `?st=` stream token (never the
+ * long-lived JWT). Minting is async, but we still return a synchronous cleanup
+ * function so callers' useEffect teardown stays simple. For first-class SSE
+ * (chat) the useStream hook uses fetch-streaming and pulls the token from a body.
  */
 export function openEventStream(jobId, { since = 0, onEvent, onDone, onError } = {}) {
-  const token = tokenStore.get();
-  const tokenParam = token ? `&access_token=${encodeURIComponent(token)}` : "";
-  const url = `${BASE}/jobs/${jobId}/events?since=${since}${tokenParam}`;
-  // withCredentials removed: no cookie-based auth left.
-  const es = new EventSource(url);
-  es.onmessage = (e) => {
-    try {
-      const data = JSON.parse(e.data);
-      onEvent?.(data, e.lastEventId ? parseInt(e.lastEventId, 10) : null);
-      if (data.type === "job_done") { onDone?.(data); es.close(); }
-      if (data.type === "error") { onError?.(data); es.close(); }
-    } catch (err) {
-      onError?.({ message: err.message });
-    }
-  };
-  es.onerror = () => {
-    onError?.({ message: "stream blip — auto-reconnecting", transient: true });
-  };
-  return () => es.close();
+  let es = null;
+  let closed = false;
+  mintStreamToken(`job:${jobId}`)
+    .then((st) => {
+      if (closed) return;
+      const url = `${BASE}/jobs/${jobId}/events?since=${since}&st=${encodeURIComponent(st)}`;
+      es = new EventSource(url);
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          onEvent?.(data, e.lastEventId ? parseInt(e.lastEventId, 10) : null);
+          if (data.type === "job_done") { onDone?.(data); es.close(); }
+          if (data.type === "error") { onError?.(data); es.close(); }
+        } catch (err) {
+          onError?.({ message: err.message });
+        }
+      };
+      es.onerror = () => {
+        onError?.({ message: "stream blip — auto-reconnecting", transient: true });
+      };
+    })
+    .catch((err) => { onError?.({ message: err.message }); });
+  return () => { closed = true; es?.close(); };
 }
 
 export { ApiError };

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
@@ -12,16 +13,20 @@ from ..models import Paper, User
 router = APIRouter(prefix="/admin/papers", tags=["admin"], dependencies=[Depends(require_admin)])
 
 
-@router.get("")
-def list_papers(
-    page: int = 1,
-    page_size: int = 20,
-    status: str | None = None,
-    user_id: str | None = None,
-    db: Session = Depends(db_session),
-):
-    page = max(1, page)
-    page_size = max(1, min(100, page_size))
+# POST-only read: filters ride in the JSON body so no token/filter lands in a URL.
+class ListPapersBody(BaseModel):
+    page: int = 1
+    page_size: int = 20
+    status: str | None = None
+    user_id: str | None = None
+
+
+@router.post("")
+def list_papers(body: ListPapersBody, db: Session = Depends(db_session)):
+    page = max(1, body.page)
+    page_size = max(1, min(100, body.page_size))
+    status = body.status
+    user_id = body.user_id
     stmt = select(Paper, User).join(User, User.id == Paper.user_id)
     if status:
         stmt = stmt.where(Paper.status == status)

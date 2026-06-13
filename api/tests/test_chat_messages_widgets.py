@@ -27,7 +27,8 @@ def _setup(client) -> tuple[uuid.UUID, uuid.UUID]:
         db.add(u); db.commit()
         client.headers["Authorization"] = f"Bearer {create_session(db, u)}"
     pid = client.post("/api/v1/projects", json={"name": "T"}).json()["id"]
-    tid = client.get(f"/api/v1/projects/{pid}/threads").json()[0]["id"]
+    # GET→POST migration: list route renamed to /threads/list (POST).
+    tid = client.post(f"/api/v1/projects/{pid}/threads/list").json()[0]["id"]
     return uuid.UUID(pid), uuid.UUID(tid)
 
 
@@ -157,7 +158,9 @@ def test_list_messages_returns_tool_calls_json(client, monkeypatch):
         ))
         db.commit()
 
-    r = client.get(f"/api/v1/threads/{tid}/messages")
+    # GET→POST migration: list route renamed to /messages/list (POST);
+    # pagination params (before_id, limit) move into the JSON body.
+    r = client.post(f"/api/v1/threads/{tid}/messages/list", json={})
     assert r.status_code == 200
     msgs = r.json()
     assert msgs, "expected at least one message"

@@ -53,7 +53,8 @@ def _serialize(a: Announcement) -> dict:
     }
 
 
-@router.get("")
+# Renamed from GET "" → POST "/list": POST "" already creates an announcement.
+@router.post("/list")
 def list_all(db: Session = Depends(db_session)):
     rows = db.scalars(select(Announcement).order_by(desc(Announcement.created_at))).all()
     return {"items": [_serialize(a) for a in rows], "total": len(rows), "page": 1, "page_size": len(rows)}

@@ -59,7 +59,14 @@ def test_download_redirects_to_signed_url(client, monkeypatch):
     )
     monkeypatch.setattr("app.routers.exports.s3_from_env", lambda: fake_s3)
 
-    resp = client.get(f"/api/v1/projects/{pid}/exports/thesis-abc.docx")
+    # Download route stays GET but the JWT is no longer accepted via URL/Bearer;
+    # mint a short-lived stream token scoped to this exact project/filename.
+    fname = "thesis-abc.docx"
+    token = client.headers["Authorization"].split(" ", 1)[1]
+    st = client.post("/api/v1/auth/stream-token",
+                     json={"access_token": token,
+                           "scope": f"project-export:{pid}/{fname}"}).json()["stream_token"]
+    resp = client.get(f"/api/v1/projects/{pid}/exports/{fname}?st={st}")
     assert resp.status_code == 302
     assert resp.headers["location"].startswith("https://test-bucket.s3.amazonaws.com")
     # Signed URL was generated for the right key
@@ -72,7 +79,14 @@ def test_download_404_when_filename_unknown(client, monkeypatch):
     pid, _ = _setup_user_and_project(client)
     _add_m5_artifact(pid, "thesis-abc.docx")
     monkeypatch.setattr("app.routers.exports.s3_from_env", lambda: MagicMock())
-    resp = client.get(f"/api/v1/projects/{pid}/exports/wrong-filename.docx")
+    # Mint a token for the requested filename so auth passes; the 404 then comes
+    # from the artifact lookup (filename not in export_artifacts).
+    fname = "wrong-filename.docx"
+    token = client.headers["Authorization"].split(" ", 1)[1]
+    st = client.post("/api/v1/auth/stream-token",
+                     json={"access_token": token,
+                           "scope": f"project-export:{pid}/{fname}"}).json()["stream_token"]
+    resp = client.get(f"/api/v1/projects/{pid}/exports/{fname}?st={st}")
     assert resp.status_code == 404
 
 
@@ -88,5 +102,11 @@ def test_download_404_when_user_does_not_own_project(client, monkeypatch):
         db.add(u2); db.commit(); db.refresh(u2)
         token2 = create_session(db, u2)
     client.headers["Authorization"] = f"Bearer {token2}"
-    resp = client.get(f"/api/v1/projects/{pid}/exports/thesis-abc.docx")
+    # Mint with the second user's token so stream-token auth passes; the 404
+    # then comes from the ownership check (u2 does not own pid).
+    fname = "thesis-abc.docx"
+    st = client.post("/api/v1/auth/stream-token",
+                     json={"access_token": token2,
+                           "scope": f"project-export:{pid}/{fname}"}).json()["stream_token"]
+    resp = client.get(f"/api/v1/projects/{pid}/exports/{fname}?st={st}")
     assert resp.status_code == 404

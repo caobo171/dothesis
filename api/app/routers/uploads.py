@@ -172,7 +172,9 @@ async def upload_paper(project_id: uuid.UUID,
     )
 
 
-@router.get("/projects/{project_id}/uploads", response_model=list[UploadListItem])
+# Renamed from GET → POST .../uploads/list: POST .../uploads already creates an
+# upload, so the list read needs a distinct path.
+@router.post("/projects/{project_id}/uploads/list", response_model=list[UploadListItem])
 def list_uploads(project_id: uuid.UUID,
                  user: User = Depends(current_user),
                  db: Session = Depends(db_session)):
@@ -190,7 +192,7 @@ def delete_upload(upload_id: uuid.UUID,
     return None
 
 
-@router.get("/uploads/{upload_id}/text", response_class=PlainTextResponse)
+@router.post("/uploads/{upload_id}/text", response_class=PlainTextResponse)
 def get_upload_text(upload_id: uuid.UUID,
                     user: User = Depends(current_user),
                     db: Session = Depends(db_session)):

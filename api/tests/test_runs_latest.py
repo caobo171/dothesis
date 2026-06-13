@@ -1,4 +1,4 @@
-"""Tests for GET /projects/{pid}/runs?latest=true."""
+"""Tests for POST /projects/{pid}/runs/list (latest in JSON body)."""
 import uuid
 import pytest
 from fastapi.testclient import TestClient
@@ -28,7 +28,8 @@ def _login_and_project(client) -> uuid.UUID:
 
 def test_latest_returns_null_when_no_runs(client):
     pid = _login_and_project(client)
-    r = client.get(f"/api/v1/projects/{pid}/runs?latest=true")
+    # GET /runs migrated to POST /runs/list; latest moves into the body (post-only endpoints).
+    r = client.post(f"/api/v1/projects/{pid}/runs/list", json={"latest": True})
     assert r.status_code == 200
     assert r.json() == {"run": None}
 
@@ -46,7 +47,8 @@ def test_latest_returns_most_recent_run(client):
         db.add(newer); db.commit()
         newer_id = newer.id
 
-    r = client.get(f"/api/v1/projects/{pid}/runs?latest=true")
+    # GET /runs migrated to POST /runs/list; latest moves into the body (post-only endpoints).
+    r = client.post(f"/api/v1/projects/{pid}/runs/list", json={"latest": True})
     assert r.status_code == 200
     body = r.json()
     assert body["run"]["id"] == str(newer_id)

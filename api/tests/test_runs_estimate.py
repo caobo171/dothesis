@@ -1,4 +1,4 @@
-"""Tests for GET /projects/{pid}/runs/estimate?topic=..."""
+"""Tests for POST /projects/{pid}/runs/estimate (topic in JSON body)."""
 import uuid
 import pytest
 from fastapi.testclient import TestClient
@@ -28,7 +28,8 @@ def _setup(client) -> uuid.UUID:
 
 def test_estimate_returns_token_and_credit_info(client):
     pid = _setup(client)
-    r = client.get(f"/api/v1/projects/{pid}/runs/estimate?topic=Leadership in SMEs")
+    # estimate migrated GET->POST; topic moves into the JSON body (post-only endpoints).
+    r = client.post(f"/api/v1/projects/{pid}/runs/estimate", json={"topic": "Leadership in SMEs"})
     assert r.status_code == 200
     body = r.json()
     assert body["estimated_tokens"] > 0

@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
@@ -15,14 +16,18 @@ from ..models import Job, Paper, User
 router = APIRouter(prefix="/admin/jobs", tags=["admin"], dependencies=[Depends(require_admin)])
 
 
-@router.get("")
-def list_jobs(
-    page: int = 1,
-    page_size: int = 20,
-    status: str | None = None,
-    db: Session = Depends(db_session),
-):
-    page = max(1, page)
+# POST-only read: filters ride in the JSON body so no token/filter lands in a URL.
+class ListJobsBody(BaseModel):
+    page: int = 1
+    page_size: int = 20
+    status: str | None = None
+
+
+@router.post("")
+def list_jobs(body: ListJobsBody, db: Session = Depends(db_session)):
+    page = max(1, body.page)
+    page_size = max(1, min(100, body.page_size))
+    status = body.status
     page_size = max(1, min(100, page_size))
     stmt = select(Job, Paper, User).join(Paper, Paper.id == Job.paper_id).join(User, User.id == Paper.user_id)
     if status:

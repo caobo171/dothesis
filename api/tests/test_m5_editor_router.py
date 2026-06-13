@@ -70,7 +70,7 @@ def _make_project_with_chapters(client: TestClient) -> str:
 def test_get_chapters_returns_all(client):
     _create_user_and_set_cookie(client)
     pid = _make_project_with_chapters(client)
-    r = client.get(f"/api/v1/projects/{pid}/m5/chapters")
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters")
     assert r.status_code == 200
     data = r.json()
     assert "intro" in data
@@ -81,7 +81,7 @@ def test_get_chapters_returns_empty_dict_when_no_m5(client):
     _create_user_and_set_cookie(client)
     r = client.post("/api/v1/projects", json={"name": "X"})
     pid = r.json()["id"]
-    r = client.get(f"/api/v1/projects/{pid}/m5/chapters")
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters")
     assert r.status_code == 200
     assert r.json() == {}
 
@@ -93,7 +93,7 @@ def test_get_chapters_404_for_other_user(client):
 
     # Switch client cookie to user 2.
     _create_user_and_set_cookie(client)
-    r = client.get(f"/api/v1/projects/{pid}/m5/chapters")
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters")
     assert r.status_code == 404
 
 
@@ -102,7 +102,7 @@ def test_get_chapters_requires_auth(monkeypatch):
     monkeypatch.setenv("ORCHESTRATOR_ENABLED", "true")
     fresh_client = TestClient(create_app(), follow_redirects=False)
     fake = uuid.uuid4()
-    r = fresh_client.get(f"/api/v1/projects/{fake}/m5/chapters")
+    r = fresh_client.post(f"/api/v1/projects/{fake}/m5/chapters")
     assert r.status_code in (401, 403)
 
 
@@ -228,7 +228,7 @@ def test_get_references_returns_dedup_m2_pool(client):
         db.commit()
 
     # 3. GET /m5/references
-    r = client.get(f"/api/v1/projects/{pid}/m5/references")
+    r = client.post(f"/api/v1/projects/{pid}/m5/references")
     assert r.status_code == 200
     refs = r.json()
 
@@ -250,7 +250,7 @@ def test_get_references_returns_empty_when_no_m2(client):
     pid = r.json()["id"]
 
     # GET /m5/references on empty project
-    r = client.get(f"/api/v1/projects/{pid}/m5/references")
+    r = client.post(f"/api/v1/projects/{pid}/m5/references")
     assert r.status_code == 200
     assert r.json() == []
 
@@ -454,7 +454,7 @@ def test_cite_inserts_pending_edit_with_canonical_text(client):
         db.commit()
 
     # 3. GET /m5/references to retrieve the assigned reference id
-    r = client.get(f"/api/v1/projects/{pid}/m5/references")
+    r = client.post(f"/api/v1/projects/{pid}/m5/references")
     assert r.status_code == 200
     refs = r.json()
     assert len(refs) == 1

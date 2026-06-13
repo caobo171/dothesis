@@ -68,9 +68,9 @@ def _make_project_with_chapters(client: TestClient) -> str:
 # Decision: endpoint list updated after router inspection. Only 9 endpoints exist
 # (removed GET /m5/chapters/intro which is not a separate route).
 _ENDPOINTS_AND_METHODS = [
-    ("GET",   "/m5/chapters",                       None),
+    ("POST",  "/m5/chapters",                       None),
     ("PATCH", "/m5/chapters/intro",                 {"prose": "x"}),
-    ("GET",   "/m5/references",                     None),
+    ("POST",  "/m5/references",                     None),
     ("POST",  "/m5/chapters/intro/paraphrase",      {"from_offset": 0, "to_offset": 1}),
     ("POST",  "/m5/chapters/intro/translate",       {"from_offset": 0, "to_offset": 1, "target_lang": "vi"}),
     ("POST",  "/m5/chapters/intro/cite",            {"at_offset": 0, "reference_id": "x"}),
