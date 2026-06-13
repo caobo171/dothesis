@@ -13,12 +13,13 @@ the endpoint see the same JSON.
 from __future__ import annotations
 
 import json
+from typing import Callable
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from .db import db_session
-from .jwt_auth import verify_access_token
+from .jwt_auth import verify_access_token, verify_stream_token
 from .models import User
 from .settings import Settings, get_settings
 
@@ -117,3 +118,34 @@ async def current_user(
         # leak account-existence semantics.
         raise _401("no_user", "user not found")
     return user
+
+
+def stream_user_factory(scope_builder: Callable[..., str]):
+    """Build a dependency for browser-GET-only endpoints (SSE / downloads).
+
+    The endpoint can't carry a JSON body, so auth rides in `?st=<stream_token>`.
+    `scope_builder(**path_params)` returns the scope the token MUST match —
+    binding the token to exactly the resource in the URL. We still return the
+    User so the endpoint's existing ownership checks (_owned_project etc.) run
+    as a second gate (defense in depth).
+    """
+    async def _dep(
+        request: Request,
+        settings: Settings = Depends(get_settings),
+        db: Session = Depends(db_session),
+    ) -> User:
+        token = request.query_params.get("st")
+        if not token:
+            raise _401("no_token", "missing stream token (?st=)")
+        expected_scope = scope_builder(**request.path_params)
+        try:
+            claims = verify_stream_token(
+                token, expected_scope=expected_scope, secret=settings.session_secret)
+        except ValueError as e:
+            code = "expired" if "expired" in str(e) else "bad_token"
+            raise _401(code, str(e))
+        user = db.get(User, claims.user_id)
+        if user is None:
+            raise _401("no_user", "user not found")
+        return user
+    return _dep

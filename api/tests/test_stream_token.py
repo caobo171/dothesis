@@ -51,3 +51,9 @@ def test_stream_wrong_secret_rejected():
 def test_stream_garbage_token_rejected():
     with pytest.raises(ValueError):
         verify_stream_token("not.a.jwt", expected_scope="job:abc", secret=SECRET)
+
+def test_stream_user_dependency():
+    # stream_user_factory builds a FastAPI dependency that reads ?st=, verifies
+    # scope (computed from the request path params), and returns the User.
+    from app.deps import stream_user_factory
+    assert callable(stream_user_factory(lambda **kw: f"job:{kw['job_id']}"))
