@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ClockIcon,
   CpuChipIcon,
   CreditCardIcon,
   CurrencyDollarIcon,
@@ -36,7 +37,10 @@ export function useSidebarSections(): SidebarSection[] {
       {
         id: "account",
         name: "Account",
-        options: [{ name: "Credit", href: "/credit", icon: CurrencyDollarIcon }],
+        options: [
+          { name: "Credit", href: "/credit", icon: CurrencyDollarIcon },
+          { name: "Transactions", href: "/transactions", icon: ClockIcon },
+        ],
       },
     ];
 
