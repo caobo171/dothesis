@@ -85,6 +85,12 @@ def verify_access_token(token: str, *, secret: str) -> AccessTokenClaims:
         raise ValueError("token expired") from e
     except _jwt.InvalidTokenError as e:
         raise ValueError(f"bad token: {e}") from e
+    # Reject stream tokens here: they are scoped, short-lived URL tokens and
+    # must never unlock the full JSON API even if one leaks into a query string.
+    # (Access tokens predate the `typ` claim, so we reject typ=="stream" rather
+    # than requiring typ=="access", keeping already-issued tokens valid.)
+    if payload.get("typ") == "stream":
+        raise ValueError("not an access token")
     sub = payload.get("sub")
     iat = payload.get("iat")
     exp = payload.get("exp")

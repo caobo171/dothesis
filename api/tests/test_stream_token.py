@@ -27,3 +27,27 @@ def test_access_token_not_accepted_as_stream():
     tok, _ = sign_access_token("u", secret=SECRET)
     with pytest.raises(ValueError):
         verify_stream_token(tok, expected_scope="job:abc", secret=SECRET)
+
+def test_stream_token_rejected_by_access_verify():
+    # A stream token must NEVER pass as a full access token, else a leaked
+    # stream URL could be replayed against the whole JSON API.
+    from app.jwt_auth import sign_stream_token, verify_access_token
+    tok, _ = sign_stream_token("u", scope="job:abc", secret=SECRET)
+    with pytest.raises(ValueError):
+        verify_access_token(tok, secret=SECRET)
+
+def test_legacy_access_token_without_typ_still_valid():
+    # Existing access tokens carry no `typ` claim; they must keep working.
+    from app.jwt_auth import sign_access_token, verify_access_token
+    tok, _ = sign_access_token("u", secret=SECRET)
+    claims = verify_access_token(tok, secret=SECRET)
+    assert claims.user_id == "u"
+
+def test_stream_wrong_secret_rejected():
+    tok, _ = sign_stream_token("u", scope="job:abc", secret=SECRET)
+    with pytest.raises(ValueError):
+        verify_stream_token(tok, expected_scope="job:abc", secret="y" * 32)
+
+def test_stream_garbage_token_rejected():
+    with pytest.raises(ValueError):
+        verify_stream_token("not.a.jwt", expected_scope="job:abc", secret=SECRET)
