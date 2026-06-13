@@ -823,25 +823,26 @@ def _make_project_with_all_chapters(client: TestClient) -> str:
     return pid
 
 
-@patch("app.routers.m5_editor.export_docx")
-@patch("app.routers.m5_editor.compile_pdf")
-def test_export_runs_both_compilers_and_returns_artifacts(mock_pdf, mock_docx, client):
-    """1. Mock export_docx → {"s3_key": "projects/p/exports/thesis.docx", "size_bytes": 1234}
-       Mock compile_pdf → {"s3_key": "projects/p/exports/thesis.pdf", "size_bytes": 5678}
+@patch("app.routers.m5_editor.run_export")
+def test_export_runs_both_compilers_and_returns_artifacts(mock_run_export, client):
+    """1. Mock run_export → [docx artifact, pdf artifact]
     2. Auth + create project + seed ALL 6 chapters
     3. POST /api/v1/projects/{pid}/m5/export
     4. Assert 200; body has docx.s3_key + pdf.size_bytes + docx.download_url
-    5. Assert both mocks called exactly once
+    5. Assert run_export called exactly once
 
-    Decision: patch in the router's namespace (app.routers.m5_editor) rather than
-    the tool module, because the router does `from orchestrator.tools.m5_writing import
-    compile_pdf, export_docx` at import time — patching the source module's names
-    after import would not affect the already-bound local references in the router.
-    Decorators stack bottom-up: innermost @patch → first parameter, so
-    mock_pdf = compile_pdf mock, mock_docx = export_docx mock.
+    Decision: the router now delegates to the shared `run_export` helper
+    (orchestrator.tools.m5_writing) instead of calling compile_pdf/export_docx
+    directly — one export path shared by the auto-export hook, this route, and
+    the agent's export tool. Patch in the router's namespace because it does
+    `from orchestrator.tools.m5_writing import run_export` at import time.
     """
-    mock_pdf.invoke.return_value = {"s3_key": "projects/p/exports/thesis.pdf",  "size_bytes": 5678}
-    mock_docx.invoke.return_value = {"s3_key": "projects/p/exports/thesis.docx", "size_bytes": 1234}
+    mock_run_export.return_value = [
+        {"kind": "docx", "s3_key": "projects/p/exports/thesis.docx", "size_bytes": 1234,
+         "download_url": "/api/v1/projects/p/exports/thesis.docx", "uri": ""},
+        {"kind": "pdf",  "s3_key": "projects/p/exports/thesis.pdf",  "size_bytes": 5678,
+         "download_url": "/api/v1/projects/p/exports/thesis.pdf", "uri": ""},
+    ]
 
     _create_user_and_set_cookie(client)
     pid = _make_project_with_all_chapters(client)
@@ -864,12 +865,7 @@ def test_export_runs_both_compilers_and_returns_artifacts(mock_pdf, mock_docx, c
     assert body["pdf"]["s3_key"] == "projects/p/exports/thesis.pdf"
     assert body["pdf"]["size_bytes"] == 5678
 
-    # Both compilers were called exactly once via .invoke()
-    # Decision: assert on .invoke rather than the top-level mock because the
-    # router calls compile_pdf.invoke(...) / export_docx.invoke(...), not the
-    # tool objects directly.
-    mock_pdf.invoke.assert_called_once()
-    mock_docx.invoke.assert_called_once()
+    mock_run_export.assert_called_once()
 
 
 def test_export_400_when_chapters_incomplete(client):

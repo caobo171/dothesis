@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { useChat } from "./hooks/useChat";
 import { ChatHeader } from "./ChatHeader";
@@ -11,6 +11,7 @@ import { AutoDraftModal } from "./AutoDraftModal";
 import { AutoDraftDrawer } from "./AutoDraftDrawer";
 import { synthesizeWidgetSelection } from "./widgets/synthesize";
 import type { WidgetSelectHandler } from "./widgets/types";
+import { formatBootstrapMessage, readBootstrapPayload } from "./NewProjectModal";
 import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
 
@@ -116,6 +117,22 @@ const MODULE_HINT: Record<string, string> = {
 
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
   const { messages, streamingText, streamingProgress, streamingError, inflight, send } = useChat(threadId);
+
+  // Bootstrap-payload pickup. NewProjectModal stashes the wizard data
+  // (topic + references + model + …) keyed by project id. The first time
+  // this thread mounts with an empty message list, we read the stash and
+  // send a structured first message so the agent's bootstrap skill can
+  // commit each slice without the user having to re-type. Guarded by a
+  // ref so React's StrictMode double-mount in dev doesn't fire twice.
+  const bootstrapFiredRef = useRef(false);
+  useEffect(() => {
+    if (bootstrapFiredRef.current) return;
+    if (messages.length > 0 || inflight) return;
+    const payload = readBootstrapPayload(projectId);
+    if (!payload) return;
+    bootstrapFiredRef.current = true;
+    void send(formatBootstrapMessage(payload));
+  }, [projectId, messages.length, inflight, send]);
   // SP6.5: include m5_writing.chapters so we can gate the "Open editor" link in
   // ChatHeader — the link must only appear once at least one chapter exists.
   // focus/current_module/module_status drive the header's focus chip (design's
@@ -133,7 +150,14 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
       m2_literature?: { research_state_summary?: string; confirmed_at?: string } | null;
       m3_design?: { methodology?: { paradigm?: string }; confirmed_at?: string } | null;
       m4_analysis?: { confirmed_at?: string } | null;
-      m5_writing?: { chapters?: Record<string, unknown>; confirmed_at?: string } | null;
+      m5_writing?: {
+        chapters?: Record<string, unknown>;
+        confirmed_at?: string;
+        // M5 auto-export hook (api/app/agent_state.py:_auto_export_m5)
+        // writes these on the M5 done transition. ChatHeader Download
+        // button + ContextPanel M5 card both read from here.
+        export_artifacts?: { kind: string; download_url: string }[];
+      } | null;
     };
   }>(
     `/projects/${projectId}`, fetcher,
@@ -147,6 +171,16 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   // Defaults to false while the project data is still loading.
   const hasChapters =
     Object.keys(project?.context_store?.m5_writing?.chapters ?? {}).length > 0;
+
+  // "Ready to draft" = the upstream research modules (M1–M4) are all done
+  // and no auto-draft run has started yet. This is the moment the user
+  // should reach for Auto-draft instead of asking chat to "write the whole
+  // thesis" — so we light the button up. M5 itself is excluded: it's the
+  // module Auto-draft produces, so requiring it done would never trigger.
+  const upstreamDone =
+    !!project?.module_status &&
+    ["M1", "M2", "M3", "M4"].every(m => project.module_status?.[m] === "done");
+  const autoDraftReady = upstreamDone && (latestRun?.run?.status ?? null) === null;
 
   const [modalOpen, setModalOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -198,22 +232,33 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     void send(text, widgetPayload);
   };
 
-  const onFileDrop = async (files: File[]) => {
+  const onFileDrop = async (files: File[]): Promise<(string | null)[]> => {
     // FormData uploads can't go through apiFetch (which JSON-encodes the
     // body). Inject the token as a query string parameter so the request
     // still authenticates — uploads endpoint accepts auth via the same
     // body/query/Bearer fallback (see api/app/deps.py:_extract_token).
+    // Returns the per-file `upload_id` (or null on failure) in input order
+    // so ChatInput can stamp each chip + ship the ids on Send. Without
+    // these ids the chat router can't materialize the bytes for Gemini.
     const token = tokenStore.get();
     const tokenParam = token ? `?access_token=${encodeURIComponent(token)}` : "";
     const base = process.env.NEXT_PUBLIC_API_BASE || "/api/v1";
-    for (const f of files) {
-      const fd = new FormData();
-      fd.append("file", f);
-      await fetch(`${base}/projects/${projectId}/uploads${tokenParam}`, {
-        method: "POST",
-        body: fd,
-      });
-    }
+    const results = await Promise.all(files.map(async (f): Promise<string | null> => {
+      try {
+        const fd = new FormData();
+        fd.append("file", f);
+        const res = await fetch(`${base}/projects/${projectId}/uploads${tokenParam}`, {
+          method: "POST",
+          body: fd,
+        });
+        if (!res.ok) return null;
+        const body = await res.json();
+        return (body?.upload_id as string) ?? null;
+      } catch {
+        return null;
+      }
+    }));
+    return results;
   };
 
   return (
@@ -228,10 +273,15 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
             : undefined
         }
         autoDraftButton={
-          <AutoDraftButton runStatus={latestRun?.run?.status ?? null} onClick={onAutoDraftClick} />
+          <AutoDraftButton
+            runStatus={latestRun?.run?.status ?? null}
+            onClick={onAutoDraftClick}
+            ready={autoDraftReady}
+          />
         }
         projectId={projectId}
         hasChapters={hasChapters}
+        exportArtifacts={project?.context_store?.m5_writing?.export_artifacts}
       />
       {project && messages.length === 0 && !inflight ? (
         // An empty thread is confusing — especially for an auto-drafted project,
@@ -280,7 +330,14 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         />
       )}
       <ChatInput
-        onSubmit={send}
+        // ChatInput emits (text, attachments[]) — send's signature is
+        // (text, widgetPayload, attachments). Skip the widgetPayload slot
+        // for composer sends; that slot is only for widget-click
+        // translations routed through onWidgetSelect above. We forward
+        // the FULL chip metadata (not just upload_ids) so the optimistic
+        // user bubble can render the linked-file chips on the spot —
+        // without waiting for SWR to revalidate the server row.
+        onSubmit={(text, attachments) => void send(text, undefined, attachments)}
         onFileDrop={onFileDrop}
         disabled={inflight}
         focusModule={project ? (project.focus ?? project.current_module) : undefined}

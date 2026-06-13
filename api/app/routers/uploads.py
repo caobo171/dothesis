@@ -133,6 +133,25 @@ async def upload_paper(project_id: uuid.UUID,
         text_uri = f"s3://{bucket}/{text_key}"
         text_extracted_at = datetime.now(timezone.utc)
 
+    # Mirror the upload into the agent's workspace so the v3 deep agent's
+    # `read_file` and `parse_reference` tools can reach the file. The
+    # workspace path matches chat_v3._workspace_dir; both write to it. We
+    # write the RAW bytes (so `parse_reference` can PDF-extract directly)
+    # and a sidecar `.txt` (so `read_file` gives the agent quick text
+    # without paying for re-extraction every read). Best-effort —
+    # mirroring failure should never break the upload route.
+    try:
+        from pathlib import Path as _P
+        import tempfile as _tmp
+        workspace = _P(os.getenv("JOB_WORKDIR_ROOT") or _tmp.gettempdir()) / "agent_projects" / str(project_id)
+        (workspace / "uploads").mkdir(parents=True, exist_ok=True)
+        safe_name = (file.filename or "untitled").replace("/", "_")
+        (workspace / "uploads" / safe_name).write_bytes(body)
+        if text:
+            (workspace / "uploads" / f"{safe_name}.txt").write_text(text, encoding="utf-8")
+    except Exception as _e:  # noqa: BLE001 — best-effort mirror
+        pass
+
     row = PaperUpload(
         id=upload_id,
         project_id=project_id,

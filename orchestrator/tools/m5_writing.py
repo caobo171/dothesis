@@ -26,6 +26,16 @@ from langchain_core.tools import tool
 _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
+# AND put engine/ itself on the path. The engine modules use repo-internal
+# imports like `from utils.logging_config import get_logger` (engine/ as the
+# root), so importing them as `engine.utils.*` from the api process fails at
+# THAT line unless engine/ is also a sys.path root. This was the cause of M5
+# exports landing as 24-byte placeholders (0 KB): _export_docx_via_engine's
+# `from engine.utils.export_professional import …` raised ModuleNotFoundError
+# on the internal `from utils.…`, the except branch wrote the placeholder.
+_ENGINE = _ROOT / "engine"
+if str(_ENGINE) not in sys.path:
+    sys.path.insert(0, str(_ENGINE))
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +94,32 @@ def _upload_to_s3(local_path: str, project_id: str, kind: str, filename: str) ->
 
 _CITE_PATTERN = re.compile(r"\((?P<author>[A-Z][\w-]+(?: et al\.)?), (?P<year>\d{4})\)")
 
+
+def _ref_author_label(ref: dict) -> str:
+    """Derive the inline-citation author label from a reference record.
+
+    M2 sources carry `authors` as a LIST (e.g. ["Nguyen", "Tran"] or ["NIH"]);
+    earlier code read a singular `author` key that doesn't exist, so EVERY
+    reference collapsed to "Anon" — which is exactly what the LLM then cited
+    ("(Anon, 2011)"). This reads the real list: first author's surname, plus
+    "et al." when there are co-authors. Falls back to a singular `author` field
+    or "Anon" only when nothing usable is present.
+    """
+    authors = ref.get("authors")
+    if isinstance(authors, list) and authors:
+        first = str(authors[0]).strip()
+        surname = first.split()[-1] if first else ""
+        if surname:
+            return f"{surname} et al." if len(authors) > 1 else surname
+    single = str(ref.get("author") or "").strip()
+    return single or "Anon"
+
+
+def _ref_citation_key(ref: dict) -> tuple[str, str]:
+    """(author_label, year_str) used as the canonical pool key for a reference,
+    shared by the prompt formatter and the citation validators so they agree."""
+    return (_ref_author_label(ref), str(ref.get("year", "")).strip())
+
 # SP6.5: separate regex used by validate_citations_plain for the autosave PATCH
 # endpoint. Broader than _CITE_PATTERN — accepts any author token and n.d. years
 # so the inline autosave validator is tolerant of varied LLM citation styles.
@@ -100,10 +136,7 @@ def validate_citations_plain(prose: str, reference_pool: list[dict]) -> dict:
     """
     # Decision: strip whitespace from pool keys so "Smith " and "Smith" match,
     # and convert year to string to align with the regex group (always a string).
-    pool_keys = {
-        (str(r.get("author", "")).strip(), str(r.get("year", "")).strip())
-        for r in reference_pool
-    }
+    pool_keys = {_ref_citation_key(r) for r in reference_pool}
     seen: dict[str, bool] = {}    # ordered dedupe via insertion-order dict
     citations_used: list[str] = []
     uncited: list[str] = []
@@ -128,9 +161,10 @@ def validate_citations(prose: str, references: list[dict]) -> tuple[list[str], l
     Plain Python helper (not a @tool) — used by compose_chapter +
     rewrite_chapter post-validation.
     """
-    # Build a pool of (author, year) tuples from references.
-    # Convert year to string to match regex group which is always a string.
-    pool = {(r.get("author", ""), str(r.get("year", ""))) for r in references}
+    # Build a pool of (author_label, year) tuples from references via the
+    # shared key helper — reads the `authors` LIST, not a non-existent
+    # `author` field (the bug that made every reference "Anon").
+    pool = {_ref_citation_key(r) for r in references}
     cited: list[str] = []
     uncited: list[str] = []
     seen: set[tuple[str, str]] = set()
@@ -208,28 +242,124 @@ def _validate_via_engine(text: str) -> dict:
         return {"issues": issues, "score": 1.0 - 0.5 * len(issues)}
 
 
+def _sections_to_markdown(sections: list[dict]) -> str:
+    """Flatten [{title, prose}] into a single markdown document.
+
+    The engine renderers (engine/utils/export_professional) consume a
+    markdown *file*, not a Python list — so this is the missing adapter
+    that lets the orchestrator's section list reach the real Pandoc-backed
+    export. `prose` is assumed to already be markdown (chapter composers
+    emit markdown); we only prepend an H1 per section title.
+    """
+    parts: list[str] = []
+    for sec in sections:
+        title = (sec.get("title") or "").strip()
+        prose = (sec.get("prose") or sec.get("body") or "").strip()
+        # Defensive last line: strip internal placeholder/QA text so it can
+        # never reach the rendered document, even on a forced export, then
+        # normalize inline-bullet runs into proper markdown lists.
+        prose = _normalize_prose_markdown(_scrub_internal_markers(prose))
+        if title:
+            parts.append(f"# {title}")
+        if prose:
+            parts.append(prose)
+    return "\n\n".join(parts) + "\n"
+
+
+def _scrub_internal_markers(prose: str) -> str:
+    """Remove engine-internal placeholder/QA text that must never appear in a
+    final thesis (composition stubs, the old uncited-citation warning block)."""
+    if not prose:
+        return prose
+    # Drop the legacy "⚠️ … may be hallucinated …" blockquote if any survived.
+    prose = re.sub(r"\n?>\s*⚠️[^\n]*\n?", "", prose)
+    # Drop bracketed composition placeholders like "[Composition failed …]"
+    # and "[Auto-generated for '…']".
+    prose = re.sub(r"\[(?:Composition failed|Auto-generated for)[^\]]*\]", "", prose)
+    return prose.strip()
+
+
+def _normalize_prose_markdown(prose: str) -> str:
+    """Fix the most common LLM markdown mistake: bullet items mushed onto one
+    line ("Goals: * a * b * c"), which pandoc renders as literal asterisks in a
+    paragraph instead of a real list. Splits such runs into a proper
+    newline-separated markdown list with a blank line before it.
+
+    Conservative: only triggers when a line has 2+ inline ` * ` / ` - ` markers
+    (a near-certain inlined list), so it won't disturb `*emphasis*`/`**bold**`
+    (no surrounding spaces) or a single stray asterisk.
+    """
+    if not prose:
+        return prose
+
+    out_lines: list[str] = []
+    for line in prose.split("\n"):
+        # A real list line already starts with a marker — leave it alone.
+        if re.match(r"^\s*([*\-+]|\d+\.)\s+", line):
+            out_lines.append(line)
+            continue
+        # Count inline bullet markers ( space + * or - + space + text ).
+        markers = re.findall(r"\s[*\-]\s+\S", line)
+        if len(markers) >= 2:
+            parts = re.split(r"\s+[*\-]\s+", line)
+            head = parts[0].strip()
+            items = [p.strip() for p in parts[1:] if p.strip()]
+            if len(items) >= 2:
+                if head:
+                    out_lines.append(head if head.endswith(":") else head)
+                    out_lines.append("")
+                out_lines.extend(f"- {it}" for it in items)
+                continue
+        out_lines.append(line)
+    return "\n".join(out_lines)
+
+
+def _write_markdown_tmp(sections: list[dict]) -> Path:
+    md = _sections_to_markdown(sections)
+    md_path = _scratch_dir() / f"draft-{uuid4().hex[:8]}.md"
+    md_path.write_text(md, encoding="utf-8")
+    return md_path
+
+
 def _compile_pdf_via_engine(sections: list[dict], output_path: str, **kw) -> str:
-    """Render sections to a PDF using engine/utils/export_professional if available;
-    otherwise write a minimal placeholder so the pipeline can continue.
+    """Render sections to a PDF via engine/utils/export_professional.export_pdf.
+
+    The engine fn takes (md_file, output_pdf) and has its own multi-engine
+    fallback (libreoffice → pandoc → weasyprint); if none are available it
+    returns False and we drop a minimal placeholder so the pipeline still
+    produces a downloadable artifact instead of raising.
     """
     try:
         from engine.utils.export_professional import export_pdf
-        return export_pdf(sections, output_path, **kw)
+        md_path = _write_markdown_tmp(sections)
+        ok = export_pdf(md_path, Path(output_path), **kw)
+        if ok and Path(output_path).exists():
+            return output_path
+        logger.warning("engine export_pdf returned falsy — writing placeholder")
     except Exception as e:
         logger.warning("engine export_pdf failed: %s — writing placeholder", e)
-        Path(output_path).write_bytes(b"%PDF-1.4\n%% placeholder - engine wiring pending\n")
-        return output_path
+    Path(output_path).write_bytes(b"%PDF-1.4\n%% placeholder - engine renderer unavailable\n")
+    return output_path
 
 
 def _export_docx_via_engine(sections: list[dict], output_path: str, **kw) -> str:
-    """Render to .docx. Same fallback strategy as PDF."""
+    """Render to .docx via engine/utils/export_professional.export_docx.
+
+    Same (md_file, output) contract + internal Pandoc fallback as the PDF
+    path. NOTE: the earlier import target (docx_post_processor) had no
+    export_docx — that's why every prior export produced a placeholder.
+    """
     try:
-        from engine.utils.docx_post_processor import export_docx as _real
-        return _real(sections, output_path, **kw)
+        from engine.utils.export_professional import export_docx as _real
+        md_path = _write_markdown_tmp(sections)
+        ok = _real(md_path, Path(output_path), **kw)
+        if ok and Path(output_path).exists():
+            return output_path
+        logger.warning("engine export_docx returned falsy — writing placeholder")
     except Exception as e:
         logger.warning("engine export_docx failed: %s — writing placeholder", e)
-        Path(output_path).write_bytes(b"PK\x03\x04 placeholder docx\n")
-        return output_path
+    Path(output_path).write_bytes(b"PK\x03\x04 placeholder docx\n")
+    return output_path
 
 
 class CitationCompiler:
@@ -256,15 +386,26 @@ class CitationCompiler:
 # --- M5 LLM helpers -------------------------------------------------------
 
 def _format_references_for_prompt(refs: list[dict]) -> str:
-    """One reference per line, numbered. Used inside chapter prompts."""
+    """One reference per line, with the EXACT inline-citation form to use.
+
+    Shows the LLM the precise `(Author, Year)` string it must reproduce so it
+    cites real sources instead of inventing "(Anon, 2011)". The author label
+    comes from `_ref_author_label` (reads the `authors` list), so it matches
+    what `validate_citations` will accept.
+    """
     if not refs:
-        return "(no references available — write without inline citations)"
-    lines = []
+        return "(no references available — write WITHOUT inline citations)"
+    lines = [
+        "Cite ONLY from this list, using the exact (Author, Year) form shown. "
+        "Do NOT invent citations. If no source fits a claim, state it without a citation."
+    ]
     for i, r in enumerate(refs, 1):
-        author = r.get("author", "Anon")
+        label = _ref_author_label(r)
         year = r.get("year", "n.d.")
         title = r.get("title", "")
-        lines.append(f"[{i}] {author} ({year}). {title}".strip())
+        venue = r.get("venue", "")
+        cite = f"({label}, {year})"
+        lines.append(f"[{i}] {cite} — {title}{(' · ' + venue) if venue else ''}".strip())
     return "\n".join(lines)
 
 
@@ -281,17 +422,67 @@ def _safe_format_kwargs(context_slice: dict) -> dict:
     return out
 
 
-def _annotate_uncited(prose: str, uncited: list[str]) -> str:
-    """Append a notice block listing any uncited (Author, Year) flags."""
-    if not uncited:
-        return prose
-    notice = (
-        "\n\n> ⚠️ The following inline citations are not present in the "
-        "M2 reference pool and may be hallucinated: "
-        + ", ".join(uncited)
-        + ". Verify or remove."
-    )
-    return prose + notice
+# Matches ONLY `{valid_python_identifier}` — leaves `{N+1}`, `{"json": 1}`, and
+# any other stray braces in a prompt template untouched.
+_PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
+
+
+def _fill_template(template: str, kwargs: dict) -> str:
+    """Substitute `{key}` placeholders without str.format()'s brittleness.
+
+    str.format() parses EVERY brace in the template, so a literal `{N+1}` or a
+    JSON example like `{"x": 1}` in a prompt file raises KeyError/ValueError and
+    aborts the whole chapter (the "[Composition failed — please retry]" bug —
+    only results.md had a stray `4.{N+1}`). This fills known identifier
+    placeholders and leaves any other brace content exactly as written.
+    """
+    def _repl(m: "re.Match") -> str:
+        key = m.group(1)
+        return str(kwargs[key]) if key in kwargs else m.group(0)
+
+    return _PLACEHOLDER_RE.sub(_repl, template)
+
+
+def _strip_uncited_citations(prose: str, references: list[dict]) -> str:
+    """Remove inline `(Author, Year)` citations that aren't in the reference
+    pool, so a hallucinated "(Anon, 2011)" never reaches the rendered document.
+
+    Replaces an in-document warning (which used to be appended to the prose and
+    rendered into the final thesis — see the screenshot bug). We delete the
+    parenthetical and any single space immediately preceding it, leaving clean
+    sentences. Real, pool-backed citations are kept untouched.
+    """
+    pool = {_ref_citation_key(r) for r in references}
+
+    def _repl(m: "re.Match") -> str:
+        key = (m.group("author"), m.group("year"))
+        return m.group(0) if key in pool else ""
+
+    # Consume an optional leading space so "research (Anon, 2011)." → "research."
+    cleaned = re.sub(r"\s?" + _CITE_PATTERN.pattern, _repl, prose)
+    # Collapse any double spaces / space-before-punctuation the removal created.
+    cleaned = re.sub(r"  +", " ", cleaned)
+    cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)
+    return cleaned
+
+
+# Appended to every chapter prompt. The composed prose is rendered to DOCX/PDF
+# via pandoc, which needs well-formed markdown — the LLM otherwise mushes list
+# items onto one line and emits broken tables.
+_MARKDOWN_FORMAT_RULES = """
+
+---
+OUTPUT FORMATTING (strict — the text is rendered to a Word document via Markdown):
+- Write academic prose in full paragraphs. Separate paragraphs with a blank line.
+- For any list, put EACH item on its OWN line starting with "- ", and leave a
+  blank line BEFORE the list. NEVER put multiple bullet items on one line.
+- Prefer prose over tables. Do NOT use Markdown tables for narrative content.
+  Only use a table for genuinely tabular data, and if you do, put each row on
+  its own line with correct "| col | col |" pipes and a "| --- | --- |"
+  separator row.
+- Use "## Heading" on its own line for sub-sections.
+- Do not output the chapter title as an H1 — it is added automatically.
+"""
 
 
 def _get_llm():
@@ -353,6 +544,360 @@ def export_docx(sections: list[dict], project_id: str) -> dict:
     return {"s3_key": s3_key, "size_bytes": size_bytes}
 
 
+# Canonical 6-chapter order + display titles, shared by every caller that
+# turns an m5_writing slice into exporter sections (the auto-export hook in
+# api/app/agent_state.py, the /m5/export route, and the agent's export tool).
+# One source of truth so the three paths can't drift.
+M5_CHAPTER_ORDER = ["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
+M5_CHAPTER_TITLES = {
+    "intro":       "Chapter 1 — Introduction",
+    "lit_review":  "Chapter 2 — Literature Review",
+    "methodology": "Chapter 3 — Methodology",
+    "results":     "Chapter 4 — Results",
+    "discussion":  "Chapter 5 — Discussion",
+    "conclusion":  "Chapter 6 — Conclusion",
+}
+
+
+def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
+    """Build exporter sections [{title, prose}] from an m5_writing slice.
+
+    Tolerates both shapes the writers produce:
+    - `chapters: {intro: {prose: "…"}, …}` — the canonical auto-mode shape.
+    - `final_sections: [{title, body|prose}, …]` — the conversational agent
+      shape (the M5 skill's DocumentSection list).
+    Returns [] when neither carries usable prose, so callers can short-circuit
+    instead of exporting an empty document.
+    """
+    chapters = (m5_slice or {}).get("chapters") or {}
+    if chapters:
+        out = []
+        for name in M5_CHAPTER_ORDER:
+            ch = chapters.get(name)
+            if not ch:
+                continue
+            prose = (ch.get("prose") or ch.get("body") or "").strip() if isinstance(ch, dict) else str(ch)
+            if prose:
+                out.append({"title": M5_CHAPTER_TITLES[name], "prose": prose})
+        if out:
+            return out
+    final_sections = (m5_slice or {}).get("final_sections") or []
+    out = []
+    for sec in final_sections:
+        if not isinstance(sec, dict):
+            continue
+        title = (sec.get("title") or sec.get("name") or "").strip()
+        prose = (sec.get("prose") or sec.get("body") or sec.get("content") or "").strip()
+        if prose:
+            out.append({"title": title or "Section", "prose": prose})
+    return out
+
+
+# Markers that signal a chapter could NOT be properly composed. These must
+# never reach the exported document (the "[Composition failed]" / "[Auto-
+# generated for …]" weirdness the user saw). When detected we treat the
+# chapter as missing and ask the user to fill the gap instead of shipping it.
+_STUB_MARKERS = ("[Composition failed", "[Auto-generated for", "[Composition failed — please retry]")
+
+
+def _is_stub_prose(prose: str) -> bool:
+    """True when prose is a placeholder/failure stub, not real chapter content."""
+    if not prose or not prose.strip():
+        return True
+    if any(marker in prose for marker in _STUB_MARKERS):
+        return True
+    # A real chapter is at least a few sentences; anything tiny is a stub.
+    return len(prose.strip()) < 120
+
+
+# Minimal data each chapter needs to be writable. Used to decide whether to
+# ask the user to fill gaps BEFORE spending ~1 min composing — and to tell
+# them exactly what's missing in plain language.
+def assess_export_readiness(context_store: dict) -> list[str]:
+    """Return a list of human-readable missing-data items (empty = ready).
+
+    Drives the "ask the user to refill before exporting" flow: a thesis can't
+    be 'fully qualified' without a title, research questions, literature,
+    methodology, and analysis results.
+    """
+    m1 = context_store.get("m1_topic") or {}
+    m2 = context_store.get("m2_literature") or {}
+    m3 = context_store.get("m3_design") or {}
+    m4 = context_store.get("m4_analysis") or {}
+
+    missing: list[str] = []
+    if not str(m1.get("research_title") or "").strip():
+        missing.append("M1 — research title")
+    if not (m1.get("research_questions") or []):
+        missing.append("M1 — research questions")
+    if not (m2.get("literature_sources") or []):
+        missing.append("M2 — literature sources (no references to cite)")
+    if not (m3.get("methodology") or m3.get("conceptual_model")):
+        missing.append("M3 — methodology / conceptual model")
+    if not (m4.get("analysis_results") or m4.get("qual_themes") or m4.get("qual_codes")):
+        missing.append("M4 — analysis results (the Results chapter has no data)")
+    return missing
+
+
+def _references_section_body(references: list[dict]) -> str:
+    """Build the References list body (no heading) as markdown.
+
+    Each entry ends with a markdown link to the source's DOI or URL — pandoc
+    renders `[text](url)` as a real clickable hyperlink in the DOCX/PDF, which
+    is what makes the bibliography clickable. Sorted by author then year.
+    """
+    if not references:
+        return ""
+
+    def _key(r: dict) -> tuple:
+        return (_ref_author_label(r).lower(), str(r.get("year", "")))
+
+    entries: list[str] = []
+    for r in sorted(references, key=_key):
+        label = _ref_author_label(r)
+        year = r.get("year", "n.d.")
+        title = (r.get("title") or "").strip()
+        venue = (r.get("venue") or "").strip()
+        doi = (r.get("doi") or "").strip()
+        url = (r.get("url") or "").strip()
+        link = f"https://doi.org/{doi}" if doi else url
+
+        entry = f"{label} ({year}). {title}.".rstrip(".") + "."
+        if venue:
+            entry += f" *{venue}*."
+        if link:
+            entry += f" [{link}]({link})"
+        entries.append(entry)
+    # Blank line between entries so pandoc treats each as its own paragraph.
+    return "\n\n".join(entries)
+
+
+def compose_all_sections(context_store: dict) -> list[dict]:
+    """Compose all 6 chapters from a nested context_store → [{title, prose}].
+
+    `context_store` is the nested module shape ({m1_topic, m2_literature,
+    m3_design, m4_analysis}). Each chapter is written by `compose_chapter`
+    (real LLM composition against the orchestrator/prompts/m5/<name>.md
+    templates), grounded in the project state. On a per-chapter LLM failure
+    we drop in a minimal fallback so one bad chapter can't abort the whole
+    export — but the happy path is full prose, not stubs.
+
+    Used by the export tool to generate a draft on demand when the user asks
+    for the file but nothing was written yet.
+    """
+    m1 = context_store.get("m1_topic") or {}
+    m2 = context_store.get("m2_literature") or {}
+    m3 = context_store.get("m3_design") or {}
+    m4 = context_store.get("m4_analysis") or {}
+
+    methodology = m3.get("methodology") if isinstance(m3.get("methodology"), dict) else {}
+    paradigm = (methodology or {}).get("paradigm", "") or ""
+    references = m2.get("literature_sources") or []
+    language = m1.get("language") or "vi"
+    citation_style = "apa7"
+
+    # Merge every module's keys into one flat slice for the prompt templates.
+    # compose_chapter JSON-encodes nested values and fills missing keys with
+    # "", so an over-broad merge is safe; we just make sure the canonical
+    # `results` key points at M4's analysis output.
+    context_slice: dict = {**m1, **m2, **m3, **m4}
+    context_slice.setdefault("results", m4.get("analysis_results"))
+
+    out: list[dict] = []
+    for name in M5_CHAPTER_ORDER:
+        try:
+            draft = compose_chapter.invoke({
+                "chapter_name": name,
+                "paradigm": paradigm,
+                "context_slice": context_slice,
+                "references": references,
+                "citation_style": citation_style,
+                "language": language,
+            })
+            prose = (draft or {}).get("prose") or ""
+        except Exception:
+            logger.exception("compose_all_sections: compose_chapter failed for %s", name)
+            prose = ""
+        if not prose.strip():
+            prose = _fallback_section(name, context_store)
+        out.append({"title": M5_CHAPTER_TITLES[name], "prose": prose})
+
+    # Append a References section built from the M2 sources, with clickable
+    # DOI/URL links. Without this the document has inline "(Author, Year)"
+    # citations but no bibliography to back them.
+    refs_body = _references_section_body(references)
+    if refs_body:
+        out.append({"title": "References", "prose": refs_body})
+    return out
+
+
+def _assign_citation_keys(references: list[dict]) -> tuple[list[dict], dict]:
+    """Build (CSL-JSON items, {(author_label, year): citekey}) from references.
+
+    Citekeys are surname+year (deduped with a/b/c suffixes), the form pandoc
+    citeproc uses. The label→key map lets us rewrite the LLM's "(Author, Year)"
+    inline citations into pandoc `[@key]` syntax that becomes clickable.
+    """
+    csl_items: list[dict] = []
+    ly_to_key: dict[tuple, str] = {}
+    used: set[str] = set()
+    for r in references:
+        label = _ref_author_label(r)
+        surname = re.sub(r"[^a-z0-9]", "", label.replace(" et al.", "").lower()) or "ref"
+        year = str(r.get("year", "")).strip()
+        base = f"{surname}{year or 'nd'}"
+        key, suffix = base, ord("a")
+        while key in used:
+            key = f"{base}{chr(suffix)}"
+            suffix += 1
+        used.add(key)
+        ly_to_key.setdefault((label, year), key)
+
+        authors = r.get("authors") or []
+        csl_authors = [{"family": str(a)} for a in authors] if authors else [{"family": label}]
+        item: dict = {
+            "id": key,
+            "type": "article-journal",
+            "title": r.get("title") or "Untitled",
+            "author": csl_authors,
+        }
+        if year.isdigit():
+            item["issued"] = {"date-parts": [[int(year)]]}
+        if r.get("venue"):
+            item["container-title"] = r["venue"]
+        if r.get("doi"):
+            item["DOI"] = r["doi"]
+        if r.get("url"):
+            item["URL"] = r["url"]
+        csl_items.append(item)
+    return csl_items, ly_to_key
+
+
+def _convert_inline_citations(prose: str, ly_to_key: dict) -> str:
+    """Rewrite "(Author, Year; Author2, Year2)" → pandoc "[@key1; @key2]".
+
+    Only rewrites a parenthetical when EVERY comma-year part maps to a known
+    reference; otherwise the parenthetical is left exactly as written (so
+    "(see Figure 1)" or an unknown citation is never mangled).
+    """
+    if not prose or not ly_to_key:
+        return prose
+
+    def _repl(m: "re.Match") -> str:
+        parts = [p.strip() for p in m.group(1).split(";")]
+        keys: list[str] = []
+        for p in parts:
+            cm = re.match(r"^(.*?),\s*(\d{4})$", p)
+            if not cm:
+                return m.group(0)
+            key = ly_to_key.get((cm.group(1).strip(), cm.group(2)))
+            if not key:
+                return m.group(0)
+            keys.append(f"@{key}")
+        return "[" + "; ".join(keys) + "]"
+
+    return re.sub(r"\(([^()]*\d{4}[^()]*)\)", _repl, prose)
+
+
+def _docx_to_pdf(docx_path: str, pdf_path: str) -> bool:
+    """Convert a DOCX to PDF via LibreOffice headless so the PDF inherits the
+    citeproc-rendered clickable citations from the DOCX (rather than
+    re-rendering from markdown, which LibreOffice can't citeproc)."""
+    import shutil
+    import subprocess
+
+    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    if not soffice:
+        return False
+    outdir = str(Path(pdf_path).parent)
+    subprocess.run(
+        [soffice, "--headless", "--convert-to", "pdf", "--outdir", outdir, docx_path],
+        capture_output=True, timeout=180, check=True,
+    )
+    produced = Path(outdir) / (Path(docx_path).stem + ".pdf")
+    if produced.exists() and str(produced) != pdf_path:
+        produced.replace(pdf_path)
+    return Path(pdf_path).exists()
+
+
+def _artifact_dict(kind: str, pid: str, s3_key: str, size_bytes: int) -> dict:
+    return {
+        "kind": kind,
+        "s3_key": s3_key,
+        "size_bytes": size_bytes,
+        "download_url": f"/api/v1/projects/{pid}/exports/{s3_key.split('/')[-1]}",
+        "uri": "",
+    }
+
+
+def run_export(sections: list[dict], project_id: str,
+               references: list[dict] | None = None) -> list[dict]:
+    """Render docx + pdf, upload to S3, return ContextPanel-ready artifacts.
+
+    The single export entrypoint shared by the auto-export hook, the
+    /m5/export route, and the agent's export_docx tool.
+
+    When `references` is provided, renders via the citeproc path so inline
+    "(Author, Year)" citations become clickable links to the auto-generated
+    References section. Falls back to the plain render on any citeproc failure
+    so export never breaks.
+    """
+    pid = str(project_id)
+    if references:
+        try:
+            return _run_export_citeproc(sections, pid, references)
+        except Exception:
+            logger.exception("citeproc export failed — falling back to plain render")
+
+    docx_res = export_docx.invoke({"sections": sections, "project_id": pid})
+    pdf_res = compile_pdf.invoke({"sections": sections, "project_id": pid})
+    return [
+        _artifact_dict("docx", pid, docx_res["s3_key"], docx_res["size_bytes"]),
+        _artifact_dict("pdf", pid, pdf_res["s3_key"], pdf_res["size_bytes"]),
+    ]
+
+
+def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict]) -> list[dict]:
+    """Render DOCX with pandoc citeproc (clickable citations + auto bibliography),
+    then convert that DOCX to PDF via LibreOffice so both formats match."""
+    csl_items, ly_to_key = _assign_citation_keys(references)
+
+    # Drop any manually-built References section — citeproc generates its own —
+    # and rewrite inline citations to [@key] form in every chapter.
+    body: list[dict] = []
+    for s in sections:
+        if (s.get("title") or "").strip().lower() == "references":
+            continue
+        body.append({
+            "title": s.get("title", ""),
+            "prose": _convert_inline_citations(s.get("prose", ""), ly_to_key),
+        })
+    # Trailing heading tells pandoc where to place the generated bibliography.
+    body.append({"title": "References", "prose": ""})
+
+    bib_path = _scratch_dir() / f"refs-{uuid4().hex[:8]}.json"
+    bib_path.write_text(json.dumps(csl_items, ensure_ascii=False), encoding="utf-8")
+
+    docx_name = f"thesis-{uuid4().hex[:8]}.docx"
+    docx_local = _scratch_dir() / docx_name
+    _export_docx_via_engine(body, str(docx_local), bibliography=bib_path)
+
+    pdf_name = f"thesis-{uuid4().hex[:8]}.pdf"
+    pdf_local = _scratch_dir() / pdf_name
+    pdf_ok = _docx_to_pdf(str(docx_local), str(pdf_local))
+
+    docx_key, docx_size = _upload_to_s3(str(docx_local), pid, "docx", docx_name)
+    out = [_artifact_dict("docx", pid, docx_key, docx_size)]
+    if pdf_ok:
+        pdf_key, pdf_size = _upload_to_s3(str(pdf_local), pid, "pdf", pdf_name)
+        out.append(_artifact_dict("pdf", pid, pdf_key, pdf_size))
+    else:
+        pdf_res = compile_pdf.invoke({"sections": body, "project_id": pid})
+        out.append(_artifact_dict("pdf", pid, pdf_res["s3_key"], pdf_res["size_bytes"]))
+    bib_path.unlink(missing_ok=True)
+    return out
+
+
 @tool
 def format_citations(items: list[dict], style: str = "apa7") -> str:
     """Format a citation list using the requested style."""
@@ -406,15 +951,19 @@ def compose_chapter(
         safe_kwargs.setdefault(k, "")
 
     try:
-        prompt = prompt_template.format(**safe_kwargs)
+        prompt = _fill_template(prompt_template, safe_kwargs) + _MARKDOWN_FORMAT_RULES
         prose = _get_llm().invoke(prompt).content.strip()
     except Exception as e:
         logger.warning("compose_chapter LLM call failed for %s: %s", chapter_name, e)
         prose = f"# {chapter_name.title()}\n\n[Composition failed — please retry]"
 
+    # Strip any citation the LLM invented that isn't in the reference pool, so
+    # hallucinated "(Anon, 2011)" never reaches the rendered document. The
+    # warning stays as RETURNED metadata (uncited_warnings) for QA/logging — it
+    # must NOT be appended into the prose, which gets rendered verbatim.
     cited_in_pool, uncited = validate_citations(prose, references)
     if uncited:
-        prose = _annotate_uncited(prose, uncited)
+        prose = _strip_uncited_citations(prose, references)
     return {
         "name": chapter_name,
         "prose": prose,
@@ -459,7 +1008,7 @@ def rewrite_chapter(
         safe_kwargs.setdefault(k, "")
 
     try:
-        base_prompt = prompt_template.format(**safe_kwargs)
+        base_prompt = _fill_template(prompt_template, safe_kwargs)
         rewrite_prompt = (
             f"{base_prompt}\n\n"
             f"## User rewrite instruction\n{instruction}\n\n"
@@ -474,9 +1023,13 @@ def rewrite_chapter(
         logger.warning("rewrite_chapter LLM call failed for %s: %s", chapter_name, e)
         prose = current_prose  # unchanged on failure
 
+    # Strip any citation the LLM invented that isn't in the reference pool, so
+    # hallucinated "(Anon, 2011)" never reaches the rendered document. The
+    # warning stays as RETURNED metadata (uncited_warnings) for QA/logging — it
+    # must NOT be appended into the prose, which gets rendered verbatim.
     cited_in_pool, uncited = validate_citations(prose, references)
     if uncited:
-        prose = _annotate_uncited(prose, uncited)
+        prose = _strip_uncited_citations(prose, references)
     return {
         "name": chapter_name,
         "prose": prose,

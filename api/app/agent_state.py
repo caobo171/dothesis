@@ -85,7 +85,28 @@ class DbProjectStateStore(ProjectStateStore):
             "versionHistory": [],
         }
 
+    def load_full_context_store(self) -> dict[str, Any]:
+        """Nested {m1_topic: {...}, m2_literature: {...}, …} for callers that
+        need WHOLE module slices (e.g. the engine chapter composers), not the
+        flattened owned-keys view `load()` returns.
+        """
+        with self.engine.connect() as conn:
+            cs = conn.execute(
+                select(DbContextStore.__table__)
+                .where(DbContextStore.__table__.c.project_id == self.project_id)
+            ).first()
+        out: dict[str, Any] = {}
+        if cs:
+            for _module, column in _MODULE_COLUMN.items():
+                out[column] = getattr(cs, column, None) or {}
+        return out
+
     def _save(self, state: dict[str, Any]) -> None:
+        # Capture the PRE-save M5 status so the post-save auto-export hook
+        # can detect the locked/in_progress → done transition. Without this
+        # we'd re-export on every commit while M5 is already done.
+        prev_state = self.load()
+        prev_m5_status = prev_state["status"].get("M5")
         flat = state["contextStore"]
         now = datetime.now(timezone.utc).isoformat()
         with self.engine.connect() as conn:
@@ -125,3 +146,82 @@ class DbProjectStateStore(ProjectStateStore):
                 .values(focus=state["focus"], module_status=state["status"])
             )
             conn.commit()
+
+        # M5 auto-export: a docx + pdf are part of the M5 done-criteria,
+        # not a separate user-triggered step. When this commit flipped M5
+        # to `done`, run the exporter in-line and write the artifacts back
+        # so the ContextPanel can show download links the moment the user
+        # sees the status flip.
+        if (
+            prev_m5_status != "done"
+            and state["status"].get("M5") == "done"
+        ):
+            self._auto_export_m5()
+
+    def _auto_export_m5(self) -> None:
+        """Run the engine docx/pdf pipeline and persist artifacts.
+
+        Idempotent + best-effort: a failure here must NOT raise, because the
+        slice commit that triggered it has already been written to the DB.
+        Raising would mean the user sees an error AFTER their M5 commit
+        succeeded — confusing. Instead we log and the user can re-export
+        via POST /projects/{pid}/m5/export.
+        """
+        import logging
+        log = logging.getLogger(__name__)
+        try:
+            # Lazy import: keep the engine renderer out of the cold-import
+            # path of every project that's nowhere near M5.
+            from orchestrator.tools.m5_writing import (
+                run_export,
+                sections_from_m5_slice,
+            )
+            from .models import ContextStore as DbContextStore
+            from sqlalchemy.orm import Session
+
+            with Session(self.engine) as db:
+                cs = db.get(DbContextStore, self.project_id)
+                if cs is None:
+                    log.warning("M5 auto-export: no context_store row for %s", self.project_id)
+                    return
+                sections = sections_from_m5_slice(cs.m5_writing or {})
+                references = (cs.m2_literature or {}).get("literature_sources") or []
+                if not sections:
+                    # M5 done was claimed without usable chapter prose (neither
+                    # the chapters shape nor final_sections carried text). The
+                    # user keeps the `done` flag but no export; the ContextPanel
+                    # shows the "no export yet" hint.
+                    log.warning(
+                        "M5 auto-export skipped for %s — no drafted prose in "
+                        "chapters or final_sections.", self.project_id,
+                    )
+                    return
+
+            artifacts = run_export(sections, str(self.project_id), references=references)
+            self.persist_export_artifacts(artifacts)
+            log.info("M5 auto-export completed for project %s", self.project_id)
+        except Exception:
+            log.exception("M5 auto-export failed for project %s", self.project_id)
+
+    def persist_export_artifacts(self, artifacts: list[dict]) -> None:
+        """Write export artifacts into m5_writing.export_artifacts.
+
+        Shared by the auto-export hook and the agent's export_docx tool so
+        both land artifacts in the one place the ContextPanel + header
+        Download button read from. Uses a fresh ORM Session (tool calls run
+        on executor threads, not the request loop).
+        """
+        from sqlalchemy.orm import Session
+        from sqlalchemy.orm.attributes import flag_modified
+
+        from .models import ContextStore as DbContextStore
+
+        with Session(self.engine) as db:
+            cs = db.get(DbContextStore, self.project_id)
+            if cs is None:
+                return
+            m5 = dict(cs.m5_writing or {})
+            m5["export_artifacts"] = artifacts
+            cs.m5_writing = m5
+            flag_modified(cs, "m5_writing")
+            db.commit()

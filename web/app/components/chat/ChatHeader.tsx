@@ -3,7 +3,50 @@ import { ReactNode } from "react";
 import { ArrowLeft, Bell, Download, History, PenSquare } from "lucide-react";
 
 import { useMe } from "@/app/lib/use-me";
+import { tokenStore } from "@/app/lib/tokenStore";
 import { MODULES } from "./HomeDashboard";
+
+
+// Header docx download button — enabled only when M5 has produced an
+// export artifact (auto-fires when M5 flips to done; see
+// api/app/agent_state.py:_auto_export_m5). The /exports/{filename} route
+// 302s to a signed S3 URL; auth token rides in the query string because
+// the browser can't attach a body to <a> download links.
+function ExportDownloadButton({
+  artifacts,
+}: {
+  artifacts?: { kind: string; download_url: string }[];
+}) {
+  const docx = artifacts?.find(a => a.kind === "docx") ?? artifacts?.[0];
+  if (!docx) {
+    return (
+      <button
+        type="button"
+        title="Export — M5 not done yet"
+        disabled
+        className="w-8 h-8 rounded-full text-ink-300 inline-flex items-center justify-center cursor-not-allowed"
+      >
+        <Download className="w-4 h-4" />
+      </button>
+    );
+  }
+  const token = typeof window !== "undefined" ? tokenStore.get() : null;
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
+  const url = docx.download_url.startsWith("/api/v1/")
+    ? `${apiBase}${docx.download_url.replace(/^\/api\/v1/, "")}`
+    : docx.download_url;
+  const href = token ? `${url}?access_token=${encodeURIComponent(token)}` : url;
+  return (
+    <a
+      href={href}
+      download
+      title="Download final thesis (DOCX)"
+      className="w-8 h-8 rounded-full text-primary-600 hover:bg-primary-50 inline-flex items-center justify-center transition-colors"
+    >
+      <Download className="w-4 h-4" />
+    </a>
+  );
+}
 
 
 // Pill palette for the focus-bar status tag.
@@ -46,6 +89,7 @@ export function ChatHeader({
   hasChapters,
   focusModule,
   focusStatus,
+  exportArtifacts,
 }: {
   projectName: string;
   threadName: string;
@@ -54,6 +98,10 @@ export function ChatHeader({
   hasChapters?: boolean;
   focusModule?: string;
   focusStatus?: string;
+  /** M5 export artifacts (docx/pdf). When present, the Download button
+   *  becomes a real link to the docx; otherwise it's disabled with a
+   *  "no export yet" tooltip. */
+  exportArtifacts?: { kind: string; download_url: string }[];
 }) {
   const focusLabel = MODULES.find(m => m.id === focusModule)?.label;
   const phase = focusModule ? PHASE_LABEL[focusModule] : undefined;
@@ -129,13 +177,7 @@ export function ChatHeader({
         >
           <History className="w-4 h-4" />
         </button>
-        <button
-          type="button"
-          title="Export"
-          className="w-8 h-8 rounded-full text-ink-500 hover:bg-ink-100 hover:text-ink-900 inline-flex items-center justify-center transition-colors"
-        >
-          <Download className="w-4 h-4" />
-        </button>
+        <ExportDownloadButton artifacts={exportArtifacts} />
         <button
           type="button"
           title="Notifications"

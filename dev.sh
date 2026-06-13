@@ -93,6 +93,11 @@ if ! "$VENV_BIN/python" -c "import google.genai" >/dev/null 2>&1; then
   "$VENV_BIN/pip" install -r engine/requirements.txt
 fi
 
+# Warn (non-fatal) if the M5 export toolchain is missing. Exports degrade to
+# basic renderers without pandoc/libreoffice — see scripts/check-export-deps.sh
+# for the Ubuntu (apt) and macOS (brew) install commands.
+bash scripts/check-export-deps.sh || true
+
 echo "==> running alembic migrations"
 (cd api && "../$VENV_BIN/alembic" upgrade head)
 

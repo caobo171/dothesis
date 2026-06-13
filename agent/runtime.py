@@ -122,7 +122,7 @@ from agent.state import ProjectStateStore
 from agent.tools.research import parse_reference, research_scout
 from agent.tools.state_tools import make_state_tools
 from agent.tools.stats import run_stats
-from agent.tools.writing import export_docx, write_pipeline
+from agent.tools.writing import make_writing_tools
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
@@ -144,6 +144,24 @@ it defines the module map (M1–M5), the state protocol (read_slice /
 commit_slice), and which module skill to read when. Mirror the user's
 language (English or Vietnamese). Be warm, concrete, and proactive — propose,
 then let the user decide.
+
+## Attachments — `[ATTACHED]` prefix
+
+When a user message begins with a line like:
+
+    [ATTACHED] uploads/foo.pdf | uploads/data.csv
+
+the user has just attached one or more files to the message. The files are
+already mirrored into the project workspace at the listed paths — call
+`read_file("uploads/foo.pdf.txt")` for the extracted text or
+`parse_reference("uploads/foo.pdf")` for structured PDF metadata.
+
+You MUST acknowledge attached files: briefly tell the user you've seen them
+and what you'll do with each ("I'll read foo.pdf and pull the key claims;
+data.csv looks like a dataset — want me to detect its schema for M4?"). Don't
+just process the user's message text and ignore the attachments. Strip the
+`[ATTACHED]` prefix from your reply — it's a wire-format marker, not
+something the user wrote.
 
 # UI affordances — ALWAYS use these when applicable
 
@@ -260,15 +278,16 @@ fill-in widgets inside it (checkboxes, fillable Likert tables) — they
 always look ugly. Pick the right shape:
 
 - **Single-answer item** (one question, N choices): list the question, then
-  the choices as plain bullets, then a one-line "(Chọn một)" note. Don't
-  put `☐` or `[ ]` before each option.
+  the choices as a Markdown TASK LIST so the frontend renders proper
+  styled checkbox pills. Use `- [ ]` for unselected options. NEVER use
+  Unicode `☐ ☒ □` or literal `[ ]` text — those render as broken glyphs.
 
   Example:
   > 1. Mỗi ngày bạn dành bao nhiêu thời gian cho mạng xã hội?
-  >    - Dưới 1 giờ
-  >    - 1–2 giờ
-  >    - 2–3 giờ
-  >    - Trên 4 giờ
+  >    - [ ] Dưới 1 giờ
+  >    - [ ] 1–2 giờ
+  >    - [ ] 2–3 giờ
+  >    - [ ] Trên 4 giờ
   >    *(Chọn một đáp án)*
 
 - **Likert-scale item** (N statements, all rated 1–5): list the statements
@@ -283,10 +302,13 @@ always look ugly. Pick the right shape:
   > 2. Tôi cảm thấy khó dừng khi đã bắt đầu.
   > 3. …
 
-- **Actual fillable file**: when the user wants to take the survey to the
-  field, call `export_docx(kind="questionnaire", …)` — that's what
-  questionnaire DOCX export exists for. Tell the user the file is ready;
-  do not paste the entire form back into chat.
+- **Finished thesis file**: when the user wants the complete thesis as a
+  document — "viết luận văn", "đưa tôi bản thesis", "tạo file", "export" —
+  call `export_docx()`. It auto-composes any missing chapters from M1–M4,
+  renders DOCX + PDF, and surfaces download links in the Context store panel.
+  Calling it IS the action — never redirect the user to a button instead, and
+  never paste whole chapters into chat. On success, tell them the files are
+  ready in the Context store panel.
 """
 
 
@@ -328,8 +350,7 @@ def build_agent(
         research_scout,
         parse_reference,
         run_stats,
-        write_pipeline,
-        export_docx,
+        *make_writing_tools(store),
     ]
 
     return create_deep_agent(
@@ -368,6 +389,7 @@ async def stream_turn(
     agent: Any,
     thread_id: str,
     user_text: str,
+    attachments: list | None = None,
 ) -> AsyncIterator[dict]:
     """Run one user turn, yielding SSE-shaped events.
 
@@ -377,9 +399,22 @@ async def stream_turn(
       {"type": "tool_end", "name": str, "preview": str}
       {"type": "error", "message": str}
       {"type": "done"}
+
+    `attachments` is a list of `agent.multimodal.Attachment` (kept as `list`
+    here to avoid a circular import at module load). When non-empty, the
+    user message is constructed via the provider-aware multimodal helper
+    so the LLM sees the actual file bytes (Gemini inline for ≤20MB; File
+    API URI for larger files), rather than just a path reference.
     """
     config = {"configurable": {"thread_id": thread_id}}
-    payload = {"messages": [{"role": "user", "content": user_text}]}
+    if attachments:
+        # Lazy import — multimodal.py pulls in google-genai which is heavy
+        # and only needed when the user attached something.
+        from agent.multimodal import build_user_message, detect_provider
+        msg = build_user_message(user_text, attachments, detect_provider())
+        payload = {"messages": [msg]}
+    else:
+        payload = {"messages": [{"role": "user", "content": user_text}]}
 
     # Diagnostic stderr beats — same idea as chat_v3.py's `[v3-emitter]`
     # diagnostics, but at the agent.astream layer. When a turn ends with

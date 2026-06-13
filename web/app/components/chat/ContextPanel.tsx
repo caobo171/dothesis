@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Clock, ExternalLink } from "lucide-react";
+import { AlertTriangle, Clock, Download, ExternalLink, FileText } from "lucide-react";
 
 import { SliceModal } from "./SliceModal";
+import { tokenStore } from "@/app/lib/tokenStore";
 
 
 // ---- types (kept stable so callers don't change) ---------------------
@@ -70,7 +71,10 @@ export function ContextPanel({
 
   return (
     <aside
-      className="w-[340px] min-w-[340px] border-l border-ink-200 bg-white h-full flex flex-col overflow-hidden"
+      // Fluid width — the parent (ChatShellLayout) sets the width via a
+      // drag handle now. min-w-0 lets long titles/labels wrap inside the
+      // narrower lower bound (~280px).
+      className="w-full min-w-0 border-l border-ink-200 bg-white h-full flex flex-col overflow-hidden"
       data-testid="context-panel"
     >
       {/* Header */}
@@ -121,20 +125,19 @@ export function ContextPanel({
             </CtxSection>
 
             <CtxSection
-              label="M4 · Analysis · M5 · Writing"
-              status={
-                // Combined card for two locked-by-default modules. If
-                // either has needs_review, surface the worst.
-                ["M4", "M5"].some(k => moduleStatus?.[k as keyof ModuleStatusMap] === "needs_review")
-                  ? "needs_review"
-                  : ["M4", "M5"].some(k => moduleStatus?.[k as keyof ModuleStatusMap] === "in_progress")
-                    ? "in_progress"
-                    : "locked"
-              }
+              label="M4 · Analysis"
+              status={sectionStatus("M4", contextStore.m4_analysis)}
             >
               <div className="text-[12.5px] text-ink-500 leading-snug">
                 Soft-locked — you can ask or start; the agent will prompt if a dependency is missing.
               </div>
+            </CtxSection>
+
+            <CtxSection
+              label="M5 · Writing"
+              status={sectionStatus("M5", contextStore.m5_writing)}
+            >
+              <M5Body data={contextStore.m5_writing} />
             </CtxSection>
 
             {uploads.length > 0 && (
@@ -252,6 +255,93 @@ function KV({ k, v }: { k: string; v: React.ReactNode }) {
 }
 
 
+// Persisted artifact shape from /m5/export + auto-export hook (agent_state.py).
+type ExportArtifact = {
+  kind: "docx" | "pdf";
+  s3_key: string;
+  size_bytes: number;
+  download_url: string;
+  uri?: string;
+};
+
+function M5Body({ data }: { data: Record<string, any> | null }) {
+  if (!data) {
+    return (
+      <EmptyHint text="Writing hasn't started — M5 builds the final docx/pdf from M1–M4 once those are done." />
+    );
+  }
+  const artifacts = (data.export_artifacts || []) as ExportArtifact[];
+  const chapters = (data.chapters || {}) as Record<string, unknown>;
+  const chapterCount = Object.keys(chapters).length;
+  const finalSections = Array.isArray(data.final_sections) ? data.final_sections : [];
+  return (
+    <>
+      {chapterCount > 0 && (
+        <>
+          <FieldLabel name="chapters" count={chapterCount} top />
+          <div className="text-[12.5px] text-ink-600 mt-1">
+            {chapterCount}/6 chapters drafted
+          </div>
+        </>
+      )}
+      {finalSections.length > 0 && chapterCount === 0 && (
+        <>
+          <FieldLabel name="final_sections" count={finalSections.length} top />
+          <div className="text-[12.5px] text-ink-600 mt-1">
+            {finalSections.length} sections in draft
+          </div>
+        </>
+      )}
+      <FieldLabel name="exports" top={chapterCount === 0 && finalSections.length === 0} />
+      {artifacts.length > 0 ? (
+        <div className="mt-1.5 space-y-1.5">
+          {artifacts.map(a => (
+            <ExportArtifactRow key={a.s3_key} artifact={a} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-[12.5px] text-ink-500 mt-1 leading-snug">
+          No export yet — runs automatically when M5 is marked done.
+        </div>
+      )}
+    </>
+  );
+}
+
+function ExportArtifactRow({ artifact }: { artifact: ExportArtifact }) {
+  const label = artifact.kind.toUpperCase();
+  const size =
+    artifact.size_bytes >= 1024 * 1024
+      ? `${(artifact.size_bytes / (1024 * 1024)).toFixed(1)} MB`
+      : `${(artifact.size_bytes / 1024).toFixed(0)} KB`;
+  // The /exports/{filename} route 302s to a signed S3 URL — auth still
+  // required, so we attach the token as a query param the same way
+  // upload POSTs do. Plain <a> would be cleaner, but the GET endpoint
+  // expects the access_token in the URL (POST-only rule excludes the
+  // download path on purpose — browsers can't POST for a file download
+  // and preserve filename headers).
+  const token = typeof window !== "undefined" ? tokenStore.get() : null;
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
+  const url = artifact.download_url.startsWith("/api/v1/")
+    ? `${apiBase}${artifact.download_url.replace(/^\/api\/v1/, "")}`
+    : artifact.download_url;
+  const href = token ? `${url}?access_token=${encodeURIComponent(token)}` : url;
+  return (
+    <a
+      href={href}
+      download
+      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50 transition-colors group"
+    >
+      <FileText className="w-3.5 h-3.5 text-primary-600 shrink-0" aria-hidden />
+      <span className="font-serif text-[12.5px] font-extrabold text-ink-900">
+        {label}
+      </span>
+      <span className="text-[11.5px] text-ink-500">· {size}</span>
+      <Download className="w-3.5 h-3.5 text-ink-400 group-hover:text-primary-600 ml-auto shrink-0" aria-hidden />
+    </a>
+  );
+}
+
 function M1Body({ data }: { data: Record<string, any> | null }) {
   if (!data) return <EmptyHint text="Topic not set yet — start in M1." />;
   const title = data.research_title;
@@ -310,8 +400,24 @@ function M2Body({ data }: { data: Record<string, any> | null }) {
   >(null);
 
   const gapText = (g: Gap) => g.description || g.text || g.title || "—";
-  const hypothesisText = (h: Hypothesis | string) =>
-    typeof h === "string" ? h : (h.text || h.statement || "—");
+  const hypothesisText = (h: Hypothesis | string | Record<string, any>): string => {
+    if (typeof h === "string") return h;
+    // Different commit paths use different keys: design uses `text`,
+    // M3 schema migration left some commits as `statement`, the engine
+    // sometimes writes `description` or `hypothesis`, and the autodraft
+    // path occasionally lands `content` or `body`. Try them all; fall
+    // back to em-dash so we never throw.
+    return (
+      (h as any).text ||
+      (h as any).statement ||
+      (h as any).description ||
+      (h as any).hypothesis ||
+      (h as any).content ||
+      (h as any).body ||
+      (h as any).label ||
+      "—"
+    );
+  };
 
   return (
     <>
@@ -664,7 +770,7 @@ function M3Body({ data }: { data: Record<string, any> | null }) {
                     {h.id ?? `H${i + 1}`}
                   </span>
                   <span className="line-clamp-1">
-                    {h.text || h.statement || "—"}
+                    {readHypothesisText(h)}
                   </span>
                 </button>
               </li>
@@ -725,7 +831,10 @@ function M3Body({ data }: { data: Record<string, any> | null }) {
         {modal?.kind === "conceptual_model" && <ConceptualModelDetail model={conceptualModel} />}
         {modal?.kind === "hypotheses" && (
           modal.index === null ? <HypothesesList hypotheses={hypotheses} />
-            : <HypothesisDetail hypothesis={hypotheses[modal.index]} text={hypotheses[modal.index].text || hypotheses[modal.index].statement || "—"} />
+            : <HypothesisDetail
+                hypothesis={hypotheses[modal.index]}
+                text={readHypothesisText(hypotheses[modal.index])}
+              />
         )}
         {modal?.kind === "instrument" && <InstrumentDetail text={questionnaire ?? ""} />}
         {modal?.kind === "themes" && <ThemesDetail themes={themes} />}
@@ -920,7 +1029,7 @@ function ConceptualModelDetail({ model }: { model: { nodes?: any[]; edges?: any[
   );
 }
 
-function HypothesesList({ hypotheses }: { hypotheses: Array<{ id?: string; text?: string; statement?: string }> }) {
+function HypothesesList({ hypotheses }: { hypotheses: Array<Record<string, any>> }) {
   return (
     <ul className="space-y-3">
       {hypotheses.map((h, i) => (
@@ -929,11 +1038,27 @@ function HypothesesList({ hypotheses }: { hypotheses: Array<{ id?: string; text?
             {h.id ?? `H${i + 1}`}
           </div>
           <div className="text-[13.5px] text-ink-900 leading-relaxed mt-0.5">
-            {h.text || h.statement || "—"}
+            {readHypothesisText(h)}
           </div>
         </li>
       ))}
     </ul>
+  );
+}
+
+// Same precedence ladder as the M2 reader. Kept as a top-level helper so
+// both the M3 modal and the M3 inline preview show the same value.
+function readHypothesisText(h: any): string {
+  if (typeof h === "string") return h;
+  return (
+    h?.text ||
+    h?.statement ||
+    h?.description ||
+    h?.hypothesis ||
+    h?.content ||
+    h?.body ||
+    h?.label ||
+    "—"
   );
 }
 

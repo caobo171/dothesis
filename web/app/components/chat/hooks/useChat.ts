@@ -3,6 +3,8 @@
 import useSWR from "swr";
 import { useStream } from "./useStream";
 import type { WidgetHint } from "../widgets/types";
+// (WidgetHint imported above is reused for the optimistic-message cast
+//  where we pack the attachments-shape variant into tool_calls_json.)
 import { apiFetch } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
 
@@ -76,6 +78,14 @@ export function useChat(threadId: string) {
     // conceptual_model: {nodes,edges}) the text extractor was silently
     // flattening to {paths:[...]}.
     widgetPayload?: { field_name: string; value: unknown },
+    // Attachment chip metadata from the composer. We need (a) the
+    // upload_ids for the POST body so the backend materializes the bytes
+    // and (b) filename+size so the optimistic user bubble can render
+    // chips immediately — without flicker between optimistic and
+    // server-truth. Backend persists the same shape onto the user
+    // Message row (chat_v3.send_message_v3 + Message.tool_calls_json),
+    // so SWR revalidation is a no-op for the chip render path.
+    attachments?: { upload_id: string; filename: string; size_bytes: number; mime_type?: string }[],
   ) => {
     // Optimistic update: show user message immediately before server confirms
     const optimistic: Message = {
@@ -83,6 +93,10 @@ export function useChat(threadId: string) {
       role: "user",
       content: text,
       created_at: new Date().toISOString(),
+      tool_calls_json:
+        attachments && attachments.length > 0
+          ? ({ attachments } as unknown as WidgetHint)
+          : null,
     };
     void mutate([...(messages ?? []), optimistic], false);
 
@@ -105,6 +119,7 @@ export function useChat(threadId: string) {
       body: JSON.stringify({
         text,
         widget_payload: widgetPayload ?? null,
+        upload_ids: (attachments ?? []).map(a => a.upload_id),
         access_token: accessToken,
       }),
     });

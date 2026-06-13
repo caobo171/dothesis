@@ -977,7 +977,8 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
 def export_docx(
     md_file: Path,
     output_docx: Path,
-    options: Optional[PDFGenerationOptions] = None
+    options: Optional[PDFGenerationOptions] = None,
+    bibliography: Optional[Path] = None,
 ) -> bool:
     """
     Export markdown to DOCX with full formatting support (tables, citations, styles).
@@ -1081,6 +1082,17 @@ def export_docx(
         # Add reference document for styling
         if reference_doc:
             cmd.extend(['--reference-doc', str(reference_doc)])
+
+        # Citation processing: when a CSL-JSON bibliography is supplied, turn on
+        # pandoc citeproc so inline [@key] citations render as "(Author, Year)"
+        # AND, with link-citations, become clickable hyperlinks to the
+        # auto-generated References section. Harmless if there are no citations.
+        if bibliography is not None and Path(bibliography).exists():
+            cmd.extend([
+                '--citeproc',
+                '--bibliography', str(bibliography),
+                '-M', 'link-citations=true',
+            ])
 
         # Add table of contents (Pandoc generates a proper Word TOC field)
         if options.enable_toc:

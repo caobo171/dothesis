@@ -23,7 +23,34 @@ normal routing (the `dothesis` skill) takes over.
 
 ## Step 1 — Declare
 
-Ask the user a single question (multiple choice, multi-select):
+The web client's entry wizard collects what the user already has BEFORE
+dropping into chat, and sends a structured first message:
+
+```
+/bootstrap
+
+Topic: <text>
+References:
+<paste>
+Gaps:
+<paste>
+Model:
+<paste>
+Instrument:
+<paste>
+Data:
+<paste>
+Draft:
+<paste>
+```
+
+When you see a message starting with `/bootstrap`, SKIP the question.
+Parse each labeled section from the message body and proceed to Step 2
+(Import) directly. The labels (`Topic:`, `References:`, etc.) map 1-to-1
+to the declared-item ids in the table below.
+
+If the user did NOT come through the wizard (no `/bootstrap` prefix on
+the first message), ask them the question instead — same list:
 
 > "Before we begin — which of these do you already have for your thesis? Pick any that apply:
 > - **topic** — title or research questions

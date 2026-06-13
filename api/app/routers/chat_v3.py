@@ -22,7 +22,7 @@ from pathlib import Path
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from ..models import Message, Thread
+from ..models import Message, PaperUpload, Thread
 from ..sse import sse_pack
 
 logger = logging.getLogger(__name__)
@@ -55,6 +55,52 @@ def _workspace_dir(project_id: uuid.UUID) -> Path:
     return Path(root) / "agent_projects" / str(project_id)
 
 
+def _materialize_attachments(
+    db: Session,
+    project_id: uuid.UUID,
+    upload_ids: list[uuid.UUID],
+) -> list:
+    """Look up each upload row, read its bytes from the workspace mirror,
+    return a list of `agent.multimodal.Attachment` ready to ship to the
+    runtime.
+
+    Misses (id not found / wrong project / file missing on disk) are
+    logged + skipped; we never want one bad upload id to torch the whole
+    message. The user might re-upload from the chip row if they care.
+    """
+    if not upload_ids:
+        return []
+    # Lazy import: don't pull in google-genai at chat-router import time.
+    from agent.multimodal import Attachment
+
+    workspace = _workspace_dir(project_id)
+    out: list[Attachment] = []
+    for uid in upload_ids:
+        row = db.get(PaperUpload, uid)
+        if row is None or row.project_id != project_id:
+            logger.warning("attachment %s missing or cross-project — skipped", uid)
+            continue
+        path = workspace / "uploads" / row.filename
+        if not path.exists():
+            logger.warning(
+                "attachment %s (%s) missing on disk at %s — skipped",
+                uid, row.filename, path,
+            )
+            continue
+        try:
+            data = path.read_bytes()
+        except Exception:
+            logger.exception("attachment %s read failed — skipped", uid)
+            continue
+        out.append(Attachment(
+            filename=row.filename,
+            bytes=data,
+            mime_type=row.mime_type or "application/octet-stream",
+            display_name=row.filename,
+        ))
+    return out
+
+
 async def _get_agent(db: Session, project_id: uuid.UUID):
     if project_id in _agents:
         return _agents[project_id]
@@ -71,19 +117,58 @@ async def _get_agent(db: Session, project_id: uuid.UUID):
     return agent
 
 
-async def send_message_v3(t: Thread, text: str, db: Session) -> StreamingResponse:
-    """Persist the user message, run one agent turn, stream SSE."""
-    db.add(Message(thread_id=t.id, role="user", content=text))
+async def send_message_v3(
+    t: Thread,
+    text: str,
+    db: Session,
+    *,
+    upload_ids: list[uuid.UUID] | None = None,
+) -> StreamingResponse:
+    """Persist the user message, run one agent turn, stream SSE.
+
+    `upload_ids` references files the user attached to this message. Each
+    is materialized from the workspace mirror written by the /uploads
+    route (`<workspace>/uploads/<filename>`) and handed to the runtime
+    as an `Attachment`. The runtime calls `agent.multimodal.build_user_message`
+    which formats it for whichever provider is active (Gemini inline ≤20MB
+    or Files API URI for larger files).
+    """
+    # Persist the file refs on the user Message so the bubble can render
+    # chips on reload. `tool_calls_json` is unused on user rows (it's for
+    # assistant widget hints), so we reuse it under an explicit
+    # `{"attachments": [...]}` key — never ambiguous with widget shapes
+    # which carry `field_name`. Metadata (not bytes) is pulled from
+    # `paper_uploads` so the chip can show filename + size + mime without
+    # the frontend doing N extra round-trips.
+    user_tool_calls: dict | None = None
+    if upload_ids:
+        rows = [db.get(PaperUpload, uid) for uid in upload_ids]
+        chips = [
+            {
+                "upload_id": str(r.id),
+                "filename": r.filename,
+                "size_bytes": r.size_bytes,
+                "mime_type": r.mime_type,
+            }
+            for r in rows
+            if r is not None and r.project_id == t.project_id
+        ]
+        if chips:
+            user_tool_calls = {"attachments": chips}
+    db.add(Message(thread_id=t.id, role="user", content=text,
+                   tool_calls_json=user_tool_calls))
     db.commit()
 
     agent = await _get_agent(db, t.project_id)
-    # Distinct checkpoint namespace from the graph_v2 thread — the two
-    # runtimes have incompatible state channels, and a rollback to the old
-    # path must find its own checkpoints untouched.
     agent_thread_id = f"v3:{t.langgraph_thread_id}"
 
     from agent.runtime import stream_turn
     from ..agent_state import DbProjectStateStore
+
+    # Materialize attachments BEFORE entering the async generator so that
+    # any read failure surfaces as a 500 the client can retry — once we're
+    # inside `gen()` failures are SSE error events the user might miss.
+    attachments = _materialize_attachments(db, t.project_id, upload_ids or [])
 
     engine = db.bind
     project_id = t.project_id
@@ -148,7 +233,7 @@ async def send_message_v3(t: Thread, text: str, db: Session) -> StreamingRespons
             completion so the consumer below can exit cleanly even if the
             agent finishes silently."""
             try:
-                async for ev in stream_turn(agent, agent_thread_id, text):
+                async for ev in stream_turn(agent, agent_thread_id, text, attachments=attachments):
                     await events_q.put(("agent", ev))
             finally:
                 await events_q.put(("done", None))

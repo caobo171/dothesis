@@ -36,11 +36,20 @@ class PDFEngineFactory:
     - Dependency Inversion: Returns abstract PDFEngine interface
     """
 
-    # Registry of all available engine classes
-    # Only Pandoc/XeLaTeX - cleanest output for academic documents
+    # Registry of all available engine classes. The factory sorts these by
+    # get_priority() and uses the highest-priority one that is_available(), so
+    # listing several is safe — unavailable engines (e.g. Pandoc/XeLaTeX with no
+    # texlive installed) are skipped automatically. LibreOffice must be here or
+    # an installed `soffice` is never even considered (the cause of M5 PDF
+    # exports failing with "No PDF engines available" despite soffice present).
+    # WeasyPrint is appended last as a pure-Python fallback when its native libs
+    # import cleanly.
     _ENGINE_CLASSES = [
         PandocLatexEngine,
+        LibreOfficeEngine,
     ]
+    if WeasyPrintEngine is not None:
+        _ENGINE_CLASSES.append(WeasyPrintEngine)
 
     @classmethod
     def create(

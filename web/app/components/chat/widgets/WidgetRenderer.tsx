@@ -16,6 +16,11 @@ export function WidgetRenderer({
   onSelect: WidgetSelectHandler;
   disabled?: boolean;
 }) {
+  // AttachmentsHint piggybacks on the same `tool_calls_json` slot (used by
+  // user-message bubbles to render linked-file chips). It has no
+  // `widget_type` and isn't a clickable widget — bail out so the discriminator
+  // switch below stays exhaustive over real widget variants.
+  if (!("widget_type" in hint)) return null;
   switch (hint.widget_type) {
     case "card_grid":
       return <CardGridWidget hint={hint} onSelect={onSelect} disabled={disabled} />;

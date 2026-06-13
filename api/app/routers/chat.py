@@ -394,11 +394,13 @@ def list_messages(thread_id: uuid.UUID, before_id: int | None = None, limit: int
 class SendMessageBody(BaseModel):
     text: str = Field(..., min_length=1, max_length=20000)
     # Structured payload from a rich widget click (FlowChart, ListEditor).
-    # Shape: {"field_name": str, "value": <any JSON>}. When set AND the
-    # backing module is awaiting the same field, the agent uses `value`
-    # verbatim and skips LLM text-extraction. Free-text replies leave this
-    # None so the existing extract-from-prose path runs as before.
     widget_payload: dict | None = None
+    # IDs of uploads the user attached to this message. The v3 chat router
+    # materializes each one into an `Attachment` and ships the bytes to the
+    # LLM as a proper multimodal block (Gemini inline ≤20MB / Files API
+    # URI for larger files). Defaults to an empty list so existing callers
+    # don't break.
+    upload_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 @router.post("/threads/{thread_id}/messages")
@@ -421,7 +423,7 @@ async def send_message(thread_id: uuid.UUID,
     # contract, state lands in the same rows. Rollback = unset the env var.
     if os.getenv("DOTHESIS_AGENT_V3", "0") == "1":
         from .chat_v3 import send_message_v3
-        return await send_message_v3(t, body.text, db)
+        return await send_message_v3(t, body.text, db, upload_ids=body.upload_ids)
 
     # 1. Persist the user message.
     db.add(Message(thread_id=thread_id, role="user", content=body.text))

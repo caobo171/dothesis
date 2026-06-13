@@ -478,6 +478,11 @@ button { font: inherit; cursor: pointer; }
   100% { box-shadow: 0 0 0 0 rgba(28,46,255,0); }
 }
 
+/* Ring-glow pulse for the "ready to draft" Auto-draft button. Reuses the
+   badge pulse keyframe (a halo, not an opacity fade) so the button text
+   stays fully legible while still drawing the eye. */
+.animate-pulse-soft { animation: pulse 1.8s ease-in-out infinite; }
+
 /* ============ Table ============ */
 .table { width: 100%; border-collapse: collapse; }
 .table th {

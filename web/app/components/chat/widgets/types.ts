@@ -104,12 +104,27 @@ export type PapersPanelHint = {
 };
 
 
+// User-message attachment chips. Persisted on the user Message row
+// (tool_calls_json) by chat_v3.send_message_v3 so MessageBubble can render
+// linked-file chips on reload. Not interactive — pure display.
+export type AttachmentChipMeta = {
+  upload_id: string;
+  filename: string;
+  size_bytes?: number | null;
+  mime_type?: string | null;
+};
+
+export type AttachmentsHint = {
+  attachments: AttachmentChipMeta[];
+};
+
 // Discriminated union — future variants (e.g. canvas_editor) land here.
 export type WidgetHint =
   | CardGridHint
   | ListEditorHint
   | FlowChartHint
-  | PapersPanelHint;
+  | PapersPanelHint
+  | AttachmentsHint;
 
 export type WidgetSelectHandler = (
   fieldName: string,

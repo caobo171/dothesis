@@ -510,31 +510,11 @@ def reject_pending_edit(
 # POST /projects/{project_id}/m5/export — re-run compile_pdf + export_docx
 # ---------------------------------------------------------------------------
 
-from orchestrator.tools.m5_writing import compile_pdf, export_docx  # noqa: E402
-
-
-_REQUIRED_CHAPTERS = ["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
-
-
-def _build_sections_for_export(chapters: dict) -> list[dict]:
-    """Build the canonical 6-section list consumable by compile_pdf / export_docx.
-
-    Decision: mirrors M5Agent._build_sections_for_export so that the router and
-    the auto-mode agent produce identical artifact inputs. Having a single source
-    of truth here avoids drift between the two code paths.
-    """
-    titles = {
-        "intro":       "Chapter 1 — Introduction",
-        "lit_review":  "Chapter 2 — Literature Review",
-        "methodology": "Chapter 3 — Methodology",
-        "results":     "Chapter 4 — Results",
-        "discussion":  "Chapter 5 — Discussion",
-        "conclusion":  "Chapter 6 — Conclusion",
-    }
-    return [
-        {"title": titles[name], "prose": chapters[name].get("prose", "")}
-        for name in _REQUIRED_CHAPTERS
-    ]
+from orchestrator.tools.m5_writing import (  # noqa: E402
+    M5_CHAPTER_ORDER as _REQUIRED_CHAPTERS,
+    run_export,
+    sections_from_m5_slice,
+)
 
 
 @router.post("/projects/{project_id}/m5/export")
@@ -543,7 +523,7 @@ def reexport(
     user: User = Depends(current_user),
     db: Session = Depends(db_session),
 ):
-    """Re-run compile_pdf + export_docx on the current chapter prose.
+    """Re-run docx + pdf export on the current chapter prose.
 
     Decision: the endpoint is intentionally idempotent — every POST replaces
     the stored export_artifacts with fresh S3 artifacts. This lets the user
@@ -564,28 +544,13 @@ def reexport(
     if missing:
         raise HTTPException(400, detail={"error": {"code": "chapters_incomplete", "missing": missing}})
 
-    sections = _build_sections_for_export(chapters)
-    pid_str = str(project_id)
+    # run_export + sections_from_m5_slice are the single shared export path
+    # (same one the auto-export hook and the agent's export tool use), so the
+    # artifact shape + download URL can't drift across the three callers.
+    sections = sections_from_m5_slice(m5)
+    references = (cs.m2_literature or {}).get("literature_sources") or []
+    artifacts = run_export(sections, str(project_id), references=references)
 
-    docx_result = export_docx.invoke({"sections": sections, "project_id": pid_str})
-    pdf_result = compile_pdf.invoke({"sections": sections, "project_id": pid_str})
-
-    def _to_artifact(kind: str, res: dict) -> dict:
-        # Decision: download_url is a relative path so the front-end can call
-        # GET /api/v1/projects/{pid}/exports/{filename} which 302-redirects to a
-        # signed S3 URL; avoids embedding expiring presigned URLs in the response.
-        return {
-            "kind": kind,
-            "s3_key": res["s3_key"],
-            "size_bytes": res["size_bytes"],
-            "download_url": f"/api/v1/projects/{pid_str}/exports/{res['s3_key'].split('/')[-1]}",
-            "uri": "",
-        }
-
-    artifacts = [_to_artifact("docx", docx_result), _to_artifact("pdf", pdf_result)]
-
-    # Persist fresh artifacts into m5_writing so the editor UI can surface them
-    # without a separate fetch.
     m5["export_artifacts"] = artifacts
     cs.m5_writing = m5
     flag_modified(cs, "m5_writing")
