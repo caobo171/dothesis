@@ -23,7 +23,7 @@ from ..google_auth import verify_google_id_token
 from ..credit_ledger import credit as ledger_credit
 from ..db import db_session
 from ..deps import current_user
-from ..jwt_auth import AuthedBody, sign_access_token
+from ..jwt_auth import AuthedBody, sign_access_token, sign_stream_token
 from ..mail import send_template
 from ..models import User
 from ..security import hash_password, verify_password
@@ -274,6 +274,37 @@ def reset_password(body: ResetRequest,
     # on User for hard revocation.
     db.commit()
     return {"ok": True}
+
+
+class StreamTokenIn(AuthedBody):
+    # `scope` names the single resource+action this token may unlock, e.g.
+    # "job:<id>". The consuming route re-checks scope against its own path and
+    # runs ownership checks, so a mismatched scope just yields a token that
+    # opens nothing.
+    scope: str = Field(..., min_length=1, max_length=200)
+
+
+class StreamTokenOut(BaseModel):
+    stream_token: str
+    expires_at: int
+
+
+@router.post("/stream-token", response_model=StreamTokenOut)
+def mint_stream_token(body: StreamTokenIn,
+                      user: User = Depends(current_user),
+                      settings: Settings = Depends(get_settings)):
+    """Mint a short-lived, resource-scoped token for a browser-GET endpoint
+    (SSE / file download) that can't carry the JWT in a body.
+
+    Why a dedicated mint route: EventSource and `<a download>` issue plain GETs
+    with no body, so the access_token (which rides in the POST body per
+    CLAUDE.md) can't reach them. Instead the client exchanges its access_token
+    here for a 120s token bound to ONE scope, then puts that in `?st=`. A leaked
+    URL is then useful for ~2 min and only for that one resource.
+    """
+    tok, exp = sign_stream_token(str(user.id), scope=body.scope,
+                                 secret=settings.session_secret)
+    return StreamTokenOut(stream_token=tok, expires_at=exp)
 
 
 class GoogleRequest(BaseModel):
