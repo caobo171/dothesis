@@ -891,6 +891,51 @@ def run_export(sections: list[dict], project_id: str,
 _ALL_REFERENCE_TITLES = {t.lower() for t in _REFERENCES_TITLE.values()}
 
 
+# Standard Word hyperlink blue. Applied inline so links look like hyperlinks
+# even if the reference template's "Hyperlink" character style is missing/plain.
+_HYPERLINK_COLOR = "0563C1"
+
+
+def _style_link_runs(docx_path: str) -> None:
+    """Give every <w:hyperlink> run a blue color + single underline.
+
+    pandoc's `link-citations` wraps in-text "(Author, Year)" citations in real
+    hyperlinks to the bibliography, but whether they LOOK like links depends on
+    the reference doc's Hyperlink style. We set the color/underline inline so the
+    look is guaranteed (citations, the bibliography's DOI/URL links, the TOC).
+    No-ops silently if python-docx isn't available or the file isn't a real docx.
+    """
+    try:
+        from docx import Document
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+    except Exception:  # noqa: BLE001
+        return
+    try:
+        doc = Document(docx_path)
+    except Exception:  # noqa: BLE001 — placeholder / non-docx; skip
+        return
+
+    changed = False
+    for hl in doc.element.body.iter(qn("w:hyperlink")):
+        for run in hl.findall(qn("w:r")):
+            rpr = run.find(qn("w:rPr"))
+            if rpr is None:
+                rpr = OxmlElement("w:rPr")
+                run.insert(0, rpr)
+            if rpr.find(qn("w:color")) is None:
+                c = OxmlElement("w:color")
+                c.set(qn("w:val"), _HYPERLINK_COLOR)
+                rpr.append(c)
+            if rpr.find(qn("w:u")) is None:
+                u = OxmlElement("w:u")
+                u.set(qn("w:val"), "single")
+                rpr.append(u)
+            changed = True
+    if changed:
+        doc.save(docx_path)
+
+
 def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict],
                          language: str = "en") -> list[dict]:
     """Render DOCX with pandoc citeproc (clickable citations + auto bibliography),
@@ -917,6 +962,10 @@ def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict],
     docx_name = f"thesis-{uuid4().hex[:8]}.docx"
     docx_local = _scratch_dir() / docx_name
     _export_docx_via_engine(body, str(docx_local), bibliography=bib_path)
+    # Force the hyperlink look (blue + underline) on every link run, so in-text
+    # citation links read as hyperlinks regardless of the reference template's
+    # Hyperlink style. Done before PDF conversion so the PDF inherits it.
+    _style_link_runs(str(docx_local))
 
     pdf_name = f"thesis-{uuid4().hex[:8]}.pdf"
     pdf_local = _scratch_dir() / pdf_name
