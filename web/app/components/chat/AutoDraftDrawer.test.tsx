@@ -9,7 +9,7 @@ import { AutoDraftDrawer } from "./AutoDraftDrawer";
 describe("AutoDraftDrawer", () => {
   test("renders module progress from events", async () => {
     server.use(
-      http.get("/api/v1/runs/r1", () => HttpResponse.json({
+      http.post("*/api/v1/runs/r1", () => HttpResponse.json({
         id: "r1", project_id: "p1", status: "running", phase: null, progress: 0,
         mode: "auto", started_at: "2026-05-27T00:00:00Z", finished_at: null, error_text: null,
         events_url: "/api/v1/runs/r1/events",
@@ -31,7 +31,7 @@ describe("AutoDraftDrawer", () => {
 
   test("close button fires onClose", async () => {
     server.use(
-      http.get("/api/v1/runs/r2", () => HttpResponse.json({ id: "r2", status: "running" })),
+      http.post("*/api/v1/runs/r2", () => HttpResponse.json({ id: "r2", status: "running" })),
       http.get("/api/v1/runs/r2/events", () => streamResponse(['data: {"type":"done"}\n\n'])),
     );
     const onClose = vi.fn();

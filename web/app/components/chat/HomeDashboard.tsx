@@ -105,7 +105,7 @@ function dayPartGreeting(): string {
 
 
 export function HomeDashboard() {
-  const { data: projects, mutate } = useSWR<Project[]>("/projects", fetcher, { dedupingInterval: 0 });
+  const { data: projects, mutate } = useSWR<Project[]>("/projects/list", fetcher, { dedupingInterval: 0 });
   const me = useMe();
   const [modalOpen, setModalOpen] = useState(false);
   const router = useRouter();

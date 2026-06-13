@@ -2,11 +2,21 @@
 
 import useSWR from "swr";
 
+import { tokenStore } from "@/app/lib/tokenStore";
+
 
 type Reference = { id: string; author: string; year: string; title?: string };
 
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+// POST-only read: the key is already an absolute /api/v1/… path (so it can't
+// route through apiFetch, which prepends BASE), so we POST directly here and
+// fold the access_token into the JSON body — keeping the JWT out of the URL.
+const fetcher = (url: string) =>
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ access_token: tokenStore.get() }),
+  }).then(r => r.json());
 
 
 // Right rail. Read-only browser of the M2 reference pool. Insertion happens

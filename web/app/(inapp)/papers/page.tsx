@@ -43,7 +43,7 @@ const STATUS_TAG: Record<DraftStatus, { label: string; cls: string }> = {
 
 
 export default function PapersPage() {
-  const { data: papers, error, isLoading, mutate } = useSWR<Project[]>("/projects", fetcher);
+  const { data: papers, error, isLoading, mutate } = useSWR<Project[]>("/projects/list", fetcher);
   const [modalOpen, setModalOpen] = useState(false);
   const router = useRouter();
 

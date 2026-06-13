@@ -16,7 +16,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 describe("useChat", () => {
   test("loads existing messages via SWR", async () => {
     server.use(
-      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([
         { id: 1, role: "user", content: "hello", created_at: "2026-05-27T00:00:00Z" },
         { id: 2, role: "assistant", content: "hi", created_at: "2026-05-27T00:00:01Z" },
       ])),
@@ -29,7 +29,7 @@ describe("useChat", () => {
 
   test("send() optimistically appends user message and streams reply", async () => {
     server.use(
-      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),
       http.post("/api/v1/threads/t1/messages", () => streamResponse([
         'data: {"type":"token","text":"reply"}\n\n',
         'data: {"type":"done"}\n\n',
@@ -48,7 +48,7 @@ describe("useChat", () => {
 
   test("collects progress SSE events into streamingProgress", async () => {
     server.use(
-      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),
       http.post("/api/v1/threads/t1/messages", () => streamResponse([
         'data: {"type":"progress","payload":{"stage":"scout.start","message":"Searching..."}}\n\n',
         'data: {"type":"progress","payload":{"stage":"scout.api_chain","message":"API chain: A → B"}}\n\n',
@@ -73,7 +73,7 @@ describe("useChat", () => {
     // expose it so the UI can show a banner — silent failure was the worst
     // part of the M2 msgpack crash.
     server.use(
-      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),
       http.post("/api/v1/threads/t1/messages", () => streamResponse([
         'data: {"type":"token","text":"partial"}\n\n',
         'data: {"type":"error","message":"TypeError: not msgpack serializable"}\n\n',
@@ -93,7 +93,7 @@ describe("useChat", () => {
 
   test("collects tool_calls SSE event into streamingToolCalls", async () => {
     server.use(
-      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),
       http.post("/api/v1/threads/t1/messages", () => streamResponse([
         'data: {"type":"token","text":"Pick a field"}\n\n',
         'data: {"type":"tool_calls","payload":{"widget_type":"card_grid","field_name":"field","title":"Pick","options":[],"columns":3}}\n\n',

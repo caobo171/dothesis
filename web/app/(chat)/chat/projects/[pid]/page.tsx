@@ -10,7 +10,7 @@ export default function ProjectIndex() {
   const router = useRouter();
   const params = useParams<{ pid: string }>();
   const { data: threads } = useSWR<Array<{ id: string }>>(
-    `/projects/${params.pid}/threads`, fetcher,
+    `/projects/${params.pid}/threads/list`, fetcher,
   );
 
   useEffect(() => {

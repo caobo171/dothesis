@@ -9,10 +9,10 @@ import { apiFetch } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
 
 
-// SWR fetcher routed through apiFetch so the access_token rides on the GET
-// (query string) just like every other authenticated read. Replaces the
-// bare fetch("/api/v1...") that was relying on the now-gone session cookie.
-const fetcher = (url: string) => apiFetch(url);
+// SWR fetcher routed through apiFetch as a POST (POST-only API) so the
+// access_token rides in the JSON body — never the URL. Replaces the bare
+// fetch("/api/v1...") that was relying on the now-gone session cookie.
+const fetcher = (url: string) => apiFetch(url, { method: "POST" });
 
 export type Message = {
   id: number;
@@ -31,7 +31,7 @@ export type Message = {
 export function useChat(threadId: string) {
   const stream = useStream();
   const { data: messages, mutate } = useSWR<Message[]>(
-    `/threads/${threadId}/messages`,
+    `/threads/${threadId}/messages/list`,
     fetcher,
   );
 

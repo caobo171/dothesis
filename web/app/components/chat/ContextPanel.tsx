@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, Clock, Coins, Download, ExternalLink, FileText } from "lucide-react";
 
 import { SliceModal } from "./SliceModal";
-import { tokenStore } from "@/app/lib/tokenStore";
+import { mintStreamToken } from "@/app/lib/api";
 
 
 // ---- types (kept stable so callers don't change) ---------------------
@@ -327,21 +327,27 @@ function ExportArtifactRow({ artifact }: { artifact: ExportArtifact }) {
       ? `${(artifact.size_bytes / (1024 * 1024)).toFixed(1)} MB`
       : `${(artifact.size_bytes / 1024).toFixed(0)} KB`;
   // The /exports/{filename} route 302s to a signed S3 URL — auth still
-  // required, so we attach the token as a query param the same way
-  // upload POSTs do. Plain <a> would be cleaner, but the GET endpoint
-  // expects the access_token in the URL (POST-only rule excludes the
-  // download path on purpose — browsers can't POST for a file download
-  // and preserve filename headers).
-  const token = typeof window !== "undefined" ? tokenStore.get() : null;
+  // required. Browsers can't POST for a file download (and keep the filename
+  // headers), so instead of putting the long-lived JWT in the URL we mint a
+  // short-lived, scoped stream token on click and navigate with ?st=. Keeps
+  // the JWT out of access logs / referrers.
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
   const url = artifact.download_url.startsWith("/api/v1/")
     ? `${apiBase}${artifact.download_url.replace(/^\/api\/v1/, "")}`
     : artifact.download_url;
-  const href = token ? `${url}?access_token=${encodeURIComponent(token)}` : url;
+  const onDownload = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const m = artifact.download_url.match(/\/projects\/([^/]+)\/exports\/([^/?]+)/);
+    if (!m) return;
+    const st = await mintStreamToken(`project-export:${m[1]}/${m[2]}`);
+    const sep = url.includes("?") ? "&" : "?";
+    window.location.href = `${url}${sep}st=${encodeURIComponent(st)}`;
+  };
   return (
     <a
-      href={href}
+      href={url}
       download
+      onClick={onDownload}
       className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50 transition-colors group"
     >
       <FileText className="w-3.5 h-3.5 text-primary-600 shrink-0" aria-hidden />

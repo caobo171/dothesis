@@ -23,7 +23,7 @@ export default function Credit() {
   const orders = useSWR<OrderRow[]>("/credit/orders", swrFetcher);
   const orderCount = orders.data?.length || 0;
 
-  const papers = useSWR<unknown[]>("/papers", swrFetcher);
+  const papers = useSWR<unknown[]>("/papers/list", swrFetcher);
   const draftCount = papers.data?.length;  // undefined while loading
 
   return (

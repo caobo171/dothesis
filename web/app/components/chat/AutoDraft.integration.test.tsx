@@ -11,24 +11,24 @@ describe("AutoDraft integration", () => {
     // runStatus tracks state across handler calls; starts at null (no active run)
     let runStatus: "running" | "done" | null = null;
     server.use(
-      http.get("/api/v1/projects/p1", () => HttpResponse.json({
+      http.post("*/api/v1/projects/p1", () => HttpResponse.json({
         name: "T", context_store: { m1_topic: { research_title: "Leadership" } },
       })),
-      http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
-      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
-      http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({
+      http.post("*/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),
+      http.post("*/api/v1/projects/p1/runs/list", () => HttpResponse.json({
         // Return the run object whenever we have an active runStatus
         run: runStatus ? { id: "r1", status: runStatus } : null,
       })),
-      http.get("/api/v1/projects/p1/runs/estimate", () => HttpResponse.json({
+      http.post("*/api/v1/projects/p1/runs/estimate", () => HttpResponse.json({
         estimated_tokens: 20000, credit_balance: 100000, sufficient_credit: true,
       })),
-      http.post("/api/v1/projects/p1/runs", () => {
+      http.post("*/api/v1/projects/p1/runs", () => {
         // POST creates the run and sets status to running
         runStatus = "running";
         return HttpResponse.json({ run_id: "r1", status: "running" });
       }),
-      http.get("/api/v1/runs/r1", () => HttpResponse.json({
+      http.post("*/api/v1/runs/r1", () => HttpResponse.json({
         id: "r1", status: runStatus ?? "running", mode: "auto",
       })),
       http.get("/api/v1/runs/r1/events", () => streamResponse([

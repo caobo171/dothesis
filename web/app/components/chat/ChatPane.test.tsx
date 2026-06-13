@@ -21,13 +21,13 @@ function renderFresh(ui: JSX.Element) {
 
 function setupMocks() {
   server.use(
-    http.get("/api/v1/projects/p1", () => HttpResponse.json({
+    http.post("*/api/v1/projects/p1", () => HttpResponse.json({
       name: "Test Project",
       context_store: { m1_topic: null },
     })),
-    http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
-    http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({ run: null })),
-    http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+    http.post("*/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+    http.post("*/api/v1/projects/p1/runs/list", () => HttpResponse.json({ run: null })),
+    http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),
   );
 }
 
@@ -48,7 +48,7 @@ describe("ChatPane integration", () => {
           'data: {"type":"done"}\n\n',
         ]);
       }),
-      http.get("/api/v1/threads/t1/messages", () => {
+      http.post("*/api/v1/threads/t1/messages/list", () => {
         // Return persisted messages after the stream so text survives inflight=false
         if (messagesAfterPost) {
           return HttpResponse.json([
@@ -79,13 +79,13 @@ describe("ChatPane widget click integration", () => {
   test("clicking a card synthesizes message and POSTs it", async () => {
     let capturedBody: { text?: string } | null = null;
     server.use(
-      http.get("/api/v1/projects/p1", () => HttpResponse.json({
+      http.post("*/api/v1/projects/p1", () => HttpResponse.json({
         name: "Test Project",
         context_store: { m1_topic: null },
       })),
-      http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
-      http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({ run: null })),
-      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([
+      http.post("*/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+      http.post("*/api/v1/projects/p1/runs/list", () => HttpResponse.json({ run: null })),
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([
         {
           id: 1,
           role: "assistant",
@@ -128,13 +128,13 @@ describe("ChatPane list_editor integration", () => {
   test("clicking Confirm on a themes list_editor synthesizes message and POSTs it", async () => {
     let capturedBody: { text?: string } | null = null;
     server.use(
-      http.get("/api/v1/projects/p1", () => HttpResponse.json({
+      http.post("*/api/v1/projects/p1", () => HttpResponse.json({
         name: "Test Project",
         context_store: { m1_topic: null },
       })),
-      http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
-      http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({ run: null })),
-      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([
+      http.post("*/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+      http.post("*/api/v1/projects/p1/runs/list", () => HttpResponse.json({ run: null })),
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([
         {
           id: 1,
           role: "assistant",
@@ -177,13 +177,13 @@ describe("ChatPane list_editor integration", () => {
   test("clicking Confirm on an analysis_outline list_editor synthesizes POST body", async () => {
     let capturedBody: { text?: string } | null = null;
     server.use(
-      http.get("/api/v1/projects/p1", () => HttpResponse.json({
+      http.post("*/api/v1/projects/p1", () => HttpResponse.json({
         name: "Test Project",
         context_store: { m1_topic: null },
       })),
-      http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
-      http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({ run: null })),
-      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([
+      http.post("*/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+      http.post("*/api/v1/projects/p1/runs/list", () => HttpResponse.json({ run: null })),
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([
         {
           id: 1,
           role: "assistant",
@@ -229,7 +229,7 @@ describe("ChatPane → ChatHeader integration (SP6.5)", () => {
     // Mock the project fetch to return a non-empty chapters map, which should
     // cause ChatHeader to render the "Open editor" link for the project.
     server.use(
-      http.get("/api/v1/projects/p1", () =>
+      http.post("*/api/v1/projects/p1", () =>
         HttpResponse.json({
           name: "Test Project",
           context_store: {
@@ -242,9 +242,9 @@ describe("ChatPane → ChatHeader integration (SP6.5)", () => {
           },
         }),
       ),
-      http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
-      http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({ run: null })),
-      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+      http.post("*/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+      http.post("*/api/v1/projects/p1/runs/list", () => HttpResponse.json({ run: null })),
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),
     );
 
     renderFresh(<ChatPane projectId="p1" threadId="t1" />);
@@ -260,7 +260,7 @@ describe("ChatPane → ChatHeader integration (SP6.5)", () => {
   it("hides Open editor when chapters is empty", async () => {
     // An empty chapters map means hasChapters=false — the link must NOT render.
     server.use(
-      http.get("/api/v1/projects/p1", () =>
+      http.post("*/api/v1/projects/p1", () =>
         HttpResponse.json({
           name: "Test Project",
           context_store: {
@@ -269,9 +269,9 @@ describe("ChatPane → ChatHeader integration (SP6.5)", () => {
           },
         }),
       ),
-      http.get("/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
-      http.get("/api/v1/projects/p1/runs", () => HttpResponse.json({ run: null })),
-      http.get("/api/v1/threads/t1/messages", () => HttpResponse.json([])),
+      http.post("*/api/v1/threads/t1", () => HttpResponse.json({ name: "Main" })),
+      http.post("*/api/v1/projects/p1/runs/list", () => HttpResponse.json({ run: null })),
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),
     );
 
     renderFresh(<ChatPane projectId="p1" threadId="t1" />);

@@ -2,15 +2,23 @@
 
 import { useEffect, useMemo } from "react";
 import { useStream } from "./useStream";
+import { tokenStore } from "@/app/lib/tokenStore";
 
 
 export function useProjectState(threadId: string) {
   const stream = useStream();
 
-  // Subscribe to the SSE state endpoint on mount / threadId change
+  // Subscribe to the SSE state endpoint on mount / threadId change.
+  // POST-only: the access_token rides in the JSON body so the JWT never
+  // appears in the stream URL.
   useEffect(() => {
     if (!threadId) return;
-    void stream.start(`/api/v1/threads/${threadId}/state`, { method: "GET" });
+    const token = tokenStore.get();
+    void stream.start(`/api/v1/threads/${threadId}/state`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ access_token: token }),
+    });
     return () => stream.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId]);

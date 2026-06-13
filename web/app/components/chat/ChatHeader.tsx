@@ -3,15 +3,16 @@ import { ReactNode } from "react";
 import { ArrowLeft, Bell, Download, History, PenSquare } from "lucide-react";
 
 import { useMe } from "@/app/lib/use-me";
-import { tokenStore } from "@/app/lib/tokenStore";
+import { mintStreamToken } from "@/app/lib/api";
 import { MODULES } from "./HomeDashboard";
 
 
 // Header docx download button — enabled only when M5 has produced an
 // export artifact (auto-fires when M5 flips to done; see
 // api/app/agent_state.py:_auto_export_m5). The /exports/{filename} route
-// 302s to a signed S3 URL; auth token rides in the query string because
-// the browser can't attach a body to <a> download links.
+// 302s to a signed S3 URL; the browser can't attach a body to <a> download
+// links, so instead of leaking the long-lived JWT in the URL we mint a
+// short-lived, scoped stream token on click and navigate with ?st=.
 function ExportDownloadButton({
   artifacts,
 }: {
@@ -30,16 +31,23 @@ function ExportDownloadButton({
       </button>
     );
   }
-  const token = typeof window !== "undefined" ? tokenStore.get() : null;
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
   const url = docx.download_url.startsWith("/api/v1/")
     ? `${apiBase}${docx.download_url.replace(/^\/api\/v1/, "")}`
     : docx.download_url;
-  const href = token ? `${url}?access_token=${encodeURIComponent(token)}` : url;
+  const onDownload = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const m = docx.download_url.match(/\/projects\/([^/]+)\/exports\/([^/?]+)/);
+    if (!m) return;
+    const st = await mintStreamToken(`project-export:${m[1]}/${m[2]}`);
+    const sep = url.includes("?") ? "&" : "?";
+    window.location.href = `${url}${sep}st=${encodeURIComponent(st)}`;
+  };
   return (
     <a
-      href={href}
+      href={url}
       download
+      onClick={onDownload}
       title="Download final thesis (DOCX)"
       className="w-8 h-8 rounded-full text-primary-600 hover:bg-primary-50 inline-flex items-center justify-center transition-colors"
     >

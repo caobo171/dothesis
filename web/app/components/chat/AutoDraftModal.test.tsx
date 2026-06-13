@@ -8,7 +8,7 @@ import { AutoDraftModal } from "./AutoDraftModal";
 describe("AutoDraftModal", () => {
   test("fetches estimate and renders it", async () => {
     server.use(
-      http.get("/api/v1/projects/p1/runs/estimate", () =>
+      http.post("*/api/v1/projects/p1/runs/estimate", () =>
         HttpResponse.json({ estimated_tokens: 18500, credit_balance: 50000, sufficient_credit: true }),
       ),
     );
@@ -27,7 +27,7 @@ describe("AutoDraftModal", () => {
 
   test("confirm fires callback with topic", async () => {
     server.use(
-      http.get("/api/v1/projects/p1/runs/estimate", () =>
+      http.post("*/api/v1/projects/p1/runs/estimate", () =>
         HttpResponse.json({ estimated_tokens: 100, credit_balance: 1000, sufficient_credit: true }),
       ),
     );

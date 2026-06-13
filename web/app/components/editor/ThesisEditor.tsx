@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import useSWR from "swr";
 
 import { apiFetch } from "@/app/lib/api";
+import { tokenStore } from "@/app/lib/tokenStore";
 
 import { OutlineRail, type ChapterName } from "./OutlineRail";
 import { ChapterEditor } from "./ChapterEditor";
@@ -12,7 +13,15 @@ import { ReExportBar } from "./ReExportBar";
 import { EmptyState } from "./EmptyState";
 
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+// POST-only read: the key is already an absolute /api/v1/… path, so we POST
+// directly and fold the access_token into the JSON body — JWT stays out of the
+// URL.
+const fetcher = (url: string) =>
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ access_token: tokenStore.get() }),
+  }).then(r => r.json());
 
 
 type ChapterDict = Record<string, {

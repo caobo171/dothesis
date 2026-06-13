@@ -27,7 +27,9 @@ type ListResp = { items: AnnouncementRow[]; total: number };
 const KEY = "/admin/announcements";
 
 export default function AnnouncementsAdmin() {
-  const { data } = useSWR<ListResp>(KEY, swrFetcher);
+  // LIST read moved to /list — a create/POST already owns the base path.
+  const LIST_KEY = `${KEY}/list`;
+  const { data } = useSWR<ListResp>(LIST_KEY, swrFetcher);
   const [editing, setEditing] = useState<AnnouncementRow | "new" | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -40,7 +42,7 @@ export default function AnnouncementsAdmin() {
         await apiFetch(`${KEY}/${editing.id}`, { method: "PATCH", body: form });
       }
       setEditing(null);
-      globalMutate(KEY);
+      globalMutate(LIST_KEY);
     } finally {
       setSubmitting(false);
     }
@@ -49,7 +51,7 @@ export default function AnnouncementsAdmin() {
   async function remove(id: string) {
     if (!confirm("Delete this announcement?")) return;
     await apiFetch(`${KEY}/${id}`, { method: "DELETE" });
-    globalMutate(KEY);
+    globalMutate(LIST_KEY);
   }
 
   return (

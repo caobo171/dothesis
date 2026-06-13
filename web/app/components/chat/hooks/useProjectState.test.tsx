@@ -9,7 +9,7 @@ import { useProjectState } from "./useProjectState";
 describe("useProjectState", () => {
   test("reduces context_update events into a snapshot", async () => {
     server.use(
-      http.get("/api/v1/threads/t1/state", () => streamResponse([
+      http.post("/api/v1/threads/t1/state", () => streamResponse([
         'data: {"type":"context_update","patch":{"m1_topic":{"research_title":"X"}}}\n\n',
         'data: {"type":"context_update","patch":{"m2_literature":{"research_state_summary":"Y"}}}\n\n',
       ])),

@@ -33,9 +33,9 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
     module_status?: ModuleStatusMap;
   }>(`/projects/${pid}`, fetcher);
   const { data: threads, mutate: mutateThreads } = useSWR<Thread[]>(
-    `/projects/${pid}/threads`, fetcher,
+    `/projects/${pid}/threads/list`, fetcher,
   );
-  const { data: uploads } = useSWR<UploadItem[]>(`/projects/${pid}/uploads`, fetcher);
+  const { data: uploads } = useSWR<UploadItem[]>(`/projects/${pid}/uploads/list`, fetcher);
 
   // Credit totals: thread (right panel) + project (left panel). POST per the
   // POST-only convention; refreshes on focus so the totals catch up after a

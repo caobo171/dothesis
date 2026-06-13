@@ -164,7 +164,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   );
   const { data: thread } = useSWR<{ name: string }>(`/threads/${threadId}`, fetcher);
   const { data: latestRun, mutate: mutateRun } = useSWR<{ run: { id: string; status: RunStatus } | null }>(
-    `/projects/${projectId}/runs?latest=true`, fetcher,
+    `/projects/${projectId}/runs/list?latest=true`, fetcher,
   );
 
   // SP6.5: gate is true only when at least one chapter entry exists.
@@ -234,21 +234,23 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
 
   const onFileDrop = async (files: File[]): Promise<(string | null)[]> => {
     // FormData uploads can't go through apiFetch (which JSON-encodes the
-    // body). Inject the token as a query string parameter so the request
-    // still authenticates — uploads endpoint accepts auth via the same
-    // body/query/Bearer fallback (see api/app/deps.py:_extract_token).
+    // body), and a multipart request has no JSON body to carry the token —
+    // so we pass it in an Authorization: Bearer header instead of the URL.
+    // Keeping the token out of the URL avoids leaking the JWT into access
+    // logs / referrers; the uploads endpoint reads the Bearer header via
+    // the body/query/Bearer fallback (see api/app/deps.py:_extract_token).
     // Returns the per-file `upload_id` (or null on failure) in input order
     // so ChatInput can stamp each chip + ship the ids on Send. Without
     // these ids the chat router can't materialize the bytes for Gemini.
     const token = tokenStore.get();
-    const tokenParam = token ? `?access_token=${encodeURIComponent(token)}` : "";
     const base = process.env.NEXT_PUBLIC_API_BASE || "/api/v1";
     const results = await Promise.all(files.map(async (f): Promise<string | null> => {
       try {
         const fd = new FormData();
         fd.append("file", f);
-        const res = await fetch(`${base}/projects/${projectId}/uploads${tokenParam}`, {
+        const res = await fetch(`${base}/projects/${projectId}/uploads`, {
           method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           body: fd,
         });
         if (!res.ok) return null;

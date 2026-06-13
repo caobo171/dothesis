@@ -21,8 +21,9 @@ export function CitePopover({ projectId, onSelect, onClose }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    // apiFetch injects access_token into the GET query string.
-    apiFetch(`/projects/${projectId}/m5/references`)
+    // POST-only read: apiFetch folds access_token into the JSON body so the
+    // token never appears in the URL.
+    apiFetch(`/projects/${projectId}/m5/references`, { method: "POST" })
       .then((data: any) => { if (!cancelled) setRefs(data); })
       .catch(() => { if (!cancelled) setRefs([]); });
     return () => { cancelled = true; };

@@ -47,7 +47,7 @@ const PROJECT = {
 describe("HomeDashboard", () => {
   test("renders project cards with module bar and review tag", async () => {
     server.use(
-      http.get("/api/v1/projects", () => HttpResponse.json([PROJECT])),
+      http.post("*/api/v1/projects/list", () => HttpResponse.json([PROJECT])),
     );
     renderDashboard();
     // The name also appears in the hero subtitle and activity timeline —
@@ -64,7 +64,7 @@ describe("HomeDashboard", () => {
 
   test("renders empty state when no projects", async () => {
     server.use(
-      http.get("/api/v1/projects", () => HttpResponse.json([])),
+      http.post("*/api/v1/projects/list", () => HttpResponse.json([])),
     );
     renderDashboard();
     await waitFor(() => expect(screen.getByText(/no projects yet/i)).toBeTruthy());
@@ -74,7 +74,7 @@ describe("HomeDashboard", () => {
 
   test("clicking New thesis opens the modal (not window.prompt)", async () => {
     server.use(
-      http.get("/api/v1/projects", () => HttpResponse.json([])),
+      http.post("*/api/v1/projects/list", () => HttpResponse.json([])),
     );
     renderDashboard();
     await waitFor(() => expect(screen.getByText(/no projects yet/i)).toBeTruthy());
@@ -85,8 +85,8 @@ describe("HomeDashboard", () => {
 
   test("creating a project navigates to its chat URL", async () => {
     server.use(
-      http.get("/api/v1/projects", () => HttpResponse.json([])),
-      http.post("/api/v1/projects", async ({ request }) => {
+      http.post("*/api/v1/projects/list", () => HttpResponse.json([])),
+      http.post("*/api/v1/projects", async ({ request }) => {
         const body = (await request.json()) as { name: string };
         return HttpResponse.json({ id: "p-new", name: body.name });
       }),
@@ -102,8 +102,8 @@ describe("HomeDashboard", () => {
 
   test("shows the user's credit balance in the hero token card", async () => {
     server.use(
-      http.get("/api/v1/projects", () => HttpResponse.json([PROJECT])),
-      http.get("*/api/v1/auth/me", () => HttpResponse.json({
+      http.post("*/api/v1/projects/list", () => HttpResponse.json([PROJECT])),
+      http.post("*/api/v1/auth/me", () => HttpResponse.json({
         id: "u1", email: "jeen@example.com", username: "Jeendeet",
         credit: 184500, is_super_admin: false, created_at: null,
       })),

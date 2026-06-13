@@ -28,9 +28,9 @@ class ApiError extends Error {
 }
 
 /**
- * Authenticated fetch. Injects access_token from tokenStore:
- *   - POST/PUT/PATCH/DELETE → into the JSON body
- *   - GET → into the query string (?access_token=…)
+ * Authenticated fetch. Injects access_token from tokenStore into the JSON body
+ * (the API is POST-only, so the token never rides in a URL). Any `?query` in the
+ * path is folded into the body too.
  *
  * Auth endpoints (login/signup/forgot-password/etc.) don't have a token
  * yet, so they pass `{ auth: false }` to skip injection.
@@ -51,7 +51,7 @@ export async function apiFetch(path, opts = {}) {
     if (method === "GET" || method === "HEAD") {
       // Authenticated GETs no longer exist (POST-only). The only GETs left are
       // unauthenticated (e.g. /health) or the SSE/download routes that mint a
-      // scoped ?st= token via openEventStream/buildDownloadHref — we never put
+      // scoped ?st= token (openEventStream / mintStreamToken) — we never put
       // the long-lived JWT in a URL here.
     } else {
       // POST family — fold any ?query from the path AND the token into the JSON
