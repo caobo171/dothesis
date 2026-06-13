@@ -112,7 +112,7 @@ function CopyButton({ text }: { text: string }) {
       type="button"
       onClick={handleCopy}
       title="Copy message"
-      className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11.5px] text-ink-500 hover:bg-ink-100 hover:text-ink-700 transition-colors w-[78px] justify-start"
+      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11.5px] text-ink-500 hover:bg-ink-100 hover:text-ink-700 transition-colors w-[78px] justify-start"
     >
       <span className="w-3 h-3 inline-flex items-center justify-center shrink-0">
         {copied
@@ -461,7 +461,10 @@ export function MessageBubble({
     <AssistantFrame
       moduleTag={moduleTag}
       footer={
-        <div className="flex items-center gap-3">
+        // mt-1.5 lives on the row (not on CopyButton) so Copy and the
+        // credits/duration meta share one baseline — a top margin on only
+        // one child pushed it out of vertical alignment with the other.
+        <div className="mt-1.5 flex items-center gap-3">
           <CopyButton text={content} />
           <ResponseMeta costCredits={costCredits} durationMs={durationMs} />
         </div>

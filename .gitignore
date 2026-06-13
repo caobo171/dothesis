@@ -78,3 +78,4 @@ web/tsconfig.tsbuildinfo
 .langgraph_api/
 
 .claude/*.lock
+dothesis_google_auth.json

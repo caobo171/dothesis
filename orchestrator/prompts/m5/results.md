@@ -6,6 +6,7 @@ You are writing Chapter 4 (Results) of a master's thesis.
 - Research title: {research_title}
 - Paradigm: {paradigm}
 - Mixed design type (mixed only): {mixed_design_type}
+- Analysis tool (from M3): {tool}
 - Data type detected (M4): {data_type_detected}
 - Per-step results (quant, from M4): {results}
 - Qualitative codes (from M4): {qual_codes}
@@ -17,34 +18,78 @@ You are writing Chapter 4 (Results) of a master's thesis.
 ## References available for citation
 {references_list}
 
+## NON-NEGOTIABLE — do not fabricate data
+- Report ONLY numbers that appear in `{results}` (or `{qual_codes}`/`{qual_themes}`).
+  Copy them verbatim. NEVER invent or "fill in" a sample size, β, R², p-value,
+  loading, AVE, reliability, or fit index.
+- If `{results}` is empty or missing the numbers a section needs, DO NOT make
+  them up. Write one short sentence that the empirical analysis for that part is
+  pending data collection, and move on. A thin honest Results chapter is
+  acceptable; a fabricated one is not.
+- Do NOT present illustrative/simulated figures as if they were collected. Every
+  reported statistic must trace to `{results}`.
+
+## Method consistency — report ONLY metrics that match `{tool}`
+Different analysis methods produce different statistics. Report the family that
+matches `{tool}`; never mix them.
+- **PLS-SEM** (SmartPLS, PLS, variance-based): report path coefficients (β) with
+  bootstrap t-values / p-values, R², adjusted R², f², Q² (predictive relevance),
+  composite reliability (CR), AVE, and discriminant validity via HTMT or
+  Fornell-Larcker. **Do NOT report CFI, TLI, RMSEA, χ²/df, SRMR** — these are
+  covariance-based (CB-SEM) fit indices that SmartPLS does not produce.
+- **CB-SEM** (AMOS, Mplus, lavaan): report model fit (χ²/df, CFI, TLI, RMSEA,
+  SRMR), standardized loadings, CR, AVE, and standardized path estimates.
+- **Regression / SPSS**: report β (standardized + unstandardized), t, p, R²,
+  adjusted R², F, and VIF for multicollinearity.
+- If `{tool}` is unclear, infer the family from what `{results}` actually
+  contains and stay internally consistent — never report two incompatible
+  families in the same chapter.
+
 ## Instructions
 
 ### If paradigm == "quantitative"
-Write a 1200-2000 word Chapter 4 with these sections:
-- 4.1 Sample characteristics (descriptives from results)
-- 4.2 Measurement model evaluation (reliability + validity from results)
-- 4.3 Hypothesis testing / structural model (path coefficients, regression coefficients, fit indices from results)
-- 4.4 Summary of supported / rejected hypotheses
-
-For each result table reference, integrate the numbers from {results} naturally into prose. Flag any threshold breaches (`⚠️` markers from M4 mean the threshold was missed).
+Write a 1200-2000 word Chapter 4 with these sub-sections (start at 4.1 — the
+chapter title is added automatically, do not repeat it):
+- 4.1 Sample characteristics — descriptives from `{results}` (use the real n).
+- 4.2 Measurement model evaluation (reliability + validity).
+  - **Present a Markdown table** (Table 4.1): construct, item, outer loading,
+    Cronbach's α, CR, AVE — one row per item/construct, values from `{results}`.
+  - If any **AVE < 0.50** or **loading < 0.50** or **α/CR < 0.70**: state the
+    breach explicitly, say which item is affected, and give the correct
+    remediation — either the item was dropped and the model re-estimated, OR
+    flag it as a measurement limitation to be carried into the Discussion and
+    Conclusion (Chapter 5). Do NOT excuse a low AVE with "CR is high" and move on.
+  - **Present a discriminant-validity table** (Table 4.2): HTMT or
+    Fornell-Larcker matrix.
+- 4.3 Hypothesis testing / structural model.
+  - **Present a Markdown table** (Table 4.3): hypothesis, path, β, t, p,
+    supported/not supported — from `{results}`.
+  - Report the structural metrics for the `{tool}` family (R²/f²/Q² for PLS-SEM;
+    fit indices for CB-SEM) and interpret effect sizes, not just significance.
+- 4.4 Summary of supported / rejected hypotheses.
 
 ### If paradigm == "qualitative"
-Write a 1200-2500 word Chapter 4 using the Braun & Clarke (2006) thematic-analysis writeup pattern:
+Write a 1200-2500 word Chapter 4 using the Braun & Clarke (2006) thematic-analysis
+writeup pattern (start at 4.1):
 - 4.1 Sample characteristics + context
-- 4.2 to 4.N (one section per theme in {qual_themes})
+- 4.2 to 4.N (one section per theme in `{qual_themes}`)
   - Theme name as section heading
-  - Synthesize codes belonging to this theme from {qual_codes}
-  - Embed 1-2 verbatim quotes per theme (drawn from qual_codes[*].quote)
+  - Synthesize codes belonging to this theme from `{qual_codes}`
+  - Embed 1-2 VERBATIM quotes per theme (drawn from `qual_codes[*].quote`) with a
+    participant id + role/field note — never invent quotes.
   - Link back to literature where appropriate
-- 4.{N+1} Integration of themes (how themes relate to each other and to the research questions)
+- 4.{N+1} Integration of themes (how themes relate to each other and to the RQs)
 
 ### If paradigm == "mixed"
-Use {mixed_design_type} to structure:
+Use `{mixed_design_type}` to structure (start at 4.1):
 - 4.1 Sample characteristics (both phases)
-- 4.2 Quantitative results (as in the quant section above)
-- 4.3 Qualitative results (as in the qual section above)
-- 4.4 Integration: convergence, divergence, expansion (explain how quant + qual results inform each other)
+- 4.2 Quantitative results (as in the quant section above — tables + tool-
+  consistent metrics)
+- 4.3 Qualitative results (as in the qual section above — verbatim quotes)
+- 4.4 Integration: convergence, divergence, expansion (explain how quant + qual
+  results inform each other; cross-reference specific numbers and quotes)
 
-Cite inline as (Author, Year). Write in {language}.
+Cite inline as (Author, Year); for narrative citations where the author is the
+sentence subject, use "Author (Year)". Write in {language}.
 
 Output: Chapter 4 prose as markdown only.

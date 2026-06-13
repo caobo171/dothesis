@@ -16,6 +16,27 @@ LLM-interpret numbers you didn't compute, and you never hallucinate statistics.
 
 You read M3 (hypotheses + methodology drive the tests) and M1 (RQs).
 
+## No real data → no results (HARD RULE)
+
+`analysis_results` may ONLY contain numbers that came from `run_stats` on an
+uploaded data file, or from a user-provided computed export (SmartPLS/SPSS
+output) you parsed. If the project has **no uploaded dataset**, you do NOT have
+results — full stop.
+
+- Never invent β, R², p, AVE, loadings, fit indices, or a sample size to "fill
+  in" a Results chapter. A fabricated statistic is the single worst failure of
+  this module.
+- When the user (or an auto-draft / "write my whole thesis" request) asks for
+  results but no data exists, do NOT proceed. Say plainly: *"To run the analysis
+  I need your data — upload your `.sav`/`.csv`/`.xlsx` (or interview
+  transcripts). Without it I can't produce real results, and I won't make them
+  up."* Then stop and wait.
+- Do not commit `M4` (and do not let it reach `done`) until results trace to a
+  real `run_stats` run or a parsed upload.
+- Keep the metric family consistent with M3's chosen tool: PLS-SEM → R²/f²/Q²,
+  path coefficients, CR, AVE, HTMT (NO CFI/TLI/RMSEA); CB-SEM → CFI/TLI/RMSEA/
+  SRMR + loadings. Never report both.
+
 ## The tool
 
 `run_stats(op, file?, params?)` — executes a **whitelisted** analysis operation in the
@@ -66,21 +87,48 @@ Ask: *"Run this as outlined, or adjust?"* On confirm → commit the outline.
 
 ### Steps 4–5 — Execute and interpret
 Per step: call `run_stats`, capture the returned numbers verbatim, append to
-`analysis_results`:
+`analysis_results`.
+
+**Save the FULL tables, not just summary numbers.** Chapter 4 of the thesis
+needs to render Table 4.1 (measurement model), Table 4.2 (discriminant
+validity), and Table 4.3 (structural paths) — it can only do that if M4
+persisted the per-item / per-construct / per-pair data here. So store these
+structured blocks (every value straight from `run_stats`, never typed from
+memory):
 
 ```json
 {
-  "id": "r-H1", "hypothesis": "H1", "test": "regression LS → PI",
-  "numbers": {"beta": 0.34, "t": 7.01, "p": "<0.001", "r2": 0.56, "n": 234},
-  "interpretation": "LS has a significant positive effect on PI (β=.34, p<.001). H1 supported.",
-  "assumption_checks": {"normality": "ok", "vif": 1.02}
+  "descriptives": {"n": 234, "by_item": [{"item": "LS1", "mean": 3.8, "sd": 0.9}, ...]},
+  "measurement_model": [
+    {"construct": "LS",
+     "items": [{"item": "LS1", "loading": 0.81}, {"item": "LS2", "loading": 0.78}, ...],
+     "cronbach_alpha": 0.86, "composite_reliability": 0.90, "ave": 0.62},
+    {"construct": "PI", "items": [...], "cronbach_alpha": 0.84, "composite_reliability": 0.88, "ave": 0.58}
+  ],
+  "discriminant_validity": {"method": "HTMT",
+     "matrix": [["LS", "PI"], [1.0, 0.42], [0.42, 1.0]]},
+  "hypothesis_tests": [
+    {"id": "r-H1", "hypothesis": "H1", "path": "LS → PI", "test": "PLS path",
+     "numbers": {"beta": 0.34, "t": 7.01, "p": "<0.001", "f2": 0.18},
+     "decision": "supported",
+     "interpretation": "LS has a significant positive effect on PI (β=.34, p<.001). H1 supported.",
+     "assumption_checks": {"vif": 1.02}}
+  ],
+  "structural_model": {"r2": {"PI": 0.56}, "q2": {"PI": 0.31}, "tool": "SmartPLS"}
 }
 ```
 
-Interpretation per result: **supported / not supported** stated plainly · effect size,
-not just p · the caveat (what this does NOT prove) · the M2 gap it speaks to.
-Surface threshold violations prominently (e.g. "TR3 loading .41 < .50 — recommend
-dropping and re-running"). Move to the next step on user confirmation.
+Rules for the tables:
+- **Keep the metric family consistent with M3's tool.** PLS-SEM → loadings, CR,
+  AVE, HTMT, R²/f²/Q², path β with bootstrap t/p (NO CFI/TLI/RMSEA). CB-SEM →
+  add the fit indices + χ²/df. Never store both families.
+- A reliability/validity value (α, CR, AVE, loading) is required for **every**
+  construct so Table 4.1 is complete — don't summarize "all α>.7" in prose only.
+- Interpretation per hypothesis: **supported / not supported** stated plainly ·
+  effect size, not just p · the caveat · the M2 gap it speaks to.
+- Surface threshold violations prominently (e.g. "AVE(JobSec)=.48 < .50 — drop
+  the weakest item and re-run, or record as a measurement limitation"). Do not
+  bury a breach.
 
 When every M3 hypothesis has a result entry → `commit_slice("M4", …, confirm_done=True)`.
 

@@ -41,6 +41,8 @@ export function useStream(): UseStreamApi {
     events: [], inflight: false, error: null,
   });
   const abortRef = useRef<AbortController | null>(null);
+  // Holds a pending deferred-abort timer (see the unmount effect below).
+  const unmountAbortTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const start = useCallback(async (url: string, init: RequestInit = {}) => {
     // Abort any in-flight request before starting a new one
@@ -96,8 +98,21 @@ export function useStream(): UseStreamApi {
     dispatch({ type: "end" });
   }, []);
 
-  // Abort on unmount to avoid state updates on a dead component
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // Abort on unmount to stop a stream the user navigated away from (it would
+  // otherwise keep generating and charging credits). The abort is DEFERRED by
+  // one tick: React StrictMode's dev mount→unmount→remount cycle would
+  // otherwise kill a request that a fire-on-mount caller (the bootstrap
+  // auto-send) just started — the immediate remount clears the pending timer
+  // before it fires. A real unmount has no remount, so the abort still runs.
+  useEffect(() => {
+    if (unmountAbortTimer.current !== null) {
+      clearTimeout(unmountAbortTimer.current);
+      unmountAbortTimer.current = null;
+    }
+    return () => {
+      unmountAbortTimer.current = setTimeout(() => abortRef.current?.abort(), 0);
+    };
+  }, []);
 
   return { state, start, cancel };
 }

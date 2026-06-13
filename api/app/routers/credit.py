@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..credit_ledger import credit as ledger_credit
 from ..db import db_session
 from ..deps import current_user
-from ..models import CreditTransaction, Order, User
+from ..models import CreditTransaction, Order, Project, Thread, User
 from ..polar_client import PolarError, create_checkout, verify_webhook
 from ..pricing import PACKAGES, PACKAGES_BY_ID
 from ..settings import get_settings
@@ -152,11 +152,32 @@ def list_my_transactions(
         select(CreditTransaction).where(CreditTransaction.user_id == user.id)
         .order_by(desc(CreditTransaction.id)).limit(200)
     ).all()
+
+    # Enrich thread-scoped rows (chat_turn) with their project + names so the
+    # UI can deep-link each spend back to the conversation that incurred it.
+    # One batched query keyed by thread id avoids an N+1 over the 200 rows; a
+    # row whose thread was since deleted simply gets no link (plain text).
+    thread_ids = {r.ref_id for r in rows if r.ref_type == "thread" and r.ref_id}
+    links: dict = {}
+    if thread_ids:
+        for tid, tname, pid, pname in db.execute(
+            select(Thread.id, Thread.name, Project.id, Project.name)
+            .join(Project, Project.id == Thread.project_id)
+            .where(Thread.id.in_(thread_ids))
+        ):
+            links[tid] = {
+                "project_id": str(pid),
+                "thread_id": str(tid),
+                "project_name": pname,
+                "thread_name": tname,
+            }
+
     return [
         {
             "id": r.id, "delta": r.delta, "reason": r.reason,
             "ref_type": r.ref_type, "ref_id": str(r.ref_id) if r.ref_id else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
+            "link": links.get(r.ref_id) if r.ref_type == "thread" else None,
         }
         for r in rows
     ]

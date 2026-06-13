@@ -14,6 +14,7 @@ import { tokenStore } from "@/app/lib/tokenStore";
 // fetch("/api/v1...") that was relying on the now-gone session cookie.
 const fetcher = (url: string) => apiFetch(url, { method: "POST" });
 
+
 export type Message = {
   id: number;
   role: "user" | "assistant" | "system" | "tool";
@@ -54,15 +55,17 @@ export function useChat(threadId: string) {
     .map(e => (e as unknown as { payload: WidgetHint }).payload)
     .at(-1)) ?? null;
 
-  // P4: collect live engine progress events (M2 phase2 scout, etc.) so the
-  // UI can render a banner with what's happening right now instead of a
-  // bare typing dot during the 30-60s wait. Most recent event is the
-  // primary message; the previous ones stay in the list for fade-out.
+  // P4: collect live `progress` events so the UI shows what's happening right
+  // now instead of a bare typing dot during the long first-token wait. The
+  // backend (chat_v3) feeds this from both engine progress (M2 citation scout)
+  // and deep-agent tool activity — already translated to student-facing labels
+  // there (where the tool args live), so we just pass the payload through.
   const streamingProgress = stream.state.events
     .filter(e => e.type === "progress")
-    .map(e => (e as unknown as {
-      payload: { stage: string; message: string };
-    }).payload);
+    .map(e => (e as unknown as { payload: { stage: string; message: string } }).payload)
+    // Drop consecutive duplicate lines so repeated tool calls with the same
+    // label don't make the bubble stutter the identical line.
+    .filter((p, i, arr) => i === 0 || p.message !== arr[i - 1].message);
 
   // P6: backend yields `{type: error, message}` SSE events when graph.astream
   // raises (e.g. msgpack serialization, LLM timeouts, provider 5xx). Surface

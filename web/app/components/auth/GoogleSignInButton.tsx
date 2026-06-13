@@ -32,6 +32,17 @@ export function GoogleSignInButton({ onError }: { onError?: (msg: string) => voi
       document.body.appendChild(script);
       added = true;
     }
+    // GIS only accepts a fixed pixel width (max 400), not "100%". Measure the
+    // wrapper and render the button at that width so it lines up with the
+    // full-width email/password inputs instead of sitting narrow + centered.
+    const renderAtContainerWidth = () => {
+      if (!window.google?.accounts?.id || !ref.current) return;
+      const w = Math.min(ref.current.offsetWidth || 320, 400);
+      ref.current.innerHTML = "";
+      window.google.accounts.id.renderButton(ref.current, {
+        theme: "outline", size: "large", width: w, shape: "rectangular",
+      });
+    };
     const init = () => {
       if (!window.google?.accounts?.id || !ref.current) return;
       window.google.accounts.id.initialize({
@@ -50,16 +61,18 @@ export function GoogleSignInButton({ onError }: { onError?: (msg: string) => voi
           }
         },
       });
-      window.google.accounts.id.renderButton(ref.current, {
-        theme: "outline", size: "large", width: 320, shape: "rectangular",
-      });
+      renderAtContainerWidth();
     };
     if (window.google?.accounts?.id) {
       init();
     } else {
       script.onload = init;
     }
+    // Re-render on container resize so the button keeps matching the form width.
+    const ro = ref.current ? new ResizeObserver(() => renderAtContainerWidth()) : null;
+    if (ro && ref.current) ro.observe(ref.current);
     return () => {
+      ro?.disconnect();
       if (added) { /* no-op: keep script for other consumers */ }
     };
   }, [router, onError]);
@@ -76,5 +89,5 @@ export function GoogleSignInButton({ onError }: { onError?: (msg: string) => voi
       </button>
     );
   }
-  return <div ref={ref} className="flex justify-center" />;
+  return <div ref={ref} className="w-full" />;
 }

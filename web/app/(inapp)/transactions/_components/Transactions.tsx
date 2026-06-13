@@ -1,10 +1,21 @@
 "use client";
 
 import { Receipt, Ticket } from "lucide-react";
+import Link from "next/link";
 import useSWR from "swr";
 
 import { swrFetcher } from "@/app/lib/api";
 import { useMe } from "@/app/lib/use-me";
+
+// Resolved project + thread for a thread-scoped (chat_turn) row, so the
+// Activity cell can deep-link back to the conversation that spent the credits.
+// Null for grants/top-ups and any row whose thread was since deleted.
+type TxnLink = {
+  project_id: string;
+  thread_id: string;
+  project_name: string;
+  thread_name: string;
+} | null;
 
 type Txn = {
   id: number;
@@ -13,6 +24,7 @@ type Txn = {
   ref_type: string | null;
   ref_id: string | null;
   created_at: string | null;
+  link?: TxnLink;
 };
 
 // Human labels for the ledger `reason` codes written by credit_ledger.
@@ -61,7 +73,19 @@ export default function Transactions() {
                       {t.created_at ? new Date(t.created_at).toLocaleString() : "—"}
                     </td>
                     <td className="px-4 py-2 text-ink-900">
-                      {REASON_LABEL[t.reason] || t.reason}
+                      {t.link ? (
+                        <Link
+                          href={`/chat/projects/${t.link.project_id}/threads/${t.link.thread_id}`}
+                          className="group inline-flex flex-wrap items-baseline gap-x-1.5 text-primary-600 hover:underline"
+                        >
+                          <span>{REASON_LABEL[t.reason] || t.reason}</span>
+                          <span className="text-xs text-ink-400 group-hover:text-ink-500">
+                            {t.link.project_name} · {t.link.thread_name}
+                          </span>
+                        </Link>
+                      ) : (
+                        REASON_LABEL[t.reason] || t.reason
+                      )}
                     </td>
                     <td
                       className={`px-4 py-2 text-right font-semibold tabular-nums ${

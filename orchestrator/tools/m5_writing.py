@@ -259,11 +259,40 @@ def _sections_to_markdown(sections: list[dict]) -> str:
         # never reach the rendered document, even on a forced export, then
         # normalize inline-bullet runs into proper markdown lists.
         prose = _normalize_prose_markdown(_scrub_internal_markers(prose))
+        # Defense-in-depth against the duplicate chapter heading: the prompt
+        # tells the LLM not to emit the chapter title, but Gemini sometimes
+        # leads with its own "# Chương N: …" / "## <chapter title>" anyway, and
+        # we prepend `# {title}` below — yielding the heading twice. Strip a
+        # leading chapter-level heading (but never a numbered sub-section like
+        # "## 4.1 …", which is real content).
         if title:
+            prose = _strip_leading_chapter_heading(prose)
             parts.append(f"# {title}")
         if prose:
             parts.append(prose)
     return "\n\n".join(parts) + "\n"
+
+
+def _strip_leading_chapter_heading(prose: str) -> str:
+    """Drop a leading chapter-title heading the LLM emitted despite the prompt.
+
+    We prepend `# {title}` to every section, so a chapter that opens with its
+    own title heading renders the title twice (the reported "Chương 2 appears
+    twice" bug). Remove the first line ONLY when it is a chapter-level heading:
+    a `#`/`##`/`###` line that is NOT a numbered sub-section (`4.1`, `2.3.1`),
+    which is genuine content and must stay.
+    """
+    if not prose:
+        return prose
+    lines = prose.split("\n")
+    i = 0
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    if i < len(lines):
+        m = re.match(r"^\s*#{1,3}\s+(.+?)\s*$", lines[i])
+        if m and not re.match(r"^\d+(\.\d+)+\b", m.group(1).strip()):
+            return "\n".join(lines[i + 1:]).strip()
+    return prose
 
 
 def _scrub_internal_markers(prose: str) -> str:
@@ -476,12 +505,20 @@ OUTPUT FORMATTING (strict — the text is rendered to a Word document via Markdo
 - Write academic prose in full paragraphs. Separate paragraphs with a blank line.
 - For any list, put EACH item on its OWN line starting with "- ", and leave a
   blank line BEFORE the list. NEVER put multiple bullet items on one line.
-- Prefer prose over tables. Do NOT use Markdown tables for narrative content.
-  Only use a table for genuinely tabular data, and if you do, put each row on
-  its own line with correct "| col | col |" pipes and a "| --- | --- |"
-  separator row.
+- Prefer prose over tables for NARRATIVE content. Do NOT wrap ordinary
+  discussion in tables.
+- BUT statistical / measurement results ARE tabular data and MUST be presented
+  as Markdown tables, not buried in prose: reliability & validity (Cronbach's
+  alpha, composite reliability, AVE, item loadings), correlation/HTMT matrices,
+  descriptives, and path/regression coefficients. Put each row on its own line
+  with correct "| col | col |" pipes and a "| --- | --- |" separator row, then
+  interpret the table in prose AFTER it.
 - Use "## Heading" on its own line for sub-sections.
 - Do not output the chapter title as an H1 — it is added automatically.
+- Never write meta-commentary about the writing process, missing inputs, or
+  assumptions you made to fill gaps (e.g. "the author assumed", "due to limited
+  information", "giả định", "thiếu thông tin"). Write as a finished scholarly
+  document — if a fact is not in the inputs, omit it, do not narrate its absence.
 """
 
 

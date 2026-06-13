@@ -98,7 +98,12 @@ export function CardGridWidget({
               onClick={() => handleCardClick(opt.value, opt.label)}
               data-testid={`card-${opt.value}`}
               className={[
-                "text-left rounded-xl border bg-white px-3 py-2",
+                // flex-col + justify-center: grid stretches all cards in a row
+                // to the tallest one (a card with a 2-line description), so a
+                // label-only card like "Có" would otherwise pin its text to
+                // the top. Centering the content block keeps every card's text
+                // vertically aligned regardless of neighbor height.
+                "flex flex-col justify-center text-left rounded-xl border bg-white px-3 py-2",
                 "hover:border-primary-500 hover:bg-primary-50",
                 "disabled:opacity-50 disabled:cursor-not-allowed transition-colors",
                 highlighted ? "border-primary-600 bg-primary-50" : "border-ink-200",

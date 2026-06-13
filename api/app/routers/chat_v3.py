@@ -28,6 +28,54 @@ from ..sse import sse_pack
 
 logger = logging.getLogger(__name__)
 
+
+# Reader of the progress bubble is a thesis student, not an engineer — never
+# leak raw tool names (`commit_slice`, `read_file`). Maps the deep-agent tool
+# (name + args) to a plain-language line. Mirrors the web fallback in
+# useChat.ts; kept here because tool args (e.g. read_file's path) only exist
+# on the backend event.
+_MODULE_NOUN = {
+    "M1": "topic", "M2": "literature review", "M3": "research design",
+    "M4": "data analysis", "M5": "writing",
+}
+_STATS_LABEL = {
+    "detect": "Inspecting your dataset…",
+    "describe": "Summarizing your data…",
+    "corr": "Checking correlations…",
+    "cronbach": "Checking reliability (Cronbach's α)…",
+    "regression": "Running the regression…",
+    "ttest": "Running a t-test…",
+}
+_TOOL_LABEL = {
+    "read_slice": "Checking your project so far…",
+    "write_file": "Saving to your workspace…",
+    "edit_file": "Updating your draft…",
+    "ls": "Looking through your files…",
+    "glob": "Looking through your files…",
+    "grep": "Searching your files…",
+    "write_todos": "Planning the next steps…",
+    "task": "Working on a sub-task…",
+    "research_scout": "Searching for relevant research…",
+    "parse_reference": "Reading a reference…",
+    "export_docx": "Building your Word document…",
+}
+
+
+def _tool_progress_label(name: str, args: dict) -> str:
+    if name == "read_file":
+        path = str(args.get("file_path") or args.get("path") or "")
+        if "/skills/" in path:
+            return "Reading the guide for this step…"
+        if "upload" in path:
+            return "Reading your uploaded file…"
+        return "Looking something up…"
+    if name == "commit_slice":
+        noun = _MODULE_NOUN.get(str(args.get("module") or ""))
+        return f"Saving your {noun}…" if noun else "Saving your progress…"
+    if name == "run_stats":
+        return _STATS_LABEL.get(str(args.get("op") or ""), "Analyzing your data…")
+    return _TOOL_LABEL.get(name, "Working on it…")
+
 # One agent per project per process. Tools close over the project's store and
 # workspace, so the cache key is the project id; the checkpointer inside is
 # shared (thread_id scopes conversations).
@@ -280,15 +328,22 @@ async def send_message_v3(
                 elif kind == "tool_start":
                     print(f"[v3] tool_start name={ev.get('name')!r}",
                           file=_sys.stderr, flush=True)
+                    # Student-facing label, not the raw tool name (`commit_slice`
+                    # meant nothing to the thesis-writer watching the bubble).
+                    # Built here because this is the only layer with the tool
+                    # args (read_file needs the path to say "guide" vs "upload").
                     yield sse_pack({"type": "progress", "payload": {
-                        "stage": ev["name"], "message": f"⚙ {ev['name']}…",
+                        "stage": ev["name"],
+                        "message": _tool_progress_label(ev.get("name", ""), ev.get("args") or {}),
                     }})
                 elif kind == "tool_end":
+                    # No progress line on tool_end: it carries no args, so a
+                    # read_file end can't reproduce the start's friendly label
+                    # and would show a mismatched duplicate. The start line
+                    # already told the user what's happening; the next event
+                    # (another tool or the reply tokens) supersedes it.
                     print(f"[v3] tool_end name={ev.get('name')!r}",
                           file=_sys.stderr, flush=True)
-                    yield sse_pack({"type": "progress", "payload": {
-                        "stage": ev["name"], "message": f"✓ {ev['name']}",
-                    }})
                 elif kind == "tool_calls":
                     # Interactive widget hint — render as clickable cards
                     # in MessageBubble. Captured for persistence below.

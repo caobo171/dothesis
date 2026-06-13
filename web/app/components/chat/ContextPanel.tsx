@@ -389,10 +389,14 @@ function M1Body({ data }: { data: Record<string, any> | null }) {
 
 function M2Body({ data }: { data: Record<string, any> | null }) {
   if (!data) return <EmptyHint text="No literature yet — run M2 scout to gather sources." />;
-  // Loose shapes: agent + engine wrote these at different times; tolerate
-  // either `description`/`text`/`title` for the prose field.
+  // Loose shapes: agent + engine wrote these at different times. The current
+  // bootstrap/M2 commit shape is `gap_id` + `one_sentence` + `type` +
+  // `why_its_a_gap` + `addressable_as`; older paths used `description`/`text`/
+  // `title` + `relevance`. Tolerate all so the chip never renders an empty "—".
   type Gap = {
-    id?: string;
+    id?: string; gap_id?: string;
+    one_sentence?: string; type?: string;
+    why_its_a_gap?: string; addressable_as?: string;
     description?: string; text?: string; title?: string;
     relevance?: string;
     confirmed?: boolean;
@@ -417,7 +421,12 @@ function M2Body({ data }: { data: Record<string, any> | null }) {
     | null
   >(null);
 
-  const gapText = (g: Gap) => g.description || g.text || g.title || "—";
+  const gapText = (g: Gap) =>
+    g.one_sentence || g.description || g.text || g.title || g.type || "—";
+  // Chip + modal id: the commit shape stores `gap_id` ("1"), older paths used
+  // `id`. Fall back to positional G{n} so a malformed gap still gets a label.
+  const gapId = (g: Gap, i: number) =>
+    g.id ?? (g.gap_id ? `G${g.gap_id}` : `G${i + 1}`);
   const hypothesisText = (h: Hypothesis | string | Record<string, any>): string => {
     if (typeof h === "string") return h;
     // Different commit paths use different keys: design uses `text`,
@@ -456,7 +465,7 @@ function M2Body({ data }: { data: Record<string, any> | null }) {
                 }`}
               >
                 <span className="font-serif font-extrabold text-[11px]">
-                  {g.id ?? `G${i + 1}`}
+                  {gapId(g, i)}
                 </span>
                 <span className="text-[11.5px] text-ink-700 max-w-[140px] truncate">
                   {gapText(g)}
@@ -541,7 +550,10 @@ function modalTitle(
   gaps: any[], hyps: any[], sources: any[],
 ): string {
   if (!m) return "";
-  if (m.kind === "gap") return `${gaps[m.index]?.id ?? `Gap ${m.index + 1}`}`;
+  if (m.kind === "gap") {
+    const g = gaps[m.index];
+    return g?.id ?? (g?.gap_id ? `G${g.gap_id}` : `Gap ${m.index + 1}`);
+  }
   if (m.kind === "hypothesis") {
     const h = hyps[m.index];
     const id = typeof h === "string" ? `H${m.index + 1}` : (h.id ?? `H${m.index + 1}`);
@@ -565,14 +577,31 @@ function modalSubtitle(
 
 function GapDetail({ gap, text }: { gap: any; text: string }) {
   const supporting: any[] = gap?.supporting_papers ?? [];
+  // Current commit shape carries `type` + `why_its_a_gap` + `addressable_as`;
+  // `relevance` was the older field. Show whichever are present.
+  const gapType = gap?.type;
+  const why = gap?.why_its_a_gap;
+  const addressable = gap?.addressable_as;
   return (
     <div className="space-y-3">
-      {gap?.relevance && (
+      {(gapType || gap?.relevance) && (
         <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-[11px] font-semibold">
-          Relevance: {gap.relevance}
+          {gapType ?? `Relevance: ${gap.relevance}`}
         </div>
       )}
       <p className="text-[14px] leading-relaxed text-ink-900">{text}</p>
+      {why && (
+        <div className="border-l-2 border-primary-200 pl-3 text-[12.5px] text-ink-600">
+          <FieldLabel name="why it's a gap" top />
+          <div className="mt-1">{why}</div>
+        </div>
+      )}
+      {addressable && (
+        <div className="border-l-2 border-emerald-200 pl-3 text-[12.5px] text-ink-600">
+          <FieldLabel name="how to address it" top />
+          <div className="mt-1">{addressable}</div>
+        </div>
+      )}
       {supporting.length > 0 && (
         <div>
           <FieldLabel name={`supporting papers (${supporting.length})`} top />

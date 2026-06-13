@@ -21,13 +21,24 @@ You are writing Chapter 3 (Methodology) of a master's thesis.
 ## References available for citation
 {references_list}
 
+## Ground rules
+- Use only the values in the Inputs. The sample size is `{target_sample_size}` —
+  do NOT invent a different figure, and do NOT claim data has already been
+  collected/analysed (that is Chapter 4's job; here you describe the planned
+  procedure). Never narrate missing inputs or assumptions you made to fill gaps.
+- The analysis tool you justify in 3.5 MUST be `{tool}`, and it MUST be the same
+  method family that Chapter 4 reports. If `{tool}` is PLS-SEM (SmartPLS), the
+  results will be variance-based (R²/f²/Q², path coefficients) — do not describe
+  a covariance-based (CB-SEM) procedure with CFI/TLI/RMSEA, and vice-versa.
+
 ## Instructions
 For paradigm = quantitative, write sections:
 - 3.1 Research design rationale (justify quant approach + chosen design)
 - 3.2 Population and sampling (sampling_strategy + target_sample_size)
 - 3.3 Instrument: measurement model + scale items per construct
 - 3.4 Data collection procedure
-- 3.5 Data analysis approach (justify tool — SmartPLS/SPSS/AMOS/R lavaan)
+- 3.5 Data analysis approach (justify tool `{tool}` — and stay consistent with
+  the metric family Chapter 4 will report)
 
 For paradigm = qualitative, write sections:
 - 3.1 Research approach + Braun & Clarke (2006) justification

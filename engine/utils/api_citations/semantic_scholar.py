@@ -21,10 +21,17 @@ class SemanticScholarClient(BaseAPIClient):
     API Documentation: https://api.semanticscholar.org/api-docs/
     """
 
+    # S2 enforces 1 req/sec cumulative across ALL endpoints, even for our
+    # approved API key (per the key-grant email, 2026-06-14). The key does NOT
+    # unlock the 100/sec tier. Pace strictly below 1/sec to avoid 429s: 0.9/sec
+    # (~1.11s spacing) keeps us under one request in any rolling 1s window while
+    # maximizing throughput.
+    SAFE_RATE_PER_SECOND: float = 0.9
+
     def __init__(
         self,
         api_key: Optional[str] = None,
-        rate_limit_per_second: float = 5.0,
+        rate_limit_per_second: float = 0.9,
         timeout: int = 15,
         max_retries: int = 5,
     ):
@@ -32,8 +39,11 @@ class SemanticScholarClient(BaseAPIClient):
         Initialize Semantic Scholar API client.
 
         Args:
-            api_key: Optional S2 API key for higher rate limits (get free key at https://www.semanticscholar.org/product/api)
-            rate_limit_per_second: Maximum requests per second (S2 allows 100 with key, 1/sec without)
+            api_key: Optional S2 API key (sent as x-api-key header). Our key's
+                tier is 1 req/sec cumulative across all endpoints, so the key
+                does not raise the rate ceiling.
+            rate_limit_per_second: Maximum requests per second. Capped to
+                SAFE_RATE_PER_SECOND (0.9) regardless of caller value.
             timeout: Request timeout in seconds
             max_retries: Maximum retry attempts (increased for rate limit resilience)
         """
@@ -42,15 +52,13 @@ class SemanticScholarClient(BaseAPIClient):
         # Use provided key or fall back to environment variable
         self.s2_api_key = api_key or os.getenv('SEMANTIC_SCHOLAR_API_KEY')
 
-        # With API key: higher rate limit (100/sec allowed, we use 10 to be safe)
-        # Without API key: lower rate limit (1/sec enforced by S2)
+        # Always pace below S2's 1 req/sec hard limit. A caller may request an
+        # even slower rate, but never a faster one than the safe ceiling.
+        rate_limit_per_second = min(rate_limit_per_second, self.SAFE_RATE_PER_SECOND)
         if self.s2_api_key:
-            rate_limit_per_second = min(rate_limit_per_second, 10.0)
-            logger.info("Semantic Scholar: Using API key for higher rate limits")
+            logger.info("Semantic Scholar: Using API key (1 req/sec tier), pacing at %.2f req/sec", rate_limit_per_second)
         else:
-            # Without key, S2 enforces 1 req/sec - use 0.5 to be safe
-            rate_limit_per_second = 0.5
-            logger.debug("Semantic Scholar: No API key, using conservative rate limit (0.5 req/sec)")
+            logger.debug("Semantic Scholar: No API key, pacing at %.2f req/sec", rate_limit_per_second)
 
         super().__init__(
             base_url="https://api.semanticscholar.org",
