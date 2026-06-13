@@ -57,3 +57,20 @@ def test_stream_user_dependency():
     # scope (computed from the request path params), and returns the User.
     from app.deps import stream_user_factory
     assert callable(stream_user_factory(lambda **kw: f"job:{kw['job_id']}"))
+
+
+def test_stream_user_missing_token_raises_401():
+    # The inner dependency must reject a request with no ?st= as a clean 401.
+    # asyncio.run variant — no pytest-asyncio plugin dependency needed.
+    import asyncio
+    from fastapi import HTTPException
+    from app.deps import stream_user_factory
+    dep = stream_user_factory(lambda **kw: "job:abc")
+    class _Req:
+        query_params = {}
+        path_params = {}
+    with pytest.raises(HTTPException) as ei:
+        # _dep checks ?st= FIRST and raises before touching settings/db, so
+        # passing None for both is safe for the missing-token path.
+        asyncio.run(dep(_Req(), settings=None, db=None))
+    assert ei.value.status_code == 401

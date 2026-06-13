@@ -137,14 +137,26 @@ def stream_user_factory(scope_builder: Callable[..., str]):
         token = request.query_params.get("st")
         if not token:
             raise _401("no_token", "missing stream token (?st=)")
-        expected_scope = scope_builder(**request.path_params)
+        try:
+            # scope_builder must be total over the route's path params; a
+            # wiring mismatch (KeyError/TypeError) must fail as a clean 401,
+            # never a raw traceback into the SSE stream (see jwt_auth.py:
+            # "Never let a bare exception bubble to the SSE stream").
+            expected_scope = scope_builder(**request.path_params)
+        except Exception:  # noqa: BLE001
+            raise _401("bad_token", "stream scope resolution failed")
         try:
             claims = verify_stream_token(
                 token, expected_scope=expected_scope, secret=settings.session_secret)
         except ValueError as e:
             code = "expired" if "expired" in str(e) else "bad_token"
             raise _401(code, str(e))
-        user = db.get(User, claims.user_id)
+        try:
+            # Mirror current_user: a malformed `sub` (bad UUID etc.) must
+            # become a 401, not a DB-driver 500 leaking into the stream.
+            user = db.get(User, claims.user_id)
+        except Exception:  # noqa: BLE001 — bad UUID format etc.
+            raise _401("bad_token", "token claims malformed")
         if user is None:
             raise _401("no_user", "user not found")
         return user
