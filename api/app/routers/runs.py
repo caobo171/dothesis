@@ -1,16 +1,22 @@
 """Runs router — start/pause/resume/status for auto-mode orchestrator runs."""
 from __future__ import annotations
 
+import asyncio
 import uuid
+from typing import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import job_runner
 from ..db import db_session
 from ..deps import current_user
-from ..models import Job, Project, User
+from ..models import Job, JobEvent, Project, User
+from ..pubsub import pubsub
+from ..sse import sse_pack
 
 router = APIRouter(tags=["runs"])
 
@@ -168,5 +174,69 @@ def get_run(run_id: uuid.UUID,
         "started_at": j.started_at.isoformat() if j.started_at else None,
         "finished_at": j.finished_at.isoformat() if j.finished_at else None,
         "error_text": j.error_text,
-        "events_url": f"/api/v1/jobs/{j.id}/events",
+        "events_url": f"/api/v1/runs/{j.id}/events",
     }
+
+
+@router.post("/runs/{run_id}/events")
+async def stream_run_events(
+    run_id: uuid.UUID,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """SSE stream of an auto-approve run's live progress.
+
+    Runs are Job rows, so their events live in JobEvent + pubsub keyed by
+    run_id — the same pipe job_runner._monitor writes to. POST (not GET) so the
+    access_token rides in the body per this project's POST-only convention; the
+    web client streams it via fetch + ReadableStream, not EventSource. We replay
+    the backlog from the DB first (the drawer usually opens mid-run), then tail
+    live events until a terminal one.
+    """
+    run = _owned_run(db, user, run_id)
+    if run.status in {"queued", "running"}:
+        job_runner.start_monitor(run_id)
+
+    backlog: list[tuple[int, dict]] = []
+    for ev in db.scalars(
+        select(JobEvent).where(JobEvent.job_id == run_id).order_by(JobEvent.id)
+    ).all():
+        # meta_json first so the column fields win on key collisions.
+        payload = {**(ev.meta_json or {}),
+                   "type": ev.type, "phase": ev.phase, "agent": ev.agent, "text": ev.text}
+        backlog.append((ev.id, payload))
+
+    sub = pubsub.subscribe(run_id)
+
+    async def gen() -> AsyncIterator[str]:
+        try:
+            for ev_id, payload in backlog:
+                yield sse_pack(payload, event_id=ev_id)
+            while True:
+                try:
+                    msg = await asyncio.wait_for(sub.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                yield sse_pack({k: v for k, v in msg.items() if k != "id"},
+                               event_id=msg.get("id"))
+                if msg.get("type") in {"job_done", "error"}:
+                    break
+        finally:
+            pubsub.unsubscribe(run_id, sub)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@router.post("/runs/{run_id}/cancel")
+def cancel_run(run_id: uuid.UUID,
+               user: User = Depends(current_user),
+               db: Session = Depends(db_session)):
+    """Stop an in-flight auto-approve run (SIGTERM the subprocess, mark
+    canceled). Distinct from pause/resume — there is no resume after cancel."""
+    run = _owned_run(db, user, run_id)
+    if run.status in {"done", "failed", "canceled"}:
+        return {"status": run.status}
+    job_runner.cancel_job(db, run)
+    return {"status": "canceled"}

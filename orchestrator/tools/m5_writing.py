@@ -498,6 +498,9 @@ def _strip_uncited_citations(prose: str, references: list[dict]) -> str:
 # Appended to every chapter prompt. The composed prose is rendered to DOCX/PDF
 # via pandoc, which needs well-formed markdown — the LLM otherwise mushes list
 # items onto one line and emits broken tables.
+# Appended to every chapter prompt so the academic-style + table-interpretation
+# rules apply uniformly across all 6 chapters from one place, rather than being
+# duplicated (and drifting) across each prompts/m5/<chapter>.md file.
 _MARKDOWN_FORMAT_RULES = """
 
 ---
@@ -519,6 +522,25 @@ OUTPUT FORMATTING (strict — the text is rendered to a Word document via Markdo
   assumptions you made to fill gaps (e.g. "the author assumed", "due to limited
   information", "giả định", "thiếu thông tin"). Write as a finished scholarly
   document — if a fact is not in the inputs, omit it, do not narrate its absence.
+
+ACADEMIC STYLE (applies to every chapter):
+- Impersonal voice only — never "I", "we", "the author thinks". Attribute claims
+  to evidence: "the results indicate...", "the analysis shows...".
+- No unsupported certainties — replace "certainly / will definitely / proves"
+  with calibrated phrasing ("the results suggest", "the findings indicate").
+- No absolutes about the sample — "all students" becomes "most respondents in
+  the sample".
+- No emotive or colloquial words ("sadly", "amazing", "a lot of") — stay neutral
+  and precise.
+- Split any sentence over ~40 words into shorter, single-idea sentences.
+- Vary vocabulary — don't repeat the same verb (rotate study/examine/analyse/
+  assess; affect/influence/shape; show/indicate/demonstrate).
+- Expand each abbreviation on first use, then use the short form.
+
+GOLDEN RULE FOR TABLES: every statistical table MUST be followed by an
+interpreting paragraph. Pattern: [overview sentence] -> [table] -> [detailed
+interpretation of the key values] -> [closing comment]. Never leave a table
+standing alone with no prose.
 """
 
 

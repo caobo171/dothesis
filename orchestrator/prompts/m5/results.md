@@ -89,6 +89,26 @@ Use `{mixed_design_type}` to structure (start at 4.1):
 - 4.4 Integration: convergence, divergence, expansion (explain how quant + qual
   results inform each other; cross-reference specific numbers and quotes)
 
+## Interpretation patterns (every table needs interpreting prose)
+
+Each results table follows the same shape: **[overview sentence] → [table] →
+[detailed interpretation of the key values] → [closing comment]**. Never leave a
+table standing alone. Adapt these model sentences (fill the brackets from `{results}`):
+
+- Sample/descriptives: *"The study obtained [n] valid responses out of [total]
+  distributed (a response rate of [%])."* Then interpret each demographic.
+- Reliability: *"The reliability test in Table 4.1 shows all constructs have
+  Cronbach's α above 0.70, meeting the threshold."* If an item was dropped:
+  *"Item [X] was removed because its corrected item-total correlation fell below 0.30."*
+- EFA: *"The EFA returned KMO = [value] (> 0.5), a significant Bartlett's test
+  (Sig = 0.000), and total variance explained of [%] (> 50%)."*
+- Correlation: *"All independent variables correlate with the dependent variable
+  at the 1% significance level (Sig < 0.01)."*
+- Regression / structural: *"The model explains [%] of the variance in the
+  dependent variable (adjusted R² = [value])."*
+- Hypothesis test: *"H1 is supported, with β = [value] and Sig = [value]."* Then
+  rank the supported paths by effect size, not just significance.
+
 Cite inline as (Author, Year); for narrative citations where the author is the
 sentence subject, use "Author (Year)". Write in {language}.
 

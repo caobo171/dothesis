@@ -21,6 +21,15 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     settings.job_workdir_root.mkdir(parents=True, exist_ok=True)
 
+    # Capture the running event loop so job_runner.start_monitor can schedule
+    # the events-tailing task even when called from a SYNC endpoint (which
+    # FastAPI runs in a threadpool worker with no running loop — that was the
+    # "no running event loop" 500 when starting an auto-approve run).
+    import asyncio as _asyncio
+
+    from . import job_runner
+    job_runner.set_app_loop(_asyncio.get_running_loop())
+
     # Orchestrator: prime the graph cache at startup so first chat turn isn't slow.
     # Interactive needs AsyncPostgresSaver (chat uses graph.astream); auto-mode
     # stays on sync PostgresSaver (subprocess invokes synchronously).

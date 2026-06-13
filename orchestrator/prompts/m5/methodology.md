@@ -49,6 +49,26 @@ For paradigm = qualitative, write sections:
 
 For paradigm = mixed, include both above + 3.6 integration section explaining the {mixed_design_type} sequencing.
 
+## Model sentences (quantitative sections)
+
+Adapt these standard academic phrasings — fill the brackets from the Inputs, never invent figures:
+
+- 3.1 Process: *"The research was conducted through a [N]-step process: (1)..., (2)..., (3)..."*
+- 3.2 Data collection: *"Primary data were collected through a structured
+  questionnaire survey, distributed online via Google Forms from [month] to [month] [year]."*
+- 3.3 Instrument: *"The questionnaire comprised two parts: Part 1 captured
+  demographic information ([k] items), and Part 2 measured the research constructs
+  ([m] items) on a five-point Likert scale."* State the source reference for each scale.
+- 3.4 Sampling: *"Following Hair et al. (2014), the minimum sample for EFA is n ≥ 5
+  × the number of observed items; with [m] items the minimum is [5m]. The study
+  targets [target_sample_size] valid responses."*
+- 3.5 Analysis: *"Data were analysed using [tool] through: (1) descriptive
+  statistics, (2) reliability testing (Cronbach's α), (3) EFA, (4) Pearson
+  correlation, (5) [the structural/regression step matching {tool}]."*
+
+Keep the analysis steps consistent with the metric family Chapter 4 reports
+(variance-based for PLS-SEM; covariance-based fit indices for CB-SEM).
+
 Cite inline as (Author, Year). Write in {language}. Length: 800-1500 words.
 
 Output: Chapter 3 prose as markdown only.

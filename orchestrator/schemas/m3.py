@@ -6,9 +6,9 @@ SP4 makes paradigm-specific fields explicit and enforces them via a
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .common import Paradigm
+from .common import Paradigm, normalize_research_type
 
 MixedDesignType = Literal["sequential_explanatory", "sequential_exploratory"]
 
@@ -16,6 +16,12 @@ MixedDesignType = Literal["sequential_explanatory", "sequential_exploratory"]
 class M3Output(BaseModel):
     # Shared common fields
     paradigm: Paradigm
+
+    # Same enum + same LLM-variance risk as M1.research_type — normalize
+    # "Mixed-methods" / "Quantitative" / "qual" before the Literal check.
+    _norm_paradigm = field_validator("paradigm", mode="before")(
+        normalize_research_type
+    )
     design: str = Field(..., description="e.g. PLS-SEM, Thematic Analysis, Sequential Explanatory")
     tool: str = Field(..., description="SmartPLS, NVivo, SPSS, ...")
     sampling_strategy: str

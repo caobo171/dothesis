@@ -20,6 +20,16 @@ log = logging.getLogger(__name__)
 
 _monitors: dict[uuid.UUID, asyncio.Task] = {}
 
+# The app's main event loop, captured at startup (main.lifespan). start_monitor
+# needs it to schedule the monitor task when called from a sync endpoint, which
+# FastAPI runs in a threadpool worker thread where get_running_loop() raises.
+_app_loop: asyncio.AbstractEventLoop | None = None
+
+
+def set_app_loop(loop: asyncio.AbstractEventLoop) -> None:
+    global _app_loop
+    _app_loop = loop
+
 
 def spawn_job(db: Session, job: Job, brief: dict, resume_from: str | None = None) -> None:
     settings = get_settings()
@@ -72,8 +82,29 @@ def spawn_job(db: Session, job: Job, brief: dict, resume_from: str | None = None
 def start_monitor(job_id: uuid.UUID) -> None:
     if job_id in _monitors and not _monitors[job_id].done():
         return
-    loop = asyncio.get_running_loop()
-    _monitors[job_id] = loop.create_task(_monitor(job_id))
+    # Async endpoints run on the loop (get_running_loop works); sync endpoints
+    # run in a threadpool worker with no running loop, so fall back to the
+    # loop captured at startup. create_task / dict assignment must happen ON
+    # the loop thread, so when we're off it we hop over via call_soon_threadsafe.
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        running = None
+    loop = running or _app_loop
+    if loop is None:
+        log.warning("start_monitor: no event loop available — progress streaming "
+                    "disabled for %s", job_id)
+        return
+
+    def _create() -> None:
+        if job_id in _monitors and not _monitors[job_id].done():
+            return
+        _monitors[job_id] = loop.create_task(_monitor(job_id))
+
+    if running is loop:
+        _create()
+    else:
+        loop.call_soon_threadsafe(_create)
 
 
 async def _monitor(job_id: uuid.UUID) -> None:

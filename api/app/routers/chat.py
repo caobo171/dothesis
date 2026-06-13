@@ -108,8 +108,17 @@ def _orch_context_store(db: Session, project_id: uuid.UUID):
     )
 
 
-def _serialize_project(db: Session, p: Project) -> ProjectOut:
-    cs = db.get(ContextStore, p.id)
+# Sentinel so list_projects can pass a pre-fetched ContextStore (including a
+# legitimate None for projects that have no row yet) without _serialize_project
+# falling back to a per-row db.get — that fallback is what caused the N+1.
+_CS_UNSET: Any = object()
+
+
+def _serialize_project(db: Session, p: Project, cs: Any = _CS_UNSET) -> ProjectOut:
+    # Single-project callers omit `cs` and we look it up here; the list endpoint
+    # passes the row it already batch-loaded so we never query per project.
+    if cs is _CS_UNSET:
+        cs = db.get(ContextStore, p.id)
     return ProjectOut(
         id=p.id, name=p.name, field=p.field, language=p.language,
         citation_style=p.citation_style, status=p.status,
@@ -168,7 +177,15 @@ def list_projects(user: User = Depends(current_user),
                   .filter_by(user_id=user.id)
                   .order_by(Project.updated_at.desc())
                   .all())
-    return [_serialize_project(db, p) for p in projects]
+    # Batch-load every project's ContextStore in ONE query instead of a per-row
+    # db.get (the previous N+1: 1 + len(projects) queries, each pulling full
+    # m1–m5 JSONB). Map by project_id and hand each row to the serializer.
+    cs_by_id: dict[uuid.UUID, ContextStore] = {}
+    if projects:
+        ids = [p.id for p in projects]
+        cs_rows = db.query(ContextStore).filter(ContextStore.project_id.in_(ids)).all()
+        cs_by_id = {cs.project_id: cs for cs in cs_rows}
+    return [_serialize_project(db, p, cs_by_id.get(p.id)) for p in projects]
 
 
 @router.post("/projects/{project_id}", response_model=ProjectOut)

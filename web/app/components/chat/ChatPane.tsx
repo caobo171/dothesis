@@ -94,7 +94,7 @@ function getEmptyStateCopy(project: {
     title: "Start your thesis",
     body:
       "Type your research topic below and I'll guide you step by step — " +
-      "or hit Auto-draft to generate a full draft.",
+      "or hit Auto approve to write the full thesis end-to-end.",
   };
 }
 
@@ -133,6 +133,19 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     bootstrapFiredRef.current = true;
     void send(formatBootstrapMessage(payload));
   }, [projectId, messages.length, inflight, send]);
+
+  // Warn before closing/reloading the tab while a turn is streaming. A reload
+  // abandons the in-flight answer — the server stops the agent and saves only
+  // the partial reply — so prompt the user to confirm they want to lose it.
+  useEffect(() => {
+    if (!inflight) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = ""; // Chrome requires returnValue set to show the prompt.
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [inflight]);
   // SP6.5: include m5_writing.chapters so we can gate the "Open editor" link in
   // ChatHeader — the link must only appear once at least one chapter exists.
   // focus/current_module/module_status drive the header's focus chip (design's
@@ -292,7 +305,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         <div className="flex-1 flex flex-col items-center justify-center text-center px-6 text-gray-500">
           {hasChapters ? (
             <>
-              <p className="text-lg font-semibold text-gray-800">✨ This thesis was auto-drafted</p>
+              <p className="text-lg font-semibold text-gray-800">✨ This thesis was auto-written</p>
               <p className="mt-1 text-sm max-w-md">
                 All modules are complete — the draft lives in the editor and the
                 progress panel. Open the editor to read it, or type below to

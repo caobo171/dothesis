@@ -293,6 +293,60 @@ async def send_message_v3(
             finally:
                 await events_q.put(("done", None))
 
+        pump_task = None
+        _finalized = False
+
+        def _finalize():
+            """Persist the (partial-or-full) assistant reply + charge for tokens
+            used so far; return the `done` payload. Idempotent — runs exactly
+            once whether the turn completed normally, errored, or the client
+            disconnected mid-stream (browser close/reload). On disconnect this is
+            what SAVES the partial answer instead of throwing it away, and the
+            charge reflects only the tokens actually spent."""
+            nonlocal _finalized
+            if _finalized:
+                return None
+            _finalized = True
+            total_tokens = _usage_in + _usage_out
+            duration_ms = int((_time.monotonic() - _turn_t0) * 1000)
+            cost_credits = max(1, round(total_tokens / 1000)) if total_tokens else 0
+
+            full = "".join(chunks)
+            if full:
+                focus = DbProjectStateStore(
+                    engine, project_id, _workspace_dir(project_id)
+                ).load()["focus"]
+                with engine.connect() as conn:
+                    conn.execute(Message.__table__.insert().values(
+                        thread_id=thread_pk, role="assistant",
+                        content=full, module_tag=focus,
+                        tool_calls_json=final_tool_calls,
+                        cost_credits=cost_credits,
+                        duration_ms=duration_ms,
+                        total_tokens=total_tokens,
+                    ))
+                    conn.commit()
+
+            credit_balance = None
+            if cost_credits > 0:
+                try:
+                    with Session(engine) as _s:
+                        proj = _s.get(Project, project_id)
+                        owner = _s.get(User, proj.user_id) if proj else None
+                        if owner is not None:
+                            charge = min(cost_credits, owner.credit or 0)
+                            if charge > 0:
+                                debit(_s, owner, delta=charge, reason="chat_turn",
+                                      ref_type="thread", ref_id=thread_pk)
+                                _s.commit()
+                            credit_balance = owner.credit
+                except Exception:  # noqa: BLE001
+                    logger.exception("credit debit failed for thread %s", thread_pk)
+
+            return {"type": "done", "cost_credits": cost_credits,
+                    "duration_ms": duration_ms, "total_tokens": total_tokens,
+                    "credit_balance": credit_balance}
+
         try:
             if _bind_ctx is not None:
                 _bind_ctx.__enter__()
@@ -363,6 +417,12 @@ async def send_message_v3(
                     break
             # Re-raise any exception the pump task captured.
             await pump_task
+            # Normal completion: persist + charge, then send `done`. Done inside
+            # the try (before the finally) so the finally's _finalize() is a
+            # no-op here and the done event still reaches the client.
+            done_payload = _finalize()
+            if done_payload is not None:
+                yield sse_pack(done_payload)
         except Exception as _e:
             # If stream_turn raises outside its own try (or the for loop
             # itself dies), the user gets a silent stream end. Surface it.
@@ -373,71 +433,29 @@ async def send_message_v3(
             print("=== end traceback ===\n", file=_sys.stderr, flush=True)
             yield sse_pack({"type": "error",
                             "message": f"{type(_e).__name__}: {_e}"})
+            # Persist whatever streamed before the crash + charge for it.
+            done_payload = _finalize()
+            if done_payload is not None:
+                yield sse_pack(done_payload)
         finally:
+            # Client gone (browser close/reload) → GeneratorExit/CancelledError
+            # skip both branches above. Cancel the agent task so its research /
+            # LLM calls stop instead of running orphaned to completion (which
+            # kept burning tokens for output nobody receives), then persist
+            # whatever streamed so the partial answer isn't lost. _finalize is
+            # idempotent, so the normal/error paths above already ran it and
+            # this is a no-op there.
+            if pump_task is not None and not pump_task.done():
+                pump_task.cancel()
             if _bind_ctx is not None:
                 try:
                     _bind_ctx.__exit__(None, None, None)
                 except Exception:  # noqa: BLE001
                     pass
             _engine_progress.unregister(langgraph_thread_id)
+            _finalize()
             print(f"[v3] turn done counts={_counts}",
                   file=_sys.stderr, flush=True)
-
-        # Per-response cost + latency. Credits are derived from total tokens at
-        # a fixed rate (chat isn't billed per-token elsewhere, so this is a
-        # transparent display metric): ~1 credit per 1k tokens, min 1 when any
-        # work happened. Shown in the message footer + summed for thread/project.
-        total_tokens = _usage_in + _usage_out
-        duration_ms = int((_time.monotonic() - _turn_t0) * 1000)
-        cost_credits = max(1, round(total_tokens / 1000)) if total_tokens else 0
-
-        # Persist the assistant reply, tagged with the post-turn focus so
-        # bubbles get their module chip on reload.
-        full = "".join(chunks)
-        if full:
-            focus = DbProjectStateStore(
-                engine, project_id, _workspace_dir(project_id)
-            ).load()["focus"]
-            with engine.connect() as conn:
-                conn.execute(Message.__table__.insert().values(
-                    thread_id=thread_pk, role="assistant",
-                    content=full, module_tag=focus,
-                    # Persist widget hint so MessageBubble renders the
-                    # interactive cards on reload — without this the cards
-                    # would only appear during the in-flight stream and
-                    # vanish after SWR revalidation.
-                    tool_calls_json=final_tool_calls,
-                    cost_credits=cost_credits,
-                    duration_ms=duration_ms,
-                    total_tokens=total_tokens,
-                ))
-                conn.commit()
-
-        # Charge the user for this turn: reduce their balance AND write a ledger
-        # row so the spend shows in /credit/transactions (the per-message
-        # cost_credits above is only a display metric). Use a fresh Session — the
-        # request's db is closed by the time this async generator streams. Charge
-        # at most the available balance so a turn never crashes the stream on an
-        # empty wallet (pre-flight gating before the turn is a follow-up).
-        credit_balance = None
-        if cost_credits > 0:
-            try:
-                with Session(engine) as _s:
-                    proj = _s.get(Project, project_id)
-                    owner = _s.get(User, proj.user_id) if proj else None
-                    if owner is not None:
-                        charge = min(cost_credits, owner.credit or 0)
-                        if charge > 0:
-                            debit(_s, owner, delta=charge, reason="chat_turn",
-                                  ref_type="thread", ref_id=thread_pk)
-                            _s.commit()
-                        credit_balance = owner.credit
-            except Exception:  # noqa: BLE001
-                logger.exception("credit debit failed for thread %s", thread_pk)
-
-        yield sse_pack({"type": "done", "cost_credits": cost_credits,
-                        "duration_ms": duration_ms, "total_tokens": total_tokens,
-                        "credit_balance": credit_balance})
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache"})

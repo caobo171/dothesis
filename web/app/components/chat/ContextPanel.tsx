@@ -292,7 +292,7 @@ function M5Body({ data }: { data: Record<string, any> | null }) {
         <>
           <FieldLabel name="chapters" count={chapterCount} top />
           <div className="text-[12.5px] text-ink-600 mt-1">
-            {chapterCount}/6 chapters drafted
+            {chapterCount}/6 chapters written
           </div>
         </>
       )}
