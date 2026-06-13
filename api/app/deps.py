@@ -41,15 +41,17 @@ async def _extract_token(request: Request) -> str | None:
     Order of preference:
       1. `access_token` field inside the JSON body (POST endpoints — the
          canonical path per CLAUDE.md).
-      2. `?access_token=...` query parameter (transitional path for the
-         GETs we haven't migrated to POST yet — see CLAUDE.md "migrate
-         when next edited" rule).
-      3. `Authorization: Bearer <token>` header (for curl / Postman /
+      2. `Authorization: Bearer <token>` header (for curl / Postman /
          non-browser tooling; the web client never uses this path).
+
+    The legacy `?access_token=` query fallback was REMOVED once all reads moved
+    to POST (token in body) and the browser-GET-only routes (SSE + downloads)
+    switched to scoped `?st=` stream tokens (see deps.stream_user_factory). The
+    long-lived JWT must never appear in a URL/access log again.
 
     Returns the first token found or None. Callers raise 401 on None.
 
-    Body-mode failures are silent here so query/header fallbacks still run.
+    Body-mode failures are silent here so the header fallback still runs.
     """
     # Body — only for requests that actually carry one.
     try:
@@ -62,15 +64,10 @@ async def _extract_token(request: Request) -> str | None:
                     if isinstance(t, str) and t:
                         return t
             except json.JSONDecodeError:
-                pass  # bad JSON falls through to query / header
+                pass  # bad JSON falls through to the header
+
     except Exception:  # noqa: BLE001
         pass
-
-    # Query string — keeps existing GET endpoints working until they're
-    # migrated to POST per CLAUDE.md. New code should NOT rely on this.
-    t = request.query_params.get("access_token")
-    if isinstance(t, str) and t:
-        return t
 
     # Authorization header — tooling-only path. Same secret; same token.
     auth = request.headers.get("authorization")
@@ -86,16 +83,16 @@ async def current_user(
 ) -> User:
     """Resolve the User row from an access_token.
 
-    Token comes from the request body (POST endpoints) OR the query string
-    (legacy GETs during migration) OR an Authorization Bearer header
-    (tooling). Body wins when multiple are present.
+    Token comes from the request body (POST endpoints) OR an Authorization
+    Bearer header (tooling). Body wins when both are present. (The `?access_token=`
+    query path was removed — the JWT must never ride in a URL.)
 
     Raises 401 with a structured `code` for: missing token, bad/expired
     token, user not found.
     """
     token = await _extract_token(request)
     if not token:
-        raise _401("no_token", "missing access_token (body / query / Bearer)")
+        raise _401("no_token", "missing access_token (body / Bearer)")
 
     try:
         claims = verify_access_token(token, secret=settings.session_secret)

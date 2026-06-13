@@ -13,7 +13,7 @@ from app.models import CreditTransaction, Paper, User
 def buyer():
     Session = get_session_factory()
     with Session() as s:
-        u = User(email="creator@e.com", password_hash="x", credit=1000)
+        u = User(email="creator@e.com", username="creator", password_hash="x", credit=1000)
         s.add(u)
         s.commit()
         return u
@@ -68,7 +68,7 @@ def test_create_paper_with_premium_tier_deducts_more(client_for, buyer):
 def test_create_paper_returns_402_when_insufficient():
     Session = get_session_factory()
     with Session() as s:
-        u = User(email="broke@e.com", password_hash="x", credit=10)
+        u = User(email="broke@e.com", username="broke", password_hash="x", credit=10)
         s.add(u)
         s.commit()
         broke_id = u.id
@@ -107,7 +107,7 @@ def test_refund_helper_returns_credits_to_user():
 
     Session = get_session_factory()
     with Session() as s:
-        u = User(email="refund@e.com", password_hash="x", credit=760)
+        u = User(email="refund@e.com", username="refund", password_hash="x", credit=760)
         s.add(u)
         s.flush()
         paper = Paper(
@@ -144,7 +144,7 @@ def test_refund_helper_is_idempotent_via_double_call():
 
     Session = get_session_factory()
     with Session() as s:
-        u = User(email="idem@e.com", password_hash="x", credit=200)
+        u = User(email="idem@e.com", username="idem", password_hash="x", credit=200)
         s.add(u)
         s.flush()
         paper = Paper(
