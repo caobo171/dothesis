@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 _SEED: frozenset[str] = frozenset({
     "cao.nv17@gmail.com",
+    "caotest171@gmail.com"
 })
 
 
