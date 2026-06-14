@@ -79,3 +79,7 @@ web/tsconfig.tsbuildinfo
 
 .claude/*.lock
 dothesis_google_auth.json
+
+# Runtime config dir created by LibreOffice during DOCX→PDF export
+api/.config/
+api/.cache/
