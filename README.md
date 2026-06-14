@@ -131,5 +131,4 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md). When you change code, follow the repo 
 
 ## Links
 - License: [MIT](LICENSE)
-- Changelog: [CHANGELOG.md](CHANGELOG.md)
 - Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Agent contract: [`AGENTS.md`](AGENTS.md) · Method: [`docs/PIPELINE.md`](docs/PIPELINE.md)

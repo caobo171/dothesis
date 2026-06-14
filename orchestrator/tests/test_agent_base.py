@@ -23,6 +23,19 @@ class _ToyAgent(ModuleAgent):
     system_prompt = "You are a toy agent."
 
 
+def test_coerce_autofill_value_unwraps_dict_into_scalar_str_field():
+    """When the LLM auto-fills a str field with a card-hint dict, the coercion
+    extracts its chosen scalar so it can't poison the slice / crash downstream
+    .lower() calls. Dict-typed fields and plain strings pass through untouched."""
+    agent = _ToyAgent()
+    card = {"prompt": "Pick one…", "options": ["a", "b"], "selected": "SPSS"}
+    assert agent._coerce_autofill_value("title", card) == "SPSS"
+    assert agent._coerce_autofill_value("title", {"type": "Multiple regression"}) \
+        == "Multiple regression"
+    # A plain string passes through untouched.
+    assert agent._coerce_autofill_value("title", "SmartPLS") == "SmartPLS"
+
+
 def _state(messages, partial=None, mode="interactive"):
     cs = ContextStore()
     if partial:

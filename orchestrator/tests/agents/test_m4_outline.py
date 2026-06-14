@@ -33,6 +33,18 @@ def test_outline_template_key_from_tool_unknown():
     assert agent._outline_template_key_from_tool("Mystery Tool") == "Unknown"
 
 
+def test_outline_template_key_from_tool_card_descriptor_dict():
+    """Auto-mode threads stored the raw card descriptor dict instead of the
+    chosen string — resume must unwrap `selected` rather than crash on .lower()."""
+    agent = M4Agent()
+    tool = {"prompt": "Pick one of the tools below, or type your own.",
+            "options": ["SmartPLS", "AMOS", "R lavaan", "SPSS", "Stata"],
+            "selected": "SPSS"}
+    assert agent._outline_template_key_from_tool(tool) == "SPSS"
+    assert agent._outline_template_key_from_tool({"value": "SmartPLS"}) == "SmartPLS"
+    assert agent._outline_template_key_from_tool({}) == "Unknown"
+
+
 def test_walk_order_spss():
     """SPSS walk: data_paste → analysis_outline → _run_execution → _summary."""
     agent = M4Agent()

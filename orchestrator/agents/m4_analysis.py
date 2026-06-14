@@ -60,9 +60,18 @@ class M4Agent(PipelineAgent, ModuleAgent):
     _render_outline: dict | None = None
     _render_paradigm: str | None = None
 
-    def _outline_template_key_from_tool(self, tool: str | None) -> str:
-        """Map an M3-recorded analysis tool name to an outline template key."""
-        if tool is None:
+    def _outline_template_key_from_tool(self, tool) -> str:
+        """Map an M3-recorded analysis tool name to an outline template key.
+
+        `tool` is `str` per M3Output, but older/auto-mode threads stored the raw
+        card descriptor ({prompt, options, selected}) instead of the chosen
+        string. Unwrap a dict to its selected value so resume of those threads
+        doesn't crash on `.lower()`.
+        """
+        if isinstance(tool, dict):
+            tool = (tool.get("selected") or tool.get("value")
+                    or tool.get("name") or tool.get("label") or "")
+        if not isinstance(tool, str) or not tool:
             return "Unknown"
         t = tool.lower()
         if "smartpls" in t:

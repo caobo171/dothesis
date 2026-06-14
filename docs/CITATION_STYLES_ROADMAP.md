@@ -1,3 +1,5 @@
+> **📜 Historical / engine-era.** This document concerns the standalone open-source engine CLI (`engine/`) and was written for that product at a point in time. It does **not** describe the current chat-first DoThesis method — for that see `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, and `docs/PIPELINE.md`.
+
 # DoThesis Citation Styles - Technical Roadmap
 
 > **Date**: 2026-02-02 (updated 2026-02-03)

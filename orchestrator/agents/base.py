@@ -623,6 +623,10 @@ class ModuleAgent(ABC):
         except (json.JSONDecodeError, TypeError):
             logger.warning("%s auto-fill returned non-JSON: %r", self.module_key, resp[:200])
             filled = {}
+        # Coerce dict-shaped scalars (e.g. the LLM echoing a card hint into a
+        # str field) to their schema type before they land in the slice — model
+        # _validate below only logs, it doesn't fix the value.
+        filled = {k: self._coerce_autofill_value(k, v) for k, v in filled.items()}
         merged = {**partial, **filled,
                   "confirmed_at": datetime.now(timezone.utc).isoformat()}
         try:
@@ -1153,6 +1157,33 @@ class ModuleAgent(ABC):
                     (v.get("text", "") if isinstance(v, dict) else v)
                     for v in value
                 ]
+        return value
+
+    def _coerce_autofill_value(self, field_name: str, value):
+        """Auto-fill safety: if the LLM returned a dict for a scalar `str` field
+        (e.g. it echoed the card hint {prompt, options, selected} or {type, ...}
+        instead of the chosen string), extract the meaningful scalar. Dict-typed
+        fields (conceptual_model, etc.) and the verbatim widget-payload path are
+        left untouched — this is only applied to LLM auto-fill output.
+        """
+        if not isinstance(value, dict):
+            return value
+        from typing import Union, get_args, get_origin
+
+        field = self.schema.model_fields.get(field_name)
+        if field is None:
+            return value
+        ann = field.annotation
+        if get_origin(ann) is Union:
+            non_none = [a for a in get_args(ann) if a is not type(None)]
+            if non_none:
+                ann = non_none[0]
+        if ann is str:
+            for k in ("selected", "value", "text", "label", "name", "type"):
+                v = value.get(k)
+                if isinstance(v, str) and v:
+                    return v
+            return ""
         return value
 
     def _field_description(self, field_name: str) -> str:
