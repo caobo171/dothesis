@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -68,6 +69,82 @@ def _read_paper_text(p: str) -> str:
             logger.warning("pdfminer extract failed for %s", path)
             return ""
     return path.read_text(encoding="utf-8", errors="ignore")
+
+
+_DOMAIN_TITLE_RE = re.compile(r"^[\w-]+(?:\.[\w-]+)+(?:/\S*)?$")  # nih.gov, a.b.c/x
+
+
+def _is_junk_citation(c: dict) -> bool:
+    """True when a citation carries no usable bibliographic content.
+
+    The scout over-fetches: grounded search returns bare domain stubs
+    ("nih.gov") and some sources arrive with placeholder/empty titles. Such
+    rows render as blank reference lines, so we drop them before they reach the
+    citation_list / bibliography.
+    """
+    title = (c.get("title") or "").strip()
+    if not title:
+        return True
+    low = title.lower()
+    if low in {"title", "untitled", "n/a", "na", "none"} or low.startswith("title "):
+        return True
+    # A bare domain or URL masquerading as a title (no spaces, looks like a host).
+    if " " not in title and (title.startswith("http") or _DOMAIN_TITLE_RE.match(title)):
+        return True
+    return False
+
+
+def _strip_json_fence(s: str) -> str:
+    s = (s or "").strip()
+    if s.startswith("```"):
+        s = s.split("\n", 1)[1] if "\n" in s else s[3:]
+        if s.endswith("```"):
+            s = s[:-3]
+    return s.strip()
+
+
+def _filter_relevant_citations(citations: list[dict], topic: str) -> list[dict]:
+    """Drop citations that aren't topically relevant to `topic`.
+
+    The deep-research scout pulls in off-topic papers — the
+    "{topic} methodology and approaches" variant returns generic method papers
+    (PRISMA, systematic-review guides) and grounded search returns unrelated
+    highly-cited work (e.g. phosphorus reviews on a comedy thesis). One bounded
+    LLM pass keeps only on-topic titles. Safe fallback: keep all titled
+    citations on timeout/error/parse-failure — never silently empty the review.
+    """
+    titled = [c for c in citations if not _is_junk_citation(c)]
+    if len(titled) <= 3 or not (topic or "").strip():
+        return titled
+    listing = "\n".join(
+        f"{i}: {(c.get('title') or '')[:160]}" for i, c in enumerate(titled)
+    )
+    prompt = (
+        "You are screening search results for a literature review.\n"
+        f'Research topic: "{topic}"\n\n'
+        "Below is a numbered list of paper titles. Return ONLY a JSON array of "
+        "the integer indices of titles that are plausibly relevant to the topic. "
+        "Be inclusive — keep anything related to the topic's field, methods, or "
+        "context; drop only clearly unrelated papers.\n\n"
+        f"{listing}"
+    )
+    try:
+        from orchestrator.agents.base import bounded_invoke
+        resp = bounded_invoke(_get_llm(), prompt, max_seconds=30)
+        keep = {int(i) for i in json.loads(_strip_json_fence(resp.content))}
+        filtered = [c for i, c in enumerate(titled) if i in keep]
+        # Guard against a model that nukes everything (returns [] or a tiny
+        # fraction): keep the filtered set only when it retains a believable
+        # number of rows, else fall back to all titled — never ship an empty
+        # or near-empty literature review off one bad classification.
+        if len(filtered) >= max(1, len(titled) // 10):
+            return filtered
+        logger.warning("relevance filter kept too few (%d/%d) — keeping all titled",
+                       len(filtered), len(titled))
+        return titled
+    except Exception:  # noqa: BLE001 — degrade gracefully, never drop everything
+        logger.warning("relevance filter failed — keeping all titled citations")
+        return titled
 
 
 @tool
@@ -135,7 +212,7 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
         # nothing — the real reason M2 degraded to zero citations.
         return c.get(name) if isinstance(c, dict) else getattr(c, name, None)
 
-    return [
+    mapped = [
         {
             "title": _field(c, "title"),
             "authors": _field(c, "authors"),
@@ -151,6 +228,10 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
         }
         for c in citations
     ]
+    # Drop junk (blank/placeholder/domain-stub titles) and off-topic results
+    # before they reach the citation_list / bibliography. ~40% of a real scout
+    # was off-topic (phosphorus, PRISMA, frailty) on a stand-up-comedy thesis.
+    return _filter_relevant_citations(mapped, topic)
 
 
 @tool

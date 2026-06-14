@@ -138,6 +138,12 @@ class M5Agent(WizardAgent, ModuleAgent):
         seen: dict[tuple[str, str], dict] = {}
         for gap in context.get("research_gaps", []):
             for paper in gap.get("supporting_papers", []):
+                # Skip gap papers with no title: find_research_gaps often returns
+                # only {author, year}, which render as blank bibliography lines
+                # ("Author (Year). ."). They can still be cited inline via the
+                # titled citation_list entries collected below.
+                if not (paper.get("title") or "").strip():
+                    continue
                 key = (paper.get("author", ""), str(paper.get("year", "")))
                 if key != ("", "") and key not in seen:
                     seen[key] = paper

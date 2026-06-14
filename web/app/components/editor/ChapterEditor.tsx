@@ -46,6 +46,13 @@ export function ChapterEditor({
 
   const editor = useEditor({
     extensions: [StarterKit, AiPending, CitationMark],
+    // Apply prose styling + suppress the browser's default focus outline on the
+    // contenteditable node itself. Putting the class here (not on EditorContent)
+    // targets the inner `.ProseMirror` element — otherwise the wrapper styles
+    // and the editable's blue focus ring fight, drawing a box around the column.
+    editorProps: {
+      attributes: { class: "prose max-w-none focus:outline-none" },
+    },
     content: `<p>${initialProse.replace(/\n/g, "</p><p>")}</p>`,
     onUpdate({ editor }) {
       // Queue a debounced PATCH each time the document changes.
@@ -207,7 +214,7 @@ export function ChapterEditor({
         )}
       </BubbleMenu>
 
-      <EditorContent editor={editor} className="prose max-w-none" />
+      <EditorContent editor={editor} />
 
       {pendingEdits.length > 0 && (
         <div className="mt-6 border-t border-gray-200 pt-4 space-y-2">

@@ -6,7 +6,61 @@ import pytest
 from orchestrator.tools.m2_literature import (
     compile_citations, find_research_gaps, scout_citations,
     summarize_paper, verify_page_numbers,
+    _is_junk_citation, _filter_relevant_citations,
 )
+
+
+def test_is_junk_citation():
+    assert _is_junk_citation({})                                  # missing title
+    assert _is_junk_citation({"title": ""})                       # empty title
+    assert _is_junk_citation({"title": "nih.gov"})               # bare domain stub
+    assert _is_junk_citation({"title": "https://example.com/x"}) # url stub
+    assert _is_junk_citation({"title": "Title"})                 # placeholder
+    assert _is_junk_citation({"title": "Untitled"})
+    assert not _is_junk_citation(
+        {"title": "Audience reception of stand-up comedy in Vietnam"})
+
+
+def test_filter_relevant_drops_offtopic(monkeypatch):
+    cites = [
+        {"title": "Humor and identity in professional stand-up comedy"},
+        {"title": "Phosphorus Nutrient in Organic Farming"},
+        {"title": "Audience reception of Vietnamese stand-up comedy"},
+        {"title": "PRISMA 2020 systematic review statement"},
+        {"title": "nih.gov"},  # junk: removed before the LLM sees the list
+    ]
+    # After junk removal the titled list is [Humor(0), Phosphorus(1),
+    # Audience(2), PRISMA(3)]; the model keeps the two comedy papers.
+    resp = MagicMock(); resp.content = "[0, 2]"
+    monkeypatch.setattr("orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    monkeypatch.setattr("orchestrator.agents.base.bounded_invoke",
+                        lambda *a, **k: resp)
+    out = _filter_relevant_citations(cites, "stand-up comedy in Vietnam")
+    titles = {c["title"] for c in out}
+    assert "Humor and identity in professional stand-up comedy" in titles
+    assert "Audience reception of Vietnamese stand-up comedy" in titles
+    assert "Phosphorus Nutrient in Organic Farming" not in titles
+    assert "PRISMA 2020 systematic review statement" not in titles
+    assert "nih.gov" not in titles
+
+
+def test_filter_relevant_keeps_all_titled_on_llm_error(monkeypatch):
+    """If the relevance LLM times out/errors, keep every titled citation (never
+    silently empty the review) — but junk is still dropped deterministically."""
+    cites = [
+        {"title": "Humor in stand-up comedy"},
+        {"title": "Phosphorus Nutrient in Organic Farming"},
+        {"title": "Audience reception studies"},
+        {"title": "Performance studies and comedy"},
+        {"title": ""},  # junk
+    ]
+    def boom(*a, **k):
+        raise RuntimeError("llm down")
+    monkeypatch.setattr("orchestrator.tools.m2_literature._get_llm", lambda: MagicMock())
+    monkeypatch.setattr("orchestrator.agents.base.bounded_invoke", boom)
+    out = _filter_relevant_citations(cites, "stand-up comedy")
+    assert len(out) == 4                       # all titled kept on error
+    assert all((c.get("title") or "").strip() for c in out)  # junk still dropped
 
 
 def test_scout_citations_calls_engine_with_min_n(monkeypatch):

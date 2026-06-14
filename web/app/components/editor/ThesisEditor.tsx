@@ -106,7 +106,11 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
   const activeChapter = chapters[active];
 
   return (
-    <div className="flex flex-col min-h-screen">
+    // h-full (not min-h-screen) so this fills the bounded shell exactly; the
+    // body row gets min-h-0 so it can shrink below its content height, which is
+    // what lets ChapterEditor's overflow-y-auto take over and scroll instead of
+    // the whole column overflowing the clipped (overflow-hidden) shell.
+    <div className="flex flex-col h-full">
       <ReExportBar
         lastExportAt={lastExportAt}
         editsSinceExport={editsSinceExport}
@@ -114,7 +118,7 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
         exporting={exporting}
         error={exportError}
       />
-      <div className="flex flex-1">
+      <div className="flex flex-1 min-h-0">
         <OutlineRail present={presentNames} active={active} onSelect={setActive} />
         {activeChapter ? (
           <ChapterEditor

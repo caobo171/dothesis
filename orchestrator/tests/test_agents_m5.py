@@ -73,12 +73,26 @@ def test_m5_collect_references_handles_authors_as_list():
 def test_m5_collect_references_prefers_gap_papers_and_adds_citation_list():
     agent = M5Agent()
     refs = agent._collect_references({
-        "research_gaps": [{"supporting_papers": [{"author": "Wang", "year": 2011, "page": 5}]}],
-        "citation_list": [{"author": "Bass", "year": 1985}],
+        "research_gaps": [{"supporting_papers": [
+            {"author": "Wang", "year": 2011, "page": 5, "title": "Leadership styles"}]}],
+        "citation_list": [{"author": "Bass", "year": 1985, "title": "Leadership"}],
     })
     pairs = {(r.get("author"), str(r.get("year"))) for r in refs}
-    assert ("Wang", "2011") in pairs    # gap paper preserved
+    assert ("Wang", "2011") in pairs    # titled gap paper preserved
     assert ("Bass", "1985") in pairs    # citation_list merged in
+
+
+def test_m5_collect_references_drops_titleless_gap_papers():
+    """Gap papers with no title (the common find_research_gaps shape) render as
+    blank bibliography lines, so they're excluded from the reference pool."""
+    agent = M5Agent()
+    refs = agent._collect_references({
+        "research_gaps": [{"supporting_papers": [{"author": "Wang", "year": 2011}]}],
+        "citation_list": [{"author": "Bass", "year": 1985, "title": "Leadership"}],
+    })
+    pairs = {(r.get("author"), str(r.get("year"))) for r in refs}
+    assert ("Wang", "2011") not in pairs   # title-less gap paper dropped
+    assert ("Bass", "1985") in pairs       # titled citation_list entry kept
 
 
 def test_m5_normalize_chapters_passthrough_dict():
