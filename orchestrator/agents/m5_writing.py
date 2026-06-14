@@ -14,7 +14,7 @@ from orchestrator.tools.m5_writing import (
     compose_chapter, compose_section, rewrite_chapter,
     validate_draft, validate_citations,
     format_citations, compile_bibliography,
-    compile_pdf, export_docx,
+    compile_pdf, export_docx, run_export,
     _chapter_titles, _references_title,
 )
 
@@ -194,26 +194,7 @@ class M5Agent(WizardAgent, ModuleAgent):
                 project_id = str(state.get("project_id") or "")
                 if project_id:
                     sections = self._build_sections_for_export(base_result.context_patch)
-                    docx_result = export_docx.invoke({
-                        "sections": sections, "project_id": project_id,
-                    })
-                    pdf_result = compile_pdf.invoke({
-                        "sections": sections, "project_id": project_id,
-                    })
-                    artifacts = [
-                        ExportArtifact(
-                            kind="docx",
-                            s3_key=docx_result["s3_key"],
-                            download_url=f"/api/v1/projects/{project_id}/exports/{docx_result['s3_key'].split('/')[-1]}",
-                            size_bytes=docx_result["size_bytes"],
-                        ),
-                        ExportArtifact(
-                            kind="pdf",
-                            s3_key=pdf_result["s3_key"],
-                            download_url=f"/api/v1/projects/{project_id}/exports/{pdf_result['s3_key'].split('/')[-1]}",
-                            size_bytes=pdf_result["size_bytes"],
-                        ),
-                    ]
+                    artifacts = self._export_artifacts(sections, project_id)
                     base_result.context_patch["export_artifacts"] = [a.model_dump() for a in artifacts]
             return base_result
 
@@ -338,38 +319,41 @@ class M5Agent(WizardAgent, ModuleAgent):
             extra_messages=[bubble],
         )
 
-    def _finalize_and_export(self, state, partial):
-        """Compile docx + pdf, upload to S3, populate export_artifacts, transition.
+    def _export_artifacts(self, sections: list[dict], project_id: str) -> list[ExportArtifact]:
+        """Render docx + pdf via the shared citeproc export path (run_export).
 
-        Uses dict-shape return from compile_pdf/export_docx to propagate real
-        size_bytes into ExportArtifact instead of hardcoding 0.
+        Why not export_docx/compile_pdf directly (the old call): that plain
+        renderer produced the three auto-mode defects the user hit — in-text
+        "(Author, Year)" citations stayed plain text, the bibliography collapsed
+        into one run-on paragraph, and markdown result-tables got mangled. The
+        citeproc/pandoc path makes citations clickable, renders the bibliography
+        one entry per line, and renders markdown tables as real tables. It needs
+        the M2 references + the doc language (pulled from the render context);
+        run_export falls back to the plain render itself if pandoc is missing, so
+        export never breaks.
         """
+        ctx = type(self)._render_context or {}
+        references = self._collect_references(ctx)
+        language = ctx.get("language", "en")
+        arts = run_export(sections, project_id, references=references, language=language)
+        return [
+            ExportArtifact(
+                kind=a["kind"],
+                s3_key=a["s3_key"],
+                download_url=a["download_url"],
+                size_bytes=a["size_bytes"],
+            )
+            for a in arts
+        ]
+
+    def _finalize_and_export(self, state, partial):
+        """Compile docx + pdf, upload to S3, populate export_artifacts, transition."""
         project_id = str(state.get("project_id") or "")
         if not project_id:
             raise RuntimeError("M5 finalize requires project_id in state")
 
         sections_for_engine = self._build_sections_for_export(partial)
-        docx_result = export_docx.invoke({
-            "sections": sections_for_engine, "project_id": project_id,
-        })
-        pdf_result = compile_pdf.invoke({
-            "sections": sections_for_engine, "project_id": project_id,
-        })
-
-        artifacts = [
-            ExportArtifact(
-                kind="docx",
-                s3_key=docx_result["s3_key"],
-                download_url=f"/api/v1/projects/{project_id}/exports/{docx_result['s3_key'].split('/')[-1]}",
-                size_bytes=docx_result["size_bytes"],
-            ),
-            ExportArtifact(
-                kind="pdf",
-                s3_key=pdf_result["s3_key"],
-                download_url=f"/api/v1/projects/{project_id}/exports/{pdf_result['s3_key'].split('/')[-1]}",
-                size_bytes=pdf_result["size_bytes"],
-            ),
-        ]
+        artifacts = self._export_artifacts(sections_for_engine, project_id)
         partial["export_artifacts"] = [a.model_dump() for a in artifacts]
         partial["confirmed_at"] = datetime.now(timezone.utc).isoformat()
         return ModuleStepResult(

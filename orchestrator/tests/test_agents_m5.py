@@ -127,13 +127,15 @@ def test_m5_auto_composes_each_chapter_separately_and_exports(monkeypatch):
     fake_bib.invoke.return_value = "Bass, A. (1990)."
     monkeypatch.setattr(m5_mod, "compile_bibliography", fake_bib)
 
-    fake_docx = MagicMock()
-    fake_docx.invoke.return_value = {"s3_key": "projects/p/exports/thesis-real.docx", "size_bytes": 512}
-    monkeypatch.setattr(m5_mod, "export_docx", fake_docx)
-
-    fake_pdf = MagicMock()
-    fake_pdf.invoke.return_value = {"s3_key": "projects/p/exports/thesis-real.pdf", "size_bytes": 1024}
-    monkeypatch.setattr(m5_mod, "compile_pdf", fake_pdf)
+    # Auto export now goes through the shared citeproc path (run_export) so
+    # citations/bibliography/tables render correctly — mock it at that level.
+    fake_run_export = MagicMock(return_value=[
+        {"kind": "docx", "s3_key": "projects/p/exports/thesis-real.docx",
+         "size_bytes": 512, "download_url": "/api/v1/projects/p/exports/thesis-real.docx"},
+        {"kind": "pdf", "s3_key": "projects/p/exports/thesis-real.pdf",
+         "size_bytes": 1024, "download_url": "/api/v1/projects/p/exports/thesis-real.pdf"},
+    ])
+    monkeypatch.setattr(m5_mod, "run_export", fake_run_export)
 
     state = {
         "messages": [HumanMessage(content="export")],
@@ -156,4 +158,4 @@ def test_m5_auto_composes_each_chapter_separately_and_exports(monkeypatch):
     keys = {a["s3_key"] for a in res.context_patch["export_artifacts"]}
     assert "projects/p/exports/thesis-real.docx" in keys
     assert "projects/p/exports/thesis-real.pdf" in keys
-    assert fake_docx.invoke.called and fake_pdf.invoke.called
+    assert fake_run_export.called
