@@ -4,6 +4,17 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { apiFetch, ApiError } from "./api";
 import { tokenStore } from "./tokenStore";
 
+/**
+ * @typedef {Object} AuthContextValue
+ * @property {any} user
+ * @property {boolean} loading
+ * @property {(email: string, password: string) => Promise<any>} login
+ * @property {(email: string, password: string) => Promise<any>} signup
+ * @property {() => Promise<void>} logout
+ * @property {(payload: any) => any} acceptTokenPayload
+ */
+
+/** @type {import('react').Context<AuthContextValue | null>} */
 const AuthContext = createContext(null);
 
 /**
