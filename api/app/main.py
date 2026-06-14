@@ -30,13 +30,14 @@ async def lifespan(app: FastAPI):
     from . import job_runner
     job_runner.set_app_loop(_asyncio.get_running_loop())
 
-    # Orchestrator: prime the graph cache at startup so first chat turn isn't slow.
-    # Interactive needs AsyncPostgresSaver (chat uses graph.astream); auto-mode
-    # stays on sync PostgresSaver (subprocess invokes synchronously).
+    # Orchestrator startup priming. Chat turns run on the v3 deep agent, which
+    # reuses the orchestrator's shared async Postgres pool (chat_v3's
+    # checkpointer) — warm it so the first turn isn't slow. Auto-draft still
+    # runs the engine's auto graph (sync PostgresSaver, subprocess-invoked).
     if settings.orchestrator_enabled:
         try:
-            from orchestrator.graph import get_auto_graph, init_interactive_graph
-            await init_interactive_graph()
+            from orchestrator.graph import _get_async_pool, get_auto_graph
+            await _get_async_pool()
             get_auto_graph()
         except Exception:
             import logging
