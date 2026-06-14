@@ -83,7 +83,7 @@ if [ -z "${GOOGLE_API_KEY:-}" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
 fi
 # S3 is where uploads + exported DOCX/PDF live. Warn but don't hard-fail (some
 # deploys point at a local MinIO via AWS_* anyway).
-[ -z "${AWS_S3_BUCKET:-}" ] && warn "AWS_S3_BUCKET unset — uploads/exports will fail at runtime"
+[ -z "${S3_BUCKET:-}" ] && warn "S3_BUCKET unset — uploads/exports will fail at runtime"
 [ "$missing_env" -eq 0 ] || die "fix the missing .env values above and re-run"
 
 # Toolchain presence.
