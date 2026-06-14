@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, Clock, Coins, Download, ExternalLink, FileText } from "lucide-react";
 
 import { SliceModal } from "./SliceModal";
-import { mintStreamToken } from "@/app/lib/api";
+import { triggerExportDownload } from "@/app/lib/api";
 
 
 // ---- types (kept stable so callers don't change) ---------------------
@@ -326,28 +326,15 @@ function ExportArtifactRow({ artifact }: { artifact: ExportArtifact }) {
     artifact.size_bytes >= 1024 * 1024
       ? `${(artifact.size_bytes / (1024 * 1024)).toFixed(1)} MB`
       : `${(artifact.size_bytes / 1024).toFixed(0)} KB`;
-  // The /exports/{filename} route 302s to a signed S3 URL — auth still
-  // required. Browsers can't POST for a file download (and keep the filename
-  // headers), so instead of putting the long-lived JWT in the URL we mint a
-  // short-lived, scoped stream token on click and navigate with ?st=. Keeps
-  // the JWT out of access logs / referrers.
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
-  const url = artifact.download_url.startsWith("/api/v1/")
-    ? `${apiBase}${artifact.download_url.replace(/^\/api\/v1/, "")}`
-    : artifact.download_url;
-  const onDownload = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    const m = artifact.download_url.match(/\/projects\/([^/]+)\/exports\/([^/?]+)/);
-    if (!m) return;
-    const st = await mintStreamToken(`project-export:${m[1]}/${m[2]}`);
-    const sep = url.includes("?") ? "&" : "?";
-    window.location.href = `${url}${sep}st=${encodeURIComponent(st)}`;
-  };
+  // Shared download path (api.triggerExportDownload): the /exports route 302s to
+  // a signed S3 URL but is still auth-gated, and <a download> can't carry a JSON
+  // body / Authorization header — so it mints a short-lived, scoped ?st= token
+  // and navigates, keeping the JWT out of URLs/logs.
   return (
     <a
-      href={url}
+      href={artifact.download_url}
       download
-      onClick={onDownload}
+      onClick={(e) => { e.preventDefault(); void triggerExportDownload(artifact.download_url); }}
       className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50 transition-colors group"
     >
       <FileText className="w-3.5 h-3.5 text-primary-600 shrink-0" aria-hidden />

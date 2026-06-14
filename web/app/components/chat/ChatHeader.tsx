@@ -3,7 +3,7 @@ import { ReactNode } from "react";
 import { ArrowLeft, Bell, Download, History, PenSquare } from "lucide-react";
 
 import { useMe } from "@/app/lib/use-me";
-import { mintStreamToken } from "@/app/lib/api";
+import { triggerExportDownload } from "@/app/lib/api";
 import { MODULES } from "./HomeDashboard";
 
 
@@ -31,23 +31,11 @@ function ExportDownloadButton({
       </button>
     );
   }
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
-  const url = docx.download_url.startsWith("/api/v1/")
-    ? `${apiBase}${docx.download_url.replace(/^\/api\/v1/, "")}`
-    : docx.download_url;
-  const onDownload = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    const m = docx.download_url.match(/\/projects\/([^/]+)\/exports\/([^/?]+)/);
-    if (!m) return;
-    const st = await mintStreamToken(`project-export:${m[1]}/${m[2]}`);
-    const sep = url.includes("?") ? "&" : "?";
-    window.location.href = `${url}${sep}st=${encodeURIComponent(st)}`;
-  };
   return (
     <a
-      href={url}
+      href={docx.download_url}
       download
-      onClick={onDownload}
+      onClick={(e) => { e.preventDefault(); void triggerExportDownload(docx.download_url); }}
       title="Download final thesis (DOCX)"
       className="w-8 h-8 rounded-full text-primary-600 hover:bg-primary-50 inline-flex items-center justify-center transition-colors"
     >

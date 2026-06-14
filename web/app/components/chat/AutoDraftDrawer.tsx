@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { X, Pause, Play, XCircle, RotateCcw } from "lucide-react";
 import { ModuleProgressDot, type ModuleStatus } from "./ModuleProgressDot";
 import { useAutoDraftRun } from "./hooks/useAutoDraftRun";
-import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
+import { apiFetch, swrFetcher as fetcher, triggerExportDownload } from "@/app/lib/api";
 
 
 const MODULES = [
@@ -108,6 +108,7 @@ export function AutoDraftDrawer({
               <a
                 key={kind}
                 href={uri as string}
+                onClick={(e) => { e.preventDefault(); void triggerExportDownload(uri as string); }}
                 className="block text-sm text-primary-600 hover:underline"
               >
                 Download {kind.toUpperCase()}

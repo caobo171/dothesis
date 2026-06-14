@@ -126,6 +126,36 @@ export async function mintStreamToken(scope) {
 }
 
 /**
+ * Download an M5 export (docx/pdf) given its project-scoped export URL.
+ *
+ * The /exports route is a browser GET that 302s to a signed S3 URL and still
+ * requires auth — but <a download> can't carry a JSON body or Authorization
+ * header. So we mint a short-lived, resource-scoped stream token and navigate
+ * with ?st=, keeping the long-lived JWT out of the URL/logs. This is the same
+ * path the ChatHeader + ContextPanel download buttons use; AutoDraftDrawer used
+ * a raw <a href> with no token (and no API-base rewrite) and 401'd/404'd.
+ *
+ * `downloadUrl` is the export_artifacts download_url
+ * (/api/v1/projects/{pid}/exports/{filename}). A URL that isn't a project
+ * export (e.g. an already-signed S3 link) is opened as-is.
+ */
+export async function triggerExportDownload(downloadUrl) {
+  if (!downloadUrl) return;
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
+  const url = downloadUrl.startsWith("/api/v1/")
+    ? `${apiBase}${downloadUrl.replace(/^\/api\/v1/, "")}`
+    : downloadUrl;
+  const m = downloadUrl.match(/\/projects\/([^/]+)\/exports\/([^/?]+)/);
+  if (!m) {
+    window.location.href = url;
+    return;
+  }
+  const st = await mintStreamToken(`project-export:${m[1]}/${m[2]}`);
+  const sep = url.includes("?") ? "&" : "?";
+  window.location.href = `${url}${sep}st=${encodeURIComponent(st)}`;
+}
+
+/**
  * Job-event stream over EventSource. EventSource is GET-only and can't set a
  * body/header, AND it auto-reconnects by reopening the same URL — so auth rides
  * in the URL as a short-lived, job-scoped `?st=` stream token (never the
