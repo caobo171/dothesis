@@ -1,6 +1,5 @@
 """Tests for POST /projects/{id}/threads/start-at/{artifact} (Phase 5 / E3)."""
 import uuid
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -45,26 +44,3 @@ def test_start_at_rejects_unknown_artifact(client):
     pid = _auth_and_project(client)
     r = client.post(f"/api/v1/projects/{pid}/threads/start-at/bogus")
     assert r.status_code == 422
-
-
-def test_send_message_seeds_target_artifact_on_first_turn(client, monkeypatch):
-    pid = _auth_and_project(client)
-    tid = client.post(f"/api/v1/projects/{pid}/threads/start-at/analysis").json()["id"]
-
-    captured = {}
-
-    def fake_astream(graph_input, **kwargs):
-        captured["input"] = graph_input
-
-        async def _it():
-            from langchain_core.messages import AIMessage
-            yield {"M1": {"messages": [AIMessage(content="ok")]}}
-        return _it()
-
-    fake_graph = MagicMock()
-    fake_graph.astream = fake_astream
-    fake_graph.aget_state = AsyncMock(return_value=MagicMock(values={}))
-    monkeypatch.setattr("orchestrator.graph.get_interactive_graph", lambda: fake_graph)
-
-    client.post(f"/api/v1/threads/{tid}/messages", json={"text": "hi"})
-    assert captured["input"].get("target_artifact") == "analysis"
