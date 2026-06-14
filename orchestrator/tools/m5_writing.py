@@ -253,8 +253,17 @@ def _sections_to_markdown(sections: list[dict]) -> str:
     """
     parts: list[str] = []
     for sec in sections:
+        # Accept both section conventions: compose_all_sections emits
+        # {title, prose}; the M5 agent's _build_sections_for_export historically
+        # emitted {name, text}. Reading only title/prose silently dropped every
+        # chapter's heading AND body for the agent path → a styles-only (blank)
+        # docx/pdf. Normalize both here so neither producer can lose content.
         title = (sec.get("title") or "").strip()
-        prose = (sec.get("prose") or sec.get("body") or "").strip()
+        if not title and sec.get("name"):
+            title = M5_CHAPTER_TITLES.get(
+                sec["name"], str(sec["name"]).replace("_", " ").title())
+        prose = (sec.get("prose") or sec.get("body")
+                 or sec.get("text") or sec.get("content") or "").strip()
         # Defensive last line: strip internal placeholder/QA text so it can
         # never reach the rendered document, even on a forced export, then
         # normalize inline-bullet runs into proper markdown lists.

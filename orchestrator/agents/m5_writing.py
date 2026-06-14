@@ -15,6 +15,7 @@ from orchestrator.tools.m5_writing import (
     validate_draft, validate_citations,
     format_citations, compile_bibliography,
     compile_pdf, export_docx,
+    _chapter_titles, _references_title,
 )
 
 
@@ -421,15 +422,22 @@ class M5Agent(WizardAgent, ModuleAgent):
         the exported thesis docx/pdf (they remain visible in chat bubbles).
         """
         chapters = self._normalize_chapters(partial.get("chapters", {}))
+        language = (type(self)._render_context or {}).get("language", "en")
+        titles = _chapter_titles(language)
+        # Emit the {title, prose} shape the renderer (_sections_to_markdown)
+        # documents and compose_all_sections already uses — with localized
+        # chapter headings. The old {name, text} shape silently produced a blank
+        # export because the renderer reads title/prose.
         sections = [
-            {"name": name,
-             "text": self._strip_uncited_warnings(
+            {"title": titles.get(name, name.replace("_", " ").title()),
+             "prose": self._strip_uncited_warnings(
                  chapters.get(name, {}).get("prose", "")
              )}
             for name in _CHAPTER_ORDER
         ]
         if partial.get("bibliography"):
-            sections.append({"name": "bibliography", "text": partial["bibliography"]})
+            sections.append({"title": _references_title(language),
+                             "prose": partial["bibliography"]})
         return sections
 
     def _format_export_artifacts_markdown(self, artifacts: list) -> str:

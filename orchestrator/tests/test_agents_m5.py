@@ -91,8 +91,11 @@ def test_m5_build_sections_survives_list_chapters():
     agent = M5Agent()
     sections = agent._build_sections_for_export(
         {"chapters": [{"title": "Chapter 1: Introduction", "prose": "hi"}]})
-    intro = next(s for s in sections if s["name"] == "intro")
-    assert intro["text"] == "hi"
+    # Sections use the renderer's {title, prose} contract — the old {name, text}
+    # shape produced a blank docx because _sections_to_markdown reads title/prose.
+    intro = next(s for s in sections if s["prose"] == "hi")
+    assert intro["prose"] == "hi"
+    assert intro["title"]  # localized chapter heading present, not the raw key
 
 
 def test_m5_auto_composes_each_chapter_separately_and_exports(monkeypatch):
