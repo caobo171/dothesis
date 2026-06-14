@@ -169,6 +169,11 @@ EnvironmentFile=${REPO_DIR}/.env
 # ORCHESTRATOR runs as an in-process subprocess of the API; enable it here so a
 # bare .env without the flag still gets the chat + auto-run surface.
 Environment=ORCHESTRATOR_ENABLED=true
+# WorkingDirectory is api/, but the API imports the repo-root packages
+# (orchestrator/, engine/, agent/) — e.g. routers/m5_editor.py does
+# `from orchestrator...` at import time. Put the repo root on PYTHONPATH so
+# those resolve; without it uvicorn crash-loops with ModuleNotFoundError.
+Environment=PYTHONPATH=${REPO_DIR}
 ExecStart=${REPO_DIR}/${VENV_BIN}/uvicorn app.main:app --host ${API_HOST} --port ${API_PORT} --workers ${API_WORKERS}
 Restart=on-failure
 RestartSec=3
