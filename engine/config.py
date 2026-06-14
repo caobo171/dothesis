@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ABOUTME: Centralized configuration management for OpenDraft
+ABOUTME: Centralized configuration management for DoThesis
 ABOUTME: Single source of truth for all settings, models, and environment variables
 """
 

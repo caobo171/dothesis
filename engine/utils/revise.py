@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ABOUTME: Revision module for OpenDraft V1
+ABOUTME: Revision module for DoThesis V1
 ABOUTME: Allows revising existing drafts with specific instructions using Gemini
 
 Ported from V3 with simplifications for V1's lighter architecture.

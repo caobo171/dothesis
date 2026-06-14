@@ -289,11 +289,11 @@ def run_compile_and_export(ctx: DraftContext) -> Tuple[Path, Path]:
     degree = degree_labels.get(ctx.academic_level, 'Master of Science')
 
     # YAML metadata
-    yaml_author = ctx.author_name or "OpenDraft AI"
-    yaml_institution = ctx.institution or "OpenDraft University"
+    yaml_author = ctx.author_name or "DoThesis AI"
+    yaml_institution = ctx.institution or "DoThesis University"
     yaml_department = ctx.department or "Department of Computer Science"
     yaml_faculty = ctx.faculty or "Faculty of Engineering"
-    yaml_advisor = ctx.advisor or "Prof. Dr. OpenDraft Supervisor"
+    yaml_advisor = ctx.advisor or "Prof. Dr. DoThesis Supervisor"
     yaml_second_examiner = ctx.second_examiner or "Prof. Dr. Second Examiner"
     yaml_location = ctx.location or "Munich"
     yaml_student_id = ctx.student_id or "N/A"
@@ -319,7 +319,7 @@ student_id: "{yaml_student_id}"
 project_type: "{draft_type}"
 word_count: "{word_count:,} words"
 pages: "{pages_estimate}"
-generated_by: "OpenDraft AI - https://github.com/federicodeponte/dothesis"
+generated_by: "DoThesis AI - https://github.com/federicodeponte/dothesis"
 ---
 
 ## Abstract

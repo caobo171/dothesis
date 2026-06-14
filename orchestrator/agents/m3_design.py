@@ -175,6 +175,18 @@ class M3Agent(WizardAgent, ModuleAgent):
     module_key = "M3"
     slice_field = "m3_design"  # brief §6 — ModuleHandler contract
     system_prompt = _PROMPT
+    # Auto-mode keeps the design SIMPLE so an unattended draft stays internally
+    # consistent and analysable (PLS-SEM auto-drafts produced fabricated CFI/AVE
+    # and method contradictions). Force a plain regression study.
+    auto_fill_directive = (
+        "Use the SIMPLEST quantitative design — do NOT use PLS-SEM, CB-SEM, SEM, "
+        "or any path/mediation model. Set paradigm='quantitative', "
+        "design='Multiple linear regression', tool='SPSS'. The conceptual_model "
+        "must be a plain regression: a few independent variables predicting ONE "
+        "dependent variable, with one hypothesis per predictor (no mediators, no "
+        "moderators, no second-order constructs). Size the sample with the "
+        "regression rule (n >= 50 + 8 x number of predictors)."
+    )
     tools = [
         recommend_methodology, build_conceptual_model, suggest_scale_items,
         estimate_sample_size, suggest_themes, compose_interview_guide,

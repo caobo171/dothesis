@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ABOUTME: Fact-check verification engine for OpenDraft QA pipeline
+ABOUTME: Fact-check verification engine for DoThesis QA pipeline
 ABOUTME: Verifies factual claims in generated text using web-grounded evidence and LLM comparison
 """
 

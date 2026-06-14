@@ -121,6 +121,7 @@ def main() -> int:
     appender = JsonlAppender(events_path)
     current_module: dict[str, str | None] = {"module": None}
     _install_sigterm_handler(appender, current_module)
+    _progress_bind = None
 
     try:
         from langchain_core.messages import HumanMessage
@@ -131,6 +132,34 @@ def main() -> int:
         graph = get_auto_graph()
         run_id = args.run_id or args.resume_run_id or str(uuid4())
         config = {"configurable": {"thread_id": run_id}}
+
+        # Stream the agents' INTERNAL progress beats (M2 research scout, M5
+        # composition, …) into events.jsonl. graph.stream only yields at node
+        # boundaries, so during the 1-2 min M2 research the feed sat silent and
+        # looked stuck — this surfaces "Searching…", "Found N sources", etc. as
+        # they happen. bind() is ContextVar-backed, so it also reaches the
+        # scout's ThreadPoolExecutor workers. Deduped to avoid hammering the file.
+        from engine.utils import progress as _progress
+
+        _last_beat: dict[str, str | None] = {"msg": None}
+
+        def _progress_to_events(payload: dict) -> None:
+            msg = (payload.get("message") or payload.get("stage") or "").strip()
+            if not msg or msg == _last_beat["msg"]:
+                return
+            _last_beat["msg"] = msg
+            try:
+                appender.write({
+                    "type": "activity",
+                    "module": current_module.get("module"),
+                    "agent": "progress",
+                    "text": msg[:500],
+                })
+            except Exception:  # noqa: BLE001 — never let a feed write break the run
+                pass
+
+        _progress_bind = _progress.bind(_progress_to_events)
+        _progress_bind.__enter__()
 
         if args.resume_run_id:
             appender.write({"type": "activity", "agent": "System",
@@ -182,6 +211,11 @@ def main() -> int:
         })
         return 1
     finally:
+        if _progress_bind is not None:
+            try:
+                _progress_bind.__exit__(None, None, None)
+            except Exception:  # noqa: BLE001
+                pass
         appender.close()
 
 

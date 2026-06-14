@@ -1,10 +1,10 @@
-# OpenDraft Engine (legacy CLI draft generator)
+# DoThesis Engine (19-agent draft generator)
 
-The Python AI engine that powers **OpenDraft** — the original 19-agent thesis draft generator. It is a **standalone, one-shot draft pipeline**, NOT the chat-first DoThesis SaaS agent graph.
+The Python AI engine — the original 19-agent thesis draft generator. It is a **standalone, one-shot draft pipeline** that also serves as the **research + writing muscle** behind the DoThesis chat product's tools.
 
-> If you're working on the chat SaaS (5 modules M1–M5, streaming chat, `context_store`), you want `orchestrator/` + `api/`, not this directory. See [`../AGENTS.md`](../AGENTS.md) and [`../researchflow-architecture-brief.md`](../researchflow-architecture-brief.md).
+> Working on the chat product (the deep agent, 5 modules M1–M5, streaming chat, `context_store`)? Start at [`../AGENTS.md`](../AGENTS.md), [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), and [`../docs/PIPELINE.md`](../docs/PIPELINE.md) — the chat runtime is `agent/` + `api/`, and unattended auto-runs are `orchestrator/`.
 
-The engine is kept here because (1) it ships as its own product, and (2) the SaaS reuses its citation-API clients (`utils/api_citations/`) and export utilities. The 19-agent pipeline below is independent of the M1–M5 chat architecture.
+Two reasons the engine lives here: (1) it ships as its own MIT-licensed product, and (2) the chat agent reuses it — `research_scout` and `parse_reference` call its citation-API clients (`utils/api_citations/`, `utils/deep_research.py`), and document export goes through its renderer (`utils/export_professional.py`). The 19-agent pipeline below is independent of the M1–M5 chat architecture, but the auto-approve path's M5 composer renders through the same export utilities.
 
 ## Structure
 

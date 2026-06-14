@@ -1,7 +1,7 @@
 """
 Deterministic text cleanup utilities.
 
-Ported from OpenDraft V2 - pure functions with zero external dependencies.
+Ported from DoThesis V2 - pure functions with zero external dependencies.
 Use apply_full_cleanup(text) for the complete 10-step cleanup pipeline.
 
 Usage:

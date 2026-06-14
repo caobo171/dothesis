@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OpenDraft CLI - AI-Powered Research Paper Generator
+DoThesis CLI - AI-Powered Research Paper Generator
 
 A simple, interactive command-line tool for generating academic papers.
 """
@@ -20,7 +20,7 @@ if sys.version_info < (3, 10):
     print()
     print(f"  {PURPLE}╭─────────────────────────────────────────────────────────────╮{RESET}")
     print(f"  {PURPLE}│{RESET}                                                             {PURPLE}│{RESET}")
-    print(f"  {PURPLE}│{RESET}   {YELLOW}⚠️  OpenDraft requires Python 3.10 or higher{RESET}              {PURPLE}│{RESET}")
+    print(f"  {PURPLE}│{RESET}   {YELLOW}⚠️  DoThesis requires Python 3.10 or higher{RESET}              {PURPLE}│{RESET}")
     print(f"  {PURPLE}│{RESET}                                                             {PURPLE}│{RESET}")
     print(f"  {PURPLE}│{RESET}   {GRAY}You have:{RESET} Python {sys.version_info.major}.{sys.version_info.minor}                                      {PURPLE}│{RESET}")
     print(f"  {PURPLE}│{RESET}                                                             {PURPLE}│{RESET}")

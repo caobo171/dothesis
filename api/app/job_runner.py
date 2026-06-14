@@ -157,6 +157,56 @@ async def _monitor(job_id: uuid.UUID) -> None:
         return
 
 
+def _sync_context_store_from_checkpoint(db: Session, job: Job) -> None:
+    """Copy an auto-run's LangGraph checkpoint into the context_store table.
+
+    The orchestrator subprocess keeps module state only in its PostgresSaver
+    checkpoint (keyed by thread_id == run.id) and never writes the DB itself
+    (orchestrator/__main__.py). Without this, the context_store table — which
+    feeds the right-panel UI, the project module_status pills, and the handoff
+    into interactive editing (orchestrator/loader.py reads it) — stays empty for
+    auto runs, so a failed run looks like it lost all its progress. The API is
+    the single DB writer, so we read the checkpoint here and upsert the table at
+    every module boundary and on the terminal event.
+    """
+    if not job.project_id:
+        return
+    try:
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        from orchestrator.graph import get_auto_graph
+        from orchestrator.state import compute_status_map
+
+        from .models import ContextStore as DbContextStore
+        from .models import Project
+
+        graph = get_auto_graph()
+        snap = graph.get_state({"configurable": {"thread_id": str(job.id)}})
+        cs = (snap.values or {}).get("context_store") if snap else None
+        if cs is None:
+            return
+
+        slices = dict(
+            m1_topic=cs.m1_topic, m2_literature=cs.m2_literature,
+            m3_design=cs.m3_design, m4_analysis=cs.m4_analysis,
+            m5_writing=cs.m5_writing,
+        )
+        stmt = (
+            pg_insert(DbContextStore.__table__)
+            .values(project_id=job.project_id, **slices)
+            .on_conflict_do_update(
+                index_elements=[DbContextStore.__table__.c.project_id], set_=slices
+            )
+        )
+        db.execute(stmt)
+
+        proj = db.get(Project, job.project_id)
+        if proj is not None:
+            proj.module_status = compute_status_map(cs).model_dump()
+    except Exception:  # noqa: BLE001 — a sync failure must never break the monitor
+        log.exception("context_store sync from checkpoint failed for run %s", job.id)
+
+
 async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
     """Persist one event, update job state, publish to subscribers. Returns True when terminal."""
     type_ = payload.get("type", "activity")
@@ -226,6 +276,18 @@ async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
             if type_ == "paused":
                 job.status = "paused"
                 job.finished_at = datetime.now(timezone.utc)
+
+            # Auto runs only persist state in the LangGraph checkpoint. Mirror it
+            # into the context_store table at each module boundary (supervisor
+            # routing to the next module) and on every terminal event, so the UI
+            # panel, module_status, resume, and interactive handoff all see the
+            # progress — even when the run failed mid-way.
+            if job.mode == "auto" and (
+                type_ in {"job_done", "error", "paused"}
+                or (type_ == "activity"
+                    and (payload.get("text") or "").startswith("Supervisor routed to"))
+            ):
+                _sync_context_store_from_checkpoint(db, job)
 
         db.commit()
         ev_id = event.id

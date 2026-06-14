@@ -168,6 +168,12 @@ class ModuleAgent(ABC):
     system_prompt: str
     tools: list[Any]
 
+    # Extra constraints appended to the auto-mode (_auto_fill) prompt only.
+    # Lets a module force simpler/safer defaults when the whole thesis is
+    # generated unattended — e.g. M3 picking plain regression over PLS-SEM —
+    # without affecting the interactive flow where the user chooses.
+    auto_fill_directive: str = ""
+
     # Set of schema fields that should render as a card grid when asked.
     # The card options are generated dynamically per turn via an LLM call
     # seeded from the already-filled partial state, so suggestions adapt
@@ -221,7 +227,18 @@ class ModuleAgent(ABC):
         """
         return int(os.getenv("ORCHESTRATOR_LLM_MAX_SECONDS", "12"))
 
-    def _bounded(self, prompt, *, retries: int = 0):
+    @staticmethod
+    def _auto_fill_max_seconds() -> int:
+        """Wall-clock cap for the AUTO-mode _auto_fill call — much higher than
+        the interactive 12s. Auto-fill makes the LLM generate a whole module
+        schema in one shot (M3, for instance, emits design + tool + the full
+        conceptual model + sample size), which legitimately takes 10-20s. The
+        12s hot-path cap was killing M3 and failing the entire auto-draft. No
+        user is watching a single keystroke here, so a longer wait is fine.
+        """
+        return int(os.getenv("ORCHESTRATOR_AUTOFILL_MAX_SECONDS", "60"))
+
+    def _bounded(self, prompt, *, retries: int = 0, max_seconds: int | None = None):
         """Wall-clock-bounded shorthand for an LLM .invoke(prompt) call.
 
         Used everywhere in the hot path so a Gemini stall in ANY interactive-
@@ -232,7 +249,7 @@ class ModuleAgent(ABC):
         """
         return bounded_invoke(
             self._get_llm(), prompt,
-            max_seconds=self._llm_max_seconds(),
+            max_seconds=max_seconds or self._llm_max_seconds(),
             retries=retries,
         )
 
@@ -596,7 +613,11 @@ class ModuleAgent(ABC):
             f"Already filled (do not change): "
             f"{json.dumps({k:v for k,v in partial.items() if k in required}, default=str)}"
         )
-        resp = self._bounded(prompt).content
+        if self.auto_fill_directive:
+            prompt += f"\n\nAUTO-MODE CONSTRAINTS (override any default above):\n{self.auto_fill_directive}"
+        # Auto-fill generates a whole schema at once → use the higher auto cap,
+        # not the 12s interactive cap that was timing out M3 (and failing the run).
+        resp = self._bounded(prompt, max_seconds=self._auto_fill_max_seconds()).content
         try:
             filled = json.loads(_strip_code_fence(resp))
         except (json.JSONDecodeError, TypeError):

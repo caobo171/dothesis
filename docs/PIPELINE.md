@@ -1,253 +1,68 @@
-# OpenDraft Agent Pipeline
+# DoThesis — The Method (M1–M5)
 
-> **19 specialized AI agents** organized in 6 phases to produce a complete academic paper.
+DoThesis turns a blank topic into a finished thesis through **five modules**. The same five modules run two ways: **guided chat** (the student drives, turn by turn) and **Auto approve** (the whole pipeline runs unattended). Both write the same project `context_store` (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
+
+```
+TOPIC ──► M1 Topic ──► M2 Literature ──► M3 Design ──► M4 Analysis ──► M5 Writing ──► DOCX + PDF
+          discovery     review            (model +       (real stats     (6 chapters
+          (title, RQs)   (sources, gaps)   methodology)   on your data)   + references)
+```
+
+Dependency DAG (a change upstream flags downstream modules `needs_review`):
+`M1 → M2,M3,M4,M5` · `M2 → M3,M4,M5` · `M3 → M4,M5` · `M4 → M5`.
 
 ---
 
-## Pipeline Overview
+## The five modules
 
-```
-INPUT: Topic + Academic Level + Citation Style + Language
-                           |
-                           v
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  PHASE 1: RESEARCH                                                  │
-  │                                                                     │
-  │  ┌──────────────┐   ┌─────────┐   ┌──────────┐                     │
-  │  │  Scout + Deep │──>│  Scribe │──>│  Signal  │                     │
-  │  │  Research     │   │         │   │          │                     │
-  │  └──────────────┘   └─────────┘   └──────────┘                     │
-  │  Find 50+ papers     Summarize     Identify gaps                    │
-  │  via API cascade     each paper    & trends                         │
-  └─────────────────────────────────────────────────────────────────────┘
-                           |
-              scout_result (citations[])
-              scribe_output (summaries)
-              signal_output (gap analysis)
-                           |
-                           v
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  PHASE 2: STRUCTURE                                                 │
-  │                                                                     │
-  │  ┌────────────┐   ┌────────────┐                                    │
-  │  │  Architect  │──>│  Formatter │                                    │
-  │  └────────────┘   └────────────┘                                    │
-  │  Design outline     Apply academic                                  │
-  │  from gaps +        style formatting                                │
-  │  topic              (APA/IEEE)                                      │
-  └─────────────────────────────────────────────────────────────────────┘
-                           |
-              formatter_output (structured outline)
-                           |
-                           v
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  PHASE 2.5: CITATION MANAGEMENT  (deterministic, no LLM)           │
-  │                                                                     │
-  │  Deduplicate citations -> Scrape titles -> Scrape metadata          │
-  │  Build citation_summary with {cite_XXX} IDs for writing agents      │
-  └─────────────────────────────────────────────────────────────────────┘
-                           |
-              citation_database + citation_summary
-                           |
-                           v
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  PHASE 3: COMPOSE                                                   │
-  │                                                                     │
-  │  Same agent (Crafter), invoked 6-7 times with different prompts:    │
-  │                                                                     │
-  │  ┌───────────────┐  ┌──────────────────┐  ┌───────────────┐        │
-  │  │ 1. Intro      │  │ 2.1 Lit Review   │  │ 2.2 Methods   │        │
-  │  └───────────────┘  └──────────────────┘  └───────────────┘        │
-  │  ┌───────────────┐  ┌──────────────────┐  ┌───────────────┐        │
-  │  │ 2.3 Results   │  │ 2.4 Discussion   │  │ 3. Conclusion │        │
-  │  └───────────────┘  └──────────────────┘  └───────────────┘        │
-  │  ┌───────────────┐                                                  │
-  │  │ 4. Appendices │  (conditional)                                   │
-  │  └───────────────┘                                                  │
-  │                                                                     │
-  │  Each section receives: outline + citation_summary + prior sections  │
-  │  Each section outputs:  markdown with {cite_XXX} placeholders       │
-  └─────────────────────────────────────────────────────────────────────┘
-                           |
-              intro_output, body_output, conclusion_output, appendix_output
-                           |
-                           v
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  PHASE 3.5: QUALITY ASSURANCE                                       │
-  │                                                                     │
-  │  ┌──────────┐   ┌────────────┐                                      │
-  │  │  Thread   │   │  Narrator  │                                      │
-  │  └──────────┘   └────────────┘                                      │
-  │  Cross-section    Voice & tone                                      │
-  │  coherence,       consistency,                                      │
-  │  contradictions,  tense, hedging                                    │
-  │  references                                                         │
-  └─────────────────────────────────────────────────────────────────────┘
-                           |
-              QA reports (advisory, not blocking)
-                           |
-                           v
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  PHASE 4: COMPILE & ENHANCE                                         │
-  │                                                                     │
-  │  1. Assemble all sections into single markdown                      │
-  │  2. Citation Compiler (deterministic):                              │
-  │     {cite_001} -> "(Smith et al., 2023)" or "[1]"                   │
-  │     Generate reference list at end                                  │
-  │  3. Abstract Generator (LLM agent):                                 │
-  │     Reads full draft, writes abstract + YAML metadata               │
-  │  4. Post-processing (deterministic):                                │
-  │     fix tables, dedup appendices, clean AI language,                │
-  │     localize headings                                               │
-  └─────────────────────────────────────────────────────────────────────┘
-                           |
-              final_draft.md (complete paper)
-                           |
-                           v
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  PHASE 5: EXPORT  (no LLM)                                         │
-  │                                                                     │
-  │  Markdown ──> PDF  (via Pandoc + LaTeX)                             │
-  │           └──> DOCX (via Pandoc)                                    │
-  └─────────────────────────────────────────────────────────────────────┘
-                           |
-                           v
-OUTPUT: paper.pdf + paper.docx
-```
+| Module | Goal | Produces | Key guardrails |
+|--------|------|----------|----------------|
+| **M1 — Topic Discovery** | Pin down the research title + questions. | `research_title`, `research_questions` (and field, paradigm, scope, sample) | `research_type` normalized to `quantitative`/`qualitative`/`mixed`. |
+| **M2 — Literature Review** | Gather verified sources, derive the gaps the thesis fills. | `literature_sources`, `research_gaps` (with supporting papers) | Sources only via `research_scout`/`parse_reference` (CrossRef/OpenAlex/Semantic Scholar/arXiv) — never invented. |
+| **M3 — Research Design** | Pick paradigm, conceptual model + hypotheses, methodology, instrument. | `conceptual_model`, `hypotheses`, `methodology`, `instrument` | Interactive offers PLS-SEM/regression/etc.; **auto mode forces plain multiple linear regression** for analysability. |
+| **M4 — Data Analysis** | Run real statistics on the student's data. | `analysis_outline`, `analysis_results` (measurement model, correlations, path/regression tables) | Numbers come **only** from the whitelisted `run_stats` tool on an uploaded dataset. No data → no results. |
+| **M5 — Writing** | Compose the chapters, compile citations, export. | `final_sections` / `chapters` → DOCX + PDF | Numbers in Results match `analysis_results`; metrics stay consistent with the chosen tool (no PLS-SEM + CB-SEM fit-index mixing). |
+
+Module skills live in `skills/dothesis-m{1..5}-*`; the routing/state skill is `skills/dothesis`; the entry wizard is `skills/dothesis-bootstrap`.
 
 ---
 
-## Agent Reference
+## Entry: the bootstrap wizard
 
-### Active Agents (13 used in automated pipeline)
-
-| # | Agent | Phase | Prompt File | Role |
-|---|-------|-------|-------------|------|
-| 1 | **Scout** | 1: Research | `01_research/scout.md` | Find 50+ papers via Semantic Scholar, Crossref, Serper, Gemini Grounded |
-| 2 | **Deep Research** | 1: Research | `01_research/deep_research.md` | Extended search when Scout finds too few papers |
-| 3 | **Scribe** | 1: Research | `01_research/scribe.md` | Summarize each discovered paper |
-| 4 | **Signal** | 1: Research | `01_research/signal.md` | Identify research gaps and emerging trends |
-| 5 | **Architect** | 2: Structure | `02_structure/architect.md` | Design paper outline from topic + gaps |
-| 6 | **Formatter** | 2: Structure | `02_structure/formatter.md` | Apply academic formatting rules to outline |
-| 7 | **Crafter** (x6) | 3: Compose | `03_compose/crafter.md` | Write each section (Intro, Lit Review, Methods, Results, Discussion, Conclusion) |
-| 8 | **Thread** | 3.5: QA | `03_compose/thread.md` | Check cross-section coherence and contradictions |
-| 9 | **Narrator** | 3.5: QA | `03_compose/narrator.md` | Check voice, tone, tense consistency |
-| 10 | **Citation Compiler** | 4: Compile | *(deterministic)* | Replace `{cite_XXX}` with formatted citations |
-| 11 | **Abstract Generator** | 4: Compile | `06_enhance/abstract_generator.md` | Generate abstract from complete draft |
-
-### Optional Agents (6 available via manual workflow)
-
-These agents have prompt files and are documented in `00_WORKFLOW.md` but are **not called** in the current automated pipeline. They are designed for the manual Cursor/Claude Code workflow where a human iterates on the draft.
-
-| # | Agent | Phase | Prompt File | Role |
-|---|-------|-------|-------------|------|
-| 12 | **Skeptic** | 4: Validate | `04_validate/skeptic.md` | Critical analysis: weak arguments, reference padding, contradictions |
-| 13 | **Verifier** | 4: Validate | `04_validate/verifier.md` | Citation verification: DOIs, author names, dates |
-| 14 | **Referee** | 4: Validate | `04_validate/referee.md` | Simulated peer review with accept/revise/reject decision |
-| 15 | **Citation Verifier** | 5: Refine | `05_refine/citation_verifier.md` | Deep citation format checking against style guide |
-| 16 | **Voice** | 5: Refine | `05_refine/voice.md` | Match author's personal writing style (optional) |
-| 17 | **Entropy** | 5: Refine | `05_refine/entropy.md` | Reduce AI-detectable patterns |
-| 18 | **Polish** | 5: Refine | `05_refine/polish.md` | Final grammar, repetition, and hedging pass |
-| 19 | **Enhancer** | 6: Enhance | `06_enhance/enhancer.md` | Add tables, figures, limitations, future research |
+A new project opens the new-project modal, which collects whatever the student already has (topic, references, gaps, model, instrument, data, draft) and sends one structured `/bootstrap …` first message. The `dothesis-bootstrap` skill imports each declared item into the right module's slice, reconciles dependency holes, computes the entry focus (first module needing attention), commits, and hands off to normal routing. If the student has nothing, it just opens M1.
 
 ---
 
-## Data Flow Between Phases
+## Guided chat turn
 
-```
-Phase 1 outputs:
-  scout_result     -> dict with 'citations' list (50+ Citation objects)
-  scout_output     -> raw markdown of all found papers
-  scribe_output    -> summarized research findings (markdown)
-  signal_output    -> research gaps analysis (markdown)
-
-Phase 2 outputs:
-  architect_output -> structured outline (markdown)
-  formatter_output -> formatted outline with style applied (markdown)
-
-Phase 2.5 outputs:
-  citation_database -> CitationDatabase with deduplicated, enriched citations
-  citation_summary  -> formatted citation list with {cite_XXX} IDs for agents
-
-Phase 3 outputs:
-  intro_output       -> Chapter 1 markdown with {cite_XXX} refs
-  lit_review_output   -> Section 2.1 markdown
-  methodology_output  -> Section 2.2 markdown
-  results_output      -> Section 2.3 markdown
-  discussion_output   -> Section 2.4 markdown
-  conclusion_output   -> Chapter 3 markdown
-  appendix_output     -> Chapter 4 markdown (conditional)
-
-Phase 3.5 outputs:
-  thread_report   -> narrative consistency issues (advisory)
-  narrator_report -> voice consistency issues (advisory)
-
-Phase 4 outputs:
-  compiled_draft  -> full markdown, {cite_XXX} replaced with formatted citations
-  final_draft     -> compiled + abstract + post-processing cleanup
-
-Phase 5 outputs:
-  paper.pdf       -> final PDF via Pandoc + LaTeX
-  paper.docx      -> final DOCX via Pandoc
-```
+1. Browser POSTs to `/api/v1/threads/{id}/messages`; the API returns an SSE stream.
+2. The agent reads the `dothesis` routing skill, then the relevant module skill, and works the turn. It calls tools as needed:
+   - `read_slice` / `commit_slice` — read/write project state (commit is the only write path).
+   - `research_scout` — literature search (engine cascade); `parse_reference` — DOI/PDF → validated metadata.
+   - `run_stats` — whitelisted statistics on an uploaded dataset.
+   - `export_docx` — render the current draft to DOCX + PDF.
+3. SSE events the UI renders: `token` (assistant text), `progress` (tool activity as plain-language beats — "Reading the guide for this step…", "Searching for relevant research…", "Saving your topic…"), `tool_calls` (interactive cards / editable models), `done`.
+4. Decisions persist via `commit_slice`; downstream modules get flagged `needs_review`. The assistant message is saved and the turn is metered (credits) by an idempotent finalizer that also runs if the student disconnects mid-turn (partial reply saved, agent stopped).
 
 ---
 
-## Citation Research Cascade (Scout Detail)
+## Auto-approve run
 
-Scout uses a multi-API cascade to find papers, managed by `CitationResearcher`:
+The "Auto approve" button (or a "write the whole thesis" request) starts an unattended run:
 
-```
-For each research topic:
-
-  1. Semantic Scholar  ──> DOI, title, authors, year, abstract
-         |
-         | (if not enough results)
-         v
-  2. Crossref          ──> DOI, title, authors, year, journal
-         |
-         | (if not enough results)
-         v
-  3. Serper / Gemini   ──> URL-based results with metadata
-     Grounded Search        (Serper preferred if USE_SERPER=true)
-         |
-         | (if all APIs fail)
-         v
-  4. LLM Fallback      ──> Gemini generates citation from training data
-                            (last resort, lower reliability)
-```
-
-Smart routing (`QueryRouter`) classifies each query to pick the best starting API:
-- Known-item queries (DOI, exact title) -> Crossref first
-- Broad topic queries -> Semantic Scholar first
-- Recent/niche topics -> Gemini Grounded / Serper first
+1. `POST /api/v1/projects/{id}/runs` → a detached `python -m orchestrator --auto-draft` subprocess.
+2. The LangGraph graph walks M1→M5; each module agent auto-fills its slice (auto-fill gets a generous wall-clock cap since it generates a whole schema at once). M3 is constrained to a simple linear-regression design; M5 (`_auto_compose_chapters`) composes the six chapters and renders DOCX + PDF to S3.
+3. Progress streams to the drawer via `POST /api/v1/runs/{id}/events` — coarse node beats *and* agent-internal beats (M2 scout searching, M5 per-chapter writing) so the feed never looks stuck.
+4. Controls: **pause/resume** (resume re-enters at the last LangGraph checkpoint — a run that died in M3 resumes at M3 with M1/M2 intact), **cancel**, and **retry** (failed/canceled).
 
 ---
 
-## File Locations
+## Export
 
-| Component | Path |
-|-----------|------|
-| Pipeline orchestrator | `engine/draft_generator.py` |
-| Agent runner | `engine/utils/agent_runner.py` |
-| Citation research | `engine/utils/api_citations/orchestrator.py` |
-| Citation compiler | `engine/utils/citation_compiler.py` |
-| Citation database | `engine/utils/citation_database.py` |
-| Deep research planner | `engine/utils/deep_research.py` |
-| Abstract generator | `engine/utils/abstract_generator.py` |
-| All prompt files | `engine/prompts/` |
-| Workflow guide (manual) | `engine/prompts/00_WORKFLOW.md` |
-| Concurrency config | `engine/concurrency/concurrency_config.py` |
+Chapters → a single Markdown document → DOCX + PDF via the engine's renderer (`engine/utils/export_professional.py`, pandoc/LibreOffice when available). Citations are compiled from `literature_sources` into a clickable bibliography. Artifacts are uploaded to S3 and surfaced as download links in the Context store panel and chat header. Composition guards refuse to ship placeholder/stub chapters or fabricated statistics.
 
 ---
 
-## Word Count Targets by Academic Level
+## The engine behind the tools
 
-Configured in `get_word_count_targets()` (`draft_generator.py:590`):
-
-| Level | Total Words | Min Citations | Deep Research Sources | Chapters |
-|-------|-------------|---------------|-----------------------|----------|
-| Research Paper | 3,000-5,000 | 10 | 20 | 3-4 |
-| Bachelor | 10,000-15,000 | 15 | 40 | 5-7 |
-| Master | 25,000-30,000 | 25 | 50 | 7-10 |
-| PhD | 50,000-80,000 | 50 | 100 | 10-15 |
+`research_scout`, `parse_reference`, and document export are backed by `engine/` — the standalone 19-agent research/draft pipeline (literature APIs, citation cascade, draft compose, DOCX/PDF). It can also run on its own as a CLI; see [`../engine/README.md`](../engine/README.md).

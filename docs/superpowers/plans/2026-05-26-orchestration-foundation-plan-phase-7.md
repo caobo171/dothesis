@@ -1,3 +1,5 @@
+> **📜 Historical record — superseded.** This document captured a plan / spec / design at a point in time and is kept for history. It does **not** describe the current system. For the live DoThesis method and architecture see `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, and `docs/PIPELINE.md`.
+
 # Phase 7: Integration tests (Tasks 27–32)
 
 > Companion file to `2026-05-26-orchestration-foundation-plan.md`. Requires Phases 0–6 (Tasks 1–26) to be complete.

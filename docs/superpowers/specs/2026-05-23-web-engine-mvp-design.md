@@ -1,8 +1,10 @@
+> **📜 Historical record — superseded.** This document captured a plan / spec / design at a point in time and is kept for history. It does **not** describe the current system. For the live DoThesis method and architecture see `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, and `docs/PIPELINE.md`.
+
 # Web ↔ Engine MVP — Design Spec
 
 **Status:** Approved (brainstorming phase complete)
 **Date:** 2026-05-23
-**Scope:** First slice of OpenDraft as a hosted SaaS. Wires the existing `web/` Next.js template to the existing Python `engine/` pipeline through a new FastAPI service, with auth and S3 storage. Billing is explicitly out of scope and will be its own spec.
+**Scope:** First slice of DoThesis as a hosted SaaS. Wires the existing `web/` Next.js template to the existing Python `engine/` pipeline through a new FastAPI service, with auth and S3 storage. Billing is explicitly out of scope and will be its own spec.
 
 ---
 
@@ -179,7 +181,7 @@ Append-only activity feed. Indexed on `(job_id, id)` for cheap SSE replay.
 | meta_json | jsonb                     | for typed payloads (progress, exports list, ...) |
 
 ### S3 layout
-The bucket is the existing AWS S3 bucket `fillformposts` in `ap-southeast-1` (shared infrastructure). All OpenDraft objects live under a top-level `dothesis/` prefix to keep them isolated from other tenants of the bucket.
+The bucket is the existing AWS S3 bucket `fillformposts` in `ap-southeast-1` (shared infrastructure). All DoThesis objects live under a top-level `dothesis/` prefix to keep them isolated from other tenants of the bucket.
 ```
 s3://fillformposts/dothesis/users/{user_id}/papers/{paper_id}/jobs/{job_id}/
     exports/draft.pdf
@@ -320,7 +322,7 @@ Required env vars (loaded from `.env` at the repo root):
 | `OPENAI_API_KEY` | `survify-backend/.env` | passed through to engine subprocesses |
 | `ANTHROPIC_API_KEY` | user-provided | optional; needed for Claude models in the wizard |
 
-The S3 bucket `fillformposts` is shared with other products — all OpenDraft writes must go under the `dothesis/` prefix and must never list / delete anything outside it. The S3 client wrapper enforces this prefix on every call.
+The S3 bucket `fillformposts` is shared with other products — all DoThesis writes must go under the `dothesis/` prefix and must never list / delete anything outside it. The S3 client wrapper enforces this prefix on every call.
 
 ---
 

@@ -1,4 +1,4 @@
-// Mock data + 19 agents + 6 phases for the OpenDraft pipeline view.
+// Mock data + 19 agents + 6 phases for the DoThesis pipeline view.
 
 export const PHASES = [
   {

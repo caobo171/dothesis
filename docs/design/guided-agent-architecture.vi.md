@@ -1,3 +1,5 @@
+> **📜 Historical record — superseded.** This document captured a plan / spec / design at a point in time and is kept for history. It does **not** describe the current system. For the live DoThesis method and architecture see `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, and `docs/PIPELINE.md`.
+
 # Kiến trúc Agent Hướng dẫn — vào ở bất kỳ bước nào, lo nốt phần còn lại, ít công nhất
 
 > **Trạng thái:** Đề xuất (thiết kế) · **Ngày:** 2026-05-30

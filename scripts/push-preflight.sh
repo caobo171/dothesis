@@ -7,7 +7,7 @@ EXPECTED_REMOTE="${EXPECTED_REMOTE:-https://github.com/federicodeponte/dothesis.
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-echo "== OpenDraft push preflight =="
+echo "== DoThesis push preflight =="
 echo "Repository: $ROOT_DIR"
 
 if ! command -v gh >/dev/null 2>&1; then

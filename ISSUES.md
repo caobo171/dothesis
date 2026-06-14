@@ -1,4 +1,4 @@
-# OpenDraft V1 - Critical Issues
+# DoThesis V1 - Critical Issues
 
 **Last Updated:** 2026-02-19
 **Assessed By:** Claude Code

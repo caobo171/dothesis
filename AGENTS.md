@@ -1,35 +1,40 @@
-# AGENTS.md — DoThesis architecture & agent contract (v3)
+# AGENTS.md — DoThesis architecture & agent contract
 
-> **Architecture:** [`docs/architecture/2026-06-10-deepagent-skills-architecture.md`](docs/architecture/2026-06-10-deepagent-skills-architecture.md) — the deep-agent + skills redesign. This file is the **agent-facing operational map** of that architecture in this codebase.
->
-> Historical context: the v2 brief ([`researchflow-architecture-brief.md`](researchflow-architecture-brief.md)) and its state-machine fix design ([`docs/architecture/2026-06-03-researchflow-target-architecture.md`](docs/architecture/2026-06-03-researchflow-target-architecture.md)) are **superseded**. v3 deliberately reversed the brief's "state machine, not a free agent" principle; everything else the brief cared about survives as deterministic code (see the invariants table below).
+> This is the **agent-facing operational map**: what the agent is, where each piece lives, and the invariants you must not break. System overview: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). End-to-end method: [`docs/PIPELINE.md`](docs/PIPELINE.md).
 
-DoThesis is the commercial chat-first thesis SaaS. The student talks to **one deep agent** (LangChain deepagents) whose domain expertise is packaged as **skills** with progressive disclosure, moving freely across 5 modules:
+DoThesis is a commercial, chat-first thesis product. The student talks to **one deep agent** (LangChain `deepagents`) whose domain expertise is packaged as **skills** with progressive disclosure. The agent moves freely across five modules, each owning a slice of a project-scoped `context_store`:
 
-| Key | Module | Skill | Owns (flat context_store keys) |
-|-----|--------|-------|-------------------------------|
+| Key | Module | Skill | Owns (flat `context_store` keys) |
+|-----|--------|-------|----------------------------------|
 | M1  | Topic Discovery | `skills/dothesis-m1-topic/` | `research_title`, `research_questions` |
 | M2  | Literature Review | `skills/dothesis-m2-literature/` | `literature_sources`, `research_gaps` |
 | M3  | Research Design | `skills/dothesis-m3-design/` | `conceptual_model`, `hypotheses`, `methodology`, `instrument` |
 | M4  | Data Analysis | `skills/dothesis-m4-analysis/` | `analysis_outline`, `analysis_results` |
-| M5  | Writing | `skills/dothesis-m5-writing/` | `final_sections` |
+| M5  | Writing | `skills/dothesis-m5-writing/` | `final_sections` / `chapters` |
 
-Plus `skills/dothesis/` (root: state protocol + routing semantics — read first every conversation) and `skills/dothesis-bootstrap/` (one-time entry wizard).
+Plus `skills/dothesis/` (root: state protocol + routing — read first every conversation) and `skills/dothesis-bootstrap/` (one-time entry wizard, fired by the new-project modal).
+
+---
+
+## Two runtimes, one state
+
+There are **two brains**, both writing the same project state:
+
+1. **Interactive chat — the deep agent (`agent/`).** Serves a chat turn when `DOTHESIS_AGENT_V3=1` (current default). One LLM agent + skills + tools, streamed over SSE.
+2. **Auto-approve — the orchestrator graph (`orchestrator/`).** The "Auto approve" button starts a detached subprocess (`python -m orchestrator --auto-draft`) that runs a LangGraph M1→M5 graph unattended, composes all six chapters, and renders DOCX + PDF. This is **not legacy** — it is the production auto-mode path. (When `DOTHESIS_AGENT_V3` is off, the same orchestrator graph can also serve interactive chat via `ORCHESTRATOR_ROUTER`, but that path is being retired.)
+
+Both paths persist to the same Postgres-backed `context_store` slices; checkpoint namespaces are disjoint (`v3:<thread_id>` for the agent, `<run_id>` for auto runs).
 
 ---
 
 ## Surfaces
 
-- `agent/` — **the v3 runtime.** `runtime.py` (create_deep_agent factory + `stream_turn` SSE-shaped event stream), `state.py` (guarded ProjectStateStore: ownership, version snapshots, focus shift, needs_review propagation), `tools/` (research_scout, parse_reference, run_stats whitelist, write_pipeline/export_docx seams, state tools), `cli.py` (spike CLI).
-- `skills/` — the 8 DoThesis skills (deepagents SKILL.md layout). Source of truth for module behavior; the Claude.ai bundle in `dothesis_v2/` is the zero-infra distribution of the same skills.
-- `api/` — FastAPI. Chat SSE (`routers/chat.py` → `routers/chat_v3.py` when `DOTHESIS_AGENT_V3=1`), `agent_state.py` (DB-backed store mapping flat keys ↔ context_store slice columns), projects/threads/uploads/billing.
-- `web/` — Next.js 15. Chat UI (DoThesis.html design), dashboard, module tracker. Consumes the same SSE vocabulary from either brain.
-- `engine/` — the research + writing muscle. `utils/deep_research.py` + `utils/api_citations/` back M2's `research_scout`; the draft pipeline (structure→compose→citations→compile→validate + docx post-processor) backs M5's `write_pipeline`/`export_docx`.
-- `orchestrator/` — **legacy graph (v1/v2), being strangled.** Serves chat turns only when `DOTHESIS_AGENT_V3` is off. `orchestrator/tools/m2_literature.py` is still load-bearing (research_scout reuses it); `shapes.py` schemas survive as commit validation. Do not invest new feature work here.
-
-## Runtime selection
-
-`DOTHESIS_AGENT_V3=1` (set in `.env`) → chat turns served by the deep agent. Unset/0 → legacy graph_v2/v1 per `ORCHESTRATOR_ROUTER`. Rollback is the env var; the two runtimes use disjoint checkpoint namespaces (`v3:<thread_id>` vs `<thread_id>`) over the same Postgres saver.
+- `agent/` — **the chat runtime.** `runtime.py` (`create_deep_agent` factory + `stream_turn`, which yields `token`/`tool_start`/`tool_end`/`tool_calls`/`usage`/`error`/`done` events), `tools/` (`research_scout`, `parse_reference`, `run_stats` whitelist, `export_docx`, `make_state_tools` → `read_slice`/`commit_slice`, writing tools), `multimodal.py` (attachments), `cli.py` (spike CLI).
+- `skills/` — the eight DoThesis skills (deepagents SKILL.md layout). Source of truth for module behavior. Read-only at runtime, mounted at `/skills/`.
+- `api/` — FastAPI, **POST-only** (auth token in the JSON body; `/api/v1/health` is the one GET). Chat SSE = `routers/chat_v3.py`; auto runs = `routers/runs.py`; `job_runner.py` spawns + monitors the auto subprocess; `agent_state.py` (`DbProjectStateStore`) maps flat keys ↔ slice columns + `projects.module_status`/`focus`.
+- `web/` — Next.js 15 chat workspace. Streams SSE via `fetch`+ReadableStream (not EventSource) so the token rides in the POST body; hits `NEXT_PUBLIC_API_BASE` directly to dodge the dev proxy's SSE buffering.
+- `orchestrator/` — the auto-mode graph + agents (`agents/m1_topic.py` … `m5_writing.py`, `agents/base.py`), `__main__.py` (subprocess entrypoint, writes `events.jsonl`), `tools/m5_writing.py` (chapter composition + export), `tools/m2_literature.py` (research, reused by the agent's `research_scout`), `schemas/` (commit validation).
+- `engine/` — research + writing muscle: `utils/api_citations/` + `utils/deep_research.py` back M2's search; `phases/` + `utils/export_professional.py` back the draft/export path.
 
 ---
 
@@ -37,40 +42,34 @@ Plus `skills/dothesis/` (root: state protocol + routing semantics — read first
 
 | Invariant | Enforced by |
 |---|---|
-| `context_store` is the single source of truth, **project-scoped** (shared by every thread/session of a project) | `agent/state.py:ProjectStateStore` (file-backed, CLI) / `api/app/agent_state.py:DbProjectStateStore` (Postgres slice columns + `projects.module_status`/`focus`) |
-| The ONLY write path is `commit_slice` | Tool boundary — validates slice ownership (`SLICE_OWNERSHIP`), snapshots version, applies, shifts focus, flags downstream. The agent never free-writes the state file. |
-| Read = free; mutate = focus shift + downstream `needs_review` ⚠ | `commit_slice` propagation over the static DAG (M1→M2..M5, M2→M3..M5, M3→M4,M5, M4→M5); only *started* modules get flagged. `read_slice` never mutates. |
-| Soft locks, never walls | Skill instructions (`skills/dothesis/SKILL.md` invariants section) |
-| No fabricated sources / numbers / prose mechanics | Tools over memory: papers via `research_scout`/`parse_reference` (engine validation), stats via `run_stats` (whitelisted ops only — the whitelist IS the security boundary), docs via `write_pipeline`/`export_docx` |
-| Long turns stay alive over SSE | `agent/runtime.py:stream_turn` yields token/tool_start/tool_end/error/done events; `api/app/routers/chat_v3.py` bridges them onto the existing SSE channel (tool activity rides `progress` → live ProgressBubble) |
-| Token metering wraps the LLM call | `orchestrator/token_meter.py` — middleware integration for the agent path is **pending** (next: wrap the model in `build_agent`) |
+| `context_store` is the single source of truth, **project-scoped** (shared by every thread of a project) | `agent/state.py:ProjectStateStore` (file, CLI) / `api/app/agent_state.py:DbProjectStateStore` (Postgres slice columns + `projects.module_status`/`focus`) |
+| The ONLY write path is `commit_slice` | State tool boundary — validates slice ownership, snapshots version, applies, shifts focus, flags downstream. The agent never free-writes state. |
+| Read = free; mutate = focus shift + downstream `needs_review` ⚠ | `commit_slice` propagation over the static DAG (M1→…, M2→M3..M5, M3→M4,M5, M4→M5); only *started* modules get flagged. `read_slice` never mutates. |
+| Soft locks, never walls | Skill instructions (`skills/dothesis/SKILL.md`) — the student may jump modules. |
+| **No fabricated sources / numbers** | Tools over memory: papers via `research_scout`/`parse_reference` (engine validation against CrossRef/OpenAlex/Semantic Scholar/arXiv); stats via `run_stats` (whitelisted ops only — the whitelist IS the security boundary). M4's skill forbids committing `analysis_results` without a real uploaded dataset. |
+| Long turns stay alive over SSE, survive disconnect | `agent/runtime.py:stream_turn` + `api/app/routers/chat_v3.py`: tool activity rides `progress` (plain-language, student-facing labels built in `chat_v3._tool_progress_label`); on client disconnect the agent task is cancelled and the partial reply is persisted via an idempotent `_finalize()`. |
+| Token metering + per-turn charge | `orchestrator/token_meter.py` sink registered in `api/app/main.py` lifespan; chat turns charge credits in `chat_v3._finalize`; auto runs charge in `job_runner._charge_auto_run`. |
+| Auto runs are simple + analysable | M3 auto-fill is constrained to plain multiple linear regression (`m3_design.py:auto_fill_directive`); M4/M5 prompts forbid mixing PLS-SEM and CB-SEM fit indices and require real-data tables. |
 
-**When updating any code**: keep the comment-the-reasoning rule — non-obvious decisions get a short `# Decision: ...` (or prose) block.
-
-**When updating a skill**: skill name == directory name, description ≤1024 chars, body <500 lines; heavy detail goes in `references/`. Behavioral edits land in `skills/` first, back-port to `dothesis_v2/` for the Claude.ai bundle.
+**When updating any code:** comment the *reasoning* behind non-obvious changes (a short `# Decision:`/prose note). **When updating a module's behavior:** edit its `skills/*/SKILL.md` first (skill name == directory name, description ≤1024 chars, body <500 lines; heavy detail → `references/`).
 
 ---
 
-## v3 migration status (strangler)
+## Auto-approve run lifecycle
 
-| Step | Status |
-|---|---|
-| 1. CLI spike (skills + state tools + runtime) | ✅ verified live — bootstrap → M1 wizard with real commits |
-| 2. Engine tools | ✅ `research_scout` (reuses the proven m2_literature path), `parse_reference` (Crossref + PDF), `run_stats` (6 whitelisted ops). 🟡 `write_pipeline`/`export_docx` are honest not-wired seams — the engine's draft path needs a job-context adapter. |
-| 3. Web behind flag | ✅ `DOTHESIS_AGENT_V3=1` → `chat_v3.py`; state lands in the same rows the web reads (module tracker, ContextPanel, dashboard unchanged) |
-| 4. Middleware parity | ❌ token metering + HITL interrupts + per-turn budget caps |
-| 5. Cutover & deletion of the graph | ❌ after soak; delete router_agent, module agent classes, graph_v2 |
-| 6. Later | auto-draft runs converge on a `writer` subagent; tiered memory; version_history table wiring for DbProjectStateStore |
+1. `POST /api/v1/projects/{id}/runs` → `job_runner.spawn_orchestrator_run` writes `brief.json` + `events.jsonl`, spawns `python -m orchestrator --auto-draft`, and `start_monitor` schedules an async tailer on the app loop (works even though the endpoint is sync — the loop is captured at startup).
+2. The subprocess streams the graph, writing semantic events (`activity`, `phase_progress`, `job_done`, `error`) to `events.jsonl`. Agent-internal beats (M2 scout search, M5 per-chapter writing) are bound through `engine.utils.progress` and written too, so the feed isn't silent during long phases.
+3. `_monitor` tails the file → `JobEvent` rows + `pubsub`. The drawer subscribes via `POST /api/v1/runs/{id}/events` (SSE: DB backlog replay, then live).
+4. Controls: `pause`/`resume` (resume re-enters at the LangGraph checkpoint), `cancel` (SIGTERM + mark canceled), and the drawer's **Retry** for failed/canceled runs.
 
 ---
 
 ## Where to look
 
-- Architecture: `docs/architecture/2026-06-10-deepagent-skills-architecture.md`
-- Runtime + tools: `agent/runtime.py`, `agent/state.py`, `agent/tools/`
-- Skills: `skills/*/SKILL.md` (+ `skills/README.md` for the v2-bundle deltas)
-- API bridge: `api/app/routers/chat_v3.py`, `api/app/agent_state.py`
-- Engine muscle: `engine/utils/deep_research.py`, `engine/utils/api_citations/`, `engine/phases/`, `engine/utils/docx_post_processor.py`
-- Tests: `agent/tests/`, `api/tests/test_agent_state.py`, `api/tests/test_chat_v3.py`
-- Legacy graph (flag-off path only): `orchestrator/graph.py`, `orchestrator/graph_v2.py`, `orchestrator/agents/`
+- Runtime + tools: `agent/runtime.py`, `agent/tools/`, `agent/state.py`
+- Skills: `skills/*/SKILL.md`
+- Chat bridge: `api/app/routers/chat_v3.py`, `api/app/agent_state.py`
+- Auto runs: `api/app/routers/runs.py`, `api/app/job_runner.py`, `orchestrator/__main__.py`, `orchestrator/agents/`, `orchestrator/tools/m5_writing.py`
+- Engine muscle: `engine/utils/api_citations/`, `engine/utils/deep_research.py`, `engine/utils/export_professional.py`, `engine/phases/`
 - Frontend chat: `web/app/components/chat/`
+- Tests: `agent/tests/`, `api/tests/`, `orchestrator/tests/`

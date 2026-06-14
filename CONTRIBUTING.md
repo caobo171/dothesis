@@ -1,39 +1,49 @@
-# Contributing to OpenDraft
+# Contributing to DoThesis
 
-Thanks for your interest in contributing to OpenDraft!
+Thanks for your interest in contributing to DoThesis!
 
 ## Quick Start
 
 ```bash
-# Clone the repo
 git clone https://github.com/federicodeponte/dothesis.git
 cd dothesis
+cp .env.example .env          # fill in keys (Gemini at minimum)
+./dev.sh                      # API :7100, web :3006
+```
 
-# Install dependencies
+For the standalone engine only:
+
+```bash
 pip install -e ./engine[dev]
-
-# Run tests
 cd engine && pytest tests/ -v
 ```
 
 ## Development Setup
 
-1. **Python 3.10+** required
-2. **Gemini API key** - Get free at [aistudio.google.com](https://aistudio.google.com/apikey)
-3. Set `GOOGLE_API_KEY` in `.env`
+1. **Python 3.13** (API venv) and **Node 18+** (web). Engine works on 3.10+.
+2. **PostgreSQL** (local, port 5499 per the default `DATABASE_URL`).
+3. A **Gemini API key** — set `GEMINI_API_KEY`/`GOOGLE_API_KEY` in `.env`. `ANTHROPIC_API_KEY` switches the agent to Claude.
+4. Read [`AGENTS.md`](AGENTS.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) before touching the agent, skills, state, or API.
 
 ## Code Structure
 
 ```
 dothesis/
-├── engine/           # Main Python package
-│   ├── dothesis/    # CLI and entry points
-│   ├── phases/       # Pipeline phases (research, structure, compose, etc.)
-│   ├── utils/        # Utilities (citations, retry, export, etc.)
-│   └── tests/        # Test suite
-├── npm/              # npm wrapper package
-└── docs/             # Documentation
+├── web/            # Next.js chat workspace
+├── api/            # FastAPI gateway (POST-only)
+├── agent/          # deep-agent chat runtime + tools
+├── skills/         # M1–M5 + routing + bootstrap skills (chat behavior)
+├── orchestrator/   # auto-approve LangGraph graph + agents + M5 export
+├── engine/         # research + writing engine (also a standalone CLI)
+└── docs/           # documentation
 ```
+
+## Conventions (please follow)
+
+- **POST-only endpoints.** New API routes are `@router.post`; the auth token rides in the JSON body. Only `/api/v1/health` is GET.
+- **Comment the reasoning** behind non-obvious changes (a short note on *why*, not *what*).
+- **Behavior lives in skills/prompts.** Change a module's behavior in its `skills/*/SKILL.md` (chat) or `orchestrator/prompts` + agent class (auto) first, then the code.
+- Don't run `next build` while `dev.sh`'s `next dev` is running — it serves stale UI.
 
 ## Making Changes
 

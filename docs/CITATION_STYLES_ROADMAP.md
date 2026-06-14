@@ -1,4 +1,4 @@
-# OpenDraft Citation Styles - Technical Roadmap
+# DoThesis Citation Styles - Technical Roadmap
 
 > **Date**: 2026-02-02 (updated 2026-02-03)
 > **Status**: Phases 0–3 complete. ibid/supra deferred to Phase 3.1.
@@ -151,7 +151,7 @@ Reference: Smith, John. "Article Title." Journal Name, vol. 45, no. 3, 2023, pp.
 
 Feature request from Nigerian law student/researcher:
 
-> "The biggest citation pain point in Nigeria is NALT support. It's our mandatory style, and the complete lack of support in any major tool means hours of manual formatting. If OpenDraft could be the first to properly implement NALT, you'd immediately become the essential tool for an entire generation of Nigerian legal scholars."
+> "The biggest citation pain point in Nigeria is NALT support. It's our mandatory style, and the complete lack of support in any major tool means hours of manual formatting. If DoThesis could be the first to properly implement NALT, you'd immediately become the essential tool for an entire generation of Nigerian legal scholars."
 
 ### What is NALT?
 
@@ -551,7 +551,7 @@ Compared `/Users/federicodeponte/dothesis/engine` with `/Users/federicodeponte/D
 
 ### Complete File Comparison
 
-#### Files Only in OpenDraft (Keep)
+#### Files Only in DoThesis (Keep)
 
 | File | Purpose | Port to OpenPaper? |
 |------|---------|-------------------|
@@ -563,7 +563,7 @@ Compared `/Users/federicodeponte/dothesis/engine` with `/Users/federicodeponte/D
 
 #### Files Only in OpenPaper (Consider Porting)
 
-| File | Purpose | Port to OpenDraft? |
+| File | Purpose | Port to DoThesis? |
 |------|---------|-------------------|
 | `utils/model_config.py` | Model pricing info | Recommended |
 | `utils/token_tracker.py` | Usage & cost tracking | Recommended |
@@ -574,9 +574,9 @@ Compared `/Users/federicodeponte/dothesis/engine` with `/Users/federicodeponte/D
 
 #### Files That Differ (Substantive Changes)
 
-##### 1. `prompts/01_research/scout.md` - OpenDraft has MORE
+##### 1. `prompts/01_research/scout.md` - DoThesis has MORE
 
-OpenDraft has preprint handling guidance that's missing from OpenPaper:
+DoThesis has preprint handling guidance that's missing from OpenPaper:
 
 ```markdown
 ### ⚠️ PREPRINT HANDLING (Critical)
@@ -598,7 +598,7 @@ rpm_limit: Requests per minute limit
 crafter_parallel: Whether to run 6 Crafter agents in parallel
 ```
 
-**Action**: Port this TO OpenDraft.
+**Action**: Port this TO DoThesis.
 
 ##### 3. `utils/agent_runner.py` - OpenPaper has quiet mode
 
@@ -609,7 +609,7 @@ if not _verbose_research:
     return  # Suppress output
 ```
 
-**Action**: Port this TO OpenDraft.
+**Action**: Port this TO DoThesis.
 
 ##### 4. `utils/export_professional.py` - OpenPaper more flexible
 
@@ -620,7 +620,7 @@ OpenPaper accepts both `str` and `Path` for file parameters:
 md_file = Path(md_file)  # Accept both str and Path
 ```
 
-**Action**: Port this TO OpenDraft.
+**Action**: Port this TO DoThesis.
 
 ##### 5. `config.py` - OpenPaper has better API key handling ✅ DONE
 
@@ -629,7 +629,7 @@ md_file = Path(md_file)  # Accept both str and Path
 google_api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY", "")
 ```
 
-**Action**: ~~Port this TO OpenDraft.~~ Already present in OpenDraft. Also added multi-key fallback fields (`GOOGLE_API_KEY_FALLBACK`, `_2`, `_3`) in Phase 2.
+**Action**: ~~Port this TO DoThesis.~~ Already present in DoThesis. Also added multi-key fallback fields (`GOOGLE_API_KEY_FALLBACK`, `_2`, `_3`) in Phase 2.
 
 ##### 6. `citation_database.py` - OpenPaper has citation_count ✅ DONE
 
@@ -638,11 +638,11 @@ google_api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY", "")
 citation_count: Optional[int] = None
 ```
 
-**Action**: ~~Port this TO OpenDraft.~~ Ported in Phase 2. Field added to Citation model, wired through Semantic Scholar and orchestrator.
+**Action**: ~~Port this TO DoThesis.~~ Ported in Phase 2. Field added to Citation model, wired through Semantic Scholar and orchestrator.
 
 ##### 7. `progress_tracker.py` - Different Supabase env vars
 
-| OpenDraft | OpenPaper |
+| DoThesis | OpenPaper |
 |-----------|-----------|
 | `SUPABASE_URL` | `SUPABASE_PROJECT_URL` |
 | `NEXT_PUBLIC_SUPABASE_URL` | `NEXT_PUBLIC_SUPABASE_PROJECT_URL` |
@@ -652,7 +652,7 @@ citation_count: Optional[int] = None
 #### Code Style Differences (Non-Substantive)
 
 Most files have formatting differences only:
-- OpenPaper uses double quotes `"`, OpenDraft uses single quotes `'`
+- OpenPaper uses double quotes `"`, DoThesis uses single quotes `'`
 - OpenPaper has multi-line function parameters
 - OpenPaper has more blank lines
 
@@ -662,7 +662,7 @@ These are style-only and don't need porting.
 
 ### Summary: Sync Actions
 
-#### Port TO OpenDraft (from OpenPaper)
+#### Port TO DoThesis (from OpenPaper)
 
 | Change | Priority | Effort | Status |
 |--------|----------|--------|--------|
@@ -675,7 +675,7 @@ These are style-only and don't need porting.
 | Multi-key API rotation (Gemini) | High | — | ✅ Phase 2 |
 | Tenacity retry library | Medium | — | ✅ Phase 2 |
 
-#### Port TO OpenPaper (from OpenDraft)
+#### Port TO OpenPaper (from DoThesis)
 
 | Change | Priority | Effort | Status |
 |--------|----------|--------|--------|

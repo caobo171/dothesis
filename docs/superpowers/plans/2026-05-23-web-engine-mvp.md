@@ -1,3 +1,5 @@
+> **📜 Historical record — superseded.** This document captured a plan / spec / design at a point in time and is kept for history. It does **not** describe the current system. For the live DoThesis method and architecture see `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, and `docs/PIPELINE.md`.
+
 # Web ↔ Engine MVP Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -225,7 +227,7 @@ from .settings import get_settings
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="OpenDraft API", version="0.1.0")
+    app = FastAPI(title="DoThesis API", version="0.1.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.web_origin],
@@ -277,7 +279,7 @@ Expected: 1 passed.
 - [ ] **Step 7: Add `api/README.md`**
 
 ```markdown
-# OpenDraft API
+# DoThesis API
 
 FastAPI service that wires the Next.js web UI to the engine pipeline.
 
@@ -1016,7 +1018,7 @@ from .settings import get_settings
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="OpenDraft API", version="0.1.0")
+    app = FastAPI(title="DoThesis API", version="0.1.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.web_origin],
@@ -2866,7 +2868,7 @@ git commit -m "web: api client, auth context and session middleware"
 import "./globals.css";
 import { AuthProvider } from "./lib/auth-context";
 
-export const metadata = { title: "OpenDraft", description: "AI thesis drafts with verified citations" };
+export const metadata = { title: "DoThesis", description: "AI thesis drafts with verified citations" };
 
 export default function RootLayout({ children }) {
   return (
@@ -3048,7 +3050,7 @@ export const Sidebar = () => {
   const path = usePathname();
   return (
     <aside className="sidebar">
-      <div className="brand">OpenDraft</div>
+      <div className="brand">DoThesis</div>
       <nav>
         {NAV.map((n) => {
           const active = n.href === "/" ? path === "/" : path.startsWith(n.href);

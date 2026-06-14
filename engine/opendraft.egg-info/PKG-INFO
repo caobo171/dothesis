@@ -51,7 +51,7 @@ Requires-Dist: streamlit>=1.28.0; extra == "docker"
 Provides-Extra: all
 Requires-Dist: dothesis[dev,docker]; extra == "all"
 
-# OpenDraft Engine
+# DoThesis Engine
 
 The Python AI engine that powers thesis draft generation. Contains the 19-agent pipeline, citation research, and export functionality.
 

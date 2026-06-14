@@ -1,3 +1,5 @@
+> **📜 Historical record — superseded.** This document captured a plan / spec / design at a point in time and is kept for history. It does **not** describe the current system. For the live DoThesis method and architecture see `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, and `docs/PIPELINE.md`.
+
 # SP3 — M1 Topic Discovery card-grid UX
 
 **Date:** 2026-05-27

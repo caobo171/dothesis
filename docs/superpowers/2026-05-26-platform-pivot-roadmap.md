@@ -1,3 +1,5 @@
+> **📜 Historical record — superseded.** This document captured a plan / spec / design at a point in time and is kept for history. It does **not** describe the current system. For the live DoThesis method and architecture see `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, and `docs/PIPELINE.md`.
+
 # Platform pivot — master roadmap
 
 > This is the **north-star document** for the chat-based / LangGraph platform pivot. The pivot is decomposed into 7 sub-projects; each sub-project has its own spec + plan + implementation cycle. **When in doubt about scope, status, or "what comes next" — read this first.**

@@ -196,7 +196,7 @@ The YAML frontmatter must start on line 1 with three dashes (---) and end with t
 ---
 title: "[Exact draft title from original]"
 subtitle: "AI-Generated Academic Draft Showcase"
-author: "OpenDraft (Multi-Agent System)"
+author: "DoThesis (Multi-Agent System)"
 system_creator: "Federico De Ponte"
 github_repo: "https://github.com/federicodeponte/dothesis"
 date: "January 2025"

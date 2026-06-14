@@ -14,7 +14,7 @@ We will respond within 48 hours.
 
 ## Security Best Practices
 
-When using OpenDraft:
+When using DoThesis:
 
 1. Never commit API keys - use `.env` files (gitignored)
 2. Review generated content before publishing

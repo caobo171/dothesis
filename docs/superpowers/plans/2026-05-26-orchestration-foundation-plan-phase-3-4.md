@@ -1,3 +1,5 @@
+> **📜 Historical record — superseded.** This document captured a plan / spec / design at a point in time and is kept for history. It does **not** describe the current system. For the live DoThesis method and architecture see `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, and `docs/PIPELINE.md`.
+
 # Phase 3–4: Agents + Graph (Tasks 12–19)
 
 > Companion file to `2026-05-26-orchestration-foundation-plan.md`. Requires Phase 0–2 (Tasks 1–11) to be complete.

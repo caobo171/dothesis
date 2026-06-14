@@ -88,7 +88,7 @@ def create_app() -> FastAPI:
     # Reset cached settings so that env-var monkeypatching in tests takes effect.
     reset_settings()
     settings = get_settings()
-    app = FastAPI(title="OpenDraft API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="DoThesis API", version="0.1.0", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.web_origin],

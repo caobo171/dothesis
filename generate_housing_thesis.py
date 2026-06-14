@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a master's thesis on Affordable Housing in India using OpenDraft."""
+"""Generate a master's thesis on Affordable Housing in India using DoThesis."""
 import os
 import sys
 import zipfile

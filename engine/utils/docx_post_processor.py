@@ -522,7 +522,7 @@ def main():
         'second_examiner': 'Prof. Dr. Hans Weber',
         'student_id': '123456',
         'project_type': 'Master Draft',
-        'system_credit': 'Generated with OpenDraft AI',
+        'system_credit': 'Generated with DoThesis AI',
         'location': 'Berlin',
     }
 

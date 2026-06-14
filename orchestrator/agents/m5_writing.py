@@ -458,8 +458,23 @@ class M5Agent(WizardAgent, ModuleAgent):
         """
         context = self._render_context or {}
         references = self._collect_references(context)
+        # Stream a beat per chapter so the auto-run activity feed shows M5 making
+        # progress ("Writing Chapter 4 — Results…") instead of one long silent
+        # gap. emit() is a no-op when no emitter is bound (e.g. tests), and the
+        # auto subprocess binds one (orchestrator/__main__.py).
+        from engine.utils import progress as _progress
+
+        _CHAPTER_BEAT = {
+            "intro": "Writing Chapter 1 — Introduction…",
+            "lit_review": "Writing Chapter 2 — Literature Review…",
+            "methodology": "Writing Chapter 3 — Methodology…",
+            "results": "Writing Chapter 4 — Results…",
+            "discussion": "Writing Chapter 5 — Discussion…",
+            "conclusion": "Writing Chapter 6 — Conclusion…",
+        }
         chapters: dict[str, dict] = {}
         for name in _CHAPTER_ORDER:
+            _progress.emit("m5_compose", _CHAPTER_BEAT.get(name, f"Writing {name}…"))
             chapters[name] = compose_chapter.invoke({
                 "chapter_name": name,
                 "paradigm": context.get("paradigm") or "quantitative",
@@ -468,6 +483,7 @@ class M5Agent(WizardAgent, ModuleAgent):
                 "citation_style": context.get("citation_style", "apa7"),
                 "language": context.get("language", "en"),
             })
+        _progress.emit("m5_compose", "Compiling references…")
         bib = compile_bibliography.invoke({
             "references": references,
             "citation_style": context.get("citation_style", "apa7"),

@@ -1,26 +1,28 @@
 # DoThesis API (FastAPI)
 
-HTTP surface for the chat-first thesis assistant. Wraps the orchestrator agent graph (`orchestrator/`) and exposes the legacy OpenDraft engine (`engine/`) as background jobs.
+HTTP surface for the chat-first thesis workspace. It drives the chat **deep agent** (`agent/`), spawns + monitors **auto-approve** runs (`orchestrator/`), and serves projects, uploads, credits, and exports.
 
-> Operating contract for the agent graph this API drives is in [`../AGENTS.md`](../AGENTS.md). Architecture brief: [`../researchflow-architecture-brief.md`](../researchflow-architecture-brief.md). Anything that touches `context_store`, routing, or memory MUST be checked against the brief's §1 NON-NEGOTIABLE principles — several are still gaps (see `AGENTS.md`).
+> Operating contract: [`../AGENTS.md`](../AGENTS.md). System map: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). The method: [`../docs/PIPELINE.md`](../docs/PIPELINE.md).
 
-## Surfaces
+## Conventions
 
-- `POST /projects` / `GET /projects/{id}` — create or fetch a project (the `context_store` root per the brief §2).
-- `POST /projects/{id}/import`, `POST /projects/{id}/assess` — entry-wizard data path (`orchestrator/intake.py` `merge_import` / `assess_work`). The brief's full §9 dependency-hole reconciliation depends on `needs_review` status (gap — see `AGENTS.md`).
-- `POST /threads`, `POST /threads/{id}/messages` — chat thread + streaming message endpoint. Mounted only when `ORCHESTRATOR_ENABLED=true`.
-- `runs.py`, `jobs.py`, `exports.py`, `m5_editor.py`, `papers.py`, `credit.py`, `uploads.py`, `auth.py`, plus the `admin_*.py` routers — billing, exports, file pipeline, OpenDraft engine jobs.
+- **POST-only.** Every endpoint is `@router.post` and the access token rides in the JSON body (read by `deps.current_user`). The single exception is `GET /api/v1/health`. Read filters that used to be query params live in the body. See [`../CLAUDE.md`](../CLAUDE.md).
+- No cookie auth: JWT (HS256, signed with `SESSION_SECRET`) or Google ID-token verify. CORS `allow_credentials` is off.
+
+## Routers (`app/routers/`)
+
+- `auth.py` — signup/login/verify, password reset, Google sign-in (`/auth/google`, verify-only), stream tokens.
+- `chat_v3.py` — the chat turn. Persists the user message, runs `agent.runtime.stream_turn`, and bridges its events onto SSE (`token`/`progress`/`tool_calls`/`error`/`done`). Charges credits + persists the assistant reply via an idempotent finalizer that also fires on client disconnect. (`chat.py` is the legacy graph path, used only when `DOTHESIS_AGENT_V3` is off.)
+- `runs.py` — auto-approve runs: start, list, status, pause/resume/cancel, and `POST /runs/{id}/events` (SSE progress). `job_runner.py` spawns the `python -m orchestrator --auto-draft` subprocess and tails its `events.jsonl` into `JobEvent` + `pubsub`.
+- `credit.py` — packages, Polar checkout/webhook, and `transactions` (chat/auto charges, deep-linked back to the thread).
+- `uploads.py`, `exports.py`, `m5_editor.py`, `papers.py`, `jobs.py`, `announcements.py`, and the `admin_*.py` routers.
 
 ## Persistence
 
-Migration `20260526_add_orchestrator_tables.py` adds the brief's spine:
-
-- `projects` — `current_module`, `field`, `language`, `citation_style`. (Missing `focus` and `status: Record<ModuleId, ModuleStatus>` map per brief §1.4 — gap.)
-- `threads` — one LangGraph thread per chat. `langgraph_thread_id` is the checkpoint key.
-- `messages` — full transcript (one row per turn), with `module_tag` + `tool_calls_json` for widget render hints.
-- `context_store` — JSONB columns `m1_topic | m2_literature | m3_design | m4_analysis | m5_writing`. Updated in place; no `version_history` table yet (brief §2 gap).
-
-The orchestrator additionally uses LangGraph's `PostgresSaver` for resume — note this conflicts with brief §1.3 ("DB is the checkpoint — do NOT reach for a checkpoint framework"). See `AGENTS.md` gap #3.
+- `projects` — `context_store` JSONB slice columns (`m1_topic … m5_writing`) + `module_status` map + `focus`. `agent_state.py:DbProjectStateStore` maps flat module keys ↔ these columns and is the DB implementation of the `commit_slice` contract.
+- `threads` / `messages` — one LangGraph thread per chat; transcript rows carry `module_tag`, `tool_calls_json` (widget hints), and per-turn `cost_credits`/`duration_ms`/`total_tokens`.
+- `jobs` (auto runs) + `job_events`, `credit_transactions`, `token_ledger`.
+- LangGraph `AsyncPostgresSaver` (chat) / `PostgresSaver` (auto) provide checkpoint/resume.
 
 ## Dev
 
@@ -32,10 +34,10 @@ alembic upgrade head
 uvicorn app.main:app --reload --port 7100
 ```
 
-Required env: `DATABASE_URL`, `GOOGLE_API_KEY` (Gemini), `ORCHESTRATOR_ENABLED=true` to mount the chat router. Optional: `ORCHESTRATOR_ROUTER=v2` to flip the orchestrator graph from supervisor-spokes (v1) to router-agent (v2).
+Required env: `DATABASE_URL`, `GEMINI_API_KEY`/`GOOGLE_API_KEY`, `ORCHESTRATOR_ENABLED=true` (mounts chat/runs/exports/uploads/editor and primes the graphs + token-meter sink), `DOTHESIS_AGENT_V3=1` (chat served by the deep agent). Most local work just runs `./dev.sh` from the repo root.
 
 ## Test
 
 ```bash
-pytest
+pytest          # api/tests
 ```

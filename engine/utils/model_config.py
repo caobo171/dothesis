@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ABOUTME: Model pricing data for token cost estimation
-ABOUTME: Ported from OpenPaper — sync adaptation for OpenDraft
+ABOUTME: Ported from OpenPaper — sync adaptation for DoThesis
 """
 
 import logging

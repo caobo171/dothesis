@@ -1,3 +1,5 @@
+> **📜 Historical record — superseded.** This document captured a plan / spec / design at a point in time and is kept for history. It does **not** describe the current system. For the live DoThesis method and architecture see `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, and `docs/PIPELINE.md`.
+
 # Guided Agent Architecture — enter-anywhere, guide-the-rest, lowest-effort
 
 > **Status:** Proposed (design) · **Author:** drafted with Claude · **Date:** 2026-05-30

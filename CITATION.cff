@@ -1,7 +1,7 @@
 cff-version: 1.2.0
-message: "If you use OpenDraft in your research, please cite it as below."
+message: "If you use DoThesis in your research, please cite it as below."
 type: software
-title: "OpenDraft"
+title: "DoThesis"
 abstract: "Open-source AI research draft generator with 19 specialized agents, verified citations from 500M+ academic papers, and export to PDF, Word, and LaTeX."
 authors:
   - family-names: "De Ponte"

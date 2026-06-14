@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ABOUTME: Centralized logging configuration for OpenDraft system
+ABOUTME: Centralized logging configuration for DoThesis system
 ABOUTME: Provides consistent logging format, levels, and handlers across all modules
 
 Usage:

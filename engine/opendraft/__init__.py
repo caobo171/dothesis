@@ -1,5 +1,5 @@
 """
-OpenDraft - AI-Powered Academic Writing Framework
+DoThesis - AI-Powered Academic Writing Framework
 
 Generate publication-ready theses with 15 specialized AI agents and 200M+ research papers.
 """

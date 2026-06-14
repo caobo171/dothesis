@@ -45,6 +45,58 @@ def test_post_run_spawns_orchestrator_subprocess(client, monkeypatch):
     assert spawned[0]["brief"]["topic"] == "Leadership in SMEs"
 
 
+def _mark_run(rid: str, **fields):
+    sf = get_session_factory()
+    with sf() as db:
+        from app.models import Job
+        run = db.get(Job, uuid.UUID(rid))
+        for k, v in fields.items():
+            setattr(run, k, v)
+        db.commit()
+
+
+def test_resume_failed_run_resumes_checkpoint(client, monkeypatch):
+    """A failed run resumes from its checkpoint (resume_from == run.id) instead
+    of restarting — and the stale error markers are cleared."""
+    pid = _setup(client)
+    spawned = []
+
+    def fake_spawn(db, run, brief, resume_from=None):
+        spawned.append(resume_from)
+        run.status = "running"
+
+    monkeypatch.setattr("app.job_runner.spawn_orchestrator_run", fake_spawn)
+
+    rid = client.post(f"/api/v1/projects/{pid}/runs",
+                      json={"mode": "auto", "topic": "x"}).json()["run_id"]
+    _mark_run(rid, status="failed", error_text="orchestrator auto-draft failed")
+
+    r = client.post(f"/api/v1/runs/{rid}/resume")
+    assert r.status_code == 200, r.text
+    assert spawned[-1] == rid  # resumed the SAME thread, not a fresh run
+
+    sf = get_session_factory()
+    with sf() as db:
+        from app.models import Job
+        run = db.get(Job, uuid.UUID(rid))
+        assert run.error_text is None
+        assert run.status == "running"
+
+
+def test_resume_running_run_rejected(client, monkeypatch):
+    """Resume is only for paused/failed/canceled — a live run is a 409."""
+    pid = _setup(client)
+    monkeypatch.setattr(
+        "app.job_runner.spawn_orchestrator_run",
+        lambda db, run, brief, resume_from=None: setattr(run, "status", "running"))
+    rid = client.post(f"/api/v1/projects/{pid}/runs",
+                      json={"mode": "auto", "topic": "x"}).json()["run_id"]
+    _mark_run(rid, status="running")
+    r = client.post(f"/api/v1/runs/{rid}/resume")
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["error"]["code"] == "not_resumable"
+
+
 def test_pause_run_calls_cancel(client, monkeypatch):
     pid = _setup(client)
     called = []

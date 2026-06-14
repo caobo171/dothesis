@@ -2,7 +2,7 @@
 """
 Output Auditor - Analyzes generated content for quality issues
 
-This script generates sample content using OpenDraft prompts and
+This script generates sample content using DoThesis prompts and
 audits it for issues like:
 - Overconfident claims
 - Fake methodology language

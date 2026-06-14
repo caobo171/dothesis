@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ABOUTME: Tier-adaptive concurrency configuration for OpenDraft
+ABOUTME: Tier-adaptive concurrency configuration for DoThesis
 ABOUTME: Auto-configures rate limits and parallel execution based on detected API tier
 """
 

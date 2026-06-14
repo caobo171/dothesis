@@ -63,7 +63,7 @@ class OpenAlexClient(BaseAPIClient):
 
         # Override default headers with polite user-agent
         self.session.headers.update({
-            'User-Agent': f'OpenDraft/1.7 (mailto:{polite_email})',
+            'User-Agent': f'DoThesis/1.7 (mailto:{polite_email})',
         })
         if self.openalex_key:
             self.session.headers['api_key'] = self.openalex_key

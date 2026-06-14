@@ -1,4 +1,4 @@
-# OpenDraft - Python Dependencies
+# DoThesis - Python Dependencies
 # Minimal dependencies for maximum simplicity
 
 # === LLM APIs ===

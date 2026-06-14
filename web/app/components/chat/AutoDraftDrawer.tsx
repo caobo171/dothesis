@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import useSWR from "swr";
-import { X, Pause, Play, XCircle } from "lucide-react";
+import { X, Pause, Play, XCircle, RotateCcw } from "lucide-react";
 import { ModuleProgressDot, type ModuleStatus } from "./ModuleProgressDot";
 import { useAutoDraftRun } from "./hooks/useAutoDraftRun";
 import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
@@ -17,7 +17,18 @@ const MODULES = [
 ];
 
 
-export function AutoDraftDrawer({ runId, onClose }: { runId: string; onClose: () => void }) {
+export function AutoDraftDrawer({
+  runId,
+  onClose,
+  onRetry,
+}: {
+  runId: string;
+  onClose: () => void;
+  // Fired from the Retry button on a failed run — the parent reopens the start
+  // flow (topic pre-filled, credit estimate shown) so a retry is an opt-in
+  // fresh run rather than a silent re-spend.
+  onRetry?: () => void;
+}) {
   const { data: run, mutate: mutateRun } = useSWR(`/runs/${runId}`, fetcher, { refreshInterval: 5000 });
   const { events } = useAutoDraftRun(runId);
 
@@ -52,6 +63,9 @@ export function AutoDraftDrawer({ runId, onClose }: { runId: string; onClose: ()
         <div>
           <h3 className="font-semibold">Run {runId.slice(0, 8)}</h3>
           <p className="text-xs text-gray-500">Status: {run?.status ?? "loading…"}</p>
+          {run?.status === "failed" && run?.error_text && (
+            <p className="text-xs text-red-600 mt-0.5 max-w-[360px]">{run.error_text}</p>
+          )}
         </div>
         <button type="button" onClick={onClose} aria-label="close drawer">
           <X className="w-5 h-5 text-gray-500" />
@@ -117,6 +131,11 @@ export function AutoDraftDrawer({ runId, onClose }: { runId: string; onClose: ()
         {(run?.status === "running" || run?.status === "paused") && (
           <button onClick={cancel} className="flex items-center gap-1 text-sm text-red-600 hover:bg-red-50 px-3 py-1.5 rounded ml-auto">
             <XCircle className="w-4 h-4" /> Cancel
+          </button>
+        )}
+        {(run?.status === "failed" || run?.status === "canceled") && onRetry && (
+          <button onClick={onRetry} className="flex items-center gap-1 text-sm bg-primary-600 text-white hover:bg-primary-700 px-3 py-1.5 rounded">
+            <RotateCcw className="w-4 h-4" /> Retry
           </button>
         )}
       </footer>

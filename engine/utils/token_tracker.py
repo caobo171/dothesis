@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ABOUTME: Synchronous TokenTracker for tracking API call token usage and costs
-ABOUTME: Ported from OpenPaper — async removed for OpenDraft's synchronous pipeline
+ABOUTME: Ported from OpenPaper — async removed for DoThesis's synchronous pipeline
 """
 
 import json

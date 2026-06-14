@@ -1,3 +1,5 @@
+> **📜 Historical record — superseded.** This document captured a plan / spec / design at a point in time and is kept for history. It does **not** describe the current system. For the live DoThesis method and architecture see `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, and `docs/PIPELINE.md`.
+
 # ResearchFlow — Target Architecture (fix design)
 
 > Companion to [`../../researchflow-architecture-brief.md`](../../researchflow-architecture-brief.md). The brief is the spec; this is the **concrete target architecture** that resolves the six §1 NON-NEGOTIABLE violations tracked in [`../../AGENTS.md`](../../AGENTS.md). Stack is Python (FastAPI + LangGraph + Postgres) + Next.js — language is tooling, the brief's principles are the contract.

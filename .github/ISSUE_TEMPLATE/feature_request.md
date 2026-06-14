@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new feature or enhancement for OpenDraft
+about: Suggest a new feature or enhancement for DoThesis
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''

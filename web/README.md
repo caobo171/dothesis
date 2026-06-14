@@ -4,7 +4,7 @@ Next.js 15 (App Router) frontend for the DoThesis chat-first thesis assistant. R
 
 > Architecture brief: [`../researchflow-architecture-brief.md`](../researchflow-architecture-brief.md). Agent contract + open gaps: [`../AGENTS.md`](../AGENTS.md). The chat surface is the brief's §1.4 conversation focus — keep "current module is a default context, never a lock" in mind when adding navigation UI.
 
-The legacy per-paper "agent run" / "draft editor" / "citations" views below render output from the OpenDraft engine and remain useful for the standalone draft-generator product (see [`../engine/README.md`](../engine/README.md)). They are NOT part of the M1–M5 chat flow.
+The legacy per-paper "agent run" / "draft editor" / "citations" views below render output from the DoThesis engine and remain useful for the standalone draft-generator product (see [`../engine/README.md`](../engine/README.md)). They are NOT part of the M1–M5 chat flow.
 
 ## Run locally
 

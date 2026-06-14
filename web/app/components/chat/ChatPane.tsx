@@ -197,6 +197,9 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
 
   const [modalOpen, setModalOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Bumped on resume to remount the drawer so its SSE stream reconnects to the
+  // freshly re-spawned run (the previous stream closed on the terminal event).
+  const [runNonce, setRunNonce] = useState(0);
 
   const onAutoDraftClick = () => {
     const status = latestRun?.run?.status ?? null;
@@ -219,6 +222,22 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
       setDrawerOpen(true);
     } catch {
       // Errors surface elsewhere; we just don't open the drawer.
+    }
+  };
+
+  // Retry a failed/canceled run by RESUMING its checkpoint (re-runs the module
+  // that died, keeping the completed ones) rather than starting over from M1.
+  // If resume isn't possible, fall back to the fresh-run modal.
+  const resumeRun = async () => {
+    const run = latestRun?.run;
+    if (!run) { setModalOpen(true); return; }
+    try {
+      await apiFetch(`/runs/${run.id}/resume`, { method: "POST" });
+      void mutateRun();
+      setRunNonce(n => n + 1);
+    } catch {
+      setDrawerOpen(false);
+      setModalOpen(true);
     }
   };
 
@@ -370,7 +389,13 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         onConfirm={confirmAutoDraft}
       />
       {drawerOpen && latestRun?.run && (
-        <AutoDraftDrawer runId={latestRun.run.id} onClose={() => setDrawerOpen(false)} />
+        <AutoDraftDrawer
+          key={`${latestRun.run.id}:${runNonce}`}
+          runId={latestRun.run.id}
+          onClose={() => setDrawerOpen(false)}
+          // Retry a failed/canceled run = resume from its last checkpoint.
+          onRetry={resumeRun}
+        />
       )}
     </>
   );

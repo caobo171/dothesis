@@ -1,576 +1,135 @@
-<h1 align="center">DoThesis — Chat-First AI Thesis Assistant</h1>
+<h1 align="center">DoThesis — Chat-First AI Thesis Workspace</h1>
 
-> **Repo orientation.** This repository hosts two products in one tree:
+<p align="center">
+  <b>A commercial, chat-first product that takes a student from a blank topic to a finished, citation-grounded thesis — one conversation, five guided modules, real verified sources.</b>
+</p>
+
+> **Orientation for contributors.** DoThesis is built as a **single deep agent driven by skills** (LangChain `deepagents`). The student chats with one agent that moves freely across five thesis modules (M1–M5); all decisions land in a project-scoped `context_store` with deterministic read/mutate propagation. There is also a one-click **"Auto approve"** mode that writes the whole thesis end-to-end unattended.
 >
-> 1. **DoThesis** — the commercial chat-first thesis SaaS, built as a **deep agent with skills** (LangChain deepagents). One agent, 8 skills (`skills/`), guided by a project-scoped `context_store` with deterministic read/mutate propagation. Architecture: [`docs/architecture/2026-06-10-deepagent-skills-architecture.md`](docs/architecture/2026-06-10-deepagent-skills-architecture.md). Agent contract + migration status: [`AGENTS.md`](AGENTS.md). Surfaces: `agent/` (deep-agent runtime + guarded state + tools), `skills/` (M1–M5 module skills), `api/` (FastAPI, SSE chat), `web/` (Next.js chat UI), `engine/` (research + writing muscle behind the agent's tools). The legacy LangGraph orchestrator (`orchestrator/`) still serves chat when `DOTHESIS_AGENT_V3` is off and is being strangled out.
-> 2. **OpenDraft** — the original open-source 19-agent draft-generator CLI (documented below). Still maintained as a standalone product; its deep-research/citation stack powers the agent's `research_scout` tool and its draft pipeline powers `write_pipeline`/`export_docx`.
+> Before changing the agent runtime, skills, state shape, or the API, read **[`AGENTS.md`](AGENTS.md)** (agent contract + invariants) and **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** (system map). The end-to-end method is in **[`docs/PIPELINE.md`](docs/PIPELINE.md)**.
 >
-> **Read `AGENTS.md` before changing the agent runtime, skills, state shape, or memory layer** — it maps every invariant to the code that enforces it.
-
-<h2 align="center">OpenDraft — AI Research Draft Generator</h2>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License">
-  <img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/Open%20Source-100%25-brightgreen.svg" alt="Open Source">
-  <img src="https://img.shields.io/github/stars/federicodeponte/dothesis?style=social" alt="GitHub stars">
-</p>
-
-<p align="center">
-  <b>Free, open-source AI engine that generates thesis-level research drafts with <em>verified</em> citations.</b><br>
-  19 specialized agents · CrossRef, OpenAlex, Semantic Scholar, arXiv · PDF/DOCX/LaTeX export
-</p>
-
-<p align="center">
-  <a href="https://openpaper.dev"><strong>🚀 Try the free hosted version on OpenPaper.dev →</strong></a><br>
-  <sub>3 free papers per day · No credit card required</sub>
-</p>
-
-<p align="center">
-  <video width="900" autoplay loop muted playsinline>
-    <source src="assets/demo.mp4" type="video/mp4">
-    <source src="assets/demo.webm" type="video/webm">
-  </video>
-</p>
+> The repo also contains the original open-source **19-agent draft-generator CLI** under `engine/`. It is still maintained and, more importantly, it is the **research + writing muscle** the agent calls through its tools (literature search, reference parsing, document export). See [`engine/README.md`](engine/README.md).
 
 ---
 
-## At a Glance
+## What DoThesis does
 
-| | |
-|:---|:---|
-| **What it is** | Open-source Python engine for AI-generated research drafts with verified citations |
-| **Best for** | Master's theses, PhD dissertations, literature reviews, research papers |
-| **Agents** | 19 specialized AI agents (research, structure, writing, citation, polish, export) |
-| **Sources** | CrossRef, OpenAlex, Semantic Scholar (200M+), arXiv |
-| **Languages** | 57+ languages including English, Spanish, German, French, Chinese, Japanese |
-| **Export** | PDF, Microsoft Word (.docx), LaTeX |
-| **Cost** | **Free** (self-hosted, MIT license) or **free tier** at [OpenPaper.dev](https://openpaper.dev) (3 papers/day) |
-| **Typical output** | 5–80+ pages, 10k–20k+ words, 30–50+ verified citations |
-| **Time to draft** | 10–20 minutes |
-| **API cost per draft** | ~$0.35 (Gemini Flash) to ~$3.00 (Claude Opus) |
+A thesis is not one prompt. DoThesis breaks the work into **five modules**, each owning a slice of the project state, and the agent guides the student through them in plain conversation:
 
----
+| Key | Module | What it produces (owned `context_store` keys) |
+|-----|--------|-----------------------------------------------|
+| **M1** | Topic Discovery | `research_title`, `research_questions` |
+| **M2** | Literature Review | `literature_sources` (verified), `research_gaps` |
+| **M3** | Research Design | `conceptual_model`, `hypotheses`, `methodology`, `instrument` |
+| **M4** | Data Analysis | `analysis_outline`, `analysis_results` (real stats, never invented) |
+| **M5** | Writing | `final_sections` / `chapters` → exported DOCX + PDF |
 
-## Table of Contents
+Two ways content gets produced:
 
-- [At a Glance](#at-a-glance)
-- [What is OpenDraft?](#what-is-dothesis)
-- [Try it free — no installation](#try-it-free--no-installation)
-- [Why OpenDraft Exists](#why-dothesis-exists)
-- [What OpenDraft is NOT](#what-dothesis-is-not)
-- [OpenDraft vs ChatGPT](#dothesis-vs-chatgpt)
-- [How It Works](#how-it-works)
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Which AI Model Should I Use?](#which-ai-model-should-i-use)
-- [Example Output](#example-output)
-- [People Also Ask](#people-also-ask)
-- [FAQ](#faq)
-- [Alternatives Comparison](#alternatives-comparison-2025)
-- [Tech Stack](#tech-stack)
-- [Contributing](#contributing)
-- [Links](#links)
+1. **Guided chat** — the student talks to the agent turn by turn. The agent reads the relevant skill, proposes options (rendered as clickable cards / editable models), and commits each decision to the project state. Soft guidance, never hard walls — the student can jump modules.
+2. **Auto approve** — one button runs the whole M1→M5 pipeline unattended (a detached `orchestrator` subprocess), composes all six chapters, compiles citations, and renders DOCX + PDF. Progress streams live into the run drawer.
+
+Core guarantees:
+
+- **No fabricated sources.** Every paper comes through the engine's literature search / reference parser and is verified against CrossRef, OpenAlex, Semantic Scholar, and arXiv.
+- **No invented statistics.** M4 only reports numbers computed by a whitelisted `run_stats` tool on the student's uploaded data — it never makes up β/R²/AVE.
+- **One source of truth.** The project `context_store` is shared across every chat thread of a project; the only write path is `commit_slice`, which validates ownership and propagates `needs_review` flags downstream.
 
 ---
 
-## What is OpenDraft?
-
-**OpenDraft is an open-source Python engine that generates thesis-level research drafts using 19 specialized AI agents.** It is designed for academic researchers who need long-form documents (10,000–20,000+ words) with citations verified against real databases.
-
-Unlike general-purpose chatbots such as ChatGPT, OpenDraft does not hallucinate citations. Every source is checked against CrossRef, OpenAlex, Semantic Scholar, and arXiv before being included in the bibliography.
-
-- **OpenDraft is** a command-line tool and Python library for drafting academic papers.
-- **OpenPaper is** the free hosted SaaS version of OpenDraft (3 papers per day, no credit card required).
-- **Best for:** Researchers drafting literature reviews, research papers, bachelor's theses, master's theses, and PhD dissertations.
-- **Price:** 100% free and open source (MIT license).
-- **Setup time:** 10 minutes for local installation.
-- **SaaS version:** [OpenPaper.dev](https://openpaper.dev) — run it in your browser, 3 free papers/day.
-
----
-
-## Try it free — no installation
-
-Not ready to self-host? **OpenPaper.dev** is the free, hosted version of OpenDraft:
-
-- ✅ **3 research papers per day** on the free plan
-- ✅ Searches CrossRef, OpenAlex, Semantic Scholar, and arXiv
-- ✅ **PDF + DOCX export**
-- ✅ No credit card required
-- ✅ Upgrade to Pro ($9/mo) or Max ($25/mo) for more daily credits
-
-<p align="center">
-  <a href="https://openpaper.dev"><img src="https://img.shields.io/badge/Try%20Free%20on-OpenPaper.dev-6366f1?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Try OpenPaper.dev for free"></a>
-</p>
-
----
-
-## Why OpenDraft Exists
-
-We built OpenDraft after repeatedly encountering AI writing tools that produced confident-sounding research drafts with hallucinated or unverifiable citations.
-
-Academic research requires trust, sources, and accountability.
-
-OpenDraft explores a different approach: instead of a single general-purpose model, it uses multiple specialized agents, each responsible for a specific step in the research drafting process, grounded in real academic literature.
-
-We open-sourced OpenDraft so researchers can inspect, critique, and improve how these systems actually work.
-
-### What Problem Does OpenDraft Solve?
-
-1. **Hallucinated citations** — ChatGPT and similar LLMs invent citations 30–50% of the time. OpenDraft verifies every source.
-2. **Length limits** — Most AI tools cannot produce documents longer than a few thousand words. OpenDraft generates 20,000+ word theses.
-3. **Generic structure** — ChatGPT outputs lack proper academic chapter/section hierarchy. OpenDraft builds thesis-grade outlines.
-4. **No export options** — ChatGPT cannot export to PDF or Word with academic formatting. OpenDraft exports to PDF, DOCX, and LaTeX.
-5. **Closed source** — Most academic AI tools are black boxes. OpenDraft is fully open source under the MIT license.
-
-### Who Is OpenDraft For?
-
-- **Graduate students** writing a master's thesis or PhD dissertation who need a structured first draft.
-- **Undergraduate students** working on a bachelor's thesis or capstone project.
-- **Researchers** preparing a literature review or journal submission.
-- **Academics** who want to verify that every citation in their AI-assisted draft links to a real paper.
-- **Developers** who want to build custom research tools on top of an open-source academic writing engine.
-
----
-
-## What OpenDraft is NOT
-
-OpenDraft is intentionally **not** designed for:
-
-- One-click generation of final papers
-- Cheating on assignments
-- Inventing citations or bypassing peer review
-- Replacing human researchers
-
-It is a research assistance and drafting tool, not an autonomous author.
-
----
-
-## OpenDraft vs ChatGPT
-
-| Question | ChatGPT | OpenDraft |
-|----------|---------|-----------|
-| Does it hallucinate citations? | Yes (often) | **Verified against real databases** |
-| Can it write 20,000+ words? | No (hits limits) | **Yes** |
-| Does it search real papers? | No | **Yes (CrossRef, OpenAlex, Semantic Scholar, arXiv)** |
-| Thesis structure? | Generic | **Academic chapters & sections** |
-| Export to PDF/Word? | No | **Yes** |
-| Free? | Limited | **100% free (self-host)** |
-| Open source? | No | **Yes (MIT license)** |
-| Hosted SaaS? | ChatGPT Plus $20/mo | **OpenPaper.dev — 3 free/day** |
-
-**Bottom line:** If you need an AI for academic writing with real citations, OpenDraft is a free, open-source alternative to ChatGPT.
-
----
-
-## How It Works
-
-OpenDraft uses **19 specialized AI agents** that work like a research team:
+## Architecture at a glance
 
 ```
-📚 RESEARCH PHASE    → Finds relevant papers from CrossRef, OpenAlex, Semantic Scholar, arXiv
-🏗️ STRUCTURE PHASE   → Creates thesis outline with chapters
-✍️ WRITING PHASE     → Drafts each section with academic tone
-🔍 CITATION PHASE    → Verifies every source exists (CrossRef, arXiv)
-✨ POLISH PHASE      → Refines language and formatting
-📄 EXPORT PHASE      → Generates PDF, Word, or LaTeX
+┌────────────┐   POST /api/v1 (SSE chat, runs, projects, credits, uploads)
+│  web/      │ ───────────────────────────────────────────────► ┌────────────┐
+│ Next.js 15 │ ◄─── token / progress / tool_calls / done (SSE) ── │  api/      │
+│ chat UI    │                                                    │  FastAPI   │
+└────────────┘                                                    └─────┬──────┘
+                                                                        │
+                   chat turn (DOTHESIS_AGENT_V3=1)                      │ auto run
+                   ┌────────────────────────────────┐                  │ (subprocess)
+                   ▼                                 │                  ▼
+            ┌──────────────┐   reads /skills/   ┌────┴─────┐   ┌──────────────────┐
+            │  agent/      │ ◄───────────────── │ skills/  │   │  orchestrator/   │
+            │ deepagents   │   commit_slice ──► │ M1–M5 +  │   │ LangGraph auto   │
+            │ runtime+tools│                    │ routing  │   │ graph (M1–M5)    │
+            └──────┬───────┘                    └──────────┘   └────────┬─────────┘
+                   │  research_scout / parse_reference / run_stats / export_docx
+                   ▼                                                    ▼
+            ┌─────────────────────────────────────────────────────────────────┐
+            │  engine/  — literature search + citations + draft/export muscle  │
+            └─────────────────────────────────────────────────────────────────┘
+                   │
+                   ▼
+            Postgres (context_store slices, threads, messages, jobs, credits)  ·  S3 (uploads, exports)
 ```
 
-**Result:** A complete research draft in 10-20 minutes instead of weeks.
+- **`web/`** — Next.js 15 chat workspace (project sidebar, module tracker, Context store panel, Auto-approve drawer, credits/transactions).
+- **`api/`** — FastAPI. **POST-only** (the auth token rides in the JSON body; only `/api/v1/health` is GET). Serves chat SSE (`routers/chat_v3.py`), auto-runs (`routers/runs.py`), projects/threads/uploads/credits.
+- **`agent/`** — the deep-agent runtime: `runtime.py` (`create_deep_agent` factory + `stream_turn` SSE event stream), tools (`research_scout`, `parse_reference`, `run_stats`, `export_docx`, state tools).
+- **`skills/`** — the source of truth for module behavior: `dothesis/` (routing + state protocol, read first), `dothesis-bootstrap/` (entry wizard), and `dothesis-m1-topic` … `dothesis-m5-writing`.
+- **`orchestrator/`** — the **auto-mode brain**. `python -m orchestrator --auto-draft` runs the LangGraph M1→M5 graph for Auto-approve runs, and its M5 composer + `tools/m5_writing.py` render the final document.
+- **`engine/`** — the research/writing engine (literature APIs, citation cascade, draft pipeline, DOCX/PDF export) behind the agent's tools.
+
+Full map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
-## Features
-
-### AI That Doesn't Make Up Citations
-Every citation is verified against CrossRef, OpenAlex, Semantic Scholar, and arXiv. If a paper doesn't exist, it's not included.
-
-### Write Any Type of Academic Paper
-- Research papers (5-10 pages)
-- Bachelor's thesis (30-50 pages)
-- Master's thesis (50-80 pages)
-- PhD dissertation (100+ pages)
-
-### 57+ Languages Supported
-English, Spanish, German, French, Chinese, Japanese, Korean, Arabic, Portuguese, Italian, Dutch, Polish, Russian, and 40+ more.
-
-### Export to Any Format
-- **PDF** - LaTeX-quality formatting
-- **Microsoft Word** (.docx)
-- **LaTeX source** - for journals
-
-### 100% Free and Open Source
-MIT license. Self-host with your own API keys. No subscriptions, no paywalls, no limits.
-
-### TL;DR and Digest Tools
-OpenDraft includes two standalone tools for quickly understanding any research paper:
-
-#### TL;DR: 5-Bullet Summary
-
-Generate a concise 5-bullet summary of any paper in seconds:
-
-```bash
-# As a subcommand
-dothesis tldr paper.pdf
-
-# Or standalone
-dothesis-tldr paper.pdf
-
-# Output to file
-dothesis tldr paper.pdf -o summary.md
-```
-
-Each bullet follows academic structure: thesis, key finding, method, implication, limitation.
-
-#### Digest: 60-Second Audio Briefing
-
-Generate a podcast-style audio summary you can listen to:
-
-```bash
-# Generate script + audio
-dothesis digest paper.pdf
-
-# Choose a different voice (rachel, adam, josh, elli, bella)
-dothesis digest paper.pdf --voice adam
-
-# Script only (no audio)
-dothesis digest paper.pdf --no-audio
-
-# Specify output directory
-dothesis digest paper.pdf -o output/
-```
-
-**Requirements:**
-- Digest audio requires an [ElevenLabs API key](https://elevenlabs.io/) set as `ELEVENLABS_API_KEY`
-- PDF reading requires the optional `pdf` extra: `pip install dothesis[pdf]`
-
-Both tools work with any academic paper (PDF, Markdown, or plain text), not just OpenDraft-generated documents.
-
----
-
-## Data Fetching
-
-Fetch research data from major statistical APIs directly into your workflow:
-
-```bash
-# Search for indicators
-dothesis data search GDP
-
-# Fetch World Bank data
-dothesis data worldbank NY.GDP.MKTP.CD --countries USA;DEU --start 2020 --end 2023
-
-# Fetch EU statistics (Eurostat)
-dothesis data eurostat nama_10_gdp
-
-# Fetch Our World in Data datasets
-dothesis data owid covid-19
-```
-
-**Supported providers:**
-- **World Bank** - Development indicators (GDP, population, education, health)
-- **Eurostat** - European Union statistics
-- **Our World in Data** - Open research datasets
-
-Data is saved as CSV files for use in your research.
-
----
-
-## Draft Revision
-
-Revise existing drafts with AI assistance:
-
-```bash
-# Revise a draft with natural language instructions
-dothesis revise ./output "Make the introduction longer and add more context"
-
-# The revised draft is saved as draft_v2.md (with PDF/DOCX exports)
-```
-
-Features:
-- Auto-detects draft files in output folders
-- Preserves all citations during revision
-- Automatic versioning (v2, v3, v4...)
-- Quality scoring before/after
-- PDF and DOCX export of revised version
-
----
-
-## Research Expose Mode
-
-Generate a quick research overview instead of a full draft:
-
-```bash
-dothesis "Neural Networks in Healthcare" --expose
-```
-
-This produces a research expose with:
-- **Research Sources Overview** - Number of sources, publication years, key journals
-- **Key Research Teams** - Major authors and research groups in the field
-- **Structured Outline** - Chapter/section structure for a full paper
-- **Complete Bibliography** - All sources with DOIs and journal info
-- **Next Steps** - Guidance for developing into a full draft
-
-Use expose mode when you want to:
-- Quickly scope a research topic
-- Validate there's enough literature
-- Get a structured starting point
-- Review sources before committing to a full draft
-
-Expose mode is ~3x faster than full draft generation.
-
----
-
-## TL;DR Mode
-
-Generate a 5-bullet summary of any academic paper in seconds:
-
-```bash
-# Summarize a PDF
-dothesis tldr paper.pdf
-
-# Summarize a markdown file
-dothesis tldr draft.md
-
-# Save to file
-dothesis tldr paper.pdf --output summary.md
-```
-
-Output:
-```
-📄 TL;DR: paper.pdf
-
-• Main finding: Neural networks improve diagnostic accuracy by 23%
-• Method: Retrospective analysis of 50,000 patient records
-• Key limitation: Single-center study, needs external validation
-• Implication: AI-assisted diagnosis could reduce misdiagnosis rates
-• Future work: Multi-center trials planned for 2025
-```
-
-Works with any PDF, Markdown, or text file.
-
----
-
-## Audio Digest
-
-Generate a 60-second audio summary using ElevenLabs TTS:
-
-```bash
-# Generate audio digest (requires ElevenLabs API key)
-dothesis digest paper.pdf
-
-# Choose a voice
-dothesis digest paper.pdf --voice adam
-
-# Available voices: rachel (default), adam, josh, elli, bella
-```
-
-Output: `paper_digest.mp3` - a professional narration summarizing the key points.
-
-**Setup:** Set `ELEVENLABS_API_KEY` in your environment or `.env` file.
-
----
-
-## Quick Start
+## Local development
 
 ### Prerequisites
-- Python 3.10+
-- A free [Gemini API key](https://makersuite.google.com/app/apikey)
+- Python 3.13 (the API venv) · Node 18+ · PostgreSQL (local on port 5499 per the default `DATABASE_URL`)
+- A Google Gemini API key (default model is `gemini-2.5-flash`). Claude is used automatically if `ANTHROPIC_API_KEY` is set.
+- Optional but recommended for real exports: `pandoc` + LibreOffice (DOCX/PDF rendering).
 
-### 1. Clone & Install
-
+### Run the stack
 ```bash
-git clone https://github.com/federicodeponte/dothesis.git
-cd dothesis
-pip install -r requirements.txt
+cp .env.example .env   # then fill in keys (see below)
+./dev.sh               # starts API (:7100), web (:3006), and (optional) LangGraph Studio (:8123)
 ```
+`dev.sh` exports `.env` to all subprocesses, wipes `web/.next` for a clean boot, and runs `uvicorn` with `--reload`. Open **http://localhost:3006**.
 
-### 2. Configure
+> Don't run `next build` while `dev.sh`'s `next dev` is up — it serves stale UI.
 
-Create a `.env` file with your API key:
-```bash
-GOOGLE_API_KEY=your-gemini-api-key
-```
-
-### 3. Generate a Draft
-
-```python
-from engine.draft_generator import DraftGenerator
-
-generator = DraftGenerator()
-draft = generator.generate(
-    topic="The Impact of AI on Academic Research",
-    paper_type="master",  # research_paper, bachelor, master, phd
-    language="en"
-)
-
-# Export to different formats
-draft.to_pdf("thesis.pdf")
-draft.to_docx("thesis.docx")
-draft.to_latex("thesis.tex")
-```
-
-See `engine/README.md` for detailed API documentation.
+### Key environment variables
+| Var | Purpose |
+|-----|---------|
+| `DATABASE_URL` | Postgres (default `postgresql+psycopg://dothesis:dothesis@localhost:5499/dothesis`) |
+| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | LLM (Gemini 2.5 Flash default) |
+| `ANTHROPIC_API_KEY` | Optional — switches the agent to Claude when set |
+| `DOTHESIS_AGENT_V3` | `1` = chat served by the deep agent (current default) |
+| `ORCHESTRATOR_ENABLED` | `true` = mount chat/runs/exports/uploads routers + prime graphs |
+| `NEXT_PUBLIC_API_BASE` | Browser → API base, e.g. `http://localhost:7100/api/v1` (SSE hits this directly to bypass the dev proxy's buffering) |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` / `DOTHESIS_GOOGLE_CLIENT_ID` | Google sign-in (must share the same client id) |
+| `S3_BUCKET` / `AWS_*` | Upload + export storage |
+| `DATAFORSEO_LOGIN` / `_PASSWORD`, `ENABLE_SEMANTIC_SCHOLAR` | Literature search backends |
+| `LANGSMITH_*` | Optional tracing |
+| `ORCHESTRATOR_AUTOFILL_MAX_SECONDS` | Wall-clock cap for an auto-mode module fill (default 60s) |
 
 ---
 
-## Which AI Model Should I Use?
+## How a chat turn works (the short version)
 
-| Model | Speed | Quality | Cost/Draft | Best For |
-|-------|-------|---------|------------|----------|
-| **Gemini 3 Flash** | ⚡ Fast | Good | ~$0.35 | Most users |
-| Gemini 3 Pro | Medium | Excellent | ~$1.40 | Important papers |
-| GPT-5.2 | Medium | Excellent | ~$1.60 | OpenAI users |
-| Claude Sonnet 4.5 | Medium | Excellent | ~$1.80 | Nuanced writing |
-| Claude Opus 4.5 | Slow | Best | ~$3.00 | Maximum quality |
+1. The browser POSTs the message to `/api/v1/threads/{id}/messages`; the API streams SSE back.
+2. The agent reads the `dothesis` routing skill, then the relevant module skill, and works the turn — emitting `token`, `progress` (tool activity, shown as plain-language beats), and `tool_calls` (interactive widgets) events.
+3. Every decision is persisted via `commit_slice`, which updates the project state and flags downstream modules for review.
+4. On completion the assistant message is persisted and the turn is metered (credits). If the student reloads mid-turn, the agent is stopped and the partial reply is saved.
 
-**Recommendation:** Start with Gemini 3 Flash for most use cases. Use Gemini 3 Pro or Claude Sonnet 4.5 for important papers.
+Details and the Auto-approve run flow: [`docs/PIPELINE.md`](docs/PIPELINE.md).
 
 ---
 
-## Example Output
+## The open-source engine (`engine/`)
 
-See what OpenDraft produces:
-
-📄 **[Download Sample PDF](https://dothesis.xyz/examples/Why_Academic_Thesis_AI_Saves_The_World.pdf)** (60 pages, 18k words, 40+ citations)
-
-📝 **[Download Sample Word](https://dothesis.xyz/examples/Why_Academic_Thesis_AI_Saves_The_World.docx)**
-
-Generated in ~15 minutes with verified citations from real academic papers.
-
----
-
-## Project Structure
-
-```
-dothesis/
-├── engine/
-│   ├── draft_generator.py    # Main 19-agent pipeline
-│   ├── config.py             # Model & API settings
-│   ├── prompts/              # Agent instruction templates
-│   ├── utils/                # Citations, export, helpers
-│   └── dothesis/            # Core agent modules
-├── examples/                 # Sample thesis outputs
-├── requirements.txt          # Python dependencies
-└── README.md
-```
-
----
-
-## People Also Ask
-
-### Is OpenDraft free?
-**Yes.** OpenDraft is 100% free and open source under the MIT license. You can self-host it with your own API keys (a typical thesis costs ~$0.35–$3 in API fees). There is also a free hosted version at [OpenPaper.dev](https://openpaper.dev) with 3 papers per day and no credit card required.
-
-### Is OpenDraft better than ChatGPT for writing a thesis?
-**Yes, for research drafts.** ChatGPT frequently hallucinates citations and cannot produce documents longer than a few thousand words. OpenDraft generates 20,000+ word theses with every citation verified against real academic databases.
-
-### Can OpenDraft write a full PhD dissertation?
-**OpenDraft can generate a complete first draft** of a PhD dissertation (100+ pages) in 10–20 minutes. However, it is a drafting assistant, not an autonomous author. You must review, edit, and add your own analysis before submission.
-
-### Does OpenDraft make up citations?
-**No.** OpenDraft verifies every citation against CrossRef, OpenAlex, Semantic Scholar, and arXiv. If a paper does not exist, it is not included in the bibliography.
-
-### What is the difference between OpenDraft and OpenPaper?
-**OpenDraft** is the open-source Python engine you run locally. **OpenPaper** is the hosted SaaS version that runs OpenDraft in the cloud so you can use it in your browser without installing anything.
-
-### How long does it take to generate a thesis with OpenDraft?
-**10–20 minutes** for a full master's thesis (50–80 pages). A shorter research paper takes 5–10 minutes.
-
-### What file formats does OpenDraft export to?
-**PDF, Microsoft Word (.docx), and LaTeX source.**
-
-### Can I use OpenDraft for commercial purposes?
-**Yes.** The MIT license permits commercial use, modification, and distribution without restriction.
-
----
-
-## FAQ
-
-### Is this really free?
-
-**Yes.** OpenDraft is 100% open source under the MIT license. Self-host with your own API keys. A typical thesis draft costs ~$0.35-$3 depending on the model.
-
-You can also use the free hosted version at **[OpenPaper.dev](https://openpaper.dev)** — 3 papers per day, no credit card required.
-
-### Is this better than ChatGPT for academic writing?
-
-**For research drafts, yes.** ChatGPT often hallucinates citations. OpenDraft verifies every citation against CrossRef, OpenAlex, Semantic Scholar, and arXiv.
-
-### Can I use this for my university thesis?
-
-OpenDraft generates **research drafts**—starting points you should review, edit, and build upon. Always:
-- Verify all sources yourself
-- Add your own analysis and insights
-- Check your institution's AI policy
-
-### How is this different from other AI writing tools?
-
-Most AI tools use a single model. OpenDraft uses **19 specialized agents**—one for research, one for citations, one for structure, etc. This produces higher quality output.
-
-### Can I use this commercially?
-
-**Yes.** MIT license allows commercial use. Build products, offer services, modify the code—no restrictions.
-
----
-
-## Alternatives Comparison (2025)
-
-| Tool | Price | Open Source | Verified Citations | Long Documents | Hosted Free Tier |
-|------|-------|-------------|-------------------|----------------|------------------|
-| **OpenDraft** | Free | ✅ Yes | ✅ Yes | ✅ Yes | ✅ OpenPaper.dev (3/day) |
-| ChatGPT Plus | $20/mo | ❌ No | ❌ No | ❌ No | ❌ No |
-| Jasper | $49/mo | ❌ No | ❌ No | ✅ Yes | ❌ No |
-| Jenni AI | $20/mo | ❌ No | ⚠️ Partial | ✅ Yes | ❌ No |
-
-**OpenDraft is a free, open-source research draft generator with verified citations.**
-
----
-
-## Tech Stack
-
-- **Engine:** Python 3.10+, multi-agent orchestration
-- **Models:** Google Gemini 3, Anthropic Claude 4.5, OpenAI GPT-5
-- **Citations:** CrossRef API, OpenAlex API, Semantic Scholar API, arXiv API
-- **Export:** WeasyPrint (PDF), python-docx (Word)
+The original DoThesis CLI — a 19-agent draft generator with verified citations and PDF/DOCX/LaTeX export — lives in `engine/` and is documented in [`engine/README.md`](engine/README.md). It runs standalone *and* powers the agent's `research_scout`, `parse_reference`, and document-export tools. It is MIT-licensed.
 
 ---
 
 ## Contributing
 
-Contributions welcome!
-
-**Ideas:**
-- Add new AI model support
-- Improve citation accuracy
-- Add export formats
-- Translate prompts
-
-Maintainer workflow docs:
-- Push/auth runbook: `docs/MAINTAINER_PUSH_RUNBOOK.md`
-- Automated push preflight: `scripts/push-preflight.sh`
-
----
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). When you change code, follow the repo conventions: **POST-only endpoints**, **comment the reasoning** behind non-obvious changes, and put behavioral changes for a module in its **skill** first. Maintainer push/auth: [`docs/MAINTAINER_PUSH_RUNBOOK.md`](docs/MAINTAINER_PUSH_RUNBOOK.md).
 
 ## Links
-
-- 🌐 **Website:** [dothesis.xyz](https://dothesis.xyz)
-- 🚀 **Free Hosted Version:** [OpenPaper.dev](https://openpaper.dev)
-- 💬 **Discussions:** [GitHub Discussions](https://github.com/federicodeponte/dothesis/discussions)
-- 🐛 **Issues:** [Report Bug](https://github.com/federicodeponte/dothesis/issues)
-- 🗒️ **Changelog:** [CHANGELOG.md](CHANGELOG.md)
-- 📜 **License:** [MIT](LICENSE)
-
----
-
-## Summary
-
-**OpenDraft** is a free, open-source Python engine for generating academic research drafts. It uses 19 specialized AI agents to create drafts with citations verified against real databases (CrossRef, OpenAlex, Semantic Scholar, arXiv).
-
-**Keywords:** AI thesis writer, AI research paper generator, ChatGPT alternative, free thesis generator, open source AI writing, multi-agent AI, verified citations, Python thesis generator, academic writing 2025, literature review generator, dissertation helper, OpenPaper, free academic AI
-
----
-
-<p align="center">
-  <b>If OpenDraft helps your research, please star the repo!</b><br><br>
-  <a href="https://github.com/federicodeponte/dothesis">⭐ Star on GitHub</a>
-</p>
+- License: [MIT](LICENSE)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+- Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Agent contract: [`AGENTS.md`](AGENTS.md) · Method: [`docs/PIPELINE.md`](docs/PIPELINE.md)

@@ -1,197 +1,71 @@
-# OpenDraft Architecture
+# DoThesis — System Architecture
 
-> 19-agent pipeline for automated academic paper generation.
+This is the system map for the current DoThesis product: a chat-first thesis workspace built as **one deep agent driven by skills**, plus an unattended **auto-approve** path. For the agent contract and invariants see [`../AGENTS.md`](../AGENTS.md); for the step-by-step method see [`PIPELINE.md`](PIPELINE.md).
 
-See also: [PIPELINE.md](PIPELINE.md) for operational details and word count targets.
-
----
-
-## Pipeline Phases
-
-```
-  Research ──> Structure ──> Compose ──> QA ──> Export
-
-  Phase 1       Phase 2       Phase 3     Phase 4     Phase 5
-  4 agents      2 agents +    1 agent     3 agents +  deterministic
-  (LLM)         citation      (x6-7       compile +   (Pandoc)
-                mgmt (det.)   sections)   abstract
-```
-
-### Phase 1: Research
-
-Discover and analyze 50+ academic papers via multi-API cascade.
-
-| Agent | Prompt | Input | Output |
-|-------|--------|-------|--------|
-| Scout | `01_research/scout.md` | Topic + config | `scout_result` (citations list), `scout_output` (markdown) |
-| Deep Research | `01_research/deep_research.md` | Topic (when Scout finds < threshold) | Additional citations via extended search |
-| Scribe | `01_research/scribe.md` | Discovered papers | `scribe_output` (paper summaries) |
-| Signal | `01_research/signal.md` | All research | `signal_output` (gaps & trends) |
-
-**Citation API cascade** (managed by `CitationResearcher`):
-1. Semantic Scholar (DOI, title, authors, year, abstract)
-2. Crossref (DOI, title, authors, year, journal)
-3. Serper / Gemini Grounded Search (URL-based results)
-4. LLM Fallback (Gemini training data — last resort)
-
-`QueryRouter` classifies each query to pick the optimal starting API.
-
-### Phase 2: Structure
-
-Design and format the paper outline.
-
-| Agent | Prompt | Input | Output |
-|-------|--------|-------|--------|
-| Architect | `02_structure/architect.md` | Topic + gaps + research | `architect_output` (outline) |
-| Formatter | `02_structure/formatter.md` | Outline + citation style | `formatter_output` (styled outline) |
-
-### Phase 2.5: Citation Management (deterministic)
-
-No LLM involved. Runs as pipeline code in `draft_generator.py`.
-
-1. **Deduplicate** citations (fuzzy title + DOI matching)
-2. **Scrape titles** from URLs for citations missing metadata
-3. **Scrape metadata** (DOI lookup, CrossRef enrichment)
-4. **Build** `citation_database` + `citation_summary` with `{cite_XXX}` IDs
-
-### Phase 3: Compose
-
-Single agent (Crafter) invoked once per section with different context.
-
-| Agent | Prompt | Input | Output |
-|-------|--------|-------|--------|
-| Crafter (x6-7) | `03_compose/crafter.md` | Outline + citation_summary + prior sections | Section markdown with `{cite_XXX}` refs |
-
-Sections written: Introduction, Literature Review, Methodology, Results, Discussion, Conclusion, Appendices (conditional).
-
-### Phase 3.5: Quality Assurance
-
-Advisory-only reports — do not block the pipeline.
-
-| Agent | Prompt | Input | Output |
-|-------|--------|-------|--------|
-| Thread | `03_compose/thread.md` | All sections | `thread_report` (coherence issues) |
-| Narrator | `03_compose/narrator.md` | All sections | `narrator_report` (voice issues) |
-| FactCheck | `04_validate/factcheck_extract.md` | Full draft | `qa_factcheck.md` (claim verification) |
-
-### Phase 4: Compile & Enhance
-
-| Step | Agent/Process | Input | Output |
-|------|---------------|-------|--------|
-| Assembly | deterministic | All section outputs | Single markdown document |
-| Citation compile | deterministic (`citation_compiler.py`) | Markdown + citation_database | `{cite_XXX}` replaced with formatted refs + reference list |
-| Abstract | `06_enhance/abstract_generator.md` | Complete draft | Abstract + YAML metadata prepended |
-| Post-processing | deterministic | Final markdown | Table fixes, dedup appendices, AI language cleanup, heading localization |
-
-### Phase 5: Export (deterministic)
-
-| Format | Engine | Output |
-|--------|--------|--------|
-| PDF | Pandoc + LaTeX (or WeasyPrint / LibreOffice fallback) | `paper.pdf` |
-| DOCX | Pandoc | `paper.docx` |
-| Markdown | passthrough | `final_draft.md` |
-
-### Optional Agents (manual workflow)
-
-These agents are available for human-in-the-loop iteration via Cursor/Claude Code but are **not** called in the automated pipeline.
-
-| # | Agent | Phase | Prompt | Role |
-|---|-------|-------|--------|------|
-| 12 | Skeptic | Validate | `04_validate/skeptic.md` | Critical analysis: weak arguments, padding, contradictions |
-| 13 | Verifier | Validate | `04_validate/verifier.md` | Citation DOI/author/date verification |
-| 14 | Referee | Validate | `04_validate/referee.md` | Simulated peer review (accept/revise/reject) |
-| 15 | Citation Verifier | Refine | `05_refine/citation_verifier.md` | Deep citation format checking |
-| 16 | Voice | Refine | `05_refine/voice.md` | Match author's writing style |
-| 17 | Entropy | Refine | `05_refine/entropy.md` | Reduce AI-detectable patterns |
-| 18 | Polish | Refine | `05_refine/polish.md` | Grammar, repetition, hedging pass |
-| 19 | Enhancer | Enhance | `06_enhance/enhancer.md` | Add tables, figures, limitations |
+> Historical design docs (the v1/v2 LangGraph orchestration foundation, the per-feature SP plans/specs, and the dated `architecture/2026-*` files) are kept as point-in-time records and are superseded by this document.
 
 ---
 
-## Data Flow Summary
+## Components
 
-```
-Phase 1  =>  scout_result, scout_output, scribe_output, signal_output
-Phase 2  =>  architect_output, formatter_output
-Phase 2.5 => citation_database, citation_summary
-Phase 3  =>  intro_output, lit_review_output, methodology_output,
-             results_output, discussion_output, conclusion_output,
-             appendix_output
-Phase 3.5 => thread_report, narrator_report, qa_factcheck.md
-Phase 4  =>  compiled_draft, final_draft.md
-Phase 5  =>  paper.pdf, paper.docx
-```
+| Layer | Path | Responsibility |
+|-------|------|----------------|
+| **Web** | `web/` | Next.js 15 chat workspace: project sidebar, module tracker, chat pane, Context store panel, Auto-approve modal + drawer, credits/transactions, editor. |
+| **API** | `api/` | FastAPI gateway. **POST-only** (auth token in the JSON body; `/api/v1/health` is the lone GET). Auth (JWT + Google), projects/threads/messages, uploads, credits, chat SSE, auto-runs, exports. |
+| **Chat agent** | `agent/` | The deep-agent runtime (`deepagents`): builds the agent, streams a turn, exposes the tools. Serves chat when `DOTHESIS_AGENT_V3=1`. |
+| **Skills** | `skills/` | Domain knowledge as SKILL.md files: routing + state protocol (`dothesis`), entry wizard (`dothesis-bootstrap`), and M1–M5. Mounted read-only at `/skills/`. |
+| **Auto-mode** | `orchestrator/` | LangGraph M1→M5 graph + module agents that run the unattended Auto-approve subprocess; also the M5 chapter composer + export. |
+| **Engine** | `engine/` | Research + writing muscle: literature-search APIs, citation cascade, draft pipeline, DOCX/PDF rendering. Also a standalone CLI. |
+| **Data** | Postgres · S3 | `context_store` slice columns, projects/threads/messages, jobs (runs) + job_events, credit ledger, token ledger. S3 holds uploads + exports. |
 
 ---
 
-## Output Directory Structure
+## Request topology
 
-Each pipeline run produces a self-contained output directory:
-
-```
-draft_output/
-├── research/                   # Phase 1 outputs
-│   ├── papers/                 # Individual paper summaries (one per source)
-│   ├── combined_research.md    # Merged research findings
-│   ├── research_gaps.md        # Signal agent gap analysis
-│   └── bibliography.json       # Raw citation data from Scout
-│
-├── drafts/                     # Phase 2-4 outputs
-│   ├── outline.md              # Architect output
-│   ├── outline_formatted.md    # Formatter output
-│   ├── citation_database.json  # Deduplicated citation DB
-│   ├── citation_summary.md     # {cite_XXX} reference list for agents
-│   ├── intro.md                # Section drafts (Crafter outputs)
-│   ├── literature_review.md
-│   ├── methodology.md
-│   ├── results.md
-│   ├── discussion.md
-│   ├── conclusion.md
-│   ├── appendices.md           # (conditional)
-│   ├── qa_thread.md            # Thread coherence report
-│   ├── qa_narrator.md          # Narrator voice report
-│   ├── qa_factcheck.md         # FactCheck verification report
-│   └── final_draft.md          # Assembled + compiled + post-processed
-│
-├── tools/                      # Refinement prompts for manual iteration
-│   └── *.md                    # Generated prompts for Cursor/Claude Code
-│
-└── exports/                    # Phase 5 outputs
-    ├── paper.pdf               # Final PDF
-    ├── paper.docx              # Final Word document
-    └── paper.md                # Final markdown (copy of final_draft.md)
-```
+- The browser holds a JWT (from email/password or Google sign-in) in `tokenStore` and sends it in the **body** of every POST. There is no cookie auth; CORS `allow_credentials` is off.
+- Streaming endpoints (chat, run events) are **POST** and consumed via `fetch` + `ReadableStream`. The web client targets `NEXT_PUBLIC_API_BASE` (the API origin) directly, because the Next dev proxy buffers `text/event-stream`.
+- `api/app/main.py` mounts routers under `/api/v1`. Chat/runs/exports/uploads/editor mount only when `ORCHESTRATOR_ENABLED=true`, which also primes the interactive + auto LangGraph caches and registers the token-meter DB sink at startup.
 
 ---
 
-## Key Source Files
+## State model
 
-| Component | Path |
-|-----------|------|
-| Pipeline orchestrator | `engine/draft_generator.py` |
-| Agent runner | `engine/utils/agent_runner.py` |
-| Pydantic LLM models | `engine/utils/models.py` |
-| Citation research orchestrator | `engine/utils/api_citations/orchestrator.py` |
-| Citation compiler | `engine/utils/citation_compiler.py` |
-| Citation database | `engine/utils/citation_database.py` |
-| Fact-check verifier | `engine/utils/factcheck_verifier.py` |
-| Deep research planner | `engine/utils/deep_research.py` |
-| Abstract generator | `engine/utils/abstract_generator.py` |
-| PDF export | `engine/utils/export_professional.py` |
-| All prompt files | `engine/prompts/` |
-| Manual workflow guide | `engine/prompts/00_WORKFLOW.md` |
-| Concurrency config | `engine/concurrency/concurrency_config.py` |
+The **`context_store`** is the single source of truth, scoped to a *project* (shared by all of its chat threads).
+
+- **Shape:** flat keys per module (e.g. `research_title`, `literature_sources`, `analysis_results`, `chapters`) grouped into slices `m1_topic … m5_writing`. Persisted as JSONB slice columns on the project, with `projects.module_status` (`locked`/`in_progress`/`done`/`needs_review`) and `projects.focus` as fast-read derivations.
+- **Only write path:** `commit_slice(module, patch, reason, confirm_done?)`. It validates that the patch only touches keys the module owns, snapshots a version, applies the patch, shifts focus, and flags downstream modules `needs_review` along the dependency DAG (M1→M2..M5, M2→M3..M5, M3→M4,M5, M4→M5) — but only modules that have already started.
+- **Reads** (`read_slice`) never mutate.
+
+Stores: `agent/state.py:ProjectStateStore` (file-backed, CLI/tests) and `api/app/agent_state.py:DbProjectStateStore` (Postgres). Both honor the same contract.
 
 ---
 
-## LLM Output Validation
+## The two execution paths
 
-All LLM JSON parse sites are protected by Pydantic models (`engine/utils/models.py`):
+### 1. Interactive chat (deep agent)
+`POST /api/v1/threads/{id}/messages` → `chat_v3.send_message_v3`:
+- Persists the user message, gets/builds the per-project cached agent (deepagents over an `AsyncPostgresSaver` checkpointer), materializes any attachments.
+- Streams `agent/runtime.py:stream_turn` events, multiplexed with engine progress, onto SSE: `token`, `progress` (tool activity → live ProgressBubble), `tool_calls` (interactive widgets), `error`, `done`.
+- An idempotent `_finalize()` persists the assistant message and charges credits — and runs on disconnect too, so a browser reload saves the partial reply and stops the agent (no orphaned token burn).
 
-| Model | Used In | Validates |
-|-------|---------|-----------|
-| `ResearchPlan` | `deep_research.py` | Gemini research plan (queries, outline, strategy) |
-| `LLMCitationResponse` | `api_citations/orchestrator.py` | Single citation from LLM fallback |
-| `CitationDatabaseSchema` | file validation | Citation database JSON structure |
-| `FactCheckJudgeVerdict` | `factcheck_verifier.py` | Judge LLM verdict (verdict, confidence, wrong_part) |
-| `FactCheckClaim` | `draft_generator.py` | Extracted factual claim (claim, section, line) |
+### 2. Auto-approve (orchestrator subprocess)
+`POST /api/v1/projects/{id}/runs` → `job_runner.spawn_orchestrator_run`:
+- Spawns `python -m orchestrator --auto-draft`; an async monitor tails the run's `events.jsonl` into `JobEvent` + `pubsub`.
+- The graph runs M1→M5 unattended; module agents auto-fill their slices (M3 constrained to plain linear regression for analysability), M5 composes six chapters and renders DOCX + PDF to S3.
+- The drawer streams progress via `POST /api/v1/runs/{id}/events`; controls are pause/resume (resume re-enters at the LangGraph checkpoint), cancel, and retry.
+
+---
+
+## External services
+
+- **LLM:** Google Gemini (`gemini-2.5-flash` default); Anthropic Claude when `ANTHROPIC_API_KEY` is set.
+- **Literature:** CrossRef, OpenAlex, Semantic Scholar, arXiv, plus DataForSEO / Gemini-grounded search (engine citation cascade).
+- **Storage:** S3 (uploads + exported DOCX/PDF). **Email:** AWS SES (verification + password reset). **Auth:** Google Identity Services (verify-only ID token). **Tracing:** LangSmith (optional). **Payments:** Polar (credits top-up).
+
+---
+
+## Conventions
+
+- **POST-only HTTP** (see [`../CLAUDE.md`](../CLAUDE.md)). New routes are `@router.post`; read filters live in the body.
+- **Comment the reasoning** for non-obvious changes.
+- **Behavior lives in skills** (chat) and in `orchestrator/prompts` + agent classes (auto). Change the skill/prompt first, code second.

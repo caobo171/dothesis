@@ -1,4 +1,4 @@
-# OpenDraft - Complete Workflow Guide
+# DoThesis - Complete Workflow Guide
 
 **Welcome!** This guide will walk you through writing a complete academic paper using AI agents.
 

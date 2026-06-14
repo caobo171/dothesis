@@ -1,4 +1,4 @@
-# OpenDraft ↔ OpenPaper Pipeline Convergence Roadmap
+# DoThesis ↔ OpenPaper Pipeline Convergence Roadmap
 
 ## Status: Active
 **Created:** 2025-02-04
@@ -8,15 +8,15 @@
 
 ## Phase 1: Port Features to OpenPaper Monolith (Low Risk, Immediate Value)
 
-Port the 3 new features from OpenDraft's phases/ modules directly into OpenPaper's existing `draft_generator.py` monolith. No architectural changes — just add the capabilities inline.
+Port the 3 new features from DoThesis's phases/ modules directly into OpenPaper's existing `draft_generator.py` monolith. No architectural changes — just add the capabilities inline.
 
 - [ ] **Expose mode** (`output_type="expose"`) — shorter, punchier output format
 - [ ] **Configurable citation style** (`citation_style` param: APA/IEEE/NALT) — currently hardcoded
 - [ ] **Per-section `clean_agent_output()`** — strip agent artifacts before assembly
 
-## Phase 2: Battle-Test Phases in OpenDraft (Prove the Architecture)
+## Phase 2: Battle-Test Phases in DoThesis (Prove the Architecture)
 
-Run real drafts through OpenDraft's new `engine/phases/` modular pipeline. Fix everything that breaks.
+Run real drafts through DoThesis's new `engine/phases/` modular pipeline. Fix everything that breaks.
 
 - [ ] Run 5+ real end-to-end draft generations through the phases pipeline
 - [ ] Fix circular imports (`compile.py` and `citations.py` → `draft_generator.py`)

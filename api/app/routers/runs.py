@@ -152,10 +152,18 @@ def resume_run(run_id: uuid.UUID,
                user: User = Depends(current_user),
                db: Session = Depends(db_session)):
     run = _owned_run(db, user, run_id)
-    if run.status != "paused":
+    # Resume covers paused runs AND terminal-but-recoverable ones (failed /
+    # canceled). The LangGraph checkpoint (keyed by thread_id == run.id) holds
+    # every completed module, so re-spawning with resume_from re-enters at the
+    # last checkpoint — e.g. a run that died in M3 picks up at M3 with M1+M2
+    # intact, instead of restarting from M1.
+    if run.status not in {"paused", "failed", "canceled"}:
         raise HTTPException(409,
-                            detail={"error": {"code": "not_paused",
+                            detail={"error": {"code": "not_resumable",
                                               "message": f"run is {run.status}"}})
+    # Clear the previous terminal markers so the resumed run reads as live.
+    run.error_text = None
+    run.finished_at = None
     job_runner.spawn_orchestrator_run(db, run, brief={}, resume_from=str(run.id))
     db.commit()
     return {"status": run.status}

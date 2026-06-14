@@ -1,4 +1,4 @@
-"""Installation verification for OpenDraft."""
+"""Installation verification for DoThesis."""
 
 import sys
 import os
@@ -157,7 +157,7 @@ def check_file_structure():
 def verify_installation():
     """Main verification function."""
     print("=" * 60)
-    print("  OpenDraft - Installation Verification")
+    print("  DoThesis - Installation Verification")
     print("=" * 60)
 
     results = {}

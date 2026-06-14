@@ -1,5 +1,5 @@
 """
-OpenDraft Backend - Modal.com Serverless Workers
+DoThesis Backend - Modal.com Serverless Workers
 
 This module provides production draft generation via Modal.com.
 """

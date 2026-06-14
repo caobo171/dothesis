@@ -784,7 +784,7 @@ For humanities, social sciences, or qualitative research theses without mathemat
 
 **ZERO TOLERANCE FOR FAKE SYSTEMATIC REVIEW CLAIMS**
 
-OpenDraft performs a **narrative literature review** (curated exploration of sources), NOT a systematic review (PRISMA protocol). You MUST be honest about this in methodology sections.
+DoThesis performs a **narrative literature review** (curated exploration of sources), NOT a systematic review (PRISMA protocol). You MUST be honest about this in methodology sections.
 
 ### Required: Declare Review Type
 
