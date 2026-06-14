@@ -28,7 +28,22 @@ class Settings(BaseSettings):
     polar_webhook_secret: str = Field(alias="POLAR_WEBHOOK_SECRET", default="")
     polar_server: str = Field(alias="POLAR_SERVER", default="sandbox")
     dothesis_base_url: str = Field(alias="DOTHESIS_BASE_URL", default="http://localhost:3000")
+    # Comma-separated providers offered to users (e.g. "polar,paypal"). SePay is
+    # always added on top for UTC+7 users when configured. "dummy" forces every
+    # provider into no-real-API stub mode for local dev / tests.
     dothesis_payments: str = Field(alias="DOTHESIS_PAYMENTS", default="polar")
+    # PayPal (raw REST via httpx — no SDK).
+    paypal_client_id: str = Field(alias="PAYPAL_CLIENT_ID", default="")
+    paypal_secret: str = Field(alias="PAYPAL_SECRET", default="")
+    paypal_mode: str = Field(alias="PAYPAL_MODE", default="sandbox")  # sandbox|production
+    paypal_webhook_id: str = Field(alias="PAYPAL_WEBHOOK_ID", default="")
+    # SePay (Vietnamese VietQR bank transfer). Offered to UTC+7 users only.
+    sepay_api_key: str = Field(alias="SEPAY_API_KEY", default="")
+    sepay_account_number: str = Field(alias="SEPAY_ACCOUNT_NUMBER", default="")
+    sepay_bank_code: str = Field(alias="SEPAY_BANK_CODE", default="")
+    sepay_memo_prefix: str = Field(alias="SEPAY_MEMO_PREFIX", default="DT")
+    # Fixed USD→VND rate for SePay package prices. Update when FX drifts.
+    usd_to_vnd: int = Field(alias="USD_TO_VND", default=25000)
     mail_from: str = Field(alias="DOTHESIS_MAIL_FROM", default="")
     mail_region: str = Field(alias="DOTHESIS_MAIL_REGION", default="ap-southeast-1")
     dothesis_mail: str = Field(alias="DOTHESIS_MAIL", default="")

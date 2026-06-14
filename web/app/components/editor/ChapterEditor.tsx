@@ -5,15 +5,18 @@ import { useEditor, EditorContent } from "@tiptap/react";
 // @tiptap/react root). Import from the menus sub-path per v3 migration guide.
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
+import { Markdown } from "tiptap-markdown";
 import { useEffect, useState, useCallback, useRef } from "react";
 
 import { AiPending } from "./extensions/AiPending";
 import { CitationMark } from "./extensions/CitationMark";
+import { SlashCommand } from "./extensions/SlashCommand";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { CitePopover } from "./CitePopover";
 import { TranslateMenu } from "./TranslateMenu";
 import { PendingEditRibbon, type PendingEdit } from "./PendingEditRibbon";
 import { useChapterAutosave } from "./hooks/useChapterAutosave";
+import { buildOffsetMap, offsetToPos, posToOffset } from "./markdownOffset";
 
 
 type Props = {
@@ -45,7 +48,12 @@ export function ChapterEditor({
   const autosave = useChapterAutosave({ projectId, chapterName });
 
   const editor = useEditor({
-    extensions: [StarterKit, AiPending, CitationMark],
+    // Markdown extension makes the editor parse `initialProse` (stored markdown)
+    // into real nodes — so `## 1.1` renders as an H2 instead of literal text —
+    // and serializes back to markdown on save. html:false keeps raw HTML out of
+    // the stored prose (and out of the exporter), so storage stays clean
+    // markdown exactly like the exporter already expects.
+    extensions: [StarterKit, Markdown.configure({ html: false }), AiPending, CitationMark, SlashCommand],
     // Apply prose styling + suppress the browser's default focus outline on the
     // contenteditable node itself. Putting the class here (not on EditorContent)
     // targets the inner `.ProseMirror` element — otherwise the wrapper styles
@@ -53,10 +61,13 @@ export function ChapterEditor({
     editorProps: {
       attributes: { class: "prose max-w-none focus:outline-none" },
     },
-    content: `<p>${initialProse.replace(/\n/g, "</p><p>")}</p>`,
+    content: initialProse,
     onUpdate({ editor }) {
-      // Queue a debounced PATCH each time the document changes.
-      const text = editor.getText();
+      // Persist markdown (not getText): getText would drop heading/emphasis
+      // syntax now that they're structural nodes, corrupting the export. The
+      // serializer round-trips the doc back to the same markdown dialect the
+      // chapter was loaded from.
+      const text = editor.storage.markdown.getMarkdown();
       autosave.queue(text);
       onDirty(true);
     },
@@ -92,6 +103,11 @@ export function ChapterEditor({
       });
     });
 
+    // Build the offset map once, after the removal pass has settled, so every
+    // edit resolves against the same serialized markdown / doc positions.
+    const offsetMap = buildOffsetMap(editor);
+    const docSize = editor.state.doc.content.size;
+
     // Add marks for edits that aren't yet reflected in the document.
     pendingEdits.forEach(edit => {
       const hasMark = (() => {
@@ -107,16 +123,15 @@ export function ChapterEditor({
       })();
       if (hasMark) return;
 
-      // PM positions are 1-based at the doc top (position 0 is before the root
-      // node's open tag). The +1 maps byte offsets returned by the server into
-      // valid ProseMirror positions. Offset correctness is verified by e2e (Task 38).
-      const from = edit.from_offset + 1;
-      const to = edit.to_offset + 1;
-      if (from <= to && to <= editor.state.doc.content.size) {
+      // Server offsets are char positions in the markdown prose; map them to PM
+      // positions through the serialized-markdown alignment (see markdownOffset).
+      const from = offsetToPos(offsetMap, docSize, edit.from_offset);
+      const to = offsetToPos(offsetMap, docSize, edit.to_offset);
+      if (from <= to && to <= docSize) {
         const markType = editor.schema.marks.aiPending;
         const tr = editor.state.tr;
         editor.view.dispatch(
-          tr.addMark(from, to === from ? from + 1 : to, markType.create({
+          tr.addMark(from, to === from ? Math.min(from + 1, docSize) : to, markType.create({
             pendingId: edit.id,
             source: edit.source,
             oldText: edit.oldText,
@@ -131,10 +146,14 @@ export function ChapterEditor({
   const _withSelection = useCallback(async (kind: "paraphrase" | "translate" | "cite", body: any) => {
     const sel = selectionRef.current;
     if (!sel && kind !== "cite") return;
+    if (!editor) return;
     const url = `/api/v1/projects/${projectId}/m5/chapters/${chapterName}/${kind}`;
+    // Convert PM positions to markdown char offsets so the server's
+    // prose[from:to] splice targets exactly what the user selected.
+    const map = buildOffsetMap(editor);
     const payload = kind === "cite"
-      ? { at_offset: editor?.state.selection.from ? editor.state.selection.from - 1 : 0, ...body }
-      : { from_offset: sel!.from - 1, to_offset: sel!.to - 1, ...body };
+      ? { at_offset: posToOffset(map, editor.state.selection.from), ...body }
+      : { from_offset: posToOffset(map, sel!.from), to_offset: posToOffset(map, sel!.to), ...body };
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

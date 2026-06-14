@@ -67,4 +67,17 @@ export const AiPending = Mark.create({
           commands.unsetMark(this.name),
     };
   },
+
+  // Markdown serialization (tiptap-markdown): this is a transient highlight for
+  // un-accepted edits — it must never leak into the stored prose or the export.
+  // Empty open/close serializes the marked run as plain text, matching the old
+  // getText behavior where the mark was simply dropped.
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: "", close: "", mixable: true, expelEnclosingWhitespace: true },
+        parse: {},
+      },
+    };
+  },
 });

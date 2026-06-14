@@ -20,7 +20,8 @@ def session():
 
 
 def _new_user(session, *, balance: int = 0) -> User:
-    u = User(email=f"u{uuid.uuid4().hex[:8]}@e.com", password_hash="x", credit=balance)
+    u = User(email=f"u{uuid.uuid4().hex[:8]}@e.com",
+             username=f"u{uuid.uuid4().hex[:8]}", password_hash="x", credit=balance)
     session.add(u)
     session.commit()
     return u

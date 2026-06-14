@@ -86,6 +86,46 @@ def test_get_chapters_returns_empty_dict_when_no_m5(client):
     assert r.json() == {}
 
 
+def test_get_chapters_backfills_from_final_sections(client):
+    # A project whose M5 went through the conversational/export path: prose in
+    # final_sections, no chapters. The editor must still open with content, so
+    # list_chapters synthesizes + persists the canonical chapter dict.
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "X"})
+    pid = r.json()["id"]
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing = {
+            "final_sections": [
+                {"chapter_name": "intro", "title": "Chapter 1 — Introduction", "prose": "Intro prose here."},
+                {"title": "Chapter 2 — Literature Review", "prose": "Lit prose here."},
+                {"title": "References", "prose": "Doe, J. (2024)."},
+            ]
+        }
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters")
+    assert r.status_code == 200
+    data = r.json()
+    # intro mapped via chapter_name, lit_review via title reverse-lookup.
+    assert data["intro"]["prose"] == "Intro prose here."
+    assert data["lit_review"]["prose"] == "Lit prose here."
+    # References is not an editable chapter — dropped.
+    assert "References" not in data
+    assert len(data) == 2
+
+    # Persisted: a second call reads chapters directly (no re-synthesis needed).
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        assert "intro" in cs.m5_writing["chapters"]
+        assert "lit_review" in cs.m5_writing["chapters"]
+
+
 def test_get_chapters_404_for_other_user(client):
     # User 1 creates the project.
     _create_user_and_set_cookie(client)

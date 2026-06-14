@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  FileText, Paperclip, PenSquare, Send, Sigma, X,
+  Paperclip, PenSquare, Send, X,
 } from "lucide-react";
 import { FileDropZone } from "./FileDropZone";
 
@@ -37,23 +37,20 @@ type Attachment = {
  *   │  Reply to DoThesis (currently in M2) — or ask about any …    │
  *   │                                                       [Send ↵]│
  *   │  ───────────────────────────────────────────────────────────  │
- *   │  📎 Attach  📄 Cite PDF  ∑ Run analysis  ◇ Draw model   │ Model: Gemini · ~340 tok/turn │
+ *   │  📎 Attach   ◇ Draw model                                    │
  *   └──────────────────────────────────────────────────────────────┘
  *      ⌘K to jump module · Shift+↵ for newline
  *
- * The action buttons (Cite PDF, Run analysis, Draw model) hand a
- * pre-filled prompt fragment into the textarea so the agent picks up
- * the intent — they're shortcuts to compose, not separate tools. The
- * agent already knows how to handle "Cite PDF" / "Draw model" requests
- * via the conventions in its system prompt.
+ * The Draw model button hands a pre-filled prompt fragment into the
+ * textarea so the agent picks up the intent — a shortcut to compose, not
+ * a separate tool. The active model name is intentionally NOT shown to
+ * users.
  */
 export function ChatInput({
   onSubmit,
   onFileDrop,
   disabled,
   focusModule,
-  modelName,
-  tokenEstimate,
 }: {
   /** Submit handler. `attachments` carries the chip metadata (server-side
    *  upload_id + filename + size) so the caller can ship the ids to the
@@ -71,10 +68,6 @@ export function ChatInput({
   disabled: boolean;
   /** Module the conversation is currently focused on. Used in the placeholder. */
   focusModule?: string;
-  /** Display name of the active model. Hidden when undefined. */
-  modelName?: string;
-  /** Estimated tokens per turn for the current thread context. Hidden when undefined. */
-  tokenEstimate?: number;
 }) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -210,7 +203,8 @@ export function ChatInput({
             </button>
           </div>
 
-          {/* Row 2: action chips on the left, model pill + token estimate on the right */}
+          {/* Row 2: file upload + Draw model. The model name is intentionally
+              not surfaced to users. */}
           <div className="flex items-center gap-1 pt-1.5 border-t border-ink-100">
             <ComposerAction
               icon={<Paperclip className="w-3.5 h-3.5" />}
@@ -219,38 +213,11 @@ export function ChatInput({
               disabled={disabled}
             />
             <ComposerAction
-              icon={<FileText className="w-3.5 h-3.5" />}
-              label="Cite PDF"
-              onClick={() => inject("Cite the PDF at p.")}
-              disabled={disabled}
-            />
-            <ComposerAction
-              icon={<Sigma className="w-3.5 h-3.5" />}
-              label="Run analysis"
-              onClick={() => inject("Run an analysis: ")}
-              disabled={disabled}
-            />
-            <ComposerAction
               icon={<PenSquare className="w-3.5 h-3.5" />}
               label="Draw model"
               onClick={() => inject("Draw the conceptual model.")}
               disabled={disabled}
             />
-            <span className="flex-1" />
-            {modelName && (
-              <div className="flex items-center gap-2 text-[11.5px] text-ink-500 pr-1">
-                <span>Model</span>
-                <span className="px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 font-bold text-[11.5px]">
-                  {modelName}
-                </span>
-                {tokenEstimate != null && (
-                  <>
-                    <span>·</span>
-                    <span className="tabular-nums">~{formatThousands(tokenEstimate)} tok/turn</span>
-                  </>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
@@ -288,15 +255,6 @@ function ComposerAction({
       <span>{label}</span>
     </button>
   );
-}
-
-
-function formatThousands(n: number): string {
-  if (n >= 1000) {
-    const k = n / 1000;
-    return `${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
-  }
-  return String(n);
 }
 
 

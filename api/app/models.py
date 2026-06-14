@@ -133,8 +133,20 @@ class Order(Base):
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="USD", server_default="USD")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", server_default="pending")
+    # Which checkout provider owns this order: polar | paypal | sepay. Defaults to
+    # polar so pre-existing rows (all Polar) read correctly.
+    provider: Mapped[str] = mapped_column(String(16), nullable=False, default="polar", server_default="polar")
     polar_checkout_id: Mapped[str | None] = mapped_column(String(128), unique=True)
     polar_order_id: Mapped[str | None] = mapped_column(String(128))
+    # PayPal order id (returned by create-order; the approval/capture key).
+    paypal_order_id: Mapped[str | None] = mapped_column(String(64))
+    # SePay: the unique transfer memo we ask the user to put in their bank
+    # transfer, and the VND amount due (rounded from the USD package price).
+    sepay_memo: Mapped[str | None] = mapped_column(String(40), index=True)
+    amount_vnd: Mapped[int | None] = mapped_column(Integer)
+    # Provider txn id used for grant idempotency (PayPal capture id / SePay
+    # referenceCode). Unique so a re-delivered webhook can't double-credit.
+    external_txn_id: Mapped[str | None] = mapped_column(String(128), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

@@ -15,7 +15,7 @@ from app.models import CreditTransaction, Order, User
 def buyer():
     Session = get_session_factory()
     with Session() as s:
-        u = User(email="buyer@e.com", password_hash="x", credit=0)
+        u = User(email="buyer@e.com", username="buyer", password_hash="x", credit=0)
         s.add(u)
         s.commit()
         return u
@@ -53,8 +53,8 @@ def test_checkout_creates_order_and_returns_url(client_with_user):
         orders = s.scalars(select(Order)).all()
         assert len(orders) == 1
         assert orders[0].polar_checkout_id == "ck_test_123"
-        assert orders[0].credits == 300
-        assert orders[0].amount_cents == 900
+        assert orders[0].credits == 10000
+        assert orders[0].amount_cents == 2499
         assert orders[0].status == "pending"
 
 

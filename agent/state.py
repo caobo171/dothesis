@@ -117,6 +117,28 @@ class ProjectStateStore:
 
     # -- mutations ---------------------------------------------------------
 
+    def _has_done_content(self, module: str, context_store: dict[str, Any]) -> bool:
+        """True when `module` has produced enough to be marked done.
+
+        Baseline: at least one of the module's owned keys is non-empty.
+        M5 is special — the finished chapters can live in the m5_writing
+        column (auto-draft path) rather than the owned `final_sections` key,
+        so we also accept chapters when the store exposes the full view. A
+        read failure there errs open (we don't block a done on a flaky read).
+        """
+        if any(context_store.get(k) for k in SLICE_OWNERSHIP[module]):
+            return True
+        if module == "M5":
+            loader = getattr(self, "load_full_context_store", None)
+            if loader is None:
+                return False
+            try:
+                chapters = (loader().get("m5_writing") or {}).get("chapters") or {}
+            except Exception:
+                return True
+            return bool(chapters)
+        return False
+
     def commit_slice(
         self,
         module: str,
@@ -139,6 +161,23 @@ class ProjectStateStore:
             )
 
         state = self.load()
+
+        # Strict done-gate: "done" must be earned, not narrated. A module can
+        # only be marked done if it has actually produced its owned output —
+        # otherwise the agent could flip a module green with nothing behind it
+        # (the chat-says-done / state-says-needs_review drift). We check the
+        # POST-write slice so a single commit that both writes and confirms is
+        # fine. Intentionally lenient (owned slice non-empty, not per-key) so
+        # bootstrap imports and qualitative designs that legitimately skip some
+        # keys aren't blocked. Empty-done is rejected wholesale, with a message
+        # telling the agent to commit progress first.
+        if confirm_done and not self._has_done_content(module, {**state["contextStore"], **writes}):
+            owned = SLICE_OWNERSHIP[module]
+            raise ValueError(
+                f"cannot mark {module} done: its slice is empty (owns {owned}). "
+                f"Commit the module's content first with confirm_done=False, "
+                f"then mark it done once there is something to show."
+            )
 
         # Snapshot BEFORE applying — history answers "what did we change away
         # from", which is what an undo/review needs.

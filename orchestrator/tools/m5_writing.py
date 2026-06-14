@@ -647,6 +647,42 @@ def _references_title(language: str) -> str:
     return _REFERENCES_TITLE["vi"] if str(language).lower().startswith("vi") else _REFERENCES_TITLE["en"]
 
 
+def chapters_from_final_sections(final_sections: list[dict]) -> dict:
+    """Map the conversational `final_sections` list onto the editor's canonical
+    chapter dict: ``{intro: {name, prose}, lit_review: {...}, …}``.
+
+    The editor (OutlineRail) only knows the six canonical chapter names, but the
+    conversational / export path stores M5 as a flat `final_sections` list. We
+    resolve each section's canonical name from its explicit `chapter_name`
+    (compose path) first, then fall back to a title reverse-lookup across the EN
+    and VI title maps (agent path, which carries only `title`). Sections that map
+    to no canonical chapter — e.g. References — are dropped: they aren't editable
+    chapters. Returns {} when nothing maps, so callers can fall through.
+    """
+    # Index BOTH language maps by their titles. (A dict merge would collapse
+    # them — they share the canonical-name keys, so the second map's titles
+    # would win and the first language's titles would be lost.)
+    title_to_name: dict[str, str] = {}
+    for mapping in (M5_CHAPTER_TITLES, M5_CHAPTER_TITLES_VI):
+        for name, title in mapping.items():
+            title_to_name[title.strip().lower()] = name
+    out: dict = {}
+    for sec in final_sections or []:
+        if not isinstance(sec, dict):
+            continue
+        name = sec.get("chapter_name")
+        if name not in M5_CHAPTER_ORDER:
+            title = (sec.get("title") or sec.get("name") or "").strip().lower()
+            name = title_to_name.get(title)
+        if name not in M5_CHAPTER_ORDER:
+            continue
+        prose = (sec.get("prose") or sec.get("body") or sec.get("content") or "").strip()
+        if not prose:
+            continue
+        out[name] = {"name": name, "prose": prose}
+    return out
+
+
 def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
     """Build exporter sections [{title, prose}] from an m5_writing slice.
 

@@ -104,6 +104,28 @@ def test_status_override_supported(store):
     assert status["M2"] == "needs_review"
 
 
+def test_confirm_done_rejected_when_slice_empty(store):
+    # Marking a module done with nothing in its slice is the chat-says-done /
+    # state-says-needs_review drift. It must be refused wholesale.
+    with pytest.raises(ValueError, match="cannot mark M1 done"):
+        store.commit_slice("M1", {}, reason="premature", confirm_done=True)
+    # Nothing persisted — the module isn't even created.
+    assert store.read_slice("M1")["exists"] is False
+
+
+def test_confirm_done_allowed_once_slice_has_content(store):
+    # The two-step the error message prescribes: commit progress, then done.
+    store.commit_slice("M1", {"research_title": "T"}, reason="progress")
+    store.commit_slice("M1", {}, reason="lock it", confirm_done=True)
+    assert store.read_slice("M1")["status"]["M1"] == "done"
+
+
+def test_confirm_done_with_writes_in_one_call(store):
+    # A single commit that both writes and confirms passes (post-write check).
+    store.commit_slice("M2", {"research_gaps": [{"id": "g1"}]}, reason="r", confirm_done=True)
+    assert store.read_slice("M2")["status"]["M2"] == "done"
+
+
 def test_slice_map_and_dag_consistency():
     # Every module owns ≥1 key; DAG only references known modules.
     modules = {"M1", "M2", "M3", "M4", "M5"}

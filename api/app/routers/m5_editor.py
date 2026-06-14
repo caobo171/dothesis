@@ -36,10 +36,33 @@ def list_chapters(
     user: User = Depends(current_user),
     db: Session = Depends(db_session),
 ):
-    """Return all chapters from m5_writing.chapters, or {} if none exist yet."""
+    """Return all chapters from m5_writing.chapters.
+
+    Backfill: a project whose M5 went through the conversational/export path has
+    its prose in `final_sections` (a flat list), not `chapters`. Without this the
+    editor would open empty for those projects even though a finished DOCX
+    exists. We synthesize the canonical chapter dict from `final_sections` and
+    persist it once, so the editor, autosave (PATCH), and export all read the
+    same `chapters` shape afterwards.
+    """
     _owned_project(db, user, project_id)
-    m5 = _m5_slice(db, project_id)
-    return m5.get("chapters", {})
+    cs = db.get(ContextStore, project_id)
+    m5 = (cs.m5_writing or {}) if cs else {}
+    chapters = m5.get("chapters") or {}
+    if chapters:
+        return chapters
+
+    final_sections = m5.get("final_sections") or []
+    if cs and final_sections:
+        from orchestrator.tools.m5_writing import chapters_from_final_sections
+        synthesized = chapters_from_final_sections(final_sections)
+        if synthesized:
+            m5["chapters"] = synthesized
+            cs.m5_writing = m5
+            flag_modified(cs, "m5_writing")
+            db.commit()
+            return synthesized
+    return {}
 
 
 # ---------------------------------------------------------------------------

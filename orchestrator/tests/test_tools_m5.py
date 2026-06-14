@@ -4,8 +4,30 @@ from unittest.mock import MagicMock
 import pytest
 
 from orchestrator.tools.m5_writing import (
+    chapters_from_final_sections,
     compile_bibliography, compile_pdf, compose_section, export_docx, format_citations, validate_draft,
 )
+
+
+def test_chapters_from_final_sections_maps_canonical_names():
+    out = chapters_from_final_sections([
+        {"chapter_name": "intro", "title": "Chapter 1 — Introduction", "prose": "A"},
+        {"title": "Chapter 2 — Literature Review", "body": "B"},   # title reverse-lookup + body key
+        {"title": "Chương 3 — Phương pháp nghiên cứu", "prose": "C"},  # Vietnamese title
+        {"title": "References", "prose": "D"},  # not a chapter — dropped
+        {"title": "Chapter 4 — Results", "prose": "   "},  # empty prose — dropped
+    ])
+    assert out["intro"]["prose"] == "A"
+    assert out["lit_review"]["prose"] == "B"
+    assert out["methodology"]["prose"] == "C"
+    assert "References" not in out and "results" not in out
+    assert set(out) == {"intro", "lit_review", "methodology"}
+    assert out["intro"] == {"name": "intro", "prose": "A"}
+
+
+def test_chapters_from_final_sections_empty():
+    assert chapters_from_final_sections([]) == {}
+    assert chapters_from_final_sections(None) == {}
 
 
 def test_compose_section_uses_engine_compose(monkeypatch):

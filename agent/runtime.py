@@ -139,7 +139,7 @@ from deepagents import create_deep_agent
 from deepagents.backends.composite import CompositeBackend
 from deepagents.backends.filesystem import FilesystemBackend
 
-from agent.state import ProjectStateStore
+from agent.state import MODULES, ProjectStateStore
 from agent.tools.research import parse_reference, research_scout
 from agent.tools.state_tools import make_state_tools
 from agent.tools.stats import run_stats
@@ -165,6 +165,28 @@ it defines the module map (M1–M5), the state protocol (read_slice /
 commit_slice), and which module skill to read when. Mirror the user's
 language (English or Vietnamese). Be warm, concrete, and proactive — propose,
 then let the user decide.
+
+## Project state — `[PROJECT STATE]` line is authoritative
+
+A user message may be preceded by a line like:
+
+    [PROJECT STATE] focus=M4 | M1:done M2:done M3:done M4:done M5:needs_review
+
+This is the REAL per-module status from the state store, injected fresh every
+turn. It overrides anything you remember. Rules:
+- When the user asks about progress, report THESE statuses verbatim — never
+  recite a status list from memory.
+- A module is `done` ONLY if it shows `done` here. NEVER tell the user a module
+  is done/complete when this line says `needs_review`, `in_progress`, or
+  `locked`.
+- Saying "I'll mark M5 done" does NOTHING on its own. To change a status you
+  MUST call `commit_slice(module, …, confirm_done=True)` and it must succeed
+  (it now refuses to mark a module done if its slice is empty). After it
+  returns, the status line on the next turn reflects the change.
+- If the user says a module looks good but its slice has no committed content,
+  do the work and `commit_slice` it — don't just declare it done.
+- Strip the `[PROJECT STATE]` marker from your reply — it's a wire-format
+  marker, not something the user wrote.
 
 ## Attachments — `[ATTACHED]` prefix
 
@@ -406,11 +428,34 @@ def _default_model():
     )
 
 
+def _state_header(store: ProjectStateStore | None) -> str:
+    """One-line authoritative status snapshot prepended to the user turn.
+
+    The model routinely confabulates module status (e.g. printing "M1–M5 all
+    done" while the store says M5 needs_review). Injecting the real focus +
+    status every turn — same rationale as the every-turn UI-convention block —
+    gives it ground truth it can't ignore. Errs silent: a load failure just
+    omits the header rather than breaking the turn.
+    """
+    if store is None:
+        return ""
+    try:
+        state = store.load()
+    except Exception:
+        return ""
+    status = state.get("status") or {}
+    if not status:
+        return ""
+    pairs = " ".join(f"{m}:{status.get(m, 'locked')}" for m in MODULES)
+    return f"[PROJECT STATE] focus={state.get('focus')} | {pairs}"
+
+
 async def stream_turn(
     agent: Any,
     thread_id: str,
     user_text: str,
     attachments: list | None = None,
+    store: ProjectStateStore | None = None,
 ) -> AsyncIterator[dict]:
     """Run one user turn, yielding SSE-shaped events.
 
@@ -428,6 +473,11 @@ async def stream_turn(
     API URI for larger files), rather than just a path reference.
     """
     config = {"configurable": {"thread_id": thread_id}}
+    # Prepend the authoritative status snapshot so the agent can't drift from
+    # real state. Goes on the user turn (like [ATTACHED]) so it rides through
+    # the multimodal path too.
+    header = _state_header(store)
+    user_text = f"{header}\n{user_text}" if header else user_text
     if attachments:
         # Lazy import — multimodal.py pulls in google-genai which is heavy
         # and only needed when the user attached something.

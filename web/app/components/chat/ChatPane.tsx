@@ -165,6 +165,9 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
       m4_analysis?: { confirmed_at?: string } | null;
       m5_writing?: {
         chapters?: Record<string, unknown>;
+        // Conversational/export path stores prose here instead of `chapters`;
+        // the editor backfills chapters from it (api/app/routers/m5_editor.py).
+        final_sections?: unknown[];
         confirmed_at?: string;
         // M5 auto-export hook (api/app/agent_state.py:_auto_export_m5)
         // writes these on the M5 done transition. ChatHeader Download
@@ -180,10 +183,17 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     `/projects/${projectId}/runs/list?latest=true`, fetcher,
   );
 
-  // SP6.5: gate is true only when at least one chapter entry exists.
-  // Defaults to false while the project data is still loading.
+  // The editor entry point ("Open editor" / "Read your draft") should appear as
+  // soon as there's an editable thesis — which is true via ANY of: drafted
+  // `chapters`, conversational `final_sections` (the editor backfills chapters
+  // from these), or a generated DOCX export. Gating only on `chapters` hid the
+  // editor for projects whose M5 went through the final_sections/export path
+  // even though a finished DOCX existed. Defaults false while loading.
+  const _m5 = project?.context_store?.m5_writing;
   const hasChapters =
-    Object.keys(project?.context_store?.m5_writing?.chapters ?? {}).length > 0;
+    Object.keys(_m5?.chapters ?? {}).length > 0 ||
+    (_m5?.final_sections?.length ?? 0) > 0 ||
+    (_m5?.export_artifacts?.some(a => a.kind === "docx") ?? false);
 
   // "Ready to draft" = the upstream research modules (M1–M4) are all done
   // and no auto-draft run has started yet. This is the moment the user
@@ -375,10 +385,6 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         onFileDrop={onFileDrop}
         disabled={inflight}
         focusModule={project ? (project.focus ?? project.current_module) : undefined}
-        // Hardcoded model label for now — matches what agent/runtime.py
-        // actually loads. Pull from a real /api/v1/me/agent-config endpoint
-        // when that lands so the user sees Claude vs Gemini accurately.
-        modelName={process.env.NEXT_PUBLIC_AGENT_MODEL_LABEL || "Gemini 2.5 Flash"}
       />
 
       <AutoDraftModal

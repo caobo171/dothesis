@@ -31,10 +31,10 @@ RED = "\033[31m"
 RESET = "\033[0m"
 
 
-async def run_turn(agent, thread_id: str, text: str) -> None:
+async def run_turn(agent, thread_id: str, text: str, store=None) -> None:
     from agent.runtime import stream_turn
 
-    async for ev in stream_turn(agent, thread_id, text):
+    async for ev in stream_turn(agent, thread_id, text, store=store):
         kind = ev["type"]
         if kind == "token":
             print(ev["text"], end="", flush=True)
@@ -67,11 +67,15 @@ async def main() -> None:
     # InMemorySaver = conversation lives for the process; the context_store
     # persists in the project dir regardless (project-scoped, thread-agnostic).
     agent = build_agent(args.project, checkpointer=InMemorySaver())
+    # File-backed store over the same project dir — feeds the authoritative
+    # [PROJECT STATE] header into each turn (same store the agent commits to).
+    from agent.state import ProjectStateStore
+    store = ProjectStateStore(args.project)
     thread_id = args.thread or f"cli-{uuid.uuid4().hex[:8]}"
     print(f"{DIM}project={args.project} thread={thread_id} — Ctrl-D to exit{RESET}")
 
     if args.once:
-        await run_turn(agent, thread_id, args.once)
+        await run_turn(agent, thread_id, args.once, store=store)
         return
 
     while True:
@@ -82,7 +86,7 @@ async def main() -> None:
             break
         if not text:
             continue
-        await run_turn(agent, thread_id, text)
+        await run_turn(agent, thread_id, text, store=store)
 
 
 if __name__ == "__main__":

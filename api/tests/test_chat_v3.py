@@ -38,7 +38,7 @@ def test_v3_turn_streams_and_persists(client, monkeypatch):
     # Stub the agent layer: a fixed event stream instead of a model call.
     # The contract under test is chat_v3's bridging — SSE shapes + Message
     # persistence — not deepagents itself.
-    async def fake_stream_turn(agent, thread_id, text, attachments=None):
+    async def fake_stream_turn(agent, thread_id, text, attachments=None, store=None):
         for ev in [
             {"type": "tool_start", "name": "read_slice", "args": {"module": "M1"}},
             {"type": "tool_end", "name": "read_slice", "preview": "{}"},
@@ -73,7 +73,7 @@ def test_v3_turn_streams_and_persists(client, monkeypatch):
 def test_v3_turn_debits_credits_and_records_transaction(client, monkeypatch):
     pid, tid = _setup_project(client)
 
-    async def fake_stream_turn(agent, thread_id, text, attachments=None):
+    async def fake_stream_turn(agent, thread_id, text, attachments=None, store=None):
         yield {"type": "token", "text": "hi"}
         # 3000 tokens → max(1, round(3000/1000)) = 3 credits.
         yield {"type": "usage", "input_tokens": 1500, "output_tokens": 1500}
@@ -105,7 +105,7 @@ def test_v3_turn_debits_credits_and_records_transaction(client, monkeypatch):
 def test_v3_error_event_surfaces(client, monkeypatch):
     pid, tid = _setup_project(client)
 
-    async def fake_stream_turn(agent, thread_id, text, attachments=None):
+    async def fake_stream_turn(agent, thread_id, text, attachments=None, store=None):
         yield {"type": "error", "message": "BoomError: model exploded"}
         yield {"type": "done"}
 

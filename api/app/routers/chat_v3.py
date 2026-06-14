@@ -288,7 +288,14 @@ async def send_message_v3(
             completion so the consumer below can exit cleanly even if the
             agent finishes silently."""
             try:
-                async for ev in stream_turn(agent, agent_thread_id, text, attachments=attachments):
+                # Pass a store so the runtime can prepend the authoritative
+                # [PROJECT STATE] status line — keeps the agent's "done" claims
+                # honest against the real module statuses.
+                turn_store = DbProjectStateStore(engine, project_id, _workspace_dir(project_id))
+                async for ev in stream_turn(
+                    agent, agent_thread_id, text,
+                    attachments=attachments, store=turn_store,
+                ):
                     await events_q.put(("agent", ev))
             finally:
                 await events_q.put(("done", None))
