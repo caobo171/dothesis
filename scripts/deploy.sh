@@ -83,7 +83,7 @@ if [ -z "${GOOGLE_API_KEY:-}" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
 fi
 # S3 is where uploads + exported DOCX/PDF live. Warn but don't hard-fail (some
 # deploys point at a local MinIO via AWS_* anyway).
-[ -z "${AWS_S3_BUCKET:-}" ] && warn "AWS_S3_BUCKET unset — uploads/exports will fail at runtime"
+[ -z "${S3_BUCKET:-}" ] && warn "S3_BUCKET unset — uploads/exports will fail at runtime"
 [ "$missing_env" -eq 0 ] || die "fix the missing .env values above and re-run"
 
 # Toolchain presence.
@@ -170,9 +170,10 @@ EnvironmentFile=${REPO_DIR}/.env
 # bare .env without the flag still gets the chat + auto-run surface.
 Environment=ORCHESTRATOR_ENABLED=true
 # WorkingDirectory is api/, but the API imports the repo-root packages
-# (orchestrator/, engine/, agent/) — e.g. routers/m5_editor.py does
-# `from orchestrator...` at import time. Put the repo root on PYTHONPATH so
-# those resolve; without it uvicorn crash-loops with ModuleNotFoundError.
+# (orchestrator/, engine/, agent/) at import time -- e.g. routers/m5_editor.py
+# imports from orchestrator. Put the repo root on PYTHONPATH so those resolve;
+# without it uvicorn crash-loops with ModuleNotFoundError. (No backticks here:
+# this heredoc is unquoted, so backticks would trigger command substitution.)
 Environment=PYTHONPATH=${REPO_DIR}
 ExecStart=${REPO_DIR}/${VENV_BIN}/uvicorn app.main:app --host ${API_HOST} --port ${API_PORT} --workers ${API_WORKERS}
 Restart=on-failure
