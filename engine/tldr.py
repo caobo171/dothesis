@@ -25,7 +25,7 @@ from utils.gemini_client import GeminiModelWrapper
 
 logger = logging.getLogger(__name__)
 
-TLDR_PROMPT = (Path(__file__).parent / "prompts" / "tldr.md").read_text()
+TLDR_PROMPT = (Path(__file__).parent / "prompts" / "tldr.md").read_text(encoding="utf-8")
 
 
 def generate_tldr(

@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRight,
@@ -18,8 +16,7 @@ import {
 } from "lucide-react";
 
 import { useMe } from "@/app/lib/use-me";
-import { NewProjectModal } from "./NewProjectModal";
-import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
+import { swrFetcher as fetcher } from "@/app/lib/api";
 
 
 // Mirrors ProjectOut from api/app/routers/chat.py. focus + module_status are
@@ -105,18 +102,8 @@ function dayPartGreeting(): string {
 
 
 export function HomeDashboard() {
-  const { data: projects, mutate } = useSWR<Project[]>("/projects/list", fetcher, { dedupingInterval: 0 });
+  const { data: projects } = useSWR<Project[]>("/projects/list", fetcher, { dedupingInterval: 0 });
   const me = useMe();
-  const [modalOpen, setModalOpen] = useState(false);
-  const router = useRouter();
-
-  // After creation: revalidate the project list and route the user directly
-  // into the new project. That's the typical next action and saves a click.
-  const handleCreated = (project: { id: string; name: string }) => {
-    void mutate();
-    setModalOpen(false);
-    router.push(`/chat/projects/${project.id}`);
-  };
 
   // /projects is ordered updated_at desc, so [0] is "where you left off".
   const current = projects?.[0];
@@ -128,17 +115,10 @@ export function HomeDashboard() {
   // max-w-7xl container (SidebarLayout non-fullBleed branch).
   return (
     <div className="max-w-6xl mx-auto">
-      <NewProjectModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onCreated={handleCreated}
-      />
-
       <Hero
         firstName={firstName}
         current={current}
         credit={me.data?.credit}
-        onNewThesis={() => setModalOpen(true)}
       />
 
       <StatsRow projects={projects} reviewCount={reviewCount} />
@@ -154,13 +134,12 @@ export function HomeDashboard() {
               : "Loading…"}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="inline-flex items-center gap-1.5 bg-primary-600 text-white pl-3 pr-4 py-2 rounded-full text-[13.5px] font-semibold hover:bg-primary-700 transition-colors"
+        <Link
+          href="/new"
+          className="inline-flex items-center gap-1.5 bg-primary-600 text-white pl-3 pr-4 py-2 rounded-full text-[13.5px] font-semibold hover:bg-primary-700 transition-colors no-underline"
         >
           <Plus className="w-4 h-4" /> New thesis
-        </button>
+        </Link>
       </div>
 
       {projects && projects.length === 0 && (
@@ -189,35 +168,29 @@ function Hero({
   firstName,
   current,
   credit,
-  onNewThesis,
 }: {
   firstName: string;
   current: Project | undefined;
   credit: number | undefined;
-  onNewThesis: () => void;
 }) {
   const focusModule = current ? (current.focus ?? current.current_module) : null;
   const focusLabel = MODULES.find(m => m.id === focusModule)?.label;
 
   return (
     <section
-      className="relative rounded-3xl px-9 pt-8 pb-7 text-white overflow-hidden mb-6"
-      style={{ background: "linear-gradient(120deg, #0b0d1a 0%, #161827 55%, #1c2eff 130%)" }}
+      className="relative rounded-3xl px-9 pt-8 pb-7 text-white overflow-hidden mb-6 border border-ink-800 bg-ink-900"
     >
-      {/* Decorative ink-blot + line waves, straight from the design mock */}
-      <svg width="360" height="260" className="absolute -top-8 -right-10 opacity-20 pointer-events-none" viewBox="0 0 360 260" aria-hidden>
-        <defs>
-          <radialGradient id="home-hero-blob" cx="50%" cy="40%">
-            <stop offset="0%" stopColor="#5b3aa8" />
-            <stop offset="100%" stopColor="#0b0d1a" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <ellipse cx="180" cy="120" rx="160" ry="110" fill="url(#home-hero-blob)" />
+      {/* Quiet line work — no chromatic blob, the hero is the type itself.
+          A single-hue surface keeps the scholarly register intact. */}
+      <svg width="320" height="220" className="absolute -top-4 -right-8 opacity-[0.07] pointer-events-none" viewBox="0 0 320 220" fill="none" aria-hidden>
+        <circle cx="160" cy="110" r="100" stroke="white" strokeWidth="1" />
+        <circle cx="160" cy="110" r="70"  stroke="white" strokeWidth="1" />
+        <circle cx="160" cy="110" r="40"  stroke="white" strokeWidth="1" />
       </svg>
-      <svg width="420" height="200" className="absolute -bottom-10 left-8 opacity-10 pointer-events-none" viewBox="0 0 420 200" fill="none" aria-hidden>
-        <path d="M0 100 Q 60 30 140 90 T 280 90 T 420 90" stroke="white" strokeWidth="1.2" />
-        <path d="M0 120 Q 60 50 140 110 T 280 110 T 420 110" stroke="white" strokeWidth="1.2" />
-        <path d="M0 140 Q 60 70 140 130 T 280 130 T 420 130" stroke="white" strokeWidth="1.2" />
+      <svg width="420" height="200" className="absolute -bottom-10 left-8 opacity-[0.08] pointer-events-none" viewBox="0 0 420 200" fill="none" aria-hidden>
+        <path d="M0 100 Q 60 30 140 90 T 280 90 T 420 90" stroke="white" strokeWidth="1" />
+        <path d="M0 120 Q 60 50 140 110 T 280 110 T 420 110" stroke="white" strokeWidth="1" />
+        <path d="M0 140 Q 60 70 140 130 T 280 130 T 420 130" stroke="white" strokeWidth="1" />
       </svg>
 
       <div className="relative flex flex-col lg:flex-row lg:items-end gap-8">
@@ -251,17 +224,16 @@ function Hero({
                 <Play className="w-3.5 h-3.5" /> Resume current thesis
               </Link>
             )}
-            <button
-              type="button"
-              onClick={onNewThesis}
+            <Link
+              href="/new"
               className={
                 current
-                  ? "inline-flex items-center gap-2 bg-white/10 text-white border border-white/20 px-5 py-[11px] rounded-full text-sm font-semibold hover:bg-white/20 transition-colors"
-                  : "inline-flex items-center gap-2 bg-white text-ink-900 px-5 py-[11px] rounded-full text-sm font-semibold hover:bg-ink-100 transition-colors"
+                  ? "inline-flex items-center gap-2 bg-white/10 text-white border border-white/20 px-5 py-[11px] rounded-full text-sm font-semibold hover:bg-white/20 transition-colors no-underline"
+                  : "inline-flex items-center gap-2 bg-white text-ink-900 px-5 py-[11px] rounded-full text-sm font-semibold hover:bg-ink-100 transition-colors no-underline"
               }
             >
               <Plus className="w-4 h-4" /> Start a new thesis
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -301,11 +273,15 @@ function StatsRow({ projects, reviewCount }: { projects: Project[] | undefined; 
   const modulesActive =
     projects?.reduce((acc, p) => acc + MODULES.filter(m => moduleStatus(p, m) === "in_progress").length, 0) ?? 0;
 
+  // Single-primary palette for the active states; muted scholarly tones for
+  // status semantics. The previous build used a violet accent for "in
+  // progress" and bright emerald/amber/red — the academic palette only
+  // permits primary + ink + a single muted ochre/moss for status.
   const cells = [
-    { icon: Clock3,        v: projects?.length ?? "—", l: "Active theses",     sub: "across your account", chip: "bg-primary-50 text-primary-600" },
-    { icon: CheckCircle2,  v: modulesDone,             l: "Modules completed", sub: "of 5 per thesis",      chip: "bg-[var(--ok-bg)] text-[var(--ok-fg)]" },
-    { icon: Loader2,       v: modulesActive,           l: "In progress",       sub: "modules being worked", chip: "bg-[#efeafd] text-[var(--accent-violet)]" },
-    { icon: AlertTriangle, v: reviewCount,             l: "Needs review",      sub: reviewCount ? "open ⚠ flags" : "all clear", chip: "bg-[var(--pause-bg)] text-[var(--pause-fg)]" },
+    { icon: Clock3,        v: projects?.length ?? "—", l: "Active theses",     sub: "across your account",                              chip: "bg-ink-100 text-ink-700" },
+    { icon: CheckCircle2,  v: modulesDone,             l: "Modules completed", sub: "of 5 per thesis",                                  chip: "bg-[#EEF4EE] text-[#3A5740]" },
+    { icon: Loader2,       v: modulesActive,           l: "In progress",       sub: "modules being worked",                             chip: "bg-primary-50 text-primary-700" },
+    { icon: AlertTriangle, v: reviewCount,             l: "Needs review",      sub: reviewCount ? "open ⚠ flags" : "all clear",         chip: "bg-[#F5EFE2] text-[#6E5121]" },
   ];
 
   return (
@@ -326,10 +302,13 @@ function StatsRow({ projects, reviewCount }: { projects: Project[] | undefined; 
 
 
 /* ---------- Project card with M1–M5 module bar ---------- */
+// Muted scholarly status palette: moss for done, primary for active, ochre
+// amber for review, neutral for locked. Bright emerald/amber were too loud
+// next to the serif project title.
 export const SEGMENT_STYLE: Record<ModuleDisplayStatus, string> = {
-  done:         "bg-[var(--ok-fg)] text-white",
+  done:         "bg-[#4A6B4F] text-white",
   in_progress:  "bg-primary-600 text-white",
-  needs_review: "bg-[var(--pause-fg)] text-white",
+  needs_review: "bg-[#8E6B2A] text-white",
   locked:       "bg-ink-100 text-ink-500",
 };
 
@@ -447,8 +426,8 @@ function RecentActivity({ projects }: { projects: Project[] }) {
 /* ---------- Pro tip — teaches the read-vs-mutate focus rule ---------- */
 function ProTip() {
   return (
-    <div className="rounded-[18px] px-5 py-[18px] border border-primary-100 bg-gradient-to-br from-primary-50 to-[#f1edfe] self-start">
-      <div className="flex items-center gap-1.5 text-[11px] text-primary-600 font-bold tracking-[0.08em] uppercase">
+    <div className="rounded-[18px] px-5 py-[18px] border border-primary-100 bg-primary-50 self-start">
+      <div className="flex items-center gap-1.5 text-[11px] text-primary-700 font-bold tracking-[0.08em] uppercase">
         <Sparkles className="w-3 h-3" /> Pro tip
       </div>
       <div className="text-sm font-semibold mt-1 leading-relaxed text-ink-900 font-serif">

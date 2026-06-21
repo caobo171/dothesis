@@ -44,7 +44,7 @@ def _get_cached(cache_key: str) -> Optional[Dict[str, Any]]:
 
     if cache_file.exists():
         try:
-            data = json.loads(cache_file.read_text())
+            data = json.loads(cache_file.read_text(encoding="utf-8"))
             if time.time() - data.get("_cached_at", 0) < CACHE_TTL_SECONDS:
                 logger.debug(f"Cache hit for {cache_key}")
                 del data["_cached_at"]

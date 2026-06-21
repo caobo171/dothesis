@@ -189,13 +189,12 @@ export function ChatHeader({
 
         <span className="w-px h-[22px] bg-ink-200 mx-1" />
 
-        {/* User identity */}
+        {/* User identity — solid ink avatar with serif-feel initials.
+            The previous peach-pink gradient read as consumer-app brand; the
+            academic palette uses a single dark surface. */}
         <div className="flex items-center gap-2 pl-1">
           <span
-            className="w-[30px] h-[30px] rounded-full inline-flex items-center justify-center text-white font-bold text-[12px]"
-            style={{
-              background: "linear-gradient(135deg, #FFD1A8 0%, #FF98B8 100%)",
-            }}
+            className="w-[30px] h-[30px] rounded-full bg-ink-800 inline-flex items-center justify-center text-white font-bold text-[12px]"
             aria-hidden="true"
           >
             {userInitials}

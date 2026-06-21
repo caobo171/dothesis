@@ -26,7 +26,7 @@ from utils.gemini_client import GeminiModelWrapper
 
 logger = logging.getLogger(__name__)
 
-DIGEST_PROMPT = (Path(__file__).parent / "prompts" / "digest.md").read_text()
+DIGEST_PROMPT = (Path(__file__).parent / "prompts" / "digest.md").read_text(encoding="utf-8")
 
 
 def generate_script(

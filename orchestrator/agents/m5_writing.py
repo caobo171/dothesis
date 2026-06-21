@@ -19,7 +19,7 @@ from orchestrator.tools.m5_writing import (
 )
 
 
-_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "m5.md").read_text()
+_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "m5.md").read_text(encoding="utf-8")
 
 _CHAPTER_ORDER = ["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
 

@@ -70,11 +70,11 @@ export const Icon = ({ name, size = 18, stroke = 1.75, className = "", style }) 
     case "doc":
       return <svg {...props}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></svg>;
     case "doc-pdf":
-      return <svg {...props}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/><text x="7" y="18" fontSize="6" fontFamily="Manrope, sans-serif" fontWeight="700" fill="currentColor" stroke="none">PDF</text></svg>;
+      return <svg {...props}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/><text x="7" y="18" fontSize="6" fontFamily="inherit" fontWeight="700" fill="currentColor" stroke="none">PDF</text></svg>;
     case "doc-word":
-      return <svg {...props}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/><text x="7" y="18" fontSize="6" fontFamily="Manrope, sans-serif" fontWeight="700" fill="currentColor" stroke="none">DOC</text></svg>;
+      return <svg {...props}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/><text x="7" y="18" fontSize="6" fontFamily="inherit" fontWeight="700" fill="currentColor" stroke="none">DOC</text></svg>;
     case "doc-tex":
-      return <svg {...props}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/><text x="7" y="18" fontSize="6" fontFamily="Manrope, sans-serif" fontWeight="700" fill="currentColor" stroke="none">TEX</text></svg>;
+      return <svg {...props}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/><text x="7" y="18" fontSize="6" fontFamily="inherit" fontWeight="700" fill="currentColor" stroke="none">TEX</text></svg>;
     case "globe":
       return <svg {...props}><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>;
     case "graduation":

@@ -266,7 +266,7 @@ def get_saved_config():
     """Load saved configuration."""
     if CONFIG_FILE.exists():
         try:
-            return json.loads(CONFIG_FILE.read_text())
+            return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
         except:
             return {}
     return {}

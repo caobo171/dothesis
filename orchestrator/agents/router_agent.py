@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 
 
 _PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "router.md"
-_SYSTEM_PROMPT = _PROMPT_PATH.read_text()
+_SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 
 _MODULE_KEYS = ("M1", "M2", "M3", "M4", "M5")
 _TOOL_NAME_TO_KEY = {

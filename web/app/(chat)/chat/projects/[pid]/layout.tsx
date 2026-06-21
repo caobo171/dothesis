@@ -67,16 +67,10 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
       leftPane={
         <WorkflowSidebar
           projectName={project?.name}
-          currentModule={project?.focus ?? project?.current_module}
-          moduleStatus={project?.module_status}
           threads={threads}
           currentThreadId={currentTid}
           onSelectThread={tid => router.push(`/chat/projects/${pid}/threads/${tid}`)}
           onNewThread={createThread}
-          // Default to Threads tab on the bare project page (no thread
-          // selected yet) — the user is shopping for one. Inside a thread,
-          // Workflow is the more useful default.
-          defaultTab={currentTid ? "workflow" : "threads"}
           projectCredits={projectCredits?.total_credits}
         />
       }

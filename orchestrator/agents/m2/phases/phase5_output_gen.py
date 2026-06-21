@@ -10,8 +10,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from orchestrator.agents.m2.state import M2SubGraphState
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent.parent.parent / "prompts" / "m2"
-_PROMPT = (_PROMPT_DIR / "5_output_gen.md").read_text()
-_STYLE = (_PROMPT_DIR / "_style.md").read_text()
+_PROMPT = (_PROMPT_DIR / "5_output_gen.md").read_text(encoding="utf-8")
+_STYLE = (_PROMPT_DIR / "_style.md").read_text(encoding="utf-8")
 
 
 def _get_llm():

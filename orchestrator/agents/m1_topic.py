@@ -9,7 +9,7 @@ from orchestrator.tools.m1_topic import refine_title, suggest_topics
 
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
-_PROMPT = (_PROMPT_DIR / "m1.md").read_text()
+_PROMPT = (_PROMPT_DIR / "m1.md").read_text(encoding="utf-8")
 
 
 class M1Agent(WizardAgent, ModuleAgent):

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { SWRConfig } from "swr";
 import { http, HttpResponse } from "msw";
 import { server } from "../../../tests/setup";
@@ -72,32 +72,15 @@ describe("HomeDashboard", () => {
     expect(screen.queryByRole("link", { name: /resume current thesis/i })).toBeNull();
   });
 
-  test("clicking New thesis opens the modal (not window.prompt)", async () => {
+  test("New thesis CTA links to the dedicated /new page", async () => {
     server.use(
       http.post("*/api/v1/projects/list", () => HttpResponse.json([])),
     );
     renderDashboard();
     await waitFor(() => expect(screen.getByText(/no projects yet/i)).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: /^new thesis$/i }));
-    expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByText(/create new project/i)).toBeTruthy();
-  });
-
-  test("creating a project navigates to its chat URL", async () => {
-    server.use(
-      http.post("*/api/v1/projects/list", () => HttpResponse.json([])),
-      http.post("*/api/v1/projects", async ({ request }) => {
-        const body = (await request.json()) as { name: string };
-        return HttpResponse.json({ id: "p-new", name: body.name });
-      }),
-    );
-    _push.mockClear();
-    renderDashboard();
-    await waitFor(() => expect(screen.getByText(/no projects yet/i)).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: /^new thesis$/i }));
-    fireEvent.change(screen.getByLabelText(/project name/i), { target: { value: "Brand new" } });
-    fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
-    await waitFor(() => expect(_push).toHaveBeenCalledWith("/chat/projects/p-new"));
+    // The "New thesis" pill in the page header is now a Link, not a modal trigger.
+    const link = screen.getByRole("link", { name: /^new thesis$/i }) as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("/new");
   });
 
   test("shows the user's credit balance in the hero token card", async () => {

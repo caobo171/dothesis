@@ -11,7 +11,7 @@ import { AutoDraftModal } from "./AutoDraftModal";
 import { AutoDraftDrawer } from "./AutoDraftDrawer";
 import { synthesizeWidgetSelection } from "./widgets/synthesize";
 import type { WidgetSelectHandler } from "./widgets/types";
-import { formatBootstrapMessage, readBootstrapPayload } from "./NewProjectModal";
+import { formatBootstrapMessage, readBootstrapPayload } from "@/app/lib/bootstrap-payload";
 import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
 
@@ -118,7 +118,7 @@ const MODULE_HINT: Record<string, string> = {
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
   const { messages, streamingText, streamingProgress, streamingError, inflight, send } = useChat(threadId);
 
-  // Bootstrap-payload pickup. NewProjectModal stashes the wizard data
+  // Bootstrap-payload pickup. The /new page stashes the form data
   // (topic + references + model + …) keyed by project id. The first time
   // this thread mounts with an empty message list, we read the stash and
   // send a structured first message so the agent's bootstrap skill can

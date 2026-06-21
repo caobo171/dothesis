@@ -79,19 +79,40 @@ if [ "$PG_READY" != "1" ]; then
 fi
 
 # --- 1. API ---
-# Detect Windows venv layout
-if [ -d api/.venv/Scripts ]; then
-  VENV_BIN="api/.venv/Scripts"
+# Pick a python interpreter — `python3` on macOS/Linux, `python` on Windows
+# (the Microsoft Store / python.org installers ship `python.exe` but no
+# `python3.exe`).
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON=python3
+elif command -v python >/dev/null 2>&1; then
+  PYTHON=python
 else
-  VENV_BIN="api/.venv/bin"
+  echo "python3 / python not found on PATH. Install Python 3.11+ and re-run." >&2
+  exit 1
 fi
 
 if [ ! -d api/.venv ]; then
   echo "==> creating api/.venv and installing deps (one-time, ~2 min)"
-  (cd api && python3 -m venv .venv)
+  (cd api && "$PYTHON" -m venv .venv)
+fi
+
+# Detect venv layout AFTER (possibly) creating it: Windows uses Scripts/,
+# everything else uses bin/.
+if [ -d api/.venv/Scripts ]; then
+  VENV_BIN="api/.venv/Scripts"
+elif [ -d api/.venv/bin ]; then
+  VENV_BIN="api/.venv/bin"
+else
+  echo "api/.venv exists but has neither Scripts/ nor bin/ — delete it and re-run." >&2
+  exit 1
+fi
+
+# Install / refresh deps. Idempotent — pip is fast when nothing changes, and
+# this also covers the case where the venv pre-existed but deps drifted.
+if ! "$VENV_BIN/python" -c "import app" >/dev/null 2>&1; then
+  echo "==> installing api deps into api/.venv"
   "$VENV_BIN/pip" install --upgrade pip
   "$VENV_BIN/pip" install -e "api[dev]"
-  # Engine deps so `python -m engine` subprocess can import draft_generator.
   "$VENV_BIN/pip" install -r engine/requirements.txt
 fi
 
@@ -99,6 +120,21 @@ fi
 if ! "$VENV_BIN/python" -c "import google.genai" >/dev/null 2>&1; then
   echo "==> installing engine deps into api/.venv (one-time)"
   "$VENV_BIN/pip" install -r engine/requirements.txt
+fi
+
+# orchestrator/ and agent/ are sibling packages at the repo root, each with their
+# own pyproject.toml that maps the package onto its directory. The api process
+# imports both at module load (api/app/routers/m5_editor.py → orchestrator.*),
+# so without these editable installs the API blows up at boot with
+# ModuleNotFoundError: No module named 'orchestrator'.
+if ! "$VENV_BIN/python" -c "import orchestrator" >/dev/null 2>&1; then
+  echo "==> installing orchestrator into api/.venv (one-time)"
+  "$VENV_BIN/pip" install -e orchestrator
+fi
+
+if ! "$VENV_BIN/python" -c "import agent" >/dev/null 2>&1; then
+  echo "==> installing agent into api/.venv (one-time)"
+  "$VENV_BIN/pip" install -e agent
 fi
 
 # Warn (non-fatal) if the M5 export toolchain is missing. Exports degrade to
@@ -143,7 +179,15 @@ WEB_PID=$!
 # Auto-detected: skipped when langgraph-cli isn't installed in the venv.
 # To install: api/.venv/bin/pip install 'langgraph-cli[inmem]'
 STUDIO_PID=""
-if [ -x "$VENV_BIN/langgraph" ] && [ "${STUDIO_ENABLED:-true}" = "true" ]; then
+# Windows venv binaries are .exe; macOS/Linux are bare names. Resolve once.
+if [ -f "$VENV_BIN/langgraph.exe" ]; then
+  LANGGRAPH_BIN="langgraph.exe"
+elif [ -f "$VENV_BIN/langgraph" ]; then
+  LANGGRAPH_BIN="langgraph"
+else
+  LANGGRAPH_BIN=""
+fi
+if [ -n "$LANGGRAPH_BIN" ] && [ "${STUDIO_ENABLED:-true}" = "true" ]; then
   echo "==> starting langgraph studio on port ${STUDIO_PORT:-8123}"
   # The "N changes detected" log spam comes from langgraph_runtime_inmem's
   # checkpoint pickles (.langgraph_api/*.pckl) being written every graph
@@ -157,11 +201,11 @@ if [ -x "$VENV_BIN/langgraph" ] && [ "${STUDIO_ENABLED:-true}" = "true" ]; then
   # only on the langgraph dev process silences root INFO without
   # affecting the rest of the dev stack — warnings/errors still surface,
   # so a real graph reload failure won't be hidden.
-  LOG_LEVEL=WARNING "$VENV_BIN/langgraph" dev --no-browser \
+  LOG_LEVEL=WARNING "$VENV_BIN/$LANGGRAPH_BIN" dev --no-browser \
     --port "${STUDIO_PORT:-8123}" &
   STUDIO_PID=$!
   echo "    → studio UI: https://smith.langchain.com/studio/?baseUrl=http://localhost:${STUDIO_PORT:-8123}"
-elif [ ! -x "$VENV_BIN/langgraph" ]; then
+elif [ -z "$LANGGRAPH_BIN" ]; then
   echo "==> skipping langgraph studio (langgraph-cli not installed in api/.venv)"
 fi
 

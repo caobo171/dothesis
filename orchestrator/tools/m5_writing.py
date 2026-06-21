@@ -1116,7 +1116,7 @@ def compose_chapter(
     validate_citations on the result; returns
     {name, prose, citations_used, uncited_warnings}.
     """
-    prompt_template = (_PROMPT_DIR / f"{chapter_name}.md").read_text()
+    prompt_template = (_PROMPT_DIR / f"{chapter_name}.md").read_text(encoding="utf-8")
     refs_block = _format_references_for_prompt(references)
     safe_kwargs = _safe_format_kwargs(context_slice)
     safe_kwargs.setdefault("paradigm", paradigm)
@@ -1175,7 +1175,7 @@ def rewrite_chapter(
     # Decision: load the same chapter prompt template as compose_chapter so the
     # rewrite stays grounded in the chapter's structural requirements, then
     # append the user's instruction and existing prose as a rewrite anchor.
-    prompt_template = (_PROMPT_DIR / f"{chapter_name}.md").read_text()
+    prompt_template = (_PROMPT_DIR / f"{chapter_name}.md").read_text(encoding="utf-8")
     refs_block = _format_references_for_prompt(references)
     safe_kwargs = _safe_format_kwargs(context_slice)
     safe_kwargs.setdefault("paradigm", context_slice.get("paradigm", "quantitative"))

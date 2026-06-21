@@ -12,8 +12,8 @@ from langchain_core.tools import tool
 
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts" / "m5_inline"
-_PARAPHRASE_PROMPT = (_PROMPTS_DIR / "paraphrase.md").read_text()
-_TRANSLATE_PROMPT = (_PROMPTS_DIR / "translate.md").read_text()
+_PARAPHRASE_PROMPT = (_PROMPTS_DIR / "paraphrase.md").read_text(encoding="utf-8")
+_TRANSLATE_PROMPT = (_PROMPTS_DIR / "translate.md").read_text(encoding="utf-8")
 
 
 def _call_llm(prompt: str) -> str:

@@ -46,8 +46,8 @@ def _build_gap_hint(gaps: list[dict]) -> dict:
     ).model_dump()
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent.parent.parent / "prompts" / "m2"
-_PROMPT = (_PROMPT_DIR / "3_gap_analysis.md").read_text()
-_STYLE = (_PROMPT_DIR / "_style.md").read_text()
+_PROMPT = (_PROMPT_DIR / "3_gap_analysis.md").read_text(encoding="utf-8")
+_STYLE = (_PROMPT_DIR / "_style.md").read_text(encoding="utf-8")
 
 _PHASE_KEY = "gap_analysis"
 

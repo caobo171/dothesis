@@ -5,10 +5,8 @@
 // bar). Drafts ARE orchestrator projects (this page reads /projects, see the
 // 2026-06 fix), so the table reuses HomeDashboard's status helpers — the
 // list and the dashboard cards can never disagree about a draft's state.
-import { useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowRight, Plus } from "lucide-react";
 
 import {
@@ -19,8 +17,7 @@ import {
   relativeTime,
   type Project,
 } from "@/app/components/chat/HomeDashboard";
-import { NewProjectModal } from "@/app/components/chat/NewProjectModal";
-import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
+import { swrFetcher as fetcher } from "@/app/lib/api";
 
 
 // One coarse status per draft, same precedence as the dashboard card:
@@ -43,28 +40,12 @@ const STATUS_TAG: Record<DraftStatus, { label: string; cls: string }> = {
 
 
 export default function PapersPage() {
-  const { data: papers, error, isLoading, mutate } = useSWR<Project[]>("/projects/list", fetcher);
-  const [modalOpen, setModalOpen] = useState(false);
-  const router = useRouter();
-
-  // Same post-create flow as the dashboard: revalidate, then jump straight
-  // into the new project's chat.
-  const handleCreated = (project: { id: string; name: string }) => {
-    void mutate();
-    setModalOpen(false);
-    router.push(`/chat/projects/${project.id}`);
-  };
+  const { data: papers, error, isLoading } = useSWR<Project[]>("/projects/list", fetcher);
 
   const list = papers ?? [];
 
   return (
     <section className="max-w-6xl mx-auto w-full">
-      <NewProjectModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onCreated={handleCreated}
-      />
-
       <div className="flex items-end justify-between gap-2 mb-4 px-0.5">
         <div>
           <h1 className="m-0 text-[22px] font-extrabold tracking-tight font-serif text-ink-900">
@@ -76,13 +57,12 @@ export default function PapersPage() {
               : `${list.length} ${list.length === 1 ? "thesis" : "theses"} in your workspace`}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="inline-flex items-center gap-1.5 bg-primary-600 text-white pl-3 pr-4 py-2 rounded-full text-[13.5px] font-semibold hover:bg-primary-700 transition-colors"
+        <Link
+          href="/new"
+          className="inline-flex items-center gap-1.5 bg-primary-600 text-white pl-3 pr-4 py-2 rounded-full text-[13.5px] font-semibold hover:bg-primary-700 transition-colors no-underline"
         >
           <Plus className="w-4 h-4" /> New thesis
-        </button>
+        </Link>
       </div>
 
       {error && (
@@ -95,13 +75,12 @@ export default function PapersPage() {
         <div className="bg-white rounded-2xl border border-dashed border-ink-200 p-12 text-center">
           <h2 className="text-base font-bold font-serif text-ink-900">No theses yet</h2>
           <p className="text-sm text-ink-500 mt-2">
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="text-primary-600 font-medium hover:underline"
+            <Link
+              href="/new"
+              className="text-primary-600 font-medium hover:underline no-underline"
             >
               Start your first one →
-            </button>
+            </Link>
           </p>
         </div>
       )}

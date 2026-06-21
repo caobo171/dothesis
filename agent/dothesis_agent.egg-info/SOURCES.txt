@@ -1,6 +1,7 @@
 pyproject.toml
 ../agent/__init__.py
 ../agent/cli.py
+../agent/multimodal.py
 ../agent/runtime.py
 ../agent/state.py
 ../agent/tools/__init__.py
@@ -13,5 +14,6 @@ dothesis_agent.egg-info/SOURCES.txt
 dothesis_agent.egg-info/dependency_links.txt
 dothesis_agent.egg-info/requires.txt
 dothesis_agent.egg-info/top_level.txt
+tests/test_runtime_state_header.py
 tests/test_state_store.py
 tests/test_stats_tool.py

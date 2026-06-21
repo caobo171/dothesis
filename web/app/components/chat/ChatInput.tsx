@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import {
-  Paperclip, PenSquare, Send, X,
+  AtSign, ChevronDown, Paperclip, PenSquare, Send, X,
 } from "lucide-react";
 import { FileDropZone } from "./FileDropZone";
+import { ExpertAvatar, ExpertPicker } from "./ExpertPicker";
+import { applyExpertPersona, type Expert } from "@/app/lib/experts";
 
 
 /**
@@ -34,17 +36,20 @@ type Attachment = {
  * Bottom composer — matches the design's `Composer`:
  *
  *   ┌──────────────────────────────────────────────────────────────┐
- *   │  Reply to DoThesis (currently in M2) — or ask about any …    │
+ *   │  [@ Methodologist · Research design, paradigms… ]      [✕]   │  ← active-expert chip
+ *   │  Ask Methodologist — they'll handle this turn                │
  *   │                                                       [Send ↵]│
  *   │  ───────────────────────────────────────────────────────────  │
- *   │  📎 Attach   ◇ Draw model                                    │
+ *   │  [@ Ask an expert ▾]   📎 Attach   ◇ Draw model              │
  *   └──────────────────────────────────────────────────────────────┘
  *      ⌘K to jump module · Shift+↵ for newline
  *
- * The Draw model button hands a pre-filled prompt fragment into the
- * textarea so the agent picks up the intent — a shortcut to compose, not
- * a separate tool. The active model name is intentionally NOT shown to
- * users.
+ * Picking an expert prefixes the outgoing message with a persona directive
+ * (see lib/experts.ts) so the same backend agent tunes voice + grounding
+ * for that specialist — no extra credit cost, same thread. The Draw model
+ * button hands a pre-filled prompt fragment into the textarea so the
+ * agent picks up the intent — a shortcut to compose, not a separate tool.
+ * The active LLM model name is intentionally NOT surfaced to users.
  */
 export function ChatInput({
   onSubmit,
@@ -71,6 +76,12 @@ export function ChatInput({
 }) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  // Active expert persona for THIS turn. Cleared back to `null` after each
+  // send so the chooser is an opt-in per-turn move, not a sticky channel
+  // that silently rebrands every future reply. Matches the design intent
+  // ("Each one has its own grounding and voice — still one thread.").
+  const [expert, setExpert] = useState<Expert | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const handleSubmit = () => {
     const trimmed = text.trim();
@@ -89,9 +100,13 @@ export function ChatInput({
         filename: a.name,
         size_bytes: a.size,
       }));
-    onSubmit(trimmed, ready);
+    // Persona directive lives in the user-visible message text, not a
+    // hidden system field — so a later read of the transcript still
+    // explains why the assistant suddenly answered like a statistician.
+    onSubmit(applyExpertPersona(trimmed, expert), ready);
     setText("");
     setAttachments([]);
+    setExpert(null);
   };
 
   // Add chips immediately when files are picked (so the user gets instant
@@ -152,17 +167,49 @@ export function ChatInput({
     setText(prev => (prev ? `${prev} ${fragment}` : fragment));
   };
 
-  const placeholder = focusModule
-    ? `Reply to DoThesis (currently in ${focusModule}) — or ask about any module`
-    : "Reply to DoThesis — or ask about any module";
+  const placeholder = expert
+    ? `Ask ${expert.name} — they'll handle this turn`
+    : focusModule
+      ? `Reply to DoThesis (currently in ${focusModule}) — or ask about any module`
+      : "Reply to DoThesis — or ask about any module";
 
   return (
     <FileDropZone onFileDrop={attachFiles}>
       <div className="px-6 pt-3.5 pb-5 bg-ink-50">
         <div
-          className="max-w-[880px] mx-auto bg-white border border-ink-200 rounded-[20px] px-4 pt-2.5 pb-2 flex flex-col gap-2"
-          style={{ boxShadow: "0 1px 0 rgba(11,16,32,.04), 0 2px 8px rgba(11,16,32,.06)" }}
+          className={`max-w-[880px] mx-auto bg-white border rounded-[20px] px-4 pt-2.5 pb-2 flex flex-col gap-2 transition-shadow ${
+            expert ? "border-primary-600 shadow-[0_0_0_3px_rgba(28,46,255,0.12)]" : "border-ink-200"
+          }`}
+          style={
+            expert
+              ? undefined
+              : { boxShadow: "0 1px 0 rgba(11,16,32,.04), 0 2px 8px rgba(11,16,32,.06)" }
+          }
         >
+          {/* Row -1: active-expert chip — surfaces who's answering this turn */}
+          {expert && (
+            <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl bg-primary-50 border border-primary-100">
+              <ExpertAvatar expert={expert} size={26} />
+              <div className="leading-tight min-w-0">
+                <div className="text-[12.5px] font-bold text-primary-700 truncate">
+                  Consulting {expert.name}
+                </div>
+                <div className="text-[11px] text-primary-700/75 truncate">
+                  {expert.tagline}
+                </div>
+              </div>
+              <span className="flex-1" />
+              <button
+                type="button"
+                onClick={() => setExpert(null)}
+                className="px-2 py-1 rounded-md text-[11px] font-semibold text-primary-700 hover:bg-primary-100 transition-colors"
+                aria-label="Clear expert"
+              >
+                ✕ Clear
+              </button>
+            </div>
+          )}
+
           {/* Row 0: attachment chips (only when something is queued) */}
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pb-1">
@@ -203,9 +250,46 @@ export function ChatInput({
             </button>
           </div>
 
-          {/* Row 2: file upload + Draw model. The model name is intentionally
-              not surfaced to users. */}
-          <div className="flex items-center gap-1 pt-1.5 border-t border-ink-100">
+          {/* Row 2: expert picker + file upload + Draw model. The active LLM
+              model name is intentionally not surfaced to users — the
+              "expert" chooser is a persona selector, not a model switcher. */}
+          <div className="flex items-center gap-1 pt-1.5 border-t border-ink-100 relative">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPickerOpen(o => !o)}
+                disabled={disabled}
+                aria-haspopup="dialog"
+                aria-expanded={pickerOpen}
+                className={`inline-flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full text-[12.5px] font-semibold border transition-colors disabled:opacity-50 ${
+                  expert
+                    ? "text-primary-700 border-primary-200 bg-primary-50/60 hover:bg-primary-50"
+                    : pickerOpen
+                      ? "text-ink-700 border-ink-200 bg-ink-100"
+                      : "text-ink-700 border-ink-200 hover:bg-ink-100"
+                }`}
+              >
+                {expert ? (
+                  <ExpertAvatar expert={expert} size={20} />
+                ) : (
+                  <span className="w-5 h-5 rounded-full bg-ink-200 text-ink-600 inline-flex items-center justify-center">
+                    <AtSign className="w-3 h-3" />
+                  </span>
+                )}
+                <span>{expert ? expert.name : "Ask an expert"}</span>
+                <ChevronDown className="w-3 h-3 opacity-55" />
+              </button>
+
+              {pickerOpen && (
+                <ExpertPicker
+                  focusModule={focusModule}
+                  selectedId={expert?.id}
+                  onSelect={e => { setExpert(e); setPickerOpen(false); }}
+                  onClose={() => setPickerOpen(false)}
+                />
+              )}
+            </div>
+
             <ComposerAction
               icon={<Paperclip className="w-3.5 h-3.5" />}
               label="Attach"
@@ -272,14 +356,10 @@ function AttachmentChip({
       className="inline-flex items-center gap-2 pl-1.5 pr-1 py-1 rounded-lg bg-ink-50 border border-ink-200 max-w-[260px] group"
       title={attachment.name}
     >
-      {/* Mini file tile — gradient stripe + ext label, same idiom as the
-          PapersPanel PDF tile so attachments look like first-class
-          citations once they're uploaded. */}
+      {/* Mini file tile — flat primary-50 (no violet) keeps the academic
+          single-hue rule; the ext label stays the only emphasis. */}
       <span
-        className="w-[28px] h-[34px] rounded-md border border-ink-200 flex items-end justify-center text-[8px] font-extrabold text-primary-700 shrink-0"
-        style={{
-          background: "linear-gradient(135deg, #F1F3FF 0%, #F4F0FF 100%)",
-        }}
+        className="w-[28px] h-[34px] rounded-md border border-ink-200 bg-primary-50 flex items-end justify-center text-[8px] font-extrabold text-primary-700 shrink-0"
         aria-hidden="true"
       >
         {ext}

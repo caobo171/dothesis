@@ -21,7 +21,7 @@ from orchestrator.tools.m4_parsers.transcript import (
 )
 
 
-_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "m4.md").read_text()
+_PROMPT = (Path(__file__).resolve().parent.parent / "prompts" / "m4.md").read_text(encoding="utf-8")
 
 
 # SP5: outline-type-aware field walk. Keys resolved from m3_design.tool via
