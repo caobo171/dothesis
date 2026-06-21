@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { apiFetch } from "@/app/lib/api";
@@ -13,12 +13,21 @@ declare global {
   }
 }
 
+// Renders the Google sign-in widget AND its "or with email" divider as one unit.
+// On origins Google hasn't authorized (e.g. *.trycloudflare.com tunnels) GIS
+// silently renders nothing — which used to leave a dead gap + a dangling
+// divider. We detect that the widget never appeared and hide the whole block,
+// so the form falls back cleanly to email/password. On a properly registered
+// domain the widget renders and everything shows again automatically.
+type Status = "off" | "pending" | "on";
+
 export function GoogleSignInButton({ onError }: { onError?: (msg: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
   // /auth/google now returns TokenOut — pipe it through the auth context
   // so the access_token gets persisted to tokenStore before we navigate.
   const { acceptTokenPayload } = useAuth();
+  const [status, setStatus] = useState<Status>(CLIENT_ID ? "pending" : "off");
 
   useEffect(() => {
     if (!CLIENT_ID) return;
@@ -43,8 +52,18 @@ export function GoogleSignInButton({ onError }: { onError?: (msg: string) => voi
         theme: "outline", size: "large", width: w, shape: "rectangular",
       });
     };
+    // If the widget never paints (unauthorized origin / blocked script), hide
+    // the block instead of leaving an empty gap.
+    const verifyRendered = () => {
+      // GIS inserts an iframe even on unauthorized origins, but it stays
+      // collapsed (≈0 height) because the content fails to load. Require a real
+      // rendered height so a broken/empty widget counts as "not available".
+      const el = ref.current;
+      const ok = !!el && el.childElementCount > 0 && el.offsetHeight > 20;
+      setStatus(ok ? "on" : "off");
+    };
     const init = () => {
-      if (!window.google?.accounts?.id || !ref.current) return;
+      if (!window.google?.accounts?.id || !ref.current) { setStatus("off"); return; }
       window.google.accounts.id.initialize({
         client_id: CLIENT_ID,
         callback: async (resp: any) => {
@@ -62,32 +81,40 @@ export function GoogleSignInButton({ onError }: { onError?: (msg: string) => voi
         },
       });
       renderAtContainerWidth();
+      // GIS paints asynchronously; check shortly after.
+      setTimeout(verifyRendered, 1200);
     };
     if (window.google?.accounts?.id) {
       init();
     } else {
       script.onload = init;
+      // Script blocked or slow → don't hang in "pending" forever.
+      script.onerror = () => setStatus("off");
     }
+    // Hard timeout backstop in case onload never fires.
+    const backstop = setTimeout(() => {
+      if (!window.google?.accounts?.id) setStatus("off");
+    }, 4000);
     // Re-render on container resize so the button keeps matching the form width.
     const ro = ref.current ? new ResizeObserver(() => renderAtContainerWidth()) : null;
     if (ro && ref.current) ro.observe(ref.current);
     return () => {
+      clearTimeout(backstop);
       ro?.disconnect();
       if (added) { /* no-op: keep script for other consumers */ }
     };
   }, [router, onError]);
 
-  if (!CLIENT_ID) {
-    return (
-      <button
-        type="button"
-        disabled
-        className="w-full rounded-xl border border-ink-200 px-4 py-2.5 text-sm font-medium text-ink-400 cursor-not-allowed"
-        title="DOTHESIS_GOOGLE_CLIENT_ID is not set"
-      >
-        Google sign-in (not configured)
-      </button>
-    );
-  }
-  return <div ref={ref} className="w-full" />;
+  if (status === "off") return null;
+
+  return (
+    <>
+      <div ref={ref} className="w-full min-h-[2.75rem]" />
+      <div className="flex items-center gap-3 text-xs text-ink-400">
+        <span className="flex-1 h-px bg-ink-100" />
+        <span>or with email</span>
+        <span className="flex-1 h-px bg-ink-100" />
+      </div>
+    </>
+  );
 }
