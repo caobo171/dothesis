@@ -93,6 +93,13 @@ scales from M2 sources (cite them per item block); qualitative → 2–4 open qu
 probes per RQ. Offer the questionnaire as a document the user can take to the field
 (M5's `export_docx` tool can render it — a one-off export, not a thesis chapter).
 
+**Google Form:** once a questionnaire/survey instrument is drafted, offer to turn it into
+a real **Google Form**. Call `make_google_form_script(title, questions, description)` — map
+each item to the right type (Likert → `scale`; single-choice → `multiple_choice`; multi →
+`checkbox`; open → `paragraph`/`short`). Present the returned Apps Script in a code block
+with its instructions so the student pastes it into script.google.com and runs it (the form
+is created in their own Google account). Do NOT claim to have created the form yourself.
+
 ## How to act based on intent
 
 - **read** — answer from the slice, no commit.

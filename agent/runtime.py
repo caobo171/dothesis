@@ -140,6 +140,7 @@ from deepagents.backends.composite import CompositeBackend
 from deepagents.backends.filesystem import FilesystemBackend
 
 from agent.state import MODULES, ProjectStateStore
+from agent.tools.forms import make_google_form_script
 from agent.tools.research import parse_reference, quick_sources, research_scout
 from agent.tools.state_tools import make_state_tools
 from agent.tools.stats import run_stats
@@ -279,9 +280,15 @@ never as raw URLs in the message text.
 
 For early/topic-stage grounding — before M2's full research_scout has run —
 use `quick_sources` to fetch a few real papers so factual or landscape claims
-carry citations from the very first message. Surface them in the same panel
-(or inline) and never make an ungrounded landscape claim. When even
-`quick_sources` returns nothing real, say so plainly and do not invent a panel.
+carry citations from the very first message.
+
+HARD RULE — surfacing what you fetched is mandatory: whenever `quick_sources`
+(or `research_scout`) returns sources, you MUST render them in a `[PAPERS]`
+panel in that same reply, AND cite them inline (Author, Year) next to the
+claims they support. NEVER call the tool and then answer without showing the
+papers — fetching sources but not displaying them is a failure. Never make an
+ungrounded landscape claim. When the tool returns nothing real, say so plainly
+and do not invent a panel.
 
 ## Diagrams — fenced ```mermaid``` blocks
 
@@ -397,6 +404,7 @@ def build_agent(
         research_scout,
         parse_reference,
         run_stats,
+        make_google_form_script,
         *make_writing_tools(store),
     ]
 
