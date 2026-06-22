@@ -402,24 +402,22 @@ function ImportRow({
         {/* File picker — drag-and-drop dashed area or "Choose files" button.
             Always shown; for filesOnly items it's the only input. */}
         <div
-          className={`${filesOnly ? "mt-2.5" : "mt-2"} rounded-[10px] border-2 border-dashed border-ink-200 hover:border-primary-300 bg-ink-50/40 px-3 py-3 flex items-center gap-2 transition-colors`}
+          className={`${filesOnly ? "mt-2.5" : "mt-2"} rounded-[10px] border-2 border-dashed border-ink-200 hover:border-primary-300 bg-ink-50/40 px-3 py-3 flex flex-col sm:flex-row sm:items-center gap-2 transition-colors`}
           onDragOver={e => { e.preventDefault(); }}
           onDrop={e => {
             e.preventDefault();
             onAddFiles(e.dataTransfer?.files ?? null);
           }}
         >
-          <Paperclip className="w-3.5 h-3.5 text-ink-400 shrink-0" />
-          <span className="text-[11.5px] text-ink-500 flex-1">
-            {filesOnly
-              ? "Drop dataset files here, or"
-              : "Attach files — drop here, or"}
+          <span className="flex items-center gap-2 text-[11.5px] text-ink-500 flex-1 min-w-0">
+            <Paperclip className="w-3.5 h-3.5 text-ink-400 shrink-0" />
+            {filesOnly ? "Drop dataset files here" : "Attach a file, or drop it here"}
           </span>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={submitting}
-            className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold bg-white border border-ink-300 text-ink-800 hover:border-primary-500 hover:text-primary-700 disabled:opacity-50"
+            className="w-full sm:w-auto shrink-0 px-3 py-1.5 rounded-full text-[11.5px] font-semibold bg-white border border-ink-300 text-ink-800 hover:border-primary-500 hover:text-primary-700 disabled:opacity-50"
           >
             Choose files
           </button>
