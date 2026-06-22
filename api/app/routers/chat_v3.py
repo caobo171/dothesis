@@ -166,6 +166,22 @@ async def _get_agent(db: Session, project_id: uuid.UUID):
     return agent
 
 
+# Credit pricing is calibrated so gemini-2.5-flash ≈ 1 credit / 1000 tokens.
+# Stronger models cost multiples more per token, so credits must scale with the
+# active model or we'd undercharge badly (a Pro turn costs ~5x a Flash turn).
+# Multiplier ≈ the model's output price relative to 2.5-flash. Update when the
+# active model or upstream prices change.
+def _credit_multiplier(model: str) -> float:
+    m = (model or "").lower()
+    if "flash-lite" in m:
+        return 0.4
+    if "pro" in m:           # 2.5-pro / 3.x-pro: ~4-6x flash output price
+        return 5.0
+    if "flash" in m:
+        return 1.0
+    return 1.0
+
+
 async def send_message_v3(
     t: Thread,
     text: str,
@@ -316,7 +332,10 @@ async def send_message_v3(
             _finalized = True
             total_tokens = _usage_in + _usage_out
             duration_ms = int((_time.monotonic() - _turn_t0) * 1000)
-            cost_credits = max(1, round(total_tokens / 1000)) if total_tokens else 0
+            # Scale credits by the active model's relative cost (see
+            # _credit_multiplier) so a Pro turn isn't charged like a Flash turn.
+            _mult = _credit_multiplier(os.getenv("DOTHESIS_AGENT_MODEL", "gemini-2.5-flash"))
+            cost_credits = max(1, round(total_tokens / 1000 * _mult)) if total_tokens else 0
 
             full = "".join(chunks)
             if full:
