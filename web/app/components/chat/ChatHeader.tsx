@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ReactNode } from "react";
-import { ArrowLeft, Bell, Download, History, PenSquare } from "lucide-react";
+import { ReactNode, useContext } from "react";
+import { ArrowLeft, Bell, Download, History, Menu, PenSquare } from "lucide-react";
 
 import { useMe } from "@/app/lib/use-me";
 import { triggerExportDownload } from "@/app/lib/api";
+import { ChatSidebarContext } from "./ChatShellLayout";
 import { MODULES } from "./HomeDashboard";
 
 
@@ -103,6 +104,7 @@ export function ChatHeader({
   const phase = focusModule ? PHASE_LABEL[focusModule] : undefined;
   const tag = focusStatus ? STATUS_TAG[focusStatus] ?? STATUS_TAG.in_progress : null;
   const me = useMe();
+  const sidebar = useContext(ChatSidebarContext);
   const user = me.data;
   const userInitials = user?.email
     ? user.email.slice(0, 2).toUpperCase()
@@ -115,6 +117,16 @@ export function ChatHeader({
       className="sticky top-0 z-10 bg-white border-b border-ink-200 px-[22px] py-3 flex items-center gap-3"
       style={{ minHeight: 60 }}
     >
+      {/* Open threads/workflow drawer — mobile only */}
+      <button
+        type="button"
+        onClick={() => sidebar.open()}
+        aria-label="Open menu"
+        className="lg:hidden w-8 h-8 rounded-full bg-ink-100 text-ink-700 hover:bg-ink-200 inline-flex items-center justify-center shrink-0 transition-colors"
+      >
+        <Menu className="w-4 h-4" />
+      </button>
+
       {/* Back to home */}
       <Link
         href="/"

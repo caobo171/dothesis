@@ -1,6 +1,11 @@
 "use client";
 
-import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { createContext, ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+
+// Lets the chat header (rendered deep inside `children`) open the threads
+// sidebar drawer on mobile without prop-threading through every page.
+export const ChatSidebarContext = createContext<{ open: () => void }>({ open: () => {} });
 
 
 // Width bounds for the right pane. Below the min the ContextPanel content
@@ -41,6 +46,13 @@ export function ChatShellLayout({
 }) {
   const [rightWidth, setRightWidth] = useState<number>(RIGHT_DEFAULT);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  // Mobile: the left sidebar is an off-canvas drawer. Close it on navigation
+  // (selecting a thread / new thread routes), so it doesn't stay covering the
+  // chat after the user picks something.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pathname = usePathname();
+  useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
   // Restore width on mount.
   useEffect(() => {
@@ -95,8 +107,24 @@ export function ChatShellLayout({
   };
 
   return (
+    <ChatSidebarContext.Provider value={{ open: () => setSidebarOpen(true) }}>
     <div className="flex h-screen bg-white">
-      {leftPane}
+      {/* Mobile drawer backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-ink-900/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      {/* Left pane: off-canvas drawer on mobile, static column on lg+ */}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {leftPane}
+      </div>
       <main className="flex-1 flex flex-col min-w-0">{children}</main>
 
       {/* Resize handle — only meaningful on lg+ screens where the right
@@ -122,5 +150,6 @@ export function ChatShellLayout({
         {rightPane}
       </div>
     </div>
+    </ChatSidebarContext.Provider>
   );
 }
