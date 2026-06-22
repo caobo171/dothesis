@@ -305,11 +305,9 @@ export function ChatInput({
           </div>
         </div>
 
-        {/* Keyboard-shortcut hint */}
+        {/* Keyboard-shortcut hint. ⌘K "jump module" was removed — it had no
+            handler wired (dead UI) and is meaningless on touch devices. */}
         <div className="max-w-[880px] mx-auto flex justify-center items-center gap-1.5 mt-2 text-[11px] text-ink-400">
-          <kbd className="px-1 py-px rounded border border-ink-200 bg-white text-[10px] font-mono">⌘K</kbd>
-          <span>to jump module</span>
-          <span>·</span>
           <kbd className="px-1 py-px rounded border border-ink-200 bg-white text-[10px] font-mono">Shift+↵</kbd>
           <span>for newline</span>
         </div>
