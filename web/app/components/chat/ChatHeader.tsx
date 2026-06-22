@@ -245,19 +245,19 @@ export function ChatHeader({
           )}
         </div>
 
-        <span className="w-px h-[22px] bg-ink-200 mx-1" />
+        <span className="hidden lg:block w-px h-[22px] bg-ink-200 mx-1" />
 
-        {/* User identity — solid ink avatar with serif-feel initials.
-            The previous peach-pink gradient read as consumer-app brand; the
-            academic palette uses a single dark surface. */}
+        {/* User identity — solid ink avatar with serif-feel initials. On mobile
+            only the avatar shows; the name/tier text is hidden to save header
+            width (it's available on the account page). */}
         <div className="flex items-center gap-2 pl-1">
           <span
-            className="w-[30px] h-[30px] rounded-full bg-ink-800 inline-flex items-center justify-center text-white font-bold text-[12px]"
+            className="w-[30px] h-[30px] rounded-full bg-ink-800 inline-flex items-center justify-center text-white font-bold text-[12px] shrink-0"
             aria-hidden="true"
           >
             {userInitials}
           </span>
-          <div className="leading-[1.15] whitespace-nowrap">
+          <div className="hidden lg:block leading-[1.15] whitespace-nowrap">
             <div className="text-[12.5px] font-semibold text-ink-900">{userName}</div>
             <div className="text-[10.5px] text-ink-500">{userTier}</div>
           </div>
