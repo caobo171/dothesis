@@ -89,7 +89,6 @@ export default function NewThesisPage() {
 
   const trimmedName = name.trim();
   const canSubmit = !submitting;
-  const checkedItems = ITEMS.filter(i => have.has(i.id));
 
   const addFilesFor = (itemId: BootstrapItemId, incoming: FileList | File[] | null) => {
     if (!incoming) return;
@@ -240,83 +239,74 @@ export default function NewThesisPage() {
             />
           </div>
 
-          {/* What do you already have? — grid in M1 → M5 order. Topic
-              lives here too (as the M1 tile) so the flow stays consistent. */}
+          {/* What do you already have? — a single M1 → M5 list. Each item's
+              input (text + files) expands inline RIGHT UNDER its box the moment
+              it's ticked, instead of being collected in a separate section
+              below — so on mobile the input is always next to what you tapped. */}
           <div>
             <div className="text-[13.5px] font-bold text-ink-900">
               What do you already have?
             </div>
             <div className="text-[12px] text-ink-500 mt-0.5 mb-3">
-              Optional — tick anything you're bringing in. Inputs (text and files) appear below.
+              Optional — tick anything you're bringing in. The input for each appears right under it.
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="flex flex-col gap-2.5">
               {ITEMS.map(it => {
                 const on = have.has(it.id);
                 return (
-                  <button
-                    key={it.id}
-                    type="button"
-                    onClick={() => toggle(it.id)}
-                    className={`flex items-start gap-3 text-left p-3.5 rounded-2xl transition-all ${
-                      on
-                        ? "bg-primary-50 border-[2px] border-primary-600"
-                        : "bg-white border border-ink-200 hover:border-ink-300"
-                    }`}
-                  >
-                    <span
-                      className={`w-[34px] h-[34px] rounded-[10px] inline-flex items-center justify-center text-[16px] shrink-0 border ${
+                  <div key={it.id} className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => toggle(it.id)}
+                      className={`flex items-start gap-3 text-left p-3.5 transition-all ${
                         on
-                          ? "bg-white text-primary-700 border-primary-100"
-                          : "bg-ink-50 text-ink-600 border-ink-200"
+                          ? "bg-primary-50 border-[2px] border-b-0 border-primary-600 rounded-t-2xl"
+                          : "bg-white border border-ink-200 hover:border-ink-300 rounded-2xl"
                       }`}
                     >
-                      {it.icon}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13.5px] font-bold text-ink-900">{it.label}</div>
-                      <div className="text-[11.5px] text-ink-500 mt-0.5">
-                        → {it.module} · {it.hint}
+                      <span
+                        className={`w-[34px] h-[34px] rounded-[10px] inline-flex items-center justify-center text-[16px] shrink-0 border ${
+                          on
+                            ? "bg-white text-primary-700 border-primary-100"
+                            : "bg-ink-50 text-ink-600 border-ink-200"
+                        }`}
+                      >
+                        {it.icon}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13.5px] font-bold text-ink-900">{it.label}</div>
+                        <div className="text-[11.5px] text-ink-500 mt-0.5">
+                          → {it.module} · {it.hint}
+                        </div>
                       </div>
-                    </div>
-                    <span
-                      className={`w-[18px] h-[18px] rounded-[5px] inline-flex items-center justify-center text-[11px] font-extrabold shrink-0 ${
-                        on
-                          ? "bg-primary-600 text-white"
-                          : "bg-white border-[1.5px] border-ink-300"
-                      }`}
-                      aria-hidden="true"
-                    >
-                      {on && <Check className="w-3 h-3" />}
-                    </span>
-                  </button>
+                      <span
+                        className={`w-[18px] h-[18px] rounded-[5px] inline-flex items-center justify-center text-[11px] font-extrabold shrink-0 ${
+                          on
+                            ? "bg-primary-600 text-white"
+                            : "bg-white border-[1.5px] border-ink-300"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {on && <Check className="w-3 h-3" />}
+                      </span>
+                    </button>
+                    {on && (
+                      <ImportRow
+                        compact
+                        files={filesByItem[it.id] ?? []}
+                        onAddFiles={fs => addFilesFor(it.id, fs)}
+                        onRemoveFile={i => removeFileFor(it.id, i)}
+                        submitting={submitting}
+                        item={it}
+                        value={payload[it.id] ?? ""}
+                        onChange={v => setPayload(p => ({ ...p, [it.id]: v }))}
+                      />
+                    )}
+                  </div>
                 );
               })}
             </div>
           </div>
-
-          {/* Inline inputs for every checked item. Each row has both a
-              textarea (free-form description) and a file picker — except
-              Data, which is files-only (datasets are best handled as
-              uploads the M4 tools can ingest). */}
-          {checkedItems.length > 0 && (
-            <div className="flex flex-col gap-3">
-              <div className="text-[13.5px] font-bold text-ink-900">
-                Tell me about each item
-              </div>
-              {checkedItems.map(it => (
-                <ImportRow
-                  key={it.id}
-                  files={filesByItem[it.id] ?? []}
-                  onAddFiles={fs => addFilesFor(it.id, fs)}
-                  onRemoveFile={i => removeFileFor(it.id, i)}
-                  submitting={submitting}
-                  item={it}
-                  value={payload[it.id] ?? ""}
-                  onChange={v => setPayload(p => ({ ...p, [it.id]: v }))}
-                />
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Footer — Cancel / Create */}
@@ -354,7 +344,7 @@ export default function NewThesisPage() {
 
 
 function ImportRow({
-  item, value, onChange, files, onAddFiles, onRemoveFile, submitting,
+  item, value, onChange, files, onAddFiles, onRemoveFile, submitting, compact = false,
 }: {
   item: DeclareItem;
   value: string;
@@ -363,6 +353,9 @@ function ImportRow({
   onAddFiles: (files: FileList | File[] | null) => void;
   onRemoveFile: (idx: number) => void;
   submitting: boolean;
+  /** When true, render as a connected continuation directly under the item's
+      box (rounded bottom, no top border, no repeated icon/label header). */
+  compact?: boolean;
 }) {
   // Data is files-only: datasets are best ingested by M4 tools as uploads,
   // not as a typed description.
@@ -370,18 +363,30 @@ function ImportRow({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
-    <div className="flex items-start gap-3.5 p-3.5 rounded-2xl border border-ink-200 bg-white">
-      <span className="w-[38px] h-[38px] rounded-[10px] bg-ink-50 text-ink-700 inline-flex items-center justify-center shrink-0">
-        {item.icon}
-      </span>
+    <div
+      className={
+        compact
+          ? "p-3.5 rounded-b-2xl border-[2px] border-t-0 border-primary-600 bg-white"
+          : "flex items-start gap-3.5 p-3.5 rounded-2xl border border-ink-200 bg-white"
+      }
+    >
+      {!compact && (
+        <span className="w-[38px] h-[38px] rounded-[10px] bg-ink-50 text-ink-700 inline-flex items-center justify-center shrink-0">
+          {item.icon}
+        </span>
+      )}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <div className="text-[13.5px] font-bold text-ink-900">{item.label}</div>
-          <span className="text-[10.5px] uppercase tracking-[0.04em] font-bold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded-md">
-            {item.module}
-          </span>
-        </div>
-        <div className="text-[11.5px] text-ink-500 mt-0.5">{item.hint}</div>
+        {!compact && (
+          <>
+            <div className="flex items-center gap-2">
+              <div className="text-[13.5px] font-bold text-ink-900">{item.label}</div>
+              <span className="text-[10.5px] uppercase tracking-[0.04em] font-bold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded-md">
+                {item.module}
+              </span>
+            </div>
+            <div className="text-[11.5px] text-ink-500 mt-0.5">{item.hint}</div>
+          </>
+        )}
 
         {!filesOnly && (
           <textarea
@@ -389,7 +394,8 @@ function ImportRow({
             onChange={e => onChange(e.target.value)}
             placeholder={importPlaceholder(item.id)}
             rows={item.textRows ?? 3}
-            className="mt-2.5 w-full rounded-[10px] border border-ink-300 px-3 py-2 text-[13px] focus:outline-none focus:border-primary-500 resize-y leading-relaxed"
+            autoFocus={compact}
+            className={`${compact ? "mt-0" : "mt-2.5"} w-full rounded-[10px] border border-ink-300 px-3 py-2 text-[13px] focus:outline-none focus:border-primary-500 resize-y leading-relaxed`}
           />
         )}
 
