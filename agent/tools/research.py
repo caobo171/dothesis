@@ -77,6 +77,51 @@ def research_scout(
 
 
 @tool
+def quick_sources(query: str, limit: int = 5) -> str:
+    """Fast grounded lookup for early/topic-stage chat — a few real papers, no deep cascade.
+
+    Use this in M1 (Topic Discovery) and any time you make a factual or
+    landscape claim BEFORE the full M2 literature search has run. It hits
+    OpenAlex directly (free, ~1-2s) and returns a handful of verified papers so
+    early answers carry citations instead of reading like an ungrounded chatbot.
+    This is NOT a substitute for `research_scout` (the real M2 search) — it is a
+    lightweight grounding aid for conversation. Never invent citations; if this
+    returns nothing, say so plainly.
+
+    Args:
+        query: A short, focused search phrase (the topic or the specific claim).
+        limit: How many papers to return (default 5, keep it small).
+    """
+    try:
+        # OpenAlex multi-result search: fast, free, no API key. Same validated
+        # metadata path the engine's citation cascade trusts (verified DOIs).
+        from engine.utils.api_citations.openalex import OpenAlexClient
+        papers = OpenAlexClient().search_papers(query, limit=max(1, min(limit, 10)))
+    except Exception as e:  # never kill the turn on a search hiccup
+        logger.exception("quick_sources failed")
+        return json.dumps({
+            "error": f"quick search failed: {e}",
+            "hint": "Tell the user grounding is briefly unavailable; answer cautiously or retry.",
+        })
+
+    # Rank by citation count so the most established work surfaces first.
+    papers = sorted(papers or [], key=lambda p: p.get("citation_count", 0) or 0, reverse=True)
+    sources = [
+        {
+            "title": p.get("title"),
+            "authors": p.get("authors"),
+            "year": p.get("year"),
+            "venue": p.get("journal") or p.get("publisher"),
+            "doi": p.get("doi"),
+            "url": p.get("url"),
+            "verified": bool(p.get("doi")),
+        }
+        for p in papers
+    ]
+    return json.dumps({"sources": sources, "count": len(sources)}, ensure_ascii=False)
+
+
+@tool
 def parse_reference(doi_or_path: str) -> str:
     """Resolve one reference into structured metadata.
 

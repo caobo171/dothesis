@@ -140,7 +140,7 @@ from deepagents.backends.composite import CompositeBackend
 from deepagents.backends.filesystem import FilesystemBackend
 
 from agent.state import MODULES, ProjectStateStore
-from agent.tools.research import parse_reference, research_scout
+from agent.tools.research import parse_reference, quick_sources, research_scout
 from agent.tools.state_tools import make_state_tools
 from agent.tools.stats import run_stats
 from agent.tools.writing import make_writing_tools
@@ -277,8 +277,11 @@ should fill in `doi` (for the clickable title) and `quote` + `page`
 sources — surface them in this panel rather than as prose, and almost
 never as raw URLs in the message text.
 
-When you DON'T have real verified papers yet — when M2 hasn't run
-research_scout — say so plainly, do not invent a panel.
+For early/topic-stage grounding — before M2's full research_scout has run —
+use `quick_sources` to fetch a few real papers so factual or landscape claims
+carry citations from the very first message. Surface them in the same panel
+(or inline) and never make an ungrounded landscape claim. When even
+`quick_sources` returns nothing real, say so plainly and do not invent a panel.
 
 ## Diagrams — fenced ```mermaid``` blocks
 
@@ -390,6 +393,7 @@ def build_agent(
 
     tools = [
         *make_state_tools(store),
+        quick_sources,
         research_scout,
         parse_reference,
         run_stats,
