@@ -1,9 +1,37 @@
 import Link from "next/link";
 import { ReactNode, useContext, useState } from "react";
-import { ArrowLeft, Bell, ChevronDown, Download, History, Menu, PanelRight, PenSquare, Sparkles } from "lucide-react";
+import { ArrowLeft, Bell, ChevronDown, Download, FileDown, History, Menu, PanelRight, PenSquare, Sparkles } from "lucide-react";
 
 import { useMe } from "@/app/lib/use-me";
 import { triggerExportDownload } from "@/app/lib/api";
+import { tokenStore } from "@/app/lib/tokenStore";
+
+// Modules that can be exported as a standalone Word doc (teacher report).
+const EXPORTABLE_MODULES: { id: string; label: string }[] = [
+  { id: "M1", label: "Topic" },
+  { id: "M2", label: "Literature" },
+  { id: "M3", label: "Design" },
+  { id: "M4", label: "Analysis" },
+];
+
+async function downloadModuleDocx(projectId: string, module: string) {
+  const base = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
+  const res = await fetch(`${base}/projects/${projectId}/export/module`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ module, access_token: tokenStore.get() }),
+  });
+  if (!res.ok) throw new Error(`export failed (${res.status})`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${module}-export.docx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 import { ChatSidebarContext } from "./ChatShellLayout";
 import { MODULES } from "./HomeDashboard";
 
@@ -219,7 +247,22 @@ export function ChatHeader({
                 <div className="px-1 pb-2">{autoDraftButton}</div>
 
                 <div className="px-2 pt-1 pb-1 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400 border-t border-ink-100">
-                  Export & more
+                  Export to Word
+                </div>
+                {projectId && EXPORTABLE_MODULES.map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => { void downloadModuleDocx(projectId, m.id); }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-ink-800 hover:bg-ink-50 text-left"
+                  >
+                    <FileDown className="w-4 h-4 text-ink-500" />
+                    <span><b className="text-primary-700">{m.id}</b> {m.label} → .docx</span>
+                  </button>
+                ))}
+
+                <div className="px-2 pt-1 pb-1 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400 border-t border-ink-100">
+                  More
                 </div>
                 <ExportDownloadButton artifacts={exportArtifacts} />
                 <button
