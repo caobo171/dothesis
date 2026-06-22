@@ -19,12 +19,12 @@ const _TOOLTIP_IDLE =
   "trích dẫn và xuất file Word + PDF — chạy tự động, bạn không phải duyệt từng bước.";
 
 const _CONFIG: Record<string, { label: string; icon: typeof Sparkles; className: string; tooltip: string }> = {
-  none:     { label: "Auto approve",       icon: Sparkles,    className: "bg-primary-600 hover:bg-primary-700 text-white", tooltip: _TOOLTIP_IDLE },
+  none:     { label: "Autopilot",       icon: Sparkles,    className: "bg-primary-600 hover:bg-primary-700 text-white", tooltip: _TOOLTIP_IDLE },
   // "ready" = all upstream modules done, no run yet. A soft ring + gentle
   // pulse turns the button into the obvious next action so the user reaches
   // for it instead of asking the chat to "write the whole thesis" (which
   // routes through the fragile conversational M5 path).
-  ready:    { label: "Auto approve",       icon: Sparkles,    className: "bg-primary-600 hover:bg-primary-700 text-white ring-2 ring-primary-300 ring-offset-1 animate-pulse-soft", tooltip: "Tất cả module đã xong — " + _TOOLTIP_IDLE },
+  ready:    { label: "Autopilot",       icon: Sparkles,    className: "bg-primary-600 hover:bg-primary-700 text-white ring-2 ring-primary-300 ring-offset-1 animate-pulse-soft", tooltip: "Tất cả module đã xong — " + _TOOLTIP_IDLE },
   running:  { label: "Đang viết…",         icon: Loader,      className: "bg-amber-500 hover:bg-amber-600 text-white", tooltip: "Đang tự động viết luận văn — quá trình này mất vài phút." },
   paused:   { label: "Resume",             icon: Play,        className: "bg-amber-500 hover:bg-amber-600 text-white", tooltip: "Lần chạy đang tạm dừng — bấm để tiếp tục." },
   done:     { label: "Done · Download",    icon: CheckCircle2,className: "bg-green-600 hover:bg-green-700 text-white", tooltip: "Luận văn đã sẵn sàng — tải file Word/PDF." },

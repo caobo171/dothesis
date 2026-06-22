@@ -82,7 +82,7 @@ export function AutoDraftModal({
             disabled={!topic.trim() || (est && !est.sufficient_credit)}
             className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-full hover:bg-primary-700 disabled:opacity-50"
           >
-            Auto approve
+            Autopilot
           </button>
         </div>
       </div>
