@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  AtSign, ChevronDown, Paperclip, PenSquare, Send, X,
+  AtSign, ChevronDown, Paperclip, Send, X,
 } from "lucide-react";
 import { FileDropZone } from "./FileDropZone";
 import { ExpertAvatar, ExpertPicker } from "./ExpertPicker";
@@ -160,13 +160,6 @@ export function ChatInput({
     input.click();
   };
 
-  // Inject a prompt-fragment into the textarea so the agent receives a
-  // clear intent. We don't auto-send — the user still has to hit Enter
-  // (or edit the message) — so a stray click doesn't fire off a request.
-  const inject = (fragment: string) => {
-    setText(prev => (prev ? `${prev} ${fragment}` : fragment));
-  };
-
   const placeholder = expert
     ? `Ask ${expert.name} — they'll handle this turn`
     : focusModule
@@ -294,12 +287,6 @@ export function ChatInput({
               icon={<Paperclip className="w-3.5 h-3.5" />}
               label="Attach"
               onClick={openFilePicker}
-              disabled={disabled}
-            />
-            <ComposerAction
-              icon={<PenSquare className="w-3.5 h-3.5" />}
-              label="Draw model"
-              onClick={() => inject("Draw the conceptual model.")}
               disabled={disabled}
             />
           </div>
