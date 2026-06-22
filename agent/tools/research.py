@@ -95,12 +95,19 @@ def parse_reference(doi_or_path: str) -> str:
             text = extract_text(str(p)) or ""
         except Exception as e:
             return json.dumps({"error": f"PDF extraction failed: {e}"})
+        # Guardrail: the PDF body is untrusted user content. Frame it as data
+        # and flag any prompt-injection so document text can't hijack the agent.
+        from agent.guardrails import neutralize_document_text
+        framed, hits = neutralize_document_text(text[:12_000])
+        if hits:
+            logger.warning("parse_reference: possible prompt-injection in %s: %s", p, hits)
         # Cap what goes back into context; the agent asks for more pages if needed.
         return json.dumps({
             "kind": "pdf",
             "path": str(p),
             "chars": len(text),
-            "text_head": text[:12_000],
+            "text_head": framed,
+            "injection_flags": hits,
         }, ensure_ascii=False)
 
     try:
