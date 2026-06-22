@@ -51,12 +51,6 @@ export default function SignupPage() {
 
         <GoogleSignInButton onError={setError} />
 
-        <div className="flex items-center gap-3 text-xs text-ink-400">
-          <span className="flex-1 h-px bg-ink-100" />
-          <span>or with email</span>
-          <span className="flex-1 h-px bg-ink-100" />
-        </div>
-
         <form onSubmit={submit} className="space-y-3">
           <label className="block">
             <span className="text-xs font-medium text-ink-500">Username</span>
