@@ -41,10 +41,14 @@ Ask: *"What broad field are you working in, and what got you interested? One par
 is fine."* Goal: surface the area + the personal hook (the hook prevents generic topics).
 
 ### Phase 2 — Narrow to a problem
-Propose 3 candidate **problem framings** based on the user's domain. Each framing:
+First call `quick_sources` with the user's domain/problem to pull a few real papers, so the
+framings are grounded in the actual literature landscape (not invented). Propose 3 candidate
+**problem framings** based on the user's domain. Each framing:
 - Specific enough that you could imagine a measurement
 - Tied to a real-world stake (who cares if you solve this?)
 - Different from the other two in angle, not just wording
+- **Carries 1–2 real citations** from `quick_sources` where you assert what is known / debated
+  / under-studied (e.g. "prior work finds X (Author, Year), but Z is under-studied").
 
 ```
 Option A — [framing in 1 sentence]
@@ -82,6 +86,15 @@ reason="topic locked", confirm_done=True)`. Then one sentence on what's next (M2
 | Title ≠ first RQ | A title is a thematic frame; the RQ is what the thesis answers. |
 | No buzzwords without anchors | "AI", "sustainability" → ask "in what context, measured how?" |
 | Respect existing gaps | If `research_gaps` exists, the title/RQs must connect to at least one gap. |
+
+## Grounding — always cite (do not violate)
+
+- When you state anything factual about the field — what is known, what is debated, what is
+  under-studied, what prior work found — **back it with a real citation** from `quick_sources`.
+  Never make ungrounded landscape claims, and never invent a reference.
+- This is grounding for *conversation*, not the M2 literature review. Keep it light (a few
+  papers), don't commit them to a slice, and don't let it turn Phase 2 into a full search.
+- If `quick_sources` returns nothing, say so plainly and proceed without fabricating sources.
 
 ## What you do NOT do
 
