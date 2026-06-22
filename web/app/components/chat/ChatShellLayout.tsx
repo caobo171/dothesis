@@ -4,8 +4,12 @@ import { createContext, ReactNode, useCallback, useEffect, useRef, useState } fr
 import { usePathname } from "next/navigation";
 
 // Lets the chat header (rendered deep inside `children`) open the threads
-// sidebar drawer on mobile without prop-threading through every page.
-export const ChatSidebarContext = createContext<{ open: () => void }>({ open: () => {} });
+// sidebar drawer (left) and the context panel drawer (right) on mobile without
+// prop-threading through every page.
+export const ChatSidebarContext = createContext<{ open: () => void; openContext: () => void }>({
+  open: () => {},
+  openContext: () => {},
+});
 
 
 // Width bounds for the right pane. Below the min the ContextPanel content
@@ -51,8 +55,9 @@ export function ChatShellLayout({
   // (selecting a thread / new thread routes), so it doesn't stay covering the
   // chat after the user picks something.
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
   const pathname = usePathname();
-  useEffect(() => { setSidebarOpen(false); }, [pathname]);
+  useEffect(() => { setSidebarOpen(false); setContextOpen(false); }, [pathname]);
 
   // Restore width on mount.
   useEffect(() => {
@@ -107,7 +112,7 @@ export function ChatShellLayout({
   };
 
   return (
-    <ChatSidebarContext.Provider value={{ open: () => setSidebarOpen(true) }}>
+    <ChatSidebarContext.Provider value={{ open: () => setSidebarOpen(true), openContext: () => setContextOpen(true) }}>
     <div className="flex h-screen bg-white">
       {/* Mobile drawer backdrop */}
       {sidebarOpen && (
@@ -142,9 +147,20 @@ export function ChatShellLayout({
         <span className="block w-px h-8 bg-ink-400 opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
 
-      {/* Right pane — width controlled, content slot from props */}
+      {/* Context-panel drawer backdrop (mobile) */}
+      {contextOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-ink-900/50 lg:hidden"
+          onClick={() => setContextOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      {/* Right pane — static width-controlled column on lg+, slide-in drawer
+          from the right on mobile (opened via the header's panel button). */}
       <div
-        className="hidden lg:flex flex-shrink-0"
+        className={`fixed inset-y-0 right-0 z-50 flex bg-white shadow-xl transition-transform duration-300 lg:static lg:z-auto lg:shadow-none lg:flex-shrink-0 lg:translate-x-0 ${
+          contextOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        }`}
         style={{ width: rightWidth }}
       >
         {rightPane}

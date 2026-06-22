@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ReactNode, useContext } from "react";
-import { ArrowLeft, Bell, Download, History, Menu, PenSquare } from "lucide-react";
+import { ArrowLeft, Bell, Download, History, Menu, PanelRight, PenSquare } from "lucide-react";
 
 import { useMe } from "@/app/lib/use-me";
 import { triggerExportDownload } from "@/app/lib/api";
@@ -167,6 +167,17 @@ export function ChatHeader({
 
       {/* Right cluster */}
       <div className="flex items-center gap-1 shrink-0">
+        {/* Open context panel drawer — mobile only */}
+        <button
+          type="button"
+          onClick={() => sidebar.openContext()}
+          aria-label="Open context panel"
+          title="Context panel"
+          className="lg:hidden w-8 h-8 rounded-full text-ink-500 hover:bg-ink-100 hover:text-ink-900 inline-flex items-center justify-center transition-colors"
+        >
+          <PanelRight className="w-4 h-4" />
+        </button>
+
         {hasChapters && projectId && (
           <Link
             href={`/chat/projects/${projectId}/editor`}
