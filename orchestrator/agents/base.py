@@ -247,11 +247,22 @@ class ModuleAgent(ABC):
         the whole graph turn — every caller already has an except-block that
         catches BoundedInvokeTimeout (subclass of Exception) and falls back.
         """
-        return bounded_invoke(
+        resp = bounded_invoke(
             self._get_llm(), prompt,
             max_seconds=max_seconds or self._llm_max_seconds(),
             retries=retries,
         )
+        # Gemini 3.x returns message content as a LIST of blocks (thought
+        # signatures etc.), but every caller here treats `.content` as a plain
+        # string (`.content.strip()`, `_strip_code_fence(.content)`, `json.loads`).
+        # Flatten to text once, centrally, so the whole auto-draft path keeps
+        # working across model versions. These calls are text-only (no tool use).
+        if isinstance(getattr(resp, "content", None), list):
+            try:
+                resp.content = text_of(resp)
+            except Exception:  # never let normalization break the turn
+                pass
+        return resp
 
     def render_hint_for_field(self, field_name: str, partial: dict | None = None) -> dict | None:
         """Return a widget render hint for the next question, or None for free-text.

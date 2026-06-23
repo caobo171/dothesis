@@ -19,6 +19,8 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
+from orchestrator.message_utils import text_of  # flatten Gemini 3.x list content
+
 import boto3
 from langchain_core.tools import tool
 
@@ -1141,7 +1143,7 @@ def compose_chapter(
 
     try:
         prompt = _fill_template(prompt_template, safe_kwargs) + _MARKDOWN_FORMAT_RULES
-        prose = _get_llm().invoke(prompt).content.strip()
+        prose = text_of(_get_llm().invoke(prompt)).strip()
     except Exception as e:
         logger.warning("compose_chapter LLM call failed for %s: %s", chapter_name, e)
         prose = f"# {chapter_name.title()}\n\n[Composition failed — please retry]"
@@ -1205,7 +1207,7 @@ def rewrite_chapter(
             f"{current_prose}\n\n"
             f"Output ONLY the rewritten chapter prose."
         )
-        prose = _get_llm().invoke(rewrite_prompt).content.strip()
+        prose = text_of(_get_llm().invoke(rewrite_prompt)).strip()
     except Exception as e:
         # Decision: on any LLM failure, return the original prose unchanged so
         # the user never loses work they've already reviewed or produced.

@@ -102,11 +102,46 @@ def _emit_event(appender, event: dict, current_module: dict) -> None:
             })
 
 
+def _patch_llm_str_content() -> None:
+    """Flatten Gemini 3.x list-shaped message content to a string, process-wide.
+
+    Gemini 3.x returns `message.content` as a LIST of blocks (text + thought
+    signatures). The orchestrator's ~20 LLM call sites across M1–M5 phases all
+    assume `.content` is a plain string (`.content.strip()`, `_strip_code_fence`,
+    `json.loads`), so they crash with "'list' object has no attribute 'strip'".
+    Patching `invoke()` once here fixes them all, model-version-agnostic. Scoped
+    to THIS subprocess (`python -m orchestrator`) on purpose — the interactive
+    chat agent runs in the API process and needs the raw block format for
+    tool-call continuity, so it is intentionally left untouched.
+    """
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from orchestrator.message_utils import text_of
+        if getattr(ChatGoogleGenerativeAI, "_str_content_patched", False):
+            return
+        _orig = ChatGoogleGenerativeAI.invoke
+
+        def invoke(self, *a, **k):
+            msg = _orig(self, *a, **k)
+            if isinstance(getattr(msg, "content", None), list):
+                try:
+                    msg.content = text_of(msg)
+                except Exception:
+                    pass
+            return msg
+
+        ChatGoogleGenerativeAI.invoke = invoke
+        ChatGoogleGenerativeAI._str_content_patched = True
+    except Exception:  # never let this break a run
+        pass
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    _patch_llm_str_content()
     args = build_arg_parser().parse_args()
     _require_aws_s3_bucket()
 
