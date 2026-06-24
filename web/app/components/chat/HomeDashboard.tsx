@@ -17,6 +17,7 @@ import {
 
 import { useMe } from "@/app/lib/use-me";
 import { swrFetcher as fetcher } from "@/app/lib/api";
+import { Card } from "@/app/components/ui/card";
 
 
 // Mirrors ProjectOut from api/app/routers/chat.py. focus + module_status are
@@ -287,14 +288,14 @@ function StatsRow({ projects, reviewCount }: { projects: Project[] | undefined; 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-7">
       {cells.map((c, i) => (
-        <div key={i} className="bg-white rounded-2xl border border-ink-200 px-[18px] py-4 flex flex-col gap-1">
+        <Card key={i} className="px-[18px] py-4 flex flex-col gap-1">
           <div className={`w-7 h-7 rounded-lg inline-flex items-center justify-center ${c.chip}`}>
             <c.icon className="w-4 h-4" />
           </div>
           <div className="text-[26px] font-extrabold tracking-tight tabular-nums mt-0.5 text-ink-900">{c.v}</div>
           <div className="text-[12.5px] text-ink-500 font-medium">{c.l}</div>
           <div className="text-[11px] text-ink-400 mt-0.5">{c.sub}</div>
-        </div>
+        </Card>
       ))}
     </div>
   );
