@@ -56,50 +56,154 @@ def _stringify(v: Any) -> str:
     return str(v)
 
 
-def _render_value(doc, value: Any) -> None:
-    if value in (None, "", [], {}):
-        doc.add_paragraph("—")
-        return
-    if isinstance(value, str):
-        for line in value.split("\n"):
-            doc.add_paragraph(line)
-    elif isinstance(value, list):
-        for item in value:
-            if isinstance(item, dict):
-                # Prefer human-meaningful fields (citations, hypotheses, etc.).
-                parts = [str(item[k]) for k in
-                         ("title", "author", "authors", "year", "venue", "name",
-                          "statement", "text", "doi")
-                         if item.get(k)]
-                doc.add_paragraph(" · ".join(parts) if parts else _stringify(item),
-                                  style="List Bullet")
-            else:
-                doc.add_paragraph(str(item), style="List Bullet")
-    elif isinstance(value, dict):
-        for k, v in value.items():
+_SKIP_KEYS = {"confirmed_at", "needs_review", "module_status", "focus"}
+_LIKERT_TYPES = {"scale", "likert"}
+
+
+def _authors_str(src: dict) -> str:
+    a = src.get("authors") or src.get("author")
+    if isinstance(a, list):
+        return ", ".join(str(x) for x in a)
+    return str(a) if a else "Anon"
+
+
+def _citation_line(src: dict) -> str:
+    """A clean reference line: Authors (Year). Title. Venue."""
+    yr = src.get("year") or "n.d."
+    parts = [f"{_authors_str(src)} ({yr})."]
+    if src.get("title"):
+        parts.append(f"{str(src['title']).rstrip('.')}.")
+    if src.get("venue") or src.get("journal"):
+        parts.append(f"{src.get('venue') or src.get('journal')}.")
+    return " ".join(parts)
+
+
+def _render_obj(doc, obj: Any) -> None:
+    """Render a free-shaped value as readable prose/bullets (for model/methodology)."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in _SKIP_KEYS or str(k).startswith("_"):
+                continue
             p = doc.add_paragraph()
-            run = p.add_run(f"{_humanize(k)}: ")
-            run.bold = True
+            p.add_run(f"{_humanize(k)}: ").bold = True
             p.add_run(_stringify(v))
-    else:
-        doc.add_paragraph(str(value))
+    elif isinstance(obj, list):
+        for it in obj:
+            doc.add_paragraph(_stringify(it), style="List Bullet")
+    elif obj not in (None, ""):
+        for line in str(obj).split("\n"):
+            doc.add_paragraph(line)
+
+
+def _render_m1(doc, s: dict) -> None:
+    if s.get("research_title"):
+        doc.add_heading("Research Title", level=1)
+        doc.add_paragraph(str(s["research_title"]))
+    rqs = s.get("research_questions") or []
+    if rqs:
+        doc.add_heading("Research Questions", level=1)
+        for i, q in enumerate(rqs):
+            p = doc.add_paragraph(style="List Number")
+            p.add_run(("Main — " if i == 0 else "") + str(q))
+
+
+def _render_m2(doc, s: dict) -> None:
+    sources = s.get("literature_sources") or []
+    if sources:
+        doc.add_heading("Reviewed Literature", level=1)
+        doc.add_paragraph(f"{len(sources)} verified academic sources.")
+        for src in sources:
+            p = doc.add_paragraph(style="List Number")
+            p.add_run(_citation_line(src))
+            if src.get("doi"):
+                p.add_run(f"  https://doi.org/{src['doi']}").italic = True
+    gaps = s.get("research_gaps") or []
+    if gaps:
+        doc.add_heading("Identified Research Gaps", level=1)
+        for g in gaps:
+            if isinstance(g, dict):
+                doc.add_heading(str(g.get("title", "Gap")), level=2)
+                if g.get("description"):
+                    doc.add_paragraph(str(g["description"]))
+            else:
+                doc.add_paragraph(str(g), style="List Bullet")
+
+
+def _render_m3(doc, s: dict) -> None:
+    if s.get("conceptual_model"):
+        doc.add_heading("Conceptual Model", level=1)
+        _render_obj(doc, s["conceptual_model"])
+    hyps = s.get("hypotheses") or []
+    if hyps:
+        doc.add_heading("Hypotheses", level=1)
+        for h in hyps:
+            doc.add_paragraph(str(h), style="List Bullet")
+    if s.get("methodology"):
+        doc.add_heading("Methodology", level=1)
+        _render_obj(doc, s["methodology"])
+    inst = s.get("instrument")
+    if inst:
+        title = inst.get("title") if isinstance(inst, dict) else None
+        doc.add_heading(f"Instrument — {title}" if title else "Instrument", level=1)
+        questions = inst.get("questions") if isinstance(inst, dict) else None
+        if questions:
+            for q in questions:
+                p = doc.add_paragraph(style="List Number")
+                p.add_run(str(q.get("text", ""))).bold = True
+                if q.get("required"):
+                    p.add_run("  (required)").italic = True
+                qtype = str(q.get("type", "")).lower()
+                opts = q.get("options") or []
+                if qtype in _LIKERT_TYPES:
+                    lo, hi = q.get("scale_min", 1), q.get("scale_max", 5)
+                    lab = ""
+                    if q.get("scale_min_label") or q.get("scale_max_label"):
+                        lab = f" ({q.get('scale_min_label','')} → {q.get('scale_max_label','')})"
+                    doc.add_paragraph(f"{lo}–{hi} Likert scale{lab}").italic = True
+                else:
+                    for o in opts:
+                        doc.add_paragraph(f"☐ {o}")
+        else:
+            _render_obj(doc, inst)
+
+
+def _render_m4(doc, s: dict) -> None:
+    if s.get("analysis_outline"):
+        doc.add_heading("Analysis Plan", level=1)
+        _render_obj(doc, s["analysis_outline"])
+    if s.get("analysis_results"):
+        doc.add_heading("Results", level=1)
+        _render_obj(doc, s["analysis_results"])
+
+
+_MODULE_RENDERERS = {"M1": _render_m1, "M2": _render_m2, "M3": _render_m3, "M4": _render_m4}
 
 
 def _build_module_docx(project_name: str, module: str, label: str, slice_: dict) -> io.BytesIO:
-    """Render one module's context_store slice into a simple, teacher-ready .docx."""
+    """Render one module's context_store slice into a teacher-ready academic report
+    (titled, sectioned prose — like M5's thesis export, but a single-module summary)."""
     from docx import Document  # local import: keeps cold-start light
 
     doc = Document()
-    doc.add_heading(f"{project_name}", level=0)
-    doc.add_heading(f"{module} — {label}", level=1)
+    # Cover: research title (falls back to project name) + module subtitle.
+    doc.add_heading(str(slice_.get("research_title") or project_name or "Untitled thesis"), level=0)
+    sub = doc.add_paragraph()
+    sub.add_run(f"{module} — {label}").bold = True
+    note = doc.add_paragraph()
+    note.add_run("Module report · generated by DoThesis").italic = True
+
     if not slice_:
         doc.add_paragraph("No content has been produced for this module yet.")
     else:
-        for key, value in slice_.items():
-            if key.startswith("_") or key.endswith("_status"):
-                continue  # skip internal/bookkeeping keys
-            doc.add_heading(_humanize(key), level=2)
-            _render_value(doc, value)
+        renderer = _MODULE_RENDERERS.get(module)
+        if renderer:
+            renderer(doc, slice_)
+        else:  # graceful fallback for any unexpected module
+            for key, value in slice_.items():
+                if key in _SKIP_KEYS or str(key).startswith("_"):
+                    continue
+                doc.add_heading(_humanize(key), level=1)
+                _render_obj(doc, value)
 
     buf = io.BytesIO()
     doc.save(buf)
