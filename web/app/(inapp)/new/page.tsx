@@ -14,6 +14,9 @@ import {
   stashBootstrapPayload,
   type BootstrapItemId,
 } from "@/app/lib/bootstrap-payload";
+import { Button } from "@/app/components/ui/button";
+import { Input } from "@/app/components/ui/input";
+import { Textarea } from "@/app/components/ui/textarea";
 
 type FilesByItem = Partial<Record<BootstrapItemId, File[]>>;
 
@@ -227,7 +230,7 @@ export default function NewThesisPage() {
             <div className="text-[12px] text-ink-500 mt-0.5 mb-2">
               Optional — leave blank to start with "Untitled thesis" and rename in chat.
             </div>
-            <input
+            <Input
               id="project-name"
               type="text"
               value={name}
@@ -235,7 +238,6 @@ export default function NewThesisPage() {
               onKeyDown={onKeyDown}
               placeholder="e.g. Gen Z livestream study"
               autoFocus
-              className="w-full rounded-[10px] border border-ink-300 px-3 py-2.5 text-[14px] focus:outline-none focus:border-primary-500"
             />
           </div>
 
@@ -322,20 +324,12 @@ export default function NewThesisPage() {
             </span>
           )}
           <span className="flex-1" />
-          <Link
-            href="/"
-            className="px-3.5 py-1.5 rounded-full text-[13px] font-semibold text-ink-700 hover:bg-ink-100 no-underline"
-          >
-            Cancel
-          </Link>
-          <button
-            type="button"
-            onClick={() => void finish()}
-            disabled={!canSubmit}
-            className="px-4 py-2 rounded-full text-[13px] font-semibold bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50"
-          >
+          <Button variant="ghost" asChild>
+            <Link href="/">Cancel</Link>
+          </Button>
+          <Button type="button" onClick={() => void finish()} disabled={!canSubmit}>
             {submitting ? "Creating…" : "Create"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -389,13 +383,13 @@ function ImportRow({
         )}
 
         {!filesOnly && (
-          <textarea
+          <Textarea
             value={value}
             onChange={e => onChange(e.target.value)}
             placeholder={importPlaceholder(item.id)}
             rows={item.textRows ?? 3}
             autoFocus={compact}
-            className={`${compact ? "mt-0" : "mt-2.5"} w-full rounded-[10px] border border-ink-300 px-3 py-2 text-[13px] focus:outline-none focus:border-primary-500 resize-y leading-relaxed`}
+            className={`${compact ? "mt-0" : "mt-2.5"} resize-y leading-relaxed`}
           />
         )}
 
@@ -413,14 +407,16 @@ function ImportRow({
             <Paperclip className="w-3.5 h-3.5 text-ink-400 shrink-0" />
             {filesOnly ? "Drop dataset files here" : "Attach a file, or drop it here"}
           </span>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={() => fileInputRef.current?.click()}
             disabled={submitting}
-            className="w-full sm:w-auto shrink-0 px-3 py-1.5 rounded-full text-[11.5px] font-semibold bg-white border border-ink-300 text-ink-800 hover:border-primary-500 hover:text-primary-700 disabled:opacity-50"
+            className="w-full sm:w-auto shrink-0"
           >
             Choose files
-          </button>
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
