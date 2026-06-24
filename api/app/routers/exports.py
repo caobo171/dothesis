@@ -7,6 +7,7 @@ Resolves the s3_key from the project's M5Output.export_artifacts and
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import tempfile
@@ -179,26 +180,126 @@ def _render_m4(doc, s: dict) -> None:
 _MODULE_RENDERERS = {"M1": _render_m1, "M2": _render_m2, "M3": _render_m3, "M4": _render_m4}
 
 
+# ── "M5-mini" prose composition ──────────────────────────────────────────────
+# Per-module instructions: write the section as flowing academic prose (like the
+# M5 chapter composer, but a short single-module write-up), NOT a field dump.
+_COMPOSE_GUIDE = {
+    "M1": "Write the **Introduction & Research Focus** section: 2-3 short paragraphs "
+          "establishing the background and problem, then state the research title and "
+          "present the research questions in prose (you may list the RQs).",
+    "M2": "Write the **Literature Review** section: synthesize the provided sources into "
+          "flowing paragraphs (what is known, debates, and the research gaps). Use inline "
+          "citations in (Author, Year) form. CITE ONLY the sources provided below — never "
+          "invent a source. Do NOT include a reference list (it is appended automatically).",
+    "M3": "Write the **Research Design & Methodology** section in prose: the conceptual "
+          "model and variables, the hypotheses, the methodology (paradigm, design, "
+          "sampling, planned analysis), and a short description of the instrument. Cite "
+          "(Author, Year) where a construct/scale comes from a source.",
+    "M4": "Write the **Data Analysis** section: describe the analysis plan and report only "
+          "results that are present in the data below. Never invent statistics.",
+}
+
+
+def _llm_text(prompt: str) -> str:
+    """Single LLM call → plain text (flattens Gemini 3.x list content)."""
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    llm = ChatGoogleGenerativeAI(
+        model=os.getenv("DOTHESIS_AGENT_MODEL", "gemini-2.5-flash"),
+        temperature=0.3, timeout=70,
+    )
+    msg = llm.invoke(prompt)
+    c = getattr(msg, "content", "")
+    if isinstance(c, list):
+        return "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in c)
+    return str(c)
+
+
+def _compose_module_prose(module: str, label: str, title: str, slice_: dict) -> str:
+    guide = _COMPOSE_GUIDE.get(module)
+    if not guide:
+        return ""
+    payload = {k: v for k, v in slice_.items() if k not in _SKIP_KEYS and not str(k).startswith("_")}
+    prompt = (
+        "You are writing one section of a Master's thesis for a student to submit to "
+        "their professor. Formal academic register, concise (about 300-600 words). "
+        "Markdown only: use '## ' for the section heading and '### ' for sub-headings, "
+        "'- ' for bullets; no tables.\n\n"
+        f"## Thesis: {title}\n## Section to write: {module} — {label}\n\n"
+        f"Instructions: {guide}\n\n"
+        f"Module data (JSON):\n{json.dumps(payload, ensure_ascii=False, default=str)[:9000]}\n\n"
+        "Write the section now (markdown):"
+    )
+    try:
+        return _llm_text(prompt).strip()
+    except Exception:  # noqa: BLE001 — fall back to structured render
+        return ""
+
+
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_BULLET_RE = re.compile(r"^\s*[-*]\s+")
+_NUM_RE = re.compile(r"^\s*\d+\.\s+")
+
+
+def _add_md_runs(p, text: str) -> None:
+    for i, seg in enumerate(_BOLD_RE.split(text)):
+        if seg:
+            run = p.add_run(seg)
+            if i % 2 == 1:
+                run.bold = True
+
+
+def _md_to_docx(doc, md: str) -> None:
+    """Render lightweight markdown (headings, bullets, numbered, **bold**) into the doc."""
+    for raw in md.split("\n"):
+        line = raw.rstrip()
+        if not line.strip():
+            continue
+        if line.startswith("### "):
+            doc.add_heading(line[4:].strip(), level=2)
+        elif line.startswith("## "):
+            doc.add_heading(line[3:].strip(), level=1)
+        elif line.startswith("# "):
+            doc.add_heading(line[2:].strip(), level=1)
+        elif _BULLET_RE.match(line):
+            _add_md_runs(doc.add_paragraph(style="List Bullet"), _BULLET_RE.sub("", line))
+        elif _NUM_RE.match(line):
+            _add_md_runs(doc.add_paragraph(style="List Number"), _NUM_RE.sub("", line))
+        else:
+            _add_md_runs(doc.add_paragraph(), line)
+
+
 def _build_module_docx(project_name: str, module: str, label: str, slice_: dict) -> io.BytesIO:
-    """Render one module's context_store slice into a teacher-ready academic report
-    (titled, sectioned prose — like M5's thesis export, but a single-module summary)."""
+    """Render one module as a teacher-ready academic write-up — an "M5-mini": the LLM
+    composes the section as prose, then we append a real reference list (M2) so
+    citations stay grounded. Falls back to a structured render if composition fails."""
     from docx import Document  # local import: keeps cold-start light
 
     doc = Document()
-    # Cover: research title (falls back to project name) + module subtitle.
-    doc.add_heading(str(slice_.get("research_title") or project_name or "Untitled thesis"), level=0)
-    sub = doc.add_paragraph()
-    sub.add_run(f"{module} — {label}").bold = True
-    note = doc.add_paragraph()
-    note.add_run("Module report · generated by DoThesis").italic = True
+    title = str(slice_.get("research_title") or project_name or "Untitled thesis")
+    doc.add_heading(title, level=0)
+    doc.add_paragraph().add_run(f"{module} — {label}").bold = True
+    doc.add_paragraph().add_run("Module report · generated by DoThesis").italic = True
 
     if not slice_:
         doc.add_paragraph("No content has been produced for this module yet.")
+        buf = io.BytesIO(); doc.save(buf); buf.seek(0); return buf
+
+    prose = _compose_module_prose(module, label, title, slice_)
+    if prose:
+        _md_to_docx(doc, prose)
+        # Grounding: append the REAL reference list for M2 (never LLM-generated).
+        if module == "M2" and slice_.get("literature_sources"):
+            doc.add_heading("References", level=1)
+            for src in slice_["literature_sources"]:
+                p = doc.add_paragraph(style="List Number")
+                p.add_run(_citation_line(src))
+                if src.get("doi"):
+                    p.add_run(f"  https://doi.org/{src['doi']}").italic = True
     else:
         renderer = _MODULE_RENDERERS.get(module)
         if renderer:
             renderer(doc, slice_)
-        else:  # graceful fallback for any unexpected module
+        else:
             for key, value in slice_.items():
                 if key in _SKIP_KEYS or str(key).startswith("_"):
                     continue
