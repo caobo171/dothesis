@@ -7,6 +7,7 @@ import {
 import { FileDropZone } from "./FileDropZone";
 import { ExpertAvatar, ExpertPicker } from "./ExpertPicker";
 import { applyExpertPersona, type Expert } from "@/app/lib/experts";
+import { Button } from "@/app/components/ui/button";
 
 
 /**
@@ -232,15 +233,15 @@ export function ChatInput({
               disabled={disabled}
               className="flex-1 resize-none border-none bg-transparent px-0 py-1.5 text-[14.5px] leading-normal text-ink-900 placeholder:text-ink-400 focus:outline-none focus:ring-0 disabled:opacity-50 max-h-40"
             />
-            <button
+            <Button
               type="button"
               onClick={handleSubmit}
               disabled={disabled || !text.trim()}
               aria-label="Send"
-              className="inline-flex items-center gap-1.5 bg-primary-600 text-white rounded-full px-4 py-2 text-[13px] font-semibold hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-end mb-0.5"
+              className="rounded-full self-end mb-0.5"
             >
               Send <Send className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           </div>
 
           {/* Row 2: expert picker + file upload + Draw model. The active LLM
