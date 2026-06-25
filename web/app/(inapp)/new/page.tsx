@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -67,12 +67,42 @@ const ACCEPT_TYPES = "application/pdf,text/plain,.pdf,.txt";
 export default function NewThesisPage() {
   const router = useRouter();
   const [name, setName] = useState("");
+  // Project setup defaults. Pre-filled from the user's cross-project memory
+  // (/me/prefs) so a returning user doesn't re-pick the same options every time.
+  const [field, setField] = useState("");
+  const [language, setLanguage] = useState("en");
+  const [citation, setCitation] = useState("apa");
+  const [prefsApplied, setPrefsApplied] = useState(false);
   const [have, setHave] = useState<Set<BootstrapItemId>>(new Set());
   const [payload, setPayload] = useState<Partial<Record<BootstrapItemId, string>>>({});
   const [filesByItem, setFilesByItem] = useState<FilesByItem>({});
   const [submitting, setSubmitting] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Cross-project memory (Phase 0): pre-fill the setup defaults from the user's
+  // remembered preferences. Best-effort — a first-time user (or any failure)
+  // just keeps the built-in defaults. We only mark "applied" when something
+  // real came back, so the hint doesn't show for first-timers.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const prefs = (await apiFetch("/me/prefs", { method: "POST", body: {} })) as {
+          field?: string; language?: string; citation_style?: string;
+        };
+        if (!alive || !prefs) return;
+        let applied = false;
+        if (prefs.field) { setField(prefs.field); applied = true; }
+        if (prefs.language) { setLanguage(prefs.language); applied = true; }
+        if (prefs.citation_style) { setCitation(prefs.citation_style); applied = true; }
+        if (applied) setPrefsApplied(true);
+      } catch {
+        /* no prefs yet / not logged in — keep defaults */
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
 
   const toggle = (id: BootstrapItemId) => {
     setHave(prev => {
@@ -154,7 +184,12 @@ export default function NewThesisPage() {
       const projectName = trimmedName || "Untitled thesis";
       const project = await apiFetch("/projects", {
         method: "POST",
-        body: { name: projectName },
+        body: {
+          name: projectName,
+          field: field.trim() || null,
+          language,
+          citation_style: citation,
+        },
       });
       const newId = (project as { id: string }).id;
 
@@ -239,6 +274,68 @@ export default function NewThesisPage() {
               placeholder="e.g. Gen Z livestream study"
               autoFocus
             />
+          </div>
+
+          {/* Setup defaults — Field / Language / Citation. Pre-filled from the
+              user's cross-project memory so returning users don't re-pick them.
+              All optional; the agent can change any of these later in chat. */}
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[13.5px] font-bold text-ink-900">Defaults</span>
+              {prefsApplied && (
+                <span className="text-[11px] text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded-md font-semibold">
+                  Restored from your last project
+                </span>
+              )}
+            </div>
+            <div className="text-[12px] text-ink-500 mt-0.5 mb-2">
+              Optional — used to frame your thesis. You can change these in chat anytime.
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label htmlFor="field" className="block text-[12px] font-semibold text-ink-700 mb-1">
+                  Field
+                </label>
+                <Input
+                  id="field"
+                  type="text"
+                  value={field}
+                  onChange={e => setField(e.target.value)}
+                  placeholder="e.g. Marketing"
+                />
+              </div>
+              <div>
+                <label htmlFor="language" className="block text-[12px] font-semibold text-ink-700 mb-1">
+                  Language
+                </label>
+                <select
+                  id="language"
+                  value={language}
+                  onChange={e => setLanguage(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="en">English</option>
+                  <option value="vi">Tiếng Việt</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="citation" className="block text-[12px] font-semibold text-ink-700 mb-1">
+                  Citation style
+                </label>
+                <select
+                  id="citation"
+                  value={citation}
+                  onChange={e => setCitation(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="apa">APA</option>
+                  <option value="mla">MLA</option>
+                  <option value="chicago">Chicago</option>
+                  <option value="harvard">Harvard</option>
+                  <option value="ieee">IEEE</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* What do you already have? — a single M1 → M5 list. Each item's

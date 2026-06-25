@@ -165,6 +165,29 @@ class CreditTransaction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class UserMemory(Base):
+    """Per-user cross-project memory (4th tier above context_store).
+
+    Stores ONLY durable preferences / meta-patterns — never thesis content,
+    citations, or numeric results (that would leak across projects and violate
+    DoThesis's anti-fabrication invariant). Allowed keys are hard-whitelisted in
+    app.user_memory.USER_MEMORY_KEYS. One row per user (1:1).
+
+    `prefs` shape: { <key>: {"value": ..., "source_project_id": str|None,
+                             "confidence": float, "updated_at": iso8601} }
+    """
+    __tablename__ = "user_memory"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    prefs: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class Announcement(Base):
     __tablename__ = "announcements"
 
@@ -225,6 +248,11 @@ class Thread(Base):
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(Text, nullable=False, server_default="Main")
+    # True once the thread name was auto-generated (from M1 research_title or a
+    # one-shot cheap LLM summary of the first message). Guards against (a) the
+    # namer re-running every turn and (b) overwriting a name the user set by hand
+    # — a manual rename leaves this False, so the namer skips it forever.
+    name_auto: Mapped[bool] = mapped_column(default=False, server_default="false", nullable=False)
     langgraph_thread_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     parent_thread_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     forked_at_message_id: Mapped[int | None] = mapped_column(BigInteger)

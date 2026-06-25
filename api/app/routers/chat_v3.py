@@ -449,6 +449,14 @@ async def send_message_v3(
             done_payload = _finalize()
             if done_payload is not None:
                 yield sse_pack(done_payload)
+            # Auto-name the thread once (cost-aware): free from M1 research_title
+            # if present, else one cheap flash-lite summary of this message.
+            # Runs in a background worker so it never delays the stream.
+            try:
+                from ..thread_namer import schedule_autoname
+                schedule_autoname(engine, thread_pk, text)
+            except Exception:  # noqa: BLE001
+                logger.exception("schedule_autoname failed for thread %s", thread_pk)
         except Exception as _e:
             # If stream_turn raises outside its own try (or the for loop
             # itself dies), the user gets a silent stream end. Surface it.

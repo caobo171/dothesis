@@ -154,8 +154,32 @@ def create_project(body: CreateProjectBody,
     db.add(Thread(project_id=p.id, name="Main",
                   langgraph_thread_id=str(uuid.uuid4())))
     db.add(ContextStore(project_id=p.id))
+    # Cross-project memory (Phase 0): remember the setup choices as this user's
+    # defaults so the next /new form pre-fills. Preferences only — never content.
+    try:
+        from ..user_memory import write_user_prefs
+        write_user_prefs(db, user.id, {
+            "field": body.field,
+            "language": body.language,
+            "citation_style": body.citation_style,
+        }, source_project_id=p.id)
+    except Exception:  # noqa: BLE001 — memory is best-effort, never block create
+        import logging
+        logging.getLogger(__name__).exception("user_memory capture failed")
     db.commit(); db.refresh(p)
     return _serialize_project(db, p)
+
+
+@router.post("/me/prefs")
+def get_user_prefs(user: User = Depends(current_user),
+                   db: Session = Depends(db_session)):
+    """Return this user's remembered preferences for pre-filling the /new form.
+
+    Cross-project memory (Phase 0). Empty {} for a first-time user. Preferences
+    only (language/citation_style/research_approach/field) — never thesis content.
+    """
+    from ..user_memory import load_user_prefs
+    return load_user_prefs(db, user.id)
 
 
 # Renamed from GET /projects → POST /projects/list: POST /projects already
