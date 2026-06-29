@@ -1,6 +1,6 @@
 ---
 name: dothesis-m4-analysis
-description: Use when analyzing thesis data — running statistics (reliability, t-test, regression, mediation, SEM/PLS), interpreting uploaded results, or coding qualitative transcripts. Module M4 of DoThesis.
+description: Use when analyzing quantitative thesis data — running statistics (reliability, t-test, regression, mediation, SEM/PLS), or interpreting uploaded SmartPLS/SPSS results. Module M4 of DoThesis.
 ---
 
 # M4 — Data Analysis (Pipeline Shape with Real Computation)
@@ -28,9 +28,9 @@ results — full stop.
   this module.
 - When the user (or an auto-draft / "write my whole thesis" request) asks for
   results but no data exists, do NOT proceed. Say plainly: *"To run the analysis
-  I need your data — upload your `.sav`/`.csv`/`.xlsx` (or interview
-  transcripts). Without it I can't produce real results, and I won't make them
-  up."* Then stop and wait.
+  I need your data — upload your survey dataset (`.sav` / `.csv` / `.xlsx`, or a
+  SmartPLS/SPSS export). Without it I can't produce real results, and I won't
+  make them up."* Then stop and wait.
 - Do not commit `M4` (and do not let it reach `done`) until results trace to a
   real `run_stats` run or a parsed upload.
 - Keep the metric family consistent with M3's chosen tool: PLS-SEM → R²/f²/Q²,
@@ -131,13 +131,6 @@ Rules for the tables:
   bury a breach.
 
 When every M3 hypothesis has a result entry → `commit_slice("M4", …, confirm_done=True)`.
-
-## Qualitative path
-
-If methodology is qualitative: load transcripts → open coding (propose codes per
-excerpt) → user merges → axial coding into themes (tied to M3 constructs or emergent)
-→ selective coding narrative against RQs. `analysis_results` = codebook + themes +
-quotes (participant id + line ref). Same discipline: quotes verbatim, never invented.
 
 ## How to act based on intent
 

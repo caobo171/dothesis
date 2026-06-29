@@ -146,13 +146,17 @@ echo "==> running alembic migrations"
 (cd api && "../$VENV_BIN/alembic" upgrade head)
 
 echo "==> starting api on port ${API_PORT:-7100}"
-# Watch api/, engine/, orchestrator/, AND the v3 deep agent (agent/ runtime +
-# skills/ SKILL.md files) — uvicorn's --reload only picks up directories
-# explicitly listed via --reload-dir. Without these, edits to agent/tool/skill
-# code need a manual kill + restart to take effect.
+# Watch api/, engine/, orchestrator/, and the v3 deep agent runtime (agent/) —
+# uvicorn's --reload only picks up directories listed via --reload-dir.
+# NOT skills/: SKILL.md files are plain markdown the agent reads from disk at
+# turn time (via the filesystem backend), so they take effect WITHOUT a worker
+# restart. Watching them was actively harmful — saving a skill file mid-turn
+# restarted the worker and killed the in-flight SSE stream, so the bootstrap
+# analysis turn saved the user message but never reached commit_slice/_finalize
+# (empty module_status, no assistant reply). Drop it.
 (cd api && "../$VENV_BIN/uvicorn" app.main:app --reload \
   --reload-dir app --reload-dir ../engine --reload-dir ../orchestrator \
-  --reload-dir ../agent --reload-dir ../skills \
+  --reload-dir ../agent \
   --port "${API_PORT:-7100}") &
 API_PID=$!
 

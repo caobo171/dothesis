@@ -1,6 +1,6 @@
 ---
 name: dothesis-m3-design
-description: Use when designing research methodology, building a conceptual model, writing hypotheses, picking paradigm (qualitative/quantitative/mixed), or designing questionnaires/interview guides. Module M3 of DoThesis.
+description: Use when designing quantitative research methodology, building a conceptual model, writing hypotheses, picking a quantitative design (survey/experiment), or designing a questionnaire/survey instrument. Module M3 of DoThesis.
 ---
 
 # M3 — Research Design (Wizard Shape)
@@ -10,11 +10,16 @@ description: Use when designing research methodology, building a conceptual mode
 You own this slice:
 - `conceptual_model: { nodes: Node[]; edges: Edge[] }`
 - `hypotheses: string[]` — H1, H2, …
-- `methodology: MethodologyConfig` — paradigm + design + sampling + analysis plan
-- `instrument` — questionnaire or interview guide (optional until designed)
+- `methodology: MethodologyConfig` — design + sampling + analysis plan
+- `instrument` — questionnaire / survey instrument (optional until designed)
 
 Wizard shape: structured passes with confirm gates, not a free chat loop.
 You read M1 (RQs) and M2 (gaps).
+
+**DoThesis is quantitative-only.** Every thesis here tests a conceptual model /
+hypotheses with statistics (regression, mediation/moderation, or SEM) run in
+**SmartPLS / SPSS**. There is no qualitative or mixed-methods path — never offer
+interviews, focus groups, case studies, ethnography, coding, or saturation.
 
 **Hard rule:** if `research_gaps` is empty, do not write hypotheses. Say:
 *"Hypotheses without gaps are ungrounded. Want to do M2 first, or import gaps now?"*
@@ -58,7 +63,6 @@ Edge-count guidance:
 - Quantitative, mediation/moderation: 4–6 edges; only when the literature demands it.
 - Quantitative, full SEM (PLS-SEM or CB-SEM): 5+ edges; only for graduate-level
   scope with a real n≥150 sample.
-- Qualitative: 3+ edges.
 
 When proposing the model, START with the parsimonious version. Offer expansion as
 an explicit follow-up question (e.g., *"Want me to add a moderator like X? It would
@@ -77,21 +81,22 @@ H1: [A] has a positive effect on [B], mediated by [C].
 ```
 
 ### 3c — Methodology
-A coherent triple **paradigm × design × instrument**:
+The paradigm is fixed: **positivist / quantitative**. Pick a coherent
+**design × instrument × analysis**:
 
-| Paradigm | Common designs | Common instruments |
+| Design | Common instruments | Analysis (SmartPLS / SPSS) |
 |---|---|---|
-| Positivist (quantitative) | survey, experiment, secondary data | Likert questionnaire, lab task, dataset |
-| Interpretivist (qualitative) | case study, ethnography, phenomenology | semi-structured interview, focus group |
-| Pragmatist (mixed) | sequential explanatory, concurrent triangulation | questionnaire + follow-up interviews |
+| Cross-sectional survey | Likert questionnaire (validated scales) | regression / mediation / PLS-SEM |
+| Experiment / quasi-experiment | manipulation + Likert measures | t-test, ANOVA, regression |
+| Secondary / archival data | existing numeric dataset | regression, SEM |
 
 Pick consciously — ask about **access** (can they reach the sample?), **time budget**,
-**skills**. State sample-size logic (n≥X for the planned analysis; or saturation).
+**skills**. State sample-size logic (n≥X for the planned analysis).
 
-Then design the instrument: quantitative → 3–7 items per construct, reusing validated
-scales from M2 sources (cite them per item block); qualitative → 2–4 open questions +
-probes per RQ. Offer the questionnaire as a document the user can take to the field
-(M5's `export_docx` tool can render it — a one-off export, not a thesis chapter).
+Then design the instrument: 3–7 items per construct, reusing validated scales from M2
+sources (cite them per item block). Offer the questionnaire as a document the user can
+take to the field (M5's `export_docx` tool can render it — a one-off export, not a
+thesis chapter).
 
 **Google Form:** once a questionnaire/survey instrument is drafted, offer to turn it into
 a real **Google Form**. Call `make_google_form_script(title, questions, description)` — map
@@ -106,8 +111,8 @@ is created in their own Google account). Do NOT claim to have created the form y
 - **continue** — work on the incomplete sub-decision.
 - **mutate** —
   - *"add hypothesis Hn"* → append + add the edge → confirm → commit.
-  - *"change paradigm to qualitative"* → major rewrite; confirm first, then rewrite
-    methodology + instrument → commit.
+  - *"change design from survey to experiment"* → rewrite methodology +
+    instrument + analysis plan; confirm first, then rewrite → commit.
   - *"add a mediator"* → modify nodes + edges + ≥1 hypothesis → commit.
   All M3 commits flag M4/M5 automatically — tell the user.
 
@@ -117,9 +122,10 @@ When all three sub-decisions are confirmed: `commit_slice("M3", …, confirm_don
 
 - Every hypothesis maps to one edge AND one gap. No orphans.
 - Constructs have definitions, not just labels — and trace to M1 RQs or M2 sources.
-- The methodology triple is internally consistent (no "qualitative survey with Likert
-  scales"; no "mixed methods" that's one method plus anecdotes).
-- Sample size or saturation logic is stated.
+- The design × instrument × analysis is internally consistent (e.g. a survey
+  design has a defined sampling frame; the analysis plan matches the model —
+  regression for direct effects, PLS-SEM for a full structural model).
+- Sample size logic is stated (n≥X for the planned analysis).
 
 ## What you do NOT do
 

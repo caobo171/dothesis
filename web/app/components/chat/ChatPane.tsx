@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { Zap } from "lucide-react";
 import useSWR from "swr";
 import { useChat } from "./hooks/useChat";
+import { useMe } from "@/app/lib/use-me";
 import { ChatHeader } from "./ChatHeader";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
@@ -11,7 +14,8 @@ import { AutoDraftModal } from "./AutoDraftModal";
 import { AutoDraftDrawer } from "./AutoDraftDrawer";
 import { synthesizeWidgetSelection } from "./widgets/synthesize";
 import type { WidgetSelectHandler } from "./widgets/types";
-import { formatBootstrapMessage, readBootstrapPayload } from "@/app/lib/bootstrap-payload";
+import { formatAnalyzeMessage, readAnalyzeIntent } from "@/app/lib/bootstrap-payload";
+import { AnalysisOverlay } from "./AnalysisOverlay";
 import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
 
@@ -118,21 +122,12 @@ const MODULE_HINT: Record<string, string> = {
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
   const { messages, streamingText, streamingProgress, streamingError, inflight, send } = useChat(threadId);
 
-  // Bootstrap-payload pickup. The /new page stashes the form data
-  // (topic + references + model + …) keyed by project id. The first time
-  // this thread mounts with an empty message list, we read the stash and
-  // send a structured first message so the agent's bootstrap skill can
-  // commit each slice without the user having to re-type. Guarded by a
-  // ref so React's StrictMode double-mount in dev doesn't fire twice.
-  const bootstrapFiredRef = useRef(false);
-  useEffect(() => {
-    if (bootstrapFiredRef.current) return;
-    if (messages.length > 0 || inflight) return;
-    const payload = readBootstrapPayload(projectId);
-    if (!payload) return;
-    bootstrapFiredRef.current = true;
-    void send(formatBootstrapMessage(payload));
-  }, [projectId, messages.length, inflight, send]);
+  // Credit balance drives the out-of-credits CTA. Default to >0 while loading so
+  // the upgrade banner doesn't flash for paying users on first paint. The
+  // backend gates turns at <= 0 (chat.py send_message → 402 insufficient_credit);
+  // this is the matching UI so the user sees WHY a turn won't run + how to fix it.
+  const { data: me } = useMe();
+  const outOfCredits = me != null && (me.credit ?? 0) <= 0;
 
   // Warn before closing/reloading the tab while a turn is streaming. A reload
   // abandons the in-flight answer — the server stops the agent and saves only
@@ -150,7 +145,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   // ChatHeader — the link must only appear once at least one chapter exists.
   // focus/current_module/module_status drive the header's focus chip (design's
   // focus bar: "M2 · Literature Review · In progress").
-  const { data: project } = useSWR<{
+  const { data: project, mutate: mutateProject } = useSWR<{
     name: string;
     focus?: string | null;
     current_module?: string;
@@ -182,6 +177,50 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   const { data: latestRun, mutate: mutateRun } = useSWR<{ run: { id: string; status: RunStatus } | null }>(
     `/projects/${projectId}/runs/list?latest=true`, fetcher,
   );
+
+  // Analyze-intent pickup. The drop-first /new page stashes the dropped files
+  // (already uploaded) + an optional note keyed by project id, then routes here
+  // with ?analyzing=1. The first time this thread mounts empty, we fire ONE
+  // bootstrap turn that reads the uploads and reports where the thesis stands,
+  // shown as a dedicated analysis screen (AnalysisOverlay) on top of the chat
+  // until the user hits Continue. Guarded by a ref so StrictMode's double-mount
+  // in dev doesn't fire twice. The turn persists an assistant Message, so on any
+  // later mount `messages.length > 0` and we never re-run it.
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzePhase, setAnalyzePhase] = useState<"running" | "done" | "failed">("running");
+  const analyzeFiredRef = useRef(false);
+  // Kept so "Try again" can re-run the same turn after the stash is consumed.
+  const analyzeIntentRef = useRef<{ note: string; attachments: any[] } | null>(null);
+
+  const runAnalyze = useCallback(async () => {
+    const intent = analyzeIntentRef.current;
+    if (!intent) return;
+    setAnalyzing(true);
+    setAnalyzePhase("running");
+    const msg = formatAnalyzeMessage(intent.note, intent.attachments.length > 0);
+    // send resolves when the turn's SSE stream closes. await the project
+    // refetch (not fire-and-forget) so the result phase reads the freshly-
+    // committed module_status rather than the stale pre-turn snapshot.
+    await send(msg, undefined, intent.attachments);
+    const fresh = await mutateProject();
+    // A turn that was killed/aborted before commit_slice (e.g. server restart,
+    // disconnect) leaves every module "locked"/absent. Don't present that as a
+    // finished analysis — surface a retry instead of a misleading "all not
+    // started" screen.
+    const ms = fresh?.module_status ?? {};
+    const committed = Object.values(ms).some(s => s && s !== "locked");
+    setAnalyzePhase(committed ? "done" : "failed");
+  }, [send, mutateProject]);
+
+  useEffect(() => {
+    if (analyzeFiredRef.current) return;
+    if (messages.length > 0 || inflight) return;
+    const intent = readAnalyzeIntent(projectId);
+    if (!intent) return;
+    analyzeFiredRef.current = true;
+    analyzeIntentRef.current = intent;
+    void runAnalyze();
+  }, [projectId, messages.length, inflight, runAnalyze]);
 
   // The editor entry point ("Open editor" / "Read your draft") should appear as
   // soon as there's an editable thesis — which is true via ANY of: drafted
@@ -307,6 +346,18 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
 
   return (
     <>
+      {analyzing && (
+        <AnalysisOverlay
+          phase={analyzePhase}
+          progress={analyzePhase === "running" ? streamingProgress : []}
+          moduleStatus={project?.module_status ?? {}}
+          focus={project?.focus ?? project?.current_module}
+          projectTitle={project?.name}
+          onContinue={() => setAnalyzing(false)}
+          onRetry={() => void runAnalyze()}
+          outOfCredits={outOfCredits}
+        />
+      )}
       <ChatHeader
         projectName={project?.name ?? "…"}
         threadName={thread?.name ?? "…"}
@@ -373,6 +424,21 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
           onWidgetSelect={onWidgetSelect}
         />
       )}
+      {outOfCredits && (
+        <div className="mx-auto mb-2 flex w-full max-w-3xl items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <Zap className="h-4 w-4 shrink-0 text-amber-600" />
+          <div className="flex-1 text-[13px] leading-snug text-amber-900">
+            <span className="font-semibold">You're out of credits.</span>{" "}
+            Top up to keep analyzing your thesis and chatting.
+          </div>
+          <Link
+            href="/credit"
+            className="shrink-0 rounded-lg bg-amber-600 px-3.5 py-1.5 text-[13px] font-semibold text-white no-underline hover:bg-amber-700"
+          >
+            Upgrade credits
+          </Link>
+        </div>
+      )}
       <ChatInput
         // ChatInput emits (text, attachments[]) — send's signature is
         // (text, widgetPayload, attachments). Skip the widgetPayload slot
@@ -383,7 +449,10 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         // without waiting for SWR to revalidate the server row.
         onSubmit={(text, attachments) => void send(text, undefined, attachments)}
         onFileDrop={onFileDrop}
-        disabled={inflight}
+        // Disable the composer when out of credits — the backend would 402 the
+        // turn anyway; blocking here avoids an orphaned user message + a confusing
+        // no-reply, and points the user at the upgrade CTA above instead.
+        disabled={inflight || outOfCredits}
         focusModule={project ? (project.focus ?? project.current_module) : undefined}
       />
 

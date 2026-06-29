@@ -49,6 +49,37 @@ Parse each labeled section from the message body and proceed to Step 2
 (Import) directly. The labels (`Topic:`, `References:`, etc.) map 1-to-1
 to the declared-item ids in the table below.
 
+### Drop-first intake (no labeled sections)
+
+The drop-first `/new` page sends `/bootstrap` with **no labeled sections** —
+instead the user has attached/uploaded files (a draft, papers, a proposal) and
+maybe a free-text note. When the `/bootstrap` message has no `Topic:` /
+`References:` / … labels, do this instead of parsing labels:
+
+1. **Read every attached/uploaded file.** Each upload is project-scoped and
+   mirrored to the workspace at `uploads/<filename>` — list that directory and
+   `read_file` each one (or use the attachment the message carries). Don't
+   guess from the filename; open the content.
+2. **Classify what you find into module slices.** Map each file's content to
+   the module(s) it covers using the same declare → seed table below — judge
+   it yourself rather than asking the user to label:
+   - title / research questions / objectives → **M1 topic**
+   - a reference list, cited papers, a lit-review section → **M2 literature**
+   - identified gaps → **M2 research_gaps**
+   - a conceptual model / hypotheses / framework → **M3 design**
+   - a questionnaire / survey instrument → **M3 instrument**
+   - a dataset or statistical results section (SPSS/SmartPLS) → **M4 analysis**
+   - drafted chapters / prose → **M5 writing**
+   A single file (e.g. a full draft) usually covers several modules — split it.
+3. Fold in the free-text note (if any, under `My own notes:`) the same way.
+4. Then proceed to Step 2 (Import) → Step 3 (Reconcile) → Step 4 (Focus) →
+   Step 5 (Commit + show the status list). The status list IS what the page's
+   analysis screen renders, so be accurate about each module's status.
+
+If a `/bootstrap` message has neither labeled sections nor any files (only a
+note, or nothing), classify the note as above; if there's truly nothing,
+treat it as "none of these" (Step 5).
+
 If the user did NOT come through the wizard (no `/bootstrap` prefix on
 the first message), ask them the question instead — same list:
 
@@ -57,8 +88,8 @@ the first message), ask them the question instead — same list:
 > - **references** — PDFs / DOI list of papers you've read
 > - **gaps** — already-identified research gaps
 > - **model** — conceptual model / hypotheses / framework diagram
-> - **instrument** — questionnaire or interview guide
-> - **data** — collected results (`.sav`, `.csv`, transcripts)
+> - **instrument** — questionnaire / survey instrument
+> - **data** — collected survey data (SPSS `.sav`, `.csv`) for SmartPLS / SPSS
 > - **draft** — partial Word/PDF draft of any chapter
 > - **none of these** — start from scratch"
 
@@ -76,7 +107,7 @@ second pipeline.
 | references | M2 | `literature_sources` | `parse_reference(file or DOI)` per source | `in_progress` *(gaps not derived yet)* |
 | gaps | M2 | `research_gaps` (with `supporting_papers` + page refs if cited) | paste | `done` |
 | model | M3 | `conceptual_model` (nodes + edges), `hypotheses` | paste / describe | `done` |
-| instrument | M3 | `instrument` (questionnaire / interview guide) | upload | `done` |
+| instrument | M3 | `instrument` (questionnaire / survey) | upload | `done` |
 | data | M4 | raw file reference + detected schema | `run_stats(op="detect", file=…)` | `in_progress` |
 | draft | M5 | `final_sections` (split by heading) | upload | `in_progress` |
 

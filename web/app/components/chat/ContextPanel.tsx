@@ -729,8 +729,6 @@ function M3Body({ data }: { data: Record<string, any> | null }) {
     | { kind: "conceptual_model" }
     | { kind: "hypotheses"; index: number | null }
     | { kind: "instrument" }
-    | { kind: "themes" }
-    | { kind: "interview_guide" }
     | null
   >(null);
 
@@ -740,11 +738,9 @@ function M3Body({ data }: { data: Record<string, any> | null }) {
   const conceptualModel = data.conceptual_model as { nodes?: any[]; edges?: any[] } | undefined;
   const hypotheses = (data.hypotheses || []) as Array<{ id?: string; text?: string; statement?: string }>;
   const questionnaire = data.questionnaire_text as string | undefined;
-  const themes = (data.themes || []) as any[];
-  const interviewGuide = data.interview_guide as Record<string, any> | undefined;
   const sampling = meth?.sampling || {};
 
-  if (!meth && !conceptualModel && hypotheses.length === 0 && !questionnaire && themes.length === 0 && !interviewGuide) {
+  if (!meth && !conceptualModel && hypotheses.length === 0 && !questionnaire) {
     return <EmptyHint text="No M3 data committed yet." />;
   }
 
@@ -832,22 +828,6 @@ function M3Body({ data }: { data: Record<string, any> | null }) {
         />
       )}
 
-      {themes.length > 0 && (
-        <ClickRow
-          name="themes"
-          summary={`${themes.length} themes`}
-          onClick={() => setModal({ kind: "themes" })}
-        />
-      )}
-
-      {interviewGuide && (
-        <ClickRow
-          name="interview_guide"
-          summary={`${Object.keys(interviewGuide.questions ?? interviewGuide).length || 0} items`}
-          onClick={() => setModal({ kind: "interview_guide" })}
-        />
-      )}
-
       {data.needs_review_note && (
         <div className="mt-2.5 px-2.5 py-2 rounded-lg bg-amber-50 text-amber-800 text-[11.5px] leading-snug font-semibold">
           ⚠ {data.needs_review_note}
@@ -871,8 +851,6 @@ function M3Body({ data }: { data: Record<string, any> | null }) {
               />
         )}
         {modal?.kind === "instrument" && <InstrumentDetail text={questionnaire ?? ""} />}
-        {modal?.kind === "themes" && <ThemesDetail themes={themes} />}
-        {modal?.kind === "interview_guide" && <InterviewGuideDetail guide={interviewGuide!} />}
       </SliceModal>
     </>
   );
@@ -887,8 +865,6 @@ function m3ModalTitle(
     | { kind: "conceptual_model" }
     | { kind: "hypotheses"; index: number | null }
     | { kind: "instrument" }
-    | { kind: "themes" }
-    | { kind: "interview_guide" }
     | null,
   hypotheses: Array<{ id?: string; text?: string; statement?: string }>,
 ): string {
@@ -900,8 +876,6 @@ function m3ModalTitle(
       if (m.index === null) return `Hypotheses (${hypotheses.length})`;
       return hypotheses[m.index]?.id ?? `H${m.index + 1}`;
     case "instrument":       return "Questionnaire";
-    case "themes":           return "Themes";
-    case "interview_guide":  return "Interview guide";
   }
 }
 
@@ -911,18 +885,14 @@ function m3ModalSubtitle(
     | { kind: "conceptual_model" }
     | { kind: "hypotheses"; index: number | null }
     | { kind: "instrument" }
-    | { kind: "themes" }
-    | { kind: "interview_guide" }
     | null,
 ): string | undefined {
   if (!m) return undefined;
   switch (m.kind) {
-    case "methodology":      return "Paradigm · design · sampling · tool";
+    case "methodology":      return "Design · sampling · analysis";
     case "conceptual_model": return "Constructs and hypothesis paths";
     case "hypotheses":       return m.index === null ? "All committed hypotheses" : "Hypothesis";
     case "instrument":       return "Full questionnaire text";
-    case "themes":           return "Qualitative themes";
-    case "interview_guide":  return "Interview / focus-group guide";
   }
 }
 
@@ -1103,58 +1073,6 @@ function InstrumentDetail({ text }: { text: string }) {
   return (
     <pre className="whitespace-pre-wrap font-serif text-[13.5px] leading-relaxed text-ink-900">
       {text}
-    </pre>
-  );
-}
-
-function ThemesDetail({ themes }: { themes: any[] }) {
-  return (
-    <ul className="space-y-3">
-      {themes.map((t, i) => (
-        <li key={i}>
-          <div className="font-bold text-primary-700 text-[13px]">
-            {t.id ?? t.name ?? `T${i + 1}`}
-          </div>
-          <div className="text-[13.5px] text-ink-900 leading-relaxed mt-0.5">
-            {t.description ?? t.text ?? "—"}
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function InterviewGuideDetail({ guide }: { guide: Record<string, any> }) {
-  // Loose shape: agent commits could be { questions: [...] } or
-  // { sections: [{title, questions: [...]}] } or flat string list.
-  const questions: string[] = guide.questions ?? guide.items ?? [];
-  const sections: Array<{ title?: string; questions?: string[] }> = guide.sections ?? [];
-  if (sections.length > 0) {
-    return (
-      <div className="space-y-4">
-        {sections.map((s, i) => (
-          <div key={i}>
-            {s.title && (
-              <div className="font-bold text-ink-900 text-[13.5px] mb-1.5">{s.title}</div>
-            )}
-            <ol className="list-decimal pl-5 space-y-1 text-[13.5px] text-ink-700">
-              {(s.questions ?? []).map((q, j) => <li key={j}>{q}</li>)}
-            </ol>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (questions.length > 0) {
-    return (
-      <ol className="list-decimal pl-5 space-y-1.5 text-[13.5px] text-ink-700">
-        {questions.map((q, i) => <li key={i}>{q}</li>)}
-      </ol>
-    );
-  }
-  return (
-    <pre className="whitespace-pre-wrap font-mono text-[12.5px] text-ink-700 bg-ink-50 rounded-lg p-3">
-      {JSON.stringify(guide, null, 2)}
     </pre>
   );
 }

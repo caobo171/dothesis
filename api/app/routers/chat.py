@@ -519,6 +519,21 @@ async def send_message(thread_id: uuid.UUID,
         raise HTTPException(404, detail={"error": {"code": "not_found"}})
     _owned_project(db, user, t.project_id)
 
+    # Credit gate. Without this a broke user runs unlimited *free* turns — the
+    # end-of-turn debit clamps the charge to the balance (min(cost, balance)), so
+    # at 0 credits every turn costs 0 and just streams normally. For a paid
+    # product that's revenue leakage, and the user gets no signal. Block up front
+    # (before send_message_v3 persists the user message, so the thread isn't left
+    # with an orphaned unanswered message) and return a structured 402 the web
+    # renders as an "upgrade credits" CTA.
+    if (user.credit or 0) <= 0:
+        raise HTTPException(
+            402,
+            detail={"error": {"code": "insufficient_credit",
+                              "balance": user.credit or 0,
+                              "message": "You're out of credits."}},
+        )
+
     from .chat_v3 import send_message_v3
     return await send_message_v3(t, body.text, db, upload_ids=body.upload_ids)
 

@@ -109,15 +109,6 @@ export function synthesizeWidgetSelection(
  */
 export function summarizeList(items: ListItem[], fieldName: string): string {
   switch (fieldName) {
-    case "themes":
-      return [
-        "My themes are:",
-        ...items.map(t => {
-          const subs = (t.sub_items ?? []).map(s => s.text).join(", ");
-          return subs ? `- ${t.text} (Sub: ${subs})` : `- ${t.text}`;
-        }),
-      ].join("\n");
-
     case "scale_items":
       return [
         "My scale items:",
@@ -133,15 +124,6 @@ export function summarizeList(items: ListItem[], fieldName: string): string {
         ...items.map(c => `- ${c.text}`),
       ].join("\n");
 
-    case "interview_guide":
-      return [
-        "My interview guide:",
-        ...items.flatMap(q => [
-          q.text,
-          ...(q.sub_items ?? []).map(p => `  Probe: ${p.text}`),
-        ]),
-      ].join("\n");
-
     case "conceptual_model":
       return [
         "My conceptual model paths:",
@@ -153,7 +135,6 @@ export function summarizeList(items: ListItem[], fieldName: string): string {
 
     case "analysis_outline":
     case "outline_quant":
-    case "outline_qual":
       // Numbered list with inline thresholds for SP5 analysis outline fields.
       // If meta.thresholds is present, append " — {threshold}" to the item text.
       return [

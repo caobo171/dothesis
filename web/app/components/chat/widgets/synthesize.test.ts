@@ -11,8 +11,8 @@ describe("synthesizeWidgetSelection", () => {
   });
 
   test("research_type synthesizes 'I'll use a X approach.'", () => {
-    expect(synthesizeWidgetSelection("research_type", "qualitative", "Qualitative"))
-      .toBe("I'll use a qualitative approach.");
+    expect(synthesizeWidgetSelection("research_type", "quantitative", "Quantitative"))
+      .toBe("I'll use a quantitative approach.");
   });
 
   test("unknown field falls back to label", () => {
@@ -20,8 +20,8 @@ describe("synthesizeWidgetSelection", () => {
   });
 
   test("research_type uses lowercase label inside the sentence", () => {
-    expect(synthesizeWidgetSelection("research_type", "mixed", "Mixed methods"))
-      .toBe("I'll use a mixed methods approach.");
+    expect(synthesizeWidgetSelection("research_type", "survey", "Cross-sectional survey"))
+      .toBe("I'll use a cross-sectional survey approach.");
   });
 
   test("selected_gap_ids synthesizes a 'use gap N and gap M' sentence", () => {
@@ -128,19 +128,6 @@ describe("synthesizeWidgetSelection", () => {
 });
 
 describe("summarizeList", () => {
-  const themes: ListItem[] = [
-    { id: "t1", text: "Cách thức lãnh đạo",
-      sub_items: [{ id: "s1", text: "Tầm nhìn" }, { id: "s2", text: "Giao tiếp" }] },
-    { id: "t2", text: "Biểu hiện gắn kết", sub_items: [] },
-  ];
-
-  test("themes produce bulleted message with sub-themes", () => {
-    const out = summarizeList(themes, "themes");
-    expect(out).toContain("My themes are:");
-    expect(out).toContain("- Cách thức lãnh đạo (Sub: Tầm nhìn, Giao tiếp)");
-    expect(out).toContain("- Biểu hiện gắn kết");
-  });
-
   test("scale_items group items under construct headers when nested", () => {
     const constructs: ListItem[] = [
       { id: "c0", text: "TL",
@@ -186,21 +173,6 @@ describe("summarizeList", () => {
     expect(out).toContain("- What content types drive the strongest engagement?");
   });
 
-  test("interview_guide groups questions by phase via meta", () => {
-    const qs: ListItem[] = [
-      { id: "q1", text: "[intro] Tell me about your role.",
-        sub_items: [], meta: { phase: "intro" } },
-      { id: "q2", text: "[main] How does your manager inspire you?",
-        sub_items: [{ id: "q2_p0", text: "Can you give an example?" }],
-        meta: { phase: "main" } },
-    ];
-    const out = summarizeList(qs, "interview_guide");
-    expect(out).toContain("My interview guide:");
-    expect(out).toContain("[intro] Tell me about your role.");
-    expect(out).toContain("[main] How does your manager inspire you?");
-    expect(out).toContain("Probe: Can you give an example?");
-  });
-
   test("conceptual_model lists paths and hypothesis meta", () => {
     const paths: ListItem[] = [
       { id: "H1", text: "TL → EE", meta: { hypothesis: "H1: TL → EE positive" } },
@@ -240,11 +212,6 @@ describe("summarizeList — SP5 analysis outline fields", () => {
     expect(out).toContain("1. Descriptive Statistics");
   });
 
-  test("outline_qual uses the same format", () => {
-    const out = summarizeList(outlineItems, "outline_qual");
-    expect(out).toContain("My analysis outline:");
-  });
-
   test("steps without thresholds omit the em-dash", () => {
     const items: ListItem[] = [{ id: "s0", text: "Step One", meta: {} }];
     const out = summarizeList(items, "analysis_outline");
@@ -278,7 +245,7 @@ describe("summarizeFlowChart — merged conceptual_model widget", () => {
   test("emits a labeled paths section + per-construct items section", () => {
     const out = summarizeFlowChart(nodes, edges, "conceptual_model");
     // Top-line header that pairs with the existing 'My ...' convention
-    // (objectives, themes, scale_items, ...) so the M3 extractor recognises
+    // (objectives, scale_items, ...) so the M3 extractor recognises
     // the message as a final-state submission rather than a clarification.
     expect(out.startsWith("My conceptual model:")).toBe(true);
 

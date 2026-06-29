@@ -338,6 +338,17 @@ async def send_message_v3(
             cost_credits = max(1, round(total_tokens / 1000 * _mult)) if total_tokens else 0
 
             full = "".join(chunks)
+            # A turn can finish with NO streamed text — e.g. the agent only ran
+            # tools, or a resumed checkpoint re-committed state silently. Saving
+            # nothing leaves the user staring at their own message with no reply
+            # (the exact "again"/"hello?" silence we hit). When the turn produced
+            # no text AND didn't already surface an error, persist a neutral
+            # fallback so every turn yields a visible assistant bubble. Errors
+            # are skipped: the error event already told the user what happened.
+            if not full and _counts.get("error", 0) == 0:
+                full = ("I didn't have anything to add there. Tell me which part "
+                        "of your thesis you'd like to work on next, or ask me "
+                        "anything about it.")
             if full:
                 focus = DbProjectStateStore(
                     engine, project_id, _workspace_dir(project_id)
