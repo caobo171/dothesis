@@ -1,6 +1,8 @@
 import { ReactNode, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import { Check, Copy, FileText } from "lucide-react";
 import { Mermaid } from "./Mermaid";
 import { WidgetRenderer } from "./widgets/WidgetRenderer";
@@ -152,8 +154,8 @@ const _markdownComponents = {
       <ul
         className={
           isTaskList
-            ? "list-none pl-0 my-2 space-y-1.5"
-            : "list-disc pl-5 my-1 space-y-0.5"
+            ? "list-none pl-0 my-2.5 space-y-1.5"
+            : "list-disc pl-5 my-2.5 space-y-1"
         }
       >
         {children}
@@ -161,7 +163,7 @@ const _markdownComponents = {
     );
   },
   ol: ({ children }: { children?: ReactNode }) => (
-    <ol className="list-decimal pl-5 my-1 space-y-0.5">{children}</ol>
+    <ol className="list-decimal pl-5 my-2.5 space-y-1">{children}</ol>
   ),
   li: ({ children, className }: { children?: ReactNode; className?: string }) => {
     // Task-list items get a button-like card row: a custom check box on
@@ -178,7 +180,7 @@ const _markdownComponents = {
         </li>
       );
     }
-    return <li className="leading-snug">{children}</li>;
+    return <li className="leading-relaxed">{children}</li>;
   },
   input: ({ type, checked }: { type?: string; checked?: boolean }) => {
     // Custom-render checkbox inputs (always from markdown task lists in
@@ -206,19 +208,22 @@ const _markdownComponents = {
   em: ({ children }: { children?: ReactNode }) => (
     <em className="italic">{children}</em>
   ),
-  // Paragraph spacing — defaults are too generous inside a bubble.
+  // Paragraph spacing — relaxed leading so stacked Vietnamese tone marks
+  // (dấu) don't visually collide line-to-line, and a real gap between blocks.
   p: ({ children }: { children?: ReactNode }) => (
-    <p className="my-1 leading-snug">{children}</p>
+    <p className="my-2.5 leading-relaxed first:mt-0 last:mb-0">{children}</p>
   ),
-  // Headings inside a bubble look weird at h1/h2 sizes; downsize.
+  // Headings inside a bubble look weird at h1/h2 sizes; downsize. Extra top
+  // margin sets each section apart from the block above (the "between blocks"
+  // cramping); first:mt-0 avoids a leading gap at the top of the bubble.
   h1: ({ children }: { children?: ReactNode }) => (
-    <div className="font-semibold text-[15px] my-1.5">{children}</div>
+    <div className="font-semibold text-[15px] mt-5 mb-2 first:mt-0">{children}</div>
   ),
   h2: ({ children }: { children?: ReactNode }) => (
-    <div className="font-semibold text-[14.5px] my-1.5">{children}</div>
+    <div className="font-semibold text-[14.5px] mt-5 mb-2 first:mt-0">{children}</div>
   ),
   h3: ({ children }: { children?: ReactNode }) => (
-    <div className="font-semibold text-[14px] my-1">{children}</div>
+    <div className="font-semibold text-[14px] mt-4 mb-1.5 first:mt-0">{children}</div>
   ),
   // Code — inline, plain block, or rendered diagram. A ```mermaid``` fenced
   // block becomes an SVG via the Mermaid component; everything else stays
@@ -240,7 +245,7 @@ const _markdownComponents = {
     );
   },
   pre: ({ children }: { children?: ReactNode }) => (
-    <pre className="my-1 rounded bg-ink-50 p-2 text-[13px] overflow-x-auto">{children}</pre>
+    <pre className="my-2.5 rounded bg-ink-50 p-2 text-[13px] overflow-x-auto">{children}</pre>
   ),
   // Links — same blue underline as before.
   a: ({ href, children }: { href?: string; children?: ReactNode }) => (
@@ -255,12 +260,12 @@ const _markdownComponents = {
   ),
   // Tables (GFM) — basic styling.
   table: ({ children }: { children?: ReactNode }) => (
-    <table className="my-1.5 border-collapse text-[13.5px]">{children}</table>
+    <table className="my-3.5 border-collapse text-[13.5px]">{children}</table>
   ),
   th: ({ children }: { children?: ReactNode }) => (
     // Header cells get whitespace-nowrap because they're typically labels
     // like "Phát biểu" / "1" / "2" / … that should never wrap.
-    <th className="border border-ink-200 px-2 py-1 text-left bg-ink-50 font-semibold whitespace-nowrap">{children}</th>
+    <th className="border border-ink-200 px-3 py-2 text-left bg-ink-50 font-semibold whitespace-nowrap">{children}</th>
   ),
   td: ({ children }: { children?: ReactNode }) => (
     // Don't break `[ ]`, `[x]`, or single tokens across lines — they're
@@ -269,11 +274,11 @@ const _markdownComponents = {
     // hold long prose; the `[&:not(:first-child)]:whitespace-nowrap`
     // selector keeps that column wrappable while clamping the rating
     // columns.
-    <td className="border border-ink-200 px-2 py-1 align-top [&:not(:first-child)]:whitespace-nowrap [&:not(:first-child)]:text-center">{children}</td>
+    <td className="border border-ink-200 px-3 py-2 align-top [&:not(:first-child)]:whitespace-nowrap [&:not(:first-child)]:text-center">{children}</td>
   ),
   // Blockquote — soft left rail.
   blockquote: ({ children }: { children?: ReactNode }) => (
-    <blockquote className="my-1 border-l-2 border-ink-200 pl-2 text-ink-600">{children}</blockquote>
+    <blockquote className="my-2.5 border-l-2 border-ink-200 pl-3 text-ink-600">{children}</blockquote>
   ),
   // Suppress `<hr>` entirely. The agent occasionally emits `___` or `---`
   // lines (Gemini uses them as visual separators or thinks they're
@@ -327,9 +332,30 @@ function _stripMarkers(text: string): string {
   ).trim();
 }
 
+// The drop-first onboarding sends a `/bootstrap …` message so the agent's
+// bootstrap skill fires + knows what to do — but that text is an instruction
+// for the AGENT, not the human. Shown raw it reads as a technical command. For
+// display, hide the marker + boilerplate and surface the user's own note (the
+// part they actually typed); if there's no note, a short friendly line. The
+// attached-file chips render below the bubble, so the upload is still obvious.
+function _displayUserText(content: string): string {
+  if (!content.trimStart().startsWith("/bootstrap")) return content;
+  const m = content.match(/My own notes:\s*([\s\S]+)$/i);
+  const note = m?.[1]?.trim();
+  return note || "Analyze my uploaded materials and tell me where my thesis stands.";
+}
+
 function _renderMarkdown(text: string) {
+  // remark-math parses `$…$` / `$$…$$`; rehype-katex renders them to HTML.
+  // The agent emits regression equations + stats (e.g. `$$\text{YD} = …$$`,
+  // `$p < 0.05$`, `$\beta = 0.369$`) — without these they showed as raw LaTeX.
+  // KaTeX CSS is loaded globally in app/layout.tsx.
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={_markdownComponents}>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
+      components={_markdownComponents}
+    >
       {_stripMarkers(text)}
     </ReactMarkdown>
   );
@@ -431,7 +457,7 @@ export function MessageBubble({
       <div data-role={role} className="flex justify-end">
         <div className="max-w-[70%] flex flex-col items-end gap-1.5">
           <div className="rounded-[18px] rounded-br-[4px] bg-primary-600 text-white px-4 py-[11px] text-[14.5px] leading-normal shadow-[0_1px_0_rgba(11,13,26,.04)]">
-            <div className="prose-tight text-[14.5px]">{_renderMarkdown(content)}</div>
+            <div className="prose-tight text-[14.5px]">{_renderMarkdown(_displayUserText(content))}</div>
             {children}
           </div>
           {attachments && attachments.length > 0 && (

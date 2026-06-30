@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, Clock, Coins, Download, ExternalLink, FileText } from "lucide-react";
 
 import { SliceModal } from "./SliceModal";
+import { Mermaid } from "./Mermaid";
 import { triggerExportDownload } from "@/app/lib/api";
 
 
@@ -214,7 +215,17 @@ function CtxSection({
         <span className="text-[12.5px] font-bold text-ink-800">{label}</span>
         <span className="flex-1" />
         {status === "needs_review" && (
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+          // The bare ⚠ icon left users unsure what it meant or what to do.
+          // Label it + explain on hover: needs_review = a dependency hole the
+          // agent flagged (e.g. a hypothesis with no backing gap). The fix is
+          // to revisit the module in chat, where the agent walks the reconcile.
+          <span
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600"
+            title="Needs review — something this module depends on changed upstream (e.g. a hypothesis with no backing gap). Open this module in chat and the agent will help you reconcile it."
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Needs review
+          </span>
         )}
         <span className="text-ink-400 text-[11px]">{collapsed ? "▸" : "▾"}</span>
       </button>
@@ -348,29 +359,98 @@ function ExportArtifactRow({ artifact }: { artifact: ExportArtifact }) {
 }
 
 function M1Body({ data }: { data: Record<string, any> | null }) {
+  // Click-to-expand like the other slices: the inline card shows title + RQs,
+  // but a topic also carries field / scope / objectives that don't fit — open
+  // the full detail in the centered SliceModal.
+  const [modalOpen, setModalOpen] = useState(false);
   if (!data) return <EmptyHint text="Topic not set yet — start in M1." />;
   const title = data.research_title;
   const rqs = (data.research_questions || []) as string[];
+  if (!title && rqs.length === 0) {
+    return <EmptyHint text="No M1 data committed yet." />;
+  }
   return (
     <>
+      <button
+        type="button"
+        onClick={() => setModalOpen(true)}
+        className="block w-full text-left -mx-1 px-1 py-0.5 rounded-md hover:bg-primary-50 transition-colors"
+      >
+        {title && (
+          <>
+            <FieldLabel name="research_title" top />
+            <div className="font-serif text-[14px] leading-[1.45] text-ink-900 mt-1">
+              {title}
+            </div>
+          </>
+        )}
+        {rqs.length > 0 && (
+          <>
+            <FieldLabel name="research_questions" count={rqs.length} />
+            <ol className="list-decimal pl-5 mt-1.5 text-[12.5px] text-ink-700 leading-[1.45] space-y-0.5">
+              {rqs.map((q, i) => <li key={i}>{q}</li>)}
+            </ol>
+          </>
+        )}
+        <span className="mt-2 inline-flex items-center gap-1 text-[11.5px] text-primary-600 font-semibold">
+          View full topic <ExternalLink className="w-3 h-3" />
+        </span>
+      </button>
+
+      <SliceModal
+        open={modalOpen}
+        title="Topic & questions"
+        subtitle="Title, scope, objectives, and research questions"
+        onClose={() => setModalOpen(false)}
+      >
+        <TopicDetail data={data} />
+      </SliceModal>
+    </>
+  );
+}
+
+function TopicDetail({ data }: { data: Record<string, any> }) {
+  const title = data.research_title as string | undefined;
+  const rqs = (data.research_questions || []) as string[];
+  const objectives = (data.objectives || []) as string[];
+  // Scalar M1 fields rendered as labeled rows when present.
+  const scalars: Array<[string, string]> = [
+    ["Field", data.field],
+    ["Research type", data.research_type],
+    ["Target population", data.target_population],
+    ["Scope", data.scope],
+  ].filter(([, v]) => typeof v === "string" && v.trim()) as Array<[string, string]>;
+
+  return (
+    <div className="space-y-4">
       {title && (
-        <>
+        <div>
           <FieldLabel name="research_title" top />
-          <div className="font-serif text-[14px] leading-[1.45] text-ink-900 mt-1">
-            {title}
-          </div>
-        </>
+          <div className="font-serif text-[16px] leading-relaxed text-ink-900 mt-1">{title}</div>
+        </div>
+      )}
+      {scalars.length > 0 && (
+        <div className="space-y-1.5">
+          {scalars.map(([k, v]) => <KVRich key={k} k={k} v={v} />)}
+        </div>
       )}
       {rqs.length > 0 && (
-        <>
-          <FieldLabel name="research_questions" count={rqs.length} />
-          <ol className="list-decimal pl-5 mt-1.5 text-[12.5px] text-ink-700 leading-[1.45] space-y-0.5">
+        <div>
+          <FieldLabel name={`research_questions (${rqs.length})`} />
+          <ol className="list-decimal pl-5 mt-2 text-[13.5px] text-ink-800 leading-relaxed space-y-1.5">
             {rqs.map((q, i) => <li key={i}>{q}</li>)}
           </ol>
-        </>
+        </div>
       )}
-      {!title && rqs.length === 0 && <EmptyHint text="No M1 data committed yet." />}
-    </>
+      {objectives.length > 0 && (
+        <div>
+          <FieldLabel name={`objectives (${objectives.length})`} />
+          <ol className="list-decimal pl-5 mt-2 text-[13.5px] text-ink-800 leading-relaxed space-y-1.5">
+            {objectives.map((o, i) => <li key={i}>{o}</li>)}
+          </ol>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -950,11 +1030,65 @@ function MethodologyDetail({ meth, sampling }: { meth: any; sampling: any }) {
   );
 }
 
+// Build a Mermaid `flowchart LR` from the model's nodes + edges so the
+// conceptual model renders as an actual diagram (boxes + hypothesis arrows)
+// instead of only two text lists. Tolerant of both edge shapes the codebase
+// emits: design's {from,to,label} and the schema's {source,target,hypothesis}.
+function _mermaidId(raw: unknown, fallback: string): string {
+  const s = String(raw ?? "").trim();
+  // Mermaid node ids must be token-safe — keep alnum/underscore, collapse rest.
+  const id = s.replace(/[^A-Za-z0-9_]/g, "_").replace(/^_+|_+$/g, "");
+  return id || fallback;
+}
+
+function _mermaidLabel(s: unknown): string {
+  // Quotes/pipes/newlines break Mermaid label syntax — neutralize them.
+  return String(s ?? "").replace(/"/g, "'").replace(/\|/g, "/").replace(/\s*\n\s*/g, " ").trim();
+}
+
+function _conceptualMermaid(nodes: any[], edges: any[]): string | null {
+  const lines = ["flowchart LR"];
+  const ids = new Map<string, string>(); // original key -> safe id
+  nodes.forEach((n, i) => {
+    const key = String(n.id ?? n.label ?? `N${i + 1}`);
+    const safe = _mermaidId(n.id ?? n.label, `N${i + 1}`);
+    ids.set(key, safe);
+    // Also map by label so edges referencing either id or label resolve.
+    if (n.label) ids.set(String(n.label), safe);
+    const label = _mermaidLabel(n.label ?? n.id ?? key) || key;
+    lines.push(`  ${safe}["${label}"]`);
+  });
+  let drewEdge = false;
+  edges.forEach(e => {
+    const srcKey = String(e.from ?? e.source ?? "");
+    const tgtKey = String(e.to ?? e.target ?? "");
+    const src = ids.get(srcKey) || (srcKey ? _mermaidId(srcKey, "") : "");
+    const tgt = ids.get(tgtKey) || (tgtKey ? _mermaidId(tgtKey, "") : "");
+    if (!src || !tgt) return;
+    // Prefer a clean hypothesis id; else strip a redundant "X → Y" prefix the
+    // design encodes in the label (the arrow itself already shows direction).
+    let lbl = e.hypothesis
+      ? String(e.hypothesis)
+      : String(e.label ?? "").replace(/^\s*\S+\s*(?:→|->)\s*\S+\s*:?\s*/, "");
+    lbl = _mermaidLabel(lbl);
+    lines.push(lbl ? `  ${src} -->|"${lbl}"| ${tgt}` : `  ${src} --> ${tgt}`);
+    drewEdge = true;
+  });
+  // Only worth a diagram when there's at least one connection to show.
+  return drewEdge ? lines.join("\n") : null;
+}
+
 function ConceptualModelDetail({ model }: { model: { nodes?: any[]; edges?: any[] } | undefined }) {
   const nodes = model?.nodes ?? [];
   const edges = model?.edges ?? [];
+  const diagram = _conceptualMermaid(nodes, edges);
   return (
     <div className="space-y-4">
+      {diagram && (
+        <div className="rounded-xl border border-ink-200 bg-white p-3 overflow-x-auto">
+          <Mermaid source={diagram} />
+        </div>
+      )}
       {nodes.length > 0 && (
         <div>
           <FieldLabel name={`constructs (${nodes.length})`} top />

@@ -23,7 +23,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from .models import ContextStore, Thread
+from .models import ContextStore, Project, Thread
 
 logger = logging.getLogger(__name__)
 
@@ -123,3 +123,91 @@ def schedule_autoname(engine, thread_id: uuid.UUID, first_user_text: str | None)
     except RuntimeError:
         # No running loop (e.g. called from sync test) — run inline.
         maybe_autoname_thread(engine, thread_id, first_user_text)
+
+
+# ---------------------------------------------------------------------------
+# Project naming — same two-tier strategy as threads, applied to the project
+# title that shows in the sidebar / dashboard. Projects are born "Untitled
+# thesis" (the drop-first /new page), so without this the list is a wall of
+# identical rows. There is no `name_auto` column on Project: the "still a
+# default name" check is enough to stop re-runs (once a real name lands it no
+# longer matches a default), and it never overwrites a user-set name.
+# ---------------------------------------------------------------------------
+
+_DEFAULT_PROJECT_NAMES = {"untitled thesis", "untitled", "new thesis", ""}
+
+
+def _is_default_project_name(name: str | None) -> bool:
+    return (name or "").strip().lower() in _DEFAULT_PROJECT_NAMES
+
+
+def _project_name_from_llm(first_user_text: str | None) -> str | None:
+    text = (first_user_text or "").strip()
+    if not text:
+        return None
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        from orchestrator.message_utils import text_of
+
+        llm = ChatGoogleGenerativeAI(
+            # Per product call: name projects with gemini-2.5-flash (a notch
+            # above the flash-lite used for threads — the project title is the
+            # most visible label, worth the slightly better model).
+            model=os.getenv("PROJECT_NAMER_MODEL", "gemini-2.5-flash"),
+            temperature=0.2,
+            timeout=int(os.getenv("PROJECT_NAMER_TIMEOUT", "12")),
+        )
+        prompt = (
+            "Summarize the following into a 3–6 word title for a thesis research "
+            "PROJECT (the topic under study). Use the same language as the "
+            "message. Title Case, no quotes, no trailing punctuation, no 'Thesis "
+            "about' preamble.\n\n"
+            f"Message:\n{text[:1500]}\n\nTitle:"
+        )
+        out = text_of(llm.invoke(prompt))
+        return _shorten(out, max_words=6) or None
+    except Exception:  # noqa: BLE001 — naming is best-effort, never raise
+        logger.exception("project auto-name LLM call failed")
+        return None
+
+
+def maybe_autoname_project(
+    engine, project_id: uuid.UUID, first_user_text: str | None
+) -> None:
+    """Synchronous core: name the project if it's still a default. Worker-safe."""
+    try:
+        with Session(engine) as db:
+            p = db.get(Project, project_id)
+            if p is None or not _is_default_project_name(p.name):
+                return
+            # The drop-first first turn is `/bootstrap` boilerplate, a poor name
+            # source — skip the LLM tier for it and rely on the detected
+            # research_title (Tier 1). A later real user message names it via
+            # the LLM tier if no title was committed.
+            text_for_llm = (
+                None if (first_user_text or "").lstrip().startswith("/bootstrap")
+                else first_user_text
+            )
+            name = _from_research_title(db, project_id) or _project_name_from_llm(text_for_llm)
+            if not name:
+                return
+            p.name = name
+            db.commit()
+            logger.info("auto-named project %s -> %r", project_id, name)
+    except Exception:  # noqa: BLE001
+        logger.exception("project auto-name failed for %s", project_id)
+
+
+def schedule_autoname_project(
+    engine, project_id: uuid.UUID, first_user_text: str | None
+) -> None:
+    """Fire-and-forget project namer — same worker-thread pattern as threads."""
+    try:
+        task = asyncio.create_task(
+            asyncio.to_thread(maybe_autoname_project, engine, project_id, first_user_text)
+        )
+        _BG_TASKS.add(task)
+        task.add_done_callback(_BG_TASKS.discard)
+    except RuntimeError:
+        maybe_autoname_project(engine, project_id, first_user_text)

@@ -4,7 +4,6 @@ import { ArrowLeft, Bell, ChevronDown, Download, FileDown, History, Menu, PanelR
 
 import { useMe } from "@/app/lib/use-me";
 import { triggerExportDownload } from "@/app/lib/api";
-import { tokenStore } from "@/app/lib/tokenStore";
 
 // Modules that can be exported as a standalone Word doc (teacher report).
 const EXPORTABLE_MODULES: { id: string; label: string }[] = [
@@ -14,23 +13,18 @@ const EXPORTABLE_MODULES: { id: string; label: string }[] = [
   { id: "M4", label: "Analysis" },
 ];
 
-async function downloadModuleDocx(projectId: string, module: string) {
-  const base = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
-  const res = await fetch(`${base}/projects/${projectId}/export/module`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ module, access_token: tokenStore.get() }),
-  });
-  if (!res.ok) throw new Error(`export failed (${res.status})`);
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${module}-export.docx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+// The export quick-actions are pre-defined PROMPTS, not raw downloads. Clicking
+// one asks the agent to turn that module's committed work into a polished,
+// professor-ready Word document — proper academic structure + headings — rather
+// than dumping the raw slice. The agent's writing/export tools produce the docx
+// and surface a download card in the reply.
+function _exportPrompt(moduleId: string, label: string): string {
+  return (
+    `Export my ${moduleId} (${label}) into a polished, well-formatted Word ` +
+    `(.docx) document I can send to my professor: proper academic structure, ` +
+    `clear headings, full sentences (not bullet fragments), and consistent ` +
+    `citation style. Use everything I've already committed for ${moduleId}.`
+  );
 }
 import { ChatSidebarContext } from "./ChatShellLayout";
 import { MODULES } from "./HomeDashboard";

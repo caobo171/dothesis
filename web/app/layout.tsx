@@ -1,4 +1,7 @@
 import "./globals.css";
+// KaTeX styles for math rendering in chat messages (remark-math + rehype-katex
+// in MessageBubble). Loaded once at the root so every rendered equation is styled.
+import "katex/dist/katex.min.css";
 import type { ReactNode } from "react";
 import { Inter, JetBrains_Mono } from "next/font/google";
 

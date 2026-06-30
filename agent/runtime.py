@@ -585,8 +585,15 @@ async def stream_turn(
                             # card grid. The agent learns this convention via
                             # the bootstrap skill — without it, every choice
                             # has to be typed instead of clicked.
-                            content = getattr(m, "content", "")
-                            if isinstance(content, str):
+                            # Normalize content to text FIRST. Gemini 3.x
+                            # (gemini-3.5-flash) returns content as a LIST of
+                            # parts ([{type:"text",...}, thinking blocks]) rather
+                            # than a plain string like 2.5-flash. Parsing only the
+                            # str case silently dropped [OPTIONS]/[PAPERS] markers
+                            # on Gemini 3 → no clickable choice cards. Join the
+                            # text parts so markers are found regardless of model.
+                            content = _text_content(getattr(m, "content", ""))
+                            if content:
                                 # Two marker shapes can ride on the same
                                 # message: [OPTIONS] (clickable choices,
                                 # always last line) and [PAPERS] (the
@@ -616,6 +623,28 @@ async def stream_turn(
           f"msg_types={_msg_type_counts}",
           file=_sys.stderr, flush=True)
     yield {"type": "done"}
+
+
+def _text_content(content: Any) -> str:
+    """Flatten an LLM message's content to plain text.
+
+    2.5-flash returns a string; Gemini 3.x (3.5-flash) returns a list of
+    content parts ({type:"text",text:…} plus thinking/signature blocks). Join
+    the text parts so downstream marker parsing ([OPTIONS], [PAPERS]) and any
+    text inspection works the same across both shapes. Non-text blocks
+    (thinking) are skipped — they're never shown to the user.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text" and block.get("text"):
+                parts.append(block["text"])
+            elif isinstance(block, str):
+                parts.append(block)
+        return "".join(parts)
+    return ""
 
 
 def _events_from_message(msg: Any):

@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 
@@ -46,7 +47,13 @@ export function SliceModal({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  // Portal to <body> so the overlay is positioned against the VIEWPORT, not a
+  // transformed ancestor. The ContextPanel/chat column has CSS transforms in
+  // its layout, which turn `position: fixed` into "fixed relative to that
+  // ancestor" — that's why the modal was rendering small + offset inside the
+  // side panel instead of centered on screen. SSR guard: only portal client-side.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-ink-900/40"
       onClick={onClose}
@@ -55,7 +62,7 @@ export function SliceModal({
       aria-labelledby="slice-modal-title"
     >
       <div
-        className="relative w-full max-w-[720px] max-h-[80vh] bg-white rounded-2xl shadow-xl flex flex-col"
+        className="relative w-full max-w-[880px] max-h-[85vh] bg-white rounded-2xl shadow-xl flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 px-5 py-3.5 border-b border-ink-200 bg-white rounded-t-2xl flex items-start gap-3">
@@ -78,6 +85,7 @@ export function SliceModal({
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -464,8 +464,11 @@ async def send_message_v3(
             # if present, else one cheap flash-lite summary of this message.
             # Runs in a background worker so it never delays the stream.
             try:
-                from ..thread_namer import schedule_autoname
+                from ..thread_namer import schedule_autoname, schedule_autoname_project
                 schedule_autoname(engine, thread_pk, text)
+                # Same for the project title while it's still "Untitled thesis"
+                # — uses gemini-2.5-flash; no-op once a real name is set.
+                schedule_autoname_project(engine, project_id, text)
             except Exception:  # noqa: BLE001
                 logger.exception("schedule_autoname failed for thread %s", thread_pk)
         except Exception as _e:
