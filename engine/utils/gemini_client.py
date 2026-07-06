@@ -49,6 +49,9 @@ class GenerationConfig:
 # Pro/preview models are flaky during peak hours; flash variants are far more reliable.
 _FALLBACK_CHAINS = {
     "gemini-3-pro-preview":   ["gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    # gemini-3.5-flash is the default model; degrade to the 2.5 flash variants
+    # when it's overloaded so a 503 doesn't kill a turn with no downgrade path.
+    "gemini-3.5-flash":       ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
     "gemini-3-flash-preview": ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
     "gemini-2.5-pro":         ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
     "gemini-2.5-flash":       ["gemini-2.5-flash-lite"],

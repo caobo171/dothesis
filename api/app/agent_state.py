@@ -204,25 +204,35 @@ class DbProjectStateStore(ProjectStateStore):
         except Exception:
             log.exception("M5 auto-export failed for project %s", self.project_id)
 
-    def persist_export_artifacts(self, artifacts: list[dict]) -> None:
-        """Write export artifacts into m5_writing.export_artifacts.
+    def persist_export_artifacts(self, artifacts: list[dict], scope: str = "full") -> None:
+        """Record export artifacts as rows in the `exports` table, tagged with
+        `scope` ("full" thesis, or "M1".."M4" for a single-module export).
 
-        Shared by the auto-export hook and the agent's export_docx tool so
-        both land artifacts in the one place the ContextPanel + header
-        Download button read from. Uses a fresh ORM Session (tool calls run
-        on executor threads, not the request loop).
+        Exports are module-agnostic now — they no longer live inside
+        m5_writing.export_artifacts (which made a per-module export show up under
+        M5). The ContextPanel reads the dedicated /exports/list endpoint and the
+        download route authorizes against these rows. Shared by the M5
+        auto-export hook (scope=full) and the agent's export_docx tool. Uses a
+        fresh ORM Session (tool calls run on executor threads).
         """
-        from sqlalchemy.orm import Session
-        from sqlalchemy.orm.attributes import flag_modified
+        import uuid as _uuid
 
-        from .models import ContextStore as DbContextStore
+        from sqlalchemy.orm import Session
+
+        from .models import Export as DbExport
 
         with Session(self.engine) as db:
-            cs = db.get(DbContextStore, self.project_id)
-            if cs is None:
-                return
-            m5 = dict(cs.m5_writing or {})
-            m5["export_artifacts"] = artifacts
-            cs.m5_writing = m5
-            flag_modified(cs, "m5_writing")
+            for a in artifacts or []:
+                s3_key = a.get("s3_key")
+                if not s3_key:
+                    continue
+                db.add(DbExport(
+                    id=_uuid.uuid4(),
+                    project_id=self.project_id,
+                    scope=scope,
+                    kind=a.get("kind") or "docx",
+                    s3_key=s3_key,
+                    filename=s3_key.rsplit("/", 1)[-1],
+                    size_bytes=int(a.get("size_bytes") or 0),
+                ))
             db.commit()

@@ -974,6 +974,167 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
         return False
 
 
+def _style_docx_tables(output_docx) -> None:
+    """Give pandoc's tables a clean academic look.
+
+    Pandoc + the reference doc render tables BORDERLESS with:
+      - `w:tblLayout w:type="fixed"` (Word ignores autofit),
+      - short `w:trHeight` on every row (numbers like "212" wrap to "21" / "2"),
+      - guessed narrow column widths (headers "Tần số (n)" break to 3 lines).
+    So we can't just flip `table.autofit = True` — Word ignores it while the
+    fixed layout is on. For every table: apply a bordered grid style, FORCE
+    `tblLayout=autofit`, allocate PROPORTIONAL widths (wide content columns,
+    narrower number columns), clear the fixed cell widths + row heights, add
+    consistent cell margins, vertically center every cell, and bold the header
+    row. Best-effort — any failure leaves the (working) docx untouched.
+    """
+    try:
+        import re as _re
+        from docx import Document
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        from docx.enum.table import WD_ALIGN_VERTICAL
+    except Exception:
+        return
+    try:
+        doc = Document(str(output_docx))
+    except Exception:
+        logger.warning("table-styling: could not open docx", exc_info=True)
+        return
+    if not doc.tables:
+        return
+
+    def _set(elem, tag_name, **attrs):
+        """Get-or-create a child element with the given w: attributes."""
+        child = elem.find(qn(tag_name))
+        if child is None:
+            child = OxmlElement(tag_name)
+            elem.append(child)
+        for k, v in attrs.items():
+            child.set(qn(k), str(v))
+        return child
+
+    for table in doc.tables:
+        # 1) Bordered style. Try a few names since availability depends on the
+        # reference doc; if none work, borders get set explicitly below.
+        for style_name in ("Table Grid", "TableGrid", "Light Grid Accent 1"):
+            try:
+                table.style = style_name
+                break
+            except Exception:
+                continue
+
+        tblPr = table._tbl.tblPr
+        # 2) Force AUTOFIT layout — Word obeys column widths as HINTS, not
+        # constraints; long content grows the column instead of wrapping cruelly.
+        _set(tblPr, "w:tblLayout", **{"w:type": "autofit"})
+        # 3) Table width = 100% of the available space (5000 fiftieths).
+        _set(tblPr, "w:tblW", **{"w:w": "5000", "w:type": "pct"})
+        # 4) Consistent inner margins — tight enough that narrow columns
+        # (VIF / t / Sig) can render their header on one line, generous enough
+        # that text never touches the borders.
+        cellMar = _set(tblPr, "w:tblCellMar")
+        for side, val in (("top", 40), ("bottom", 40), ("left", 60), ("right", 60)):
+            _set(cellMar, f"w:{side}", **{"w:w": str(val), "w:type": "dxa"})
+        # 5) Explicit borders in case the built-in style didn't apply.
+        borders = _set(tblPr, "w:tblBorders")
+        for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
+            _set(borders, f"w:{side}", **{"w:val": "single", "w:sz": "4", "w:color": "auto"})
+
+        # 6) Column widths sized to CONTENT, not a flat text/number split.
+        # Previous heuristic gave every numeric column the same weight → in a
+        # wide table like "Bảng 4.5" (8 cols: Giả thuyết / Biến / Hệ số B /
+        # Beta / t / Sig / VIF / Kết luận) a header like "Giả thuyết" or "Kết
+        # luận" broke into "Gi / ả thuyết" while single-letter headers "K", "IF"
+        # were still cramped by margins. Fix: measure the longest word in the
+        # HEADER of each column and use that as a MIN width, then split the
+        # remaining space using the text-vs-numeric heuristic.
+        n_cols = len(table.columns)
+        header_cells = table.rows[0].cells if table.rows else []
+        sample_rows = table.rows[1:4]
+
+        def _longest_word_len(txt: str) -> int:
+            # Word Vietnamese-friendly: split on whitespace only. A cell like
+            # "Hệ số B (Unstandardized)" → 15 chars ("(Unstandardized)").
+            return max((len(w) for w in (txt or "").split()), default=1)
+
+        header_len: list[int] = []
+        for c in range(n_cols):
+            txt = header_cells[c].text.strip() if c < len(header_cells) else ""
+            header_len.append(max(3, _longest_word_len(txt)))
+
+        is_numeric_col: list[bool] = []
+        for c in range(n_cols):
+            numeric_hits = 0
+            for r in sample_rows:
+                if c < len(r.cells):
+                    txt = r.cells[c].text.strip().replace(",", ".")
+                    if _re.fullmatch(r"[\d.\s%\-]+", txt or ""):
+                        numeric_hits += 1
+            is_numeric_col.append(numeric_hits >= 1)
+
+        # Word measures widths in dxa; a typical usable page width is ~9000.
+        page_dxa = 9000
+        # Min width per column ≈ header longest-word × ~120 dxa/char + margins,
+        # so "Kết" (3 chars) reserves ~360 + 240 margins ≈ 600 dxa, and
+        # "(Unstandardized)" (15 chars) reserves ~1800 dxa. Prevents header
+        # breakage but leaves numeric single-line cells room to shrink.
+        MIN_PER_CHAR = 120
+        MARGINS = 240
+        min_dxa = [max(500, header_len[c] * MIN_PER_CHAR + MARGINS) for c in range(n_cols)]
+        # Cap the sum of minimums so we don't overshoot the page in extreme
+        # cases; scale down proportionally if needed.
+        min_sum = sum(min_dxa)
+        if min_sum > page_dxa * 0.8:
+            factor = (page_dxa * 0.8) / min_sum
+            min_dxa = [max(500, int(v * factor)) for v in min_dxa]
+        # Remaining space is split by weight: numeric = 1, text = 2.
+        weights = [1 if is_numeric_col[c] else 2 for c in range(n_cols)]
+        remaining = max(0, page_dxa - sum(min_dxa))
+        total_w = sum(weights) or n_cols
+        col_dxa = [min_dxa[c] + int(remaining * weights[c] / total_w) for c in range(n_cols)]
+        # Replace tblGrid.
+        old_grid = table._tbl.find(qn("w:tblGrid"))
+        if old_grid is not None:
+            table._tbl.remove(old_grid)
+        grid = OxmlElement("w:tblGrid")
+        table._tbl.insert(list(table._tbl).index(tblPr) + 1, grid)
+        for w in col_dxa:
+            gc = OxmlElement("w:gridCol"); gc.set(qn("w:w"), str(w)); grid.append(gc)
+
+        # 7) Per-cell: set width, vertical-center, clear fixed row heights,
+        # slightly smaller header font on very narrow number columns is skipped
+        # in favor of just giving numeric columns their fair share of space.
+        for r_idx, row in enumerate(table.rows):
+            # Clear row height rule so cells grow with content instead of
+            # clipping into a two-line height.
+            trPr = row._tr.get_or_add_trPr()
+            trHeight = trPr.find(qn("w:trHeight"))
+            if trHeight is not None:
+                trPr.remove(trHeight)
+            for c_idx, cell in enumerate(row.cells):
+                tcPr = cell._tc.get_or_add_tcPr()
+                # Fixed cell width override (in dxa).
+                tcW = _set(tcPr, "w:tcW",
+                           **{"w:w": str(col_dxa[c_idx] if c_idx < len(col_dxa) else 1500),
+                              "w:type": "dxa"})
+                # Vertical center — headers with "Tần số (n)" were bottom-aligned
+                # and read as broken.
+                cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+        # 8) Bold the header row.
+        if table.rows:
+            for cell in table.rows[0].cells:
+                for p in cell.paragraphs:
+                    for run in p.runs:
+                        run.bold = True
+
+    try:
+        doc.save(str(output_docx))
+    except Exception:
+        logger.warning("table-styling: could not save docx", exc_info=True)
+
+
 def export_docx(
     md_file: Path,
     output_docx: Path,
@@ -1157,10 +1318,14 @@ def export_docx(
             if hasattr(options, 'location') and options.location:
                 post_options['location'] = options.location
 
-        if not insert_academic_structure(output_docx, verbose=True, options=post_options if post_options else None):
+        struct_ok = insert_academic_structure(output_docx, verbose=True, options=post_options if post_options else None)
+        if not struct_ok:
             logger.warning("Post-processing failed - DOCX created but may lack page structure")
             logger.warning("DOCX will have inline title block instead of standalone pages")
-            return True  # Still return True since basic DOCX was created
+
+        # Style tables LAST so it survives the structure pass. Borderless pandoc
+        # tables → bordered, autofit, bold-header. Best-effort.
+        _style_docx_tables(output_docx)
 
         return True
 

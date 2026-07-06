@@ -1,11 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Clock, Coins, Download, ExternalLink, FileText } from "lucide-react";
+import useSWR from "swr";
+import { AlertTriangle, Clock, Coins, Download, ExternalLink } from "lucide-react";
 
 import { SliceModal } from "./SliceModal";
 import { Mermaid } from "./Mermaid";
-import { triggerExportDownload } from "@/app/lib/api";
+import { FileTypeIcon } from "./FileTypeIcon";
+import {
+  triggerExportDownload,
+  triggerUploadDownload,
+  swrFetcher as fetcher,
+} from "@/app/lib/api";
 
 
 // ---- types (kept stable so callers don't change) ---------------------
@@ -50,12 +56,14 @@ type SectionStatus = "done" | "in_progress" | "needs_review" | "locked";
  * data inspection: what the agent has committed to your project state.
  */
 export function ContextPanel({
+  projectId,
   contextStore,
   uploads,
   currentModule,
   moduleStatus,
   threadCredits,
 }: {
+  projectId?: string;
   contextStore: ContextStore;
   uploads: UploadItem[];
   currentModule?: string;
@@ -153,15 +161,12 @@ export function ContextPanel({
               <M5Body data={contextStore.m5_writing} />
             </CtxSection>
 
+            {projectId && <ExportsSection projectId={projectId} />}
+
             {uploads.length > 0 && (
               <CtxSection label={`Uploads (${uploads.length})`} status="in_progress">
-                <div className="space-y-1">
-                  {uploads.slice(0, 5).map(u => (
-                    <div key={u.id} className="text-[12.5px] text-ink-700 truncate">
-                      📄 {u.filename}
-                      {u.page_count && <span className="text-ink-400 ml-1">· {u.page_count}p</span>}
-                    </div>
-                  ))}
+                <div className="space-y-1.5">
+                  {uploads.slice(0, 5).map(u => <UploadRow key={u.id} upload={u} />)}
                   {uploads.length > 5 && (
                     <div className="text-[11.5px] text-ink-400 pt-1">
                       +{uploads.length - 5} more…
@@ -278,25 +283,23 @@ function KV({ k, v }: { k: string; v: React.ReactNode }) {
 }
 
 
-// Persisted artifact shape from /m5/export + auto-export hook (agent_state.py).
-type ExportArtifact = {
-  kind: "docx" | "pdf";
-  s3_key: string;
-  size_bytes: number;
-  download_url: string;
-  uri?: string;
-};
-
 function M5Body({ data }: { data: Record<string, any> | null }) {
   if (!data) {
     return (
       <EmptyHint text="Writing hasn't started — M5 builds the final docx/pdf from M1–M4 once those are done." />
     );
   }
-  const artifacts = (data.export_artifacts || []) as ExportArtifact[];
+  // Exports moved out of M5 into the dedicated module-agnostic Exports section
+  // (a per-module export shouldn't appear under M5). M5Body now only shows the
+  // writing progress (chapters / draft sections).
   const chapters = (data.chapters || {}) as Record<string, unknown>;
   const chapterCount = Object.keys(chapters).length;
   const finalSections = Array.isArray(data.final_sections) ? data.final_sections : [];
+  if (chapterCount === 0 && finalSections.length === 0) {
+    return (
+      <EmptyHint text="Writing hasn't started — M5 builds the final docx/pdf from M1–M4 once those are done." />
+    );
+  }
   return (
     <>
       {chapterCount > 0 && (
@@ -315,46 +318,98 @@ function M5Body({ data }: { data: Record<string, any> | null }) {
           </div>
         </>
       )}
-      <FieldLabel name="exports" top={chapterCount === 0 && finalSections.length === 0} />
-      {artifacts.length > 0 ? (
-        <div className="mt-1.5 space-y-1.5">
-          {artifacts.map(a => (
-            <ExportArtifactRow key={a.s3_key} artifact={a} />
-          ))}
-        </div>
-      ) : (
-        <div className="text-[12.5px] text-ink-500 mt-1 leading-snug">
-          No export yet — runs automatically when M5 is marked done.
-        </div>
-      )}
     </>
   );
 }
 
-function ExportArtifactRow({ artifact }: { artifact: ExportArtifact }) {
-  const label = artifact.kind.toUpperCase();
+// --- Exports (module-agnostic) ---
+
+type ExportRow = {
+  id: string;
+  scope: string;   // "full" | "M1".."M4"
+  kind: string;    // "docx" | "pdf"
+  filename: string;
+  size_bytes: number;
+  created_at: string | null;
+  download_url: string;
+};
+
+const _SCOPE_LABEL: Record<string, string> = {
+  full: "Full thesis", M1: "M1 Topic", M2: "M2 Literature",
+  M3: "M3 Design", M4: "M4 Analysis", M5: "M5 Writing",
+};
+
+function ExportsSection({ projectId }: { projectId: string }) {
+  // Fetch the project's exports list (newest first). Revalidates on focus so a
+  // freshly-agent-generated export shows up without a manual reload.
+  const { data } = useSWR<ExportRow[]>(`/projects/${projectId}/exports/list`, fetcher);
+  const rows = data ?? [];
+  return (
+    <CtxSection label={`Exports${rows.length ? ` (${rows.length})` : ""}`} status="in_progress">
+      {rows.length === 0 ? (
+        <EmptyHint text="No exports yet — ask to export a module or the full thesis, or use Quick actions → Export to Word." />
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map(r => <ExportRowItem key={r.id} row={r} />)}
+        </div>
+      )}
+    </CtxSection>
+  );
+}
+
+function ExportRowItem({ row }: { row: ExportRow }) {
   const size =
-    artifact.size_bytes >= 1024 * 1024
-      ? `${(artifact.size_bytes / (1024 * 1024)).toFixed(1)} MB`
-      : `${(artifact.size_bytes / 1024).toFixed(0)} KB`;
-  // Shared download path (api.triggerExportDownload): the /exports route 302s to
-  // a signed S3 URL but is still auth-gated, and <a download> can't carry a JSON
-  // body / Authorization header — so it mints a short-lived, scoped ?st= token
-  // and navigates, keeping the JWT out of URLs/logs.
+    row.size_bytes >= 1024 * 1024
+      ? `${(row.size_bytes / (1024 * 1024)).toFixed(1)} MB`
+      : `${(row.size_bytes / 1024).toFixed(0)} KB`;
   return (
     <a
-      href={artifact.download_url}
+      href={row.download_url}
       download
-      onClick={(e) => { e.preventDefault(); void triggerExportDownload(artifact.download_url); }}
-      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50 transition-colors group"
+      onClick={(e) => { e.preventDefault(); void triggerExportDownload(row.download_url); }}
+      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50 transition-colors"
     >
-      <FileText className="w-3.5 h-3.5 text-primary-600 shrink-0" aria-hidden />
-      <span className="font-serif text-[12.5px] font-extrabold text-ink-900">
-        {label}
+      <FileTypeIcon kind={row.kind} className="w-[18px] h-[22px] shrink-0" />
+      <span className="font-serif text-[12px] font-extrabold text-ink-900 shrink-0">
+        {row.kind.toUpperCase()}
       </span>
-      <span className="text-[11.5px] text-ink-500">· {size}</span>
-      <Download className="w-3.5 h-3.5 text-ink-400 group-hover:text-primary-600 ml-auto shrink-0" aria-hidden />
+      <span className="text-[10.5px] uppercase tracking-[0.04em] font-bold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded shrink-0">
+        {row.scope === "full"
+          ? _SCOPE_LABEL.full
+          : !row.scope.includes(",")
+            ? (_SCOPE_LABEL[row.scope] ?? row.scope)
+            : row.scope.split(",").map(s => s.trim()).join(" + ")}
+      </span>
+      <span className="text-ink-400 text-[11.5px] ml-auto shrink-0">{size}</span>
+      <Download className="w-3.5 h-3.5 text-ink-400 shrink-0" aria-hidden />
     </a>
+  );
+}
+
+// Uploads row — same shape as ExportRowItem. Uses FileTypeIcon (red PDF band)
+// instead of the old 📄 emoji, shows page count when present, and downloads via
+// triggerUploadDownload (mints a scoped ?st= token → /uploads/{id}/download
+// → S3 signed URL). Kind is derived from mime_type.
+function UploadRow({ upload }: { upload: UploadItem }) {
+  const kind = (upload.mime_type || "").includes("pdf") ? "pdf" : "file";
+  return (
+    <button
+      type="button"
+      onClick={() => { void triggerUploadDownload(upload.id); }}
+      title={`Download ${upload.filename}`}
+      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50 transition-colors text-left"
+    >
+      <FileTypeIcon kind={kind} className="w-[18px] h-[22px] shrink-0" />
+      <span className="text-[12.5px] text-ink-800 truncate flex-1 min-w-0">
+        {upload.filename}
+      </span>
+      {upload.page_count != null && (
+        <span className="text-[11px] text-ink-400 tabular-nums shrink-0">
+          {upload.page_count}p
+        </span>
+      )}
+      <Download className="w-3.5 h-3.5 text-ink-400 shrink-0" aria-hidden />
+    </button>
   );
 }
 
@@ -463,7 +518,9 @@ function M2Body({ data }: { data: Record<string, any> | null }) {
   type Gap = {
     id?: string; gap_id?: string;
     one_sentence?: string; type?: string;
-    why_its_a_gap?: string; addressable_as?: string;
+    // The committed shape uses `why_it_is_a_gap`; an older path had the typo'd
+    // `why_its_a_gap`. Tolerate both.
+    why_it_is_a_gap?: string; why_its_a_gap?: string; addressable_as?: string;
     description?: string; text?: string; title?: string;
     relevance?: string;
     confirmed?: boolean;
@@ -488,8 +545,14 @@ function M2Body({ data }: { data: Record<string, any> | null }) {
     | null
   >(null);
 
+  // Show what the gap actually IS, not its category. `type` ("context gap")
+  // is only a classification — surfacing it as the chip text read as nonsense
+  // ("gap-1 context gap"). Prefer the real content: a one-sentence summary, the
+  // rationale (why_it_is_a_gap), or what it's addressable as. `type` is dropped
+  // from the chain (it's shown as a separate label in the gap modal).
   const gapText = (g: Gap) =>
-    g.one_sentence || g.description || g.text || g.title || g.type || "—";
+    g.one_sentence || g.why_it_is_a_gap || g.why_its_a_gap || g.addressable_as ||
+    g.description || g.text || g.title || "(research gap)";
   // Chip + modal id: the commit shape stores `gap_id` ("1"), older paths used
   // `id`. Fall back to positional G{n} so a malformed gap still gets a label.
   const gapId = (g: Gap, i: number) =>
@@ -598,7 +661,7 @@ function M2Body({ data }: { data: Record<string, any> | null }) {
         subtitle={modalSubtitle(modal, gaps, hypotheses, sources)}
         onClose={() => setModal(null)}
       >
-        {modal?.kind === "gap" && <GapDetail gap={gaps[modal.index]} text={gapText(gaps[modal.index])} />}
+        {modal?.kind === "gap" && <GapDetail gap={gaps[modal.index]} />}
         {modal?.kind === "hypothesis" && (
           <HypothesisDetail
             hypothesis={hypotheses[modal.index]}
@@ -619,6 +682,10 @@ function modalTitle(
   if (!m) return "";
   if (m.kind === "gap") {
     const g = gaps[m.index];
+    // Title = the gap's category ("Context gap"), not the bare id ("gap-1").
+    // The id moves to the subtitle. Falls back to the id when no type.
+    const t = (g?.type as string | undefined)?.trim();
+    if (t) return t.charAt(0).toUpperCase() + t.slice(1);
     return g?.id ?? (g?.gap_id ? `G${g.gap_id}` : `Gap ${m.index + 1}`);
   }
   if (m.kind === "hypothesis") {
@@ -634,7 +701,11 @@ function modalSubtitle(
   _gaps: any[], _hyps: any[], _sources: any[],
 ): string | undefined {
   if (!m) return undefined;
-  if (m.kind === "gap") return "Research gap";
+  if (m.kind === "gap") {
+    const g = _gaps[m.index];
+    const id = g?.id ?? (g?.gap_id ? `G${g.gap_id}` : null);
+    return id ? `Research gap · ${id}` : "Research gap";
+  }
   if (m.kind === "hypothesis") return "Hypothesis";
   return "Click any paper to open its source";
 }
@@ -642,21 +713,28 @@ function modalSubtitle(
 
 // --- detail renderers for the modal body ---
 
-function GapDetail({ gap, text }: { gap: any; text: string }) {
+function GapDetail({ gap }: { gap: any }) {
   const supporting: any[] = gap?.supporting_papers ?? [];
-  // Current commit shape carries `type` + `why_its_a_gap` + `addressable_as`;
-  // `relevance` was the older field. Show whichever are present.
+  // Current commit shape carries `type` + `why_it_is_a_gap` + `addressable_as`
+  // (`why_its_a_gap` was a typo'd older key; `relevance` even older). Show
+  // whichever are present.
   const gapType = gap?.type;
-  const why = gap?.why_its_a_gap;
+  const why = gap?.why_it_is_a_gap ?? gap?.why_its_a_gap;
   const addressable = gap?.addressable_as;
+  // Only show a standalone headline when there's a distinct one-sentence
+  // summary — otherwise `text` is the rationale and would duplicate the "why
+  // it's a gap" block below.
+  const headline = gap?.one_sentence;
   return (
     <div className="space-y-3">
-      {(gapType || gap?.relevance) && (
+      {/* `type` is shown as the modal title now — only surface the older
+          `relevance` field here (when there's no type). */}
+      {!gapType && gap?.relevance && (
         <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-[11px] font-semibold">
-          {gapType ?? `Relevance: ${gap.relevance}`}
+          Relevance: {gap.relevance}
         </div>
       )}
-      <p className="text-[14px] leading-relaxed text-ink-900">{text}</p>
+      {headline && <p className="text-[14px] leading-relaxed text-ink-900">{headline}</p>}
       {why && (
         <div className="border-l-2 border-primary-200 pl-3 text-[12.5px] text-ink-600">
           <FieldLabel name="why it's a gap" top />

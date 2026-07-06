@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from ..agent_state import DbProjectStateStore
 from ..db import db_session
 from ..deps import current_user, stream_user_factory
-from ..models import ContextStore, Project, User
+from ..models import ContextStore, Export, Project, User
 from ..routers.uploads import s3_from_env
 
 router = APIRouter(tags=["exports"])
@@ -44,9 +44,16 @@ def _humanize(key: str) -> str:
     return key.replace("_", " ").strip().title()
 
 
-def _slug(name: str | None) -> str:
-    s = re.sub(r"[^a-zA-Z0-9]+", "-", (name or "thesis").lower()).strip("-")
-    return s or "thesis"
+def _slug(name: str | None, max_len: int = 60) -> str:
+    # Transliterate diacritics to ASCII first so a Vietnamese title like
+    # "Các yếu tố ảnh hưởng…" slugs to "cac-yeu-to-anh-huong…" instead of
+    # losing every accented letter to a hyphen. NFKD drops the combining marks;
+    # đ/Đ don't decompose, so map them explicitly.
+    import unicodedata
+    raw = (name or "thesis").replace("đ", "d").replace("Đ", "D")
+    ascii_ = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode()
+    s = re.sub(r"[^a-zA-Z0-9]+", "-", ascii_.lower()).strip("-")
+    return (s[:max_len].strip("-") or "thesis")
 
 
 def _stringify(v: Any) -> str:
@@ -204,7 +211,9 @@ def _llm_text(prompt: str) -> str:
     """Single LLM call → plain text (flattens Gemini 3.x list content)."""
     from langchain_google_genai import ChatGoogleGenerativeAI
     llm = ChatGoogleGenerativeAI(
-        model=os.getenv("DOTHESIS_AGENT_MODEL", "gemini-2.5-flash"),
+        # Same env var + default as the deep agent (agent/runtime.py) so the
+        # export composer's fallback stays on the 3.5-flash family too.
+        model=os.getenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash"),
         temperature=0.3, timeout=70,
     )
     msg = llm.invoke(prompt)
@@ -367,22 +376,76 @@ def download_export(
     db: Session = Depends(db_session),
 ):
     """302-redirect to a fresh 5-minute signed URL for the requested artifact."""
-    _owned_project(db, user, project_id)
-    cs = db.get(ContextStore, project_id)
-    m5 = (cs.m5_writing or {}) if cs else {}
-    artifacts = m5.get("export_artifacts") or []
+    proj = _owned_project(db, user, project_id)
     expected_key = f"projects/{project_id}/exports/{filename}"
-    # Only redirect if the artifact key is present — prevents guessing other keys.
-    if not any(a.get("s3_key") == expected_key for a in artifacts):
+    # Only redirect if this artifact is a recorded export for the project —
+    # prevents guessing other S3 keys. Authoritative source is now the exports
+    # table (was m5_writing.export_artifacts).
+    row = (
+        db.query(Export)
+        .filter(Export.project_id == project_id, Export.s3_key == expected_key)
+        .first()
+    )
+    if row is None:
         raise HTTPException(
             404, detail={"error": {"code": "artifact_not_found"}},
         )
+    # Meaningful download name from the project title + scope, instead of the
+    # opaque storage name ("thesis-233f5248.docx"). e.g.
+    # "gen-z-tiktok-cosmetics-M2-M3.docx" or "<title>.docx" for a full export.
+    ext = filename.rsplit(".", 1)[-1] if "." in filename else (row.kind or "docx")
+    scope_suffix = "" if (row.scope or "full") == "full" else "-" + (row.scope or "").replace(",", "-")
+    download_name = f"{_slug(proj.name)}{scope_suffix}.{ext}"
     s3 = s3_from_env()
     signed_url = s3.generate_presigned_url(
         "get_object",
         # Project convention is S3_BUCKET; AWS_S3_BUCKET kept as a fallback.
+        # ResponseContentDisposition overrides the browser "Save As" name on the
+        # signed GET without renaming the stored object.
         Params={"Bucket": os.environ.get("S3_BUCKET") or os.environ["AWS_S3_BUCKET"],
-                "Key": expected_key},
+                "Key": expected_key,
+                "ResponseContentDisposition": f'attachment; filename="{download_name}"'},
         ExpiresIn=300,
     )
     return RedirectResponse(url=signed_url, status_code=302)
+
+
+@router.post("/projects/{project_id}/exports/list")
+def list_exports(
+    project_id: uuid.UUID,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """The LATEST export document per (scope, kind), newest first — powers the
+    module-agnostic Exports panel. Every re-export used to add another row, so a
+    project that ran "Full thesis" 4× showed 4 identical PDF rows; users only
+    ever want the most recent one. We keep one per (kind, scope) pair. Older
+    documents stay in the DB (still downloadable via a direct download URL) —
+    they're just hidden from the panel."""
+    _owned_project(db, user, project_id)
+    rows = (
+        db.query(Export)
+        .filter(Export.project_id == project_id)
+        .order_by(Export.created_at.desc())
+        .all()
+    )
+    seen: set[tuple[str, str]] = set()
+    latest: list[Export] = []
+    for r in rows:
+        key = ((r.kind or "").lower(), r.scope or "full")
+        if key in seen:
+            continue
+        seen.add(key)
+        latest.append(r)
+    return [
+        {
+            "id": str(r.id),
+            "scope": r.scope,
+            "kind": r.kind,
+            "filename": r.filename,
+            "size_bytes": r.size_bytes,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "download_url": f"/api/v1/projects/{project_id}/exports/{r.filename}",
+        }
+        for r in latest
+    ]

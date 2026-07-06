@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowUpRight, Flag, Quote } from "lucide-react";
 
+import { FileTypeIcon } from "../FileTypeIcon";
 import type { PapersPanelHint } from "./types";
 
 
@@ -124,24 +125,19 @@ function PaperRow({
 
   return (
     <div className="px-4 pt-3 pb-3.5 border-t border-ink-100 flex gap-3.5 items-start">
-      {/* PDF thumbnail */}
-      <div
-        className="relative w-[38px] min-w-[38px] h-[48px] rounded-md border border-ink-200 flex items-end justify-center"
-        style={{
-          background: "linear-gradient(135deg, #F1F3FF 0%, #F4F0FF 100%)",
-          boxShadow: "1px 1px 0 var(--ink-200, #E4E7F1)",
-        }}
-        aria-hidden="true"
-      >
+      {/* PDF thumbnail — branded FileTypeIcon (red "PDF" band) matching the
+          Exports panel + in-chat download card. Seminal star pinned in the
+          corner. */}
+      <div className="relative w-[38px] min-w-[38px] flex items-center justify-center" aria-hidden="true">
+        <FileTypeIcon kind="pdf" className="w-[34px] h-[42px]" />
         {paper.seminal && (
           <span
-            className="absolute -top-1.5 -right-1.5 w-[18px] h-[18px] rounded-full bg-amber-500 text-white inline-flex items-center justify-center text-[10px] font-extrabold"
+            className="absolute -top-1 -right-1 w-[18px] h-[18px] rounded-full bg-amber-500 text-white inline-flex items-center justify-center text-[10px] font-extrabold"
             title="Seminal"
           >
             ★
           </span>
         )}
-        <span className="text-[9px] font-extrabold text-primary-600 pb-0.5">PDF</span>
       </div>
 
       {/* Main content */}
@@ -180,8 +176,8 @@ function PaperRow({
           <blockquote
             className="mt-2 py-2 pl-3 pr-2.5 rounded-r-lg text-[13px] text-ink-800 leading-relaxed font-serif"
             style={{
-              borderLeft: "3px solid #6A4DE0",
-              background: "#F4F0FF",
+              borderLeft: "3px solid #2540FF",
+              background: "#EEF1FF",
             }}
           >
             {paper.quote}
@@ -231,12 +227,13 @@ function PaperRow({
 }
 
 
-// Camp swatch colors — match the design's 4-color palette (primary,
-// accent-violet, review-600, ok-600). When there are more than 4 camps the
-// palette wraps; that's the design's intentional behavior too.
+// Camp swatch colors — categorical (one per literature camp). Purple was
+// dropped (the AI-default blue/purple fingerprint); the set is now
+// blue / teal / amber / emerald — four clearly distinct, calibrated hues.
+// When there are more than 4 camps the palette wraps.
 const CAMP_COLORS = [
-  "#2540FF",  // primary
-  "#6A4DE0",  // accent-violet
-  "#E08800",  // review-600 (amber)
-  "#1F9D62",  // ok-600 (emerald)
+  "#2540FF",  // primary blue
+  "#0D9488",  // teal
+  "#E08800",  // amber
+  "#1F9D62",  // emerald
 ];

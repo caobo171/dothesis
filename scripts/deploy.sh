@@ -97,16 +97,59 @@ if [ "${SKIP_WEB:-0}" != "1" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 1. System packages — M5 export toolchain (pandoc + libreoffice)
+# 1. System packages — M5 export toolchain (pandoc + libreoffice + Chrome runtime)
 # ---------------------------------------------------------------------------
 if [ "${SKIP_APT:-0}" = "1" ]; then
   log "SKIP_APT=1 — skipping system package install"
 else
-  log "installing system export deps (pandoc, libreoffice-writer)"
+  log "installing system export deps (pandoc, libreoffice-writer, Chrome runtime libs)"
   $SUDO apt-get update -qq
-  $SUDO apt-get install -y --no-install-recommends pandoc libreoffice-writer
+  # Chrome-for-Testing (managed by puppeteer for the mermaid CLI) needs a
+  # handful of shared libraries to launch headless on a bare Ubuntu server —
+  # otherwise `mmdc` times out with "TimeoutError waiting for WS endpoint".
+  # Package list from the official Puppeteer troubleshooting doc.
+  $SUDO apt-get install -y --no-install-recommends \
+    pandoc libreoffice-writer \
+    ca-certificates fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 \
+    libc6 libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 libgbm1 \
+    libgcc-s1 libglib2.0-0 libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 \
+    libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
+    libxrandr2 libxrender1 libxss1 libxtst6 lsb-release wget xdg-utils
 fi
-# Verify; --strict makes a degraded toolchain a hard failure in prod.
+
+# ---------------------------------------------------------------------------
+# 1b. Mermaid CLI — conceptual-model diagrams (Node-based)
+# ---------------------------------------------------------------------------
+# The M5 export renders the agent's `flowchart LR` block to a PNG and embeds
+# it. Missing tools = fall back to a text relationship list (still ships), so
+# any failure here is warned but never blocks the deploy. Skipped when Node
+# isn't available (matches the SKIP_WEB gate — same runtime).
+if [ "${SKIP_WEB:-0}" != "1" ] && command -v npm >/dev/null 2>&1; then
+  MMDC_DIR="engine/tools/mermaid_cli"
+  if [ -f "$MMDC_DIR/package.json" ]; then
+    log "installing mermaid CLI + managed Chrome (conceptual-model diagrams)"
+    ( cd "$MMDC_DIR" && npm install --no-audit --no-fund --silent ) || \
+      warn "mermaid CLI install failed — conceptual-model diagrams will fall back to text"
+    # puppeteer's own Chrome for Testing. Written under $PUPPETEER_CACHE_DIR
+    # (or ~/.cache/puppeteer). Idempotent — noop when already at the pinned version.
+    export PUPPETEER_CACHE_DIR="${PUPPETEER_CACHE_DIR:-$HOME/.cache/puppeteer}"
+    if [ ! -d "$PUPPETEER_CACHE_DIR/chrome" ] || \
+       [ -z "$(ls -A "$PUPPETEER_CACHE_DIR/chrome" 2>/dev/null || true)" ]; then
+      ( cd "$MMDC_DIR" && npx --yes puppeteer browsers install chrome ) || \
+        warn "puppeteer chrome install failed — mermaid → PNG will fall back to text"
+    else
+      log "puppeteer chrome already installed in ${PUPPETEER_CACHE_DIR}"
+    fi
+    # Give the service user access to the cache (Chrome writes profile files
+    # under here on first launch).
+    if [ "$APP_USER" != "$(id -un)" ] && [ -d "$PUPPETEER_CACHE_DIR" ]; then
+      $SUDO chown -R "$APP_USER":"$APP_USER" "$PUPPETEER_CACHE_DIR" || true
+    fi
+  fi
+fi
+
+# Verify; --strict makes a degraded toolchain a hard failure in prod. mmdc is
+# informational-only in the check (fallback is graceful) so it never trips --strict.
 bash scripts/check-export-deps.sh --strict || die "export toolchain incomplete — see hints above"
 
 # ---------------------------------------------------------------------------
@@ -175,6 +218,9 @@ Environment=ORCHESTRATOR_ENABLED=true
 # without it uvicorn crash-loops with ModuleNotFoundError. (No backticks here:
 # this heredoc is unquoted, so backticks would trigger command substitution.)
 Environment=PYTHONPATH=${REPO_DIR}
+# Where puppeteer's Chrome-for-Testing was installed by the deploy step.
+# _render_mermaid_png reads this to locate the browser mmdc needs.
+Environment=PUPPETEER_CACHE_DIR=${PUPPETEER_CACHE_DIR:-${REPO_DIR}/api/.cache/puppeteer}
 ExecStart=${REPO_DIR}/${VENV_BIN}/uvicorn app.main:app --host ${API_HOST} --port ${API_PORT} --workers ${API_WORKERS}
 Restart=on-failure
 RestartSec=3

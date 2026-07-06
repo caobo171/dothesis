@@ -365,7 +365,13 @@ def _charge_auto_run(db: Session, run: Job) -> None:
     )
     if total_tokens <= 0:
         return
-    cost = max(1, round(total_tokens / 1000))
+    # Scale by the active orchestrator model's relative cost — the auto-draft
+    # pipeline runs on ORCHESTRATOR_LLM_MODEL (gemini-3.5-flash, ~4x a 2.5-flash
+    # turn), so the flat 1-credit/1k-token rate would undercharge it badly. Same
+    # multiplier the chat turn uses (pricing.credit_multiplier).
+    from .pricing import credit_multiplier
+    mult = credit_multiplier(os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-3.5-flash"))
+    cost = max(1, round(total_tokens / 1000 * mult))
     charge = min(cost, owner.credit or 0)
     if charge > 0:
         debit(db, owner, delta=charge, reason="auto_run", ref_type="run", ref_id=run.id)

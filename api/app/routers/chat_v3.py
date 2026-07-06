@@ -166,20 +166,9 @@ async def _get_agent(db: Session, project_id: uuid.UUID):
     return agent
 
 
-# Credit pricing is calibrated so gemini-2.5-flash ≈ 1 credit / 1000 tokens.
-# Stronger models cost multiples more per token, so credits must scale with the
-# active model or we'd undercharge badly (a Pro turn costs ~5x a Flash turn).
-# Multiplier ≈ the model's output price relative to 2.5-flash. Update when the
-# active model or upstream prices change.
-def _credit_multiplier(model: str) -> float:
-    m = (model or "").lower()
-    if "flash-lite" in m:
-        return 0.4
-    if "pro" in m:           # 2.5-pro / 3.x-pro: ~4-6x flash output price
-        return 5.0
-    if "flash" in m:
-        return 1.0
-    return 1.0
+# Credit-per-token scaling by active model lives in pricing.py so the chat turn
+# and the auto-draft run (job_runner) charge off one source of truth.
+from ..pricing import credit_multiplier as _credit_multiplier
 
 
 async def send_message_v3(
@@ -248,10 +237,12 @@ async def send_message_v3(
         _usage_in = 0
         _usage_out = 0
         chunks: list[str] = []
-        # Captured from `tool_calls` events emitted by the runtime when the
-        # agent included an `[OPTIONS] …` marker. Persisted onto the
-        # Message row so MessageBubble can render the cards on reload.
-        final_tool_calls: dict | None = None
+        # Captured from `tool_calls` events emitted by the runtime (an
+        # `[OPTIONS]` card, a `[PAPERS]` panel, an export download card, …).
+        # A single turn can emit SEVERAL (e.g. export + papers panel) — collect
+        # ALL of them, not just the last, so none clobbers another. Persisted
+        # onto the Message row so MessageBubble can render them all on reload.
+        widget_hints: list[dict] = []
 
         # Engine progress beats (research_scout's 30–90s search) reach the
         # SSE stream through the same registry the graph path used.
@@ -334,7 +325,7 @@ async def send_message_v3(
             duration_ms = int((_time.monotonic() - _turn_t0) * 1000)
             # Scale credits by the active model's relative cost (see
             # _credit_multiplier) so a Pro turn isn't charged like a Flash turn.
-            _mult = _credit_multiplier(os.getenv("DOTHESIS_AGENT_MODEL", "gemini-2.5-flash"))
+            _mult = _credit_multiplier(os.getenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash"))
             cost_credits = max(1, round(total_tokens / 1000 * _mult)) if total_tokens else 0
 
             full = "".join(chunks)
@@ -349,6 +340,15 @@ async def send_message_v3(
                 full = ("I didn't have anything to add there. Tell me which part "
                         "of your thesis you'd like to work on next, or ask me "
                         "anything about it.")
+            # Collapse the turn's widget hints into the single tool_calls_json
+            # slot: none → null, one → that hint (back-compat), many → a `multi`
+            # wrapper the frontend expands so an export card + papers panel both
+            # render (previously the last hint clobbered the rest).
+            final_tool_calls = (
+                None if not widget_hints
+                else widget_hints[0] if len(widget_hints) == 1
+                else {"widget_type": "multi", "widgets": widget_hints}
+            )
             if full:
                 focus = DbProjectStateStore(
                     engine, project_id, _workspace_dir(project_id)
@@ -437,9 +437,11 @@ async def send_message_v3(
                           file=_sys.stderr, flush=True)
                 elif kind == "tool_calls":
                     # Interactive widget hint — render as clickable cards
-                    # in MessageBubble. Captured for persistence below.
-                    final_tool_calls = ev.get("payload")
-                    yield sse_pack({"type": "tool_calls", "payload": final_tool_calls})
+                    # in MessageBubble. Collect every hint this turn emits.
+                    _payload = ev.get("payload")
+                    if _payload:
+                        widget_hints.append(_payload)
+                    yield sse_pack({"type": "tool_calls", "payload": _payload})
                 elif kind == "usage":
                     # Token usage for this LLM step — accumulate (don't forward
                     # mid-stream; the total is persisted + sent in `done`).

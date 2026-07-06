@@ -133,6 +133,14 @@ export type ExportArtifactsHint = {
   artifacts: ExportArtifact[];
 };
 
+// A single turn can emit several widgets (e.g. an export download card AND a
+// papers panel). When there's more than one, the backend wraps them in this so
+// none clobbers another; WidgetRenderer expands it.
+export type MultiHint = {
+  widget_type: "multi";
+  widgets: WidgetHint[];
+};
+
 // Discriminated union — future variants (e.g. canvas_editor) land here.
 export type WidgetHint =
   | CardGridHint
@@ -140,7 +148,8 @@ export type WidgetHint =
   | FlowChartHint
   | PapersPanelHint
   | AttachmentsHint
-  | ExportArtifactsHint;
+  | ExportArtifactsHint
+  | MultiHint;
 
 export type WidgetSelectHandler = (
   fieldName: string,

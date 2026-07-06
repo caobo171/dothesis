@@ -13,12 +13,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..db import db_session
-from ..deps import current_user
+from ..deps import current_user, stream_user_factory
 from ..models import PaperUpload, Project, User
 from ..pdf_extract import extract_pdf_text
 
@@ -190,6 +190,40 @@ def delete_upload(upload_id: uuid.UUID,
     up = _owned_upload(db, user, upload_id)
     db.delete(up); db.commit()
     return None
+
+
+@router.get("/uploads/{upload_id}/download")
+def download_upload(
+    upload_id: uuid.UUID,
+    # GET-only (browser <a download>) — auth via a short-lived ?st= token
+    # scoped to this exact upload, keeping the long-lived JWT out of the URL.
+    user: User = Depends(stream_user_factory(
+        lambda upload_id: f"project-upload:{upload_id}")),
+    db: Session = Depends(db_session),
+):
+    """302-redirect to a fresh 5-minute signed URL for the uploaded file.
+
+    Powers the Uploads section's download button. Mirrors the export download
+    route: S3 presigned URL with ResponseContentDisposition so the browser
+    saves the file under its original filename (not the opaque S3 key).
+    """
+    up = _owned_upload(db, user, upload_id)
+    # s3_uri format: s3://<bucket>/users/<uid>/projects/<pid>/uploads/<uploadid>/<filename>
+    if not (up.s3_uri or "").startswith("s3://"):
+        raise HTTPException(404, detail={"error": {"code": "no_s3_uri"}})
+    _, _, rest = up.s3_uri.partition("s3://")
+    bucket, _, key = rest.partition("/")
+    if not (bucket and key):
+        raise HTTPException(500, detail={"error": {"code": "bad_s3_uri"}})
+    s3 = s3_from_env()
+    signed_url = s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": key,
+                "ResponseContentDisposition":
+                    f'attachment; filename="{up.filename}"'},
+        ExpiresIn=300,
+    )
+    return RedirectResponse(url=signed_url, status_code=302)
 
 
 @router.post("/uploads/{upload_id}/text", response_class=PlainTextResponse)

@@ -38,6 +38,18 @@ MODEL_PRICING: Dict[str, ModelPricing] = {
         display_name="Gemini 3.0 Flash (Preview)",
         provider="gemini",
     ),
+    # Default deep-agent + orchestrator model (DOTHESIS_AGENT_MODEL /
+    # ORCHESTRATOR_LLM_MODEL). Same price tier as the 3-flash-preview anchor;
+    # explicit entry because get_model_pricing's prefix match doesn't bridge
+    # "gemini-3.5-flash" → "gemini-3-flash-preview", so without it cost metering
+    # would fall through to None and undercount tokens.
+    "gemini-3.5-flash": ModelPricing(
+        input_price=0.50,
+        output_price=3.00,
+        name="Gemini 3.5 Flash",
+        display_name="Gemini 3.5 Flash",
+        provider="gemini",
+    ),
     # Gemini 2.5 family
     "gemini-2.5-pro": ModelPricing(
         input_price=1.25,

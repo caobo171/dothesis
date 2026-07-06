@@ -5,28 +5,33 @@ import { ArrowLeft, Bell, ChevronDown, Download, FileDown, History, Menu, PanelR
 import { useMe } from "@/app/lib/use-me";
 import { triggerExportDownload } from "@/app/lib/api";
 
-// Modules that can be exported as a standalone Word doc (teacher report).
-const EXPORTABLE_MODULES: { id: string; label: string }[] = [
-  { id: "M1", label: "Topic" },
-  { id: "M2", label: "Literature" },
-  { id: "M3", label: "Design" },
-  { id: "M4", label: "Analysis" },
-];
-
-// The export quick-actions are pre-defined PROMPTS, not raw downloads. Clicking
-// one asks the agent to turn that module's committed work into a polished,
-// professor-ready Word document — proper academic structure + headings — rather
-// than dumping the raw slice. The agent's writing/export tools produce the docx
-// and surface a download card in the reply.
-function _exportPrompt(moduleId: string, label: string): string {
+// Export is agent-driven: the user picks any modules in the ExportModulesModal,
+// and we ask the agent to call `export_docx(scope="M1,M3,…")` — which composes
+// the chosen module(s) into ONE professor-ready doc and records it in the
+// Exports list tagged with that scope (never dumped in M5). The docx/pdf show up
+// in the Exports panel + as a download card in chat.
+function _exportPrompt(modules: string[]): string {
+  // "full" → the complete 6-chapter thesis (compose_all_sections), not a
+  // combination of module write-ups.
+  if (modules.length === 1 && modules[0] === "full") {
+    return (
+      "Export my FULL thesis as a polished, professor-ready Word document — " +
+      'call export_docx with scope "full" (all chapters: introduction, ' +
+      "literature review, methodology, results, discussion, conclusion, plus " +
+      "the reference list)."
+    );
+  }
+  const scope = modules.join(",");
+  const list = modules.join(", ");
+  const noun = modules.length > 1 ? "modules" : "module";
   return (
-    `Export my ${moduleId} (${label}) into a polished, well-formatted Word ` +
-    `(.docx) document I can send to my professor: proper academic structure, ` +
-    `clear headings, full sentences (not bullet fragments), and consistent ` +
-    `citation style. Use everything I've already committed for ${moduleId}.`
+    `Export my ${list} ${noun} as one polished, professor-ready Word document ` +
+    `— call export_docx with scope "${scope}". Use everything I've already ` +
+    `committed for ${modules.length > 1 ? "those modules" : list}.`
   );
 }
 import { ChatSidebarContext } from "./ChatShellLayout";
+import { ExportModulesModal } from "./ExportModulesModal";
 import { MODULES } from "./HomeDashboard";
 
 
@@ -109,6 +114,7 @@ export function ChatHeader({
   focusModule,
   focusStatus,
   exportArtifacts,
+  onQuickPrompt,
 }: {
   projectName: string;
   threadName: string;
@@ -121,6 +127,9 @@ export function ChatHeader({
    *  becomes a real link to the docx; otherwise it's disabled with a
    *  "no export yet" tooltip. */
   exportArtifacts?: { kind: string; download_url: string }[];
+  /** Send a pre-defined prompt into the chat — Export-to-Word quick actions
+   *  use it to ask the agent to export a module (export_docx scope). */
+  onQuickPrompt?: (text: string) => void;
 }) {
   const focusLabel = MODULES.find(m => m.id === focusModule)?.label;
   const phase = focusModule ? PHASE_LABEL[focusModule] : undefined;
@@ -128,6 +137,7 @@ export function ChatHeader({
   const me = useMe();
   const sidebar = useContext(ChatSidebarContext);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const user = me.data;
   const userInitials = user?.email
     ? user.email.slice(0, 2).toUpperCase()
@@ -240,20 +250,23 @@ export function ChatHeader({
                 {/* Autopilot (renamed from Auto approve) */}
                 <div className="px-1 pb-2">{autoDraftButton}</div>
 
-                <div className="px-2 pt-1 pb-1 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400 border-t border-ink-100">
-                  Export to Word
-                </div>
-                {projectId && EXPORTABLE_MODULES.map(m => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => { void downloadModuleDocx(projectId, m.id); }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-ink-800 hover:bg-ink-50 text-left"
-                  >
-                    <FileDown className="w-4 h-4 text-ink-500" />
-                    <span><b className="text-primary-700">{m.id}</b> {m.label} → .docx</span>
-                  </button>
-                ))}
+                {onQuickPrompt && (
+                  <>
+                    <div className="px-2 pt-1 pb-1 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400 border-t border-ink-100">
+                      Export to Word
+                    </div>
+                    {/* One action → opens the module picker (choose any modules;
+                        they're combined into one .docx). */}
+                    <button
+                      type="button"
+                      onClick={() => setExportOpen(true)}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-ink-800 hover:bg-ink-50 text-left"
+                    >
+                      <FileDown className="w-4 h-4 text-ink-500" />
+                      <span>Export modules → .docx…</span>
+                    </button>
+                  </>
+                )}
 
                 <div className="px-2 pt-1 pb-1 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400 border-t border-ink-100">
                   More
@@ -300,6 +313,14 @@ export function ChatHeader({
           </div>
         </div>
       </div>
+
+      {onQuickPrompt && (
+        <ExportModulesModal
+          open={exportOpen}
+          onClose={() => setExportOpen(false)}
+          onExport={(modules) => onQuickPrompt(_exportPrompt(modules))}
+        />
+      )}
     </header>
   );
 }

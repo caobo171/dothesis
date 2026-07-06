@@ -23,6 +23,13 @@ class Package(TypedDict):
 # run at ~$0.0025/credit (~66% margin at a 25% output mix). Larger packs apply a
 # modest volume discount but stay ≥60% margin. Re-tune once token_ledger meters
 # real tokens/run and the input:output split.
+#
+# ⚠️ STALE since the gemini-3.5-flash switch (2026-06-30): chat turns AND
+# auto-draft runs now bill at credit_multiplier()=4.0 for the Gemini 3 flash
+# family, so a 10M-token run debits ~40,000 credits, not 10,000 — the Starter
+# pack now covers ~1/4 of a run. The dollar prices/credits below are unchanged
+# (a business decision), but the "one pack = one run" framing no longer holds.
+# Decide: raise pack credits, raise pack prices, or accept thinner per-run value.
 PACKAGES: list[Package] = [
     {
         "id": "starter_package",
@@ -80,3 +87,30 @@ def resolve_model(tier: str) -> str:
         raise ValueError(f"unknown tier: {tier!r}")
     env_key = f"DOTHESIS_{tier.upper()}_MODEL"
     return os.environ.get(env_key) or TIER_TO_MODEL[tier]
+
+
+# Single source of truth for how credits scale with the active model. The credit
+# rate (1 credit ≈ 1000 tokens) is calibrated on gemini-2.5-flash; pricier models
+# must scale up or we undercharge. Used by BOTH charge sites — the interactive
+# chat turn (chat_v3._finalize) and the auto-draft run (job_runner._charge_auto_run)
+# — so they can't drift apart. Multiplier ≈ the model's BLENDED (input+output)
+# price relative to 2.5-flash, from engine/utils/model_config.py:
+#   2.5-flash       $0.15 in / $0.60 out  → 1.0  (baseline)
+#   2.5-flash-lite  $0.10 in / $0.40 out  → 0.4
+#   3.x-flash       $0.50 in / $3.00 out  → 4.0  (3.3x in, 5x out; ~4x blended on
+#                                                 input-heavy thesis turns)
+#   *-pro           $1.25+ in / $10+ out  → 5.0
+def credit_multiplier(model: str) -> float:
+    m = (model or "").lower()
+    if "flash-lite" in m:
+        return 0.4
+    if "pro" in m:
+        return 5.0
+    # Gemini 3 flash family (gemini-3.5-flash, gemini-3-flash-preview) — must
+    # precede the generic "flash" branch, which these names also match and which
+    # would undercharge them at 1.0.
+    if "3.5-flash" in m or "3-flash" in m:
+        return 4.0
+    if "flash" in m:
+        return 1.0
+    return 1.0

@@ -269,7 +269,9 @@ def _sections_to_markdown(sections: list[dict]) -> str:
         # Defensive last line: strip internal placeholder/QA text so it can
         # never reach the rendered document, even on a forced export, then
         # normalize inline-bullet runs into proper markdown lists.
-        prose = _normalize_prose_markdown(_scrub_internal_markers(prose))
+        prose = _normalize_prose_markdown(
+            _mermaid_to_prose(_split_run_on_hypotheses(_scrub_internal_markers(prose)))
+        )
         # Defense-in-depth against the duplicate chapter heading: the prompt
         # tells the LLM not to emit the chapter title, but Gemini sometimes
         # leads with its own "# Chương N: …" / "## <chapter title>" anyway, and
@@ -319,15 +321,200 @@ def _scrub_internal_markers(prose: str) -> str:
     return prose.strip()
 
 
+def _split_run_on_hypotheses(prose: str) -> str:
+    """Break a paragraph that lists H1/H2/H3… inline into ONE paragraph per H.
+
+    The M5 discussion composer sometimes emits every hypothesis as a
+    continuous run: "Cụ thể: - H1: KOL … (β=…). - H2: HATH … (β=…). - H3: …"
+    That reads as a wall of prose because the separators aren't at line start
+    (so `_normalize_prose_markdown` doesn't fire). Insert a real paragraph
+    break before each `Hn:` marker so each hypothesis stands as its own block.
+
+    Handles: `- H1:`, `– H1:`, `- **H1:**`, `**H1:**`, with the leading dash
+    optional; the leading intro `Cụ thể: -` stays with its sentence.
+    """
+    if not prose or "H1" not in prose:
+        return prose
+    # Match a hypothesis marker that isn't already at line start. Uses a
+    # positive lookahead so the marker text is preserved.
+    # Group: whitespace/dash before "H<n>:" (or "**H<n>:**") in-line.
+    pattern = re.compile(
+        r"(?<!\n)[ \t]*[-–—]?[ \t]*(\*\*)?H\d{1,2}:",
+    )
+
+    def _sub(m: "re.Match[str]") -> str:
+        marker = m.group(0).lstrip(" \t-–—")
+        # Preserve the ** if present.
+        return "\n\n" + marker.lstrip()
+
+    out = pattern.sub(_sub, prose)
+    # First H may end up as "\n\nH1:" at the very start; strip leading blanks.
+    return out.lstrip("\n")
+
+
+def _render_mermaid_png(mmd_source: str, out_path: Path) -> bool:
+    """Render mermaid source to a PNG via the local @mermaid-js/mermaid-cli.
+
+    Puppeteer's own Chrome-for-Testing binary is used (the OS Chrome install
+    fails to connect over the puppeteer WS socket on macOS). Returns True on a
+    real PNG, False when the CLI is missing / times out — the caller falls back
+    to a text list so the document still ships.
+    """
+    import os as _os
+    import subprocess as _subprocess
+    import shutil as _shutil
+
+    engine_root = Path(__file__).resolve().parents[2] / "engine"
+    mmdc_dir = engine_root / "tools" / "mermaid_cli"
+    mmdc = mmdc_dir / "node_modules" / ".bin" / "mmdc"
+    if not mmdc.exists():
+        return False
+    # Locate puppeteer's own Chrome. It gets installed under ~/.cache/puppeteer
+    # (or the value of PUPPETEER_CACHE_DIR). Pick the highest-versioned dir.
+    chrome_bin: Path | None = None
+    cache_dir = Path(_os.environ.get("PUPPETEER_CACHE_DIR",
+                                     Path.home() / ".cache" / "puppeteer"))
+    chrome_root = cache_dir / "chrome"
+    if chrome_root.exists():
+        versions = sorted(chrome_root.iterdir(), key=lambda p: p.name, reverse=True)
+        for v in versions:
+            # macOS layout: <v>/chrome-mac-arm64/Google Chrome for Testing.app/…
+            for candidate in v.rglob("Google Chrome for Testing"):
+                if candidate.is_file():
+                    chrome_bin = candidate
+                    break
+            if chrome_bin:
+                break
+            # Linux layout: <v>/chrome-linux64/chrome
+            for candidate in v.rglob("chrome"):
+                if candidate.is_file():
+                    chrome_bin = candidate
+                    break
+            if chrome_bin:
+                break
+
+    mmd_path = out_path.with_suffix(".mmd")
+    mmd_path.write_text(mmd_source, encoding="utf-8")
+    puppeteer_cfg = mmdc_dir / "puppeteer.json"
+    if not puppeteer_cfg.exists():
+        puppeteer_cfg.write_text(
+            '{ "args": ["--no-sandbox", "--disable-setuid-sandbox"] }',
+            encoding="utf-8",
+        )
+
+    env = _os.environ.copy()
+    if chrome_bin:
+        env["PUPPETEER_EXECUTABLE_PATH"] = str(chrome_bin)
+    cmd = [str(mmdc), "-p", str(puppeteer_cfg), "-i", str(mmd_path),
+           "-o", str(out_path), "-w", "1100", "-b", "white"]
+    try:
+        result = _subprocess.run(cmd, env=env, capture_output=True, timeout=45)
+    except (_subprocess.TimeoutExpired, OSError) as e:
+        logger.warning("mermaid render failed: %s", e)
+        return False
+    finally:
+        try:
+            mmd_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+    if result.returncode != 0:
+        logger.warning("mmdc exit=%s stderr=%s",
+                       result.returncode, result.stderr[:200].decode(errors="ignore"))
+        return False
+    return out_path.exists() and out_path.stat().st_size > 200
+
+
+def _mermaid_to_prose(prose: str) -> str:
+    """DOCX/PDF can't render Mermaid syntax directly. Replace ```mermaid``` (or
+    a bare `flowchart LR …`) with a rendered PNG image + a text-list caption
+    (relationships) so the document has BOTH the visual and the source of truth.
+
+    On render failure (mmdc missing / puppeteer timeout) the diagram falls back
+    to just the text list — the doc still ships, just without the picture.
+    """
+    low = prose.lower()
+    if "flowchart" not in low and "graph " not in low and "mermaid" not in low:
+        return prose
+    labels = dict(re.findall(r"([A-Za-z0-9_]+)\[([^\]]+)\]", prose))
+    edges: list[tuple[str, str, str]] = []
+    for em in re.finditer(
+        r"([A-Za-z0-9_]+)(?:\[[^\]]*\])?\s*-\.?-?->\s*(?:\|([^|]*)\|)?\s*([A-Za-z0-9_]+)(?:\[[^\]]*\])?",
+        prose,
+    ):
+        s = (labels.get(em.group(1), em.group(1)) or "").strip()
+        t = (labels.get(em.group(3), em.group(3)) or "").strip()
+        edges.append((s, t, (em.group(2) or "").strip()))
+    if not edges:
+        return prose  # not a parseable diagram — don't risk mangling real prose
+
+    # Reconstruct a clean mermaid source from what we parsed (drops any prose
+    # accidentally interleaved with the diagram lines) — this is what we hand
+    # to mmdc. Nodes use their long labels; edges keep the pipe-labeled arrow
+    # so the hypothesis id ("H1: +") shows on the arrow.
+    # Regex with THREE groups: src_id, edge_label (optional), tgt_id.
+    edge_re = re.compile(
+        r"([A-Za-z0-9_]+)(?:\[[^\]]*\])?\s*-\.?-?->\s*(?:\|([^|]*)\|)?\s*([A-Za-z0-9_]+)"
+    )
+    parsed_edges = [(m.group(1), (m.group(2) or "").strip(), m.group(3))
+                    for m in edge_re.finditer(prose)]
+    mmd_lines = ["flowchart LR"]
+    seen_nodes: set[str] = set()
+    for src_id, _e, tgt_id in parsed_edges:
+        for nid in (src_id, tgt_id):
+            if nid in seen_nodes:
+                continue
+            seen_nodes.add(nid)
+            lbl = labels.get(nid, nid).replace('"', "'")
+            mmd_lines.append(f'    {nid}["{lbl}"]')
+    for s_id, e_lbl, t_id in parsed_edges:
+        if e_lbl:
+            mmd_lines.append(f'    {s_id} -->|{e_lbl}| {t_id}')
+        else:
+            mmd_lines.append(f'    {s_id} --> {t_id}')
+    mmd_source = "\n".join(mmd_lines)
+
+    # Drop mermaid syntax lines from the surrounding prose.
+    keep: list[str] = []
+    for line in prose.split("\n"):
+        st = line.strip().strip("`").strip()
+        if re.match(r"^(flowchart|graph)\s+\w+", st, re.I):
+            continue
+        if st.lower() == "mermaid":
+            continue
+        if "-->" in st or "-.->" in st:
+            continue
+        if re.match(r"^[A-Za-z0-9_]+\[[^\]]*\]$", st):
+            continue
+        keep.append(line)
+
+    # Try to render to PNG (in the same scratch dir the md file lives in, so
+    # pandoc's relative-image resolution finds it via absolute path).
+    img_line = ""
+    try:
+        png_path = _scratch_dir() / f"conceptmodel-{uuid4().hex[:8]}.png"
+        if _render_mermaid_png(mmd_source, png_path):
+            # Pandoc: `![caption](abs/path/img.png)`. Absolute path is fine.
+            img_line = f'\n![Mô hình nghiên cứu]({png_path})\n'
+    except Exception:
+        logger.exception("mermaid render step failed")
+
+    rel = ["", "**Mối quan hệ giả thuyết trong mô hình:**", ""]
+    rel += [f"- {s} → {t}" + (f" ({e})" if e else "") for s, t, e in edges]
+    return "\n".join(keep).rstrip() + img_line + "\n" + "\n".join(rel) + "\n"
+
+
 def _normalize_prose_markdown(prose: str) -> str:
     """Fix the most common LLM markdown mistake: bullet items mushed onto one
     line ("Goals: * a * b * c"), which pandoc renders as literal asterisks in a
     paragraph instead of a real list. Splits such runs into a proper
     newline-separated markdown list with a blank line before it.
 
-    Conservative: only triggers when a line has 2+ inline ` * ` / ` - ` markers
+    Conservative: only triggers when a line has 2+ inline markers
     (a near-certain inlined list), so it won't disturb `*emphasis*`/`**bold**`
-    (no surrounding spaces) or a single stray asterisk.
+    (no surrounding spaces) or a single stray asterisk. The marker set covers
+    `*`, `-`, the en-dash `–`, the em-dash `—`, and the bullet `•` — LLMs emit
+    any of these for an inlined list (e.g. hypotheses "… – H1: … – H2: …"), and
+    only the hyphen was caught before, leaving en-dash lists run together.
     """
     if not prose:
         return prose
@@ -335,13 +522,13 @@ def _normalize_prose_markdown(prose: str) -> str:
     out_lines: list[str] = []
     for line in prose.split("\n"):
         # A real list line already starts with a marker — leave it alone.
-        if re.match(r"^\s*([*\-+]|\d+\.)\s+", line):
+        if re.match(r"^\s*([*\-+–—•]|\d+\.)\s+", line):
             out_lines.append(line)
             continue
-        # Count inline bullet markers ( space + * or - + space + text ).
-        markers = re.findall(r"\s[*\-]\s+\S", line)
+        # Count inline bullet markers ( space + marker + space + text ).
+        markers = re.findall(r"\s[*\-–—•]\s+\S", line)
         if len(markers) >= 2:
-            parts = re.split(r"\s+[*\-]\s+", line)
+            parts = re.split(r"\s+[*\-–—•]\s+", line)
             head = parts[0].strip()
             items = [p.strip() for p in parts[1:] if p.strip()]
             if len(items) >= 2:
@@ -574,6 +761,63 @@ def compose_section(section_name: str, context_store: dict) -> str:
     discussion, conclusion.
     """
     return _compose_section_via_engine(section_name, context_store)
+
+
+# --- Per-module "M5-mini" composer (for single/multi-module exports) ---------
+# A real LLM write-up of ONE module's slice as academic prose — used by the
+# Export-to-Word actions (scope=M1..M4). Distinct from `_compose_section_via_
+# engine`, which targets the auto-mode full-thesis pipeline and falls back to
+# placeholder stubs when the engine's private composers aren't available.
+_MODULE_COMPOSE_SKIP = {"confirmed_at", "needs_review", "module_status", "focus"}
+_MODULE_COMPOSE_GUIDE = {
+    "M1": "Write the **Introduction & Research Focus** section: 2-3 short paragraphs "
+          "establishing the background and problem, then state the research title and "
+          "present the research questions in prose (you may list the RQs).",
+    "M2": "Write the **Literature Review** section: synthesize the provided sources into "
+          "flowing paragraphs (what is known, debates, and the research gaps). Use inline "
+          "citations in (Author, Year) form. CITE ONLY the sources provided below — never "
+          "invent a source. Do NOT include a reference list (it is appended automatically).",
+    "M3": "Write the **Research Design & Methodology** section in prose: the conceptual "
+          "model and variables, the hypotheses, the methodology (paradigm, design, "
+          "sampling, planned analysis), and a short description of the instrument. Cite "
+          "(Author, Year) where a construct/scale comes from a source.",
+    "M4": "Write the **Data Analysis** section: describe the analysis plan and report only "
+          "results that are present in the data below. Never invent statistics.",
+}
+
+
+def compose_module_prose(module: str, slice_: dict, title: str = "Untitled thesis") -> str:
+    """Compose ONE module's slice as a standalone academic write-up (markdown body,
+    heading stripped — the caller supplies the section title). Real LLM compose;
+    returns "" on unknown module or failure so the caller can flag needs_data."""
+    guide = _MODULE_COMPOSE_GUIDE.get((module or "").upper())
+    if not guide:
+        return ""
+    payload = {
+        k: v for k, v in (slice_ or {}).items()
+        if k not in _MODULE_COMPOSE_SKIP and not str(k).startswith("_")
+    }
+    prompt = (
+        "You are writing one section of a Master's thesis for a student to submit "
+        "to their professor. Formal academic register, concise (about 300-600 "
+        "words). Markdown only: '## ' for the section heading, '### ' for "
+        "sub-headings, '- ' for bullets; no tables.\n\n"
+        f"## Thesis: {title}\n## Section: {module}\n\n"
+        f"Instructions: {guide}\n\n"
+        f"Module data (JSON):\n{json.dumps(payload, ensure_ascii=False, default=str)[:9000]}\n\n"
+        "Write the section now (markdown):"
+    )
+    try:
+        msg = _get_llm().invoke(prompt)
+        c = getattr(msg, "content", "")
+        text = (
+            "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in c)
+            if isinstance(c, list) else str(c)
+        )
+        return _strip_leading_chapter_heading(text.strip())
+    except Exception:
+        logger.exception("compose_module_prose failed for %s", module)
+        return ""
 
 
 @tool
@@ -932,16 +1176,137 @@ def _convert_inline_citations(prose: str, ly_to_key: dict) -> str:
     return re.sub(r"\(([^()]*\d{4}[^()]*)\)", _repl, prose)
 
 
+def _populate_docx_toc(docx_path: str) -> None:
+    """Replace the DOCX's auto-updating Word TOC field with STATIC entries.
+
+    Pandoc inserts a `TOC \\o "1-3" \\h \\z \\u` field code that Word (and only
+    Word) fills in on "Update Field". LibreOffice's headless PDF converter
+    doesn't run field codes → the PDF shows only the "Table of Contents" title
+    with nothing under it. So walk the doc, collect every Heading 1/2/3, and
+    write those in place of the empty field placeholder. Best-effort — silent
+    return on failure leaves the (still-working, TOC-less) PDF path intact.
+    """
+    try:
+        from docx import Document
+        from docx.oxml.ns import qn
+    except Exception:
+        return
+    try:
+        doc = Document(docx_path)
+    except Exception:
+        logger.warning("populate-toc: could not open docx", exc_info=True)
+        return
+
+    # Collect Heading 1..3 entries in document order.
+    entries: list[tuple[int, str]] = []
+    for p in doc.paragraphs:
+        style = (p.style.name if p.style else "") or ""
+        text = p.text.strip()
+        if not text:
+            continue
+        if style == "Heading 1":
+            entries.append((1, text))
+        elif style == "Heading 2":
+            entries.append((2, text))
+        elif style == "Heading 3":
+            entries.append((3, text))
+    if not entries:
+        return
+
+    # Pandoc wraps the whole TOC in a `w:sdt` (structured document tag) block:
+    #   <w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery val="Table of Contents"/>
+    # …</w:sdtPr><w:sdtContent>…w:p with TOC field…</w:sdtContent></w:sdt>
+    # Find that sdt so we can gut its content and refill with static entries
+    # (while keeping the "Table of Contents" title paragraph LibreOffice already
+    # renders correctly).
+    body = doc.element.body
+    from docx.oxml import OxmlElement
+
+    def _find_toc_sdt():
+        for sdt in body.iter(qn("w:sdt")):
+            for gallery in sdt.iter(qn("w:docPartGallery")):
+                if gallery.get(qn("w:val")) == "Table of Contents":
+                    return sdt
+        return None
+
+    toc_sdt = _find_toc_sdt()
+    if toc_sdt is not None:
+        # Inside sdtContent, keep the FIRST paragraph (the "Table of Contents"
+        # title, styled TOCHeading) and drop everything else (the field-code
+        # placeholders + any pandoc hint paragraphs).
+        content = toc_sdt.find(qn("w:sdtContent"))
+        if content is None:
+            return
+        children = list(content)
+        # First para = title. Remove all children EXCEPT that first paragraph.
+        title_el = children[0] if children else None
+        for child in children[1:]:
+            content.remove(child)
+    else:
+        # Fallback: no sdt wrapper — look for a bare TOC field paragraph.
+        target = None
+        for p_el in body.iterfind(qn("w:p")):
+            instr = p_el.find(f".//{qn('w:instrText')}")
+            if instr is not None and instr.text and "TOC " in instr.text:
+                target = p_el
+                break
+        if target is None:
+            return
+        target.getparent().remove(target)
+        content = None
+        title_el = None
+
+    def _mk_para(level: int, text: str):
+        p = OxmlElement("w:p")
+        pPr = OxmlElement("w:pPr")
+        # A tiny left indent per level so H2/H3 read hierarchical.
+        if level > 1:
+            ind = OxmlElement("w:ind")
+            ind.set(qn("w:left"), str(360 * (level - 1)))  # 360 dxa ≈ 0.25"
+            pPr.append(ind)
+        p.append(pPr)
+        r = OxmlElement("w:r"); rPr = OxmlElement("w:rPr")
+        if level == 1:
+            b = OxmlElement("w:b"); rPr.append(b)
+        r.append(rPr)
+        t = OxmlElement("w:t"); t.text = text; t.set(qn("xml:space"), "preserve")
+        r.append(t); p.append(r)
+        return p
+
+    if content is not None:
+        # Append fresh entries inside w:sdtContent (below the title paragraph
+        # that survived the pruning above).
+        for level, text in entries:
+            content.append(_mk_para(level, text))
+    else:
+        # Insert at the same body index the deleted TOC field paragraph held.
+        # (This branch runs only when there's no w:sdt wrapper.)
+        for level, text in entries:
+            body.append(_mk_para(level, text))
+
+    try:
+        doc.save(docx_path)
+    except Exception:
+        logger.warning("populate-toc: could not save docx", exc_info=True)
+
+
 def _docx_to_pdf(docx_path: str, pdf_path: str) -> bool:
     """Convert a DOCX to PDF via LibreOffice headless so the PDF inherits the
     citeproc-rendered clickable citations from the DOCX (rather than
-    re-rendering from markdown, which LibreOffice can't citeproc)."""
+    re-rendering from markdown, which LibreOffice can't citeproc).
+
+    Populates the pandoc-inserted TOC field with static entries first —
+    LibreOffice's field engine doesn't run Word's TOC codes, so without this
+    the PDF's TOC is empty.
+    """
     import shutil
     import subprocess
 
     soffice = shutil.which("soffice") or shutil.which("libreoffice")
     if not soffice:
         return False
+    # Fill the TOC in place so both the DOCX and the resulting PDF have entries.
+    _populate_docx_toc(docx_path)
     outdir = str(Path(pdf_path).parent)
     subprocess.run(
         [soffice, "--headless", "--convert-to", "pdf", "--outdir", outdir, docx_path],

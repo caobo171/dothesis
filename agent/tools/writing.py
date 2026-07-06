@@ -33,17 +33,24 @@ def make_writing_tools(store) -> list:
     """
 
     @tool
-    def export_docx(citation_style: str = "apa7", force: bool = False) -> str:
-        """Export the current thesis draft to Word + PDF.
+    def export_docx(citation_style: str = "apa7", force: bool = False, scope: str = "full") -> str:
+        """Export thesis work to Word + PDF.
 
-        Renders every drafted chapter (read from this project's state) into a
-        DOCX and a PDF through the engine's document pipeline — headings, TOC,
-        citations, references — uploads them, and makes them downloadable from
-        the Context store panel. Use this when the user wants the finished
-        file. Do NOT paste whole chapters back into chat instead.
+        `scope` controls WHAT is exported:
+          - "full" (default): the whole thesis — every drafted chapter rendered
+            with headings, TOC, citations, references.
+          - a module or a comma-joined SET of modules ("M3", or "M1,M3,M4"):
+            composes those module(s) into ONE professor-ready document, in
+            M1→M4 order (M1=Introduction, M2=Literature, M3=Design/Methodology,
+            M4=Analysis/Results). Use this when the user picks specific modules
+            (e.g. "export my methodology + results" → scope "M3,M4").
+
+        The export is recorded in the project's Exports list tagged with `scope`,
+        so a single-module export is labeled correctly (it does NOT get filed
+        under M5). A download card is shown in your reply.
 
         If the project is missing data needed for a qualified thesis (e.g. no
-        analysis results, no references), this returns
+        analysis results, no references), the full export returns
         {"error": "needs_data", "missing": [...]} WITHOUT exporting — ask the
         user to fill those gaps first. Only pass force=True after the user
         explicitly says to export with whatever data exists.
@@ -51,6 +58,7 @@ def make_writing_tools(store) -> list:
         Args:
             citation_style: apa7 (default), vancouver, ieee, …
             force: skip the missing-data check and export anyway (user opt-in).
+            scope: "full" (default) or "M1".."M4" for a single-module export.
         """
         project_id = getattr(store, "project_id", None)
         if project_id is None:
@@ -62,8 +70,10 @@ def make_writing_tools(store) -> list:
 
         try:
             from orchestrator.tools.m5_writing import (
+                M5_CHAPTER_ORDER,
                 assess_export_readiness,
                 compose_all_sections,
+                compose_module_prose,
                 run_export,
                 sections_from_m5_slice,
                 _is_stub_prose,
@@ -101,11 +111,84 @@ def make_writing_tools(store) -> list:
         references = ((full_cs or {}).get("m2_literature") or {}).get("literature_sources") or []
         language = ((full_cs or {}).get("m1_topic") or {}).get("language") or "vi"
 
-        # No draft yet → generate one from the upstream modules. But FIRST
-        # check the project actually has the data a qualified thesis needs.
-        # If not, don't compose a degraded document full of placeholder text —
-        # return needs_data so the agent can ask the user to fill the gaps.
-        if not sections:
+        # --- Module-scoped export (scope = "M3" or a set "M1,M3,M4") --------
+        # Compose ONE document from the selected module(s) — a standalone
+        # academic write-up — and file it tagged with that scope (not M5). The
+        # user can pick several modules; they're combined into one doc in M-order.
+        _scope = (scope or "full").strip()
+        if _scope.lower() != "full":
+            _COLUMN = {"M1": "m1_topic", "M2": "m2_literature",
+                       "M3": "m3_design", "M4": "m4_analysis"}
+            _LABEL = {"M1": "Introduction", "M2": "Literature Review",
+                      "M3": "Research Design", "M4": "Data Analysis"}
+            # Parse + de-dup the requested modules, keep canonical M1→M4 order.
+            requested = {m.strip().upper() for m in _scope.split(",") if m.strip()}
+            mods = [m for m in ("M1", "M2", "M3", "M4") if m in requested]
+            unknown = requested - set(_COLUMN)
+            if unknown or not mods:
+                return json.dumps({
+                    "error": "bad_scope",
+                    "hint": "scope must be 'full' or a comma-joined set of "
+                            "M1, M2, M3, M4 (e.g. 'M1,M3').",
+                })
+            title = ((full_cs or {}).get("m1_topic") or {}).get("research_title") or "Untitled thesis"
+            built: list[dict] = []
+            thin: list[str] = []
+            for _mod in mods:
+                slice_ = (full_cs or {}).get(_COLUMN[_mod]) or {}
+                prose = compose_module_prose(_mod, slice_, title)
+                if not prose.strip() or _is_stub_prose(prose):
+                    thin.append(_mod)
+                    continue
+                built.append({"title": _LABEL[_mod], "prose": prose})
+            # If some picked modules have no real content, stop (unless forced)
+            # so we don't ship a doc full of placeholders.
+            if thin and not force:
+                return json.dumps({
+                    "error": "needs_data",
+                    "modules": thin,
+                    "hint": f"These modules don't have enough committed content "
+                            f"to write yet: {', '.join(thin)}. Ask the user to "
+                            f"fill them in, or export anyway with force.",
+                }, ensure_ascii=False)
+            if not built:
+                return json.dumps({
+                    "error": "no_content",
+                    "hint": "None of the selected modules have content to export.",
+                })
+            scope_tag = ",".join(mods)
+            try:
+                artifacts = run_export(
+                    built, str(project_id), references=references, language=language,
+                )
+            except Exception as e:
+                logger.exception("export_docx(scope=%s): run_export failed", scope_tag)
+                return json.dumps({"error": "export_failed", "detail": str(e)})
+            persist = getattr(store, "persist_export_artifacts", None)
+            if persist:
+                try:
+                    persist(artifacts, scope=scope_tag)
+                except Exception:
+                    logger.exception("export_docx: persist (scope=%s) failed", scope_tag)
+            return json.dumps({
+                "ok": True,
+                "scope": scope_tag,
+                "artifacts": artifacts,
+                "instruction": "Module export succeeded. Reply with a SHORT "
+                               "confirmation in the user's language. The DOCX/PDF "
+                               "download buttons are already shown.",
+            }, ensure_ascii=False)
+
+        # A FULL thesis export needs every chapter. Compose when there's NO
+        # draft OR when the stored draft is INCOMPLETE — e.g. only the
+        # methodology was committed to final_sections, which made a "full"
+        # export silently ship a 1-chapter document while the reply claimed 6.
+        # (A complete committed draft — chapter_count >= the full order — is
+        # reused as-is.)
+        _chapter_count = len([
+            s for s in (sections or []) if (s.get("title") or "") != "References"
+        ])
+        if not sections or _chapter_count < len(M5_CHAPTER_ORDER):
             if full_cs:
                 missing = assess_export_readiness(full_cs)
                 if missing and not force:
@@ -170,18 +253,26 @@ def make_writing_tools(store) -> list:
             except Exception:
                 logger.exception("export_docx: persist_export_artifacts failed")
 
+        # Report what was ACTUALLY exported so the agent doesn't claim "6
+        # chapters" when fewer were produced. chapter_titles excludes the
+        # auto-appended References section.
+        chapter_titles = [s.get("title") for s in sections if (s.get("title") or "") != "References"]
         return json.dumps({
             "ok": True,
             "generated": generated,
             "artifacts": artifacts,
+            "chapters": chapter_titles,
+            "chapter_count": len(chapter_titles),
             # Instruction to the agent, NOT user-facing copy — the agent must
             # write its OWN confirmation in the conversation's language (the
             # user got an English message parroted from here before). A download
             # card is already rendered in the chat message, so keep it short.
             "instruction": "Export succeeded. Reply with a SHORT confirmation "
                            "in the user's language (Vietnamese if they wrote in "
-                           "Vietnamese). Do NOT paste chapter text. The DOCX/PDF "
-                           "download buttons are already shown in your message.",
+                           "Vietnamese). State the ACTUAL chapter_count above — do "
+                           "NOT claim a number of chapters that isn't in `chapters`. "
+                           "Do NOT paste chapter text. The DOCX/PDF download "
+                           "buttons are already shown in your message.",
         }, ensure_ascii=False)
 
     return [export_docx]

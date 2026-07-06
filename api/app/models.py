@@ -240,6 +240,33 @@ class Project(Base):
     )
 
 
+class Export(Base):
+    """A generated export document — module-agnostic.
+
+    Exports used to live inside `m5_writing.export_artifacts`, which made a
+    per-module export (e.g. "M3 design") wrongly appear under M5 Writing. They're
+    now first-class: each row records WHAT was exported via `scope` ("full" for a
+    whole thesis, or "M1".."M4" for a single module) so the UI can list them in a
+    dedicated Exports area and label each correctly. One row per artifact
+    (a docx and its pdf are two rows sharing the same scope + created_at-ish).
+    """
+    __tablename__ = "exports"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    # "full", a single module ("M3"), or a comma-joined set ("M1,M3,M4").
+    scope: Mapped[str] = mapped_column(String(64), nullable=False, server_default="full")
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)  # docx | pdf
+    s3_key: Mapped[str] = mapped_column(Text, nullable=False)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class Thread(Base):
     __tablename__ = "threads"
 

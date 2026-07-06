@@ -1,10 +1,12 @@
-import { ReactNode, useState } from "react";
+import { Fragment, ReactNode, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { Check, Copy, FileText } from "lucide-react";
 import { Mermaid } from "./Mermaid";
+import { CitationChip } from "./CitationChip";
+import { triggerExportDownload } from "@/app/lib/api";
 import { WidgetRenderer } from "./widgets/WidgetRenderer";
 import type {
   AttachmentChipMeta,
@@ -144,6 +146,85 @@ function CopyButton({ text }: { text: string }) {
  * Tailwind classes on each rendered tag keep the visual style consistent with
  * the design system — keep them sober (no big headings inside chat bubbles).
  */
+// Inline grounding pills. The agent emits `{{cite: label | title | url}}` next
+// to grounded claims (curly braces so Markdown's `[...]` link parser leaves them
+// intact). We split those out of the rendered text and swap in <CitationChip>.
+const _CITE_RE = /\{\{cite:\s*([^{}]+?)\}\}/g;
+
+// remark-gfm autolinks bare `https://…` URLs — inside a `{{cite}}` marker that
+// splits the marker across a text node + an <a>, so the regex below would miss
+// it (and gfm even swallows the trailing `}}` into the href). Neutralize the
+// autolink triggers (`://`, `www.`) INSIDE markers with private-use sentinels
+// before markdown runs; _splitCites restores them when building the chip URL.
+const _SENTINEL_SCHEME = "\uE000";
+const _SENTINEL_WWW = "\uE001";
+
+function _protectCiteUrls(md: string): string {
+  return md.replace(/\{\{cite:\s*[^{}]+?\}\}/g, marker =>
+    marker.replace(/:\/\//g, _SENTINEL_SCHEME).replace(/\bwww\./g, _SENTINEL_WWW),
+  );
+}
+
+function _restoreUrl(u: string): string {
+  return u.replace(new RegExp(_SENTINEL_SCHEME, "g"), "://")
+          .replace(new RegExp(_SENTINEL_WWW, "g"), "www.");
+}
+
+// KaTeX errors on a raw `&`, `%`, or `#` inside `\text{}` — the model sometimes
+// writes `\text{Hypotheses & Model (M3)}`, which then shows as broken source
+// instead of rendering. Escape those chars inside `\text{}` (its content is
+// always literal text). Alignment `&` in matrices / aligned environments lives
+// OUTSIDE `\text{}`, so it's left intact.
+function _fixMathText(md: string): string {
+  return md.replace(/\\text\{([^{}]*)\}/g, (_full, inner: string) => {
+    const fixed = inner
+      .replace(/(?<!\\)&/g, "\\&")
+      .replace(/(?<!\\)%/g, "\\%")
+      .replace(/(?<!\\)#/g, "\\#");
+    return `\\text{${fixed}}`;
+  });
+}
+
+function _splitCites(text: string, keyBase: string): ReactNode {
+  if (!text.includes("{{cite:")) return text;
+  const out: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  _CITE_RE.lastIndex = 0;
+  while ((m = _CITE_RE.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const parts = m[1].split("|").map(s => s.trim());
+    const label = parts[0] ?? "";
+    const title = parts[1] || parts[0] || "";
+    const url = _restoreUrl(parts[2] || "");
+    // Need at least a label + url to make a useful pill; else leave raw.
+    out.push(
+      url
+        ? <CitationChip key={`${keyBase}-${i++}`} label={label} title={title} url={url} />
+        : m[0],
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+// Walk a renderer's children; rewrite plain-string parts, pass elements
+// (bold/links/etc.) through untouched. Markers live in prose, so string-level
+// handling covers the real cases without recursing into nested nodes.
+function _withCitations(children: ReactNode): ReactNode {
+  if (typeof children === "string") return _splitCites(children, "c");
+  if (Array.isArray(children)) {
+    return children.map((c, i) =>
+      typeof c === "string"
+        ? <Fragment key={i}>{_splitCites(c, `c${i}`)}</Fragment>
+        : c,
+    );
+  }
+  return children;
+}
+
 const _markdownComponents = {
   // Lists — tight spacing so multi-level bullets stay legible inside a bubble.
   ul: ({ children, className }: { children?: ReactNode; className?: string }) => {
@@ -180,7 +261,7 @@ const _markdownComponents = {
         </li>
       );
     }
-    return <li className="leading-relaxed">{children}</li>;
+    return <li className="leading-relaxed">{_withCitations(children)}</li>;
   },
   input: ({ type, checked }: { type?: string; checked?: boolean }) => {
     // Custom-render checkbox inputs (always from markdown task lists in
@@ -211,7 +292,7 @@ const _markdownComponents = {
   // Paragraph spacing — relaxed leading so stacked Vietnamese tone marks
   // (dấu) don't visually collide line-to-line, and a real gap between blocks.
   p: ({ children }: { children?: ReactNode }) => (
-    <p className="my-2.5 leading-relaxed first:mt-0 last:mb-0">{children}</p>
+    <p className="my-2.5 leading-relaxed first:mt-0 last:mb-0">{_withCitations(children)}</p>
   ),
   // Headings inside a bubble look weird at h1/h2 sizes; downsize. Extra top
   // margin sets each section apart from the block above (the "between blocks"
@@ -247,17 +328,26 @@ const _markdownComponents = {
   pre: ({ children }: { children?: ReactNode }) => (
     <pre className="my-2.5 rounded bg-ink-50 p-2 text-[13px] overflow-x-auto">{children}</pre>
   ),
-  // Links — same blue underline as before.
-  a: ({ href, children }: { href?: string; children?: ReactNode }) => (
-    <a
-      href={href}
-      className="underline text-primary-600 hover:text-primary-700"
-      target="_blank"
-      rel="noreferrer noopener"
-    >
-      {children}
-    </a>
-  ),
+  // Links — same blue underline as before. Export-artifact links (the agent's
+  // "Tải bản .docx/.pdf tại đây") point at /projects/<id>/exports/<file>, which
+  // is GET-auth'd via a short-lived ?st= token — a plain <a> navigation hits it
+  // WITHOUT the token and fails (the download never starts). Intercept those and
+  // route through triggerExportDownload, which mints the token + triggers the
+  // download. All other links keep the normal new-tab behavior.
+  a: ({ href, children }: { href?: string; children?: ReactNode }) => {
+    const isExport = !!href && /\/projects\/[^/]+\/exports\//.test(href);
+    return (
+      <a
+        href={href}
+        onClick={isExport ? (e) => { e.preventDefault(); void triggerExportDownload(href!); } : undefined}
+        className="underline text-primary-600 hover:text-primary-700"
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        {children}
+      </a>
+    );
+  },
   // Tables (GFM) — basic styling.
   table: ({ children }: { children?: ReactNode }) => (
     <table className="my-3.5 border-collapse text-[13.5px]">{children}</table>
@@ -353,10 +443,14 @@ function _renderMarkdown(text: string) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
+      // strict:false + a muted errorColor so the occasional bad LaTeX the model
+      // emits (e.g. plain text wrapped in \text{} with a raw `&`) degrades to
+      // gray source instead of alarming red. The prompt steers the model away
+      // from LaTeX-ifying plain prose in the first place.
+      rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false, errorColor: "#9ca3af" }]]}
       components={_markdownComponents}
     >
-      {_stripMarkers(text)}
+      {_fixMathText(_protectCiteUrls(_stripMarkers(text)))}
     </ReactMarkdown>
   );
 }
@@ -385,7 +479,7 @@ export function AssistantFrame({
       <span
         aria-hidden
         className="w-[34px] h-[34px] min-w-[34px] rounded-[10px] inline-flex items-center justify-center text-white font-extrabold font-serif text-[15px] mt-[22px] shadow-[0_4px_12px_rgba(28,46,255,.22)]"
-        style={{ background: "linear-gradient(135deg, #1c2eff 0%, #5b3aa8 100%)" }}
+        style={{ background: "linear-gradient(135deg, #2540FF 0%, #1B2FD6 100%)" }}
       >
         D
       </span>

@@ -23,6 +23,16 @@ export function WidgetRenderer({
   // switch below stays exhaustive over real widget variants.
   if (!("widget_type" in hint)) return null;
   switch (hint.widget_type) {
+    case "multi":
+      // Several widgets emitted by one turn (e.g. export download card +
+      // papers panel) — render each so none clobbers another.
+      return (
+        <>
+          {hint.widgets.map((h, i) => (
+            <WidgetRenderer key={i} hint={h} onSelect={onSelect} disabled={disabled} />
+          ))}
+        </>
+      );
     case "card_grid":
       return <CardGridWidget hint={hint} onSelect={onSelect} disabled={disabled} />;
     case "list_editor":

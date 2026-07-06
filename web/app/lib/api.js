@@ -156,6 +156,22 @@ export async function triggerExportDownload(downloadUrl) {
 }
 
 /**
+ * Download an uploaded file (PDF / .txt in Uploads panel) by upload id.
+ *
+ * Same trick as triggerExportDownload: mint a short-lived, resource-scoped
+ * stream token and navigate to the GET /uploads/{id}/download route (which
+ * 302s to a signed S3 URL). Browser saves the file under its original name
+ * because the backend sets ResponseContentDisposition.
+ */
+export async function triggerUploadDownload(uploadId) {
+  if (!uploadId) return;
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
+  const st = await mintStreamToken(`project-upload:${uploadId}`);
+  const base = apiBase || "/api/v1";
+  window.location.href = `${base}/uploads/${uploadId}/download?st=${encodeURIComponent(st)}`;
+}
+
+/**
  * Job-event stream over EventSource. EventSource is GET-only and can't set a
  * body/header, AND it auto-reconnects by reopening the same URL — so auth rides
  * in the URL as a short-lived, job-scoped `?st=` stream token (never the

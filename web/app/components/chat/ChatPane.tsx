@@ -377,15 +377,18 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         projectId={projectId}
         hasChapters={hasChapters}
         exportArtifacts={project?.context_store?.m5_writing?.export_artifacts}
+        // Export-to-Word quick actions → agent prompt (export_docx scope=Mx),
+        // which files the export under its module scope, not M5.
+        onQuickPrompt={(t) => void send(t)}
       />
       {project && messages.length === 0 && !inflight ? (
         // An empty thread is confusing — especially for an auto-drafted project,
         // where all the content lives in the editor + progress panel, not in chat.
         // Point the user to the right place instead of showing a blank pane.
-        <div className="flex-1 flex flex-col items-center justify-center text-center px-6 text-gray-500">
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-6 text-ink-500">
           {hasChapters ? (
             <>
-              <p className="text-lg font-semibold text-gray-800">✨ This thesis was auto-written</p>
+              <p className="text-lg font-semibold text-ink-800">This thesis was auto-written</p>
               <p className="mt-1 text-sm max-w-md">
                 All modules are complete — the draft lives in the editor and the
                 progress panel. Open the editor to read it, or type below to
@@ -406,7 +409,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
               const copy = getEmptyStateCopy(project);
               return (
                 <>
-                  <p className="text-lg font-semibold text-gray-800">{copy.title}</p>
+                  <p className="text-lg font-semibold text-ink-800">{copy.title}</p>
                   <p className="mt-1 text-sm max-w-md">{copy.body}</p>
                 </>
               );

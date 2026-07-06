@@ -76,6 +76,7 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
       }
       rightPane={
         <ContextPanel
+          projectId={pid}
           contextStore={project?.context_store ?? {
             m1_topic: null, m2_literature: null, m3_design: null, m4_analysis: null, m5_writing: null,
           }}

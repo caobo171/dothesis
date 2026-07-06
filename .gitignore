@@ -83,3 +83,12 @@ dothesis_google_auth.json
 # Runtime config dir created by LibreOffice during DOCX→PDF export
 api/.config/
 api/.cache/
+
+# Mermaid CLI toolchain (renders conceptual-model diagrams to PNG for docx/pdf
+# export). package.json + puppeteer.json are checked in; node_modules and any
+# generated PNGs are not. Installed by scripts/deploy.sh (and locally by the
+# next re-run of scripts/check-export-deps.sh --install).
+engine/tools/mermaid_cli/node_modules/
+engine/tools/mermaid_cli/package-lock.json
+engine/tools/mermaid_cli/*.png
+engine/tools/mermaid_cli/*.svg

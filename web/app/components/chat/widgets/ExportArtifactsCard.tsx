@@ -1,7 +1,8 @@
 "use client";
 
-import { Download, FileText } from "lucide-react";
+import { Download } from "lucide-react";
 import { mintStreamToken } from "@/app/lib/api";
+import { FileTypeIcon } from "../FileTypeIcon";
 import type { ExportArtifactsHint, ExportArtifact } from "./types";
 
 // Download card shown inside an assistant message after export_docx succeeds
@@ -56,7 +57,7 @@ function ArtifactButton({ artifact }: { artifact: ExportArtifact }) {
       onClick={onDownload}
       className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-3 py-2 hover:border-primary-300 hover:bg-primary-50 transition-colors group"
     >
-      <FileText className="w-4 h-4 text-primary-600 shrink-0" aria-hidden />
+      <FileTypeIcon kind={artifact.kind} className="w-5 h-6 shrink-0" />
       <span className="font-serif text-[13px] font-extrabold text-ink-900">{label}</span>
       {size && <span className="text-[11.5px] text-ink-500">· {size}</span>}
       <Download className="w-3.5 h-3.5 text-ink-400 group-hover:text-primary-600 ml-1 shrink-0" aria-hidden />

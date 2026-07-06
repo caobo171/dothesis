@@ -45,7 +45,7 @@ export function WorkflowSidebar({
         <span
           className="w-9 h-9 rounded-[10px] inline-flex items-center justify-center text-white font-extrabold font-serif text-[18px] shrink-0"
           style={{
-            background: "linear-gradient(135deg, #2540FF 0%, #6A4DE0 100%)",
+            background: "linear-gradient(135deg, #2540FF 0%, #1B2FD6 100%)",
             boxShadow: "0 4px 12px rgba(37,64,255,.22)",
           }}
         >

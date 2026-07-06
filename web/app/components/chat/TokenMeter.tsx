@@ -8,7 +8,7 @@ export function TokenMeter({ credits }: { credits: number }) {
     <div
       data-testid="token-meter"
       className={`flex items-center gap-1 text-xs ${
-        isLow ? "text-red-600 font-semibold" : "text-gray-500"
+        isLow ? "text-red-600 font-semibold" : "text-ink-500"
       }`}
     >
       <Zap className="w-3 h-3" />

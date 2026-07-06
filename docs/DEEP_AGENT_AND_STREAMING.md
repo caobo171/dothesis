@@ -201,6 +201,91 @@ api/app/routers/chat_v3.py:send_message_v3
 The frontend hits the same `/send_message` endpoint as v2. The only thing that
 changed is what runs inside the streaming response generator.
 
+### End-to-end sequence (user message → deep agent → streamed reply)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant CI as ChatInput / useChat.send
+    participant ST as useStream (fetch + reader)
+    participant API as FastAPI /threads/{id}/messages
+    participant V3 as send_message_v3 (chat_v3.py)
+    participant RT as stream_turn (runtime.py)
+    participant AG as Deep Agent (LangGraph)
+    participant LLM as LLM (Gemini / Claude)
+    participant DB as Postgres
+
+    U->>CI: types message + hits Send
+    CI->>CI: optimistic user bubble (SWR mutate)
+    CI->>ST: stream.start(url, POST body)
+    Note over CI,ST: body = { text, widget_payload,<br/>upload_ids, access_token }
+    ST->>API: POST text/event-stream
+
+    API->>V3: send_message_v3(thread, text, db)
+    V3->>DB: persist user Message
+    V3->>V3: _get_agent() (1 per project, cached)
+    V3->>V3: _materialize_attachments() (upload bytes)
+
+    rect rgb(235,245,255)
+    Note over V3,LLM: streaming turn begins
+    V3->>RT: stream_turn(agent, thread_id, text, store)
+    RT->>RT: prepend [PROJECT STATE] header
+    RT->>AG: agent.astream(stream_mode=[messages, updates])
+
+    loop per LLM chunk
+        AG->>LLM: prompt / tool loop
+        LLM-->>AG: AIMessageChunk (text delta)
+        AG-->>RT: messages: token delta
+        RT-->>V3: {type: token, text}
+        V3-->>ST: SSE data: {type:token,...}
+        ST-->>CI: append to streamingText
+        CI-->>U: StreamingBubble re-render + cursor
+    end
+
+    opt tool calls / skills
+        AG-->>RT: updates: tool_start / tool_end
+        RT-->>V3: tool_start
+        V3-->>ST: SSE progress (friendly label)
+        ST-->>U: ProgressBubble line
+    end
+
+    opt [OPTIONS] / [PAPERS] markers
+        AG-->>RT: updates: full AI message
+        RT->>RT: parse markers → widget hint
+        RT-->>V3: {type: tool_calls, payload}
+        V3-->>ST: SSE tool_calls
+    end
+    end
+
+    AG-->>RT: stream end
+    RT-->>V3: {type: done}
+    V3->>DB: persist assistant Message (full text + widget)
+    V3->>DB: debit credits (token usage)
+    V3-->>ST: SSE done {cost, tokens, balance}
+    ST->>ST: mark stream end (inflight=false)
+
+    CI->>API: SWR revalidate /messages/list
+    API-->>CI: settled messages
+    CI-->>U: swap StreamingBubble → MessageBubble + widgets
+```
+
+What the diagram encodes:
+
+- **POST-only + SSE** — the browser uses `fetch` + a manual `ReadableStream`
+  reader (not `EventSource`) because the auth token rides in the JSON body
+  (see `CLAUDE.md`).
+- **Two stream modes** — `messages` carries live token deltas; `updates` carries
+  tool activity and the settled message (where `[OPTIONS]` / `[PAPERS]` markers
+  are parsed). See §6.
+- **Multiplexing** — agent events and engine progress beats (the 30–90s research
+  scout) share one `asyncio.Queue` so progress isn't blocked behind a long tool
+  call. See §7.
+- **Persistence + billing on `done`** — the full reply is saved and credits
+  debited only after the stream completes (or on disconnect, via the idempotent
+  `_finalize()`).
+- **Widgets settle post-stream** — cards / panels appear after SWR revalidation,
+  not during token streaming.
+
 ---
 
 ## 6. `stream_turn` — agent events → SSE-shaped dicts

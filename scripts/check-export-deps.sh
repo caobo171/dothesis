@@ -9,6 +9,8 @@
 #                      (no Word heading styles / clean TOC / table fidelity)
 #   - no libreoffice → DOCX→PDF conversion is unavailable; PDF export falls
 #     (soffice)        back to weasyprint, which needs a healthy Pillow build
+#   - no mmdc        → conceptual-model mermaid diagrams render as a text
+#                      relationship list instead of a real PNG in the doc
 #
 # Exit code is ALWAYS 0 (informational): a missing renderer should warn, never
 # block the stack from booting. Pass --strict to exit 1 when something's
@@ -73,6 +75,26 @@ elif [ -n "$soffice_bin" ]; then
 else
   echo "  ✗ libreoffice/soffice NOT found — PDF export will degrade. Install: ${SOFFICE_HINT}"
   missing=$((missing + 1))
+fi
+
+# Mermaid CLI + its puppeteer-managed Chrome — renders the conceptual-model
+# `flowchart LR` block to a PNG that pandoc embeds in the DOCX. Missing = fall
+# back to a text relationship list (doc still ships), so this is INFORMATIONAL
+# only — never counts toward `--strict` failure.
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+MMDC="${REPO_DIR}/engine/tools/mermaid_cli/node_modules/.bin/mmdc"
+if [ -x "$MMDC" ]; then
+  echo "  ✓ mmdc (mermaid → PNG for conceptual model)"
+  PUP_CACHE="${PUPPETEER_CACHE_DIR:-$HOME/.cache/puppeteer}"
+  if [ -d "$PUP_CACHE/chrome" ] && [ -n "$(ls -A "$PUP_CACHE/chrome" 2>/dev/null || true)" ]; then
+    echo "  ✓ puppeteer chrome for testing (in $PUP_CACHE/chrome)"
+  else
+    echo "  ○ puppeteer chrome NOT installed — mermaid → PNG will fall back to a text list."
+    echo "    Install: (cd engine/tools/mermaid_cli && npx --yes puppeteer browsers install chrome)"
+  fi
+else
+  echo "  ○ mmdc NOT installed — conceptual-model diagrams render as a text list."
+  echo "    Install: (cd engine/tools/mermaid_cli && npm install)"
 fi
 
 if [ "$missing" -gt 0 ]; then
