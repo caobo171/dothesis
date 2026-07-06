@@ -199,6 +199,60 @@ class WeasyPrintEngine(PDFEngine):
             border-top: 1px solid #000;
             margin: 24pt 0;
         }}
+
+        /* Embedded figures (e.g. the research-model diagram) fit the page. */
+        img {{
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 12pt auto;
+        }}
+
+        /* APA-style tables: horizontal rules only (top, under header, bottom),
+           no vertical lines; full width; slightly smaller font so wide tables
+           (e.g. reliability/validity indices) fit the page without cramping. */
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+            margin: 12pt 0 16pt;
+            font-size: 10pt;
+            line-height: 1.3;
+            page-break-inside: avoid;
+            border-top: 1.2pt solid #000;
+            border-bottom: 1.2pt solid #000;
+        }}
+
+        table thead th {{
+            border-bottom: 1pt solid #000;
+        }}
+
+        table th,
+        table td {{
+            padding: 5pt 7pt;
+            text-align: left;
+            vertical-align: top;
+            text-indent: 0;
+            border: none;
+            overflow-wrap: break-word;
+        }}
+
+        table th {{
+            font-weight: 700;
+        }}
+
+        /* Zebra striping for readability on multi-column tables. */
+        table tbody tr:nth-child(even) {{
+            background-color: #f4f6f8;
+        }}
+
+        /* Table caption ("Bảng 4.1") sits above and reads as a label. */
+        table caption {{
+            caption-side: top;
+            text-align: left;
+            font-weight: 700;
+            margin-bottom: 4pt;
+        }}
         """
 
         # Add page numbers if requested

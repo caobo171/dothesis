@@ -789,13 +789,36 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
             section.left_margin = Inches(1.0)
             section.right_margin = Inches(1.0)
 
-        # Centered italic footer (manual page numbering hint)
+        # Centered footer with a REAL auto-updating Word PAGE field, so the
+        # document shows actual page numbers out of the box (no "Insert > Page
+        # Number" step). Falls back to a static "1" if the OXML API is missing.
         footer_para = doc.sections[0].footer.paragraphs[0]
         footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = footer_para.add_run("[Add page numbers via Insert > Page Number in Word]")
+        run = footer_para.add_run()
         run.font.name = 'Times New Roman'
         run.font.size = Pt(10)
-        run.font.italic = True
+        try:
+            from docx.oxml import OxmlElement
+            from docx.oxml.ns import qn
+
+            fld_begin = OxmlElement("w:fldChar")
+            fld_begin.set(qn("w:fldCharType"), "begin")
+            instr = OxmlElement("w:instrText")
+            instr.set(qn("xml:space"), "preserve")
+            instr.text = "PAGE"
+            fld_sep = OxmlElement("w:fldChar")
+            fld_sep.set(qn("w:fldCharType"), "separate")
+            fld_num = OxmlElement("w:t")
+            fld_num.text = "1"
+            fld_end = OxmlElement("w:fldChar")
+            fld_end.set(qn("w:fldCharType"), "end")
+            run._r.append(fld_begin)
+            run._r.append(instr)
+            run._r.append(fld_sep)
+            run._r.append(fld_num)
+            run._r.append(fld_end)
+        except Exception:
+            run.text = "1"
 
         BODY_FONT = "Times New Roman"
         BODY_SIZE = Pt(12)
