@@ -70,6 +70,8 @@ async def create_partner_report(
     # live per-chapter progress while this (long) call is still running.
     progress_token: str | None = Form(None),
     title: str | None = Form(None),
+    # Optional free-text context the end user typed to steer the writing.
+    notes: str | None = Form(None),
     language: str = Form("en"),
     x_partner_token: str | None = Header(None, alias="X-Partner-Token"),
 ):
@@ -104,6 +106,7 @@ async def create_partner_report(
             progress_token=progress_token,
             filename=file.filename,
             title=title,
+            notes=notes,
             language=language,
         )
     except ReportError as e:

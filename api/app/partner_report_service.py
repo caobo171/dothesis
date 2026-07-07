@@ -569,6 +569,7 @@ def generate_partner_report(
     progress_token: str | None = None,
     filename: str | None = None,
     title: str | None = None,
+    notes: str | None = None,
     language: str = "en",
 ) -> dict[str, Any]:
     """Generate a report from an analysis PDF and return download URLs.
@@ -630,13 +631,23 @@ def generate_partner_report(
 
         # When the user gave no title (and always, for supporting context), infer
         # the study framing from the data so chapters aren't full of "[...]" stubs.
-        inferred = _infer_topic(text, language)
+        # The user's free-text notes (if any) are prepended so the inferred
+        # title/objectives/RQs reflect what they described — this then cascades
+        # into the intro/lit-review/methodology framing.
+        notes_clean = (notes or "").strip()
+        infer_text = (
+            f"Mô tả bổ sung từ người dùng (ưu tiên bám sát):\n{notes_clean}\n\n{text}"
+            if notes_clean else text
+        )
+        inferred = _infer_topic(infer_text, language)
 
         research_title = (title or "").strip() or str(inferred.get("research_title") or "").strip()
         m1_topic: dict = {
             "research_title": research_title or "Báo cáo phân tích",
             "language": language,
         }
+        if notes_clean:
+            m1_topic["user_context"] = notes_clean
         # These map 1:1 to the M5 intro/chapter prompt inputs (field, objectives,
         # research_questions, target_population, scope, research_type).
         for key in ("field", "research_type", "objectives", "target_population", "scope"):
