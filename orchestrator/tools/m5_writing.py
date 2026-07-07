@@ -279,21 +279,25 @@ def _sections_to_markdown(sections: list[dict]) -> str:
         # leading chapter-level heading (but never a numbered sub-section like
         # "## 4.1 …", which is real content).
         if title:
-            prose = _strip_leading_chapter_heading(prose)
+            prose = _strip_leading_chapter_heading(prose, title)
             parts.append(f"# {title}")
         if prose:
             parts.append(prose)
     return "\n\n".join(parts) + "\n"
 
 
-def _strip_leading_chapter_heading(prose: str) -> str:
-    """Drop a leading chapter-title heading the LLM emitted despite the prompt.
+def _strip_leading_chapter_heading(prose: str, title: str | None = None) -> str:
+    """Drop a leading chapter-title line the LLM emitted despite the prompt.
 
     We prepend `# {title}` to every section, so a chapter that opens with its
-    own title heading renders the title twice (the reported "Chương 2 appears
-    twice" bug). Remove the first line ONLY when it is a chapter-level heading:
-    a `#`/`##`/`###` line that is NOT a numbered sub-section (`4.1`, `2.3.1`),
-    which is genuine content and must stay.
+    own title renders the title twice (the "Chương N appears twice" bug). Remove
+    the first non-blank line ONLY when it is a chapter title in one of these
+    shapes, and never a numbered sub-section (`4.1`, `2.3.1`) which is content:
+      (a) an ATX heading `#`..`######` (any level) that isn't a sub-section;
+      (b) a NON-heading line the LLM wrote as plain/bold text, e.g.
+          `CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU` or `**Chapter 4 - Results**` — this is
+          what pandoc rendered as a stray `Normal` paragraph under the H1;
+      (c) a line whose marker-stripped text equals the prepended `title`.
     """
     if not prose:
         return prose
@@ -301,10 +305,27 @@ def _strip_leading_chapter_heading(prose: str) -> str:
     i = 0
     while i < len(lines) and not lines[i].strip():
         i += 1
-    if i < len(lines):
-        m = re.match(r"^\s*#{1,3}\s+(.+?)\s*$", lines[i])
-        if m and not re.match(r"^\d+(\.\d+)+\b", m.group(1).strip()):
-            return "\n".join(lines[i + 1:]).strip()
+    if i >= len(lines):
+        return prose
+    line = lines[i]
+    rest = lambda: "\n".join(lines[i + 1:]).strip()
+
+    # (a) ATX heading (widened to any level) that is not a numbered sub-section.
+    m = re.match(r"^\s*#{1,6}\s+(.+?)\s*$", line)
+    if m and not re.match(r"^\d+(\.\d+)+\b", m.group(1).strip()):
+        return rest()
+
+    # marker-stripped text: drop leading `#`s and surrounding `**` bold markers.
+    bare = re.sub(r"^\s*#*\s*", "", line.strip())
+    bare = re.sub(r"^\*\*\s*|\s*\*\*$", "", bare).strip()
+    # (b) a title-shaped chapter line (bounded length so real sentences that
+    #     merely start "Chương 4: trình bày…" — long — are never stripped).
+    if re.match(r"(?i)^(CHƯƠNG|CHAPTER)\s+\d+\s*[:.\-–—]\s*.{0,80}$", bare) \
+            and not re.match(r"^\d+(\.\d+)+\b", bare):
+        return rest()
+    # (c) exact match against the prepended title (any marker form).
+    if title and bare and bare.casefold() == title.strip().casefold():
+        return rest()
     return prose
 
 
@@ -541,8 +562,16 @@ def _normalize_prose_markdown(prose: str) -> str:
     return "\n".join(out_lines)
 
 
-def _write_markdown_tmp(sections: list[dict]) -> Path:
+# YAML block that makes pandoc citeproc emit EVERY bibliography entry, even ones
+# not matched by an inline `[@key]`. Uses the literal-block form (the documented
+# way — `-M nocite=@*` on the CLI is a plain MetaString citeproc won't parse).
+_NOCITE_FRONTMATTER = "---\nnocite: |\n  @*\n---"
+
+
+def _write_markdown_tmp(sections: list[dict], frontmatter: str | None = None) -> Path:
     md = _sections_to_markdown(sections)
+    if frontmatter:
+        md = frontmatter.rstrip("\n") + "\n\n" + md
     md_path = _scratch_dir() / f"draft-{uuid4().hex[:8]}.md"
     md_path.write_text(md, encoding="utf-8")
     return md_path
@@ -569,18 +598,29 @@ def _compile_pdf_via_engine(sections: list[dict], output_path: str, **kw) -> str
     return output_path
 
 
-def _export_docx_via_engine(sections: list[dict], output_path: str, **kw) -> str:
+def _export_docx_via_engine(sections: list[dict], output_path: str,
+                            frontmatter: str | None = None,
+                            populate_toc: bool = False, **kw) -> str:
     """Render to .docx via engine/utils/export_professional.export_docx.
 
     Same (md_file, output) contract + internal Pandoc fallback as the PDF
     path. NOTE: the earlier import target (docx_post_processor) had no
     export_docx — that's why every prior export produced a placeholder.
+
+    `frontmatter` is prepended to the markdown (used for the `nocite: @*` block).
+    `populate_toc` fills the pandoc-inserted (otherwise empty) Word TOC field
+    with static entries so the DOCX opens with a visible table of contents.
     """
     try:
         from engine.utils.export_professional import export_docx as _real
-        md_path = _write_markdown_tmp(sections)
+        md_path = _write_markdown_tmp(sections, frontmatter=frontmatter)
         ok = _real(md_path, Path(output_path), **kw)
         if ok and Path(output_path).exists():
+            if populate_toc:
+                try:
+                    _populate_docx_toc(output_path)
+                except Exception as e:  # noqa: BLE001 — TOC is best-effort
+                    logger.warning("populate TOC failed: %s", e)
             return output_path
         logger.warning("engine export_docx returned falsy — writing placeholder")
     except Exception as e:
@@ -670,23 +710,56 @@ def _fill_template(template: str, kwargs: dict) -> str:
     return _PLACEHOLDER_RE.sub(_repl, template)
 
 
-def _strip_uncited_citations(prose: str, references: list[dict]) -> str:
-    """Remove inline `(Author, Year)` citations that aren't in the reference
-    pool, so a hallucinated "(Anon, 2011)" never reaches the rendered document.
+# A "citation-shaped" parenthetical: `(<author text with a letter>, <YYYY>)`.
+# Broader than _CITE_PATTERN so it catches every form a Vietnamese-language LLM
+# emits — `(Hair & Ringle, 2019)`, `(Nguyễn và cộng sự, 2021)`, `(Đặng, 2019)`,
+# `(Smith, 2020; Jones, 2021)` — while NOT matching non-citations that lack a
+# real year: `(xem Bảng 4.1)`, `(β = 0.302, p = 0.000)`, `(N = 188)`.
+_CITE_SHAPED = re.compile(r"\(\s*([^()]*?[^\W\d_][^()]*?),\s*((?:19|20)\d{2}[a-z]?)\s*\)")
 
-    Replaces an in-document warning (which used to be appended to the prose and
-    rendered into the final thesis — see the screenshot bug). We delete the
-    parenthetical and any single space immediately preceding it, leaving clean
-    sentences. Real, pool-backed citations are kept untouched.
+
+def _cite_surname_year(author_text: str, year: str) -> tuple[str, str]:
+    """First alphabetic surname token (Unicode-aware) + 4-digit year, for
+    tolerant matching against the reference pool. Handles `&` / `và cộng sự`
+    joined authors and diacritic names (Đặng, Nguyễn)."""
+    toks = re.findall(r"[^\W\d_]+", author_text, flags=re.UNICODE)
+    surname = toks[0].casefold() if toks else ""
+    y = re.match(r"(\d{4})", year)
+    return surname, (y.group(1) if y else year)
+
+
+def _pool_surname_years(references: list[dict]) -> set[tuple[str, str]]:
+    """Pool keyed by (first-author surname, 4-digit year) for tolerant lookup."""
+    out: set[tuple[str, str]] = set()
+    for r in references:
+        toks = re.findall(r"[^\W\d_]+", _ref_author_label(r), flags=re.UNICODE)
+        surname = toks[0].casefold() if toks else ""
+        year = str(r.get("year", "")).strip()
+        ym = re.match(r"(\d{4})", year)
+        if surname and ym:
+            out.add((surname, ym.group(1)))
+    return out
+
+
+def _strip_uncited_citations(prose: str, references: list[dict]) -> str:
+    """Remove inline citations not backed by the reference pool, so a
+    hallucinated "(Anon, 2011)" never reaches the rendered document.
+
+    When the pool is EMPTY (e.g. Crossref returned nothing), every
+    citation-shaped parenthetical is stripped — there is nothing to back any of
+    them. When the pool is non-empty, a citation is kept only when its
+    (surname, year) matches a pool entry (tolerant of `&`/`và cộng sự` joins and
+    diacritics). We delete the parenthetical plus one leading space; real,
+    pool-backed citations are untouched.
     """
-    pool = {_ref_citation_key(r) for r in references}
+    pool = _pool_surname_years(references)
 
     def _repl(m: "re.Match") -> str:
-        key = (m.group("author"), m.group("year"))
-        return m.group(0) if key in pool else ""
+        surname, year = _cite_surname_year(m.group(1), m.group(2))
+        return m.group(0) if (pool and (surname, year) in pool) else ""
 
     # Consume an optional leading space so "research (Anon, 2011)." → "research."
-    cleaned = re.sub(r"\s?" + _CITE_PATTERN.pattern, _repl, prose)
+    cleaned = re.sub(r"\s?" + _CITE_SHAPED.pattern, _repl, prose)
     # Collapse any double spaces / space-before-punctuation the removal created.
     cleaned = re.sub(r"  +", " ", cleaned)
     cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)
@@ -736,9 +809,18 @@ ACADEMIC STYLE (applies to every chapter):
 - Expand each abbreviation on first use, then use the short form.
 
 GOLDEN RULE FOR TABLES: every statistical table MUST be followed by an
-interpreting paragraph. Pattern: [overview sentence] -> [table] -> [detailed
-interpretation of the key values] -> [closing comment]. Never leave a table
-standing alone with no prose.
+interpreting paragraph. Pattern: [overview sentence] -> [caption] -> [table] ->
+[source] -> [detailed interpretation of the key values] -> [closing comment].
+Never leave a table standing alone with no prose.
+
+TABLE CAPTION & SOURCE (match a standard thesis exactly):
+- Immediately BEFORE each statistical table, put a bold caption on its OWN line.
+  Vietnamese: `**Bảng <chương>.<số>: <tên bảng>**` (e.g. `**Bảng 4.1: Thống kê
+  mô tả mẫu**`). English: `**Table <số>: <name>**`.
+- Immediately AFTER each table, put an italic source line on its OWN line.
+  Vietnamese: `*Nguồn: Kết quả phân tích từ SmartPLS/SPSS, tác giả tổng hợp.*`
+  English: `*Source: Author's analysis.*`.
+- Number tables sequentially per chapter (Bảng 4.1, 4.2, 4.3 …).
 """
 
 
@@ -853,7 +935,7 @@ def export_docx(sections: list[dict], project_id: str) -> dict:
         raise ValueError("export_docx requires project_id")
     filename = f"thesis-{uuid4().hex[:8]}.docx"
     local_path = _scratch_dir() / filename
-    _export_docx_via_engine(sections, str(local_path))
+    _export_docx_via_engine(sections, str(local_path), populate_toc=True)
     s3_key, size_bytes = _upload_to_s3(str(local_path), project_id, "docx", filename)
     return {"s3_key": s3_key, "size_bytes": size_bytes}
 
@@ -1432,7 +1514,13 @@ def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict],
 
     docx_name = f"thesis-{uuid4().hex[:8]}.docx"
     docx_local = _scratch_dir() / docx_name
-    _export_docx_via_engine(body, str(docx_local), bibliography=bib_path)
+    # nocite:@* → citeproc prints the FULL bibliography (never an empty heading,
+    # regardless of which inline [@key]s matched). populate_toc → filled TOC.
+    # toc-title makes the TOC heading match the document language.
+    toc_title = "Mục lục" if str(language).lower().startswith("vi") else "Contents"
+    frontmatter = f'---\nnocite: |\n  @*\ntoc-title: "{toc_title}"\n---'
+    _export_docx_via_engine(body, str(docx_local), bibliography=bib_path,
+                            frontmatter=frontmatter, populate_toc=True)
     # Force the hyperlink look (blue + underline) on every link run, so in-text
     # citation links read as hyperlinks regardless of the reference template's
     # Hyperlink style. Done before PDF conversion so the PDF inherits it.
@@ -1448,7 +1536,11 @@ def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict],
         pdf_key, pdf_size = _upload_to_s3(str(pdf_local), pid, "pdf", pdf_name)
         out.append(_artifact_dict("pdf", pid, pdf_key, pdf_size))
     else:
-        pdf_res = compile_pdf.invoke({"sections": body, "project_id": pid})
+        # No LibreOffice → weasyprint can't resolve `[@key]`. Render the ORIGINAL
+        # sections (plain "(Author, Year)" text + the deterministic References
+        # section) so the PDF never ships raw `[@key]` markers or an empty
+        # bibliography — instead of the citeproc-rewritten `body`.
+        pdf_res = compile_pdf.invoke({"sections": sections, "project_id": pid})
         out.append(_artifact_dict("pdf", pid, pdf_res["s3_key"], pdf_res["size_bytes"]))
     bib_path.unlink(missing_ok=True)
     return out

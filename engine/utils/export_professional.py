@@ -1017,6 +1017,7 @@ def _style_docx_tables(output_docx) -> None:
         from docx.oxml import OxmlElement
         from docx.oxml.ns import qn
         from docx.enum.table import WD_ALIGN_VERTICAL
+        from docx.shared import Pt
     except Exception:
         return
     try:
@@ -1144,6 +1145,15 @@ def _style_docx_tables(output_docx) -> None:
                 # Vertical center — headers with "Tần số (n)" were bottom-aligned
                 # and read as broken.
                 cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                # Cell paragraphs inherit the reference doc's Normal style
+                # (double line-spacing + 0.5" first-line indent) → tall, oddly
+                # indented cells. Flatten them to compact single-spaced text.
+                for p in cell.paragraphs:
+                    pf = p.paragraph_format
+                    pf.first_line_indent = Pt(0)
+                    pf.line_spacing = 1.0
+                    pf.space_before = Pt(2)
+                    pf.space_after = Pt(2)
 
         # 8) Bold the header row.
         if table.rows:

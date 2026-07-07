@@ -58,6 +58,7 @@ def test_happy_path_returns_urls_and_branding(client, monkeypatch):
     monkeypatch.setattr(svc, "generate_partner_report", lambda *a, **k: {
         "pages": 3,
         "depth": "analysis_report",
+        "chapters": ["results"],
         "sections": ["Chapter 4 — Results"],
         "pdf_url": "https://s3/signed.pdf",
         "docx_url": "https://s3/signed.docx",
@@ -112,8 +113,12 @@ def test_service_empty_text_raises(monkeypatch):
 
 def test_service_composes_and_presigns(monkeypatch):
     monkeypatch.setattr(svc, "extract_pdf_text", lambda b: ("AVE=0.62, HTMT ok, R2=.41", 5))
-    monkeypatch.setattr(svc, "_compose_analysis_sections",
-                        lambda cs, lang: [{"title": "Chapter 4 — Results", "prose": "..."}])
+    # Avoid the LLM topic-inference + Crossref network calls in a unit test.
+    monkeypatch.setattr(svc, "_infer_topic", lambda text, lang: {})
+    monkeypatch.setattr(svc, "_literature_search", lambda *a, **k: [])
+    monkeypatch.setattr(svc, "_compose_chapters",
+                        lambda context_store, chapter_keys, language, **kw:
+                        [{"title": "Chapter 4 — Results", "prose": "..."}])
 
     # Stub the lazily-imported run_export at its source module.
     import orchestrator.tools.m5_writing as m5

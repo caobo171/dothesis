@@ -402,29 +402,17 @@ def _literature_search(topic: str, research_questions: list[str] | None,
 
 
 def _references_section(references: list[dict], language: str) -> dict:
-    """Build a populated References section (APA-ish) from the sources.
+    """Build a populated References section from the sources.
 
     Deterministic — lists every source we found regardless of whether the LLM
-    cited it inline, so the section is never an empty heading.
+    cited it inline, so the section is never an empty heading. Reuses dothesis's
+    shared `_references_section_body` (sorted by author+year, clickable DOI/URL
+    links) instead of a drifted local clone. This section is what the PDF
+    (weasyprint) fallback ships; the citeproc DOCX path generates its own.
     """
+    from orchestrator.tools.m5_writing import _references_section_body  # noqa: PLC0415
     title = "Tài liệu tham khảo" if str(language).lower().startswith("vi") else "References"
-    entries: list[str] = []
-    for r in references:
-        authors = r.get("authors") or []
-        if len(authors) > 3:
-            au = ", ".join(authors[:3]) + ", et al."
-        elif authors:
-            au = ", ".join(authors)
-        else:
-            au = "Anonymous"
-        year = r.get("year") or "n.d."
-        entry = f"{au} ({year}). {r.get('title') or 'Untitled'}."
-        if r.get("venue"):
-            entry += f" *{r['venue']}*."
-        if r.get("doi"):
-            entry += f" https://doi.org/{r['doi']}"
-        entries.append(entry)
-    return {"title": title, "prose": "\n\n".join(entries)}
+    return {"title": title, "prose": _references_section_body(references)}
 
 
 def _infer_model(analysis_text: str, language: str) -> dict:
@@ -624,11 +612,14 @@ def generate_partner_report(
             "m4_analysis": {"analysis_results": text},
         }
 
-        # M2: when the literature-review chapter is included, run a bounded
-        # literature search so the report gets real inline citations + a
-        # References section (via the citeproc export path). Best-effort.
+        # M2: fetch a bounded literature set so composed chapters get real inline
+        # citations backed by a populated References section. EVERY academic
+        # chapter cites (intro/lit_review/methodology/results/discussion), so we
+        # fetch whenever any chapter is composed — not only when Chương 2 is
+        # ticked. Otherwise the LLM cites sources with no bibliography behind
+        # them (hallucinated citations + empty References). Best-effort: []-safe.
         references: list[dict] = []
-        if "lit_review" in chapter_keys:
+        if chapter_keys:
             _set_progress(progress_token, phase="research")
             references = _literature_search(
                 m1_topic["research_title"], m1_topic.get("research_questions") or []
@@ -677,10 +668,11 @@ def generate_partner_report(
             except Exception:
                 logger.exception("partner_report: model diagram step failed (continuing)")
 
-        # Append a populated References section (built from the sources directly,
-        # so it's never an empty heading). We DON'T pass references to run_export
-        # because pandoc citeproc only lists inline-matched [@key] citations —
-        # unreliable when the LLM's (Author, Year) doesn't match exactly.
+        # Append a deterministic References section as a belt-and-braces fallback:
+        # the citeproc DOCX path drops it (by title) and generates its own
+        # bibliography with `nocite:@*` (all pool sources, never empty); the
+        # plain PDF (weasyprint) fallback ships THIS one so the PDF is never
+        # missing its references.
         if references:
             sections.append(_references_section(references, language))
 
@@ -688,9 +680,11 @@ def generate_partner_report(
 
         from orchestrator.tools.m5_writing import run_export  # noqa: PLC0415
 
-        # No user project — a synthetic id namespaces the S3 export keys.
+        # No user project — a synthetic id namespaces the S3 export keys. Pass
+        # references so the DOCX renders via citeproc: inline "(Author, Year)"
+        # become clickable links + a complete, formatted bibliography.
         project_id = f"partner-{uuid.uuid4().hex}"
-        artifacts = run_export(sections, project_id, references=None, language=language)
+        artifacts = run_export(sections, project_id, references=references or None, language=language)
 
         s3 = _s3_from_env()
         urls: dict[str, str] = {}
