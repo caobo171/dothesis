@@ -805,6 +805,11 @@ OUTPUT FORMATTING (strict — the text is rendered to a Word document via Markdo
   descriptives, and path/regression coefficients. Put each row on its own line
   with correct "| col | col |" pipes and a "| --- | --- |" separator row, then
   interpret the table in prose AFTER it.
+- ONLY build a table when the ACTUAL numbers are present in the provided
+  analysis. NEVER output a table containing placeholder cells ("…", "...",
+  "TBD", "N/A", blanks) or invented numbers. If the specific values for a table
+  (e.g. the full HTMT matrix) are NOT in the data, describe that finding in
+  prose only — do not emit a table shell of placeholders.
 - Use "## Heading" on its own line for sub-sections.
 - Do not output the chapter title as an H1 — it is added automatically.
 - Never write meta-commentary about the writing process, missing inputs, or

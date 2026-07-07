@@ -137,10 +137,13 @@ if ! "$VENV_BIN/python" -c "import agent" >/dev/null 2>&1; then
   "$VENV_BIN/pip" install -e agent
 fi
 
-# Warn (non-fatal) if the M5 export toolchain is missing. Exports degrade to
-# basic renderers without pandoc/libreoffice — see scripts/check-export-deps.sh
-# for the Ubuntu (apt) and macOS (brew) install commands.
-bash scripts/check-export-deps.sh || true
+# Check the M5 export toolchain. LibreOffice is MANDATORY — the PDF needs it for
+# its Table of Contents + clickable citations; without it the PDF silently
+# degrades (WeasyPrint, no TOC/links). So this HARD-FAILS the dev boot when
+# LibreOffice is missing — install it per the printed hint, then re-run.
+# pandoc/mmdc stay informational. Escape hatch for a quick UI-only session:
+#   REQUIRE_LIBREOFFICE=0 ./dev.sh
+bash scripts/check-export-deps.sh --require-libreoffice
 
 echo "==> running alembic migrations"
 (cd api && "../$VENV_BIN/alembic" upgrade head)

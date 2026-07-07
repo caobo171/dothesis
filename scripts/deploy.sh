@@ -148,9 +148,12 @@ if [ "${SKIP_WEB:-0}" != "1" ] && command -v npm >/dev/null 2>&1; then
   fi
 fi
 
-# Verify; --strict makes a degraded toolchain a hard failure in prod. mmdc is
-# informational-only in the check (fallback is graceful) so it never trips --strict.
-bash scripts/check-export-deps.sh --strict || die "export toolchain incomplete — see hints above"
+# Verify; --strict makes a degraded toolchain a hard failure in prod, and
+# --require-libreoffice makes LibreOffice explicitly MANDATORY (the PDF needs it
+# for its Table of Contents + clickable citations — WeasyPrint fallback has
+# neither). mmdc is informational-only so it never trips the check.
+bash scripts/check-export-deps.sh --strict --require-libreoffice \
+  || die "export toolchain incomplete (LibreOffice is required) — see hints above"
 
 # ---------------------------------------------------------------------------
 # 2. API — venv, deps, migrations

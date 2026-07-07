@@ -113,7 +113,9 @@ def test_service_empty_text_raises(monkeypatch):
 
 def test_service_composes_and_presigns(monkeypatch):
     monkeypatch.setattr(svc, "extract_pdf_text", lambda b: ("AVE=0.62, HTMT ok, R2=.41", 5))
-    # Avoid the LLM topic-inference + Crossref network calls in a unit test.
+    # Avoid the LLM topic-inference + Crossref network calls in a unit test, and
+    # bypass the M4 data-sufficiency gate (orthogonal to compose/presign here).
+    monkeypatch.setattr(svc, "_has_sufficient_m4_data", lambda text: True)
     monkeypatch.setattr(svc, "_infer_topic", lambda text, lang: {})
     monkeypatch.setattr(svc, "_literature_search", lambda *a, **k: [])
     monkeypatch.setattr(svc, "_compose_chapters",

@@ -113,9 +113,16 @@ _BOLD_HYP_RE = re.compile(r"^\s*\*\*\s*(H\s*\d+)\s*[:.\)]\s*(.+?)\s*\*\*\s*$", r
 #    every item is a bold-led label, so real dashes in prose are left alone.
 _STAR_BULLET_RE = re.compile(r"\s\*\s+")
 _DASH_BULLET_RE = re.compile(r"\s-\s+")
-# A "content" pipe inside a table cell: not padded by whitespace and not already
-# escaped — i.e. a literal ``|`` that must not be treated as a column delimiter.
-_CONTENT_PIPE_RE = re.compile(r"(?<![\s|\\])\|(?=[^\s|])")
+# Escape literal pipes that live INSIDE a parenthesis group in a table row
+# (the SmartPLS header ``T Statistics (|O/STDEV|)``). Scoping to parentheses
+# avoids the earlier bug where a tightly-formatted row like ``|QD|0.5|0.6|-|``
+# had its *delimiter* pipes escaped and collapsed into a single cell.
+_PAREN_GROUP_RE = re.compile(r"\(([^()]*)\)")
+
+# A markdown table row that is a placeholder shell: a cell whose whole content is
+# an ellipsis / dots (…, ...) — the LLM emits these when it lacks the real
+# numbers. Such tables are dropped (see _drop_placeholder_tables).
+_PLACEHOLDER_CELL_RE = re.compile(r"(?:^|\|)\s*(?:…|\.{2,})\s*(?=\||$)")
 
 
 def _reflow_inline_bullets(line: str) -> list[str]:
@@ -180,15 +187,12 @@ def _sanitize_prose(prose: str) -> str:
     for raw in prose.split("\n"):
         expanded.extend(_reflow_inline_bullets(raw))
     for ln in expanded:
-        # 0) table rows: escape any *content* pipe (e.g. the SmartPLS header
-        #    ``T Statistics (|O/STDEV|)``). A literal ``|`` inside a cell is read
-        #    as an extra column delimiter, which desyncs the column count and
-        #    breaks the whole table on render. Delimiter pipes are always padded
-        #    by a space; content pipes are tight (``(|O``/``V|)``), so we escape
-        #    only pipes with a non-space, non-escaped neighbour on both sides.
-        #    Separator rows (only |,-,:,space) are left untouched.
+        # 0) table rows: escape a literal ``|`` that lives INSIDE a parenthesis
+        #    group (the SmartPLS header ``T Statistics (|O/STDEV|)``) so it isn't
+        #    read as an extra column delimiter. Scoping to parentheses avoids
+        #    touching real delimiter pipes in a tight row like ``|QD|0.5|-|``.
         if ln.lstrip().startswith("|") and set(ln.strip()) - set("|-: "):
-            ln = _CONTENT_PIPE_RE.sub(r"\\|", ln)
+            ln = _PAREN_GROUP_RE.sub(lambda m: "(" + m.group(1).replace("|", "\\|") + ")", ln)
         # 1) whole-sentence bold hypothesis:  **H1: ....**  ->  **H1:** ....
         bm = _BOLD_HYP_RE.match(ln)
         if bm:
@@ -207,6 +211,51 @@ def _sanitize_prose(prose: str) -> str:
                 out.append(f"**{text}**")
                 continue
         out.append(ln)
+    return _drop_placeholder_tables("\n".join(out))
+
+
+def _drop_placeholder_tables(prose: str) -> str:
+    """Remove a Markdown table whose cells are placeholder dots/ellipsis.
+
+    When the uploaded analysis lacks the real numbers for a table (e.g. only a
+    prose "all HTMT < 0.85" with no matrix), the composer sometimes emits the
+    table SHELL filled with "…"/"..." cells. A table of placeholders is worse
+    than none, so drop it — along with its bold "Bảng x.y" caption and italic
+    "Nguồn:" source line — and keep the surrounding interpretive prose.
+    """
+    lines = prose.split("\n")
+    out: list[str] = []
+    i, n = 0, len(lines)
+    while i < n:
+        if lines[i].lstrip().startswith("|"):
+            j = i
+            block: list[str] = []
+            while j < n and lines[j].lstrip().startswith("|"):
+                block.append(lines[j])
+                j += 1
+            if any(_PLACEHOLDER_CELL_RE.search(b) for b in block):
+                # Drop a preceding "**Bảng …**" caption (and blank lines).
+                while out and not out[-1].strip():
+                    out.pop()
+                if out and re.match(r"^\s*\*\*\s*(Bảng|Table)\b", out[-1]):
+                    out.pop()
+                    while out and not out[-1].strip():
+                        out.pop()
+                # Skip a following blank + italic "*Nguồn…*" source line.
+                k = j
+                while k < n and not lines[k].strip():
+                    k += 1
+                if k < n and re.match(r"^\s*\*\s*(Nguồn|Source)\b", lines[k]):
+                    k += 1
+                i = k
+                if out and out[-1].strip():
+                    out.append("")
+                continue
+            out.extend(block)
+            i = j
+        else:
+            out.append(lines[i])
+            i += 1
     return "\n".join(out)
 
 

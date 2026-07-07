@@ -29,10 +29,22 @@
 
 set -uo pipefail
 
+# --strict               → exit 1 if ANY export dep (pandoc/libreoffice) is missing.
+# --require-libreoffice  → exit 1 if LibreOffice specifically is missing/broken.
+#                          LibreOffice is MANDATORY: without it the PDF loses its
+#                          Table of Contents + clickable citations. Can also be
+#                          forced with REQUIRE_LIBREOFFICE=1 in the environment.
 STRICT=0
-[ "${1:-}" = "--strict" ] && STRICT=1
+REQUIRE_LO="${REQUIRE_LIBREOFFICE:-0}"
+for arg in "$@"; do
+  case "$arg" in
+    --strict) STRICT=1 ;;
+    --require-libreoffice|--require-soffice) REQUIRE_LO=1 ;;
+  esac
+done
 
 missing=0
+soffice_ok=0
 
 # Pick the right install hint for this OS so the message is copy-pasteable.
 if [ "$(uname -s)" = "Darwin" ]; then
@@ -69,6 +81,7 @@ elif command -v libreoffice >/dev/null 2>&1; then
 fi
 if [ -n "$soffice_bin" ] && "$soffice_bin" --version >/dev/null 2>&1; then
   echo "  ✓ libreoffice (DOCX→PDF) — $("$soffice_bin" --version 2>/dev/null | head -1)"
+  soffice_ok=1
 elif [ -n "$soffice_bin" ]; then
   echo "  ✗ ${soffice_bin} is on PATH but BROKEN (won't run — dangling install?). Reinstall: ${SOFFICE_HINT}"
   missing=$((missing + 1))
@@ -95,6 +108,16 @@ if [ -x "$MMDC" ]; then
 else
   echo "  ○ mmdc NOT installed — conceptual-model diagrams render as a text list."
   echo "    Install: (cd engine/tools/mermaid_cli && npm install)"
+fi
+
+# LibreOffice is MANDATORY when requested: the DOCX→PDF path is the ONLY way the
+# PDF gets a Table of Contents + clickable citations. Without it the PDF silently
+# degrades to WeasyPrint (no TOC, no citation links), so block the boot/deploy.
+if [ "$REQUIRE_LO" -eq 1 ] && [ "$soffice_ok" -ne 1 ]; then
+  echo "==> FATAL: LibreOffice (soffice) is REQUIRED but not usable." >&2
+  echo "    The PDF export needs it for the Table of Contents + clickable citations." >&2
+  echo "    Install it: ${SOFFICE_HINT}" >&2
+  exit 1
 fi
 
 if [ "$missing" -gt 0 ]; then
