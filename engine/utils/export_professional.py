@@ -789,13 +789,36 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
             section.left_margin = Inches(1.0)
             section.right_margin = Inches(1.0)
 
-        # Centered italic footer (manual page numbering hint)
+        # Centered footer with a REAL auto-updating Word PAGE field, so the
+        # document shows actual page numbers out of the box (no "Insert > Page
+        # Number" step). Falls back to a static "1" if the OXML API is missing.
         footer_para = doc.sections[0].footer.paragraphs[0]
         footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = footer_para.add_run("[Add page numbers via Insert > Page Number in Word]")
+        run = footer_para.add_run()
         run.font.name = 'Times New Roman'
         run.font.size = Pt(10)
-        run.font.italic = True
+        try:
+            from docx.oxml import OxmlElement
+            from docx.oxml.ns import qn
+
+            fld_begin = OxmlElement("w:fldChar")
+            fld_begin.set(qn("w:fldCharType"), "begin")
+            instr = OxmlElement("w:instrText")
+            instr.set(qn("xml:space"), "preserve")
+            instr.text = "PAGE"
+            fld_sep = OxmlElement("w:fldChar")
+            fld_sep.set(qn("w:fldCharType"), "separate")
+            fld_num = OxmlElement("w:t")
+            fld_num.text = "1"
+            fld_end = OxmlElement("w:fldChar")
+            fld_end.set(qn("w:fldCharType"), "end")
+            run._r.append(fld_begin)
+            run._r.append(instr)
+            run._r.append(fld_sep)
+            run._r.append(fld_num)
+            run._r.append(fld_end)
+        except Exception:
+            run.text = "1"
 
         BODY_FONT = "Times New Roman"
         BODY_SIZE = Pt(12)
@@ -994,6 +1017,7 @@ def _style_docx_tables(output_docx) -> None:
         from docx.oxml import OxmlElement
         from docx.oxml.ns import qn
         from docx.enum.table import WD_ALIGN_VERTICAL
+        from docx.shared import Pt
     except Exception:
         return
     try:
@@ -1121,6 +1145,15 @@ def _style_docx_tables(output_docx) -> None:
                 # Vertical center — headers with "Tần số (n)" were bottom-aligned
                 # and read as broken.
                 cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                # Cell paragraphs inherit the reference doc's Normal style
+                # (double line-spacing + 0.5" first-line indent) → tall, oddly
+                # indented cells. Flatten them to compact single-spaced text.
+                for p in cell.paragraphs:
+                    pf = p.paragraph_format
+                    pf.first_line_indent = Pt(0)
+                    pf.line_spacing = 1.0
+                    pf.space_before = Pt(2)
+                    pf.space_after = Pt(2)
 
         # 8) Bold the header row.
         if table.rows:

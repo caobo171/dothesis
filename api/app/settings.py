@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     google_client_id: str = Field(alias="DOTHESIS_GOOGLE_CLIENT_ID", default="")
     signup_bonus_credits: int = Field(alias="DOTHESIS_SIGNUP_BONUS_CREDITS", default=100)
     orchestrator_enabled: bool = Field(alias="ORCHESTRATOR_ENABLED", default=False)
+    # Shared secret for the service-to-service partner report endpoint
+    # (POST /api/v1/partner/report). Set on both DoThesis and the calling
+    # partner (e.g. Fillform). Empty disables the endpoint (401 on every call).
+    partner_api_token: str = Field(alias="PARTNER_API_TOKEN", default="")
     langsmith_api_key: str | None = Field(alias="LANGSMITH_API_KEY", default=None)
     orchestrator_pg_pool_max: int = Field(alias="ORCHESTRATOR_PG_POOL_MAX", default=10)
 
