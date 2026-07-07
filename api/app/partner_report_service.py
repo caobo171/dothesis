@@ -530,6 +530,37 @@ def _extract_text(file_bytes: bytes, filename: str | None) -> tuple[str, int]:
     return extract_pdf_text(file_bytes)
 
 
+# Signals that an uploaded file actually contains statistical-analysis output
+# (SmartPLS / SPSS), which the Results (M4) chapter needs. Covers English and
+# Vietnamese terminology.
+_M4_DATA_SIGNALS = (
+    "cronbach", "composite reliability", "average variance", "ave", "htmt",
+    "heterotrait", "outer loading", "factor loading", "r square", "r-square",
+    "p value", "p-value", "t statistic", "t-statistic", "std", "standard deviation",
+    "correlation", "regression", "coefficient", "path coefficient", "variance",
+    "eigenvalue", "kmo", "bartlett", "f square", "vif", "original sample",
+    "sample mean", "stdev", "significance", "sig.", "beta", "β", "α",
+    "độ tin cậy", "phương sai", "tương quan", "hồi quy", "hệ số", "trung bình",
+    "độ lệch chuẩn", "kiểm định", "giá trị hội tụ", "giá trị phân biệt",
+    "tải nhân tố", "nhân tố",
+)
+
+
+def _has_sufficient_m4_data(text: str) -> bool:
+    """True when the extracted text looks like real statistical-analysis output.
+
+    The Results (M4) chapter is built FROM the uploaded analysis (reliability,
+    validity, path coefficients, …). If the file is a proposal / an unrelated
+    doc / mostly prose with no numbers, M4 has nothing to tabulate — we fail
+    fast instead of fabricating tables. Heuristic: needs at least two distinct
+    statistical terms AND a handful of decimal numbers.
+    """
+    low = (text or "").lower()
+    keyword_hits = sum(1 for k in _M4_DATA_SIGNALS if k in low)
+    decimal_hits = len(re.findall(r"\d[.,]\d", text or ""))
+    return keyword_hits >= 2 and decimal_hits >= 6
+
+
 def generate_partner_report(
     pdf_bytes: bytes,
     *,
@@ -585,6 +616,17 @@ def generate_partner_report(
             # Image-only scans and non-text files land here — a clear 422, not 500.
             raise ReportError("no_extractable_text",
                               "the file has no machine-readable text (image-only scan?)")
+
+        # M4 gate: the Results chapter needs real statistical output. If it was
+        # requested but the file has no such data, fail fast (before any LLM
+        # spend) so the partner can charge only a small validation fee instead
+        # of billing for a report it can't build.
+        if "results" in chapter_keys and not _has_sufficient_m4_data(text):
+            raise ReportError(
+                "insufficient_m4_data",
+                "the uploaded file lacks the statistical analysis data (reliability, "
+                "validity, path coefficients, …) needed to write the Results (M4) chapter",
+            )
 
         # When the user gave no title (and always, for supporting context), infer
         # the study framing from the data so chapters aren't full of "[...]" stubs.

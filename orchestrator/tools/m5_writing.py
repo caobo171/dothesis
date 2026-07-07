@@ -283,7 +283,13 @@ def _sections_to_markdown(sections: list[dict]) -> str:
             parts.append(f"# {title}")
         if prose:
             parts.append(prose)
-    return "\n\n".join(parts) + "\n"
+    md = "\n\n".join(parts) + "\n"
+    # Normalize long dashes to a plain hyphen across the whole output (chapter
+    # titles + prose): the LLM peppers prose with em-dashes and our headings use
+    # them, which reads as machine-generated. Runs AFTER list-reflow (which must
+    # distinguish en-dashes from ASCII hyphens), so it can't disturb that.
+    md = md.replace("—", "-").replace("–", "-")
+    return md
 
 
 def _strip_leading_chapter_heading(prose: str, title: str | None = None) -> str:
@@ -546,15 +552,25 @@ def _normalize_prose_markdown(prose: str) -> str:
         if re.match(r"^\s*([*\-+–—•]|\d+\.)\s+", line):
             out_lines.append(line)
             continue
-        # Count inline bullet markers ( space + marker + space + text ).
-        markers = re.findall(r"\s[*\-–—•]\s+\S", line)
-        if len(markers) >= 2:
-            parts = re.split(r"\s+[*\-–—•]\s+", line)
+        # `*` / `•` are unambiguous inline-list markers. `-`/`–`/`—` double as
+        # PARENTHETICAL dashes ("text — aside — more"), so only treat them as a
+        # list when the items are bold-led labels — otherwise a dash-parenthetical
+        # sentence gets wrongly chopped into bullets.
+        star = re.findall(r"\s[*•]\s+\S", line)
+        dash = re.findall(r"\s[-–—]\s+\S", line)
+        parts = None
+        require_bold = False
+        if len(star) >= 2:
+            parts = re.split(r"\s+[*•]\s+", line)
+        elif len(dash) >= 2:
+            parts = re.split(r"\s+[-–—]\s+", line)
+            require_bold = True
+        if parts is not None:
             head = parts[0].strip()
             items = [p.strip() for p in parts[1:] if p.strip()]
-            if len(items) >= 2:
+            if len(items) >= 2 and (not require_bold or all(it.startswith("**") for it in items)):
                 if head:
-                    out_lines.append(head if head.endswith(":") else head)
+                    out_lines.append(head)
                     out_lines.append("")
                 out_lines.extend(f"- {it}" for it in items)
                 continue
@@ -715,7 +731,9 @@ def _fill_template(template: str, kwargs: dict) -> str:
 # emits — `(Hair & Ringle, 2019)`, `(Nguyễn và cộng sự, 2021)`, `(Đặng, 2019)`,
 # `(Smith, 2020; Jones, 2021)` — while NOT matching non-citations that lack a
 # real year: `(xem Bảng 4.1)`, `(β = 0.302, p = 0.000)`, `(N = 188)`.
-_CITE_SHAPED = re.compile(r"\(\s*([^()]*?[^\W\d_][^()]*?),\s*((?:19|20)\d{2}[a-z]?)\s*\)")
+# Exclude ';' so a multi-citation like "(TUNÇ, 2022; Wu, 2025)" is left intact
+# (not greedily matched and stripped when only the LAST pair fails to validate).
+_CITE_SHAPED = re.compile(r"\(\s*([^()';]*?[^\W\d_][^()';]*?),\s*((?:19|20)\d{2}[a-z]?)\s*\)")
 
 
 def _cite_surname_year(author_text: str, year: str) -> tuple[str, str]:
@@ -807,6 +825,18 @@ ACADEMIC STYLE (applies to every chapter):
 - Vary vocabulary — don't repeat the same verb (rotate study/examine/analyse/
   assess; affect/influence/shape; show/indicate/demonstrate).
 - Expand each abbreviation on first use, then use the short form.
+
+CITATIONS (strict — invalid citations are removed automatically):
+- Cite ONLY sources from the provided reference list. NEVER invent an author or
+  a source that is not on that list.
+- Always cite in PARENTHETICAL form at the END of the sentence/clause:
+  "… mối quan hệ này (Author, Year)." Use the EXACT (Author, Year) string shown
+  in the list.
+- NEVER write a citation as the sentence subject / narrative form
+  ("Author (Year) đã chỉ ra…", "Author (Year) showed…"). Rephrase so the
+  citation sits in parentheses at the end.
+- If no provided source supports a claim, state the claim without a citation —
+  do not attribute it to an invented source.
 
 GOLDEN RULE FOR TABLES: every statistical table MUST be followed by an
 interpreting paragraph. Pattern: [overview sentence] -> [caption] -> [table] ->
@@ -1610,8 +1640,10 @@ def compose_chapter(
     # warning stays as RETURNED metadata (uncited_warnings) for QA/logging — it
     # must NOT be appended into the prose, which gets rendered verbatim.
     cited_in_pool, uncited = validate_citations(prose, references)
-    if uncited:
-        prose = _strip_uncited_citations(prose, references)
+    # ALWAYS run the pool-based stripper (not only when the narrow validator
+    # flagged something): it removes every parenthetical citation not backed by
+    # the reference pool — the authoritative cleaner for hallucinated cites.
+    prose = _strip_uncited_citations(prose, references)
     return {
         "name": chapter_name,
         "prose": prose,
@@ -1676,8 +1708,10 @@ def rewrite_chapter(
     # warning stays as RETURNED metadata (uncited_warnings) for QA/logging — it
     # must NOT be appended into the prose, which gets rendered verbatim.
     cited_in_pool, uncited = validate_citations(prose, references)
-    if uncited:
-        prose = _strip_uncited_citations(prose, references)
+    # ALWAYS run the pool-based stripper (not only when the narrow validator
+    # flagged something): it removes every parenthetical citation not backed by
+    # the reference pool — the authoritative cleaner for hallucinated cites.
+    prose = _strip_uncited_citations(prose, references)
     return {
         "name": chapter_name,
         "prose": prose,
