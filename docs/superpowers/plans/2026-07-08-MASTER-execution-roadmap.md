@@ -27,8 +27,14 @@ Best-in-class extensions (make it best-in-class at guiding quant theses):
 | F8 | Quantitative correctness content pack | `specs/…quant-correctness-content-pack-design.md` | `plans/…quant-correctness-content-pack.md` | 4 |
 | F9 | Model cost/quality eval ("shootout") | `specs/…model-cost-quality-eval-design.md` | `plans/…model-cost-quality-eval.md` | 5 |
 | F10 | Provider routing + OpenRouter fallback | `specs/…provider-routing-fallback-design.md` | `plans/…provider-routing-fallback.md` | 4 |
+| F11 | Thesis timeline + weekly nudge | `specs/…thesis-timeline-nudge-design.md` | `plans/…thesis-timeline-nudge.md` | 5 |
 
-**50 tasks total.**
+**55 tasks total.**
+
+**F11 is the tagline capstone** — "an agent that goes with your thesis journey." F1–F10 make it
+present and proactive *within* a session; F11 adds the *temporal* accompaniment (backwards
+timeline from the defense date + one weekly nudge) so it walks with the student across the months.
+Depends on F2 (roadmap position + UI) and F6 (the defense block closes the timeline).
 
 **F9 + F10 are the cost/reliability pair:** F9 tells you *which* model (quality × VN × true cost);
 F10 lets you *switch and fall back* safely (one factory, OpenRouter cascade, caching-preserving
@@ -157,6 +163,7 @@ passes and it's merged.
 - [ ] **F6 — Mock Committee** → `plans/2026-07-08-mock-committee.md`
 - [ ] **F9 — Model cost/quality eval** → `plans/2026-07-08-model-cost-quality-eval.md`
 - [ ] **F10 — Provider routing + OpenRouter fallback** → `plans/2026-07-08-provider-routing-fallback.md`
+- [ ] **F11 — Thesis timeline + weekly nudge** → `plans/2026-07-08-thesis-timeline-nudge.md`
 
 ## Suggested branch/PR strategy
 
