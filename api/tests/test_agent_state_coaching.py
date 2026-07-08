@@ -33,3 +33,11 @@ def test_exists_ignores_coaching_only_state(project_id):
     st["contextStore"]["institution_profile"] = {"citation_style": "apa7"}
     store._save(st)
     assert store.exists() is False
+
+
+def test_read_api_returns_persisted_coaching(project_id):
+    store = DbProjectStateStore(get_engine(), project_id, "/tmp/ws")
+    st = store.load(); st["contextStore"]["advisor_feedback"] = [{"id": "1", "status": "open"}]
+    store._save(st)
+    assert store.get_advisor_feedback()[0]["id"] == "1"
+    assert store.get_institution_profile() == {}

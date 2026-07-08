@@ -100,6 +100,27 @@ class ProjectStateStore:
         tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(self.path)
 
+    # -- coaching reads ------------------------------------------------------
+    # Typed getters for the COACHING_KEYS (outside the M1-M5 slice map, see
+    # note above). Consumers (e.g. F3's review_thesis) must read through
+    # these instead of `getattr(store, "institution_profile", ...)` — that
+    # pattern reads an attribute that is never set on the store and always
+    # silently returns the default, which is the bug this fixes.
+    def _cs(self) -> dict:
+        return self.load().get("contextStore") or {}
+
+    def get_institution_profile(self) -> dict:
+        return self._cs().get("institution_profile") or {}
+
+    def get_advisor_feedback(self) -> list:
+        return self._cs().get("advisor_feedback") or []
+
+    def get_roadmap_tasks(self) -> list:
+        return self._cs().get("roadmap_tasks") or []
+
+    def get_thesis_timeline(self) -> dict:
+        return self._cs().get("thesis_timeline") or {}
+
     # -- reads -------------------------------------------------------------
 
     def read_slice(self, module: str) -> dict[str, Any]:
