@@ -53,6 +53,16 @@ VERSION_HISTORY_CAP = 50
 
 STATE_FILENAME = "context_store.json"
 
+# Project-scoped coaching/memory keys that live OUTSIDE the module slice map.
+# Persisted by DbProjectStateStore in the `coaching` JSONB column (see
+# project_db_store_persistence_gap memory). Written via dedicated store paths,
+# never commit_slice — commit_slice's ownership check is module-scoped and
+# would reject them.
+# NOTE: field-it results are NOT here — F7 writes them into the m4_analysis
+# module column (where F8 reads), so they persist via normal ownership.
+COACHING_KEYS = {"roadmap_tasks", "advisor_feedback", "institution_profile",
+                 "thesis_timeline"}
+
 
 class SliceOwnershipError(ValueError):
     """A commit tried to write keys outside the module's owned slice."""

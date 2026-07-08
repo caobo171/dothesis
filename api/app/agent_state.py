@@ -22,7 +22,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from agent.state import MODULES, SLICE_OWNERSHIP, ProjectStateStore
+from agent.state import COACHING_KEYS, MODULES, SLICE_OWNERSHIP, ProjectStateStore
 
 from .models import ContextStore as DbContextStore
 from .models import Project
@@ -45,7 +45,11 @@ class DbProjectStateStore(ProjectStateStore):
 
     def exists(self) -> bool:
         state = self.load()
-        return bool(state["contextStore"]) or any(
+        # Coaching keys (e.g. an F4 institution_default seed) must NOT count
+        # as "the project has started" — only actual module-slice content
+        # should, or onboarding treats every fresh project as in-progress.
+        module_keys = set(state["contextStore"]) - COACHING_KEYS
+        return bool(module_keys) or any(
             s != "locked" for s in state["status"].values()
         )
 
@@ -74,6 +78,13 @@ class DbProjectStateStore(ProjectStateStore):
                 for key in SLICE_OWNERSHIP[module]:
                     if key in slice_dict:
                         flat[key] = slice_dict[key]
+            # Coaching keys live in their own column, outside the module
+            # slice map entirely — lift them the same way so the agent sees
+            # one flat contextStore regardless of which column backs a key.
+            if getattr(cs, "coaching", None):
+                for key, value in cs.coaching.items():
+                    if key in COACHING_KEYS:
+                        flat[key] = value
 
         return {
             "status": status,
@@ -131,6 +142,17 @@ class DbProjectStateStore(ProjectStateStore):
                     touched = True
                 if touched or current:
                     values[column] = current or None
+            # Coaching keys get their own merge-over-existing pass — MERGE,
+            # never rebuild, same reasoning as the per-module columns above:
+            # a rebuild from `flat` alone would wipe any coaching key not
+            # touched by THIS save (e.g. saving roadmap_tasks would otherwise
+            # blow away a previously-saved institution_profile).
+            existing_coaching = dict(getattr(existing, "coaching", None) or {}) if existing else {}
+            for key in COACHING_KEYS:
+                if key in flat:
+                    existing_coaching[key] = flat[key]
+            if existing_coaching:
+                values["coaching"] = existing_coaching
             if existing is None:
                 conn.execute(DbContextStore.__table__.insert().values(
                     project_id=self.project_id, **values))

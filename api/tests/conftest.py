@@ -1,8 +1,12 @@
+import uuid
+
 import pytest
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, get_engine, reset_engine_for_tests
+from app.models import Project, User
 
 
 @pytest.fixture(scope="session")
@@ -18,3 +22,17 @@ def _bind_db(pg_url, monkeypatch):
     Base.metadata.drop_all(get_engine())
     Base.metadata.create_all(get_engine())
     yield
+
+
+@pytest.fixture
+def project_id():
+    # Shared across test_agent_state.py and test_agent_state_coaching.py —
+    # both need a real project row to hang a DbProjectStateStore off of.
+    engine = get_engine()
+    with Session(engine) as s:
+        u = User(email=f"t-{uuid.uuid4().hex[:8]}@x.com", username=uuid.uuid4().hex[:8],
+                 password_hash="x", email_verified=True)
+        s.add(u); s.flush()
+        p = Project(user_id=u.id, name="T", current_module="M1", status="draft")
+        s.add(p); s.commit()
+        return p.id

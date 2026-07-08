@@ -4,26 +4,13 @@ Verifies the flat agent shape round-trips through context_store slice columns
 + projects.module_status/focus, so the web's module tracker and ContextPanel
 read agent-written state with zero changes.
 """
-import uuid
-
-import pytest
 from sqlalchemy.orm import Session
 
 from app.agent_state import DbProjectStateStore
 from app.db import get_engine
-from app.models import ContextStore, Project, User
+from app.models import ContextStore, Project
 
-
-@pytest.fixture
-def project_id():
-    engine = get_engine()
-    with Session(engine) as s:
-        u = User(email=f"t-{uuid.uuid4().hex[:8]}@x.com", username=uuid.uuid4().hex[:8],
-                 password_hash="x", email_verified=True)
-        s.add(u); s.flush()
-        p = Project(user_id=u.id, name="T", current_module="M1", status="draft")
-        s.add(p); s.commit()
-        return p.id
+# project_id fixture lives in conftest.py — shared with test_agent_state_coaching.py.
 
 
 def _store(project_id, tmp_path):
