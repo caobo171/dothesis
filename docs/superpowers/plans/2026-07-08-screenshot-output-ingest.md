@@ -12,7 +12,7 @@
 
 - **Tools take file paths, never bytes/base64 args** the model fills. Resolve within the project workspace like `run_stats` (`agent/tools/stats.py:131`).
 - **Never fabricate a value** — unreadable cells `null` + flagged.
-- **Real multimodal API only** — `build_user_message(text, attachments, provider)` + `Attachment.from_path`; provider `"google"` to match `_get_llm()` (Gemini). NO `model_message_for` (doesn't exist).
+- **Real multimodal API only** — `build_user_message(text, attachments, provider)` + `Attachment.from_path`; provider `"gemini"` (the valid `Provider` literal — `agent/multimodal.py:41` is `Literal["gemini","openai","anthropic"]`; `"google"` raises `ValueError`) to match `_get_llm()` (Gemini). NO `model_message_for` (doesn't exist).
 - No real vision/API in tests (stub `_vision_read`). Comment the decision behind each change.
 
 ---
@@ -81,9 +81,9 @@ def infer_table_kind(headers: list[str]) -> str:
 
 
 def _load_bytes(file: str) -> bytes:
-    """Resolve `file` in the project workspace (uploads dir), like run_stats. Isolated for tests."""
-    from agent.tools.stats import _resolve_upload_path  # noqa: PLC0415 — reuse run_stats' resolver
-    return Path(_resolve_upload_path(file)).read_bytes()
+    """Read the file. `file` is a path the runtime passes (same convention as run_stats/_load_df,
+    which does Path(file) directly — there is NO separate workspace resolver). Isolated for tests."""
+    return Path(file).read_bytes()
 
 
 def _num(x):
@@ -129,8 +129,9 @@ def parse_smartpls_export(file: str) -> str:
                            "hint": "paste the values or upload a screenshot"}, ensure_ascii=False)
 ```
 
-> **Note:** add `lxml` to `api/pyproject.toml`; confirm `_resolve_upload_path` is the real helper
-> `run_stats` uses to locate an uploaded file (adapt the name to what `agent/tools/stats.py` exposes).
+> **Note:** add `lxml` to `api/pyproject.toml`. `file` is the path the runtime passes to the tool
+> (same as `run_stats`, whose `_load_df` does `Path(file)` at `agent/tools/stats.py:23` — there is
+> NO workspace resolver to reuse).
 
 - [ ] **Step 4: Run to verify it passes** → PASS.
 
@@ -188,14 +189,9 @@ def _vision_read(file: str) -> str:
     """Read a results-table image via Gemini. Isolated so tests stub it."""
     from agent.multimodal import Attachment, build_user_message  # noqa: PLC0415 (real API)
     from orchestrator.tools.m5_writing import _get_llm  # noqa: PLC0415 (Gemini)
-    att = Attachment.from_path(_resolve_path(file))
-    msg = build_user_message(_VISION_PROMPT, [att], provider="google")  # provider matches _get_llm
+    att = Attachment.from_path(file)                       # `file` is already the path
+    msg = build_user_message(_VISION_PROMPT, [att], provider="gemini")  # valid Provider literal
     return str(getattr(_get_llm().invoke([msg]), "content", ""))
-
-
-def _resolve_path(file: str) -> str:
-    from agent.tools.stats import _resolve_upload_path  # noqa: PLC0415
-    return _resolve_upload_path(file)
 
 
 @tool

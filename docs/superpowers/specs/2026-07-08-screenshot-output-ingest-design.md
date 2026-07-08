@@ -37,7 +37,7 @@ interprets the image (ungrounded, error-prone).
 `parse_output_table(file: str) -> str` in `agent/tools/output_parse.py` — takes a **workspace file
 path** (the pattern `run_stats` uses; a model cannot supply image bytes through a JSON tool call):
 - Loads the image via `agent/multimodal.Attachment.from_path(...)` and builds a Gemini message via
-  `build_user_message(prompt, [att], provider="google")` (the real helper — NOT `model_message_for`),
+  `build_user_message(prompt, [att], provider="gemini")` (the real helper + valid `Provider` literal — NOT `model_message_for`, NOT `"google"`),
   then invokes `_get_llm()` (which IS Gemini). Returns strict-JSON `{table_kind, rows}`.
 - `table_kind` inferred from headers; low-confidence → `needs_confirmation` with the parsed guess.
 - The prompt forbids inventing numbers ("transcribe only what is visible; mark unreadable cells null").

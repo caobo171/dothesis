@@ -43,9 +43,10 @@ already extracted + neutralized by the route. Classification: extension + a chea
 `_infer_model(text, language)` (both **require `language`**). May import `app.*` + `orchestrator.*`
 (it's api-layer).
 
-### Route — `POST /projects/{id}/import`
+### Route — `POST /projects/{id}/mid-journey-import`
 
-Authed (`Depends(current_user)` + ownership: `project.user_id == user.id` else 403), POST-only.
+(Distinct path — `chat.py:271` already owns `POST /projects/{id}/import` for the M2 artifact-commit
+flow.) Authed (`Depends(current_user)` + ownership: `project.user_id == user.id` else 403), POST-only.
 Steps:
 1. Gather the project's uploads' extracted text (the uploads flow already writes `extracted.txt`
    per upload); **neutralize** each via `agent/guardrails.neutralize_document_text`.
@@ -68,7 +69,7 @@ confirm.
 ## Data flow
 
 ```
-/new upload → POST /projects/{id}/import (authed)
+/new upload → POST /projects/{id}/mid-journey-import (authed)
   → server extracts + neutralizes upload text
   → import_existing_work (classify + infer, api-layer)
   → commit_slice per evidenced module IN ORDER (in_progress)

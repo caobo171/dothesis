@@ -171,7 +171,7 @@ def test_focus_is_first_not_imported(monkeypatch):
     app = FastAPI(); app.include_router(ir.router, prefix="/api/v1")
     # override the auth dependency for the test
     app.dependency_overrides[ir.current_user] = lambda: object()
-    r = TestClient(app).post("/api/v1/projects/abc/import")
+    r = TestClient(app).post("/api/v1/projects/abc/mid-journey-import")
     assert r.status_code == 200
     assert committed == ["M1", "M3"]          # MODULES order
     assert focus_set["f"] == "M2"             # first not-imported
@@ -229,7 +229,9 @@ def _set_focus(db, project_id, focus: str) -> None:
     db.commit()
 
 
-@router.post("/projects/{project_id}/import")
+# Distinct path — chat.py:271 already owns POST /projects/{id}/import (the M2
+# artifact-commit flow). Use a distinct path so neither shadows the other.
+@router.post("/projects/{project_id}/mid-journey-import")
 def import_project(project_id: str, user: User = Depends(current_user), db=Depends(db_session)):
     _authorize(db, user, project_id)
     store, files, language = _store_and_files(db, project_id)
@@ -243,7 +245,9 @@ def import_project(project_id: str, user: User = Depends(current_user), db=Depen
                 imported.append(module)
             except Exception:
                 logger.exception("import: commit %s failed", module)   # skip, don't report
-    focus = next((m for m in MODULES if m not in res["slices"]), MODULES[-1])
+    # focus = first module NOT actually committed (use `imported`, not slices, so a failed
+    # commit doesn't get skipped over).
+    focus = next((m for m in MODULES if m not in imported), MODULES[-1])
     _set_focus(db, project_id, focus)
     return {"imported": imported, "ambiguous": res["ambiguous"],
             "unreadable": res["unreadable"], "focus": focus}

@@ -85,7 +85,9 @@ def test_coaching_keys_round_trip_in_db(project_id):   # reuse test_agent_state.
     assert "m1_topic" not in reloaded["contextStore"]
 ```
 
-> Use the repo's existing DB test fixtures (`api/tests/conftest.py` / `test_agent_state*.py`).
+> Use the repo's existing DB test fixtures. NOTE: the `project_id` fixture currently lives
+> module-local in `api/tests/test_agent_state.py:18` — **move it to `api/tests/conftest.py`** so the
+> new `test_agent_state_coaching.py` file can see it (else it's a fixture-not-found error).
 
 - [ ] **Step 2: Run to verify it fails** → FAIL (coaching keys dropped).
 
