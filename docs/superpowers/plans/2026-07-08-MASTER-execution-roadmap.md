@@ -1,12 +1,14 @@
-# Master Execution Roadmap — Vertical Agent Upgrade (5 features)
+# Master Execution Roadmap — Vertical Agent Upgrade (8 features)
 
 **Date:** 2026-07-08
-**Status:** Program plan — sequences the five specced features into one ordered build.
-**Scope:** This does not restate the 29 per-task steps — it orders the five plans by their
-real dependencies, defines shippable milestones, and marks what can run in parallel. Each
-feature keeps its own plan file (the source of truth for its tasks).
+**Status:** Program plan — sequences the eight specced features into one ordered build.
+**Scope:** This does not restate the per-task steps — it orders the plans by their real
+dependencies, defines shippable milestones, and marks what can run in parallel. Each feature
+keeps its own plan file (the source of truth for its tasks).
 
-## The five features
+## The eight features
+
+Core five (the vertical-agent foundation):
 
 | # | Feature | Spec | Plan | Tasks |
 |---|---|---|---|---|
@@ -16,7 +18,15 @@ feature keeps its own plan file (the source of truth for its tasks).
 | F4 | Cross-session memory + advisor loop | `specs/…cross-session-memory-design.md` | `plans/…cross-session-memory.md` | 5 |
 | F5 | Observability / agent-quality evals | `specs/…observability-agent-quality-design.md` | `plans/…observability-agent-quality.md` | 4 |
 
-**29 tasks total.**
+Best-in-class extensions (make it best-in-class at guiding quant theses):
+
+| # | Feature | Spec | Plan | Tasks |
+|---|---|---|---|---|
+| F6 | Mock Committee (Hội đồng ảo) | `specs/…mock-committee-design.md` | `plans/…mock-committee.md` | 4 |
+| F7 | Field-It survey pipeline (Questionnaire Doctor + survify) | `specs/…field-it-survey-pipeline-design.md` | `plans/…field-it-survey-pipeline.md` | 4 |
+| F8 | Quantitative correctness content pack | `specs/…quant-correctness-content-pack-design.md` | `plans/…quant-correctness-content-pack.md` | 4 |
+
+**41 tasks total.**
 
 ## Dependency graph
 
@@ -74,6 +84,22 @@ feature** — while respecting the dependency graph:
 
 Single-implementer: just follow 1→5 above.
 
+### Where the extensions (F6–F8) slot in
+
+- **F8 (correctness content pack)** — mostly skill content + two thin checks; **no hard deps**.
+  Its content tasks (Design→Test Matrix, Two-Register) are the cheapest, highest-leverage work
+  in the whole program — **do them early, even before F1**, in parallel with F2. Its `preflight`
+  rubric criterion waits for F3.
+- **F7 (Field-It / Questionnaire Doctor)** — depends only on existing tools; shares
+  `agent/sampling.py` with F8. Slot it after F8's content lands (Questionnaire Doctor pairs with
+  the correctness content) and around F3 (adds `instrument_quality`). Its survify handoff is the
+  commercial flywheel — prioritize if monetization is the near-term goal.
+- **F6 (Mock Committee)** — depends on **F2** (post-M5 offer) and is best **right after F3**
+  (rubric findings feed the questions). It's the referral moment — do it once F3 ships.
+
+**Revised full order (single track), advisor-loop + quick-wins weighted:**
+F8-content (matrix + two-register) → F2 → F4 → F1 → F3 → F8-rest → F7 → F6 → F5.
+
 ## Milestones (shippable increments)
 
 - **M-A — "The agent leads."** After F2. Roadmap + `[NEXT]` + ContextPanel Next card. Demoable
@@ -112,6 +138,9 @@ passes and it's merged.
 - [ ] **F1 — Unify headless generation** → `plans/2026-07-08-unify-headless-generation.md`
 - [ ] **F3 — Quality evaluation** → `plans/2026-07-08-quality-evaluation.md`
 - [ ] **F5 — Observability** → `plans/2026-07-08-observability-agent-quality.md`
+- [ ] **F8 — Quant correctness content pack** → `plans/2026-07-08-quant-correctness-content-pack.md`
+- [ ] **F7 — Field-It survey pipeline** → `plans/2026-07-08-field-it-survey-pipeline.md`
+- [ ] **F6 — Mock Committee** → `plans/2026-07-08-mock-committee.md`
 
 ## Suggested branch/PR strategy
 
