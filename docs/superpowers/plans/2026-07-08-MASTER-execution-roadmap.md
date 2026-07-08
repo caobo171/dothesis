@@ -26,8 +26,14 @@ Best-in-class extensions (make it best-in-class at guiding quant theses):
 | F7 | Field-It survey pipeline (Questionnaire Doctor + survify) | `specs/…field-it-survey-pipeline-design.md` | `plans/…field-it-survey-pipeline.md` | 4 |
 | F8 | Quantitative correctness content pack | `specs/…quant-correctness-content-pack-design.md` | `plans/…quant-correctness-content-pack.md` | 4 |
 | F9 | Model cost/quality eval ("shootout") | `specs/…model-cost-quality-eval-design.md` | `plans/…model-cost-quality-eval.md` | 5 |
+| F10 | Provider routing + OpenRouter fallback | `specs/…provider-routing-fallback-design.md` | `plans/…provider-routing-fallback.md` | 4 |
 
-**46 tasks total.**
+**50 tasks total.**
+
+**F9 + F10 are the cost/reliability pair:** F9 tells you *which* model (quality × VN × true cost);
+F10 lets you *switch and fall back* safely (one factory, OpenRouter cascade, caching-preserving
+native escape hatch, route-independent billing). Do F10 right after/with F9 — both attack the
+cost concern and neither blocks the coaching/quality line.
 
 ## Dependency graph
 
@@ -150,6 +156,7 @@ passes and it's merged.
 - [ ] **F7 — Field-It survey pipeline** → `plans/2026-07-08-field-it-survey-pipeline.md`
 - [ ] **F6 — Mock Committee** → `plans/2026-07-08-mock-committee.md`
 - [ ] **F9 — Model cost/quality eval** → `plans/2026-07-08-model-cost-quality-eval.md`
+- [ ] **F10 — Provider routing + OpenRouter fallback** → `plans/2026-07-08-provider-routing-fallback.md`
 
 ## Suggested branch/PR strategy
 
