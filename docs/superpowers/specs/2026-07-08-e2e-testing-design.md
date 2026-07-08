@@ -208,9 +208,14 @@ every call, so no hidden counters are needed:
 
 Because the emitted `tool_calls` are real LangChain tool-call blocks, deepagents executes
 them for real: a scripted `commit_slice` runs `agent/tools/state_tools.py:commit_slice` →
-`DbProjectStateStore` → Postgres, with ownership validation, the strict done-gate, focus
-shift, and downstream `needs_review` propagation all live. A scripted `export_docx` runs the
-real engine compose/export and uploads to (Min)S3.
+`DbProjectStateStore` → Postgres, with ownership validation, the strict done-gate, and focus
+shift all running as real code on every scripted commit. `DOWNSTREAM` `needs_review`
+propagation is the same real code path, but neither the M1→M5 nor the export fixture actually
+*triggers* it — both script modules strictly in forward canonical order and mark each `done`
+immediately, so every downstream module is still `locked` (the only state the propagation
+check skips) at the moment its neighbor commits. This is a genuine coverage gap, not a mocked
+shortcut — see plan Note 14 for the follow-up scenario that would close it. A scripted
+`export_docx` runs the real engine compose/export and uploads to (Min)S3.
 
 **What stays unmocked but harmless:** `api/app/thread_namer.py` builds its own
 `ChatGoogleGenerativeAI` for background thread auto-naming. It is wrapped in
