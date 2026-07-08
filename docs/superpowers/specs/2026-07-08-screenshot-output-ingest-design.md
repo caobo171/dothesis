@@ -34,18 +34,22 @@ interprets the image (ungrounded, error-prone).
 
 ### Vision parse tool
 
-`parse_output_table(attachment_ref) -> str` in `agent/tools/stats.py` (next to `check_thresholds`):
-- Uses the **multimodal model** already wired in the runtime (`agent/multimodal.Attachment`;
-  Gemini inline / File API) to read the image into a strict-JSON `{table_kind, rows}`.
-- `table_kind` inferred from headers (loadings / htmt / fornell_larcker / vif / path_coeffs /
-  fit_indices); low-confidence → returns `needs_confirmation` with the parsed guess.
-- The prompt forbids inventing numbers ("transcribe only what is visible; mark unreadable cells").
+`parse_output_table(file: str) -> str` in `agent/tools/output_parse.py` — takes a **workspace file
+path** (the pattern `run_stats` uses; a model cannot supply image bytes through a JSON tool call):
+- Loads the image via `agent/multimodal.Attachment.from_path(...)` and builds a Gemini message via
+  `build_user_message(prompt, [att], provider="google")` (the real helper — NOT `model_message_for`),
+  then invokes `_get_llm()` (which IS Gemini). Returns strict-JSON `{table_kind, rows}`.
+- `table_kind` inferred from headers; low-confidence → `needs_confirmation` with the parsed guess.
+- The prompt forbids inventing numbers ("transcribe only what is visible; mark unreadable cells null").
 
 ### Deterministic export parse
 
-`parse_smartpls_export(bytes, filename) -> str` — SmartPLS HTML report / `.xlsx` → the same
-`{table_kind, rows}` shape via `pandas`/`openpyxl` + the docx/html table flatten already in
-`partner_report_service._extract_text`. Preferred over vision when the student has the file.
+`parse_smartpls_export(file: str) -> str` — a **workspace file path** to a SmartPLS HTML report /
+`.xlsx` → the same `{table_kind, rows}` shape via `pandas.read_html` (needs `lxml`) / `openpyxl`.
+Preferred over vision when the student has the file. Row-oriented tables (loadings / HTMT-pairs /
+VIF / AVE / CR) emit `{item, value}`; a full matrix (Fornell-Larcker) emits `{table_kind:
+"fornell_larcker", matrix: [...]}` and is handled separately (not fed cell-by-cell to
+`check_thresholds`).
 
 ### Wire to F8
 

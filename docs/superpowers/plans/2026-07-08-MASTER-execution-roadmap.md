@@ -66,12 +66,13 @@ The Fable-5 audit re-sequenced for correctness + value. Single track:
 7. **F9 probe tier** — cost pressure-test (Gemini→Qwen/GPT).
 8. **F1 steps 1–3** — gate unification (defer step 4 partner optional-inputs until a partner asks).
 9. **F3** — quality rubric (needs F1 gate + F2; apply F0 read-API fix).
-10. **F13** — screenshot/export ingest (needs F8).
-11. **F7** — Questionnaire Doctor + survify + a folded consent/data-privacy generator (was F14 ethics).
-12. **F6** — Mock Committee (ship heuristic early, enrich after F3).
-13. **F11** — timeline + nudge.
-14. **F10 Tasks 1–3** — provider factory + route (defer Task 4 cached-cost telemetry).
-15. **F5 dashboards** — last.
+10. **F8-rest** — methods pre-flight + output sanity (`check_thresholds`) + `preflight` rubric criterion.
+11. **F13** — screenshot/export ingest (**needs F8's `check_thresholds` from step 10**).
+12. **F7** — Questionnaire Doctor + survify + a folded consent/data-privacy generator (was F14 ethics).
+13. **F6** — Mock Committee (ship heuristic early, enrich after F3).
+14. **F11** — timeline + nudge.
+15. **F10 Tasks 1–3** — provider factory + route (defer Task 4 cached-cost telemetry).
+16. **F5 dashboards** — last.
 
 **Deferred / not yet specced (proposed next):** integrity **methods audit trail + authorship
 provenance**; **per-university DOCX templates** (invert the old F13 order — templates before Zotero,
@@ -110,59 +111,26 @@ Hard dependencies (must precede):
   with empty defaults, so F3 does NOT block on F4 and F4 does NOT block on F3.
 - **F1 is independent** — no dependency on F2–F5.
 
-## Recommended execution order
+## Execution order — single source of truth
 
-Weighted by your stated priority — **the advisor-feedback loop (F4) is the most important
-feature** — while respecting the dependency graph:
+**Use the "Audit-revised build order" above.** (Earlier drafts of this doc carried two other
+orderings; they were removed 2026-07-08 to end the conflict the re-audit flagged.) Key scheduling
+constraints baked into that order:
 
-1. **F2 — Proactive coaching layer** (7 tasks).
-   *Why first:* it's the foundation the flagship needs (`flag_blocker`, `roadmap_tasks` path,
-   `[NEXT]`), and it's independently valuable (the agent starts leading). No upstream deps.
-2. **F4 — Cross-session memory + advisor loop** (5 tasks).
-   *Why second:* the most-important feature, and F2 unblocks it. Ships the full
-   ingest → directive → blocker → adjust → track loop end-to-end.
-3. **F1 — Unify headless generation** (7 tasks).
-   *Why third:* independent foundation cleanup; produces the single M4 gate F3 needs. Can
-   also be pulled earlier or run in parallel (see below) since it shares no code with F2/F4.
-4. **F3 — Quality evaluation** (6 tasks).
-   *Why fourth:* needs F1 (gate) + F2 (review step); lands after F4 so its advisor dimension
-   lights up with real data instead of empty defaults.
-5. **F5 — Observability** (4 tasks).
-   *Why last:* instruments the events F2–F4 emit; inert until PostHog is provisioned.
+- **F0 is a hard prerequisite** for F2/F4/F7/F11 (persistence).
+- **Full F8 — including `check_thresholds` (F8 Task 4) — must land before F13** (F13 feeds it).
+  The audit-revised order schedules F8-content early and the rest before F13.
+- **F12 lists F2 as a *soft* dep** (import can land before F2; the activation card is richer with
+  it) — F12 may run early, in parallel.
+- **F3 joins once F1 (gate) + F2 (review step) are both merged.**
 
-### Parallelization (if more than one implementer/agent)
+### Parallelization (if >1 implementer)
 
-- **Track A:** F2 → F4 → (F3 review step) — the coaching/memory/quality line.
-- **Track B:** F1 in parallel with Track A (zero shared files — F1 touches
-  `partner_report_service.py` / `compose_export.py`; Track A touches `agent/roadmap.py`,
-  `state.py`, `state_tools.py`).
-- **Join:** F3 starts once BOTH F1 (gate) and F2 (review step) are merged.
-- **F5 last**, after F2/F3/F4 land.
-
-Single-implementer: just follow 1→5 above.
-
-### Where the extensions (F6–F8) slot in
-
-- **F8 (correctness content pack)** — mostly skill content + two thin checks; **no hard deps**.
-  Its content tasks (Design→Test Matrix, Two-Register) are the cheapest, highest-leverage work
-  in the whole program — **do them early, even before F1**, in parallel with F2. Its `preflight`
-  rubric criterion waits for F3.
-- **F7 (Field-It / Questionnaire Doctor)** — depends only on existing tools; shares
-  `agent/sampling.py` with F8. Slot it after F8's content lands (Questionnaire Doctor pairs with
-  the correctness content) and around F3 (adds `instrument_quality`). Its survify handoff is the
-  commercial flywheel — prioritize if monetization is the near-term goal.
-- **F6 (Mock Committee)** — depends on **F2** (post-M5 offer) and is best **right after F3**
-  (rubric findings feed the questions). It's the referral moment — do it once F3 ships.
-
-- **F9 (model cost/quality eval)** — the probe suite (Tasks 1–3, 5) is useful **immediately** and
-  standalone; its compose-quality dimension (Task 4) needs F3. Given cost-vs-quality is a live
-  concern (Gemini 3.5 Flash tripled in price), run F9's probe tier **early** to pressure-test a
-  swap to Qwen3.6 Plus / GPT-5.4 mini, and complete Task 4 once F3 lands to make the swap fully
-  data-gated.
-
-**Revised full order (single track), advisor-loop + quick-wins + cost weighted:**
-F8-content (matrix + two-register) → **F9 probe tier (Tasks 1–3,5)** → F2 → F4 → F1 → F3 →
-**F9 Task 4 (compose-quality)** → F8-rest → F7 → F6 → F5.
+- **Track A:** F0 → F2 → F4 → (F3 review step) — coaching/memory/quality line.
+- **Track B:** F1 in parallel (touches `partner_report_service.py`/`compose_export.py`; Track A
+  touches `agent/roadmap.py`, `state.py`, `state_tools.py` — no overlap). F9 probe tier here too.
+- **Track C:** F8-content + F12 (import) in parallel — no hard deps.
+- **Join:** F3 after F1+F2; F13 after F8; F6/F11 after their deps.
 
 ## Milestones (shippable increments)
 

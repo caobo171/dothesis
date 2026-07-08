@@ -1,100 +1,108 @@
 # Mid-Journey State Import Design (F12)
 
 **Date:** 2026-07-08
-**Status:** Design — approved, pending spec review
-**Motivation (audit CRITICAL):** Most paying students arrive **mid-thesis** — topic approved,
-data collected, or three chapters written. Because DoThesis state is *earned*, today's agent has
-no way to reflect work done elsewhere and would insist on starting at M1. This is the biggest
-tagline gap ("goes with your journey" must mean *joining* a journey in progress) AND the missing
-first-run activation moment. The `partner_report_service` inference code already does ~70% of the
-work.
+**Status:** Design — approved, revised after Fable-5 re-audit (now an API-layer route).
+**Motivation (audit CRITICAL):** Most paying students arrive **mid-thesis** — topic approved, data
+collected, or three chapters written. DoThesis state is *earned*, so today's agent would insist on
+M1. This is the biggest tagline gap ("goes with your journey" must mean *joining* a journey in
+progress) AND the missing first-run activation moment. The `partner_report_service` inference does
+~70% of the work.
 
 ## Problem
 
-A student uploads their proposal + two chapters + an SPSS output file and expects the agent to
-"catch up." Instead the roadmap shows everything `locked` at M1. The first session — the make-or-
-break activation moment — feels like the tool ignores everything they've done.
+A student uploads their proposal + two chapters + an SPSS output and expects the agent to "catch
+up." Instead the roadmap shows everything `locked` at M1 — the make-or-break first session feels
+like the tool ignored their work.
 
 ## Goals
 
-- **Import from uploads:** classify the student's existing material (proposal, chapters, dataset,
-  analysis output, questionnaire) and **infer per-module slices**, committing them as *earned*
-  state so the roadmap starts where the student actually is.
-- **Earned, not narrated:** state is derived from the *artifacts* (the uploaded evidence), then
-  written via `commit_slice` — consistent with "state is earned." Ambiguous items are asked, not
-  assumed.
-- **Activation:** the first `/new` session ends with "here's where you are, here's your next step"
-  — the aha — instead of a blank M1.
+- **Import from uploads:** classify existing material and **infer per-module slices**, committing
+  them as *earned* state so the roadmap starts where the student actually is.
+- **Earned, evidenced server-side:** extraction/inference run in the **API layer** from the actual
+  uploaded files (not model-supplied text), then commit via `commit_slice`.
+- **Activation:** the first session opens at the right module with a "here's where you are / next
+  do X" summary.
 
 ## Non-goals
 
-- Not a plagiarism/authorship check (that's the integrity feature).
-- Not importing *quality* — imported chapters may be weak; F3 grades later.
-- Doesn't fabricate missing modules — only what the uploads evidence.
+- Not plagiarism/authorship checking; not grading imported quality (F3 later).
+- Doesn't fabricate modules — only what an upload evidences.
 
-## Design
+## Design (revised: API-layer, not an agent tool)
 
-### Import pass (extends `/bootstrap`)
+**Why API-layer:** the inference helpers live in `app.partner_report_service`, and **`agent/` must
+not import `app/`** (verified: no such import exists today). Running import in the API layer also
+means extraction is **server-side from real files**, closing the model-supplied-evidence hole.
 
-`import_existing_work(files, notes) -> dict` in `agent/import_work.py`:
-1. **Classify** each upload (proposal / chapter-N / questionnaire / dataset / analysis-output)
-   via extension + a cheap LLM classifier on extracted text (reuse `pdf_extract`, the docx path,
-   and prompt-injection neutralization from `agent/guardrails.py`).
-2. **Infer per-module slices** reusing partner inference (`_infer_topic`→M1, `_infer_model`→M3,
-   analysis text→M4) + chapter parsing → M5 `final_sections`, questionnaire → M3 `instrument`.
-3. Return `{slices: {M1:{…},…}, evidence: {module: filename}, ambiguous: [...]}`.
+### Classify + infer — `api/app/import_work.py`
 
-### Commit as earned state
+`import_existing_work(files: list[dict], language: str) -> dict` → `{slices: {M1..M5: {...}},
+evidence: {module: filename}, ambiguous: [...], unreadable: [...]}`. `files = [{filename, text}]`
+already extracted + neutralized by the route. Classification: extension + a cheap
+`orchestrator`-LLM classifier; inference reuses `_infer_topic(text, language)` /
+`_infer_model(text, language)` (both **require `language`**). May import `app.*` + `orchestrator.*`
+(it's api-layer).
 
-The bootstrap skill commits each inferred slice via `commit_slice(module, writes, reason=
-"imported from <file>")` — so status flips to `in_progress`/`done` **because a real artifact backs
-it** (the artifact is the evidence the done-gate requires). Downstream `needs_review` propagation
-works as normal. Ambiguous items → the agent asks before committing.
+### Route — `POST /projects/{id}/import`
 
-### Focus + next step
-
-After import, `focus` is set to the first module still incomplete (via F2 `derive_substep`), and
-the agent opens with the roadmap + next action — the activation aha.
+Authed (`Depends(current_user)` + ownership: `project.user_id == user.id` else 403), POST-only.
+Steps:
+1. Gather the project's uploads' extracted text (the uploads flow already writes `extracted.txt`
+   per upload); **neutralize** each via `agent/guardrails.neutralize_document_text`.
+2. `import_existing_work(files, language)`.
+3. Commit each evidenced slice via `DbProjectStateStore.commit_slice`, **in `MODULES` order**
+   (so downstream `needs_review` isn't spuriously raised — downstream modules are still `locked`
+   when each commits), `confirm_done=False` (imported work is *in progress* until the student
+   confirms).
+4. **Set focus to the first NOT-imported module** (`next(m for m in MODULES if m not in slices)`,
+   else the last) — this is what fixes "always M1": importing M1+M3 lands focus at M2, not M1.
+   The route writes `Project.focus` directly (api-layer DB write).
+5. Return `{imported, ambiguous, unreadable, focus}`.
 
 ### UI
 
-The `/new` flow (already "drop-first") gains an "importing your work…" progress state and a
-post-import **summary card**: "Imported: M1 topic, M3 model, M5 ch.1–2 · You're at M4 · Next:
-run your analysis."
+`/new` (already drop-first) shows an "importing your work…" state then a summary card: "Imported:
+M1 topic, M3 model, M5 ch.1–2 · You're at M4 · Next: run your analysis" + ambiguous items to
+confirm.
 
 ## Data flow
 
 ```
-/new: drop proposal + chapters + output → import_existing_work
-  → classify → infer slices → commit_slice per evidenced module (earned)
-  → focus = first incomplete → roadmap + [NEXT] → activation summary card
+/new upload → POST /projects/{id}/import (authed)
+  → server extracts + neutralizes upload text
+  → import_existing_work (classify + infer, api-layer)
+  → commit_slice per evidenced module IN ORDER (in_progress)
+  → focus = first not-imported module → summary card (activation)
 ```
 
 ## Error handling
 
-- Best-effort per file: an unclassifiable/garbled upload is listed as "couldn't read" and skipped,
-  never blocks the import.
-- Only evidenced slices are committed; the done-gate still applies (empty slice can't be `done`).
-- Ambiguous inferences are surfaced as questions, not silently written.
+- Best-effort per file: unreadable/garbled uploads listed under `unreadable`, never block import.
+- Only evidenced slices commit; a slice that can't commit is skipped and NOT reported as imported.
+- Ambiguous inferences returned for the agent to ask about, not silently written.
+- Route is idempotent-ish: re-import merges (commit_slice overwrites owned keys).
 
 ## Testing
 
-- Classifier: a proposal PDF → `proposal`; an SPSS output → `analysis-output`.
-- Import: fixtures (proposal + a results file) → M1 + M4 slices inferred; committing flips M1→
-  done / M4→in_progress; `focus` = first incomplete.
-- Earned-gate respected: an empty/garbled chapter does NOT mark M5 done.
-- Ambiguous case → returned in `ambiguous`, not committed.
+- `import_existing_work`: proposal PDF → M1 (+M3 if a model is inferable); analysis output → M4;
+  unreadable → `unreadable`. Inference stubs use the **real 2-arg signature** `(text, language)`.
+- Route: authed + ownership (401/403); stubbed `import_existing_work` → commits happen in MODULES
+  order, `Project.focus` = first not-imported (importing M1+M3 ⇒ focus M2, NOT M1); imported list
+  only includes slices that actually committed.
+- Earned-gate: an empty/garbled chapter does not mark M5 done.
 - api tests via `./run.sh`.
 
 ## Migration / rollout
 
-1. `import_existing_work` (classify + infer, reusing partner inference).
-2. Bootstrap skill: commit evidenced slices + ask on ambiguous + set focus.
-3. `/new` UI: import progress + summary card.
+1. `api/app/import_work.py` (classify + infer, api-layer).
+2. `POST /projects/{id}/import` (auth + ownership + server-side extract/neutralize + ordered
+   commits + focus).
+3. `/new` UI summary card.
 
 ## Dependencies
 
-- `partner_report_service` inference helpers (`_infer_topic`/`_infer_model`), `pdf_extract`,
-  `agent/guardrails.py`.
-- **F2** (roadmap `derive_substep`/`next_action`) for focus + the activation summary.
-- **F0** (persistence) is not required (imports go into module slices via `commit_slice`).
+- `app.partner_report_service` inference, `app.pdf_extract.extract_pdf_text`,
+  `agent/guardrails.neutralize_document_text`, `app.deps.current_user`.
+- **F2** (roadmap `derive_substep`/`next_action`) for the summary/next-step — the route only sets
+  focus + status, the agent narrates. (Soft dep: import can land before F2; the card is richer with it.)
+- **Not** dependent on F0 (imports go into owned module slices, which already round-trip).

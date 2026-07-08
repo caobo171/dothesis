@@ -69,10 +69,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```python
 # api/tests/test_agent_state_coaching.py
 from app.agent_state import DbProjectStateStore
+from app.db import get_engine
 
 
-def test_coaching_keys_round_trip_in_db(db_engine, project_id):   # reuse existing DB fixtures
-    store = DbProjectStateStore(db_engine, project_id, "/tmp/ws")
+def test_coaching_keys_round_trip_in_db(project_id):   # reuse test_agent_state.py's project_id fixture
+    store = DbProjectStateStore(get_engine(), project_id, "/tmp/ws")
     st = store.load()
     st["contextStore"]["roadmap_tasks"] = [{"id": "b1", "status": "open", "title": "x"}]
     st["contextStore"]["institution_profile"] = {"citation_style": "apa7"}
@@ -96,8 +97,10 @@ In `agent/state.py`:
 # Persisted by DbProjectStateStore in the `coaching` JSONB column (see
 # project_db_store_persistence_gap memory). Written via dedicated store paths,
 # never commit_slice.
+# NOTE: field-it results are NOT here — F7 writes them into the m4_analysis
+# module column (where F8 reads), so they persist via normal ownership.
 COACHING_KEYS = {"roadmap_tasks", "advisor_feedback", "institution_profile",
-                 "thesis_timeline", "field_it_results"}
+                 "thesis_timeline"}
 ```
 
 In `api/app/agent_state.py` `load()`, after building `flat`, lift the coaching blob:
@@ -107,13 +110,28 @@ In `api/app/agent_state.py` `load()`, after building `flat`, lift the coaching b
                 if k in COACHING_KEYS:
                     flat[k] = v
 ```
-In `_save()`, write coaching keys present in `flat` back to the column:
+In `_save()`, MERGE coaching keys present in `flat` OVER the existing column (never rebuild —
+a rebuild would wipe keys not in the current write, exactly like the per-module columns already
+merge at `agent_state.py:121`):
 ```python
-            coaching = {k: flat[k] for k in COACHING_KEYS if k in flat}
-            if coaching or (existing and getattr(existing, "coaching", None)):
-                values["coaching"] = coaching or None
+            existing_coaching = dict(getattr(existing, "coaching", None) or {}) if existing else {}
+            for k in COACHING_KEYS:
+                if k in flat:
+                    existing_coaching[k] = flat[k]
+            if existing_coaching:
+                values["coaching"] = existing_coaching
 ```
-(Ensure `values["coaching"]` is included in both the insert and update branches.)
+`**values` already covers both the insert and update branches (`agent_state.py:135-142`).
+
+**Also fix `exists()`** (`agent_state.py:46-50`): it must test MODULE keys only, else seeding an
+`institution_default` (F4) makes every fresh project report `exists=True` and onboarding paths
+treat it as "started":
+```python
+    def exists(self) -> bool:
+        state = self.load()
+        module_keys = set(state["contextStore"]) - COACHING_KEYS
+        return bool(module_keys) or any(s != "locked" for s in state["status"].values())
+```
 
 - [ ] **Step 4: Run to verify it passes** → PASS.
 
@@ -146,9 +164,8 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ```python
 # add to api/tests/test_agent_state_coaching.py
-def test_read_api_returns_persisted_coaching(db_engine, project_id):
-    store = DbProjectStateStore(db_engine, project_id, "/tmp/ws")
-    store.upsert_advisor_feedback  # (added in F4) — or set directly for this test:
+def test_read_api_returns_persisted_coaching(project_id):
+    store = DbProjectStateStore(get_engine(), project_id, "/tmp/ws")
     st = store.load(); st["contextStore"]["advisor_feedback"] = [{"id": "1", "status": "open"}]
     store._save(st)
     assert store.get_advisor_feedback()[0]["id"] == "1"
@@ -251,7 +268,10 @@ These amend the named plans. Apply the edit before/within the cited task.
 
 - [ ] `cd api && ./run.sh alembic upgrade head` clean; `downgrade -1`/`upgrade head` round-trips.
 - [ ] `cd api && ./run.sh pytest tests/test_agent_state_coaching.py -q` → PASS (DB round-trip proven).
-- [ ] Grep confirms F2/F4/F7/F11 write paths target keys in `COACHING_KEYS`.
+- [ ] Grep confirms F2/F4/F11 coaching write paths target keys in `COACHING_KEYS` (roadmap_tasks,
+  advisor_feedback, institution_profile, thesis_timeline); F7 field-it results go to the
+  `m4_analysis` column (normal ownership), NOT the coaching blob.
+- [ ] `exists()` returns False for a fresh project even after an `institution_default` seed.
 
 ## Notes
 
