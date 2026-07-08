@@ -25,8 +25,9 @@ Best-in-class extensions (make it best-in-class at guiding quant theses):
 | F6 | Mock Committee (Hội đồng ảo) | `specs/…mock-committee-design.md` | `plans/…mock-committee.md` | 4 |
 | F7 | Field-It survey pipeline (Questionnaire Doctor + survify) | `specs/…field-it-survey-pipeline-design.md` | `plans/…field-it-survey-pipeline.md` | 4 |
 | F8 | Quantitative correctness content pack | `specs/…quant-correctness-content-pack-design.md` | `plans/…quant-correctness-content-pack.md` | 4 |
+| F9 | Model cost/quality eval ("shootout") | `specs/…model-cost-quality-eval-design.md` | `plans/…model-cost-quality-eval.md` | 5 |
 
-**41 tasks total.**
+**46 tasks total.**
 
 ## Dependency graph
 
@@ -97,8 +98,15 @@ Single-implementer: just follow 1→5 above.
 - **F6 (Mock Committee)** — depends on **F2** (post-M5 offer) and is best **right after F3**
   (rubric findings feed the questions). It's the referral moment — do it once F3 ships.
 
-**Revised full order (single track), advisor-loop + quick-wins weighted:**
-F8-content (matrix + two-register) → F2 → F4 → F1 → F3 → F8-rest → F7 → F6 → F5.
+- **F9 (model cost/quality eval)** — the probe suite (Tasks 1–3, 5) is useful **immediately** and
+  standalone; its compose-quality dimension (Task 4) needs F3. Given cost-vs-quality is a live
+  concern (Gemini 3.5 Flash tripled in price), run F9's probe tier **early** to pressure-test a
+  swap to Qwen3.6 Plus / GPT-5.4 mini, and complete Task 4 once F3 lands to make the swap fully
+  data-gated.
+
+**Revised full order (single track), advisor-loop + quick-wins + cost weighted:**
+F8-content (matrix + two-register) → **F9 probe tier (Tasks 1–3,5)** → F2 → F4 → F1 → F3 →
+**F9 Task 4 (compose-quality)** → F8-rest → F7 → F6 → F5.
 
 ## Milestones (shippable increments)
 
@@ -141,6 +149,7 @@ passes and it's merged.
 - [ ] **F8 — Quant correctness content pack** → `plans/2026-07-08-quant-correctness-content-pack.md`
 - [ ] **F7 — Field-It survey pipeline** → `plans/2026-07-08-field-it-survey-pipeline.md`
 - [ ] **F6 — Mock Committee** → `plans/2026-07-08-mock-committee.md`
+- [ ] **F9 — Model cost/quality eval** → `plans/2026-07-08-model-cost-quality-eval.md`
 
 ## Suggested branch/PR strategy
 
