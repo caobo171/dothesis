@@ -238,6 +238,10 @@ class Project(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    # F11 — last time a proactive coaching nudge was sent for this project.
+    # Nullable: most projects have never received one. Lets the nudge
+    # scheduler rate-limit without a separate table.
+    last_nudge_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Export(Base):
@@ -386,6 +390,11 @@ class ContextStore(Base):
     m3_design: Mapped[dict | None] = mapped_column(JSONB)
     m4_analysis: Mapped[dict | None] = mapped_column(JSONB)
     m5_writing: Mapped[dict | None] = mapped_column(JSONB)
+    # Home for project-scoped coaching/memory keys that don't belong to any
+    # single module column above (e.g. advisor-feedback tracking, nudge
+    # state) — the DB-backed store only round-trips known columns, so a new
+    # context_store key with nowhere to live gets silently dropped in prod.
+    coaching: Mapped[dict | None] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
