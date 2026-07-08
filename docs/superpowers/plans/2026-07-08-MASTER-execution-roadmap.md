@@ -1,7 +1,16 @@
 # Master Execution Roadmap — Vertical Agent Upgrade (8 features)
 
 **Date:** 2026-07-08
-**Status:** Program plan — sequences the eight specced features into one ordered build.
+**Status:** Program plan — sequences the specced features into one ordered build. **Audited by an
+independent Fable-5 pass (2026-07-08); see F0 for the mandatory pre-build fixes.**
+
+## ⚠ Read first: F0 is a hard prerequisite
+
+An independent audit found a systemic defect: the coaching/memory features write new
+`context_store` keys that **`DbProjectStateStore` silently drops in prod** (it round-trips only
+`SLICE_OWNERSHIP` keys), plus contract/auth/packaging/test defects. **Do `F0 — Foundation Fixes &
+Remediation` (`plans/2026-07-08-F0-foundation-and-remediation.md`) before F2/F4/F7/F11**, and apply
+its Part B/C corrections while building each feature. See `project_db_store_persistence_gap` memory.
 **Scope:** This does not restate the per-task steps — it orders the plans by their real
 dependencies, defines shippable milestones, and marks what can run in parallel. Each feature
 keeps its own plan file (the source of truth for its tasks).
@@ -18,13 +27,21 @@ Core five (the vertical-agent foundation):
 | F4 | Cross-session memory + advisor loop | `specs/…cross-session-memory-design.md` | `plans/…cross-session-memory.md` | 5 |
 | F5 | Observability / agent-quality evals | `specs/…observability-agent-quality-design.md` | `plans/…observability-agent-quality.md` | 4 |
 
+Prerequisite (audit-driven, do first):
+
+| # | Feature | Plan | Tasks |
+|---|---|---|---|
+| F0 | Foundation fixes & remediation (DB persistence + contracts + errata) | `plans/…F0-foundation-and-remediation.md` | 3 + corrections |
+
 Best-in-class extensions (make it best-in-class at guiding quant theses):
 
 | # | Feature | Spec | Plan | Tasks |
 |---|---|---|---|---|
 | F6 | Mock Committee (Hội đồng ảo) | `specs/…mock-committee-design.md` | `plans/…mock-committee.md` | 4 |
-| F7 | Field-It survey pipeline (Questionnaire Doctor + survify) | `specs/…field-it-survey-pipeline-design.md` | `plans/…field-it-survey-pipeline.md` | 4 |
+| F7 | Field-It survey pipeline (Questionnaire Doctor + survify + ethics/consent) | `specs/…field-it-survey-pipeline-design.md` | `plans/…field-it-survey-pipeline.md` | 4 |
 | F8 | Quantitative correctness content pack | `specs/…quant-correctness-content-pack-design.md` | `plans/…quant-correctness-content-pack.md` | 4 |
+| F12 | Mid-journey state import (join a thesis in progress + activation) | `specs/…mid-journey-import-design.md` | `plans/…mid-journey-import.md` | 3 |
+| F13 | Screenshot / export output ingest (feeds F8) | `specs/…screenshot-output-ingest-design.md` | `plans/…screenshot-output-ingest.md` | 3 |
 | F9 | Model cost/quality eval ("shootout") | `specs/…model-cost-quality-eval-design.md` | `plans/…model-cost-quality-eval.md` | 5 |
 | F10 | Provider routing + OpenRouter fallback | `specs/…provider-routing-fallback-design.md` | `plans/…provider-routing-fallback.md` | 4 |
 | F11 | Thesis timeline + weekly nudge | `specs/…thesis-timeline-nudge-design.md` | `plans/…thesis-timeline-nudge.md` | 5 |
@@ -35,6 +52,33 @@ Best-in-class extensions (make it best-in-class at guiding quant theses):
 present and proactive *within* a session; F11 adds the *temporal* accompaniment (backwards
 timeline from the defense date + one weekly nudge) so it walks with the student across the months.
 Depends on F2 (roadmap position + UI) and F6 (the defense block closes the timeline).
+
+## Audit-revised build order (2026-07-08)
+
+The Fable-5 audit re-sequenced for correctness + value. Single track:
+
+1. **F0** — foundation fixes (persistence + contracts). *Hard prerequisite.*
+2. **F5 Task 1** — the `emit()` layer only (inert without a key), so everything ships instrumented.
+3. **F8-content** — design→test matrix + two-register (cheapest, highest-leverage).
+4. **F12** — mid-journey import (activation; uses partner inference; no F0 dep).
+5. **F2** — coaching roadmap.
+6. **F4** — advisor loop (needs F0 + F2). *The flagship.*
+7. **F9 probe tier** — cost pressure-test (Gemini→Qwen/GPT).
+8. **F1 steps 1–3** — gate unification (defer step 4 partner optional-inputs until a partner asks).
+9. **F3** — quality rubric (needs F1 gate + F2; apply F0 read-API fix).
+10. **F13** — screenshot/export ingest (needs F8).
+11. **F7** — Questionnaire Doctor + survify + a folded consent/data-privacy generator (was F14 ethics).
+12. **F6** — Mock Committee (ship heuristic early, enrich after F3).
+13. **F11** — timeline + nudge.
+14. **F10 Tasks 1–3** — provider factory + route (defer Task 4 cached-cost telemetry).
+15. **F5 dashboards** — last.
+
+**Deferred / not yet specced (proposed next):** integrity **methods audit trail + authorship
+provenance**; **per-university DOCX templates** (invert the old F13 order — templates before Zotero,
+since APA7 is hardcoded and `institution_profile.citation_style` is a dead field). Monetization
+placement (free/paid boundary + paywall location) needs an owner. Nudge channel → Zalo/Messenger.
+Defense slide-deck generator. "When the agent is wrong" confidence/escalation rule + advisor-
+precedence rule. Mid-collection monitoring.
 
 **F9 + F10 are the cost/reliability pair:** F9 tells you *which* model (quality × VN × true cost);
 F10 lets you *switch and fall back* safely (one factory, OpenRouter cascade, caching-preserving
@@ -152,6 +196,10 @@ Copied so no task drops them:
 
 Work each feature through its own plan; check it off here when its plan's Final Verification
 passes and it's merged.
+
+- [ ] **F0 — Foundation fixes & remediation (DO FIRST)** → `plans/2026-07-08-F0-foundation-and-remediation.md`
+- [ ] **F12 — Mid-journey state import** → `plans/2026-07-08-mid-journey-import.md`
+- [ ] **F13 — Screenshot / export output ingest** → `plans/2026-07-08-screenshot-output-ingest.md`
 
 - [ ] **F2 — Proactive coaching layer** → `plans/2026-07-08-proactive-coaching-layer.md`
 - [ ] **F4 — Cross-session memory + advisor loop** → `plans/2026-07-08-cross-session-memory.md`
