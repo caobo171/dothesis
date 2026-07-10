@@ -141,6 +141,7 @@ from deepagents.backends.filesystem import FilesystemBackend
 
 from agent.preflight import make_preflight_tool
 from agent.state import MODULES, ProjectStateStore
+from agent.tools.defense import make_defense_tools  # F6: Mock Committee
 from agent.tools.forms import make_google_form_script
 from agent.tools.instrument import (  # F7: Questionnaire Doctor + sampling plan
     audit_instrument,
@@ -486,6 +487,10 @@ def build_agent(
         # open a survey with before fielding. Pure, no store needed.
         consent_notice,
         *make_writing_tools(store),
+        # F6: Mock Committee — store-bound so it reads THIS project's real weak
+        # points (small n, rejected H, quality findings) rather than a
+        # model-supplied context_store, and folds in the F3 rubric best-effort.
+        *make_defense_tools(store),
     ]
 
     return create_deep_agent(
