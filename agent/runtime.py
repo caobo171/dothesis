@@ -474,6 +474,14 @@ def _default_model():
     working default; the architecture's preferred model is Claude and it
     takes over automatically once a key lands.
     """
+    # E2E harness hook (docs/superpowers/specs/2026-07-08-e2e-testing-design.md).
+    # This is the single model factory for the chat agent (build_agent falls
+    # here whenever no model is passed — the api's chat_v3._get_agent never
+    # passes one), so one guard mocks every turn. Everything downstream of
+    # the completion — deepagents loop, tools, store, DB — stays real.
+    if os.getenv("DOTHESIS_E2E_MOCK") == "1":
+        from agent.testing.fake_model import FakeChatModel
+        return FakeChatModel.from_fixtures_dir(os.environ["DOTHESIS_E2E_FIXTURES_DIR"])
     if os.getenv("ANTHROPIC_API_KEY"):
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(
