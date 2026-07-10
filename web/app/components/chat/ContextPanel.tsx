@@ -7,6 +7,7 @@ import { AlertTriangle, Clock, Coins, Download, ExternalLink } from "lucide-reac
 import { SliceModal } from "./SliceModal";
 import { Mermaid } from "./Mermaid";
 import { FileTypeIcon } from "./FileTypeIcon";
+import { RoadmapPanel } from "./RoadmapPanel";
 import {
   triggerExportDownload,
   triggerUploadDownload,
@@ -62,6 +63,8 @@ export function ContextPanel({
   currentModule,
   moduleStatus,
   threadCredits,
+  onSendMessage,
+  roadmapRefreshKey,
 }: {
   projectId?: string;
   contextStore: ContextStore;
@@ -70,6 +73,11 @@ export function ContextPanel({
   moduleStatus?: ModuleStatusMap;
   /** Total credits spent in the current thread — shown in the header. */
   threadCredits?: number;
+  /** F2: when the host can post into chat, the roadmap Next-card CTAs use this
+   *  to one-click act. Optional — the panel is read-only without it. */
+  onSendMessage?: (text: string) => void;
+  /** F2: bump to force the roadmap to re-fetch (e.g. after a turn completes). */
+  roadmapRefreshKey?: number;
 }) {
   const [showRaw, setShowRaw] = useState(false);
 
@@ -124,6 +132,15 @@ export function ContextPanel({
           </pre>
         ) : (
           <>
+            {/* F2: the derived coaching roadmap + Next card leads the student
+                from real state. Mounted above the per-module cards. */}
+            {projectId && (
+              <RoadmapPanel
+                projectId={projectId}
+                onSendMessage={onSendMessage}
+                refreshKey={roadmapRefreshKey}
+              />
+            )}
             <CtxSection
               label="M1 · Topic & questions"
               moduleId="M1"
