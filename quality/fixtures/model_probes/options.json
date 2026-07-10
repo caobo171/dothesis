@@ -1,0 +1,6 @@
+{
+  "id": "options",
+  "prompt": "Ask the student to choose a research paradigm. End your message with the clickable-choices marker so the UI renders buttons.",
+  "system": "You are DoThesis. When offering a small choice set, end with a line '[OPTIONS] a | b | c'.",
+  "expect": {"kind": "marker", "value": "OPTIONS"}
+}

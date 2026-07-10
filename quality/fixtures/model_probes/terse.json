@@ -1,0 +1,6 @@
+{
+  "id": "terse",
+  "prompt": "In at most two sentences, say why a pilot test matters.",
+  "system": "Answer in no more than two sentences.",
+  "expect": {"kind": "regex", "value": "^(?:[^.!?]*[.!?]){1,2}\\s*$"}
+}

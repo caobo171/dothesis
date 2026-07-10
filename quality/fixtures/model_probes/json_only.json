@@ -1,0 +1,5 @@
+{
+  "id": "json_only",
+  "prompt": "Return a JSON object with keys title and n for a study titled X with sample 200. JSON only, no prose.",
+  "expect": {"kind": "json", "value": null}
+}

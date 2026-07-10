@@ -1,0 +1,6 @@
+{
+  "id": "vi_answer",
+  "prompt": "Giải thích ngắn gọn Cronbach's alpha là gì cho một sinh viên.",
+  "system": "Trả lời hoàn toàn bằng tiếng Việt.",
+  "expect": {"kind": "language", "value": "vi"}
+}

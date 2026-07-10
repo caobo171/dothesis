@@ -1,0 +1,6 @@
+{
+  "id": "cite",
+  "prompt": "State one factual claim about TAM (Technology Acceptance Model) and attach an inline citation using the {{cite:...}} marker.",
+  "system": "Attach citations as {{cite: Author Year}} immediately after each factual claim.",
+  "expect": {"kind": "regex", "value": "\\{\\{\\s*cite:"}
+}
