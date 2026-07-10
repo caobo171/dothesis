@@ -78,5 +78,37 @@ def _native(spec: ModelSpec):
     return ChatGoogleGenerativeAI(model=spec.model, temperature=spec.temperature)
 
 
-def _openrouter(spec: ModelSpec):  # implemented in Task 2
-    raise NotImplementedError("openrouter route lands in F10 Task 2")
+def _openrouter(spec: ModelSpec):
+    """OpenAI-compatible client pointed at OpenRouter: fallback cascade + data policy.
+
+    The key check runs BEFORE the (lazy) langchain_openai import so a misconfigured
+    route fails fast with a clear message even where the eval-only dep isn't
+    installed — and never mid-turn. langchain_openai stays lazy because the native
+    route (the default) must not require it.
+    """
+    key = os.getenv("OPENROUTER_API_KEY", "")
+    if not key:
+        raise RuntimeError("openrouter route needs OPENROUTER_API_KEY (set it or use route=native)")
+    from langchain_openai import ChatOpenAI  # noqa: PLC0415 — openrouter-only, lazy
+
+    models = [spec.model, *spec.fallbacks]
+    return ChatOpenAI(
+        model=spec.model,
+        base_url="https://openrouter.ai/api/v1",
+        api_key=key,
+        temperature=spec.temperature,
+        max_tokens=spec.max_tokens,
+        # OpenRouter-specific: fallback cascade + no-train/no-log provider filter.
+        # data_collection=deny is the default so student PII is never used for
+        # training; override via DOTHESIS_OPENROUTER_DATA_POLICY only deliberately.
+        extra_body={
+            "models": models,
+            "provider": {
+                "data_collection": os.getenv("DOTHESIS_OPENROUTER_DATA_POLICY", "deny"),
+                "allow_fallbacks": True,
+            },
+        },
+        # OpenAI-compatible streaming reports usage only when asked — the credit
+        # ledger reads it via extract_usage, so keep this on.
+        model_kwargs={"stream_options": {"include_usage": True}},
+    )

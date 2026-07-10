@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = Field(alias="GEMINI_API_KEY", default=None)
     openai_api_key: str | None = Field(alias="OPENAI_API_KEY", default=None)
     anthropic_api_key: str | None = Field(alias="ANTHROPIC_API_KEY", default=None)
+    # F10 provider routing: OpenRouter fallback route. Empty key keeps the native
+    # route as the only usable one (make_model fails fast if openrouter is selected
+    # without a key). data_policy=deny stops downstream providers training on
+    # student PII; agent/model_factory reads these via env (agent must not import app).
+    openrouter_api_key: str = Field(alias="OPENROUTER_API_KEY", default="")
+    openrouter_data_policy: str = Field(alias="DOTHESIS_OPENROUTER_DATA_POLICY", default="deny")
     job_workdir_root: Path = Field(alias="JOB_WORKDIR_ROOT", default=Path("./var/jobs"))
     api_port: int = Field(alias="API_PORT", default=7100)
     web_origin: str = Field(alias="WEB_ORIGIN", default="http://localhost:3000")

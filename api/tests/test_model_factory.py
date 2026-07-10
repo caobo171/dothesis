@@ -60,3 +60,65 @@ def test_unknown_route_raises():
     import pytest
     with pytest.raises(ValueError):
         make_model(ModelSpec(route="bogus"))
+
+
+# -- Task 2: OpenRouter route ------------------------------------------------
+# langchain_openai is an eval/openrouter-only dep and is NOT installed in the
+# test env (the native route never touches it). Inject a fake module so we can
+# assert the *config contract* the constructor receives without the dep / network.
+def _install_fake_chatopenai(monkeypatch):
+    import sys
+    import types
+
+    captured: dict = {}
+
+    class FakeChatOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            # Mirror the attributes the real ChatOpenAI stores, so asserts that
+            # read them (openai_api_base/extra_body/model_kwargs) still work.
+            self.model = kwargs.get("model")
+            self.openai_api_base = kwargs.get("base_url")
+            self.extra_body = kwargs.get("extra_body")
+            self.model_kwargs = kwargs.get("model_kwargs")
+
+    fake_mod = types.ModuleType("langchain_openai")
+    fake_mod.ChatOpenAI = FakeChatOpenAI
+    monkeypatch.setitem(sys.modules, "langchain_openai", fake_mod)
+    return captured
+
+
+def test_openrouter_route_config(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.delenv("DOTHESIS_OPENROUTER_DATA_POLICY", raising=False)
+    captured = _install_fake_chatopenai(monkeypatch)
+    spec = ModelSpec(route="openrouter", model="qwen3.6-plus",
+                     fallbacks=["gpt-5.4-mini", "gemini-3.5-flash"])
+    m = make_model(spec)
+    assert "openrouter.ai" in str(m.openai_api_base)
+    body = m.extra_body or {}
+    # Primary first, then the fallback cascade — OpenRouter fails over in order.
+    assert body["models"] == ["qwen3.6-plus", "gpt-5.4-mini", "gemini-3.5-flash"]
+    # Student PII must not be trained on / logged by downstream providers.
+    assert body["provider"]["data_collection"] == "deny"
+    assert body["provider"]["allow_fallbacks"] is True
+    # OpenAI-compatible streaming reports usage only when asked — the ledger needs it.
+    assert (m.model_kwargs.get("stream_options") or {}).get("include_usage") is True
+
+
+def test_openrouter_data_policy_override(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.setenv("DOTHESIS_OPENROUTER_DATA_POLICY", "allow")
+    captured = _install_fake_chatopenai(monkeypatch)
+    m = make_model(ModelSpec(route="openrouter", model="qwen"))
+    assert m.extra_body["provider"]["data_collection"] == "allow"
+    assert m.extra_body["models"] == ["qwen"]
+
+
+def test_openrouter_requires_key(monkeypatch):
+    import pytest
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    # Fail fast at build time on a misconfigured route (missing key), before any
+    # attempt to import/construct the client.
+    with pytest.raises(RuntimeError):
+        make_model(ModelSpec(route="openrouter", model="qwen"))
