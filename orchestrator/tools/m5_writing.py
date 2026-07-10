@@ -1100,29 +1100,40 @@ def _is_stub_prose(prose: str) -> bool:
 # Minimal data each chapter needs to be writable. Used to decide whether to
 # ask the user to fill gaps BEFORE spending ~1 min composing — and to tell
 # them exactly what's missing in plain language.
-def assess_export_readiness(context_store: dict) -> list[str]:
-    """Return a list of human-readable missing-data items (empty = ready).
+def assess_export_readiness(context_store: dict, chapters: list[str] | None = None) -> list[str]:
+    """Return human-readable missing-data items (empty = ready).
 
-    Drives the "ask the user to refill before exporting" flow: a thesis can't
-    be 'fully qualified' without a title, research questions, literature,
-    methodology, and analysis results.
+    When `chapters` is given, only report items whose owning chapter is in the
+    requested set, so a subset compose (partner "analysis_report" = intro/
+    results/discussion) isn't blocked by data a skipped chapter would have used.
+    Title/RQs and literature are needed by every academic chapter (owner ANY);
+    methodology + results are chapter-specific. This is the ONE gate for full
+    AND subset composes — it replaces partner's second _has_sufficient_m4_data
+    store-gate.
     """
     m1 = context_store.get("m1_topic") or {}
     m2 = context_store.get("m2_literature") or {}
     m3 = context_store.get("m3_design") or {}
     m4 = context_store.get("m4_analysis") or {}
 
+    ANY = None  # relevant to every chapter
+    checks = [
+        (ANY, not str(m1.get("research_title") or "").strip(), "M1 — research title"),
+        (ANY, not (m1.get("research_questions") or []), "M1 — research questions"),
+        (ANY, not (m2.get("literature_sources") or []),
+         "M2 — literature sources (no references to cite)"),
+        ("methodology", not (m3.get("methodology") or m3.get("conceptual_model")),
+         "M3 — methodology / conceptual model"),
+        ("results", not (m4.get("analysis_results") or m4.get("qual_themes") or m4.get("qual_codes")),
+         "M4 — analysis results (the Results chapter has no data)"),
+    ]
+    req = set(chapters) if chapters is not None else None
     missing: list[str] = []
-    if not str(m1.get("research_title") or "").strip():
-        missing.append("M1 — research title")
-    if not (m1.get("research_questions") or []):
-        missing.append("M1 — research questions")
-    if not (m2.get("literature_sources") or []):
-        missing.append("M2 — literature sources (no references to cite)")
-    if not (m3.get("methodology") or m3.get("conceptual_model")):
-        missing.append("M3 — methodology / conceptual model")
-    if not (m4.get("analysis_results") or m4.get("qual_themes") or m4.get("qual_codes")):
-        missing.append("M4 — analysis results (the Results chapter has no data)")
+    for owner, is_missing, label in checks:
+        if not is_missing:
+            continue
+        if req is None or owner is ANY or owner in req:
+            missing.append(label)
     return missing
 
 
