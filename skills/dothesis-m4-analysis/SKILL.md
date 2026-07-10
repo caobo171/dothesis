@@ -151,6 +151,22 @@ HTMT <0.85, VIF <3.3) AND flags suspiciously-perfect patterns (all loadings >0.9
 already have. Consult `references/output-interpretation.md` for the full threshold
 table, the "too good to be true" heuristics, and how to narrate a breach.
 
+### Ingesting a results image or export (F13)
+
+When the student **attaches an image or an export file** of results instead of
+typing the numbers:
+
+- Export file (SmartPLS/SPSS HTML or .xlsx) → `parse_smartpls_export(file)` — the
+  reliable default; prefer it whenever the student has the file.
+- Screenshot only → `parse_output_table(file)` — convenience path via vision.
+
+Both return `{table_kind, rows}`. Feed that straight into
+`check_thresholds(table_kind, rows)` → then narrate with the
+`references/output-interpretation.md` thresholds and the two-register content.
+If a parse comes back `needs_confirmation` (low-confidence vision) or `error`,
+**show the parsed values back and ask the student to confirm before narrating** —
+never present unconfirmed OCR numbers as results.
+
 When every M3 hypothesis has a result entry → `commit_slice("M4", …, confirm_done=True)`.
 
 ## How to act based on intent

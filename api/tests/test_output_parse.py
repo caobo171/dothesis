@@ -44,3 +44,14 @@ def test_vision_junk(monkeypatch):
     monkeypatch.setattr(op, "_vision_read", lambda f: "the image is blurry")
     out = json.loads(op.parse_output_table.func(file="shot.png"))
     assert out.get("error") or out.get("needs_confirmation")
+
+
+def test_export_feeds_check_thresholds(monkeypatch):
+    # End-to-end: a real export -> parsed rows -> F8's check_thresholds. An HTMT of
+    # 0.91 (>= 0.85) must trip the discriminant-validity flag.
+    from agent.tools.stats import check_thresholds     # F8
+    html = "<table><tr><th>pair</th><th>HTMT</th></tr><tr><td>BI-ATT</td><td>0.91</td></tr></table>".encode()
+    monkeypatch.setattr(op, "_load_bytes", lambda f: html)
+    parsed = json.loads(op.parse_smartpls_export.func(file="r.html"))
+    flags = json.loads(check_thresholds.func(table_kind=parsed["table_kind"], rows=parsed["rows"]))
+    assert any("discriminant" in f["issue"].lower() for f in flags["findings"])

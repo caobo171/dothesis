@@ -142,6 +142,7 @@ from deepagents.backends.filesystem import FilesystemBackend
 from agent.preflight import make_preflight_tool
 from agent.state import MODULES, ProjectStateStore
 from agent.tools.forms import make_google_form_script
+from agent.tools.output_parse import parse_output_table, parse_smartpls_export
 from agent.tools.research import parse_reference, quick_sources, research_scout
 from agent.tools.state_tools import make_state_tools
 from agent.tools.stats import check_thresholds, run_stats
@@ -460,6 +461,10 @@ def build_agent(
         # F8: output sanity layer — classify pasted result tables (loadings/AVE/
         # CR/HTMT/VIF) against thresholds + flag suspiciously-perfect data.
         check_thresholds,
+        # F13: turn a results EXPORT (SmartPLS/SPSS HTML/xlsx) or a SCREENSHOT into
+        # {table_kind, rows} that feed check_thresholds. Both take a workspace path.
+        parse_smartpls_export,
+        parse_output_table,
         # F8: methods pre-flight — the M3->M4 readiness audit (advisory). Bound
         # to the store so the agent can run it before kicking off M4 analysis.
         make_preflight_tool(store),
