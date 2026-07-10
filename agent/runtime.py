@@ -153,6 +153,7 @@ from agent.tools.research import parse_reference, quick_sources, research_scout
 from agent.tools.state_tools import make_state_tools
 from agent.tools.stats import check_thresholds, run_stats
 from agent.tools.writing import make_writing_tools
+from agent.usage import extract_usage  # F10: route-independent token accounting
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
@@ -661,16 +662,18 @@ async def stream_turn(
                                 if hint is not None:
                                     yield {"type": "tool_calls", "payload": hint}
                         else:
-                            # Token usage for cost metering. Gemini surfaces
-                            # usage_metadata on the completed AIMessage in the
-                            # updates stream; sum across every LLM step in the
-                            # turn so the per-response cost reflects tool loops.
-                            _usage = getattr(m, "usage_metadata", None)
-                            if _usage:
+                            # Token usage for cost metering. F10: read it through
+                            # extract_usage so native (usage_metadata) and
+                            # OpenAI-compatible/OpenRouter (usage.prompt_tokens/
+                            # completion_tokens) shapes feed the SAME accumulation
+                            # the credit ledger debits — route-independent billing.
+                            # Emitted event shape is unchanged so chat_v3 stays as-is.
+                            _u = extract_usage(m)
+                            if _u["in"] or _u["out"]:
                                 yield {
                                     "type": "usage",
-                                    "input_tokens": int(_usage.get("input_tokens", 0) or 0),
-                                    "output_tokens": int(_usage.get("output_tokens", 0) or 0),
+                                    "input_tokens": _u["in"],
+                                    "output_tokens": _u["out"],
                                 }
                             for tc in getattr(m, "tool_calls", None) or []:
                                 if tc.get("name"):
