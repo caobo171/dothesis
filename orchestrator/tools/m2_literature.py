@@ -44,8 +44,12 @@ def _engine_model():
     engine uses (B5 fix).
     """
     from engine.utils.gemini_client import create_gemini_client
+    # The citation planner is a native-genai structured call, so it needs a Gemini
+    # model — NOT ORCHESTRATOR_LLM_MODEL, which may now be a non-Gemini id (e.g.
+    # Ofox's bailian/qwen-plus) that would break the Gemini client. create_gemini_client
+    # routes this through Ofox's Gemini-native endpoint when the deployment is on Ofox.
     return create_gemini_client(
-        model_name=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
+        model_name=os.getenv("CITATION_PLANNER_MODEL", "gemini-2.5-flash"),
         temperature=0.3,
     )
 

@@ -27,6 +27,25 @@ MODEL_PRICES: dict[str, dict] = {
                 "note": "over-thinks; output tokens balloon", "updated": "2026-07-08"},
     "claude-haiku-4-5": {"in": 1.00, "out": 5.00, "provider": "anthropic",
                          "note": "strong agentic, mid-price", "updated": "2026-07-08"},
+    # --- Ofox gateway ids + LIVE prices pulled from GET api.ofox.ai/v1/models
+    #     (the `pricing` field, 2026-07-10). Keys match the provider/model string
+    #     passed to evaluate_models, so cost() resolves them directly. ---
+    "google/gemini-3.5-flash": {"in": 1.50, "out": 9.00, "provider": "ofox",
+                                "note": "current default; output tripled", "updated": "2026-07-10"},
+    "google/gemini-2.5-flash": {"in": 0.30, "out": 2.50, "provider": "ofox",
+                                "note": "cheap Gemini; weaker markers", "updated": "2026-07-10"},
+    "bailian/qwen-plus": {"in": 0.12, "out": 0.29, "provider": "ofox",
+                          "note": "configured default; VN leader + markers + tools; 1M ctx", "updated": "2026-07-10"},
+    "bailian/qwen-flash": {"in": 0.022, "out": 0.22, "provider": "ofox",
+                           "note": "cheapest Qwen; 1M ctx", "updated": "2026-07-10"},
+    "bailian/qwen-max": {"in": 0.35, "out": 1.38, "provider": "ofox",
+                         "note": "strongest Qwen BUT only 32k ctx (risky for DoThesis)", "updated": "2026-07-10"},
+    "deepseek/deepseek-v4-flash": {"in": 0.14, "out": 0.28, "provider": "ofox",
+                                   "note": "cheapest that passed markers+VN+tools; 1M ctx", "updated": "2026-07-10"},
+    "deepseek/deepseek-v4-pro": {"in": 0.45, "out": 0.88, "provider": "ofox",
+                                 "note": "stronger DeepSeek; 1M ctx", "updated": "2026-07-10"},
+    "z-ai/glm-5": {"in": 1.00, "out": 3.20, "provider": "ofox",
+                   "note": "over-thinks; FAILED [OPTIONS] marker in live probe", "updated": "2026-07-10"},
 }
 
 

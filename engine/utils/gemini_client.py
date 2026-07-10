@@ -212,6 +212,20 @@ def create_gemini_client(
             "google-genai not installed. Run: pip install google-genai>=1.0.0"
         )
 
+    # Route the native-genai path through Ofox's Gemini-native endpoint when the
+    # deployment is on Ofox (google-genai SDK is Ofox-compatible; the key rides in
+    # x-goog-api-key). Ofox needs provider-prefixed ids (google/gemini-2.5-flash),
+    # so add the prefix if the caller passed a bare gemini id. This keeps the
+    # citation planner / vision paths on Ofox instead of requiring a Google key.
+    route = (os.getenv("ORCHESTRATOR_LLM_ROUTE") or os.getenv("DOTHESIS_MODEL_ROUTE") or "").lower()
+    ofox_key = os.getenv("OFOX_API_KEY")
+    if route == "ofox" and ofox_key:
+        from google.genai.types import HttpOptions  # noqa: PLC0415
+        m = model_name if "/" in model_name else f"google/{model_name}"
+        client = genai.Client(api_key=ofox_key,
+                              http_options=HttpOptions(base_url="https://api.ofox.ai/gemini"))
+        return GeminiModelWrapper(client, m, temperature)
+
     api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise ValueError(

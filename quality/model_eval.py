@@ -17,13 +17,17 @@ logger = logging.getLogger(__name__)
 
 
 def _complete(model: str, prompt: str, system: str | None = None) -> tuple[str, dict]:
-    """One network chokepoint — OpenRouter (OpenAI-compatible). Tests stub this.
+    """One network chokepoint — an OpenAI-compatible gateway. Tests stub this.
 
-    langchain_openai is imported lazily so the package imports (and the stubbed
-    tests run) without the eval-only network dep installed."""
+    Gateway is env-configurable so the same harness benchmarks OpenRouter OR Ofox:
+      DOTHESIS_EVAL_BASE_URL (default https://openrouter.ai/api/v1)
+      DOTHESIS_EVAL_API_KEY  (falls back to OPENROUTER_API_KEY)
+    e.g. DOTHESIS_EVAL_BASE_URL=https://api.ofox.ai/v1 DOTHESIS_EVAL_API_KEY=$OFOX_API_KEY.
+    langchain_openai is imported lazily so stubbed tests run without the dep."""
     from langchain_openai import ChatOpenAI  # noqa: PLC0415 — eval-only, lazy
-    llm = ChatOpenAI(model=model, base_url="https://openrouter.ai/api/v1",
-                     api_key=os.environ.get("OPENROUTER_API_KEY", ""))
+    base_url = os.getenv("DOTHESIS_EVAL_BASE_URL", "https://openrouter.ai/api/v1")
+    api_key = os.getenv("DOTHESIS_EVAL_API_KEY") or os.getenv("OPENROUTER_API_KEY", "")
+    llm = ChatOpenAI(model=model, base_url=base_url, api_key=api_key)
     msgs = ([("system", system)] if system else []) + [("human", prompt)]
     resp = llm.invoke(msgs)
     usage = getattr(resp, "usage_metadata", {}) or {}

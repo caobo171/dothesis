@@ -145,17 +145,24 @@ def _upload_to_gemini_files(att: Attachment) -> str:
     # Lazy import — the SDK is heavy and we only need it for big files.
     from google import genai as _genai
 
-    api_key = (
-        os.getenv("GOOGLE_API_KEY")
-        or os.getenv("GEMINI_API_KEY")
-    )
-    if not api_key:
-        raise RuntimeError(
-            "GOOGLE_API_KEY / GEMINI_API_KEY required to upload >20MB attachments "
-            "via the Gemini File API"
-        )
-
-    client = _genai.Client(api_key=api_key)
+    # Route through Ofox's Gemini-native endpoint when the deployment is on Ofox,
+    # else native Google. NOTE: the Gemini Files API (large-attachment upload) is a
+    # Gemini feature; qwen (the text brain) can't do vision, so image/large-file
+    # understanding needs a Gemini/VL model regardless of the text-model choice.
+    route = (os.getenv("DOTHESIS_MODEL_ROUTE") or "").lower()
+    ofox_key = os.getenv("OFOX_API_KEY")
+    if route == "ofox" and ofox_key:
+        from google.genai.types import HttpOptions  # noqa: PLC0415
+        client = _genai.Client(api_key=ofox_key,
+                               http_options=HttpOptions(base_url="https://api.ofox.ai/gemini"))
+    else:
+        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "GOOGLE_API_KEY / GEMINI_API_KEY (or OFOX_API_KEY on route=ofox) required "
+                "to upload >20MB attachments via the Gemini File API"
+            )
+        client = _genai.Client(api_key=api_key)
     # Files API takes an `io.BytesIO` or a `Path`; the in-memory route
     # avoids a temp-file dance and lines up with how we get bytes from
     # the workspace mirror.
