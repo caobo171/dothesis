@@ -141,6 +141,16 @@ Rules for the tables:
   the weakest item and re-run, or record as a measurement limitation"). Do not
   bury a breach.
 
+### Output sanity — check what came back
+
+Before you narrate a results table (yours from `run_stats`, or a SmartPLS/SPSS
+export the user pasted), run `check_thresholds(table_kind, rows)`. It classifies
+each value against the standard cutoffs (loadings ≥0.708, AVE ≥0.5, CR 0.7–0.95,
+HTMT <0.85, VIF <3.3) AND flags suspiciously-perfect patterns (all loadings >0.9
+⇒ possible straight-lined data). It computes nothing — it only compares values you
+already have. Consult `references/output-interpretation.md` for the full threshold
+table, the "too good to be true" heuristics, and how to narrate a breach.
+
 When every M3 hypothesis has a result entry → `commit_slice("M4", …, confirm_done=True)`.
 
 ## How to act based on intent

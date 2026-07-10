@@ -127,6 +127,53 @@ OPS = {
 }
 
 
+# --- Output sanity layer (F8 Task 4) -------------------------------------
+# check_thresholds classifies numbers the STUDENT already pasted (from SmartPLS/
+# SPSS output) against standard reporting thresholds. It is deliberately NOT a
+# run_stats op: it computes NOTHING — every branch here is a comparison, never
+# arithmetic on a value — so it can safely run on typed-in tables the sandbox
+# never saw. The full threshold table + narration guidance lives in
+# skills/dothesis-m4-analysis/references/output-interpretation.md.
+_THRESHOLDS = {
+    "loadings": lambda v: None if v >= 0.708 else "below 0.708 — consider removing this item",
+    "ave": lambda v: None if v >= 0.5 else "AVE below 0.5 — convergent validity not met",
+    "cr": lambda v: None if 0.7 <= v <= 0.95 else "CR outside 0.7–0.95",
+    "htmt": lambda v: None if v < 0.85 else "HTMT ≥ 0.85 — discriminant validity may fail",
+    "vif": lambda v: None if v < 3.3 else "VIF ≥ 3.3 — possible collinearity",
+}
+
+
+@tool
+def check_thresholds(table_kind: str, rows: list[dict]) -> str:
+    """Classify a pasted results table (loadings/ave/cr/htmt/vif) against standard
+    thresholds and flag both violations AND suspiciously-perfect patterns (all
+    loadings > 0.9 ⇒ possible straight-lined data). Does NOT compute new
+    statistics — it only compares the values you paste in.
+
+    Args:
+        table_kind: One of loadings, ave, cr, htmt, vif.
+        rows: List of {"item"/"pair": label, "value": number} from the student's
+            SmartPLS/SPSS output.
+    """
+    check = _THRESHOLDS.get(table_kind)
+    findings = []
+    values = [r.get("value") for r in rows if isinstance(r.get("value"), (int, float))]
+    if check:
+        for r in rows:
+            v = r.get("value")
+            msg = check(v) if isinstance(v, (int, float)) else None
+            if msg:
+                findings.append({"issue": f"{r.get('item') or r.get('pair') or '?'}: {msg}",
+                                 "severity": "hard"})
+    # Suspiciously perfect: a whole construct of loadings above 0.9 is more often
+    # bad data (straight-lining, a copied matrix) than a genuinely clean scale.
+    # min() SELECTS a value; it derives no new statistic.
+    if table_kind == "loadings" and values and min(values) >= 0.9:
+        findings.append({"issue": "All loadings > 0.9 — suspiciously perfect; check for "
+                                  "straight-lined data or a wrong matrix.", "severity": "soft"})
+    return json.dumps({"table_kind": table_kind, "findings": findings}, ensure_ascii=False)
+
+
 @tool
 def run_stats(op: str, file: str, params: dict | None = None) -> str:
     """Run ONE whitelisted statistical operation on an uploaded data file.

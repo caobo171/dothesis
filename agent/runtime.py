@@ -144,7 +144,7 @@ from agent.state import MODULES, ProjectStateStore
 from agent.tools.forms import make_google_form_script
 from agent.tools.research import parse_reference, quick_sources, research_scout
 from agent.tools.state_tools import make_state_tools
-from agent.tools.stats import run_stats
+from agent.tools.stats import check_thresholds, run_stats
 from agent.tools.writing import make_writing_tools
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -457,6 +457,9 @@ def build_agent(
         research_scout,
         parse_reference,
         run_stats,
+        # F8: output sanity layer — classify pasted result tables (loadings/AVE/
+        # CR/HTMT/VIF) against thresholds + flag suspiciously-perfect data.
+        check_thresholds,
         # F8: methods pre-flight — the M3->M4 readiness audit (advisory). Bound
         # to the store so the agent can run it before kicking off M4 analysis.
         make_preflight_tool(store),
