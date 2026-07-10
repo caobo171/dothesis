@@ -39,6 +39,13 @@ USER_MEMORY_KEYS: frozenset[str] = frozenset({
     "writing_formality",
     "option_presentation",
     "auto_approve_default",
+    # F4 — cross-project advisor learning. institution_default seeds a new
+    # project's institution_profile; recurring_advisor_themes are the recurring
+    # ADDRESSED directives so a new project starts pre-warned. Both are
+    # preferences/patterns, not thesis content — safe under the anti-fabrication
+    # invariant (no sources/citations/results cross projects).
+    "institution_default",
+    "recurring_advisor_themes",
 })
 
 
@@ -115,3 +122,21 @@ def write_user_prefs(
         }
     row.prefs = merged
     db.flush()
+
+
+def distill_advisor_themes(db, user_id, advisor_feedback, source_project_id=None) -> None:
+    """Summarize recurring ADDRESSED advisor directives into cross-project memory so a
+    new project starts pre-warned. Cheap recurrence heuristic (issues seen >=2 become
+    themes) rather than an LLM summary — deterministic and safe for a cross-project
+    write. Best-effort — never breaks the caller (feedback loop must not crash a turn)."""
+    from collections import Counter
+    try:
+        addressed = [d.get("issue", "").strip().lower()
+                     for d in (advisor_feedback or []) if d.get("status") == "addressed"]
+        themes = [issue for issue, n in Counter(addressed).items() if issue and n >= 2]
+        if themes:
+            write_user_prefs(db, user_id, {"recurring_advisor_themes": themes},
+                             source_project_id=source_project_id, confidence=0.7)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("distill_advisor_themes failed")

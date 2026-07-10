@@ -8,6 +8,7 @@ import uuid
 import pytest
 from sqlalchemy.orm import Session
 
+from app import user_memory as um  # F4: alias for the new keys/distill tests
 from app.db import get_engine
 from app.models import User
 from app.user_memory import (
@@ -85,3 +86,29 @@ def test_isolation_between_users():
         s.commit()
         assert load_user_prefs(s, a.id) == {"field": "Law"}
         assert load_user_prefs(s, b.id) == {}
+
+
+# -- F4: cross-project advisor learning ------------------------------------
+def test_new_keys_allowed():
+    assert {"institution_default", "recurring_advisor_themes"} <= um.USER_MEMORY_KEYS
+
+
+def test_distill_writes_themes(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(um, "write_user_prefs",
+                        lambda db, uid, updates, **k: calls.update(updates))
+    fb = [{"issue": "report effect sizes", "status": "addressed"},
+          {"issue": "report effect sizes", "status": "addressed"}]
+    um.distill_advisor_themes(db=None, user_id="u", advisor_feedback=fb, source_project_id=None)
+    assert "recurring_advisor_themes" in calls
+
+
+def test_distill_ignores_single_or_open(monkeypatch):
+    # only-once or not-yet-addressed issues are NOT themes (needs recurrence >= 2).
+    calls = {}
+    monkeypatch.setattr(um, "write_user_prefs",
+                        lambda db, uid, updates, **k: calls.update(updates))
+    fb = [{"issue": "add effect sizes", "status": "addressed"},
+          {"issue": "fix citations", "status": "open"}]
+    um.distill_advisor_themes(db=None, user_id="u", advisor_feedback=fb)
+    assert calls == {}

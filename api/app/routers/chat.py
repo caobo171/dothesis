@@ -167,6 +167,19 @@ def create_project(body: CreateProjectBody,
         import logging
         logging.getLogger(__name__).exception("user_memory capture failed")
     db.commit(); db.refresh(p)
+    # F4: if the user has an institution_default (learned from a prior project),
+    # seed this project's institution_profile so it starts pre-warned. Post-commit
+    # so the ContextStore row is visible to the store's own connection. Best-effort.
+    try:
+        from ..user_memory import load_user_prefs
+        inst = load_user_prefs(db, user.id).get("institution_default")
+        if isinstance(inst, dict) and inst:
+            from ..agent_state import DbProjectStateStore
+            from .chat_v3 import _workspace_dir
+            DbProjectStateStore(db.bind, p.id, _workspace_dir(p.id)).set_institution_profile(inst)
+    except Exception:  # noqa: BLE001 — seeding is best-effort, never block create
+        import logging
+        logging.getLogger(__name__).exception("institution_default seeding failed")
     return _serialize_project(db, p)
 
 

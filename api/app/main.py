@@ -146,6 +146,32 @@ def create_app() -> FastAPI:
         # F2: chat-only coaching surface (uses chat_v3 workspace); orchestrator block.
         app.include_router(roadmap_router.router, prefix="/api/v1")
 
+    # F4: wire the cross-project advisor-theme distill hook. The agent tool
+    # mark_feedback_addressed calls agent.memory_hook.distill_advisor_themes once
+    # every directive is addressed; the agent layer can't import app, so the real
+    # impl is set here — resolving user_id from the store's project_id.
+    import agent.memory_hook as _memory_hook
+
+    def _distill(store, advisor_feedback) -> None:
+        import logging
+        pid = getattr(store, "project_id", None)
+        if pid is None:
+            return  # file-backed store (e.g. tests) — no user to distill to
+        from .db import get_session_factory
+        from .models import Project
+        from .user_memory import distill_advisor_themes
+        try:
+            with get_session_factory()() as db:
+                proj = db.get(Project, pid)
+                if proj is not None:
+                    distill_advisor_themes(db, proj.user_id, advisor_feedback,
+                                           source_project_id=pid)
+                    db.commit()
+        except Exception:
+            logging.getLogger(__name__).exception("distill hook failed")
+
+    _memory_hook.distill_advisor_themes = _distill
+
     return app
 
 
