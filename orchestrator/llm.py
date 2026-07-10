@@ -87,3 +87,28 @@ def get_orchestrator_llm(
         return ChatOpenAI(**kwargs)
 
     raise ValueError(f"unknown orchestrator LLM route: {route!r}")
+
+
+def get_vision_llm(model: str | None = None, temperature: float | None = None):
+    """Vision-capable model for image/screenshot turns (F13 output ingest, image
+    attachments). The text brain (e.g. Ofox qwen-plus) may be TEXT-ONLY, so vision
+    calls route HERE to a Gemini/VL model instead.
+
+    Always a Gemini client: build_user_message(provider="gemini") emits Gemini-format
+    content, so the OpenAI-compat ofox route can't consume it. On route=ofox we point
+    the Gemini client at Ofox's Gemini-NATIVE endpoint (verified working) with the
+    Ofox key; else native Google. DOTHESIS_VISION_MODEL overrides (default
+    gemini-2.5-flash). Keeps vision on Ofox instead of forcing a separate Google key.
+    """
+    from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: PLC0415
+    m = model or os.getenv("DOTHESIS_VISION_MODEL", "gemini-2.5-flash")
+    t = 0.2 if temperature is None else temperature
+    route = (os.getenv("ORCHESTRATOR_LLM_ROUTE") or os.getenv("DOTHESIS_MODEL_ROUTE") or "native").lower()
+    ofox_key = os.getenv("OFOX_API_KEY")
+    if route == "ofox" and ofox_key:
+        vm = m if "/" in m else f"google/{m}"   # Ofox needs provider-prefixed ids
+        return ChatGoogleGenerativeAI(
+            model=vm, google_api_key=ofox_key,
+            client_options={"api_endpoint": "https://api.ofox.ai/gemini"},
+            transport="rest", temperature=t)
+    return ChatGoogleGenerativeAI(model=m, temperature=t)

@@ -118,14 +118,15 @@ def _vision_read(file: str) -> str:
 
     Uses the real multimodal contract: build_user_message(text, [Attachment], provider)
     -> HumanMessage, with provider="gemini" (the valid Provider literal in
-    agent/multimodal.py — "google" would raise ValueError). The LLM comes from the
-    orchestrator's Gemini factory (agent -> orchestrator import is allowed; agent ->
-    app is not). Isolated so tests stub it and never call a model."""
+    agent/multimodal.py — "google" would raise ValueError). Uses get_vision_llm (NOT
+    the orchestrator text model): the text brain may be a text-only model (e.g. Ofox
+    qwen-plus) that can't read images, so vision goes to a Gemini/VL model, routed
+    through Ofox on route=ofox. Isolated so tests stub it and never call a model."""
     from agent.multimodal import Attachment, build_user_message  # noqa: PLC0415 (real API)
-    from orchestrator.tools.m5_writing import _get_llm  # noqa: PLC0415 (Gemini factory)
+    from orchestrator.llm import get_vision_llm  # noqa: PLC0415 (vision-capable factory)
     att = Attachment.from_path(file)                       # `file` is already the path
     msg = build_user_message(_VISION_PROMPT, [att], provider="gemini")  # valid Provider literal
-    return str(getattr(_get_llm().invoke([msg]), "content", ""))
+    return str(getattr(get_vision_llm().invoke([msg]), "content", ""))
 
 
 @tool

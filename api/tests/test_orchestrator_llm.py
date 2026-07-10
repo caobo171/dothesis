@@ -115,3 +115,25 @@ def test_unknown_route_raises(monkeypatch):
     import pytest
     with pytest.raises(ValueError):
         get_orchestrator_llm()
+
+
+def test_get_vision_llm_native_default(monkeypatch):
+    # Vision defaults to a Gemini client (build_user_message emits Gemini format).
+    monkeypatch.delenv("ORCHESTRATOR_LLM_ROUTE", raising=False)
+    monkeypatch.delenv("DOTHESIS_MODEL_ROUTE", raising=False)
+    monkeypatch.setenv("GOOGLE_API_KEY", "test")
+    from orchestrator.llm import get_vision_llm
+    m = get_vision_llm()
+    assert m.__class__.__name__ == "ChatGoogleGenerativeAI"
+
+
+def test_get_vision_llm_ofox_points_at_ofox(monkeypatch):
+    # On ofox, vision stays a Gemini client but points at Ofox's gemini-native
+    # endpoint with the Ofox key + a provider-prefixed id.
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "ofox")
+    monkeypatch.setenv("OFOX_API_KEY", "sk-of-test")
+    from orchestrator.llm import get_vision_llm
+    m = get_vision_llm(model="gemini-2.5-flash")
+    assert m.__class__.__name__ == "ChatGoogleGenerativeAI"
+    # ofox branch prefixes the id (google/...) for the gateway; native leaves it bare.
+    assert str(m.model) == "google/gemini-2.5-flash"
