@@ -179,3 +179,15 @@ def test_set_institution_profile_merges(store):
     store.set_institution_profile({"min_references": 30})
     prof = store.load()["contextStore"]["institution_profile"]
     assert prof == {"citation_style": "apa7", "min_references": 30}
+
+
+# -- thesis timeline: dedicated coaching path (F11 Task 3) ---------------------
+def test_set_thesis_timeline_uses_dedicated_path(store):
+    # thesis_timeline is a COACHING_KEY: written via its own store path, never
+    # commit_slice, so it must NOT shift focus or change any module status.
+    store.commit_slice("M1", {"research_title": "T"}, reason="seed")
+    before = store.load()
+    store.set_thesis_timeline({"milestones": [{"module": "M1"}]})
+    after = store.load()
+    assert after["contextStore"]["thesis_timeline"]["milestones"][0]["module"] == "M1"
+    assert after["status"] == before["status"] and after["focus"] == before["focus"]

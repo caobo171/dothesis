@@ -332,6 +332,19 @@ class ProjectStateStore:
         self._save(state)
         return prof
 
+    def set_thesis_timeline(self, timeline: dict[str, Any]) -> dict[str, Any]:
+        """Store the backwards thesis timeline (F11). thesis_timeline is a
+        COACHING_KEY, so this is a DEDICATED path (same rationale as
+        set_institution_profile): recording a calendar is not a module design
+        decision, so it must NEVER shift focus, flip module status, propagate
+        needs_review, or add a version snapshot — hence not commit_slice, whose
+        ownership check is module-scoped and would reject it. DbProjectStateStore
+        round-trips it via the coaching JSONB column."""
+        state = self.load()
+        state["contextStore"]["thesis_timeline"] = timeline
+        self._save(state)
+        return timeline
+
     # -- field-it results ingestion (F7) ----------------------------------
     # Deliberately NOT commit_slice, same rationale as set_institution_profile:
     # ingesting collected survey data is not a design decision, so it must not

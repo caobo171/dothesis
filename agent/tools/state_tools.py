@@ -130,5 +130,28 @@ def make_state_tools(store: ProjectStateStore) -> list:
                 pass  # distillation is a nicety; never break the turn
         return json.dumps({"addressed": ok}, ensure_ascii=False)
 
+    @tool
+    def set_defense_date(defense_date: str) -> str:
+        """Record the student's target defense/submission date (YYYY-MM-DD) and build a
+        realistic backwards timeline (M1->defense) they can pace against. Reads the
+        project's chosen method and planned sample size to size data collection."""
+        from datetime import date  # noqa: PLC0415
+
+        from agent.timeline import build_timeline  # noqa: PLC0415
+
+        # Read the project's LIVE FLAT contextStore (F0 correction: the store's
+        # load() returns flat keys — methodology, sample_plan — NOT the nested
+        # m3_design shape the plan literal assumed; reading m3_design here would
+        # always miss and silently fall back to defaults, never reaching
+        # build_timeline with the real data). Mirrors make_sampling_plan_tool.
+        cs = (store.load() or {}).get("contextStore") or {}
+        method = cs.get("methodology") or "regression"
+        target_n = (cs.get("sample_plan") or {}).get("target_n") or 200
+        tl = build_timeline(date.fromisoformat(defense_date), method, target_n, date.today())
+        # Persist via the dedicated coaching path — never commit_slice (a
+        # calendar is not a module design decision).
+        store.set_thesis_timeline(tl)
+        return json.dumps(tl, ensure_ascii=False)
+
     return [read_slice, commit_slice, flag_blocker, resolve_blocker,
-            ingest_advisor_feedback, mark_feedback_addressed]
+            ingest_advisor_feedback, mark_feedback_addressed, set_defense_date]

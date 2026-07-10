@@ -87,6 +87,14 @@ Show the title + RQs in a clean block. Ask: *"Lock this in?"*
 On confirmation: `commit_slice("M1", {research_title, research_questions},
 reason="topic locked", confirm_done=True)`. Then one sentence on what's next (M2).
 
+### Capture the defense date (timeline)
+Early in M1 — after the topic is framed — ask for the student's **target
+defense/submission date** and call `set_defense_date("YYYY-MM-DD")`. This builds
+a realistic backwards timeline (M1 → defense) the whole journey can be paced
+against, and powers the weekly nudge. It's advisory: if the plan comes back
+`feasible: false` (deadline too close), flag it warmly and suggest a later date
+or a tighter scope — never refuse. Skip only if the student has no date yet.
+
 ## Quality bars — do not violate
 
 | Bar | Reason |

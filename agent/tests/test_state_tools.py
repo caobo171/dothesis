@@ -48,3 +48,21 @@ def test_mark_feedback_addressed_clears_blocker(tmp_path, monkeypatch):
     cs = store.load()["contextStore"]
     assert cs["advisor_feedback"][0]["status"] == "addressed"
     assert cs["roadmap_tasks"][0]["status"] == "done"   # linked blocker cleared
+
+
+def test_set_defense_date_builds_timeline(tmp_path):
+    # F11 Task 3 + F0 correction: the tool must read the project's REAL flat
+    # contextStore (methodology + sample_plan.target_n) and actually reach
+    # build_timeline — not fall back to defaults. A target_n of 350 sizes data
+    # collection to 6 weeks (ceil(350/50)=7, capped 6); the default 200 would
+    # give 4, so asserting 6 proves the real data flowed through.
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    store.commit_slice("M3", {"methodology": "PLS-SEM", "sample_plan": {"target_n": 350}},
+                       reason="x")
+    tools = {t.name: t for t in make_state_tools(store)}
+    assert "set_defense_date" in tools
+    out = json.loads(tools["set_defense_date"].func(defense_date="2026-12-31"))
+    assert out["feasible"] in (True, False)
+    assert out["data_collection_weeks"] == 6          # reached build_timeline w/ real target_n
+    # Persisted via the dedicated coaching path (not commit_slice).
+    assert store.load()["contextStore"]["thesis_timeline"]["milestones"]
