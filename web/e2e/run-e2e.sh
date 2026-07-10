@@ -31,11 +31,22 @@ docker run -d --name "$MINIO_NAME" \
   -p "${MINIO_PORT}:9000" minio/minio server /data >/dev/null
 
 echo "==> waiting for postgres (:${PG_PORT})"
+# DECISION: probe from the HOST over the mapped TCP port, not `docker exec
+# pg_isready` inside the container. The official postgres image's entrypoint
+# runs initdb's bootstrap SQL against a TEMPORARY server that is intentionally
+# restricted to the Unix socket (listen_addresses='') before starting the
+# real server with full TCP listening. `docker exec pg_isready` (no -h) talks
+# over that Unix socket and happily reports "ready" during the temp-server
+# phase; the immediately-following `alembic upgrade head` then connects over
+# the mapped TCP port, races the temp→real server handover, and hits "server
+# closed the connection unexpectedly" ~50% of runs. A host-side probe with
+# `-h localhost -p PG_PORT` only succeeds once the real TCP listener (the one
+# alembic actually uses) is up, so there's no gap left to race.
 for _ in $(seq 1 60); do
-  docker exec "$PG_NAME" pg_isready -U e2e -d dothesis_e2e >/dev/null 2>&1 && break
+  pg_isready -h localhost -p "${PG_PORT}" -U e2e -d dothesis_e2e >/dev/null 2>&1 && break
   sleep 1
 done
-docker exec "$PG_NAME" pg_isready -U e2e -d dothesis_e2e >/dev/null
+pg_isready -h localhost -p "${PG_PORT}" -U e2e -d dothesis_e2e >/dev/null
 
 echo "==> waiting for minio (:${MINIO_PORT})"
 for _ in $(seq 1 60); do
