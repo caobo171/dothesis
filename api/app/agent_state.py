@@ -43,6 +43,55 @@ class DbProjectStateStore(ProjectStateStore):
         self.engine = engine
         self.project_id = project_id
 
+    def commit_slice(
+        self,
+        module: str,
+        writes: dict[str, Any],
+        reason: str,
+        confirm_done: bool = False,
+        status_overrides: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Instrumented write path: emit agent-quality events around the base
+        commit_slice. Decision (F5 Task 2): this is where user/project ids are
+        known and every module-status transition funnels through, so it's the
+        single chokepoint for the completion-funnel and gate-rate signal.
+
+        Best-effort throughout — `emit` swallows its own errors, and we never let
+        analytics change the commit's outcome (the ValueError is always re-raised).
+        """
+        from .analytics import emit  # noqa: PLC0415 — local import keeps the state layer inert-importable
+        # The store isn't (yet) owner-aware; pass None rather than fabricate an
+        # id. emit tolerates None (distinct_id -> "anonymous").
+        uid = getattr(self, "user_id", None)
+        before = self.load()["status"].get(module)
+        try:
+            result = super().commit_slice(
+                module, writes, reason,
+                confirm_done=confirm_done, status_overrides=status_overrides,
+            )
+        except ValueError as e:
+            # The strict empty-done gate ("cannot mark <M> done: its slice is
+            # empty") is the hallucinated-completion catch — record it, then
+            # re-raise so the caller behaviour is unchanged. Other ValueErrors
+            # (ownership, nothing-to-do) are not gate rejections, so we skip them.
+            if "cannot mark" in str(e):
+                emit("done_rejected_empty", uid,
+                     {"module": module, "project_id": str(self.project_id)})
+            raise
+        after = self.load()["status"].get(module)
+        if after != before:
+            emit("module_status_changed", uid,
+                 {"module": module, "from": before, "to": after,
+                  "project_id": str(self.project_id)})
+        # `flagged` = downstream modules this commit knocked to needs_review — the
+        # raw signal for "a late upstream edit invalidated finished work".
+        flagged = result.get("flagged", []) if isinstance(result, dict) else []
+        if flagged:
+            emit("needs_review_propagated", uid,
+                 {"module": module, "downstream": flagged,
+                  "project_id": str(self.project_id)})
+        return result
+
     def exists(self) -> bool:
         state = self.load()
         # Coaching keys (e.g. an F4 institution_default seed) must NOT count
