@@ -46,6 +46,9 @@ USER_MEMORY_KEYS: frozenset[str] = frozenset({
     # invariant (no sources/citations/results cross projects).
     "institution_default",
     "recurring_advisor_themes",
+    # F11 — weekly-nudge opt-in. A durable per-user preference (defaults True at
+    # send time), not thesis content — safe under the anti-fabrication invariant.
+    "nudge_opt_in",
 })
 
 
