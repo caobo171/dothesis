@@ -7,8 +7,13 @@ from __future__ import annotations
 MODEL_PRICES: dict[str, dict] = {
     "gemini-3.5-flash": {"in": 1.50, "out": 9.00, "provider": "google",
                          "note": "current default; output tripled in 2026", "updated": "2026-07-08"},
-    "gemini-2.5-flash": {"in": 0.30, "out": 2.50, "provider": "google",
-                         "note": "cheaper but weaker instruction-following", "updated": "2026-07-08"},
+    # Ofox-indicative rates (2026-07 web research — VERIFY on ofox.ai/pricing before
+    # relying on it). Output is ~15x cheaper than 3.5-flash's $9/M — the dominant
+    # lever, since output is uncacheable. Weaker instruction-following than 3.5:
+    # must clear the marker floor (run the shootout) before switching.
+    "gemini-2.5-flash": {"in": 0.15, "out": 0.60, "provider": "google",
+                         "note": "cheap; weaker instruction-following; via Ofox google/gemini-2.5-flash",
+                         "updated": "2026-07-10"},
     "gpt-5.4-mini": {"in": 0.40, "out": 1.75, "provider": "openai",
                      "note": "safe western drop-in", "updated": "2026-07-08"},
     # in=0.33 (not 0.325): the plan's table snippet and its cost test disagreed

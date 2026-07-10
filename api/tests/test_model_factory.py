@@ -122,3 +122,30 @@ def test_openrouter_requires_key(monkeypatch):
     # attempt to import/construct the client.
     with pytest.raises(RuntimeError):
         make_model(ModelSpec(route="openrouter", model="qwen"))
+
+
+# -- Ofox gateway route (OpenAI-compatible; the cost/quality lever) ----------
+def test_ofox_route_config(monkeypatch):
+    monkeypatch.setenv("OFOX_API_KEY", "sk-of-test")
+    captured = _install_fake_chatopenai(monkeypatch)
+    m = make_model(ModelSpec(route="ofox", model="google/gemini-2.5-flash"))
+    assert "api.ofox.ai/v1" in str(m.openai_api_base)
+    assert captured["model"] == "google/gemini-2.5-flash"
+    assert captured["api_key"] == "sk-of-test"
+    # OpenAI-compatible streaming reports usage only when asked — the ledger needs it.
+    assert (m.model_kwargs.get("stream_options") or {}).get("include_usage") is True
+
+
+def test_ofox_requires_key(monkeypatch):
+    monkeypatch.delenv("OFOX_API_KEY", raising=False)
+    import pytest
+    with pytest.raises(RuntimeError, match="OFOX_API_KEY"):
+        make_model(ModelSpec(route="ofox", model="google/gemini-2.5-flash"))
+
+
+def test_spec_from_env_ofox_default_model(monkeypatch):
+    monkeypatch.setenv("DOTHESIS_MODEL_ROUTE", "ofox")
+    monkeypatch.delenv("DOTHESIS_AGENT_MODEL", raising=False)
+    spec = spec_from_env()
+    assert spec.route == "ofox"
+    assert spec.model == "google/gemini-2.5-flash"

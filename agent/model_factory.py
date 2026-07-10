@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ModelSpec:
-    route: str = "native"  # "native" | "openrouter"
+    route: str = "native"  # "native" | "openrouter" | "ofox"
     model: str = "gemini-3.5-flash"
     fallbacks: list[str] = field(default_factory=list)
     temperature: float = 0.4
@@ -42,6 +42,10 @@ def spec_from_env() -> ModelSpec:
     default_model = "gemini-3.5-flash"
     if route == "native" and os.getenv("ANTHROPIC_API_KEY"):
         default_model = "claude-sonnet-4-6"
+    elif route == "ofox":
+        # Ofox uses provider/model ids; default to the cheap Gemini-family tier
+        # (dramatically cheaper output than 3.5-flash). Override via DOTHESIS_AGENT_MODEL.
+        default_model = "google/gemini-2.5-flash"
     return ModelSpec(
         route=route,
         model=os.getenv("DOTHESIS_AGENT_MODEL", default_model),
@@ -61,6 +65,8 @@ def make_model(spec: ModelSpec | None = None):
         return _native(spec)
     if spec.route == "openrouter":
         return _openrouter(spec)  # Task 2
+    if spec.route == "ofox":
+        return _ofox(spec)
     raise ValueError(f"unknown model route: {spec.route!r}")
 
 
@@ -108,6 +114,40 @@ def _openrouter(spec: ModelSpec):
                 "allow_fallbacks": True,
             },
         },
+        # OpenAI-compatible streaming reports usage only when asked — the credit
+        # ledger reads it via extract_usage, so keep this on.
+        model_kwargs={"stream_options": {"include_usage": True}},
+    )
+
+
+def _ofox(spec: ModelSpec):
+    """OpenAI-compatible client pointed at Ofox (https://api.ofox.ai/v1).
+
+    Ofox is a unified gateway (one key -> Claude/GPT/Gemini/Qwen/DeepSeek/…) at
+    ~provider rates, so it's the cost/quality lever: route to a cheaper model
+    (e.g. google/gemini-2.5-flash: ~15x cheaper output than 3.5-flash) or a
+    stronger/Vietnamese-better one (qwen) without a native SDK per provider.
+    Model IDs are `provider/model`, e.g. "google/gemini-2.5-flash".
+
+    CACHING CAVEAT: Ofox documents caching on the provider-NATIVE protocol, not
+    this OpenAI-compatible endpoint — so the big system-prompt + skills prefix may
+    NOT get the ~90% input cache discount here. That's usually fine because DoThesis
+    cost is output-dominated (uncacheable anyway), but verify `cached_*` token
+    counts on a real response; if input caching turns out to matter for your model,
+    use route=native for that provider instead. Key check runs before the (lazy)
+    langchain_openai import so a misconfig fails fast, never mid-turn.
+    """
+    key = os.getenv("OFOX_API_KEY", "")
+    if not key:
+        raise RuntimeError("ofox route needs OFOX_API_KEY (set it or use route=native)")
+    from langchain_openai import ChatOpenAI  # noqa: PLC0415 — gateway-only, lazy
+
+    return ChatOpenAI(
+        model=spec.model,  # provider/model, e.g. "google/gemini-2.5-flash"
+        base_url="https://api.ofox.ai/v1",
+        api_key=key,
+        temperature=spec.temperature,
+        max_tokens=spec.max_tokens,
         # OpenAI-compatible streaming reports usage only when asked — the credit
         # ledger reads it via extract_usage, so keep this on.
         model_kwargs={"stream_options": {"include_usage": True}},
