@@ -98,3 +98,49 @@ def test_field_it_rejects_non_owner(monkeypatch):
                 authorize=_deny)
     r = c.post("/api/v1/projects/abc/field-it", json={"instrument": {"items": []}})
     assert r.status_code == 403
+
+
+# --- Task 4: results ingestion ---------------------------------------------
+
+def test_results_ingest_writes_m4(monkeypatch):
+    written = {}
+    monkeypatch.setattr(fi, "_store_for", lambda pid: type("S", (), {
+        "set_field_it_results": lambda self, data: written.update(data)})())
+    c = _client(monkeypatch)
+    r = c.post("/api/v1/projects/abc/field-it/results",
+               json={"collection_id": "c1", "responses": [{"q1": 5}],
+                     "quality": [{"straight_lined": False, "duration_s": 220}]})
+    assert r.status_code == 200 and written["collection_id"] == "c1"
+
+
+def test_results_bad_payload_is_4xx(monkeypatch):
+    # Missing collection_id / responses → pydantic 422 (auth passes first).
+    c = _client(monkeypatch)
+    assert c.post("/api/v1/projects/abc/field-it/results", json={"nope": 1}).status_code == 422
+
+
+def test_results_ingest_rejects_non_owner(monkeypatch):
+    def _deny(db, user, pid):
+        raise HTTPException(403, detail={"error": {"code": "forbidden"}})
+
+    c = _client(monkeypatch, authorize=_deny)
+    r = c.post("/api/v1/projects/abc/field-it/results",
+               json={"collection_id": "c1", "responses": [{"q1": 5}]})
+    assert r.status_code == 403
+
+
+def test_set_field_it_results_round_trips_and_is_m4_owned(tmp_path):
+    # The store method persists into the flat contextStore, and the three keys
+    # are M4-owned so DbProjectStateStore._save carries them into m4_analysis
+    # (closing the prod persistence gap). Ingesting data must NOT move status.
+    from agent.state import SLICE_OWNERSHIP, ProjectStateStore
+    store = ProjectStateStore(tmp_path)
+    store.set_field_it_results({"collection_id": "c1", "responses": [{"q1": 5}],
+                                "quality": [{"straight_lined": False}]})
+    cs = store.load()["contextStore"]
+    assert cs["field_it_collection_id"] == "c1"
+    assert cs["field_it_responses"] == [{"q1": 5}]
+    assert cs["field_it_quality"] == [{"straight_lined": False}]
+    for k in ("field_it_collection_id", "field_it_responses", "field_it_quality"):
+        assert k in SLICE_OWNERSHIP["M4"]
+    assert store.load()["status"]["M4"] == "locked"

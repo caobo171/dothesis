@@ -109,3 +109,30 @@ async def create_field_it(project_id: str, body: FieldItIn,
             questions=[{"text": i.get("text", ""), "type": "paragraph"} for i in items],
             description=consent)
         return {"provider": "google_form_fallback", "fallback_google_script": script}
+
+
+# --- Task 4: results ingestion → M4 ----------------------------------------
+
+class FieldItResultsIn(BaseModel):
+    collection_id: str
+    responses: list[dict]
+    quality: list[dict] = []
+
+
+@router.post("/projects/{project_id}/field-it/results")
+async def ingest_field_it_results(project_id: str, body: FieldItResultsIn,
+                                  user: User = Depends(current_user),
+                                  db: Session = Depends(db_session)):
+    """Ingest a fielded collection's structured responses + quality flags into M4.
+
+    Authed + ownership-checked — this writes into the project's M4 slice, so it
+    must never be an anonymous write. Pydantic makes a missing collection_id /
+    responses a 422. The store method writes only the M4 field-it keys (no
+    focus/status change); F8's Output Sanity Layer reads the quality flags."""
+    _authorize(db, user, project_id)
+    result = _store_for(project_id).set_field_it_results({
+        "collection_id": body.collection_id,
+        "responses": body.responses,
+        "quality": body.quality,
+    })
+    return {"ok": True, **(result or {})}

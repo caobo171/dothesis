@@ -29,7 +29,13 @@ SLICE_OWNERSHIP: dict[str, list[str]] = {
     # decisions), and preflight_check reads them to gate M3->M4 readiness.
     "M3": ["conceptual_model", "hypotheses", "methodology", "instrument",
            "sample_plan", "cmb_plan", "missing_data_plan"],
-    "M4": ["analysis_outline", "analysis_results"],
+    # field_it_* added for F7 results ingestion: fielded survey responses +
+    # quality flags land in M4 (where F8's Output Sanity Layer reads). Making
+    # them M4-owned is what lets DbProjectStateStore._save persist them into the
+    # m4_analysis column automatically — the same mechanism as analysis_results,
+    # so there is no Db-specific write path to forget (project_db_store_persistence_gap).
+    "M4": ["analysis_outline", "analysis_results",
+           "field_it_collection_id", "field_it_responses", "field_it_quality"],
     "M5": ["final_sections"],
 }
 
@@ -325,6 +331,25 @@ class ProjectStateStore:
         state["contextStore"]["institution_profile"] = prof
         self._save(state)
         return prof
+
+    # -- field-it results ingestion (F7) ----------------------------------
+    # Deliberately NOT commit_slice, same rationale as set_institution_profile:
+    # ingesting collected survey data is not a design decision, so it must not
+    # shift focus, flip module status, or flag M5 for review. The three keys are
+    # M4-owned (SLICE_OWNERSHIP["M4"]), so DbProjectStateStore._save lifts them
+    # into the m4_analysis column on the next save — the Output Sanity Layer (F8)
+    # reads the quality flags from there.
+    def set_field_it_results(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Write a fielded collection's raw responses + quality flags into M4."""
+        state = self.load()
+        cs = state["contextStore"]
+        cs["field_it_collection_id"] = data.get("collection_id")
+        cs["field_it_responses"] = data.get("responses") or []
+        cs["field_it_quality"] = data.get("quality") or []
+        self._save(state)
+        return {"collection_id": cs["field_it_collection_id"],
+                "n_responses": len(cs["field_it_responses"]),
+                "n_quality": len(cs["field_it_quality"])}
 
 
 def _validate_module(module: str) -> None:
