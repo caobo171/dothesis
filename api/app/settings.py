@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     # (POST /api/v1/partner/report). Set on both DoThesis and the calling
     # partner (e.g. Fillform). Empty disables the endpoint (401 on every call).
     partner_api_token: str = Field(alias="PARTNER_API_TOKEN", default="")
+    # F7 Field-It: the team's own survey rails. fillform (VN) / survify (intl).
+    # Empty base URL ⇒ the route always falls back to the Google Form script, so
+    # this is safe to ship before the provider REST contract is wired.
+    fillform_api_base: str = Field(alias="FILLFORM_API_BASE", default="")
+    fillform_api_token: str = Field(alias="FILLFORM_API_TOKEN", default="")
+    survify_api_base: str = Field(alias="SURVIFY_API_BASE", default="")
+    survify_api_token: str = Field(alias="SURVIFY_API_TOKEN", default="")
     langsmith_api_key: str | None = Field(alias="LANGSMITH_API_KEY", default=None)
     orchestrator_pg_pool_max: int = Field(alias="ORCHESTRATOR_PG_POOL_MAX", default=10)
     # Backend agent-quality analytics (F5). Empty key ⇒ app.analytics.emit no-ops,

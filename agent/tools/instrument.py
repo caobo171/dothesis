@@ -94,6 +94,50 @@ def audit_instrument(instrument: dict, hypotheses: list, constructs: list) -> st
                       ensure_ascii=False)
 
 
+def build_consent_notice(language: str = "en", institution: str = "", purpose: str = "") -> str:
+    """Deterministic informed-consent / data-privacy preamble for a survey.
+
+    Folded in from the old "F14 ethics" line (F0 correction #5): every fielded
+    instrument should open with a consent block — voluntary participation,
+    anonymity, data use, withdrawal, and a contact. Bilingual because the default
+    market is Vietnamese (project_sibling_products) with an English fallback for
+    the intl (survify) audience. Advisory content the student adapts to their
+    IRB/faculty rules; NOT legal advice.
+    """
+    vi = str(language).lower().startswith("vi")
+    who = institution or ("nhóm nghiên cứu" if vi else "the research team")
+    why = purpose or ("phục vụ mục đích học thuật" if vi else "academic research purposes")
+    if vi:
+        return (
+            "THÔNG BÁO ĐỒNG THUẬN THAM GIA\n"
+            f"Khảo sát này do {who} thực hiện, {why}.\n"
+            "• Tham gia hoàn toàn tự nguyện; bạn có thể dừng bất cứ lúc nào.\n"
+            "• Câu trả lời được ẩn danh và chỉ dùng cho mục đích nghiên cứu tổng hợp.\n"
+            "• Dữ liệu được lưu trữ bảo mật và không chia sẻ thông tin định danh.\n"
+            "• Bằng việc tiếp tục, bạn xác nhận đã đủ 18 tuổi và đồng ý tham gia."
+        )
+    return (
+        "INFORMED CONSENT NOTICE\n"
+        f"This survey is conducted by {who} for {why}.\n"
+        "- Participation is entirely voluntary; you may stop at any time.\n"
+        "- Your responses are anonymous and used only for aggregate research.\n"
+        "- Data is stored securely and no identifying information is shared.\n"
+        "- By continuing, you confirm you are 18+ and consent to participate."
+    )
+
+
+@tool
+def consent_notice(language: str = "en", institution: str = "", purpose: str = "") -> str:
+    """Generate an informed-consent / data-privacy preamble to place at the START
+    of a survey before fielding.
+
+    Covers voluntary participation, anonymity, data use, withdrawal, and consent.
+    Bilingual (Vietnamese when language starts with 'vi', else English). Advisory
+    ethics aid — adapt it to your institution's IRB/faculty requirements.
+    """
+    return build_consent_notice(language, institution, purpose)
+
+
 def make_sampling_plan_tool(store):
     """Wrap the sampling-plan computation as a LangChain tool bound to a store.
 

@@ -144,6 +144,7 @@ from agent.state import MODULES, ProjectStateStore
 from agent.tools.forms import make_google_form_script
 from agent.tools.instrument import (  # F7: Questionnaire Doctor + sampling plan
     audit_instrument,
+    consent_notice,
     make_sampling_plan_tool,
 )
 from agent.tools.output_parse import parse_output_table, parse_smartpls_export
@@ -481,6 +482,9 @@ def build_agent(
         # size. Store-bound so it persists the plan to the M3 sample_plan key
         # (shares the power helper with F8's methods pre-flight).
         make_sampling_plan_tool(store),
+        # F7: informed-consent / data-privacy preamble generator (bilingual) to
+        # open a survey with before fielding. Pure, no store needed.
+        consent_notice,
         *make_writing_tools(store),
     ]
 

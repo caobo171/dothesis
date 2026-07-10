@@ -135,6 +135,7 @@ def create_app() -> FastAPI:
         from .routers import uploads as uploads_router
         from .routers import import_route as import_router  # F12: mid-journey state import
         from .routers import roadmap as roadmap_router  # F2: derived coaching roadmap
+        from .routers import field_it as field_it_router  # F7: survey handoff + results ingestion
         app.include_router(chat_router.router, prefix="/api/v1")
         app.include_router(exports_router.router, prefix="/api/v1")  # SP6
         app.include_router(m5_editor_router.router, prefix="/api/v1")  # SP6.5
@@ -145,6 +146,9 @@ def create_app() -> FastAPI:
         app.include_router(import_router.router, prefix="/api/v1")
         # F2: chat-only coaching surface (uses chat_v3 workspace); orchestrator block.
         app.include_router(roadmap_router.router, prefix="/api/v1")
+        # F7: Field-It survey handoff + results ingestion (uses chat_v3 workspace
+        # + DbProjectStateStore); orchestrator block like the roadmap surface.
+        app.include_router(field_it_router.router, prefix="/api/v1")
 
     # F4: wire the cross-project advisor-theme distill hook. The agent tool
     # mark_feedback_addressed calls agent.memory_hook.distill_advisor_themes once
