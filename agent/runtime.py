@@ -139,6 +139,7 @@ from deepagents import create_deep_agent
 from deepagents.backends.composite import CompositeBackend
 from deepagents.backends.filesystem import FilesystemBackend
 
+from agent.preflight import make_preflight_tool
 from agent.state import MODULES, ProjectStateStore
 from agent.tools.forms import make_google_form_script
 from agent.tools.research import parse_reference, quick_sources, research_scout
@@ -456,6 +457,9 @@ def build_agent(
         research_scout,
         parse_reference,
         run_stats,
+        # F8: methods pre-flight — the M3->M4 readiness audit (advisory). Bound
+        # to the store so the agent can run it before kicking off M4 analysis.
+        make_preflight_tool(store),
         make_google_form_script,
         *make_writing_tools(store),
     ]

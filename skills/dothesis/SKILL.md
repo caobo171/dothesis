@@ -170,7 +170,7 @@ The user should never learn the words `commit_slice`, `final_sections`, or
 |---|---|---|
 | M1 | `research_title`, `research_questions` | — |
 | M2 | `literature_sources`, `research_gaps` | M1 |
-| M3 | `conceptual_model`, `hypotheses`, `methodology`, `instrument` | M1, M2 |
+| M3 | `conceptual_model`, `hypotheses`, `methodology`, `instrument`, `sample_plan`, `cmb_plan`, `missing_data_plan` | M1, M2 |
 | M4 | `analysis_outline`, `analysis_results` | M3 |
 | M5 | `final_sections` | M1–M4 (all) |
 

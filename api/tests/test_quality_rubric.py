@@ -86,6 +86,32 @@ def test_judge_dimension_survives_bad_json(monkeypatch):
     assert any("could not evaluate" in f["issue"].lower() for f in d["findings"])
 
 
+def test_preflight_dimension_flags_missing_design_items():
+    # A thesis whose M3 design skipped the pre-flight items (sample/CMB/missing-
+    # data plans) scores below 1.0 on the preflight dimension and surfaces the
+    # gaps as soft findings — advisory, never blocking (F8 Task 3).
+    from quality.rubric import preflight_dimension
+    d = preflight_dimension(_GOOD)  # _GOOD's m3_design has no sample_plan/cmb_plan
+    assert d["name"] == "preflight"
+    assert d["score"] < 1.0
+    assert d["findings"] and all(f["severity"] == "soft" for f in d["findings"])
+
+
+def test_preflight_dimension_clean_when_ready():
+    from quality.rubric import preflight_dimension
+    cs = {"m3_design": {"methodology": "PLS-SEM",
+                        "instrument": {"items": [{"reverse_coded": True}]},
+                        "sample_plan": {"target_n": 200}, "cmb_plan": "Harman",
+                        "missing_data_plan": "listwise"}}
+    d = preflight_dimension(cs)
+    assert d["score"] == 1.0 and d["findings"] == []
+
+
+def test_score_thesis_includes_preflight_dimension():
+    r = score_thesis(_GOOD)
+    assert any(d["name"] == "preflight" for d in r["dimensions"])
+
+
 def test_open_advisor_directive_is_hard_finding():
     fb = [{"id": "1", "chapter": "results", "issue": "Report effect sizes",
            "required_change": "add Cohen's f2", "status": "open"},

@@ -96,6 +96,26 @@ def results_validity_dimension(context_store: dict, method: str) -> dict:
             "findings": findings}
 
 
+def preflight_dimension(context_store: dict) -> dict:
+    """Methods pre-flight as a soft rubric dimension (F8 Task 3).
+
+    Decision: reuse the SAME pure check the agent's methods_preflight tool runs
+    (agent.preflight.preflight_check) so the rubric and the live coaching surface
+    can never disagree about what 'analysis-ready' means. Import is lazy + local
+    to keep quality import-light and avoid any agent<->quality load cycle
+    (agent.preflight is pure; quality.rubric only reaches into it here). Findings
+    are SOFT — a design gap is advisory, not a hard blocker on the thesis."""
+    from agent.preflight import preflight_check  # noqa: PLC0415
+    missing = preflight_check(context_store)
+    # Each missing item shaves 0.15 (plan-specified) so a couple of gaps still
+    # leaves a usable-but-flagged score; floored at 0 so it never goes negative.
+    score = max(0.0, 1.0 - 0.15 * len(missing))
+    findings = [{"issue": m, "fix": "Address this before running M4 analysis.",
+                 "chapter": "methodology", "severity": "soft"} for m in missing]
+    return {"name": "preflight", "weight": 0.10, "score": round(score, 3),
+            "findings": findings}
+
+
 def apply_institution_overlay(dims: list[dict], profile: dict | None,
                               context_store: dict) -> list[dict]:
     """Override dimension weights and add hard requirement findings. Pure over dims.
@@ -213,6 +233,9 @@ def score_thesis(context_store: dict, *, institution_profile: dict | None = None
     # their chapter. Read with an empty default so F3 works without F4.
     adv_dim, adv_summary = advisor_dimension(advisor_feedback or [])
     dims.append(adv_dim)
+    # Methods pre-flight: soft, design-readiness gaps (sample/CMB/missing-data
+    # plans) that should be caught before M4 — same check the live agent runs.
+    dims.append(preflight_dimension(context_store))
     # Institution overlay last — it can re-weight the dims above and add hard
     # requirements (min refs) before we compute overall/blocking.
     dims = apply_institution_overlay(dims, institution_profile, context_store)

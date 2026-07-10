@@ -48,9 +48,20 @@ exports), `describe`, `cronbach`, `efa`, `cfa_loadings`, `corr`, `regression`,
 Free-form code is not an op. If a needed analysis has no op, tell the user it needs
 to be added to the whitelist — do not improvise math in your head.
 
+## Pre-flight — run BEFORE any analysis (advisory)
+
+At the very start of the analysis pipeline, call `methods_preflight`. It audits
+the M3 design for the things that are fatal-but-cheap-to-fix before you touch the
+data: analysis method chosen, instrument built, sample size planned, reverse-coded
+items present, and common-method-bias + missing-data plans set. If it returns
+missing items, **surface them to the user and offer to fix them first** (loop back
+to M3 for the design gaps) — but this is advisory: never refuse to run M4 over it.
+If it comes back ready, say so briefly and continue to Detect.
+
 ## The pipeline
 
 ```
+0. pre-flight the M3 design               → methods_preflight (advisory)
 1. detect data type from upload         → run_stats(op="detect")
 2. propose analysis outline              → each step tied to an M3 hypothesis
 3. user confirms/edits → commit outline

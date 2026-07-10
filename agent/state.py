@@ -24,7 +24,11 @@ MODULES = ["M1", "M2", "M3", "M4", "M5"]
 SLICE_OWNERSHIP: dict[str, list[str]] = {
     "M1": ["research_title", "research_questions"],
     "M2": ["literature_sources", "research_gaps"],
-    "M3": ["conceptual_model", "hypotheses", "methodology", "instrument"],
+    # sample_plan / cmb_plan / missing_data_plan added for the F8 methods
+    # pre-flight: commit_slice must be able to WRITE them (they're M3 design
+    # decisions), and preflight_check reads them to gate M3->M4 readiness.
+    "M3": ["conceptual_model", "hypotheses", "methodology", "instrument",
+           "sample_plan", "cmb_plan", "missing_data_plan"],
     "M4": ["analysis_outline", "analysis_results"],
     "M5": ["final_sections"],
 }
