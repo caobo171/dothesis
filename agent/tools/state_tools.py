@@ -65,4 +65,20 @@ def make_state_tools(store: ProjectStateStore) -> list:
             return json.dumps({"error": str(e)})
         return json.dumps(result, ensure_ascii=False)
 
-    return [read_slice, commit_slice]
+    @tool
+    def flag_blocker(module: str, substep: str, title: str, why: str) -> str:
+        """Record a student-specific blocker under a roadmap sub-step (e.g. a
+        failed discriminant-validity check). Use ONLY for a concrete obstacle
+        that must be cleared before the student can proceed — not for normal
+        steps. Does NOT change module status. Returns the stored task (with id).
+        """
+        task = store.upsert_roadmap_task(
+            {"module": module, "substep": substep, "title": title, "why": why, "status": "open"})
+        return json.dumps(task, ensure_ascii=False)
+
+    @tool
+    def resolve_blocker(task_id: str) -> str:
+        """Mark a previously flagged blocker resolved once the student fixed it."""
+        return json.dumps({"resolved": store.resolve_roadmap_task(task_id)}, ensure_ascii=False)
+
+    return [read_slice, commit_slice, flag_blocker, resolve_blocker]
