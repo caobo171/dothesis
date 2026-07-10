@@ -171,6 +171,23 @@ def _judge_prompt(name: str, context_store: dict) -> str:
             f"DRAFT:\n{body}")
 
 
+def advisor_dimension(advisor_feedback: list[dict]) -> tuple[dict, dict]:
+    """Turn open professor directives into hard findings + a N-of-M summary.
+
+    Decision: advisor_feedback is read with an EMPTY DEFAULT ([]) — F3 does not
+    hard-depend on F4; with no feedback the dimension is a perfect 1.0 no-op."""
+    fb = advisor_feedback or []
+    open_items = [f for f in fb if f.get("status") == "open"]
+    summary = {"total": len(fb), "addressed": sum(1 for f in fb if f.get("status") == "addressed"),
+               "open": open_items}
+    findings = [{"issue": f"Advisor required (not yet addressed): {o.get('issue')}",
+                 "fix": o.get("required_change", "Address this advisor comment."),
+                 "chapter": o.get("chapter", "-"), "severity": "hard"} for o in open_items]
+    score = 1.0 if not fb else summary["addressed"] / len(fb)
+    return {"name": "advisor", "weight": 0.20, "score": round(score, 3),
+            "findings": findings}, summary
+
+
 def _weighted(dims: list[dict]) -> float:
     # Weights are illustrative and don't sum to 1; normalize by total weight so
     # institution overlays that change weights don't skew the 0..1 overall.
@@ -192,13 +209,17 @@ def score_thesis(context_store: dict, *, institution_profile: dict | None = None
                                 _judge_prompt("methodology", context_store), context_store))
     dims.append(judge_dimension("writing", 0.10,
                                 _judge_prompt("writing", context_store), context_store))
+    # Advisor-directive dim: open professor comments become hard findings on
+    # their chapter. Read with an empty default so F3 works without F4.
+    adv_dim, adv_summary = advisor_dimension(advisor_feedback or [])
+    dims.append(adv_dim)
     # Institution overlay last — it can re-weight the dims above and add hard
     # requirements (min refs) before we compute overall/blocking.
     dims = apply_institution_overlay(dims, institution_profile, context_store)
     blocking = [f["issue"] for d in dims for f in d["findings"] if f["severity"] == "hard"]
     return {
         "overall": _weighted(dims), "method": method, "dimensions": dims,
-        "advisor": {"total": 0, "addressed": 0, "open": []},
+        "advisor": adv_summary,
         "blocking": blocking,
     }
 
