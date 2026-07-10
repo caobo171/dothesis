@@ -20,3 +20,11 @@ def test_design_test_matrix_exists_and_referenced():
 def test_two_register_rule_present():
     skill = (ROOT / "skills/dothesis/SKILL.md").read_text().lower()
     assert "two-register" in skill or "two register" in skill
+
+
+def test_defense_skill_exists_and_wired():
+    # F6: the mock-committee drill skill exists, drives the committee-questions
+    # tool, and is routed from the root skill.
+    ds = ROOT / "skills/dothesis-defense/SKILL.md"
+    assert ds.exists() and "generate_committee_questions" in ds.read_text()
+    assert "defense" in (ROOT / "skills/dothesis/SKILL.md").read_text().lower()
