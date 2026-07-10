@@ -62,7 +62,7 @@ export default defineConfig({
     { name: "smoke", testMatch: /smoke\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
     {
       name: "journeys",
-      testMatch: /(onboarding|m1-to-m5|export|live-smoke)\.spec\.ts/,
+      testMatch: /(onboarding|m1-to-m5|export|roadmap|mid-journey-import|live-smoke)\.spec\.ts/,
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/user.json" },
     },

@@ -80,6 +80,12 @@ class SeedProjectBody(AuthedBody):
     slices: dict[str, dict] = {}
     # Modules to mark done (confirm_done=True on their commit).
     done: list[str] = []
+    # E2E-only: seed coaching keys (F2/F4) that live OUTSIDE the module slice map
+    # so a spec can exercise the roadmap/advisor surfacing without scripting a full
+    # agent turn. Written via the dedicated store paths (never commit_slice), so
+    # they don't shift focus/status. Keys: roadmap_tasks[], advisor_feedback[],
+    # institution_profile{}.
+    coaching: dict = {}
 
 
 @router.post("/seed-project")
@@ -120,6 +126,15 @@ def seed_project(body: SeedProjectBody,
         except (SliceOwnershipError, ValueError) as e:
             raise HTTPException(422, detail={"error": {"code": "bad_slice",
                                                        "message": str(e)}})
+    # Coaching keys (F2 roadmap_tasks / F4 advisor_feedback / institution_profile)
+    # via the dedicated store paths — these bypass commit_slice by design.
+    coaching = body.coaching or {}
+    for task in coaching.get("roadmap_tasks", []) or []:
+        store.upsert_roadmap_task(task)
+    for directive in coaching.get("advisor_feedback", []) or []:
+        store.upsert_advisor_feedback(directive)
+    if coaching.get("institution_profile"):
+        store.set_institution_profile(coaching["institution_profile"])
     return {"project_id": str(p.id), "thread_id": str(t.id)}
 
 
