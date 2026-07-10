@@ -59,7 +59,11 @@ export default defineConfig({
     // filters (--grep, file args) do NOT apply to dependency projects —
     // setup always runs in full, which the live tier's --grep relies on.
     { name: "setup", testMatch: /auth\.setup\.ts/ },
-    { name: "smoke", testMatch: /smoke\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
+    // `/smoke\.spec\.ts/` used to also match live-smoke.spec.ts, which then ran
+    // UNAUTHENTICATED here (no storageState) and false-failed in the live tier.
+    // Anchor to a path separator so only smoke.spec.ts matches; live-smoke runs
+    // in the authed `journeys` project.
+    { name: "smoke", testMatch: /\/smoke\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
     {
       name: "journeys",
       testMatch: /(onboarding|m1-to-m5|export|roadmap|mid-journey-import|defense|questionnaire|live-smoke)\.spec\.ts/,
@@ -102,7 +106,21 @@ export default defineConfig({
         DOTHESIS_TEST_SUPPORT: "1",
         // Mock model ONLY in the deterministic tier. Omit (not "") in live
         // mode so pydantic-settings never sees an empty-string bool.
-        ...(LIVE ? {} : {
+        // In LIVE mode, forward the real model routing from the shell so the
+        // live smoke exercises the ACTUAL configured deployment model (e.g.
+        // Ofox -> qwen), not a hardcoded default. Only defined keys are set
+        // (undefined ones are dropped by Playwright), so an env without these
+        // still falls back to the app's own defaults.
+        ...(LIVE ? {
+          DOTHESIS_MODEL_ROUTE: process.env.DOTHESIS_MODEL_ROUTE,
+          DOTHESIS_AGENT_MODEL: process.env.DOTHESIS_AGENT_MODEL,
+          ORCHESTRATOR_LLM_ROUTE: process.env.ORCHESTRATOR_LLM_ROUTE,
+          ORCHESTRATOR_LLM_MODEL: process.env.ORCHESTRATOR_LLM_MODEL,
+          OFOX_API_KEY: process.env.OFOX_API_KEY,
+          OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+          GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
+          GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+        } : {
           DOTHESIS_E2E_MOCK: "1",
           DOTHESIS_E2E_FIXTURES_DIR: fixturesDir,
         }),

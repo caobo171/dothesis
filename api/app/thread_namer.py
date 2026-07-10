@@ -68,12 +68,14 @@ def _from_llm(first_user_text: str | None) -> str | None:
     if not text:
         return None
     try:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-
+        from orchestrator.llm import get_orchestrator_llm
         from orchestrator.message_utils import text_of
 
-        llm = ChatGoogleGenerativeAI(
-            model=os.getenv("THREAD_NAMER_MODEL", "gemini-2.5-flash-lite"),
+        # Route through the shared factory so thread-naming follows the configured
+        # provider (native Gemini or Ofox). A hardcoded ChatGoogleGenerativeAI
+        # crashes when DOTHESIS_MODEL_ROUTE=ofox (no Google key) — found by the
+        # live E2E tier. Naming is a tiny call, so the route's default model is fine.
+        llm = get_orchestrator_llm(
             temperature=0.2,
             timeout=int(os.getenv("THREAD_NAMER_TIMEOUT", "12")),
         )
@@ -146,15 +148,13 @@ def _project_name_from_llm(first_user_text: str | None) -> str | None:
     if not text:
         return None
     try:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-
+        from orchestrator.llm import get_orchestrator_llm
         from orchestrator.message_utils import text_of
 
-        llm = ChatGoogleGenerativeAI(
-            # Per product call: name projects with gemini-2.5-flash (a notch
-            # above the flash-lite used for threads — the project title is the
-            # most visible label, worth the slightly better model).
-            model=os.getenv("PROJECT_NAMER_MODEL", "gemini-2.5-flash"),
+        # Route through the shared factory (see _from_llm) so project-naming
+        # follows the configured provider (native/Ofox) instead of a hardcoded
+        # Google client.
+        llm = get_orchestrator_llm(
             temperature=0.2,
             timeout=int(os.getenv("PROJECT_NAMER_TIMEOUT", "12")),
         )

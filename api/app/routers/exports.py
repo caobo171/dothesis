@@ -209,13 +209,12 @@ _COMPOSE_GUIDE = {
 
 def _llm_text(prompt: str) -> str:
     """Single LLM call → plain text (flattens Gemini 3.x list content)."""
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    llm = ChatGoogleGenerativeAI(
-        # Same env var + default as the deep agent (agent/runtime.py) so the
-        # export composer's fallback stays on the 3.5-flash family too.
-        model=os.getenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash"),
-        temperature=0.3, timeout=70,
-    )
+    from orchestrator.llm import get_orchestrator_llm
+    # Route through the shared factory so the export composer follows the
+    # configured provider (native/Ofox) instead of a hardcoded Google client —
+    # a hardcoded ChatGoogleGenerativeAI + a provider/model id (e.g. Ofox's
+    # bailian/qwen-plus) would crash. Found by the live E2E tier.
+    llm = get_orchestrator_llm(temperature=0.3, timeout=70)
     msg = llm.invoke(prompt)
     c = getattr(msg, "content", "")
     if isinstance(c, list):
