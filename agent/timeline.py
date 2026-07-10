@@ -51,3 +51,47 @@ def build_timeline(defense_date: date, method: str, target_n: int, today: date) 
         cursor = end
     return {"milestones": milestones, "data_collection_weeks": coll,
             "total_weeks": total, "feasible": start >= today}
+
+
+def timeline_status(context_store_state: dict, today: date) -> dict:
+    """Compare the student's real roadmap position (F2 focus) against the planned
+    milestone window. `context_store_state` is the full state dict
+    ({contextStore, status, focus}). Returns {} when there is no timeline
+    (null-safe). Otherwise {expected_phase, actual_phase, weeks_behind, this_week,
+    next_milestone, on_track}."""
+    cs = context_store_state.get("contextStore") or {}
+    tl = cs.get("thesis_timeline") or {}
+    ms = tl.get("milestones") or []
+    if not ms:
+        return {}
+
+    # Expected phase = the milestone whose window contains today, else the last
+    # one already past (so a student "between" phases is measured against the
+    # phase they should have reached).
+    iso = today.isoformat()
+    expected = ms[0]
+    for m in ms:
+        if m["start"] <= iso <= m["end"] or m["end"] <= iso:
+            expected = m
+
+    # Actual phase = the project's live focus (F2).
+    actual = context_store_state.get("focus") or "M1"
+    exp_i = _ORDER.index(expected["module"]) if expected["module"] in _ORDER else 0
+    act_i = _ORDER.index(actual) if actual in _ORDER else 0
+    behind_phases = max(0, exp_i - act_i)
+
+    # Weeks-behind: sum the planned weeks across the phase span the student still
+    # has to traverse. F0 correction: count act_i..exp_i INCLUSIVE so the
+    # EXPECTED milestone's own weeks are not excluded (the plan's `< exp_i` bound
+    # dropped the expected phase, so a single-milestone list reported 0 behind).
+    # Guarded by behind_phases so an on-track/ahead student is never flagged.
+    weeks_behind = 0
+    if behind_phases:
+        for m in ms:
+            idx = _ORDER.index(m["module"]) if m["module"] in _ORDER else -1
+            if act_i <= idx <= exp_i:
+                weeks_behind += m.get("weeks", 1)
+
+    return {"expected_phase": expected["module"], "actual_phase": actual,
+            "weeks_behind": weeks_behind, "this_week": expected["label"],
+            "next_milestone": expected, "on_track": weeks_behind == 0}
