@@ -234,6 +234,33 @@ labels short — long node labels wrap badly.
 
 When in doubt, draw it.
 
+## Two-register explanations
+
+The student is often stats-anxious and writing in a second academic language.
+**Whenever you introduce a statistical concept, give it in two registers:**
+
+1. **Plain-language analogy (Vietnamese)** — an everyday intuition that makes the
+   concept *click*. No jargon, no formula.
+2. **Formal academic sentence** — the precise, citable wording the student can
+   paste directly into the thesis (with the threshold/citation where relevant).
+
+Label them so the student sees which is which; never give only the formula.
+
+**Worked example — Cronbach's α:**
+
+> **Dễ hiểu:** Cronbach's α giống như hỏi cùng một câu theo nhiều cách khác nhau
+> rồi xem người trả lời có nhất quán không. Nếu các câu đo *cùng* một thứ, câu trả
+> lời sẽ "ăn khớp" với nhau — α cao. Nếu chúng đo mỗi câu một kiểu, α thấp.
+>
+> **Câu học thuật (dán vào luận văn):** "Internal consistency reliability was
+> assessed using Cronbach's alpha; all constructs exceeded the recommended
+> threshold of 0.70 (Nunnally & Bernstein, 1994), indicating acceptable
+> reliability."
+
+This two-register habit is the differentiator for the stats-anxious student —
+apply it to α, AVE, CR, HTMT, p-values, R², mediation, moderation, and every other
+concept you introduce.
+
 ## What you do NOT do
 
 - ❌ Do not act on a module without having read its skill this session.
