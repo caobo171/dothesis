@@ -1,0 +1,10 @@
+{
+  "scenario": "onboarding",
+  "entry": "/bootstrap",
+  "steps": [
+    {
+      "expect_user": "/bootstrap",
+      "response": "I read your note. Here is where your thesis stands.\n\n**Detected topic:** The impact of TikTok livestream shopping on Gen Z purchase intention in Hanoi.\n\n- **M1 Topic** — a clear draft topic is present.\n- **M2 Literature** — nothing collected yet.\n- **M3 Design** — no conceptual model or hypotheses yet.\n- **M4 Analysis** — survey data mentioned but not analyzed.\n- **M5 Writing** — not started.\n\nWhere would you like to begin?\n\n[OPTIONS] Refine my topic (M1) | Find literature (M2) | Design the study (M3)"
+    }
+  ]
+}

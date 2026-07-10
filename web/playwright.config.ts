@@ -12,6 +12,18 @@ const WEB_URL = `http://localhost:${WEB_PORT}`;
 const apiDir = path.resolve(__dirname, "../api");
 const fixturesDir = path.resolve(__dirname, "e2e/fixtures");
 const workRoot = path.resolve(__dirname, "e2e/.work");
+// Repo root of the checkout Playwright is launched from. This is deliberately
+// put on the API's PYTHONPATH below: `pip install -e` registers the
+// `dothesis_agent`/`dothesis_orchestrator` packages against ONE checkout's path
+// (the main clone), so when the harness runs from a git worktree the uvicorn
+// process would import a STALE `agent/` from the main clone — silently missing
+// the fixture-mock hook (`DOTHESIS_E2E_MOCK` in agent/runtime._default_model)
+// and any other worktree-only agent change. `app.*` already resolves correctly
+// (it's found via the API's cwd on sys.path), but the sibling `agent`/
+// `orchestrator` packages do not — hence pinning PYTHONPATH to THIS checkout so
+// PathFinder wins over the editable-install finder. No-op when the worktree and
+// the editable install happen to be the same path (a fresh CI clone).
+const repoRoot = path.resolve(__dirname, "..");
 
 // Live tier (nightly): real model, no fixture mock — but the test-support
 // router stays on because the live smoke still needs seeded users.
@@ -77,6 +89,12 @@ export default defineConfig({
       env: {
         DATABASE_URL: process.env.DATABASE_URL,
         SESSION_SECRET: "dothesis-e2e-secret",
+        // Force the sibling `agent`/`orchestrator` packages to load from THIS
+        // checkout, not whatever clone `pip install -e` was originally run
+        // against. Without this, a worktree run imports a stale main-clone
+        // `agent/` that lacks the DOTHESIS_E2E_MOCK hook, so every fixture turn
+        // builds a real model and 500s. See repoRoot note above.
+        PYTHONPATH: repoRoot,
         // Chat/exports/uploads routers only mount when this is set
         // (api/app/main.py:create_app).
         ORCHESTRATOR_ENABLED: "true",
