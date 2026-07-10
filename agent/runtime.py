@@ -520,22 +520,12 @@ def _default_model():
     if os.getenv("DOTHESIS_E2E_MOCK") == "1":
         from agent.testing.fake_model import FakeChatModel
         return FakeChatModel.from_fixtures_dir(os.environ["DOTHESIS_E2E_FIXTURES_DIR"])
-    if os.getenv("ANTHROPIC_API_KEY"):
-        from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(
-            model=os.getenv("DOTHESIS_AGENT_MODEL", "claude-sonnet-4-6"),
-            max_tokens=8_000,
-        )
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    # Default to gemini-3.5-flash (Gemini 3 family): stronger tool-use /
-    # instruction-following than 2.5-flash, so the agent reliably emits the
-    # [OPTIONS]/[PAPERS] UI markers the chat surface depends on. The hardcoded
-    # default matches DOTHESIS_AGENT_MODEL in .env so the model stays 3.5 even
-    # when the env var is absent (tests, CLI, a fresh deploy).
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash"),
-        temperature=0.4,
-    )
+    # F10: provider selection now lives in the make_model factory (native route
+    # preserves prompt caching; openrouter adds a fallback cascade). With no new
+    # env this returns the exact same client as before — gemini-3.5-flash @ 0.4,
+    # or ChatAnthropic(claude-sonnet-4-6, max_tokens=8000) when a key is set.
+    from agent.model_factory import make_model
+    return make_model()
 
 
 def _state_header(store: ProjectStateStore | None) -> str:
