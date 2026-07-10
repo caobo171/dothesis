@@ -73,6 +73,12 @@ async def create_partner_report(
     # Optional free-text context the end user typed to steer the writing.
     notes: str | None = Form(None),
     language: str = Form("en"),
+    # Optional caller-supplied M1/M2/M3 modules as JSON strings (the input
+    # contract). Each present one is used verbatim by the service; missing ones
+    # are generated. Sent as form fields so they ride alongside the file upload.
+    m1: str | None = Form(None),
+    m2: str | None = Form(None),
+    m3: str | None = Form(None),
     x_partner_token: str | None = Header(None, alias="X-Partner-Token"),
 ):
     _require_partner(x_partner_token)
@@ -96,6 +102,24 @@ async def create_partner_report(
 
     chapter_list = [c.strip() for c in chapters.split(",") if c.strip()] if chapters else None
 
+    # Parse each optional module JSON up front so a malformed shape is a clean
+    # 422 (never a silent drop / silent overwrite of a caller-provided module).
+    import json
+
+    def _parse(name, raw):
+        if not raw:
+            return None
+        try:
+            val = json.loads(raw)
+        except json.JSONDecodeError:
+            raise HTTPException(422, detail={"error": {"code": "bad_module_json",
+                               "message": f"{name} must be valid JSON"}})
+        if not isinstance(val, dict):
+            raise HTTPException(422, detail={"error": {"code": "bad_module_json",
+                               "message": f"{name} must be a JSON object"}})
+        return val
+    m1_d, m2_d, m3_d = _parse("m1", m1), _parse("m2", m2), _parse("m3", m3)
+
     try:
         # Blocking (pdfminer + LLM compose + LibreOffice render) — off the loop.
         result = await run_in_threadpool(
@@ -108,6 +132,9 @@ async def create_partner_report(
             title=title,
             notes=notes,
             language=language,
+            m1=m1_d,
+            m2=m2_d,
+            m3=m3_d,
         )
     except ReportError as e:
         # bad_depth / bad_chapters / no_extractable_text -> 422; compose_failed -> 502.

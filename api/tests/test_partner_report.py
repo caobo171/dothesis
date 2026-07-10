@@ -74,6 +74,27 @@ def test_happy_path_returns_urls_and_branding(client, monkeypatch):
     assert body["pages"] == 3
 
 
+def test_router_passes_optional_modules_through(client, monkeypatch):
+    captured = {}
+
+    def fake(*a, **k):
+        captured.update(k)
+        return {"pages": 1, "depth": "analysis_report", "chapters": ["results"],
+                "sections": ["R"], "pdf_url": "u", "docx_url": "u"}
+    monkeypatch.setattr(router_mod, "generate_partner_report", fake)
+
+    r = client.post(
+        "/api/v1/partner/report",
+        headers={"X-Partner-Token": TOKEN},
+        files={"file": ("a.pdf", io.BytesIO(b"%PDF-1.4 x"), "application/pdf")},
+        data={"depth": "analysis_report", "language": "en",
+              "m1": '{"research_title": "Given"}'},
+    )
+    assert r.status_code == 200
+    assert captured["m1"] == {"research_title": "Given"}
+    assert captured["m2"] is None and captured["m3"] is None
+
+
 def test_no_extractable_text_is_422(client, monkeypatch):
     def boom(*a, **k):
         raise ReportError("no_extractable_text", "image-only scan")
