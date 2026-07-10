@@ -10,6 +10,15 @@ import { tokenStore } from "@/app/lib/tokenStore";
 import { stashAnalyzeIntent, type AnalyzeAttachment } from "@/app/lib/bootstrap-payload";
 import { Button } from "@/app/components/ui/button";
 import { Textarea } from "@/app/components/ui/textarea";
+import { ImportSummary } from "@/app/components/chat/ImportSummary";
+
+// Shape of POST /projects/{id}/mid-journey-import (F12).
+type ImportResult = {
+  imported: string[];
+  ambiguous: string[];
+  unreadable: string[];
+  focus: string;
+};
 
 /**
  * /new — drop-first onboarding.
@@ -40,6 +49,12 @@ export default function NewThesisPage() {
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // F12: when the user drops files, we run a server-side import and show an
+  // activation summary ("here's where you are, next do X") before chat instead
+  // of firing a blind bootstrap turn. Note-only (describe-it) keeps the old
+  // straight-to-chat path — see analyze().
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importedProjectId, setImportedProjectId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Setup defaults still come from the user's cross-project memory (/me/prefs)
@@ -131,6 +146,25 @@ export default function NewThesisPage() {
         attachments.push(await uploadOne(newId, files[i]));
       }
 
+      // F12: if the student dropped real files, import them server-side
+      // (deterministic classify → infer → commit in MODULES order → focus on
+      // the first not-imported module) and show the activation summary. The
+      // note-only "describe it" path has nothing to import, so it keeps the
+      // original bootstrap-turn analysis flow (and is what the onboarding E2E
+      // exercises).
+      if (files.length > 0) {
+        setStatus("Reading your work…");
+        const res = (await apiFetch(`/projects/${newId}/mid-journey-import`, {
+          method: "POST",
+          body: {},
+        })) as ImportResult;
+        setImportResult(res);
+        setImportedProjectId(newId);
+        setSubmitting(false);
+        setStatus(null);
+        return;
+      }
+
       stashAnalyzeIntent(newId, { note, attachments });
       router.push(`/chat/projects/${newId}?analyzing=1`);
     } catch (e: any) {
@@ -140,6 +174,27 @@ export default function NewThesisPage() {
       setStatus(null);
     }
   };
+
+  // F12: once the import lands, the page becomes the activation summary — the
+  // first-session payoff — with a CTA into chat at the imported focus module.
+  if (importResult && importedProjectId) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="text-center mb-7">
+          <h1 className="m-0 text-[26px] font-extrabold font-serif tracking-tight text-ink-900">
+            Here&apos;s where you are
+          </h1>
+        </div>
+        <ImportSummary
+          imported={importResult.imported}
+          focus={importResult.focus}
+          ambiguous={importResult.ambiguous}
+          unreadable={importResult.unreadable}
+          onContinue={() => router.push(`/chat/projects/${importedProjectId}`)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto">
