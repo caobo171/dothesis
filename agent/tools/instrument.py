@@ -15,8 +15,13 @@ preflight uses.
 from __future__ import annotations
 
 import json
+import logging
 
 from langchain_core.tools import tool
+
+from agent.sampling import target_sample_n
+
+logger = logging.getLogger(__name__)
 
 # Coordinating conjunctions (EN + VI) that usually mean an item bundles two
 # ideas into one question ("fast AND reliable") — a double-barreled item the
@@ -87,3 +92,52 @@ def audit_instrument(instrument: dict, hypotheses: list, constructs: list) -> st
     """
     return json.dumps(audit_instrument_findings(instrument, hypotheses, constructs),
                       ensure_ascii=False)
+
+
+def make_sampling_plan_tool(store):
+    """Wrap the sampling-plan computation as a LangChain tool bound to a store.
+
+    Factory (closes over `store`) — mirrors make_preflight_tool. Two F0
+    corrections drive this shape:
+      1. The tool READS the project's live flat contextStore from the store; it
+         does NOT take a model-supplied `context_store` argument (models can't be
+         trusted to pass real state).
+      2. The computed plan is PERSISTED to the owned M3 `sample_plan` key via
+         commit_slice — the one write path — so it survives the turn and the
+         preflight / field-it surfaces can read a real planned target_n. Writing
+         it as an M3 design decision (not ephemeral coaching) is correct: a
+         sample plan IS a design choice, and committing it flags M4 for review.
+    """
+    @tool
+    def sampling_plan() -> str:
+        """Compute a defensible target sample size + collection timeline from the
+        study's method and model size, and record it in the design.
+
+        Reads the project's chosen methodology, conceptual model, and instrument;
+        applies the 10x / cases-per-predictor rules; and saves the plan so the
+        methods pre-flight and Field-It handoff can use it. Returns the plan JSON.
+        """
+        cs = (store.load() or {}).get("contextStore") or {}
+        method = cs.get("methodology") or "regression"
+        n_paths = len((cs.get("conceptual_model") or {}).get("paths") or [])
+        n_ind = len((cs.get("instrument") or {}).get("items") or [])
+        n, rule = target_sample_n(method, n_paths, n_ind)
+        plan = {
+            "target_n": n,
+            "method_rule": rule,
+            "screening": "Add a screening question to exclude ineligible respondents.",
+            # A bigger target needs a longer field window; keep it coarse.
+            "timeline_weeks": 3 if n <= 250 else 4,
+            "rationale": f"{rule} With {n_paths} structural paths and {n_ind} items.",
+        }
+        # Persist as an M3 design decision (F0 correction). Best-effort: a store
+        # write failure must not lose the model the computed plan, so we still
+        # return it — the persistence is advisory plumbing, not the deliverable.
+        try:
+            store.commit_slice("M3", {"sample_plan": plan},
+                               reason="sampling_plan: computed target sample size")
+        except Exception:
+            logger.exception("sampling_plan: failed to persist sample_plan to store")
+        return json.dumps(plan, ensure_ascii=False)
+
+    return sampling_plan

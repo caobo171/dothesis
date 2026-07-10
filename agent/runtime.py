@@ -142,7 +142,10 @@ from deepagents.backends.filesystem import FilesystemBackend
 from agent.preflight import make_preflight_tool
 from agent.state import MODULES, ProjectStateStore
 from agent.tools.forms import make_google_form_script
-from agent.tools.instrument import audit_instrument  # F7: Questionnaire Doctor
+from agent.tools.instrument import (  # F7: Questionnaire Doctor + sampling plan
+    audit_instrument,
+    make_sampling_plan_tool,
+)
 from agent.tools.output_parse import parse_output_table, parse_smartpls_export
 from agent.tools.research import parse_reference, quick_sources, research_scout
 from agent.tools.state_tools import make_state_tools
@@ -474,6 +477,10 @@ def build_agent(
         # fielding (double-barreled/leading items, reverse-coded coverage,
         # attention checks, scale-provenance skeleton). Pure, no store needed.
         audit_instrument,
+        # F7: sampling plan — defensible target n + timeline from method/model
+        # size. Store-bound so it persists the plan to the M3 sample_plan key
+        # (shares the power helper with F8's methods pre-flight).
+        make_sampling_plan_tool(store),
         *make_writing_tools(store),
     ]
 
