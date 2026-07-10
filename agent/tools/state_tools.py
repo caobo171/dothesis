@@ -13,6 +13,15 @@ from langchain_core.tools import tool
 
 from agent.state import ProjectStateStore, SliceOwnershipError
 
+# An advisor directive names a thesis chapter; map it to the DoThesis module that
+# owns that chapter's work so the raised blocker lands on the right roadmap step.
+_CHAPTER_TO_MODULE = {"intro": "M5", "lit_review": "M2", "methodology": "M3",
+                      "results": "M4", "discussion": "M5", "conclusion": "M5"}
+
+
+def _chapter_to_module(chapter: str | None) -> str:
+    return _CHAPTER_TO_MODULE.get((chapter or "").lower(), "M5")
+
 
 def make_state_tools(store: ProjectStateStore) -> list:
     @tool
@@ -81,4 +90,45 @@ def make_state_tools(store: ProjectStateStore) -> list:
         """Mark a previously flagged blocker resolved once the student fixed it."""
         return json.dumps({"resolved": store.resolve_roadmap_task(task_id)}, ensure_ascii=False)
 
-    return [read_slice, commit_slice, flag_blocker, resolve_blocker]
+    @tool
+    def ingest_advisor_feedback(feedback_text: str) -> str:
+        """Record a thesis supervisor's feedback. Extracts each requested change into a
+        tracked directive, persists it, and raises a roadmap blocker per open item so the
+        student is led to address it. Use whenever the user pastes/relays professor comments.
+        """
+        from agent.feedback import extract_directives  # noqa: PLC0415
+        directives = extract_directives(feedback_text)
+        added = 0
+        for d in directives:
+            stored = store.upsert_advisor_feedback(d)
+            # Each open directive becomes a blocker (F2), linked by feedback_id so
+            # mark_feedback_addressed can clear exactly the right one.
+            store.upsert_roadmap_task({
+                "module": _chapter_to_module(stored.get("chapter")),
+                "substep": "", "title": f"Advisor: {stored.get('issue')}",
+                "why": stored.get("required_change") or "Address this advisor comment.",
+                "status": "open", "feedback_id": stored["id"]})
+            added += 1
+        return json.dumps({"added": added}, ensure_ascii=False)
+
+    @tool
+    def mark_feedback_addressed(feedback_id: str) -> str:
+        """Mark an advisor directive addressed once the revision is done; clears its blocker."""
+        ok = store.mark_advisor_feedback_addressed(feedback_id)
+        for t in (store.load()["contextStore"].get("roadmap_tasks") or []):
+            if t.get("feedback_id") == feedback_id:
+                store.resolve_roadmap_task(t["id"])
+        # When every directive is now addressed, distill recurring themes into
+        # cross-project memory (F0 correction: trigger lives here). Best-effort via
+        # the app-wired hook — the agent layer must not import app.user_memory.
+        fb = store.load()["contextStore"].get("advisor_feedback") or []
+        if fb and all(d.get("status") == "addressed" for d in fb):
+            try:
+                from agent.memory_hook import distill_advisor_themes  # noqa: PLC0415
+                distill_advisor_themes(store, fb)
+            except Exception:
+                pass  # distillation is a nicety; never break the turn
+        return json.dumps({"addressed": ok}, ensure_ascii=False)
+
+    return [read_slice, commit_slice, flag_blocker, resolve_blocker,
+            ingest_advisor_feedback, mark_feedback_addressed]
