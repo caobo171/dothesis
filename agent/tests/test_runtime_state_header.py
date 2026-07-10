@@ -10,10 +10,32 @@ from agent.state import ProjectStateStore
 
 def test_header_all_locked_for_fresh_project(tmp_path):
     # Fresh project → authoritative "everything locked" context (accurate for
-    # the M1 onboarding turn; not noise).
+    # the M1 onboarding turn; not noise). The state line is now the FIRST line;
+    # a derived [NEXT] line follows it (F2 Task 5).
     store = ProjectStateStore(tmp_path)
     header = _state_header(store)
-    assert header == "[PROJECT STATE] focus=None | M1:locked M2:locked M3:locked M4:locked M5:locked"
+    first_line = header.splitlines()[0]
+    assert first_line == "[PROJECT STATE] focus=None | M1:locked M2:locked M3:locked M4:locked M5:locked"
+
+
+def test_header_includes_next_line_midproject(tmp_path):
+    # Mid-project (M1 has a title, needs questions) → the [NEXT] line leads to
+    # the derived next sub-step so the agent closes the turn pointing there.
+    store = ProjectStateStore(tmp_path)
+    store.commit_slice("M1", {"research_title": "T"}, reason="r")
+    header = _state_header(store)
+    assert "[PROJECT STATE]" in header
+    assert "[NEXT]" in header
+    assert "derive_questions" in header or "research question" in header.lower()
+
+
+def test_header_survives_load_failure():
+    # A roadmap/store hiccup must never break the turn — omit the header instead.
+    class Boom:
+        def load(self):
+            raise RuntimeError("db down")
+
+    assert _state_header(Boom()) == ""
 
 
 def test_header_none_store():

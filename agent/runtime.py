@@ -188,6 +188,11 @@ turn. It overrides anything you remember. Rules:
   do the work and `commit_slice` it — don't just declare it done.
 - Strip the `[PROJECT STATE]` marker from your reply — it's a wire-format
   marker, not something the user wrote.
+- The `[NEXT]` line (when present, right after `[PROJECT STATE]`) is the single
+  most useful next step, computed from real project state. Unless the user
+  redirects, CLOSE every turn by leading toward it: name what to do next and
+  why, and offer its options with the `[OPTIONS]` marker. Never invent a
+  different "next step" than the one derived. Strip `[NEXT]` from your reply too.
 
 ## Attachments — `[ATTACHED]` prefix
 
@@ -519,7 +524,18 @@ def _state_header(store: ProjectStateStore | None) -> str:
     if not status:
         return ""
     pairs = " ".join(f"{m}:{status.get(m, 'locked')}" for m in MODULES)
-    return f"[PROJECT STATE] focus={state.get('focus')} | {pairs}"
+    header = f"[PROJECT STATE] focus={state.get('focus')} | {pairs}"
+    # Append the single next action so the model leads from ground truth every
+    # turn (same rationale as the state line: it can't narrate its own position).
+    try:
+        from agent.roadmap import next_action  # local import: avoid load cycle
+        na = next_action(state)
+        if na:
+            header += (f"\n[NEXT] {na['module']}/{na.get('substep') or '-'} — "
+                       f"{na['title']} :: {na['why']}")
+    except Exception:
+        pass  # a roadmap hiccup must never break the turn
+    return header
 
 
 async def stream_turn(
