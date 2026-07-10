@@ -126,6 +126,7 @@ export function ContextPanel({
           <>
             <CtxSection
               label="M1 · Topic & questions"
+              moduleId="M1"
               status={sectionStatus("M1", contextStore.m1_topic)}
             >
               <M1Body data={contextStore.m1_topic} />
@@ -133,6 +134,7 @@ export function ContextPanel({
 
             <CtxSection
               label="M2 · Gaps & hypotheses"
+              moduleId="M2"
               status={sectionStatus("M2", contextStore.m2_literature)}
             >
               <M2Body data={contextStore.m2_literature} />
@@ -140,6 +142,7 @@ export function ContextPanel({
 
             <CtxSection
               label="M3 · Methodology & model"
+              moduleId="M3"
               status={sectionStatus("M3", contextStore.m3_design)}
             >
               <M3Body data={contextStore.m3_design} />
@@ -147,6 +150,7 @@ export function ContextPanel({
 
             <CtxSection
               label="M4 · Analysis"
+              moduleId="M4"
               status={sectionStatus("M4", contextStore.m4_analysis)}
             >
               <div className="text-[12.5px] text-ink-500 leading-snug">
@@ -156,6 +160,7 @@ export function ContextPanel({
 
             <CtxSection
               label="M5 · Writing"
+              moduleId="M5"
               status={sectionStatus("M5", contextStore.m5_writing)}
             >
               <M5Body data={contextStore.m5_writing} />
@@ -201,16 +206,27 @@ export function ContextPanel({
 function CtxSection({
   label,
   status,
+  moduleId,
   children,
 }: {
   label: string;
   status: SectionStatus;
+  /** Stable machine-readable hook for E2E assertions ("M1".."M5"). The
+   *  status dot is a Tailwind class — style-coupled and unassertable — so
+   *  tests read data-status instead (2026-07-08 e2e-testing spec). Only the
+   *  five module cards pass this; the Exports/Uploads cards omit it so they
+   *  get no testid and their data-status is inert. */
+  moduleId?: string;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const dot = STATUS_DOT[status];
   return (
-    <div className="border border-ink-200 rounded-xl bg-white">
+    <div
+      className="border border-ink-200 rounded-xl bg-white"
+      data-testid={moduleId ? `ctx-${moduleId}` : undefined}
+      data-status={status}
+    >
       <button
         type="button"
         onClick={() => setCollapsed(c => !c)}
