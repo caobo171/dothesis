@@ -115,7 +115,7 @@ def test_service_composes_and_presigns(monkeypatch):
     monkeypatch.setattr(svc, "extract_pdf_text", lambda b: ("AVE=0.62, HTMT ok, R2=.41", 5))
     # Avoid the LLM topic-inference + Crossref network calls in a unit test, and
     # bypass the M4 data-sufficiency gate (orthogonal to compose/presign here).
-    monkeypatch.setattr(svc, "_has_sufficient_m4_data", lambda text: True)
+    monkeypatch.setattr(svc, "pdf_looks_like_analysis", lambda text: True)
     monkeypatch.setattr(svc, "_infer_topic", lambda text, lang: {})
     monkeypatch.setattr(svc, "_literature_search", lambda *a, **k: [])
     monkeypatch.setattr(svc, "_compose_chapters",
@@ -142,6 +142,30 @@ def test_service_composes_and_presigns(monkeypatch):
     assert out["pdf_url"].endswith("report.pdf?sig=1")
     assert out["docx_url"].endswith("report.docx?sig=1")
     assert out["sections"] == ["Chapter 4 — Results"]
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — build_partner_context_store (optional M1/M2/M3, generate-if-missing).
+# ---------------------------------------------------------------------------
+
+def test_build_context_store_uses_provided_m1_verbatim(monkeypatch):
+    called = {"infer": False}
+    monkeypatch.setattr(svc, "_infer_topic", lambda *a, **k: called.__setitem__("infer", True) or {})
+    monkeypatch.setattr(svc, "_budgeted_scout", lambda *a, **k: [])
+    provided_m1 = {"research_title": "Given Title", "research_questions": ["RQ1"]}
+    store = svc.build_partner_context_store(
+        "AVE=0.6 HTMT ok R2=.4", notes=None, language="en", m1=provided_m1)
+    assert store["m1_topic"]["research_title"] == "Given Title"
+    assert called["infer"] is False  # provided -> NOT inferred
+
+
+def test_build_context_store_generates_missing_m2(monkeypatch):
+    monkeypatch.setattr(svc, "_infer_topic", lambda *a, **k: {"research_title": "Inferred"})
+    monkeypatch.setattr(svc, "_infer_model", lambda *a, **k: {})
+    scout_hits = [{"title": "Real Paper", "doi": "10.1/x"}]
+    monkeypatch.setattr(svc, "_budgeted_scout", lambda *a, **k: scout_hits)
+    store = svc.build_partner_context_store("AVE=0.6", notes=None, language="en")  # no m2
+    assert store["m2_literature"]["literature_sources"] == scout_hits
 
 
 # ---------------------------------------------------------------------------

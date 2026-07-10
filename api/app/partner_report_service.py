@@ -478,7 +478,7 @@ _M4_DATA_SIGNALS = (
 )
 
 
-def _has_sufficient_m4_data(text: str) -> bool:
+def pdf_looks_like_analysis(text: str) -> bool:
     """True when the extracted text looks like real statistical-analysis output.
 
     The Results (M4) chapter is built FROM the uploaded analysis (reliability,
@@ -491,6 +491,63 @@ def _has_sufficient_m4_data(text: str) -> bool:
     keyword_hits = sum(1 for k in _M4_DATA_SIGNALS if k in low)
     decimal_hits = len(re.findall(r"\d[.,]\d", text or ""))
     return keyword_hits >= 2 and decimal_hits >= 6
+
+
+def build_partner_context_store(
+    text: str,
+    *,
+    notes: str | None,
+    language: str,
+    m1: dict | None = None,
+    m2: dict | None = None,
+    m3: dict | None = None,
+) -> dict:
+    """Assemble the nested context_store for a partner report.
+
+    Input contract: M1/M2/M3 are OPTIONAL. Each one the caller provides is used
+    VERBATIM; each missing one is generated (M1 via _infer_topic, M3 via
+    _infer_model, M2 via real budgeted research). M4 is always the uploaded
+    analysis text. Provided modules are never overwritten — partner generation
+    only fills holes.
+    """
+    notes_clean = (notes or "").strip()
+
+    # M1: provided or inferred (notes prepended so inference reflects user intent).
+    if m1:
+        m1_topic = dict(m1)
+        m1_topic.setdefault("language", language)
+    else:
+        infer_text = (f"Mô tả bổ sung:\n{notes_clean}\n\n{text}" if notes_clean else text)
+        inferred = _infer_topic(infer_text, language)
+        m1_topic = {"research_title": str(inferred.get("research_title") or "").strip()
+                    or "Báo cáo phân tích", "language": language}
+        for key in ("field", "research_type", "objectives", "target_population", "scope"):
+            val = inferred.get(key)
+            if isinstance(val, str) and val.strip():
+                m1_topic[key] = val.strip()
+        rqs = inferred.get("research_questions")
+        if isinstance(rqs, list) and rqs:
+            m1_topic["research_questions"] = [str(q) for q in rqs if str(q).strip()]
+    if notes_clean:
+        m1_topic.setdefault("user_context", notes_clean)
+
+    store: dict = {"m1_topic": m1_topic, "m4_analysis": {"analysis_results": text}}
+
+    # M3: provided or inferred (used later for the methodology diagram).
+    store["m3_design"] = dict(m3) if m3 else (_infer_model(text, language) or {})
+
+    # M2: provided verbatim, else REAL budgeted research (never a bare token fetch).
+    if m2:
+        store["m2_literature"] = dict(m2)
+    else:
+        refs = _budgeted_scout(
+            m1_topic.get("research_title", ""),
+            m1_topic.get("research_questions") or [],
+        )
+        if refs:
+            store["m2_literature"] = {"literature_sources": refs}
+
+    return store
 
 
 def generate_partner_report(
@@ -554,7 +611,7 @@ def generate_partner_report(
         # requested but the file has no such data, fail fast (before any LLM
         # spend) so the partner can charge only a small validation fee instead
         # of billing for a report it can't build.
-        if "results" in chapter_keys and not _has_sufficient_m4_data(text):
+        if "results" in chapter_keys and not pdf_looks_like_analysis(text):
             raise ReportError(
                 "insufficient_m4_data",
                 "the uploaded file lacks the statistical analysis data (reliability, "
