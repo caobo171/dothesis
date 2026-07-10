@@ -3,21 +3,19 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 
 from langchain_core.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
+from orchestrator.llm import get_orchestrator_llm
 
 logger = logging.getLogger(__name__)
 
 
 def _get_llm():
-    # Centralised LLM factory — monkeypatchable in tests.
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
-        temperature=0.2,
-    )
+    # Delegates to the engine-wide factory (ORCHESTRATOR_LLM_ROUTE routes the
+    # whole engine); temperature 0.2 is this parser's original per-site setting.
+    # Kept as a module symbol because tests monkeypatch it.
+    return get_orchestrator_llm(temperature=0.2)
 
 
 _SPEAKER_PATTERN = re.compile(r"^\s*([A-Z][A-Z _-]+):\s*", re.MULTILINE)

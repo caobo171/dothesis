@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from langchain_core.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
+from orchestrator.llm import get_orchestrator_llm
 
 # Make engine package importable as a sibling.
 _ROOT = Path(__file__).resolve().parents[2]
@@ -24,10 +24,9 @@ logger = logging.getLogger(__name__)
 
 
 def _get_llm():
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
-        temperature=0.3,
-    )
+    # Delegates to the engine-wide factory (ORCHESTRATOR_LLM_ROUTE); temperature
+    # 0.3 is this tool's original per-site setting.
+    return get_orchestrator_llm(temperature=0.3)
 
 
 def _engine_model():

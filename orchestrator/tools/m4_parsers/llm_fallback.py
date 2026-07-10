@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 
 from langchain_core.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
+from orchestrator.llm import get_orchestrator_llm
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +19,11 @@ logger = logging.getLogger(__name__)
 def _get_llm():
     """Factory function for LLM instance.
 
-    Returns a ChatGoogleGenerativeAI instance configured with the
-    ORCHESTRATOR_LLM_MODEL env var (defaults to gemini-2.5-flash).
+    Delegates to the engine-wide factory so ORCHESTRATOR_LLM_ROUTE routes every
+    tool at once. Temperature 0.1 is this parser's original per-site setting.
     This function is mocked in tests to inject fake LLM responses.
     """
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
-        temperature=0.1,
-    )
+    return get_orchestrator_llm(temperature=0.1)
 
 
 @tool

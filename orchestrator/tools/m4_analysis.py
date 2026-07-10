@@ -8,12 +8,11 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Literal
 
 from langchain_core.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
+from orchestrator.llm import get_orchestrator_llm
 
 from orchestrator.tools.m4_parsers import dispatch_parse
 from orchestrator.tools.m4_parsers.llm_fallback import extract_step_data
@@ -27,12 +26,10 @@ _SEM_HTML_MARKERS = ("smartpls", "pls algorithm", "outer loadings", "htmt", "amo
 
 
 def _get_llm():
-    # Centralised LLM factory — allows monkeypatching in tests without touching
-    # tool internals; model is configurable via env var for staging vs. prod.
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
-        temperature=0.2,
-    )
+    # Delegates to the engine-wide factory (ORCHESTRATOR_LLM_ROUTE routes the
+    # whole engine); temperature 0.2 is this tool's original per-site setting.
+    # Kept as a module symbol because tests monkeypatch it.
+    return get_orchestrator_llm(temperature=0.2)
 
 
 @tool

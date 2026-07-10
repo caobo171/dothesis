@@ -1,11 +1,10 @@
 """Phase 5 — Output_Gen. Single-shot, no regen loop."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from langchain_core.messages import AIMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from orchestrator.llm import get_orchestrator_llm
 
 from orchestrator.agents.m2.state import M2SubGraphState
 
@@ -15,10 +14,9 @@ _STYLE = (_PROMPT_DIR / "_style.md").read_text(encoding="utf-8")
 
 
 def _get_llm():
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
-        temperature=0.4,
-    )
+    # Delegates to the engine-wide factory (ORCHESTRATOR_LLM_ROUTE routes the
+    # whole engine); temperature 0.4 is this phase's original per-site setting.
+    return get_orchestrator_llm(temperature=0.4)
 
 
 def _format_references(refs: list[dict]) -> str:

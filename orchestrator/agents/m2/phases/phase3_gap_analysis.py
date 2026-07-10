@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from orchestrator.llm import get_orchestrator_llm
 
 from orchestrator.agents.m2.intent import classify_phase_intent
 from orchestrator.agents.m2.state import M2SubGraphState
@@ -57,10 +57,9 @@ def _regen_cap() -> int:
 
 
 def _get_llm():
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
-        temperature=0.3,
-    )
+    # Delegates to the engine-wide factory (ORCHESTRATOR_LLM_ROUTE routes the
+    # whole engine); temperature 0.3 is this phase's original per-site setting.
+    return get_orchestrator_llm(temperature=0.3)
 
 
 def _strip_fence(s: str) -> str:

@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 
 from langchain_core.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
+from orchestrator.llm import get_orchestrator_llm
 
 # bounded_invoke wraps Gemini calls in a wall-clock timeout. Without it, a
 # single hung Gemini call freezes the entire graph turn (Gemini occasionally
@@ -27,11 +26,10 @@ _TOOL_LLM_RETRIES = 1
 
 
 def _get_llm():
-    # Centralised LLM factory — allows monkeypatching in tests without touching each tool.
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
-        temperature=0.3,
-    )
+    # Delegates to the engine-wide factory (ORCHESTRATOR_LLM_ROUTE routes the
+    # whole engine); temperature 0.3 is this tool's original per-site setting.
+    # Kept as a module symbol because tests monkeypatch it.
+    return get_orchestrator_llm(temperature=0.3)
 
 
 def _invoke_json(llm, prompt: str):

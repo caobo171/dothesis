@@ -37,6 +37,9 @@ dependencies = [
   # HTML export path; openpyxl backs the .xlsx path in agent/tools/output_parse.py.
   "lxml>=5.0",
   "openpyxl>=3.1",
+  # OpenAI-compatible client for the Ofox / OpenRouter gateway routes (F10 + Ofox).
+  # Needed at runtime whenever DOTHESIS_MODEL_ROUTE / ORCHESTRATOR_LLM_ROUTE=ofox.
+  "langchain-openai>=1.3,<2",
 ]
 
 [project.optional-dependencies]

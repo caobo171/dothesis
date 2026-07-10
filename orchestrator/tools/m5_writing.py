@@ -860,12 +860,13 @@ TABLE CAPTION & SOURCE (match a standard thesis exactly):
 
 
 def _get_llm():
-    """LLM factory for M5 tools. Monkeypatchable in tests."""
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
-        temperature=0.4,
-    )
+    """LLM factory for M5 tools. Monkeypatchable in tests.
+
+    Delegates to the engine-wide factory so ORCHESTRATOR_LLM_ROUTE routes every
+    tool at once; temperature 0.4 is this tool's original per-site setting.
+    """
+    from orchestrator.llm import get_orchestrator_llm  # lazy: keep import-light
+    return get_orchestrator_llm(temperature=0.4)
 
 
 # --- Public tools --------------------------------------------------------

@@ -7,20 +7,20 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 
 from langchain_core.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
+from orchestrator.llm import get_orchestrator_llm
 
 logger = logging.getLogger(__name__)
 
 
 def _get_llm():
-    """Single chokepoint for LLM creation — easy to monkeypatch in tests."""
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
-        temperature=0.4,
-    )
+    """Single chokepoint for LLM creation — easy to monkeypatch in tests.
+
+    Delegates to the engine-wide factory so ORCHESTRATOR_LLM_ROUTE routes every
+    tool at once; temperature 0.4 is this tool's original per-site setting.
+    """
+    return get_orchestrator_llm(temperature=0.4)
 
 
 @tool
