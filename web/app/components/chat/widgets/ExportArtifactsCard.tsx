@@ -14,7 +14,9 @@ export function ExportArtifactsCard({ hint }: { hint: ExportArtifactsHint }) {
   const artifacts = hint.artifacts || [];
   if (artifacts.length === 0) return null;
   return (
-    <div className="mt-3 rounded-xl border border-ink-200 bg-ink-50/60 p-3">
+    // data-testid: the card's visible heading is localized ("LUẬN VĂN ĐÃ
+    // XUẤT") — E2E asserts on a stable hook instead of copy.
+    <div className="mt-3 rounded-xl border border-ink-200 bg-ink-50/60 p-3" data-testid="export-artifacts-card">
       <div className="text-[12px] font-semibold text-ink-500 mb-2 tracking-[0.02em]">
         LUẬN VĂN ĐÃ XUẤT
       </div>

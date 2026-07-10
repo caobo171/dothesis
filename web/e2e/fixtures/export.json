@@ -1,0 +1,18 @@
+{
+  "scenario": "export",
+  "entry": "Export my thesis",
+  "steps": [
+    {
+      "expect_user": "Export my thesis",
+      "response": "Exporting the full thesis now — this builds the DOCX and PDF.",
+      "tool_calls": [{
+        "name": "export_docx",
+        "args": { "citation_style": "apa7", "scope": "full" }
+      }]
+    },
+    {
+      "expect_user": "\"ok\": true",
+      "response": "Your thesis has been exported — use the download buttons above."
+    }
+  ]
+}
