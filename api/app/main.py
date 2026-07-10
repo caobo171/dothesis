@@ -134,6 +134,7 @@ def create_app() -> FastAPI:
         from .routers import runs as runs_router
         from .routers import uploads as uploads_router
         from .routers import import_route as import_router  # F12: mid-journey state import
+        from .routers import roadmap as roadmap_router  # F2: derived coaching roadmap
         app.include_router(chat_router.router, prefix="/api/v1")
         app.include_router(exports_router.router, prefix="/api/v1")  # SP6
         app.include_router(m5_editor_router.router, prefix="/api/v1")  # SP6.5
@@ -142,6 +143,8 @@ def create_app() -> FastAPI:
         app.include_router(partner_report_router.router, prefix="/api/v1")
         # F12: reuses uploads' S3 fetch + chat_v3 workspace, so it lives in the orchestrator block.
         app.include_router(import_router.router, prefix="/api/v1")
+        # F2: chat-only coaching surface (uses chat_v3 workspace); orchestrator block.
+        app.include_router(roadmap_router.router, prefix="/api/v1")
 
     return app
 
