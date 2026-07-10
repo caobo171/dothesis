@@ -6,9 +6,9 @@ import os
 from typing import Literal
 
 from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
+from orchestrator.llm import get_orchestrator_llm
 from orchestrator.message_utils import text_of
 from orchestrator.state import (
     ModuleKey, OrchestratorState, get_module_slice, next_unconfirmed_module,
@@ -30,10 +30,11 @@ class IntentClassification(BaseModel):
 
 
 def _intent_llm():
-    # timeout=20 matches base.py:_get_llm; without it, a stalled Gemini call
-    # could block every single interactive turn (it runs before any module).
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
+    # Route through the engine-wide factory (ORCHESTRATOR_LLM_ROUTE) so the whole
+    # engine is switchable. temperature=0.0 + timeout=20 are this site's original
+    # settings — the timeout matters here (this runs before any module, so a
+    # stalled call would block every single interactive turn).
+    return get_orchestrator_llm(
         temperature=0.0,
         timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
     )

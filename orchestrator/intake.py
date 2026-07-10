@@ -38,9 +38,11 @@ def merge_import(cs: ContextStore, blob: dict) -> ContextStore:
 
 
 def _assess_llm():
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
+    # Route through the engine-wide factory (ORCHESTRATOR_LLM_ROUTE) so the whole
+    # engine is switchable. temperature 0.2 + the per-request timeout are this
+    # site's original settings, preserved so native behavior is unchanged.
+    from orchestrator.llm import get_orchestrator_llm
+    return get_orchestrator_llm(
         temperature=0.2,
         timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
     )

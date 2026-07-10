@@ -35,11 +35,16 @@ _MODULE_DESCRIPTIONS = {
 def _default_llm():
     """Gemini Flash. Read answers are short conversational paraphrases of
     structured data — Flash is fast and cheap enough for this; latency is
-    the explicit win of `read` over `module.step()`."""
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_READ_MODEL",
-                        os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash")),
+    the explicit win of `read` over `module.step()`.
+
+    Routes through the engine-wide factory (ORCHESTRATOR_LLM_ROUTE) so the whole
+    engine is switchable. ORCHESTRATOR_READ_MODEL still overrides the model when
+    set; unset → model=None so the factory applies its ORCHESTRATOR_LLM_MODEL /
+    gemini-2.5-flash default (identical resolution). temperature=0.0 + timeout
+    are this site's original settings."""
+    from orchestrator.llm import get_orchestrator_llm
+    return get_orchestrator_llm(
+        model=os.getenv("ORCHESTRATOR_READ_MODEL"),
         temperature=0.0,
         timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
     )

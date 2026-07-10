@@ -19,7 +19,11 @@ from __future__ import annotations
 import os
 
 
-def get_orchestrator_llm(model: str | None = None, temperature: float | None = None):
+def get_orchestrator_llm(
+    model: str | None = None,
+    temperature: float | None = None,
+    timeout: int | None = None,
+):
     """Build the engine's chat model for the configured route.
 
     Args mirror the old per-site construction so callers can preserve their
@@ -28,6 +32,14 @@ def get_orchestrator_llm(model: str | None = None, temperature: float | None = N
                      (the exact default every `_get_llm()` used).
       - temperature: defaults to 0.4 (the modal per-site value); each site
                      passes its own (e.g. m4 analysis uses 0.2).
+      - timeout:     per-request timeout (seconds). Only the hot-path sites set
+                     it (base.py, supervisor, router, read, intake, backfill,
+                     m2/intent all passed timeout=ORCHESTRATOR_LLM_TIMEOUT so a
+                     stalled request can't wedge the whole turn). Default None
+                     keeps the timeout-free sites (phase2/phase4) byte-for-byte
+                     — no timeout kwarg reaches the client, its default stands.
+                     Both langchain clients accept `timeout`, so this is a safe
+                     passthrough for either route.
 
     Fail fast: an unknown route raises here, at build time, not mid-run.
     """
@@ -36,12 +48,15 @@ def get_orchestrator_llm(model: str | None = None, temperature: float | None = N
     temperature = 0.4 if temperature is None else temperature
 
     if route == "native":
-        # Native SDK, unchanged construction: Gemini gets model + temperature,
-        # NOTHING else (no max_tokens) — byte-for-byte with the old `_get_llm()`
-        # sites. Import stays local so this module is import-light.
+        # Native SDK, unchanged construction: Gemini gets model + temperature
+        # (+ timeout only when the caller set one) — byte-for-byte with the old
+        # `_get_llm()` sites. Import stays local so this module is import-light.
         from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: PLC0415
 
-        return ChatGoogleGenerativeAI(model=model, temperature=temperature)
+        kwargs = {"model": model, "temperature": temperature}
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return ChatGoogleGenerativeAI(**kwargs)
 
     if route == "ofox":
         # OpenAI-compatible client pointed at the Ofox gateway. The key check runs
@@ -56,14 +71,19 @@ def get_orchestrator_llm(model: str | None = None, temperature: float | None = N
             )
         from langchain_openai import ChatOpenAI  # noqa: PLC0415 — gateway-only, lazy
 
-        return ChatOpenAI(
-            model=model,  # provider/model, e.g. "google/gemini-2.5-flash"
-            base_url="https://api.ofox.ai/v1",
-            api_key=key,
-            temperature=temperature,
+        kwargs = {
+            "model": model,  # provider/model, e.g. "google/gemini-2.5-flash"
+            "base_url": "https://api.ofox.ai/v1",
+            "api_key": key,
+            "temperature": temperature,
             # OpenAI-compatible streaming reports usage only when asked — the
             # credit ledger reads it via extract_usage, so keep this on.
-            model_kwargs={"stream_options": {"include_usage": True}},
-        )
+            "model_kwargs": {"stream_options": {"include_usage": True}},
+        }
+        # Preserve the hot-path per-request timeout across the gateway too, so
+        # the ofox route has the same anti-wedge protection the native sites had.
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return ChatOpenAI(**kwargs)
 
     raise ValueError(f"unknown orchestrator LLM route: {route!r}")

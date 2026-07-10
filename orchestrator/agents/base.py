@@ -13,8 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, ValidationError
+
+from orchestrator.llm import get_orchestrator_llm
 
 from orchestrator.agents.widgets import CardGridHint, CardOption, ListEditorHint, ListItem
 from orchestrator.message_utils import text_of
@@ -207,8 +208,12 @@ class ModuleAgent(ABC):
         # ceiling: Gemini 2.5 Flash typically returns in 1-3s, anything past
         # ~10s is the API being unhealthy and we'd rather fail fast and let
         # the caller's except-fallback path run.
-        return ChatGoogleGenerativeAI(
-            model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
+        #
+        # Routes through the engine-wide factory (ORCHESTRATOR_LLM_ROUTE) so the
+        # whole engine — all 5 modules share this base — is switchable. The
+        # temperature=0.4 default and the per-request timeout are preserved so
+        # native behavior is unchanged.
+        return get_orchestrator_llm(
             temperature=0.4,
             timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
         )

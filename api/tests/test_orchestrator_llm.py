@@ -33,6 +33,26 @@ def test_native_passes_through_per_site_temperature(monkeypatch):
     assert m.temperature == 0.2
 
 
+def test_native_passes_through_timeout(monkeypatch):
+    # Hot-path sites (base.py, supervisor, router, read, intake, backfill,
+    # m2/intent) built Gemini with timeout=ORCHESTRATOR_LLM_TIMEOUT so a stalled
+    # request can't wedge the whole turn. Routing them through the factory MUST
+    # preserve that per-request timeout — otherwise the native route regresses.
+    monkeypatch.delenv("ORCHESTRATOR_LLM_ROUTE", raising=False)
+    monkeypatch.setenv("GOOGLE_API_KEY", "test")
+    m = get_orchestrator_llm(temperature=0.0, timeout=20)
+    assert m.timeout == 20
+
+
+def test_native_default_omits_timeout(monkeypatch):
+    # Sites that never set a timeout (phase2/phase4) must stay byte-for-byte:
+    # no timeout kwarg reaches the client (its own default stands).
+    monkeypatch.delenv("ORCHESTRATOR_LLM_ROUTE", raising=False)
+    monkeypatch.setenv("GOOGLE_API_KEY", "test")
+    m = get_orchestrator_llm(temperature=0.5)
+    assert m.timeout is None
+
+
 # -- Ofox gateway route (OpenAI-compatible) ----------------------------------
 # langchain_openai is a gateway-only dep and is NOT installed in the test env
 # (the native route never touches it). Inject a fake module so we can assert the
@@ -68,6 +88,16 @@ def test_ofox_route_config(monkeypatch):
     assert captured["api_key"] == "sk-of-test"
     # OpenAI-compatible streaming reports usage only when asked — the ledger needs it.
     assert (m.model_kwargs.get("stream_options") or {}).get("include_usage") is True
+
+
+def test_ofox_route_passes_through_timeout(monkeypatch):
+    # The engine's timeout-bearing sites also route through ofox; the per-request
+    # timeout must reach the OpenAI-compatible client too (parity with native).
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "ofox")
+    monkeypatch.setenv("OFOX_API_KEY", "sk-of-test")
+    captured = _install_fake_chatopenai(monkeypatch)
+    get_orchestrator_llm(model="google/gemini-2.5-flash", timeout=20)
+    assert captured["timeout"] == 20
 
 
 def test_ofox_requires_key(monkeypatch):

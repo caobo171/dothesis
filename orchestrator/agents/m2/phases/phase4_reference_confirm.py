@@ -1,13 +1,12 @@
 """Phase 4 — Reference_Confirm."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from orchestrator.agents.m2.intent import classify_phase_intent
+from orchestrator.llm import get_orchestrator_llm
 from orchestrator.agents.m2.state import M2SubGraphState
 from orchestrator.agents.widgets import CardGridHint, CardOption
 from orchestrator.message_utils import text_of
@@ -75,10 +74,10 @@ _PHASE_KEY = "reference_confirm"
 
 
 def _get_llm():
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
-        temperature=0.0,
-    )
+    # Route through the engine-wide factory (ORCHESTRATOR_LLM_ROUTE); temperature
+    # 0.0 is this phase's original per-site setting. No timeout kwarg here — the
+    # old construction never set one, so this stays byte-for-byte.
+    return get_orchestrator_llm(temperature=0.0)
 
 
 def _auto_verify(paper_uris: list[str], refs: list[dict]) -> list[dict]:

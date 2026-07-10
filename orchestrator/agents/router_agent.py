@@ -48,9 +48,9 @@ import time
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from orchestrator.agents.base import ModuleStepResult, bounded_invoke
+from orchestrator.llm import get_orchestrator_llm
 from orchestrator.agents.module_tools import (
     _AGENT_BY_KEY, _CURRENT_STATE, _TOOL_RESULTS, ALL_TOOLS,
 )
@@ -81,10 +81,15 @@ _TOOL_NAME_TO_KEY = {
 def _router_llm():
     """Gemini Flash for routing — same model the modules use so we don't
     pay for a second model warm-up. temperature=0 + bind_tools(tool_choice
-    ="any") enforces deterministic tool selection."""
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_ROUTER_MODEL",
-                        os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash")),
+    ="any") enforces deterministic tool selection.
+
+    Routes through the engine-wide factory (ORCHESTRATOR_LLM_ROUTE) so the whole
+    engine is switchable. ORCHESTRATOR_ROUTER_MODEL still overrides the model
+    when set; when unset we pass model=None so the factory applies its own
+    ORCHESTRATOR_LLM_MODEL / gemini-2.5-flash default — identical resolution to
+    the old nested-getenv. timeout=20 preserved (routing runs every turn)."""
+    return get_orchestrator_llm(
+        model=os.getenv("ORCHESTRATOR_ROUTER_MODEL"),
         temperature=0.0,
         timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
     )

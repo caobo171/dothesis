@@ -8,9 +8,9 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from orchestrator.agents.base import BoundedInvokeTimeout, bounded_invoke
+from orchestrator.llm import get_orchestrator_llm
 from orchestrator.agents.m2.intent import classify_phase_intent
 from orchestrator.agents.m2.state import M2SubGraphState
 from orchestrator.agents.widgets import CardGridHint, CardOption
@@ -177,10 +177,11 @@ def _beat(state, stage: str, message: str, **meta) -> None:
 
 
 def _get_llm():
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
-        temperature=0.5,
-    )
+    # Route through the engine-wide factory (ORCHESTRATOR_LLM_ROUTE); temperature
+    # 0.5 is this phase's original per-site setting. No timeout here — the call
+    # is wall-clock-bounded by bounded_invoke(_max_synth_seconds), not the
+    # request-level timeout, so it stays byte-for-byte with the old construction.
+    return get_orchestrator_llm(temperature=0.5)
 
 
 def _scout(topic: str, min_n: int = 20) -> list[dict]:

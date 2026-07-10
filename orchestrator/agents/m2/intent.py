@@ -11,8 +11,9 @@ import os
 import re
 from typing import Literal
 
-from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
+
+from orchestrator.llm import get_orchestrator_llm
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +37,11 @@ class PhaseIntent(BaseModel):
 
 
 def _intent_llm():
-    # timeout matches base.py:_get_llm; without it, a stalled Gemini call here
-    # could block every M2 interactive turn. See the L1/L2 fixes for the
-    # supervisor + base.py hot-path equivalents.
-    return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
+    # Route through the engine-wide factory (ORCHESTRATOR_LLM_ROUTE) so the whole
+    # engine is switchable. temperature=0.0 + timeout are this site's original
+    # settings; the timeout matters (without it a stalled call could block every
+    # M2 interactive turn — see the supervisor + base.py hot-path equivalents).
+    return get_orchestrator_llm(
         temperature=0.0,
         timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
     )
