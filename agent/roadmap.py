@@ -133,7 +133,11 @@ def next_action(state: dict) -> dict | None:
                     "why": f"{focus} is done — {m} is next.",
                     "cta_options": [f"Start {m}", f"What does {m} involve?"]}
 
-    # 5) Everything done.
-    return {"module": "M5", "substep": "export", "title": "Export your thesis",
-            "why": "Every module is done — generate the final document.",
-            "cta_options": ["Export my thesis", "Review it first"]}
+    # 5) Everything done. Lead into the mock committee (F6) alongside export —
+    #    the emotional peak of the journey, not just a file drop. substep stays
+    #    "export" (the terminal spine step); defense prep is an optional
+    #    rehearsal offered via the CTA, not a tracked module.
+    return {"module": "M5", "substep": "export",
+            "title": "Export your thesis & prep your defense",
+            "why": "Every module is done — generate the final document and rehearse your defense.",
+            "cta_options": ["Export my thesis", "Prep for my defense", "Review it first"]}

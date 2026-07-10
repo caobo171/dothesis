@@ -79,3 +79,14 @@ def test_null_safe_on_empty_state():
 def test_m5_has_review_before_export():
     from agent.roadmap import ROADMAP
     assert ROADMAP["M5"].index("review") < ROADMAP["M5"].index("export")
+
+
+def test_all_done_offers_defense_prep():
+    # F6: once everything is done, the terminal action leads into the mock
+    # committee alongside export — the emotional peak, not just a file.
+    from agent.roadmap import next_action
+    s = {"contextStore": {"final_sections": [{"x": 1}]},
+         "status": {m: "done" for m in ["M1", "M2", "M3", "M4", "M5"]}, "focus": "M5"}
+    na = next_action(s)
+    labels = " ".join(na.get("cta_options", [])).lower()
+    assert "defense" in labels or "defence" in labels
