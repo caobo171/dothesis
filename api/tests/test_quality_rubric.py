@@ -1,5 +1,22 @@
+import pytest
+
 from quality.rubric import score_thesis, deterministic_dimensions
 from quality.rubric import results_validity_dimension, apply_institution_overlay, METHOD_CRITERIA
+
+
+@pytest.fixture(autouse=True)
+def _stub_judge_llm(monkeypatch):
+    # F0: no test may hit a live model. score_thesis fires the LLM-judge dims,
+    # so stub _get_llm module-wide with a benign valid-JSON response. The two
+    # judge_dimension tests re-monkeypatch it in their own bodies (that wins).
+    import orchestrator.tools.m5_writing as _m5
+
+    class _Resp:
+        content = '{"score": 0.7, "findings": []}'
+
+    monkeypatch.setattr(_m5, "_get_llm",
+                        lambda: type("L", (), {"invoke": lambda self, p: _Resp()})())
+
 
 _GOOD = {
     "m1_topic": {"research_title": "T", "research_questions": ["Q"]},
@@ -45,3 +62,25 @@ def test_institution_min_references_adds_hard_finding():
     cs = {"m2_literature": {"literature_sources": [{"title": "a"}] * 12}}
     out = apply_institution_overlay(dims, {"min_references": 30}, cs)
     assert any("30" in f["issue"] for d in out for f in d["findings"])
+
+
+import orchestrator.tools.m5_writing as m5
+from quality.rubric import judge_dimension
+
+
+def test_judge_dimension_parses_llm_json(monkeypatch):
+    class _Resp:
+        content = '{"score": 0.4, "findings": [{"issue": "H1 has no gap", ' \
+                  '"fix": "Trace H1 to a gap", "chapter": "methodology", "severity": "soft"}]}'
+    monkeypatch.setattr(m5, "_get_llm", lambda: type("L", (), {"invoke": lambda self, p: _Resp()})())
+    d = judge_dimension("methodology", 0.15, "prompt", {})
+    assert d["score"] == 0.4 and d["findings"][0]["issue"].startswith("H1")
+
+
+def test_judge_dimension_survives_bad_json(monkeypatch):
+    class _Resp:
+        content = "not json at all"
+    monkeypatch.setattr(m5, "_get_llm", lambda: type("L", (), {"invoke": lambda self, p: _Resp()})())
+    d = judge_dimension("writing", 0.10, "prompt", {})
+    assert 0.0 <= d["score"] <= 1.0
+    assert any("could not evaluate" in f["issue"].lower() for f in d["findings"])

@@ -4,6 +4,7 @@ can never corrupt a thesis. institution_profile + advisor_feedback are read with
 defaults (owned by the cross-session-memory spec)."""
 from __future__ import annotations
 
+import json as _json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,53 @@ def apply_institution_overlay(dims: list[dict], profile: dict | None,
     return out
 
 
+def judge_dimension(name: str, weight: float, prompt: str, context_store: dict) -> dict:
+    """One bounded LLM-judge call. Best-effort: any failure => neutral score + note,
+    so the overall score always returns (Global Constraint: never crash)."""
+    from orchestrator.tools.m5_writing import _get_llm  # noqa: PLC0415
+    try:
+        resp = _get_llm().invoke(prompt)
+        content = getattr(resp, "content", resp)
+        if isinstance(content, list):
+            content = " ".join(str(p.get("text", "") if isinstance(p, dict) else p) for p in content)
+        content = str(content)
+        s, e = content.find("{"), content.rfind("}")
+        # Decision (deviation from plan literal): if there's no JSON object at
+        # all, RAISE into the except branch so we emit a "could not evaluate"
+        # finding rather than silently returning a neutral score with no note —
+        # that's what the bad-json robustness test proves.
+        if s == -1 or e == -1:
+            raise ValueError("no JSON object in judge response")
+        data = _json.loads(content[s:e + 1])
+        score = float(data.get("score", 0.6))
+        findings = [f for f in (data.get("findings") or []) if isinstance(f, dict)]
+        return {"name": name, "weight": weight, "score": max(0.0, min(1.0, score)),
+                "findings": findings}
+    except Exception:
+        logger.exception("quality: judge '%s' failed", name)
+        return {"name": name, "weight": weight, "score": 0.6,
+                "findings": [{"issue": f"Could not evaluate {name} automatically.",
+                              "fix": "Review this dimension manually.", "chapter": "-",
+                              "severity": "soft"}]}
+
+
+def _judge_prompt(name: str, context_store: dict) -> str:
+    m1 = context_store.get("m1_topic") or {}
+    m3 = context_store.get("m3_design") or {}
+    body = _all_prose(context_store)[:8000]
+    rubric = {
+        "methodology": "Do the hypotheses trace to stated research gaps, and does the chosen "
+                       "method match the research design? Score 0..1.",
+        "writing": "Is the prose coherent, academic in tone, and free of placeholder stubs? "
+                   "Score 0..1.",
+    }[name]
+    return (f"You are a thesis examiner. {rubric}\nReturn STRICT JSON: "
+            '{"score": <0..1>, "findings": [{"issue","fix","chapter","severity"}]}\n\n'
+            f"Title: {m1.get('research_title')}\nHypotheses: {m3.get('hypotheses')}\n"
+            f"Gaps: {(context_store.get('m2_literature') or {}).get('research_gaps')}\n\n"
+            f"DRAFT:\n{body}")
+
+
 def _weighted(dims: list[dict]) -> float:
     # Weights are illustrative and don't sum to 1; normalize by total weight so
     # institution overlays that change weights don't skew the 0..1 overall.
@@ -138,6 +186,12 @@ def score_thesis(context_store: dict, *, institution_profile: dict | None = None
     dims = deterministic_dimensions(context_store)
     # Method-aware results-reporting checklist (PLS/CB-SEM/SPSS/generic).
     dims.append(results_validity_dimension(context_store, method))
+    # Bounded LLM-judge dims: methodology (gap<->hypothesis trace) + writing
+    # quality. Best-effort — a judge failure yields a neutral dim, never a crash.
+    dims.append(judge_dimension("methodology", 0.15,
+                                _judge_prompt("methodology", context_store), context_store))
+    dims.append(judge_dimension("writing", 0.10,
+                                _judge_prompt("writing", context_store), context_store))
     # Institution overlay last — it can re-weight the dims above and add hard
     # requirements (min refs) before we compute overall/blocking.
     dims = apply_institution_overlay(dims, institution_profile, context_store)
