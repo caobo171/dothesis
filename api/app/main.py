@@ -133,12 +133,15 @@ def create_app() -> FastAPI:
         from .routers import partner_report as partner_report_router  # partner cross-product report
         from .routers import runs as runs_router
         from .routers import uploads as uploads_router
+        from .routers import import_route as import_router  # F12: mid-journey state import
         app.include_router(chat_router.router, prefix="/api/v1")
         app.include_router(exports_router.router, prefix="/api/v1")  # SP6
         app.include_router(m5_editor_router.router, prefix="/api/v1")  # SP6.5
         app.include_router(runs_router.router, prefix="/api/v1")
         app.include_router(uploads_router.router, prefix="/api/v1")
         app.include_router(partner_report_router.router, prefix="/api/v1")
+        # F12: reuses uploads' S3 fetch + chat_v3 workspace, so it lives in the orchestrator block.
+        app.include_router(import_router.router, prefix="/api/v1")
 
     return app
 
