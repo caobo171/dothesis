@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=70.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dothesis-quality"
+version = "0.1.0"
+requires-python = ">=3.10"
+# No hard deps: model_prices/probes are pure stdlib; model_eval's OpenRouter
+# client (langchain_openai) is imported lazily inside _complete, so the eval-only
+# network dep isn't required to import the package or run the (stubbed) tests.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+]
+
+[tool.setuptools]
+# Same editable-install pattern as agent/orchestrator: the package lives at
+# repo-root/quality/, mapped explicitly so `pip install -e quality` exposes
+# `import quality.rubric` / `quality.model_eval` from the api process.
+package-dir = {"quality" = "../quality"}
+packages = ["quality"]

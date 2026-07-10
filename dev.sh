@@ -137,6 +137,13 @@ if ! "$VENV_BIN/python" -c "import agent" >/dev/null 2>&1; then
   "$VENV_BIN/pip" install -e agent
 fi
 
+# quality/ holds the model-eval + rubric packages (F9/F3). Same editable-install
+# pattern; without it `import quality.model_eval` fails in the api process/tests.
+if ! "$VENV_BIN/python" -c "import quality" >/dev/null 2>&1; then
+  echo "==> installing quality into api/.venv (one-time)"
+  "$VENV_BIN/pip" install -e quality
+fi
+
 # Check the M5 export toolchain. LibreOffice is MANDATORY — the PDF needs it for
 # its Table of Contents + clickable citations; without it the PDF silently
 # degrades (WeasyPrint, no TOC/links). So this HARD-FAILS the dev boot when
