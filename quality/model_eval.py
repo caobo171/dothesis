@@ -32,10 +32,19 @@ def _complete(model: str, prompt: str, system: str | None = None) -> tuple[str, 
 
 
 def evaluate_models(models: list[str], probes: list[dict],
-                    compose_fixtures: list[dict] | None = None) -> list[dict]:
+                    compose_fixtures: list[dict] | None = None,
+                    cached_input_ratio: float | None = None) -> list[dict]:
     """Run the probe suite across each model; one row per model with per-dimension
     reliability + true cost. A single probe/model failure is isolated (counted in
-    `errors`), never aborting the run."""
+    `errors`), never aborting the run.
+
+    cached_input_ratio (F10): the fraction of input tokens that survive prompt
+    caching — DoThesis's big system-prompt + skills prefix is the cacheable part,
+    so on a caching-preserving route only ~`ratio` of the input is billed at full
+    price. When set, each row also reports `cached_cost_per_task` alongside the
+    uncached `cost_per_task`, so the report compares TRUE cost per route. Native/
+    caching routes realize the cached number; a non-caching OpenRouter route does
+    not (it pays `cost_per_task`)."""
     rows: list[dict] = []
     for model in models:
         marker = instr = vi = 0
@@ -70,6 +79,13 @@ def evaluate_models(models: list[str], probes: list[dict],
             "vietnamese": round(vi / vi_n, 3) if vi_n else None,
             "tokens": {"in": tin, "out": tout},
             "cost_per_task": cost(model, tin, tout),
+            # Cached cost only when a ratio is given: the cacheable system-prompt
+            # prefix drops the effective input tokens to `tin * ratio`. Realized by
+            # native/caching routes; left None otherwise so the column is honest.
+            "cached_cost_per_task": (
+                cost(model, int(tin * cached_input_ratio), tout)
+                if cached_input_ratio is not None else None
+            ),
             "latency_ms": latency, "errors": errors,
         }
         # Compose-quality (F3 rubric) is folded in only when fixtures are supplied

@@ -236,6 +236,11 @@ async def send_message_v3(
         # included) so the per-response cost reflects the whole turn.
         _usage_in = 0
         _usage_out = 0
+        # F10: models that actually served steps this turn. On the OpenRouter
+        # route the primary can silently fail over to a pricier fallback; we emit
+        # a `model_served` analytics signal when the served model != the requested
+        # primary so a silent, costlier switch is visible rather than invisible.
+        _served_models: set[str] = set()
         chunks: list[str] = []
         # Captured from `tool_calls` events emitted by the runtime (an
         # `[OPTIONS]` card, a `[PAPERS]` panel, an export download card, …).
@@ -380,6 +385,28 @@ async def send_message_v3(
                 except Exception:  # noqa: BLE001
                     logger.exception("credit debit failed for thread %s", thread_pk)
 
+            # F10: flag a silent fallback. If any served model differs from the
+            # requested primary (spec_from_env().model), emit `model_served` so a
+            # switch to a pricier fallback is observable. Best-effort, never
+            # blocks the turn. spec_from_env is agent-layer (safe to import).
+            try:
+                from agent.model_factory import spec_from_env
+
+                primary = spec_from_env().model
+                switched = {m for m in _served_models if m and m != primary}
+                if switched:
+                    from .. import analytics
+
+                    with Session(engine) as _s2:
+                        _proj = _s2.get(Project, project_id)
+                        _uid = str(_proj.user_id) if _proj else None
+                    for served in switched:
+                        analytics.emit("model_served", _uid,
+                                       {"requested": primary, "served": served,
+                                        "thread_id": thread_pk})
+            except Exception:  # noqa: BLE001
+                logger.exception("model_served emit failed for thread %s", thread_pk)
+
             return {"type": "done", "cost_credits": cost_credits,
                     "duration_ms": duration_ms, "total_tokens": total_tokens,
                     "credit_balance": credit_balance}
@@ -447,6 +474,8 @@ async def send_message_v3(
                     # mid-stream; the total is persisted + sent in `done`).
                     _usage_in += int(ev.get("input_tokens", 0) or 0)
                     _usage_out += int(ev.get("output_tokens", 0) or 0)
+                    if ev.get("model"):
+                        _served_models.add(str(ev["model"]))
                 elif kind == "error":
                     logger.error("agent turn error for thread %s: %s", thread_pk, ev["message"])
                     print(f"[v3] ERROR msg={ev.get('message')!r}",

@@ -27,11 +27,39 @@ native SDK once a winner is chosen.
 | instr | fraction of instruction probes passed (JSON-only, terseness, `{{cite}}`) |
 | vi | fraction of Vietnamese-language probes passed |
 | $/task | true cost = tokens × `model_prices.py` (a "thinking" model's output tokens count) |
+| cached $/task | cost when the cacheable system-prompt prefix is cached — only populated when `evaluate_models(..., cached_input_ratio=…)` is passed (see below) |
 | errors | isolated per-probe failures (a provider hiccup never aborts the run) |
 
 `recommend(rows, marker_floor=0.9)` picks the best **quality-per-dollar** model
 that clears the marker-reliability floor — an unreliable model is never
 recommended, however cheap.
+
+## Provider routing (F10) — native vs OpenRouter
+
+Production selects the central brain via env, read by `agent/model_factory.py`
+(`make_model()`); with no new env it builds today's native model, unchanged.
+
+| env var | effect |
+|---|---|
+| `DOTHESIS_MODEL_ROUTE` | `native` (default, provider SDK — **prompt caching preserved**) or `openrouter` (OpenAI-compatible client with a fallback cascade) |
+| `DOTHESIS_AGENT_MODEL` | primary model string |
+| `DOTHESIS_MODEL_FALLBACKS` | comma-separated fallback cascade for the OpenRouter route (`models: [primary, …fallbacks]`, tried in order) |
+| `DOTHESIS_MODEL_TEMPERATURE` / `DOTHESIS_MODEL_MAX_TOKENS` | sampling knobs (defaults 0.4 / 8000) |
+| `OPENROUTER_API_KEY` | required for `route=openrouter`; `make_model` fails fast at build time without it |
+| `DOTHESIS_OPENROUTER_DATA_POLICY` | `deny` (default) sets `provider.data_collection=deny` so downstream providers never train on / log student PII |
+
+**Caching is why the native route stays the default.** The big system-prompt +
+skills prefix is the cacheable part; the native provider SDK realizes that saving,
+so its **cached $/task** (the `cached_cost_per_task` column, from a run with
+`cached_input_ratio` set to the uncacheable input fraction) is the number to
+compare — a non-caching OpenRouter route pays the full `$/task`. Use OpenRouter as
+the default+failover route; pin the winner back to its native SDK when
+`cached $/task` says caching wins.
+
+**Silent fallbacks are visible.** When the OpenRouter route fails over, the served
+model differs from the requested primary; the turn path emits a `model_served`
+analytics event (`{requested, served, thread_id}`) so a switch to a pricier model
+is observable rather than invisible.
 
 ## Reliability floors / CI gate
 

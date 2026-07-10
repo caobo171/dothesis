@@ -89,6 +89,43 @@ def test_gate_fails_on_reliability_regression():
     assert me.run_model_gate(cand, inc, {"marker_reliability": 0.9}) == 1
 
 
+# -- F10: cached-cost column ------------------------------------------------
+def test_row_reports_cached_cost_when_available(monkeypatch):
+    monkeypatch.setattr(me, "_complete",
+                        lambda m, p, system=None: ("[OPTIONS] a | b", {"in": 1000, "out": 100}))
+    monkeypatch.setattr(me, "cost", lambda m, i, o: 0.01)
+    # cached run reports fewer effective input tokens (prefix cached)
+    rows = me.evaluate_models(["m"],
+                              [{"id": "o", "prompt": "p",
+                                "expect": {"kind": "marker", "value": "OPTIONS"}}],
+                              cached_input_ratio=0.2)
+    assert rows[0]["cached_cost_per_task"] is not None
+    assert rows[0]["cached_cost_per_task"] <= rows[0]["cost_per_task"]
+
+
+def test_cached_cost_is_strictly_lower_with_token_priced_cost(monkeypatch):
+    # A token-proportional cost proves the cached number is actually cheaper,
+    # not just <=: the cacheable prefix drops effective input tokens.
+    monkeypatch.setattr(me, "_complete",
+                        lambda m, p, system=None: ("[OPTIONS] a | b", {"in": 1000, "out": 100}))
+    monkeypatch.setattr(me, "cost", lambda m, i, o: i * 1e-6 + o * 2e-6)
+    rows = me.evaluate_models(["m"],
+                              [{"id": "o", "prompt": "p",
+                                "expect": {"kind": "marker", "value": "OPTIONS"}}],
+                              cached_input_ratio=0.2)
+    assert rows[0]["cached_cost_per_task"] < rows[0]["cost_per_task"]
+
+
+def test_cached_cost_none_when_ratio_absent(monkeypatch):
+    monkeypatch.setattr(me, "_complete",
+                        lambda m, p, system=None: ("[OPTIONS] a", {"in": 100, "out": 10}))
+    monkeypatch.setattr(me, "cost", lambda m, i, o: 0.01)
+    rows = me.evaluate_models(["m"],
+                              [{"id": "o", "prompt": "p",
+                                "expect": {"kind": "marker", "value": "OPTIONS"}}])
+    assert rows[0]["cached_cost_per_task"] is None
+
+
 def test_gate_passes_when_floors_met():
     cand = {"model": "c", "marker_reliability": 0.95, "quality": 0.82}
     inc = {"model": "i", "marker_reliability": 0.9, "quality": 0.8}

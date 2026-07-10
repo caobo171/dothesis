@@ -670,11 +670,22 @@ async def stream_turn(
                             # Emitted event shape is unchanged so chat_v3 stays as-is.
                             _u = extract_usage(m)
                             if _u["in"] or _u["out"]:
-                                yield {
+                                # F10: surface the model that ACTUALLY served this
+                                # step (OpenRouter can silently fail over to a
+                                # pricier fallback). response_metadata carries the
+                                # served model name; chat_v3 compares it to the
+                                # requested primary and emits model_served on a
+                                # switch. Best-effort — omitted when unknown.
+                                _meta = getattr(m, "response_metadata", None) or {}
+                                _served = _meta.get("model_name") or _meta.get("model")
+                                _ev = {
                                     "type": "usage",
                                     "input_tokens": _u["in"],
                                     "output_tokens": _u["out"],
                                 }
+                                if _served:
+                                    _ev["model"] = _served
+                                yield _ev
                             for tc in getattr(m, "tool_calls", None) or []:
                                 if tc.get("name"):
                                     yield {
