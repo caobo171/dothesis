@@ -116,6 +116,33 @@ def preflight_dimension(context_store: dict) -> dict:
             "findings": findings}
 
 
+def instrument_quality_dimension(context_store: dict) -> dict:
+    """Questionnaire Doctor as a soft rubric dimension (F7 Task 1).
+
+    Decision: reuse the SAME pure lint the agent's audit_instrument tool runs
+    (agent.tools.instrument.audit_instrument_findings) so the rubric and the live
+    coaching surface can never disagree about instrument quality. Lazy + local
+    import keeps quality import-light and mirrors preflight_dimension's approach.
+
+    Constructs are derived from the instrument's own item.construct fields (the
+    rubric has no separate construct list), so a construct with no reverse-coded
+    item still gets flagged. Findings are SOFT — an item-wording gap is advisory,
+    never a hard block on the thesis."""
+    from agent.tools.instrument import audit_instrument_findings  # noqa: PLC0415
+    m3 = context_store.get("m3_design") or {}
+    instrument = m3.get("instrument") or {}
+    hypotheses = m3.get("hypotheses") or []
+    items = instrument.get("items") or []
+    # Ordered-unique construct names present on the items.
+    constructs = list(dict.fromkeys(i.get("construct") for i in items if i.get("construct")))
+    findings = audit_instrument_findings(instrument, hypotheses, constructs)["findings"]
+    # Each flagged item/coverage gap shaves 0.1, floored at 0 — a couple of soft
+    # issues still leaves a usable score.
+    score = max(0.0, 1.0 - 0.1 * len(findings))
+    return {"name": "instrument_quality", "weight": 0.10, "score": round(score, 3),
+            "findings": findings}
+
+
 def apply_institution_overlay(dims: list[dict], profile: dict | None,
                               context_store: dict) -> list[dict]:
     """Override dimension weights and add hard requirement findings. Pure over dims.
@@ -236,6 +263,10 @@ def score_thesis(context_store: dict, *, institution_profile: dict | None = None
     # Methods pre-flight: soft, design-readiness gaps (sample/CMB/missing-data
     # plans) that should be caught before M4 — same check the live agent runs.
     dims.append(preflight_dimension(context_store))
+    # Instrument quality: soft, item-level questionnaire issues (double-barreled
+    # items, missing reverse-coded coverage, no attention check) caught before
+    # fielding — same lint the live audit_instrument tool runs.
+    dims.append(instrument_quality_dimension(context_store))
     # Institution overlay last — it can re-weight the dims above and add hard
     # requirements (min refs) before we compute overall/blocking.
     dims = apply_institution_overlay(dims, institution_profile, context_store)

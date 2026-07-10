@@ -142,6 +142,7 @@ from deepagents.backends.filesystem import FilesystemBackend
 from agent.preflight import make_preflight_tool
 from agent.state import MODULES, ProjectStateStore
 from agent.tools.forms import make_google_form_script
+from agent.tools.instrument import audit_instrument  # F7: Questionnaire Doctor
 from agent.tools.output_parse import parse_output_table, parse_smartpls_export
 from agent.tools.research import parse_reference, quick_sources, research_scout
 from agent.tools.state_tools import make_state_tools
@@ -469,6 +470,10 @@ def build_agent(
         # to the store so the agent can run it before kicking off M4 analysis.
         make_preflight_tool(store),
         make_google_form_script,
+        # F7: Questionnaire Doctor — deterministic instrument lint before
+        # fielding (double-barreled/leading items, reverse-coded coverage,
+        # attention checks, scale-provenance skeleton). Pure, no store needed.
+        audit_instrument,
         *make_writing_tools(store),
     ]
 

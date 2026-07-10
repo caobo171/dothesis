@@ -112,6 +112,25 @@ def test_score_thesis_includes_preflight_dimension():
     assert any(d["name"] == "preflight" for d in r["dimensions"])
 
 
+def test_instrument_quality_dimension_flags_double_barreled(monkeypatch):
+    # A questionnaire with a double-barreled item and no reverse-coded/attention
+    # coverage scores below 1.0 on the instrument_quality dimension, all soft
+    # (F7 Task 1) — same lint the live audit_instrument tool runs.
+    from quality.rubric import instrument_quality_dimension
+    cs = {"m3_design": {"instrument": {"items": [
+        {"id": "q1", "text": "The app is fast and reliable", "construct": "PE"}]}}}
+    d = instrument_quality_dimension(cs)
+    assert d["name"] == "instrument_quality"
+    assert d["score"] < 1.0
+    assert d["findings"] and all(f["severity"] == "soft" for f in d["findings"])
+    assert any("double" in f["issue"].lower() for f in d["findings"])
+
+
+def test_score_thesis_includes_instrument_quality_dimension():
+    r = score_thesis(_GOOD)
+    assert any(d["name"] == "instrument_quality" for d in r["dimensions"])
+
+
 def test_open_advisor_directive_is_hard_finding():
     fb = [{"id": "1", "chapter": "results", "issue": "Report effect sizes",
            "required_change": "add Cohen's f2", "status": "open"},
