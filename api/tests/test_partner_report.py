@@ -113,35 +113,47 @@ def test_service_empty_text_raises(monkeypatch):
 
 def test_service_composes_and_presigns(monkeypatch):
     monkeypatch.setattr(svc, "extract_pdf_text", lambda b: ("AVE=0.62, HTMT ok, R2=.41", 5))
-    # Avoid the LLM topic-inference + Crossref network calls in a unit test, and
-    # bypass the M4 data-sufficiency gate (orthogonal to compose/presign here).
     monkeypatch.setattr(svc, "pdf_looks_like_analysis", lambda text: True)
-    monkeypatch.setattr(svc, "_infer_topic", lambda text, lang: {})
-    monkeypatch.setattr(svc, "_literature_search", lambda *a, **k: [])
-    monkeypatch.setattr(svc, "_compose_chapters",
-                        lambda context_store, chapter_keys, language, **kw:
-                        [{"title": "Chapter 4 — Results", "prose": "..."}])
-
-    # Stub the lazily-imported run_export at its source module.
+    monkeypatch.setattr(svc, "build_partner_context_store",
+                        lambda text, **k: {"m1_topic": {"research_title": "T"},
+                                           "m4_analysis": {"analysis_results": text}})
+    # Gate passes (nothing missing) for the requested chapters.
+    monkeypatch.setattr("orchestrator.tools.m5_writing.assess_export_readiness",
+                        lambda store, chapters=None: [])
+    # Stub the shared compose + export seams the service now calls by name.
+    import orchestrator.tools.compose_export as ce
+    monkeypatch.setattr(ce, "compose_sections",
+                        lambda *a, **k: [{"title": "Chapter 4 — Results", "prose": "p"}])
+    monkeypatch.setattr(svc, "_maybe_embed_model_diagram", lambda *a, **k: None)
     import orchestrator.tools.m5_writing as m5
-    monkeypatch.setattr(m5, "run_export", lambda sections, pid, references=None, language="en": [
-        {"kind": "pdf", "s3_key": f"projects/{pid}/exports/report.pdf", "size_bytes": 10},
-        {"kind": "docx", "s3_key": f"projects/{pid}/exports/report.docx", "size_bytes": 10},
-    ])
+    monkeypatch.setattr(m5, "run_export",
+                        lambda sections, pid, references=None, language="en": [
+                            {"kind": "pdf", "s3_key": f"projects/{pid}/report.pdf", "size_bytes": 10},
+                            {"kind": "docx", "s3_key": f"projects/{pid}/report.docx", "size_bytes": 10},
+                        ])
 
     class _FakeS3:
         def generate_presigned_url(self, op, Params, ExpiresIn):
             return f"https://s3.example/{Params['Key']}?sig=1"
-
     monkeypatch.setattr(svc, "_s3_from_env", lambda: _FakeS3())
     monkeypatch.setenv("S3_BUCKET", "bkt")
 
     out = svc.generate_partner_report(b"pdf", depth="analysis_report", title="T", language="en")
     assert out["pages"] == 5
-    assert out["depth"] == "analysis_report"
     assert out["pdf_url"].endswith("report.pdf?sig=1")
     assert out["docx_url"].endswith("report.docx?sig=1")
     assert out["sections"] == ["Chapter 4 — Results"]
+
+
+def test_service_rejects_when_gate_reports_missing(monkeypatch):
+    monkeypatch.setattr(svc, "extract_pdf_text", lambda b: ("AVE=0.62 HTMT R2=.41", 5))
+    monkeypatch.setattr(svc, "pdf_looks_like_analysis", lambda text: True)
+    monkeypatch.setattr(svc, "build_partner_context_store", lambda text, **k: {"m1_topic": {}})
+    monkeypatch.setattr("orchestrator.tools.m5_writing.assess_export_readiness",
+                        lambda store, chapters=None: ["M4 — analysis results"])
+    with pytest.raises(ReportError) as ei:
+        svc.generate_partner_report(b"pdf", depth="analysis_report", language="en")
+    assert ei.value.code == "needs_data"
 
 
 # ---------------------------------------------------------------------------

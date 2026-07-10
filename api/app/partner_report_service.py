@@ -27,11 +27,10 @@ from typing import Any
 
 from .pdf_extract import extract_pdf_text
 
-# Prose sanitation now lives in the engine so every compose path (auto-mode,
-# agent, partner) cleans once, in one place. compose_chapter already sanitizes
-# its output; we keep this import for the fallback-section path below, which
-# doesn't go through compose_chapter.
-from orchestrator.tools.m5_writing import sanitize_prose  # noqa: E402
+# Prose sanitation now lives in the engine (orchestrator.tools.m5_writing.
+# sanitize_prose) and is applied inside compose_chapter, so partner no longer
+# sanitizes here — the shared compose_sections path handles it. No local import
+# needed after generate_partner_report was rewired onto that shared back half.
 
 logger = logging.getLogger(__name__)
 
@@ -107,63 +106,34 @@ def _presign(s3, s3_key: str, *, expires_in: int = 3600) -> str:
     )
 
 
-def _compose_chapters(
-    context_store: dict,
-    chapter_keys: list[str],
-    language: str,
-    on_chapter=None,
-    references: list[dict] | None = None,
-    title_overrides: dict[str, str] | None = None,
-) -> list[dict]:
-    """Compose an explicit set of M5 chapters via the engine, in canonical order.
+def _maybe_embed_model_diagram(sections: list[dict], text: str, language: str,
+                               chapter_keys: list[str]) -> None:
+    """Infer + render the M3 model diagram and embed it in the methodology section
+    (in place). Best-effort — a diagram failure never breaks the report.
 
-    Mirrors compose_all_sections' per-chapter composition (real LLM prose
-    grounded in the merged context slice) but limited to the requested chapters
-    so the user only pays for the "Chương N" they ticked. `on_chapter(index,
-    key, title, phase)` is called with phase="start"/"end" around each chapter
-    so callers can surface live progress.
+    Kept as a helper so the partner flow can compose → EMBED → export in that
+    exact order (the diagram must land between the shared compose_sections and
+    run_export steps).
     """
-    from orchestrator.tools.m5_writing import (  # noqa: PLC0415 — heavy import, load lazily
-        _chapter_titles,
-        _fallback_section,
-        compose_chapter,
-    )
-
-    m1 = context_store.get("m1_topic") or {}
-    m3 = context_store.get("m3_design") or {}
-    m4 = context_store.get("m4_analysis") or {}
-    context_slice: dict = {**m1, **m3, **m4}
-    context_slice.setdefault("results", m4.get("analysis_results"))
-
-    # Always compose in canonical order regardless of how the caller ordered them.
-    ordered = [k for k in _CHAPTER_ORDER if k in set(chapter_keys)]
-
-    base_titles = _chapter_titles(language)
-    titles = {**base_titles, **(title_overrides or {})}
-    out: list[dict] = []
-    for idx, name in enumerate(ordered):
-        if on_chapter:
-            on_chapter(idx, name, titles[name], "start")
-        try:
-            draft = compose_chapter.invoke({
-                "chapter_name": name,
-                "paradigm": "",
-                "context_slice": context_slice,
-                "references": references or [],
-                "citation_style": "apa7",
-                "language": language,
-            })
-            prose = (draft or {}).get("prose") or ""
-        except Exception:
-            logger.exception("partner_report: compose_chapter failed for %s", name)
-            prose = ""
-        if not prose.strip():
-            prose = _fallback_section(name, context_store)
-        if prose.strip():
-            out.append({"title": titles[name], "prose": sanitize_prose(prose)})
-        if on_chapter:
-            on_chapter(idx, name, titles[name], "end")
-    return out
+    if "methodology" not in chapter_keys:
+        return
+    try:
+        model = _infer_model(text, language)
+        png = _render_model_diagram(model) if model else None
+        if not png:
+            return
+        from orchestrator.tools.m5_writing import _chapter_titles  # noqa: PLC0415
+        meth_title = _chapter_titles(language).get("methodology")
+        caption = ("Hình 1. Mô hình nghiên cứu đề xuất"
+                   if str(language).lower().startswith("vi")
+                   else "Figure 1. Proposed research model")
+        figure_md = f"\n\n![{caption}]({png})\n"
+        for sec in sections:
+            if sec.get("title") == meth_title:
+                sec["prose"] = (sec.get("prose") or "") + figure_md
+                break
+    except Exception:
+        logger.exception("partner_report: model diagram step failed (continuing)")
 
 
 def _infer_topic(analysis_text: str, language: str) -> dict:
@@ -560,6 +530,12 @@ def generate_partner_report(
     title: str | None = None,
     notes: str | None = None,
     language: str = "en",
+    # Optional caller-supplied M1/M2/M3 modules (the input contract). Each one
+    # given is used verbatim by build_partner_context_store; missing ones are
+    # generated. Lets a partner pass a real topic/sources/model to skip inference.
+    m1: dict | None = None,
+    m2: dict | None = None,
+    m3: dict | None = None,
 ) -> dict[str, Any]:
     """Generate a report from an analysis PDF and return download URLs.
 
@@ -607,126 +583,63 @@ def generate_partner_report(
             raise ReportError("no_extractable_text",
                               "the file has no machine-readable text (image-only scan?)")
 
-        # M4 gate: the Results chapter needs real statistical output. If it was
-        # requested but the file has no such data, fail fast (before any LLM
-        # spend) so the partner can charge only a small validation fee instead
-        # of billing for a report it can't build.
+        # Ingest pre-check: cheap fail-fast before any LLM spend when the upload
+        # isn't statistical output at all (only when a Results chapter is asked).
+        # This is a heuristic PDF sniff, NOT the store-level completeness gate.
         if "results" in chapter_keys and not pdf_looks_like_analysis(text):
-            raise ReportError(
-                "insufficient_m4_data",
-                "the uploaded file lacks the statistical analysis data (reliability, "
-                "validity, path coefficients, …) needed to write the Results (M4) chapter",
-            )
+            raise ReportError("insufficient_m4_data",
+                              "the uploaded file lacks the statistical analysis data "
+                              "needed to write the Results (M4) chapter")
 
-        # When the user gave no title (and always, for supporting context), infer
-        # the study framing from the data so chapters aren't full of "[...]" stubs.
-        # The user's free-text notes (if any) are prepended so the inferred
-        # title/objectives/RQs reflect what they described — this then cascades
-        # into the intro/lit-review/methodology framing.
-        notes_clean = (notes or "").strip()
-        infer_text = (
-            f"Mô tả bổ sung từ người dùng (ưu tiên bám sát):\n{notes_clean}\n\n{text}"
-            if notes_clean else text
-        )
-        inferred = _infer_topic(infer_text, language)
+        # Build the nested context_store: caller-provided M1/M2/M3 are used
+        # verbatim, missing ones are generated (M2 runs REAL budgeted research).
+        # This replaces the old inline topic-inference + Crossref block.
+        _set_progress(progress_token, phase="research")
+        context_store = build_partner_context_store(
+            text, notes=notes, language=language, m1=m1, m2=m2, m3=m3)
+        # A caller-typed title always wins over an inferred one (preserves the old
+        # behavior where the `title` form field seeded research_title).
+        if (title or "").strip():
+            context_store.setdefault("m1_topic", {})["research_title"] = title.strip()
 
-        research_title = (title or "").strip() or str(inferred.get("research_title") or "").strip()
-        m1_topic: dict = {
-            "research_title": research_title or "Báo cáo phân tích",
-            "language": language,
-        }
-        if notes_clean:
-            m1_topic["user_context"] = notes_clean
-        # These map 1:1 to the M5 intro/chapter prompt inputs (field, objectives,
-        # research_questions, target_population, scope, research_type).
-        for key in ("field", "research_type", "objectives", "target_population", "scope"):
-            val = inferred.get(key)
-            if isinstance(val, str) and val.strip():
-                m1_topic[key] = val.strip()
-        rqs = inferred.get("research_questions")
-        if isinstance(rqs, list) and rqs:
-            m1_topic["research_questions"] = [str(q) for q in rqs if str(q).strip()]
+        # The ONE store-level gate (shared with the rest of the app), scoped to
+        # the requested chapters. Missing data -> needs_data (partner charges a
+        # small validation fee instead of a full report). No second gate here:
+        # pdf_looks_like_analysis above is only a cheap ingest sniff.
+        from orchestrator.tools.m5_writing import assess_export_readiness  # noqa: PLC0415
+        missing = assess_export_readiness(context_store, chapter_keys)
+        if missing:
+            raise ReportError("needs_data", "missing required data: " + "; ".join(missing))
 
-        # Minimal nested context_store the M5 engine understands. The analysis
-        # text becomes M4's analysis_results (the canonical `results` key).
-        context_store: dict = {
-            "m1_topic": m1_topic,
-            "m4_analysis": {"analysis_results": text},
-        }
+        references = (context_store.get("m2_literature") or {}).get("literature_sources") or None
 
-        # M2: fetch a bounded literature set so composed chapters get real inline
-        # citations backed by a populated References section. EVERY academic
-        # chapter cites (intro/lit_review/methodology/results/discussion), so we
-        # fetch whenever any chapter is composed — not only when Chương 2 is
-        # ticked. Otherwise the LLM cites sources with no bibliography behind
-        # them (hallucinated citations + empty References). Best-effort: []-safe.
-        references: list[dict] = []
-        if chapter_keys:
-            _set_progress(progress_token, phase="research")
-            references = _literature_search(
-                m1_topic["research_title"], m1_topic.get("research_questions") or []
-            )
-            if references:
-                context_store["m2_literature"] = {"literature_sources": references}
-
-        _set_progress(progress_token, phase="compose")
-
-        def _on_chapter(idx: int, key: str, title_: str, phase: str) -> None:
-            if phase == "start":
-                _set_progress(progress_token, done=idx, current=title_)
-            else:
-                _set_progress(progress_token, done=idx + 1, current=None)
+        def _on_chapter(idx, key, title_, phase):
+            _set_progress(progress_token, done=idx + (1 if phase == "end" else 0),
+                          current=None if phase == "end" else title_)
 
         # The (now combined) Discussion chapter is presented as the concluding
         # chapter — relabel its heading to "Kết luận"/"Conclusion".
         combined_title = "Chương 5 — Kết luận" if language.startswith("vi") else "Chapter 5 — Conclusion"
-        sections = _compose_chapters(
-            context_store, chapter_keys, language, on_chapter=_on_chapter,
-            references=references or None, title_overrides={"discussion": combined_title},
-        )
+        _set_progress(progress_token, phase="compose")
 
+        # Partner composes via the shared `compose_sections`, injects its
+        # methodology diagram into the returned sections, THEN exports. We do NOT
+        # use compose_and_export here (which composes+exports in one call) because
+        # the diagram must be embedded between those two steps — compose_and_export
+        # stays for callers that don't need the diagram (and for Spec-2 reuse).
+        from orchestrator.tools.compose_export import compose_sections  # noqa: PLC0415
+        from orchestrator.tools.m5_writing import run_export  # noqa: PLC0415
+        project_id = f"partner-{uuid.uuid4().hex}"
+        sections = compose_sections(
+            context_store, chapter_keys, language,
+            references=references, progress=_on_chapter,
+            title_overrides={"discussion": combined_title},
+        )
         if not sections:
             raise ReportError("compose_failed", "the writing engine produced no sections")
-
-        # M3: when the methodology chapter is included, infer the structural model
-        # from the data, render it as a diagram, and embed it in that chapter.
-        if "methodology" in chapter_keys:
-            try:
-                model = _infer_model(text, language)
-                png = _render_model_diagram(model) if model else None
-                if png:
-                    from orchestrator.tools.m5_writing import _chapter_titles  # noqa: PLC0415
-                    meth_title = _chapter_titles(language).get("methodology")
-                    caption = (
-                        "Hình 1. Mô hình nghiên cứu đề xuất"
-                        if str(language).lower().startswith("vi")
-                        else "Figure 1. Proposed research model"
-                    )
-                    figure_md = f"\n\n![{caption}]({png})\n"
-                    for sec in sections:
-                        if sec.get("title") == meth_title:
-                            sec["prose"] = (sec.get("prose") or "") + figure_md
-                            break
-            except Exception:
-                logger.exception("partner_report: model diagram step failed (continuing)")
-
-        # Append a deterministic References section as a belt-and-braces fallback:
-        # the citeproc DOCX path drops it (by title) and generates its own
-        # bibliography with `nocite:@*` (all pool sources, never empty); the
-        # plain PDF (weasyprint) fallback ships THIS one so the PDF is never
-        # missing its references.
-        if references:
-            sections.append(_references_section(references, language))
-
-        _set_progress(progress_token, phase="export", done=total, current=None)
-
-        from orchestrator.tools.m5_writing import run_export  # noqa: PLC0415
-
-        # No user project — a synthetic id namespaces the S3 export keys. Pass
-        # references so the DOCX renders via citeproc: inline "(Author, Year)"
-        # become clickable links + a complete, formatted bibliography.
-        project_id = f"partner-{uuid.uuid4().hex}"
-        artifacts = run_export(sections, project_id, references=references or None, language=language)
+        _maybe_embed_model_diagram(sections, text, language, chapter_keys)
+        _set_progress(progress_token, phase="export", current=None)
+        artifacts = run_export(sections, project_id, references=references, language=language)
 
         s3 = _s3_from_env()
         urls: dict[str, str] = {}
