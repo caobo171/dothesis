@@ -93,6 +93,11 @@ The paradigm is fixed: **positivist / quantitative**. Pick a coherent
 Pick consciously — ask about **access** (can they reach the sample?), **time budget**,
 **skills**. State sample-size logic (n≥X for the planned analysis).
 
+**Before endorsing any analysis method, consult `references/design-test-matrix.md`
+and state the rule that applies + its citation.** Never approve CB-SEM below its
+sample minimum, or a reflective/formative mismatch — those are the #1 novice errors
+and the matrix lists them as hard stops.
+
 Then design the instrument: 3–7 items per construct, reusing validated scales from M2
 sources (cite them per item block). Offer the questionnaire as a document the user can
 take to the field (M5's `export_docx` tool can render it — a one-off export, not a
