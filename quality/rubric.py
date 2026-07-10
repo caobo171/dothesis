@@ -65,6 +65,64 @@ def deterministic_dimensions(context_store: dict) -> list[dict]:
     return [structure, citations, stubs]
 
 
+METHOD_CRITERIA: dict[str, list[str]] = {
+    "pls-sem": ["cronbach", "composite reliability|cr", "ave", "htmt",
+                "path coefficient|β|beta", "r2|r-square|r²", "p value|p-value|p<"],
+    "cb-sem":  ["cronbach", "cfa|factor loading", "cfi", "rmsea", "tli|nfi",
+                "chi-square|χ2", "path coefficient|β"],
+    "spss":    ["cronbach", "kmo|bartlett", "regression|beta|β", "r2|r-square",
+                "vif|tolerance", "f statistic|f=", "p value|p<"],
+    "generic": ["reliability", "validity", "coefficient", "p value|p<"],
+}
+
+
+def results_validity_dimension(context_store: dict, method: str) -> dict:
+    # Decision: deterministic presence check of the method's required statistics
+    # in the analysis_results text — cheap, method-aware, no LLM. Findings are
+    # SOFT (advisory): the hard data gate stays M4's job, not ours.
+    import re  # noqa: PLC0415
+    text = ((context_store.get("m4_analysis") or {}).get("analysis_results") or "").lower()
+    crits = METHOD_CRITERIA.get(method, METHOD_CRITERIA["generic"])
+    findings = []
+    for pattern in crits:
+        if not re.search(pattern, text):
+            label = pattern.split("|")[0]
+            findings.append({"issue": f"Results don't report {label} (expected for {method}).",
+                             "fix": f"Report and interpret {label} in your Results chapter.",
+                             "chapter": "results", "severity": "soft"})
+    score = 1.0 - (len(findings) / max(1, len(crits)))
+    return {"name": "results_validity", "weight": 0.20, "score": round(score, 3),
+            "findings": findings}
+
+
+def apply_institution_overlay(dims: list[dict], profile: dict | None,
+                              context_store: dict) -> list[dict]:
+    """Override dimension weights and add hard requirement findings. Pure over dims.
+
+    Decision: institution_profile is read with an EMPTY DEFAULT (F3 decouples
+    from F4) — no profile means a generic rubric, never a crash."""
+    if not profile:
+        return dims
+    out = [dict(d) for d in dims]
+    for d in out:
+        w = (profile.get("weight_overrides") or {}).get(d["name"])
+        if w is not None:
+            d["weight"] = w
+
+    min_refs = profile.get("min_references")
+    if min_refs:
+        n = len((context_store.get("m2_literature") or {}).get("literature_sources") or [])
+        if n < min_refs:
+            for d in out:
+                if d["name"] == "citations":
+                    d["findings"] = d["findings"] + [{
+                        "issue": f"Only {n} references; your institution requires >= {min_refs}.",
+                        "fix": f"Add at least {min_refs - n} more sources.",
+                        "chapter": "lit_review", "severity": "hard"}]
+                    d["score"] = min(d["score"], 0.5)
+    return out
+
+
 def _weighted(dims: list[dict]) -> float:
     # Weights are illustrative and don't sum to 1; normalize by total weight so
     # institution overlays that change weights don't skew the 0..1 overall.
@@ -78,6 +136,11 @@ def score_thesis(context_store: dict, *, institution_profile: dict | None = None
     overlay land in later tasks)."""
     method = _detect_method(context_store)
     dims = deterministic_dimensions(context_store)
+    # Method-aware results-reporting checklist (PLS/CB-SEM/SPSS/generic).
+    dims.append(results_validity_dimension(context_store, method))
+    # Institution overlay last — it can re-weight the dims above and add hard
+    # requirements (min refs) before we compute overall/blocking.
+    dims = apply_institution_overlay(dims, institution_profile, context_store)
     blocking = [f["issue"] for d in dims for f in d["findings"] if f["severity"] == "hard"]
     return {
         "overall": _weighted(dims), "method": method, "dimensions": dims,

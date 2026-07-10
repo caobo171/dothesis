@@ -1,4 +1,5 @@
 from quality.rubric import score_thesis, deterministic_dimensions
+from quality.rubric import results_validity_dimension, apply_institution_overlay, METHOD_CRITERIA
 
 _GOOD = {
     "m1_topic": {"research_title": "T", "research_questions": ["Q"]},
@@ -27,3 +28,20 @@ def test_score_thesis_returns_overall_and_shape():
     assert 0.0 <= r["overall"] <= 1.0
     assert r["method"] and isinstance(r["dimensions"], list)
     assert r["advisor"] == {"total": 0, "addressed": 0, "open": []}
+
+
+def test_pls_results_dimension_flags_missing_htmt():
+    cs = {"m4_analysis": {"analysis_results": "AVE=0.6 CR=0.8 R2=0.4 p<.05"}}  # no HTMT
+    d = results_validity_dimension(cs, "pls-sem")
+    assert any("htmt" in f["issue"].lower() for f in d["findings"])
+
+
+def test_spss_uses_different_criteria():
+    assert set(METHOD_CRITERIA["spss"]) != set(METHOD_CRITERIA["pls-sem"])
+
+
+def test_institution_min_references_adds_hard_finding():
+    dims = [{"name": "citations", "weight": 0.2, "score": 1.0, "findings": []}]
+    cs = {"m2_literature": {"literature_sources": [{"title": "a"}] * 12}}
+    out = apply_institution_overlay(dims, {"min_references": 30}, cs)
+    assert any("30" in f["issue"] for d in out for f in d["findings"])
