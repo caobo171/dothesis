@@ -27,6 +27,12 @@ from typing import Any
 
 from .pdf_extract import extract_pdf_text
 
+# Prose sanitation now lives in the engine so every compose path (auto-mode,
+# agent, partner) cleans once, in one place. compose_chapter already sanitizes
+# its output; we keep this import for the fallback-section path below, which
+# doesn't go through compose_chapter.
+from orchestrator.tools.m5_writing import sanitize_prose  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 # Mermaid CLI (mmdc) tool dir — renders the M3 research-model diagram to PNG.
@@ -101,164 +107,6 @@ def _presign(s3, s3_key: str, *, expires_in: int = 3600) -> str:
     )
 
 
-_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*$")
-_HYP_RE = re.compile(r"^(H\s*\d+)\s*[:.\)]\s*(.+)$", re.IGNORECASE)
-_BOLD_HYP_RE = re.compile(r"^\s*\*\*\s*(H\s*\d+)\s*[:.\)]\s*(.+?)\s*\*\*\s*$", re.IGNORECASE)
-# Inline list markers the composer sometimes emits on a single line.
-#  * a spaced single ``*`` is unambiguous (``**bold**``/``*italic*`` never have a
-#    space directly inside the asterisks) -> always a bullet.
-#  * a spaced ASCII hyphen ``-`` is ambiguous with a parenthetical dash and MUST
-#    only match U+002D (en-dash ``–`` / em-dash ``—`` in "Fornell–Larcker" etc.
-#    are different codepoints and never match) -> only treated as a bullet when
-#    every item is a bold-led label, so real dashes in prose are left alone.
-_STAR_BULLET_RE = re.compile(r"\s\*\s+")
-_DASH_BULLET_RE = re.compile(r"\s-\s+")
-# Escape literal pipes that live INSIDE a parenthesis group in a table row
-# (the SmartPLS header ``T Statistics (|O/STDEV|)``). Scoping to parentheses
-# avoids the earlier bug where a tightly-formatted row like ``|QD|0.5|0.6|-|``
-# had its *delimiter* pipes escaped and collapsed into a single cell.
-_PAREN_GROUP_RE = re.compile(r"\(([^()]*)\)")
-
-# A markdown table row that is a placeholder shell: a cell whose whole content is
-# an ellipsis / dots (…, ...) — the LLM emits these when it lacks the real
-# numbers. Such tables are dropped (see _drop_placeholder_tables).
-_PLACEHOLDER_CELL_RE = re.compile(r"(?:^|\|)\s*(?:…|\.{2,})\s*(?=\||$)")
-
-
-def _reflow_inline_bullets(line: str) -> list[str]:
-    """Turn inline ``* a * b`` / ``- a - b`` list markers into real one-per-line
-    list items.
-
-    The composer sometimes emits a list on a single line (``Intro: * item one
-    * item two`` or ``... . - **Label:** text - **Label2:** text``). Markdown
-    only makes a list when each marker starts its own line, so inline markers
-    render literally and the items collapse into one paragraph. We split them
-    into a proper bullet list (blank line before/after so it parses in both
-    pandoc and weasyprint).
-    """
-    stripped = line.lstrip()
-    # leave tables, real headings, blockquotes and already-list lines alone
-    if not stripped or stripped[0] in "|>#" or stripped[:2] in ("- ", "* ", "+ "):
-        return [line]
-
-    require_bold = False
-    if len(_STAR_BULLET_RE.split(line)) >= 2:
-        parts = _STAR_BULLET_RE.split(line)
-    else:
-        parts = _DASH_BULLET_RE.split(line)
-        if len(parts) < 2:
-            return [line]
-        # ASCII-hyphen lists only when items are bold-led (avoids splitting a
-        # parenthetical "abc - def" or a name range "Hà Nội - Hải Phòng").
-        require_bold = True
-
-    head = parts[0].rstrip()
-    items = [p.strip() for p in parts[1:] if p.strip()]
-    if not items:
-        return [line]
-    if require_bold and not all(it.startswith("**") for it in items):
-        return [line]
-
-    out: list[str] = []
-    if head:
-        out.append(head)
-        out.append("")
-    out.extend(f"- {it}" for it in items)
-    out.append("")
-    return out
-
-
-def _sanitize_prose(prose: str) -> str:
-    """Normalize LLM markdown quirks before export.
-
-    The composer sometimes emits each hypothesis (``H1: ...`` full sentence) as a
-    Markdown *heading*. Word then (a) renders it as an oversized bold line and
-    (b) pulls it into the Table of Contents with a page number — both wrong. It
-    also sometimes wraps the whole hypothesis sentence in ``**bold**``.
-
-    We demote those to a normal body paragraph with only the ``Hn:`` label bold,
-    and demote any heading whose text is a full sentence (a real section title is
-    short and doesn't end in a period) — never a legitimate heading.
-    """
-    out: list[str] = []
-    # Expand any inline "* a * b" lists into one-item-per-line first, then run
-    # the per-line normalizations over the expanded lines.
-    expanded: list[str] = []
-    for raw in prose.split("\n"):
-        expanded.extend(_reflow_inline_bullets(raw))
-    for ln in expanded:
-        # 0) table rows: escape a literal ``|`` that lives INSIDE a parenthesis
-        #    group (the SmartPLS header ``T Statistics (|O/STDEV|)``) so it isn't
-        #    read as an extra column delimiter. Scoping to parentheses avoids
-        #    touching real delimiter pipes in a tight row like ``|QD|0.5|-|``.
-        if ln.lstrip().startswith("|") and set(ln.strip()) - set("|-: "):
-            ln = _PAREN_GROUP_RE.sub(lambda m: "(" + m.group(1).replace("|", "\\|") + ")", ln)
-        # 1) whole-sentence bold hypothesis:  **H1: ....**  ->  **H1:** ....
-        bm = _BOLD_HYP_RE.match(ln)
-        if bm:
-            out.append(f"**{bm.group(1).strip().upper().replace(' ', '')}:** {bm.group(2).strip()}")
-            continue
-        # 2) heading form
-        hm = _HEADING_RE.match(ln)
-        if hm:
-            text = hm.group(1).strip()
-            hyp = _HYP_RE.match(text)
-            if hyp:  # "### H1: full sentence"  ->  "**H1:** full sentence"
-                out.append(f"**{hyp.group(1).strip().upper().replace(' ', '')}:** {hyp.group(2).strip()}")
-                continue
-            # a heading that is actually a full sentence -> plain bold paragraph
-            if len(text) > 60 and text.rstrip().endswith((".", ")", ":")):
-                out.append(f"**{text}**")
-                continue
-        out.append(ln)
-    return _drop_placeholder_tables("\n".join(out))
-
-
-def _drop_placeholder_tables(prose: str) -> str:
-    """Remove a Markdown table whose cells are placeholder dots/ellipsis.
-
-    When the uploaded analysis lacks the real numbers for a table (e.g. only a
-    prose "all HTMT < 0.85" with no matrix), the composer sometimes emits the
-    table SHELL filled with "…"/"..." cells. A table of placeholders is worse
-    than none, so drop it — along with its bold "Bảng x.y" caption and italic
-    "Nguồn:" source line — and keep the surrounding interpretive prose.
-    """
-    lines = prose.split("\n")
-    out: list[str] = []
-    i, n = 0, len(lines)
-    while i < n:
-        if lines[i].lstrip().startswith("|"):
-            j = i
-            block: list[str] = []
-            while j < n and lines[j].lstrip().startswith("|"):
-                block.append(lines[j])
-                j += 1
-            if any(_PLACEHOLDER_CELL_RE.search(b) for b in block):
-                # Drop a preceding "**Bảng …**" caption (and blank lines).
-                while out and not out[-1].strip():
-                    out.pop()
-                if out and re.match(r"^\s*\*\*\s*(Bảng|Table)\b", out[-1]):
-                    out.pop()
-                    while out and not out[-1].strip():
-                        out.pop()
-                # Skip a following blank + italic "*Nguồn…*" source line.
-                k = j
-                while k < n and not lines[k].strip():
-                    k += 1
-                if k < n and re.match(r"^\s*\*\s*(Nguồn|Source)\b", lines[k]):
-                    k += 1
-                i = k
-                if out and out[-1].strip():
-                    out.append("")
-                continue
-            out.extend(block)
-            i = j
-        else:
-            out.append(lines[i])
-            i += 1
-    return "\n".join(out)
-
-
 def _compose_chapters(
     context_store: dict,
     chapter_keys: list[str],
@@ -312,7 +160,7 @@ def _compose_chapters(
         if not prose.strip():
             prose = _fallback_section(name, context_store)
         if prose.strip():
-            out.append({"title": titles[name], "prose": _sanitize_prose(prose)})
+            out.append({"title": titles[name], "prose": sanitize_prose(prose)})
         if on_chapter:
             on_chapter(idx, name, titles[name], "end")
     return out
