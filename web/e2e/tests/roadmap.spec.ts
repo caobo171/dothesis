@@ -55,3 +55,36 @@ test("F4: an open advisor directive surfaces as the Next blocker", async ({ page
   // The advisor directive, raised as a blocker, is the leading next action.
   await expect(panel.getByText(/Advisor: report effect sizes/)).toBeVisible();
 });
+
+test("F11: the timeline you-are-here card shows progress-vs-plan", async ({ page }) => {
+  const token = loadSessions().main.token;
+  const rc = await request.newContext();
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const shift = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return iso(d);
+  };
+  // Plan puts "today" inside the M2 (literature) window, but the project's focus
+  // is still M1 (only M1 seeded) → timeline_status reports weeks-behind.
+  const seeded = await apiPost(rc, "/test/seed-project", {
+    access_token: token,
+    name: "E2E timeline",
+    slices: { M1: { research_title: "T" } },
+    coaching: {
+      thesis_timeline: {
+        milestones: [
+          { module: "M1", start: shift(-30), end: shift(-15), label: "Topic & questions", weeks: 2 },
+          { module: "M2", start: shift(-14), end: shift(1), label: "Literature review", weeks: 2 },
+        ],
+      },
+    },
+  });
+  await rc.dispose();
+
+  await page.goto(`/chat/projects/${seeded.project_id}/threads/${seeded.thread_id}`);
+  const card = page.getByTestId("timeline-card");
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByText(/This week: Literature review/)).toBeVisible();
+  await expect(card.getByText(/week\(s\) behind/)).toBeVisible();
+});

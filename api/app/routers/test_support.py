@@ -135,6 +135,8 @@ def seed_project(body: SeedProjectBody,
         store.upsert_advisor_feedback(directive)
     if coaching.get("institution_profile"):
         store.set_institution_profile(coaching["institution_profile"])
+    if coaching.get("thesis_timeline"):
+        store.set_thesis_timeline(coaching["thesis_timeline"])
     return {"project_id": str(p.id), "thread_id": str(t.id)}
 
 

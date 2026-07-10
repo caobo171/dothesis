@@ -1,0 +1,26 @@
+{
+  "scenario": "questionnaire-doctor",
+  "entry": "check my questionnaire",
+  "steps": [
+    {
+      "expect_user": "check my questionnaire",
+      "response": "Running the Questionnaire Doctor over your instrument.",
+      "tool_calls": [{
+        "name": "audit_instrument",
+        "args": {
+          "instrument": {
+            "items": [
+              { "id": "q1", "text": "The streamer is credible and trustworthy", "construct": "trust" },
+              { "id": "q2", "text": "I intend to buy", "construct": "intention" }
+            ]
+          },
+          "hypotheses": ["H1: trust -> purchase intention"],
+          "constructs": ["trust", "intention"]
+        }
+      }]
+    },
+    {
+      "response": "Questionnaire audit complete. A few things to fix before you field it:\n\n- 'credible and trustworthy' looks double-barreled — split it into two items.\n- No reverse-coded items for the trust construct — add one to catch careless responding.\n\n[OPTIONS] Fix these items | Field it anyway"
+    }
+  ]
+}

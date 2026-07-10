@@ -1,0 +1,14 @@
+{
+  "scenario": "defense-prep",
+  "entry": "prepare me for my defense",
+  "steps": [
+    {
+      "expect_user": "prepare me for my defense",
+      "response": "Let me assemble your mock committee from your thesis' weak points.",
+      "tool_calls": [{ "name": "generate_committee_questions", "args": {} }]
+    },
+    {
+      "response": "Here are the questions your committee is most likely to ask:\n\n1. Why did you choose PLS-SEM over CB-SEM for your sample?\n2. How did you rule out common method bias?\n\n[OPTIONS] Practice answering | Export a cheat sheet"
+    }
+  ]
+}
