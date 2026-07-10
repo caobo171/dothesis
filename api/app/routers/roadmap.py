@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -18,6 +19,7 @@ from ..deps import current_user, db_session
 from ..models import Project, User
 from agent.roadmap import ROADMAP, SUBSTEP_LABELS, derive_substep, next_action
 from agent.state import MODULES
+from agent.timeline import timeline_status  # F11: you-are-here-vs-plan card
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["roadmap"])
@@ -78,4 +80,7 @@ async def get_roadmap(project_id: str, user: User = Depends(current_user),
         "tasks": [t for t in (state.get("contextStore", {}).get("roadmap_tasks") or [])
                   if t.get("status") == "open"],
         "next_action": next_action(state) or {},
+        # F11: progress-vs-plan for the timeline card. Null-safe — {} when the
+        # student has no defense date yet, so the frontend simply renders no card.
+        "timeline": timeline_status(state, date.today()),
     }

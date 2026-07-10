@@ -39,6 +39,19 @@ def test_roadmap_null_safe_on_headless_state(monkeypatch):
     assert c.post("/api/v1/projects/abc/roadmap").status_code == 200
 
 
+def test_roadmap_includes_timeline_status(monkeypatch):
+    # F11 Task 5: the endpoint returns timeline_status alongside the roadmap so
+    # the ContextPanel can render a you-are-here-vs-plan card every session.
+    state = {"focus": "M2", "status": {"M1": "done", "M2": "in_progress", "M3": "locked",
+             "M4": "locked", "M5": "locked"},
+             "contextStore": {"thesis_timeline": {"milestones": [
+                 {"module": "M4", "label": "Data analysis", "start": "2026-07-01",
+                  "end": "2026-07-15"}]}}}
+    c = _client(monkeypatch, state)
+    body = c.post("/api/v1/projects/abc/roadmap").json()
+    assert "timeline" in body and body["timeline"].get("this_week")
+
+
 def test_roadmap_rejects_non_owner(monkeypatch):
     def _deny(db, user, pid):
         raise HTTPException(403, detail={"error": {"code": "forbidden"}})

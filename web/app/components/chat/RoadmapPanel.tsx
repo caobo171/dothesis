@@ -6,7 +6,12 @@ import { apiFetch } from "@/app/lib/api";
 type Sub = { id: string; label: string; state: "done" | "current" | "upcoming" };
 type Mod = { id: string; status: string; current: string | null; substeps: Sub[] };
 type NextAction = { module: string; substep: string; title: string; why: string; cta_options: string[] };
-type Roadmap = { modules: Mod[]; tasks: any[]; next_action: NextAction | Record<string, never> };
+// F11: progress-vs-plan. {} (no keys) when the student hasn't set a defense date.
+type Timeline = { this_week?: string; on_track?: boolean; weeks_behind?: number };
+type Roadmap = {
+  modules: Mod[]; tasks: any[]; next_action: NextAction | Record<string, never>;
+  timeline?: Timeline;
+};
 
 /**
  * Derived coaching roadmap (F2 Task 7). Fetches POST /projects/{id}/roadmap on
@@ -41,6 +46,16 @@ export function RoadmapPanel({
 
   return (
     <div className="flex flex-col gap-3" data-testid="roadmap-panel">
+      {/* F11: you-are-here-vs-plan card. Only shown once the student has a
+          timeline (defense date set) — keeps the plan visible every session. */}
+      {data.timeline?.this_week && (
+        <div className="rounded-xl border border-ink-200 p-3 text-[12.5px]" data-testid="timeline-card">
+          <div className="font-semibold text-ink-800">This week: {data.timeline.this_week}</div>
+          <div className={data.timeline.on_track ? "text-green-600" : "text-amber-600"}>
+            {data.timeline.on_track ? "On track" : `~${data.timeline.weeks_behind} week(s) behind`}
+          </div>
+        </div>
+      )}
       {hasNext && (
         <div className="rounded-xl border border-primary-200 bg-primary-50 p-3">
           <div className="text-[10.5px] uppercase tracking-[0.08em] text-primary-700 font-semibold">Next</div>

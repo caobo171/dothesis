@@ -37,4 +37,22 @@ describe("RoadmapPanel", () => {
     await waitFor(() => screen.getByTestId("roadmap-panel"));
     expect(screen.queryByRole("button")).toBeNull();
   });
+
+  test("renders the F11 timeline card with an on-track/behind badge", async () => {
+    apiFetch.mockResolvedValue({
+      ...FIXTURE,
+      timeline: { this_week: "Data analysis", on_track: false, weeks_behind: 2 },
+    });
+    render(<RoadmapPanel projectId="abc" />);
+    await waitFor(() => screen.getByTestId("timeline-card"));
+    expect(screen.getByText("This week: Data analysis")).toBeTruthy();
+    expect(screen.getByText(/2 week\(s\) behind/)).toBeTruthy();
+  });
+
+  test("no timeline card when the plan is absent", async () => {
+    apiFetch.mockResolvedValue(FIXTURE); // no `timeline` key
+    render(<RoadmapPanel projectId="abc" />);
+    await waitFor(() => screen.getByTestId("roadmap-panel"));
+    expect(screen.queryByTestId("timeline-card")).toBeNull();
+  });
 });
