@@ -159,3 +159,23 @@ def test_commit_slice_still_rejects_roadmap_tasks_key(store):
     # roadmap_tasks must not be writable through the module slice path.
     with pytest.raises(SliceOwnershipError):
         store.commit_slice("M4", {"roadmap_tasks": []}, reason="x")
+
+
+# -- cross-session memory: advisor_feedback + institution_profile (F4 Task 1) --
+def test_advisor_feedback_roundtrip(store):
+    d = store.upsert_advisor_feedback({"chapter": "results", "issue": "report effect sizes",
+                                       "required_change": "add Cohen's f2"})
+    assert d["status"] == "open" and d["id"]
+    before = store.load()
+    assert store.mark_advisor_feedback_addressed(d["id"]) is True
+    after = store.load()
+    assert after["contextStore"]["advisor_feedback"][0]["status"] == "addressed"
+    # dedicated path: module state machine untouched
+    assert after["focus"] == before["focus"] and after["status"] == before["status"]
+
+
+def test_set_institution_profile_merges(store):
+    store.set_institution_profile({"citation_style": "apa7"})
+    store.set_institution_profile({"min_references": 30})
+    prof = store.load()["contextStore"]["institution_profile"]
+    assert prof == {"citation_style": "apa7", "min_references": 30}

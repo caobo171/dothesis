@@ -281,6 +281,47 @@ class ProjectStateStore:
             self._save(state)
         return hit
 
+    # -- cross-session memory (per-project) -------------------------------
+    # Same rationale as roadmap_tasks: durable per-project data (advisor
+    # directives, institution profile) that must NOT move module status/focus/
+    # history, so it bypasses commit_slice. Both keys are COACHING_KEYS members,
+    # so DbProjectStateStore already round-trips them (F0).
+    def upsert_advisor_feedback(self, directive: dict[str, Any]) -> dict[str, Any]:
+        """Add or update an advisor directive by id. Only touches advisor_feedback."""
+        import uuid as _uuid
+        state = self.load()
+        items = list(state["contextStore"].get("advisor_feedback") or [])
+        stored = {**directive}
+        stored.setdefault("id", _uuid.uuid4().hex)
+        stored.setdefault("status", "open")
+        stored.setdefault("source", "professor")
+        stored.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+        items = [d for d in items if d.get("id") != stored["id"]] + [stored]
+        state["contextStore"]["advisor_feedback"] = items
+        self._save(state)
+        return stored
+
+    def mark_advisor_feedback_addressed(self, feedback_id: str) -> bool:
+        """Flip a directive to addressed (with a timestamp). False if id not found."""
+        state = self.load()
+        hit = False
+        for d in state["contextStore"].get("advisor_feedback") or []:
+            if d.get("id") == feedback_id:
+                d["status"] = "addressed"
+                d["addressed_at"] = datetime.now(timezone.utc).isoformat()
+                hit = True
+        if hit:
+            self._save(state)
+        return hit
+
+    def set_institution_profile(self, fields: dict[str, Any]) -> dict[str, Any]:
+        """Merge fields into the institution_profile key (never wipes prior fields)."""
+        state = self.load()
+        prof = {**(state["contextStore"].get("institution_profile") or {}), **fields}
+        state["contextStore"]["institution_profile"] = prof
+        self._save(state)
+        return prof
+
 
 def _validate_module(module: str) -> None:
     if module not in MODULES:
