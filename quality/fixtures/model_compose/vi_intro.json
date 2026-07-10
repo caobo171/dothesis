@@ -1,0 +1,27 @@
+{
+  "id": "vi_intro",
+  "language": "vi",
+  "compose_prompt": "Viết chương Mở đầu cho một luận văn định lượng về ảnh hưởng của mạng xã hội đến hành vi học tập của sinh viên. Nêu bối cảnh, khoảng trống nghiên cứu, mục tiêu và câu hỏi nghiên cứu. Văn phong học thuật, khoảng 350 từ, bằng tiếng Việt.",
+  "context_store": {
+    "m1_topic": {
+      "language": "vi",
+      "research_title": "Ảnh hưởng của mạng xã hội đến hành vi học tập của sinh viên đại học",
+      "research_questions": [
+        "Mạng xã hội ảnh hưởng như thế nào đến sự tập trung trong học tập?",
+        "Thói quen học tập có điều tiết mối quan hệ này không?"
+      ]
+    },
+    "m2_literature": {
+      "literature_sources": [
+        {"title": "Social media use and academic performance", "authors": ["Junco"], "year": 2012}
+      ],
+      "research_gaps": [
+        "Thiếu nghiên cứu định lượng ở bối cảnh sinh viên Việt Nam về cơ chế xao nhãng."
+      ]
+    },
+    "m3_design": {
+      "methodology": "PLS-SEM",
+      "hypotheses": ["H1: Sử dụng mạng xã hội -> Sự chú ý học tập (-)"]
+    }
+  }
+}

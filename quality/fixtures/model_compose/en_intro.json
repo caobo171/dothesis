@@ -1,0 +1,27 @@
+{
+  "id": "en_intro",
+  "language": "en",
+  "compose_prompt": "Write the Introduction chapter for a quantitative thesis on how live-streaming commerce affordances shape consumers' purchase intention. Ground the argument in the S-O-R framework, state the research gap, and end with the research questions. Academic register, ~350 words.",
+  "context_store": {
+    "m1_topic": {
+      "research_title": "IT affordances of live-streaming commerce and consumer purchase intention: an S-O-R perspective",
+      "research_questions": [
+        "How do live-streaming IT affordances influence purchase intention?",
+        "Does perceived trust mediate the affordance-intention link?"
+      ]
+    },
+    "m2_literature": {
+      "literature_sources": [
+        {"title": "How live streaming influences purchase intentions in social commerce", "authors": ["Sun"], "year": 2019},
+        {"title": "Stimulus-Organism-Response model in retail environments", "authors": ["Mehrabian", "Russell"], "year": 1974}
+      ],
+      "research_gaps": [
+        "Affordance-level (not platform-level) drivers of purchase intention in live commerce are under-examined."
+      ]
+    },
+    "m3_design": {
+      "methodology": "PLS-SEM",
+      "hypotheses": ["H1: Visibility affordance -> purchase intention (+)"]
+    }
+  }
+}

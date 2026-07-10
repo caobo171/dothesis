@@ -33,6 +33,46 @@ def test_model_failure_is_isolated(monkeypatch):
     assert rows[0]["errors"] >= 1 and rows[0]["marker_reliability"] == 0.0
 
 
+# -- Task 4: compose-quality tie-in (F3 rubric) ----------------------------
+def test_compose_quality_uses_rubric(monkeypatch):
+    # No network, no real rubric: stub the model client AND score_thesis so the
+    # test proves evaluate_compose_quality delegates scoring to the F3 rubric.
+    monkeypatch.setattr(me, "_complete",
+                        lambda m, p, system=None: ("composed prose", {"in": 10, "out": 10}))
+    import quality.rubric as rub
+    monkeypatch.setattr(rub, "score_thesis", lambda cs, **k: {"overall": 0.77})
+    q = me.evaluate_compose_quality(
+        "good", [{"context_store": {"m1_topic": {}}, "compose_prompt": "write intro"}])
+    assert q == 0.77
+
+
+def test_compose_quality_folded_into_rows(monkeypatch):
+    # When compose fixtures are supplied, evaluate_models must fold `quality`
+    # into each row (the deep signal beyond the probes).
+    monkeypatch.setattr(me, "_complete",
+                        lambda m, p, system=None: ("prose", {"in": 5, "out": 5}))
+    monkeypatch.setattr(me, "cost", lambda m, i, o: 0.001)
+    import quality.rubric as rub
+    monkeypatch.setattr(rub, "score_thesis", lambda cs, **k: {"overall": 0.66})
+    rows = me.evaluate_models(
+        ["m"], [{"id": "opt", "prompt": "p", "expect": {"kind": "marker", "value": "OPTIONS"}}],
+        compose_fixtures=[{"context_store": {"m1_topic": {}}, "compose_prompt": "write"}])
+    assert rows[0]["quality"] == 0.66
+
+
+def test_real_fixtures_load_and_include_vietnamese():
+    # The shipped compose fixtures must parse and carry a Vietnamese one so the
+    # shootout measures VN compose quality, not just English.
+    import json
+    from pathlib import Path
+    fx_dir = Path(__file__).resolve().parents[2] / "quality/fixtures/model_compose"
+    fixtures = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(fx_dir.glob("*.json"))]
+    assert len(fixtures) >= 2
+    for fx in fixtures:
+        assert "context_store" in fx and "compose_prompt" in fx
+    assert any(fx.get("language") == "vi" for fx in fixtures)
+
+
 # -- Task 5: report / recommend / gate -------------------------------------
 def test_recommend_picks_best_value_above_floor():
     rows = [
