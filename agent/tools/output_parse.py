@@ -101,3 +101,50 @@ def parse_smartpls_export(file: str) -> str:
         # ask the student for the values rather than crashing the turn.
         return json.dumps({"error": f"couldn't parse export: {e}",
                            "hint": "paste the values or upload a screenshot"}, ensure_ascii=False)
+
+
+# --- Vision path (screenshot) --------------------------------------------
+# Convenience path for when the student only has a screenshot. It goes through the
+# REAL multimodal API (agent.multimodal) + the Gemini LLM factory, so it is isolated
+# behind _vision_read() — the single function tests stub — to keep the network/model
+# boundary out of the test suite.
+_VISION_PROMPT = ("Transcribe ONLY the visible results table into STRICT JSON "
+                  '{"table_kind": "...", "rows": [{"item": "", "value": <number or null>}]}. '
+                  "Do NOT invent numbers; mark unreadable cells null. No prose.")
+
+
+def _vision_read(file: str) -> str:
+    """Read a results-table image via Gemini. `file` is already the workspace path.
+
+    Uses the real multimodal contract: build_user_message(text, [Attachment], provider)
+    -> HumanMessage, with provider="gemini" (the valid Provider literal in
+    agent/multimodal.py — "google" would raise ValueError). The LLM comes from the
+    orchestrator's Gemini factory (agent -> orchestrator import is allowed; agent ->
+    app is not). Isolated so tests stub it and never call a model."""
+    from agent.multimodal import Attachment, build_user_message  # noqa: PLC0415 (real API)
+    from orchestrator.tools.m5_writing import _get_llm  # noqa: PLC0415 (Gemini factory)
+    att = Attachment.from_path(file)                       # `file` is already the path
+    msg = build_user_message(_VISION_PROMPT, [att], provider="gemini")  # valid Provider literal
+    return str(getattr(_get_llm().invoke([msg]), "content", ""))
+
+
+@tool
+def parse_output_table(file: str) -> str:
+    """Parse a SCREENSHOT (a workspace image file) of a SmartPLS/SPSS/AMOS results table into
+    {table_kind, rows}. Prefer parse_smartpls_export if the student has the file. Never invents
+    numbers; low-confidence parses ask the student to confirm."""
+    raw = _vision_read(file)
+    # Extract the JSON object the model was asked to emit. If there is none, the
+    # model didn't find a table — surface that, don't fabricate a parse.
+    s, e = raw.find("{"), raw.rfind("}")
+    if s == -1 or e == -1:
+        return json.dumps({"error": "couldn't read a table in that image",
+                           "hint": "paste the values or upload the SmartPLS HTML export"})
+    try:
+        data = json.loads(raw[s:e + 1])
+    except Exception:
+        # Malformed JSON = low confidence: hand it back for confirmation, don't guess.
+        return json.dumps({"needs_confirmation": True, "raw": raw[:300]})
+    if not data.get("rows"):
+        return json.dumps({"needs_confirmation": True, "parsed": data})
+    return json.dumps(data, ensure_ascii=False)
