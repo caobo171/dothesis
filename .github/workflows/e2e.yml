@@ -1,0 +1,151 @@
+# .github/workflows/e2e.yml
+#
+# Two tiers (2026-07-08 e2e-testing spec):
+#   e2e-mocked — every PR to master. Deterministic, free: the LLM is the
+#                fixture-scripted FakeChatModel; everything else is real
+#                (Postgres, MinIO, uvicorn, next dev, deepagents tools).
+#   e2e-live   — nightly/manual, secret-gated like live-validation.yml:
+#                one real completion proves the marker pipeline against the
+#                actual model. No secrets => the job no-ops green.
+#
+# NOTE: live-validation.yml and quality.yml are STALE (pre-api/agent/web
+# layout) and deliberately untouched here — retiring them is a follow-up
+# once this workflow has proven itself (see the spec's Non-goals).
+name: E2E
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+  schedule:
+    - cron: "30 18 * * *"
+
+jobs:
+  e2e-mocked:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install LibreOffice (PDF leg of the export suite)
+        # run-e2e.sh probes `command -v soffice`; with it present the export
+        # suite RUNS in CI (not skipped). libreoffice-writer pulls in
+        # libreoffice-core, which provides the `soffice` binary.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-writer
+
+      - name: Build api venv
+        # CI must build its OWN venv: the local dev venv is macOS-arm64 wheels,
+        # useless on Linux. Editable-installing the three packages registers
+        # `app` (api), `agent`, and `orchestrator` on sys.path so uvicorn +
+        # the engine import. On a fresh clone the editable paths and the
+        # checkout coincide, so playwright.config's PYTHONPATH pin is a no-op.
+        run: |
+          cd api
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e . -e ../agent -e ../orchestrator
+
+      - name: Install web deps + Chromium
+        run: |
+          cd web
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E (mocked LLM tier)
+        # run-e2e.sh brings up its own ephemeral Postgres + MinIO containers,
+        # runs migrations, creates the bucket, then `playwright test`. No live
+        # LLM secret is needed — the tier is DOTHESIS_E2E_MOCK the whole way.
+        run: web/e2e/run-e2e.sh
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
+
+  e2e-live:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Mirrors live-validation.yml: probe the secret, no-op green without it.
+      - name: Check live secret availability
+        id: secret_check
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [[ -n "${GOOGLE_API_KEY:-}" || -n "${GEMINI_API_KEY:-}" ]]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "No live API secret configured — skipping live tier."
+          fi
+
+      - name: Setup Python
+        if: steps.secret_check.outputs.has_key == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Setup Node
+        if: steps.secret_check.outputs.has_key == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build api venv
+        if: steps.secret_check.outputs.has_key == 'true'
+        run: |
+          cd api
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e . -e ../agent -e ../orchestrator
+
+      - name: Install web deps + Chromium
+        if: steps.secret_check.outputs.has_key == 'true'
+        run: |
+          cd web
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E (live tier — @live smoke only)
+        if: steps.secret_check.outputs.has_key == 'true'
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DOTHESIS_E2E_LIVE: "1"
+        # --grep filters tests but NOT dependency projects: the auth setup
+        # project still runs in full and seeds the users the smoke needs.
+        run: web/e2e/run-e2e.sh --grep @live
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-live
+          path: web/playwright-report/
+          retention-days: 7
