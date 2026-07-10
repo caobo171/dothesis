@@ -39,3 +39,43 @@ def test_sanitize_drops_placeholder_table():
     out = sanitize_prose(md)
     assert "|" not in out          # the dotted shell table is gone
     assert "Real prose." in out    # surrounding prose kept
+
+
+# --- Task 3: shared compose_and_export back half ----------------------------
+import orchestrator.tools.m5_writing as m5
+from orchestrator.tools import compose_export as ce
+
+
+def test_compose_sections_orders_canonically_and_calls_compose(monkeypatch):
+    seen = []
+
+    # compose_chapter is a LangChain StructuredTool (pydantic) whose .invoke is
+    # not a settable field, so we swap the whole object in the ce namespace that
+    # compose_sections resolves — proving compose is called once per chapter.
+    class _FakeTool:
+        def invoke(self, payload):
+            seen.append(payload["chapter_name"])
+            return {"prose": f"prose for {payload['chapter_name']}"}
+
+    monkeypatch.setattr(ce, "compose_chapter", _FakeTool())
+    store = {"m1_topic": {"research_title": "T"}, "m4_analysis": {"analysis_results": "x"}}
+    # Pass chapters OUT of order; expect canonical order in the output.
+    out = ce.compose_sections(store, ["results", "intro"], "en")
+    assert [s["title"] for s in out]  # titles resolved
+    assert seen == ["intro", "results"]  # canonical order enforced
+
+
+def test_compose_and_export_calls_run_export(monkeypatch):
+    monkeypatch.setattr(ce, "compose_sections",
+                        lambda *a, **k: [{"title": "Chapter 4 — Results", "prose": "p"}])
+    called = {}
+    # compose_and_export calls run_export THROUGH the m5_writing module (not a
+    # name bound at import), so patching m5.run_export intercepts it.
+    monkeypatch.setattr(m5, "run_export",
+                        lambda sections, pid, references=None, language="en":
+                        called.update(pid=pid, n=len(sections)) or
+                        [{"kind": "pdf", "s3_key": f"projects/{pid}/x.pdf", "size_bytes": 1}])
+    arts = ce.compose_and_export({"m1_topic": {}}, "partner-abc",
+                                 chapters=["results"], language="en")
+    assert called == {"pid": "partner-abc", "n": 1}
+    assert arts[0]["kind"] == "pdf"
