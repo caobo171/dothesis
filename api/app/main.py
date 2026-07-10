@@ -118,6 +118,14 @@ def create_app() -> FastAPI:
     app.include_router(admin_announcements_router.router, prefix="/api/v1")
     app.include_router(announcements_router.router, prefix="/api/v1")
 
+    # E2E test seams — mounted ONLY under DOTHESIS_TEST_SUPPORT=1 (defaults
+    # off; see routers/test_support.py for the threat-model notes). Placed
+    # before the orchestrator block on purpose: the auth/billing suite needs
+    # these seams even in configs where chat (orchestrator) is off.
+    if settings.test_support_enabled:
+        from .routers import test_support as test_support_router
+        app.include_router(test_support_router.router, prefix="/api/v1")
+
     if settings.orchestrator_enabled:
         from .routers import chat as chat_router
         from .routers import exports as exports_router  # SP6: M5 export download

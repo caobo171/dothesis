@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     google_client_id: str = Field(alias="DOTHESIS_GOOGLE_CLIENT_ID", default="")
     signup_bonus_credits: int = Field(alias="DOTHESIS_SIGNUP_BONUS_CREDITS", default=100)
     orchestrator_enabled: bool = Field(alias="ORCHESTRATOR_ENABLED", default=False)
+    # E2E test-support router switch. Separate from DOTHESIS_E2E_MOCK because
+    # the live E2E tier runs the REAL model but still needs user/project
+    # seeding. Defaults off: in prod the /test/* routes are never mounted.
+    test_support_enabled: bool = Field(alias="DOTHESIS_TEST_SUPPORT", default=False)
     # Shared secret for the service-to-service partner report endpoint
     # (POST /api/v1/partner/report). Set on both DoThesis and the calling
     # partner (e.g. Fillform). Empty disables the endpoint (401 on every call).
