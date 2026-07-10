@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     partner_api_token: str = Field(alias="PARTNER_API_TOKEN", default="")
     langsmith_api_key: str | None = Field(alias="LANGSMITH_API_KEY", default=None)
     orchestrator_pg_pool_max: int = Field(alias="ORCHESTRATOR_PG_POOL_MAX", default=10)
+    # Backend agent-quality analytics (F5). Empty key ⇒ app.analytics.emit no-ops,
+    # so this is safe to ship before a prod PostHog project exists. Matches the
+    # Field(alias=...) convention used above rather than the plan's bare-attr sketch.
+    posthog_api_key: str = Field(alias="POSTHOG_API_KEY", default="")
+    posthog_host: str = Field(alias="POSTHOG_HOST", default="https://us.i.posthog.com")
 
     @field_validator("s3_prefix", mode="before")
     @classmethod
