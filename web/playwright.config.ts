@@ -42,9 +42,25 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    // Task 4 adds the "setup" auth project and the storageState-backed
-    // journey projects; until then only the unauthenticated smoke runs.
+    // Runs first (project dependencies); Playwright starts webServers before
+    // any project, so the API is up when this seeds users. NOTE: test
+    // filters (--grep, file args) do NOT apply to dependency projects —
+    // setup always runs in full, which the live tier's --grep relies on.
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
     { name: "smoke", testMatch: /smoke\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "journeys",
+      testMatch: /(onboarding|m1-to-m5|export|live-smoke)\.spec\.ts/,
+      dependencies: ["setup"],
+      use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/user.json" },
+    },
+    {
+      // The one suite that drives login/signup for real — no storageState.
+      name: "auth-billing",
+      testMatch: /auth-billing\.spec\.ts/,
+      dependencies: ["setup"], // needs the seeded broke user
+      use: { ...devices["Desktop Chrome"] },
+    },
   ],
   webServer: [
     {
