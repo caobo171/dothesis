@@ -133,3 +133,29 @@ def test_slice_map_and_dag_consistency():
     for module, downstream in DOWNSTREAM.items():
         assert module in modules
         assert set(downstream) <= modules
+
+
+# -- roadmap_tasks coaching write path (F2 Task 3) ------------------------
+# Blockers are ephemeral coaching aids: the dedicated path must never disturb
+# the module state machine (focus/status/history), unlike commit_slice.
+def test_upsert_roadmap_task_does_not_touch_focus_or_status(store):
+    before = store.load()
+    store.upsert_roadmap_task({"module": "M4", "substep": "interpret",
+                               "title": "HTMT fails", "why": "validity", "status": "open"})
+    after = store.load()
+    assert after["focus"] == before["focus"]
+    assert after["status"] == before["status"]
+    assert after["contextStore"]["roadmap_tasks"][0]["title"] == "HTMT fails"
+
+
+def test_resolve_roadmap_task_flips_status(store):
+    t = store.upsert_roadmap_task({"module": "M4", "title": "x", "why": "y", "status": "open"})
+    assert store.resolve_roadmap_task(t["id"]) is True
+    assert store.load()["contextStore"]["roadmap_tasks"][0]["status"] == "done"
+    assert store.resolve_roadmap_task("missing") is False
+
+
+def test_commit_slice_still_rejects_roadmap_tasks_key(store):
+    # roadmap_tasks must not be writable through the module slice path.
+    with pytest.raises(SliceOwnershipError):
+        store.commit_slice("M4", {"roadmap_tasks": []}, reason="x")

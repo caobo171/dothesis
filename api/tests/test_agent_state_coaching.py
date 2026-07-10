@@ -41,3 +41,14 @@ def test_read_api_returns_persisted_coaching(project_id):
     store._save(st)
     assert store.get_advisor_feedback()[0]["id"] == "1"
     assert store.get_institution_profile() == {}
+
+
+def test_upsert_roadmap_task_round_trips_in_db(project_id):
+    # F2 Task 3's dedicated coaching write path must persist through the DB store
+    # (not only the file store), since roadmap_tasks lives in the coaching column.
+    store = DbProjectStateStore(get_engine(), project_id, "/tmp/ws")
+    t = store.upsert_roadmap_task({"module": "M4", "title": "HTMT fails",
+                                   "why": "validity", "status": "open"})
+    reloaded = DbProjectStateStore(get_engine(), project_id, "/tmp/ws").load()
+    tasks = reloaded["contextStore"]["roadmap_tasks"]
+    assert tasks[0]["id"] == t["id"] and tasks[0]["title"] == "HTMT fails"

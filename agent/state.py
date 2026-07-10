@@ -248,6 +248,39 @@ class ProjectStateStore:
             "version": len(state["versionHistory"]),
         }
 
+    # -- roadmap_tasks (coaching blockers) --------------------------------
+    # Deliberately NOT commit_slice: blockers are ephemeral coaching aids, so
+    # writing one must never shift focus, change module status, propagate
+    # needs_review, or add a version snapshot. This keeps the module state
+    # machine pristine while still funneling writes through the store.
+    # roadmap_tasks is a COACHING_KEYS member, so DbProjectStateStore already
+    # round-trips it (see F0 / project_db_store_persistence_gap).
+    def upsert_roadmap_task(self, task: dict[str, Any]) -> dict[str, Any]:
+        """Add or replace a blocker (by id). Only touches roadmap_tasks."""
+        import uuid as _uuid
+        state = self.load()
+        tasks = list(state["contextStore"].get("roadmap_tasks") or [])
+        stored = {**task}
+        stored.setdefault("id", _uuid.uuid4().hex)
+        stored.setdefault("status", "open")
+        tasks = [t for t in tasks if t.get("id") != stored["id"]] + [stored]
+        state["contextStore"]["roadmap_tasks"] = tasks
+        self._save(state)
+        return stored
+
+    def resolve_roadmap_task(self, task_id: str) -> bool:
+        """Flip a blocker to done. Returns False if the id wasn't found."""
+        state = self.load()
+        tasks = state["contextStore"].get("roadmap_tasks") or []
+        hit = False
+        for t in tasks:
+            if t.get("id") == task_id:
+                t["status"] = "done"
+                hit = True
+        if hit:
+            self._save(state)
+        return hit
+
 
 def _validate_module(module: str) -> None:
     if module not in MODULES:
