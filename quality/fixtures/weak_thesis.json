@@ -1,0 +1,21 @@
+{
+  "m1_topic": {
+    "research_title": "A study",
+    "research_questions": []
+  },
+  "m2_literature": {
+    "literature_sources": []
+  },
+  "m3_design": {
+    "methodology": "PLS-SEM"
+  },
+  "m4_analysis": {
+    "analysis_results": "We ran the model and it worked."
+  },
+  "m5_writing": {
+    "final_sections": [
+      {"title": "Introduction", "prose": "TODO: write this section later."},
+      {"title": "Results", "prose": "As reported by (Nguyen, 2099) the results are significant."}
+    ]
+  }
+}

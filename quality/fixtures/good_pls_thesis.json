@@ -1,0 +1,39 @@
+{
+  "m1_topic": {
+    "research_title": "The Effect of Perceived Usefulness on Continuance Intention in Mobile Banking",
+    "research_questions": [
+      "Does perceived usefulness influence continuance intention?",
+      "Does satisfaction mediate the relationship between usefulness and continuance intention?"
+    ],
+    "language": "en"
+  },
+  "m2_literature": {
+    "literature_sources": [
+      {"title": "Understanding IS continuance", "authors": ["Bhattacherjee"], "year": 2001},
+      {"title": "Technology acceptance model", "authors": ["Davis"], "year": 1989},
+      {"title": "Mobile banking adoption", "authors": ["Zhou"], "year": 2011},
+      {"title": "Expectation-confirmation in IS", "authors": ["Oliver"], "year": 1980},
+      {"title": "PLS-SEM in research", "authors": ["Hair"], "year": 2017}
+    ],
+    "research_gaps": [
+      "Limited evidence on continuance (not initial adoption) in emerging-market mobile banking."
+    ]
+  },
+  "m3_design": {
+    "methodology": "PLS-SEM",
+    "conceptual_model": {"nodes": ["PU", "SAT", "CI"], "edges": [["PU", "CI"], ["PU", "SAT"], ["SAT", "CI"]]},
+    "hypotheses": [
+      "H1: Perceived usefulness positively affects continuance intention.",
+      "H2: Satisfaction mediates the usefulness-continuance relationship."
+    ]
+  },
+  "m4_analysis": {
+    "analysis_results": "Measurement model: Cronbach's alpha 0.82-0.91, composite reliability (CR) 0.88-0.93, AVE 0.61-0.72 (convergent validity established). Discriminant validity confirmed via HTMT (all ratios < 0.85). Structural model: path coefficient PU->CI beta = 0.41 (p < .001), SAT->CI beta = 0.33 (p < .01). R2 for continuance intention = 0.52. p-value for all paths < .05."
+  },
+  "m5_writing": {
+    "final_sections": [
+      {"title": "Introduction", "prose": "This study investigates the drivers of continuance intention in mobile banking. Grounded in the expectation-confirmation model (Bhattacherjee, 2001) and the technology acceptance model (Davis, 1989), it examines how perceived usefulness shapes users' decision to continue using mobile banking services. The introduction frames the research problem, states the objectives, and outlines the contribution to the information systems continuance literature in an emerging-market context."},
+      {"title": "Results", "prose": "The measurement model demonstrated adequate reliability and validity (Hair, 2017). Composite reliability exceeded 0.88 and AVE exceeded 0.61 for all constructs, establishing convergent validity. Discriminant validity was confirmed through the HTMT criterion. The structural model explained 52 percent of the variance in continuance intention. Perceived usefulness had a significant positive effect on continuance intention, and satisfaction partially mediated this relationship, supporting both hypotheses."}
+    ]
+  }
+}
