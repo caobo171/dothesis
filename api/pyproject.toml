@@ -33,6 +33,10 @@ dependencies = [
   "langchain-google-genai>=4.1.0,<5",
   "pdfminer.six>=20231228",
   "posthog>=3.0",
+  # F13: deterministic results-export parsing. lxml backs pandas.read_html for the
+  # HTML export path; openpyxl backs the .xlsx path in agent/tools/output_parse.py.
+  "lxml>=5.0",
+  "openpyxl>=3.1",
 ]
 
 [project.optional-dependencies]
