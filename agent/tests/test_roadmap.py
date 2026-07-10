@@ -30,3 +30,47 @@ def test_derived_substep_is_always_in_spine_or_none():
     for m in ROADMAP:
         sub = derive_substep(m, _state())
         assert sub is None or sub in ROADMAP[m]
+
+
+# -- next_action (5-way precedence) ---------------------------------------
+from agent.roadmap import next_action
+
+
+def _full(status, cs=None, focus="M1"):
+    return {"contextStore": cs or {}, "status": status, "focus": focus}
+
+
+def test_open_blocker_wins():
+    s = _full({"M1": "in_progress", "M2": "locked", "M3": "locked", "M4": "locked", "M5": "locked"},
+              cs={"research_title": "T", "roadmap_tasks": [
+                  {"id": "b1", "module": "M4", "substep": "interpret",
+                   "title": "HTMT 0.91 fails", "why": "discriminant validity", "status": "open"}]},
+              focus="M1")
+    na = next_action(s)
+    assert na["module"] == "M4" and "HTMT" in na["title"]
+
+
+def test_needs_review_wins_over_advance():
+    s = _full({"M1": "done", "M2": "needs_review", "M3": "locked", "M4": "locked", "M5": "locked"},
+              cs={"research_title": "T", "research_questions": ["Q"]}, focus="M2")
+    na = next_action(s)
+    assert na["module"] == "M2" and "review" in na["why"].lower()
+
+
+def test_advance_focus_when_clean():
+    s = _full({"M1": "in_progress", "M2": "locked", "M3": "locked", "M4": "locked", "M5": "locked"},
+              cs={"research_title": "T"}, focus="M1")
+    na = next_action(s)
+    assert na["module"] == "M1" and na["substep"] == "derive_questions"
+
+
+def test_all_done_returns_none_or_export():
+    s = _full({m: "done" for m in ["M1", "M2", "M3", "M4", "M5"]},
+              cs={"final_sections": [{"x": 1}]}, focus="M5")
+    na = next_action(s)
+    assert na is None or na["substep"] == "export"
+
+
+def test_null_safe_on_empty_state():
+    # headless-produced state (no roadmap_tasks, minimal status) must not crash.
+    assert next_action({"contextStore": {}, "status": {}, "focus": None}) is not None

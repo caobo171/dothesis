@@ -70,3 +70,66 @@ def derive_substep(module: str, state: dict) -> str | None:
             return "synthesize_sections"
         return None
     return None
+
+
+from agent.state import MODULES  # ["M1".."M5"]  (import here: derive_substep above is dep-free)
+
+
+def _title_for(module: str, substep: str | None) -> str:
+    if substep is None:
+        return f"Confirm {module} is done"
+    return SUBSTEP_LABELS.get(substep, substep)
+
+
+def next_action(state: dict) -> dict | None:
+    """The single next thing the student should do. Deterministic precedence:
+    open blocker > needs_review > advance focus > next module > done.
+
+    Null-safe on headless-produced state (no roadmap_tasks, minimal status) so it
+    never crashes an auto-mode / partner turn — the chat coaching layer must not
+    couple into the headless surfaces.
+    """
+    cs = state.get("contextStore") or {}
+    status = state.get("status") or {}
+    focus = state.get("focus") or "M1"
+
+    # 1) An open agent-inserted blocker jumps the queue.
+    for t in cs.get("roadmap_tasks") or []:
+        if t.get("status") == "open":
+            return {"module": t.get("module", focus), "substep": t.get("substep", ""),
+                    "title": t.get("title", "Resolve blocker"),
+                    "why": t.get("why", "This is blocking progress."),
+                    "cta_options": ["How do I fix this?", "Skip for now"]}
+
+    # 2) A started module flagged for review beats marching forward.
+    for m in MODULES:
+        if status.get(m) == "needs_review":
+            return {"module": m, "substep": derive_substep(m, state) or "",
+                    "title": f"Re-check {m}",
+                    "why": "An upstream change flagged it for review — resolve it before moving on.",
+                    "cta_options": [f"Review {m}", "Why does this need review?"]}
+
+    # 3) Advance the focus module.
+    if status.get(focus) not in ("done", None) or derive_substep(focus, state) is not None:
+        sub = derive_substep(focus, state)
+        if sub is not None:
+            return {"module": focus, "substep": sub, "title": _title_for(focus, sub),
+                    "why": "This is the next step in your current module.",
+                    "cta_options": [_title_for(focus, sub), "Skip to next module"]}
+        if status.get(focus) != "done":
+            return {"module": focus, "substep": "", "title": f"Confirm {focus} is done",
+                    "why": f"{focus} has all its content — confirm it so we move on.",
+                    "cta_options": [f"Mark {focus} done", "Not yet"]}
+
+    # 4) Move to the first not-done module in order.
+    for m in MODULES:
+        if status.get(m) != "done":
+            sub = derive_substep(m, state)
+            return {"module": m, "substep": sub or "", "title": _title_for(m, sub),
+                    "why": f"{focus} is done — {m} is next.",
+                    "cta_options": [f"Start {m}", f"What does {m} involve?"]}
+
+    # 5) Everything done.
+    return {"module": "M5", "substep": "export", "title": "Export your thesis",
+            "why": "Every module is done — generate the final document.",
+            "cta_options": ["Export my thesis", "Review it first"]}
