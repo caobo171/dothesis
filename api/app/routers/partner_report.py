@@ -146,6 +146,11 @@ async def create_partner_report(
             500, detail={"error": {"code": "report_failed", "message": "report generation failed"}},
         )
 
+    # F5: partner surface export completed. Headless (no user id) — pass None;
+    # best-effort so the partner path gains no blocking logic (headless invariant).
+    from ..analytics import emit
+    emit("export_completed", None,
+         {"scope": ",".join(chapter_list) if chapter_list else depth, "surface": "partner"})
     return result
 
 

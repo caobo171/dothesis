@@ -271,6 +271,12 @@ class DbProjectStateStore(ProjectStateStore):
 
             artifacts = run_export(sections, str(self.project_id), references=references, language=language)
             self.persist_export_artifacts(artifacts)
+            # F5: auto surface (headless M5 done-hook) export completed. Emitted
+            # here rather than in job_runner because this IS the auto-mode export
+            # chokepoint; best-effort, no user id at the store layer.
+            from .analytics import emit  # noqa: PLC0415
+            emit("export_completed", getattr(self, "user_id", None),
+                 {"scope": "full", "surface": "auto", "project_id": str(self.project_id)})
             log.info("M5 auto-export completed for project %s", self.project_id)
         except Exception:
             log.exception("M5 auto-export failed for project %s", self.project_id)

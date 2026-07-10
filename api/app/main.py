@@ -176,6 +176,14 @@ def create_app() -> FastAPI:
 
     _memory_hook.distill_advisor_themes = _distill
 
+    # F5: wire the agent-layer analytics hook. agent/ and quality/ call
+    # agent.analytics.emit (a no-op by default) so they never import app; here the
+    # app rebinds it to the real best-effort PostHog emitter. Same indirection as
+    # the memory hook above.
+    import agent.analytics as _agent_analytics
+    from .analytics import emit as _emit
+    _agent_analytics.emit = _emit
+
     return app
 
 

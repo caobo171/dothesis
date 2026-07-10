@@ -45,6 +45,15 @@ def deterministic_dimensions(context_store: dict) -> list[dict]:
     pool = (context_store.get("m2_literature") or {}).get("literature_sources") or []
     cite = validate_citations_plain(_all_prose(context_store), pool)
     uncited = cite["uncited_warnings"]
+    # F5 (F0 decision): emit the hallucination-catch signal HERE — this is F3's
+    # citation dimension, the single place uncited (likely-fabricated) citations
+    # are detected. quality already imports agent (preflight/instrument dims), so
+    # agent.analytics.emit adds no new layering edge; it's a no-op until the app
+    # wires it. One event per rejected citation, breakdown-able by `kind`.
+    if uncited:
+        from agent.analytics import emit  # noqa: PLC0415
+        for u in uncited:
+            emit("citation_rejected", None, {"kind": "uncited", "citation": str(u)})
     citations = {
         "name": "citations", "weight": 0.20,
         "score": 1.0 if not uncited else max(0.0, 1.0 - 0.1 * len(uncited)),

@@ -24,6 +24,26 @@ from agent.timeline import timeline_status  # F11: you-are-here-vs-plan card
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["roadmap"])
 
+# F5 (F0 correction): the roadmap endpoint is POLLED, so emitting
+# next_action_surfaced on every call would flood PostHog. We emit ONLY when the
+# surfaced action actually changes. Change-detection is a per-process in-memory
+# map project_id -> (module, substep); this is deliberately NOT durable — the
+# only cost of a process restart (or a second web worker) is at most one
+# duplicate emit per project per restart, which is acceptable for a coaching
+# signal and avoids a new DB column / coaching-key round-trip just for dedup.
+_LAST_SURFACED: dict[str, tuple] = {}
+
+
+def _maybe_emit_next_action(project_id: str, na: dict, user_id) -> None:
+    key = (na.get("module"), na.get("substep"))
+    if _LAST_SURFACED.get(project_id) == key:
+        return  # unchanged since the last poll — skip to avoid a flood
+    _LAST_SURFACED[project_id] = key
+    from ..analytics import emit  # noqa: PLC0415 — best-effort, app layer
+    emit("next_action_surfaced", str(user_id) if user_id else None,
+         {"module": na.get("module"), "substep": na.get("substep"),
+          "project_id": project_id})
+
 
 def _authorize(db: Session, user: User, project_id: str) -> Project:
     """403 unless the caller owns the project. Kept thin so tests can stub it."""
@@ -75,11 +95,14 @@ async def get_roadmap(project_id: str, user: User = Depends(current_user),
         cur = derive_substep(m, state)
         modules.append({"id": m, "status": status.get(m, "locked"), "current": cur,
                         "substeps": _substep_states(m, cur, status.get(m, "locked"))})
+    na = next_action(state) or {}
+    # F5: emit only when the next action changed since the last poll (see above).
+    _maybe_emit_next_action(project_id, na, getattr(user, "id", None))
     return {
         "modules": modules,
         "tasks": [t for t in (state.get("contextStore", {}).get("roadmap_tasks") or [])
                   if t.get("status") == "open"],
-        "next_action": next_action(state) or {},
+        "next_action": na,
         # F11: progress-vs-plan for the timeline card. Null-safe — {} when the
         # student has no defense date yet, so the frontend simply renders no card.
         "timeline": timeline_status(state, date.today()),

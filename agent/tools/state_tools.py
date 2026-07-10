@@ -109,6 +109,9 @@ def make_state_tools(store: ProjectStateStore) -> list:
                 "why": stored.get("required_change") or "Address this advisor comment.",
                 "status": "open", "feedback_id": stored["id"]})
             added += 1
+        # F5: advisor-loop signal — how many directives were captured this turn.
+        from agent.analytics import emit  # noqa: PLC0415 — no-op until app wires it
+        emit("advisor_feedback_ingested", None, {"count": added})
         return json.dumps({"added": added}, ensure_ascii=False)
 
     @tool
@@ -128,6 +131,9 @@ def make_state_tools(store: ProjectStateStore) -> list:
                 distill_advisor_themes(store, fb)
             except Exception:
                 pass  # distillation is a nicety; never break the turn
+        # F5: advisor-loop signal — the "addressed" side of ingested-vs-addressed.
+        from agent.analytics import emit  # noqa: PLC0415 — no-op until app wires it
+        emit("advisor_feedback_addressed", None, {})
         return json.dumps({"addressed": ok}, ensure_ascii=False)
 
     @tool

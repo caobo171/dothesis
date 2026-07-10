@@ -170,6 +170,10 @@ def make_writing_tools(store) -> list:
                     persist(artifacts, scope=scope_tag)
                 except Exception:
                     logger.exception("export_docx: persist (scope=%s) failed", scope_tag)
+            # F5: chat-surface export completed (module-scoped). Best-effort.
+            from agent.analytics import emit  # noqa: PLC0415
+            emit("export_completed", None,
+                 {"scope": scope_tag, "surface": "chat", "project_id": str(project_id)})
             return json.dumps({
                 "ok": True,
                 "scope": scope_tag,
@@ -257,6 +261,10 @@ def make_writing_tools(store) -> list:
         # chapters" when fewer were produced. chapter_titles excludes the
         # auto-appended References section.
         chapter_titles = [s.get("title") for s in sections if (s.get("title") or "") != "References"]
+        # F5: chat-surface full-thesis export completed. Best-effort.
+        from agent.analytics import emit  # noqa: PLC0415
+        emit("export_completed", None,
+             {"scope": "full", "surface": "chat", "project_id": str(project_id)})
         return json.dumps({
             "ok": True,
             "generated": generated,
@@ -290,7 +298,16 @@ def make_writing_tools(store) -> list:
         # the empty dict/list through keeps F3 working without F4 present.
         profile = store.get_institution_profile() or None
         feedback = store.get_advisor_feedback() or []
-        return json.dumps(score_thesis(cs, institution_profile=profile,
-                                       advisor_feedback=feedback), ensure_ascii=False)
+        result = score_thesis(cs, institution_profile=profile, advisor_feedback=feedback)
+        # F5: emit the quality-trend signal (overall score, detected method,
+        # blocking-finding count). No user id at the tool layer — pass None; the
+        # dashboard trends on properties, not per-person. Best-effort hook.
+        from agent.analytics import emit  # noqa: PLC0415 — no-op until app wires it
+        emit("quality_reviewed", None, {
+            "overall": result.get("overall"),
+            "method": result.get("method"),
+            "blocking_count": len(result.get("blocking") or []),
+        })
+        return json.dumps(result, ensure_ascii=False)
 
     return [export_docx, review_thesis]
