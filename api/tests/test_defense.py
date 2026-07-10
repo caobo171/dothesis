@@ -28,6 +28,16 @@ def test_always_returns_questions_even_on_empty_state():
     assert len(qs) >= 3
 
 
+def test_rubric_findings_become_questions():
+    # Each F3 rubric finding (dimensions[].findings[]) becomes a targeted
+    # question so the drill hits the examiner's likely quality attack points.
+    rr = {"dimensions": [{"name": "citations", "findings": [
+        {"issue": "Citation (Ghost, 2099) has no matching reference.", "chapter": "intro"}]}]}
+    qs = committee_questions({}, rubric_result=rr)
+    assert any("ghost" in q["question"].lower() or "reference" in q["question"].lower()
+               for q in qs)
+
+
 def test_generate_committee_questions_tool_reads_store(monkeypatch):
     # F0 correction: the TOOL closes over the store and reads state itself (no
     # model-supplied context_store). Stub the rubric's LLM judge so no test hits

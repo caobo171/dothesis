@@ -64,10 +64,24 @@ def _state_weakpoints(cs: dict) -> list[dict]:
 
 
 def committee_questions(context_store: dict, rubric_result: dict | None = None) -> list[dict]:
-    """Pure question generator. State-only heuristics; rubric folding lands in Task 2.
+    """Pure question generator: state-only heuristics + (when a rubric is passed)
+    one targeted question per quality finding.
 
-    `context_store` is the NESTED module shape (m1_topic..m5_writing)."""
-    return _state_weakpoints(context_store or {})
+    `context_store` is the NESTED module shape (m1_topic..m5_writing). Decision:
+    fold the F3 rubric findings on TOP of the state heuristics so the drill hits
+    exactly the examiner's likely attack points; with no rubric it degrades to
+    the state-only staples (best-effort guarantee)."""
+    questions = _state_weakpoints(context_store or {})
+    if rubric_result:
+        for dim in rubric_result.get("dimensions", []):
+            for f in dim.get("findings", []):
+                questions.append({
+                    "category": dim.get("name", "general"),
+                    "question": f"A weakness was flagged: {f.get('issue')}. How do you respond?",
+                    "targets": dim.get("name"), "difficulty": "hard",
+                    "model_answer_hint": f.get(
+                        "fix", "Acknowledge and defend or disclose as a limitation.")})
+    return questions
 
 
 def make_defense_tools(store) -> list:
