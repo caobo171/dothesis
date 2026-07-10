@@ -142,3 +142,38 @@ def test_service_composes_and_presigns(monkeypatch):
     assert out["pdf_url"].endswith("report.pdf?sig=1")
     assert out["docx_url"].endswith("report.docx?sig=1")
     assert out["sections"] == ["Chapter 4 — Results"]
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — budgeted real M2 research with Crossref fallback.
+# ---------------------------------------------------------------------------
+
+def test_budgeted_scout_uses_real_scout_when_in_budget(monkeypatch):
+    import orchestrator.tools.m2_literature as m2lit
+    monkeypatch.setattr(m2lit.scout_citations, "func",
+                        lambda topic, min_n=8: [{"title": "Scouted", "doi": "10.1/a"}])
+    out = svc._budgeted_scout("topic", ["RQ1"])
+    assert out and out[0]["title"] == "Scouted"
+
+
+def test_budgeted_scout_falls_back_on_timeout(monkeypatch):
+    import orchestrator.tools.m2_literature as m2lit
+
+    def slow(topic, min_n=8):
+        import time; time.sleep(5); return []
+    monkeypatch.setattr(m2lit.scout_citations, "func", slow)
+    monkeypatch.setattr(svc, "_M2_SCOUT_TIMEOUT_S", 0.2)  # force timeout fast
+    monkeypatch.setattr(svc, "_literature_search",
+                        lambda *a, **k: [{"title": "Crossref fallback"}])
+    out = svc._budgeted_scout("topic", ["RQ1"])
+    assert out == [{"title": "Crossref fallback"}]
+
+
+def test_budgeted_scout_falls_back_on_error(monkeypatch):
+    import orchestrator.tools.m2_literature as m2lit
+
+    def boom(topic, min_n=8):
+        raise RuntimeError("scout down")
+    monkeypatch.setattr(m2lit.scout_citations, "func", boom)
+    monkeypatch.setattr(svc, "_literature_search", lambda *a, **k: [])
+    assert svc._budgeted_scout("topic", []) == []

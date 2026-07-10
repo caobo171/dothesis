@@ -298,6 +298,41 @@ def _literature_search(topic: str, research_questions: list[str] | None,
     return refs[:n]
 
 
+# Real M2 research for a partner report, under a wall-clock budget. The full
+# scout can run minutes / rate-limit; we cap it and fall back to the light
+# Crossref search so a report never hangs and never ships zero references.
+_M2_SCOUT_MIN = 8
+_M2_SCOUT_TIMEOUT_S = 45
+
+
+def _budgeted_scout(topic: str, research_questions: list[str]) -> list[dict]:
+    """Deep scout capped by time; Crossref fallback on timeout/error/empty."""
+    import concurrent.futures as _fut
+
+    composed = topic
+    if research_questions:
+        composed += "\nResearch questions:\n" + "\n".join(f"- {q}" for q in research_questions)
+
+    try:
+        from orchestrator.tools.m2_literature import scout_citations  # noqa: PLC0415
+        with _fut.ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(scout_citations.func, composed, min_n=_M2_SCOUT_MIN)
+            citations = future.result(timeout=_M2_SCOUT_TIMEOUT_S)
+        sources = [
+            {"title": c.get("title"), "authors": c.get("authors"), "year": c.get("year"),
+             "venue": c.get("source") or c.get("venue"), "doi": c.get("doi"),
+             "url": c.get("url")}
+            for c in (citations or [])
+        ]
+        if sources:
+            return sources
+    except Exception:
+        # TimeoutError, engine failure, rate limit — all fall through to Crossref.
+        logger.exception("partner_report: budgeted scout failed; using Crossref fallback")
+
+    return _literature_search(topic, research_questions)
+
+
 def _references_section(references: list[dict], language: str) -> dict:
     """Build a populated References section from the sources.
 
