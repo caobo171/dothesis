@@ -275,4 +275,22 @@ def make_writing_tools(store) -> list:
                            "buttons are already shown in your message.",
         }, ensure_ascii=False)
 
-    return [export_docx]
+    @tool
+    def review_thesis() -> str:
+        """Grade the current thesis against a committee-readiness rubric (structure,
+        citations, method-specific results, methodology, writing, and any open advisor
+        comments). Returns per-dimension scores plus specific fixes. Advisory — it does
+        not block export."""
+        from quality.rubric import score_thesis  # noqa: PLC0415
+
+        cs = store.load_full_context_store()
+        # F0: read the coaching keys through the store's TYPED getters (empty
+        # defaults), never getattr(store, "institution_profile", ...) — that
+        # attribute is never set and would silently mask a real profile. Passing
+        # the empty dict/list through keeps F3 working without F4 present.
+        profile = store.get_institution_profile() or None
+        feedback = store.get_advisor_feedback() or []
+        return json.dumps(score_thesis(cs, institution_profile=profile,
+                                       advisor_feedback=feedback), ensure_ascii=False)
+
+    return [export_docx, review_thesis]

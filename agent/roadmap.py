@@ -15,7 +15,10 @@ ROADMAP: dict[str, list[str]] = {
     "M2": ["familiarize", "map_research_state", "find_gaps", "confirm_refs", "generate_output"],
     "M3": ["define_constructs", "build_model", "state_hypotheses", "choose_method", "design_instrument"],
     "M4": ["detect_data", "outline_analysis", "confirm_plan", "run_per_step", "interpret"],
-    "M5": ["synthesize_sections", "assemble", "export"],
+    # "review" (F3): a committee-readiness grade before export. Advisory, so
+    # derive_substep never SNAPS to it (no backing artifact) — it's a display
+    # spine step the review_thesis tool renders; export stays the terminal step.
+    "M5": ["synthesize_sections", "assemble", "review", "export"],
 }
 
 SUBSTEP_LABELS: dict[str, str] = {
@@ -31,6 +34,7 @@ SUBSTEP_LABELS: dict[str, str] = {
     "confirm_plan": "Confirm the analysis plan", "run_per_step": "Run each analysis step",
     "interpret": "Interpret the results",
     "synthesize_sections": "Synthesize the chapters", "assemble": "Assemble the thesis",
+    "review": "Committee-readiness review",
     "export": "Export the document",
 }
 

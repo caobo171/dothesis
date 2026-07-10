@@ -74,3 +74,8 @@ def test_all_done_returns_none_or_export():
 def test_null_safe_on_empty_state():
     # headless-produced state (no roadmap_tasks, minimal status) must not crash.
     assert next_action({"contextStore": {}, "status": {}, "focus": None}) is not None
+
+
+def test_m5_has_review_before_export():
+    from agent.roadmap import ROADMAP
+    assert ROADMAP["M5"].index("review") < ROADMAP["M5"].index("export")
