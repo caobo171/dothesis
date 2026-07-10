@@ -5,3 +5,9 @@ dist
 .env*.local
 .DS_Store
 .design-source
+
+# e2e harness scratch (2026-07-08 e2e testing plan)
+/e2e/.auth/
+/e2e/.work/
+/playwright-report/
+/test-results/
