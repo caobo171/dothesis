@@ -9,6 +9,7 @@ so this never adds a blocking gate to a headless path.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Callable
 
 # Import the module (not the bound name) so run_export is resolved at CALL time
@@ -43,6 +44,21 @@ def compose_sections(
     m4 = context_store.get("m4_analysis") or {}
     context_slice: dict = {**m1, **m3, **m4}
     context_slice.setdefault("results", m4.get("analysis_results"))
+    # Render grounded research gaps (list of {description, refs}) into a readable
+    # block the Introduction prompt can ground its problem statement in. Always
+    # set the key ("" when absent) so the `{research_gaps}` placeholder is safe.
+    _gaps = context_slice.get("research_gaps")
+    if isinstance(_gaps, list) and _gaps:
+        # Prose only — DROP the brief's [n] source numbers. Those index the
+        # brief's own scout, not this report's bibliography, so keeping them
+        # would leave dangling "[3]" markers; the Introduction re-cites from the
+        # report's reference pool as (Author, Year) instead.
+        context_slice["research_gaps"] = "\n".join(
+            f"- {re.sub(r'\\s*\\[[0-9,\\s]+\\]', '', str(g.get('description', ''))).strip()}"
+            for g in _gaps if isinstance(g, dict)
+        )
+    elif not isinstance(_gaps, str):
+        context_slice["research_gaps"] = ""
 
     # Always compose in canonical order regardless of how the caller ordered them.
     ordered = [k for k in M5_CHAPTER_ORDER if k in set(chapters)]

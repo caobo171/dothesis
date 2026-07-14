@@ -1,15 +1,17 @@
 """M1 — Topic Discovery agent."""
+import logging
 from pathlib import Path
 
 from orchestrator.agents.base import ModuleAgent
 from orchestrator.agents.shapes import WizardAgent
 from orchestrator.agents.widgets import CardOption
 from orchestrator.schemas.m1 import M1Output
-from orchestrator.tools.m1_topic import refine_title, suggest_topics
+from orchestrator.tools.m1_topic import refine_title, research_brief, suggest_topics
 
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _PROMPT = (_PROMPT_DIR / "m1.md").read_text(encoding="utf-8")
+_log = logging.getLogger(__name__)
 
 
 class M1Agent(WizardAgent, ModuleAgent):
@@ -22,7 +24,7 @@ class M1Agent(WizardAgent, ModuleAgent):
     module_key = "M1"
     slice_field = "m1_topic"  # brief §6 — ModuleHandler contract
     system_prompt = _PROMPT
-    tools = [suggest_topics, refine_title]
+    tools = [research_brief, suggest_topics, refine_title]
 
     # Dynamic LLM-generated cards for these fields — see base.ModuleAgent.
     # The base class's render_hint_for_field reads `card_fields` and asks the
@@ -83,3 +85,42 @@ class M1Agent(WizardAgent, ModuleAgent):
         if field_name == "research_type":
             return self._STATIC_RESEARCH_TYPE_OPTIONS
         return super()._static_card_options(field_name, partial)
+
+    def _auto_fill(self, state, partial):
+        """Auto-mode M1 = base field fill PLUS a grounded research brief.
+
+        Interactive M1 exposes `research_brief` as a tool the agent may call,
+        but auto-mode never invokes tools (one structured-output shot). So the
+        headless M1 slice used to carry only title/objectives/RQs. Here we run
+        the brief once and attach context + research_gaps + suggested_topics
+        (each grounded in real literature) to the slice — best-effort, so a
+        failed/slow brief never blocks the auto-draft.
+        """
+        result = super()._auto_fill(state, partial)
+        patch = getattr(result, "context_patch", None)
+        if not isinstance(patch, dict) or patch.get("research_gaps"):
+            return result
+        idea = str(patch.get("research_title") or "").strip()
+        if not idea:
+            try:
+                idea = " ".join(
+                    str(getattr(m, "content", "") or "")
+                    for m in (state.get("messages") or [])
+                ).strip()
+            except Exception:
+                idea = ""
+        if not idea:
+            return result
+        try:
+            brief = research_brief.func(idea, field=str(patch.get("field") or ""))
+            if brief.get("context"):
+                patch["context"] = brief["context"]
+            if brief.get("gaps"):
+                patch["research_gaps"] = brief["gaps"]
+            if brief.get("suggested_topics"):
+                patch["suggested_topics"] = brief["suggested_topics"]
+            if brief.get("sources"):
+                patch["brief_sources"] = brief["sources"]
+        except Exception:
+            _log.warning("M1 auto research_brief failed", exc_info=True)
+        return result
