@@ -76,9 +76,22 @@ require_env() {
 }
 require_env DATABASE_URL
 require_env SESSION_SECRET
-# At least one model provider key (Gemini is the default runtime model).
-if [ -z "${GOOGLE_API_KEY:-}" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
-  warn "no GOOGLE_API_KEY / GEMINI_API_KEY set — the agent has no LLM provider"
+# Model-provider preflight. The LLM route decides which key is prod-critical:
+# the Ofox gateway (ORCHESTRATOR_LLM_ROUTE / DOTHESIS_MODEL_ROUTE = "ofox") needs
+# OFOX_API_KEY — the route raises "ofox route needs OFOX_API_KEY" at the FIRST
+# LLM call, so a keyless ofox deploy crash-loops. The native route needs a
+# Gemini key. Fail fast at deploy instead of at runtime.
+if [ "${ORCHESTRATOR_LLM_ROUTE:-}" = "ofox" ] || [ "${DOTHESIS_MODEL_ROUTE:-}" = "ofox" ]; then
+  if [ -z "${OFOX_API_KEY:-}" ]; then
+    warn "LLM route is 'ofox' but OFOX_API_KEY is unset — the route will crash at the first LLM call"
+    missing_env=1
+  fi
+  # Vision on the ofox route uses OFOX_API_KEY; a Gemini key is only a nice-to-have
+  # native fallback, so don't hard-fail on it here.
+  [ -z "${GOOGLE_API_KEY:-}" ] && [ -z "${GEMINI_API_KEY:-}" ] && \
+    warn "ofox route without GOOGLE_API_KEY/GEMINI_API_KEY — fine, but there is no native Gemini fallback"
+elif [ -z "${GOOGLE_API_KEY:-}" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
+  warn "no GOOGLE_API_KEY / GEMINI_API_KEY set — the native LLM route has no provider"
   missing_env=1
 fi
 # S3 is where uploads + exported DOCX/PDF live. Warn but don't hard-fail (some
