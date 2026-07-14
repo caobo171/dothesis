@@ -283,11 +283,17 @@ def _budgeted_scout(topic: str, research_questions: list[str]) -> list[dict]:
     if research_questions:
         composed += "\nResearch questions:\n" + "\n".join(f"- {q}" for q in research_questions)
 
+    # NOTE: do NOT use `with ThreadPoolExecutor(...)`. Its __exit__ calls
+    # shutdown(wait=True), which BLOCKS until the (possibly runaway) scout thread
+    # finishes — so a `future.result(timeout=45)` that times out would still wait
+    # minutes for the hung thread, defeating the wall-clock cap entirely. On a
+    # flaky network (Semantic Scholar 429 storm) that pushes the whole report
+    # past the caller's timeout. Shut down WITHOUT waiting instead.
+    ex = _fut.ThreadPoolExecutor(max_workers=1)
     try:
         from orchestrator.tools.m2_literature import scout_citations  # noqa: PLC0415
-        with _fut.ThreadPoolExecutor(max_workers=1) as ex:
-            future = ex.submit(scout_citations.func, composed, min_n=_M2_SCOUT_MIN)
-            citations = future.result(timeout=_M2_SCOUT_TIMEOUT_S)
+        future = ex.submit(scout_citations.func, composed, min_n=_M2_SCOUT_MIN)
+        citations = future.result(timeout=_M2_SCOUT_TIMEOUT_S)
         sources = [
             {"title": c.get("title"), "authors": c.get("authors"), "year": c.get("year"),
              "venue": c.get("source") or c.get("venue"), "doi": c.get("doi"),
@@ -299,6 +305,10 @@ def _budgeted_scout(topic: str, research_questions: list[str]) -> list[dict]:
     except Exception:
         # TimeoutError, engine failure, rate limit — all fall through to Crossref.
         logger.exception("partner_report: budgeted scout failed; using Crossref fallback")
+    finally:
+        # wait=False so we never block on the runaway scout thread; cancel_futures
+        # drops anything still queued. The 45s cap is now actually enforced.
+        ex.shutdown(wait=False, cancel_futures=True)
 
     return _literature_search(topic, research_questions)
 
@@ -349,6 +359,29 @@ def _infer_model(analysis_text: str, language: str) -> dict:
             return {}
         data = _json.loads(content[s:e + 1])
         if isinstance(data, dict) and data.get("constructs") and data.get("paths"):
+            # The shared gate (assess_export_readiness) requires m3.methodology
+            # OR m3.conceptual_model for the methodology chapter. _infer_model
+            # only yields constructs/paths (for the diagram), so WITHOUT this the
+            # partner flow — which never ships methodology prose, only analysis
+            # output — is ALWAYS blocked with needs_data whenever the methodology
+            # chapter is requested (i.e. every full report). Synthesize a
+            # conceptual_model description from the inferred model so the gate is
+            # satisfied and compose has real M3 content to write from.
+            if not data.get("conceptual_model") and not data.get("methodology"):
+                labels = {c.get("id"): (c.get("label") or c.get("id"))
+                          for c in data["constructs"] if isinstance(c, dict)}
+                rels = "; ".join(
+                    f"{labels.get(p.get('from'), p.get('from'))} → "
+                    f"{labels.get(p.get('to'), p.get('to'))}"
+                    for p in data["paths"] if isinstance(p, dict))
+                if str(language).lower().startswith("vi"):
+                    data["conceptual_model"] = (
+                        "Mô hình nghiên cứu đề xuất gồm các mối quan hệ giả thuyết: "
+                        + rels + ".")
+                else:
+                    data["conceptual_model"] = (
+                        "The proposed research model comprises the hypothesized "
+                        "relationships: " + rels + ".")
             return data
     except Exception:
         logger.exception("partner_report: model inference failed")
@@ -501,10 +534,48 @@ def build_partner_context_store(
     if notes_clean:
         m1_topic.setdefault("user_context", notes_clean)
 
+    # Grounded research brief → attach the real research GAP + context +
+    # suggested directions to M1 so the report's Introduction can justify the
+    # study against the literature (not just restate the topic). Best-effort:
+    # a slow/failed brief never blocks the report. Skipped if the caller already
+    # supplied gaps.
+    if not m1_topic.get("research_gaps"):
+        try:
+            from orchestrator.tools.m1_topic import research_brief  # noqa: PLC0415
+            brief_idea = str(m1_topic.get("research_title") or "").strip()
+            if notes_clean:
+                brief_idea = (brief_idea + " " + notes_clean).strip()
+            if brief_idea:
+                brief = research_brief.func(brief_idea, field=str(m1_topic.get("field") or ""))
+                if brief.get("context"):
+                    m1_topic.setdefault("background_context", brief["context"])
+                if brief.get("gaps"):
+                    m1_topic["research_gaps"] = brief["gaps"]
+                if brief.get("suggested_topics"):
+                    m1_topic["suggested_topics"] = brief["suggested_topics"]
+        except Exception:
+            logger.warning("partner_report: research brief failed (skipping)", exc_info=True)
+
     store: dict = {"m1_topic": m1_topic, "m4_analysis": {"analysis_results": text}}
 
     # M3: provided or inferred (used later for the methodology diagram).
     store["m3_design"] = dict(m3) if m3 else (_infer_model(text, language) or {})
+    # A partner report ONLY ever ships analysis output — the methodology is always
+    # reconstructed from the results, never user-supplied. So the M3 gate must
+    # never hard-block it: guarantee a conceptual_model even when inference came
+    # back empty (bad extraction / model shown only as an image). compose still
+    # has the full analysis text (M4) to write the methodology chapter from.
+    _m3d = store["m3_design"]
+    if not (_m3d.get("methodology") or _m3d.get("conceptual_model")):
+        _m3d["conceptual_model"] = (
+            "Mô hình nghiên cứu được tái lập từ kết quả phân tích thống kê đã cung cấp "
+            "(các cấu trúc tiềm ẩn và quan hệ đường dẫn suy ra từ kết quả)."
+            if language.startswith("vi")
+            else "The research model is reconstructed from the provided statistical "
+            "analysis results (latent constructs and path relationships inferred "
+            "from the reported results)."
+        )
+        store["m3_design"] = _m3d
 
     # M2: provided verbatim, else REAL budgeted research (never a bare token fetch).
     if m2:

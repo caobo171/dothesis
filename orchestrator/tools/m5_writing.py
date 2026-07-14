@@ -1327,18 +1327,36 @@ def _populate_docx_toc(docx_path: str) -> None:
         return
 
     # Collect Heading 1..3 entries in document order.
-    entries: list[tuple[int, str]] = []
+    from docx.oxml import OxmlElement
+    # Collect Heading 1..3 entries in document order, dropping a bookmark on each
+    # heading so the static TOC entries below can hyperlink STRAIGHT to it — a
+    # clickable TOC in the LibreOffice-rendered PDF. Without per-heading anchors
+    # every TOC line resolved to the same spot (or nothing) when clicked.
+    entries: list[tuple[int, str, str]] = []
+    _levels = {"Heading 1": 1, "Heading 2": 2, "Heading 3": 3}
+    _bid = 8000
     for p in doc.paragraphs:
         style = (p.style.name if p.style else "") or ""
+        level = _levels.get(style)
         text = p.text.strip()
-        if not text:
+        if not level or not text:
             continue
-        if style == "Heading 1":
-            entries.append((1, text))
-        elif style == "Heading 2":
-            entries.append((2, text))
-        elif style == "Heading 3":
-            entries.append((3, text))
+        anchor = f"_Toc_dt_{len(entries)}"
+        p_el = p._p
+        bstart = OxmlElement("w:bookmarkStart")
+        bstart.set(qn("w:id"), str(_bid))
+        bstart.set(qn("w:name"), anchor)
+        bend = OxmlElement("w:bookmarkEnd")
+        bend.set(qn("w:id"), str(_bid))
+        # bookmarkStart must sit AFTER pPr (pPr must be the paragraph's 1st child).
+        pPr = p_el.find(qn("w:pPr"))
+        if pPr is not None:
+            pPr.addnext(bstart)
+        else:
+            p_el.insert(0, bstart)
+        p_el.append(bend)
+        _bid += 1
+        entries.append((level, text, anchor))
     if not entries:
         return
 
@@ -1385,7 +1403,7 @@ def _populate_docx_toc(docx_path: str) -> None:
         content = None
         title_el = None
 
-    def _mk_para(level: int, text: str):
+    def _mk_para(level: int, text: str, anchor: str):
         p = OxmlElement("w:p")
         pPr = OxmlElement("w:pPr")
         # A tiny left indent per level so H2/H3 read hierarchical.
@@ -1394,24 +1412,27 @@ def _populate_docx_toc(docx_path: str) -> None:
             ind.set(qn("w:left"), str(360 * (level - 1)))  # 360 dxa ≈ 0.25"
             pPr.append(ind)
         p.append(pPr)
+        # Wrap the entry in an INTERNAL hyperlink to the heading's bookmark so
+        # clicking it jumps to that section in the PDF.
+        hyper = OxmlElement("w:hyperlink"); hyper.set(qn("w:anchor"), anchor)
         r = OxmlElement("w:r"); rPr = OxmlElement("w:rPr")
         if level == 1:
             b = OxmlElement("w:b"); rPr.append(b)
         r.append(rPr)
         t = OxmlElement("w:t"); t.text = text; t.set(qn("xml:space"), "preserve")
-        r.append(t); p.append(r)
+        r.append(t); hyper.append(r); p.append(hyper)
         return p
 
     if content is not None:
         # Append fresh entries inside w:sdtContent (below the title paragraph
         # that survived the pruning above).
-        for level, text in entries:
-            content.append(_mk_para(level, text))
+        for level, text, anchor in entries:
+            content.append(_mk_para(level, text, anchor))
     else:
         # Insert at the same body index the deleted TOC field paragraph held.
         # (This branch runs only when there's no w:sdt wrapper.)
-        for level, text in entries:
-            body.append(_mk_para(level, text))
+        for level, text, anchor in entries:
+            body.append(_mk_para(level, text, anchor))
 
     try:
         doc.save(docx_path)
@@ -1725,6 +1746,14 @@ def _sanitize_prose(prose: str) -> str:
             if len(text) > 60 and text.rstrip().endswith((".", ")", ":")):
                 out.append(f"**{text}**")
                 continue
+        # 3) blank line BEFORE a pipe table. Pandoc only parses a pipe table when
+        #    a blank line precedes it; the composer often glues the table header
+        #    directly under its "**Bảng 4.x: …**" caption, so pandoc reads the
+        #    whole block as one paragraph and ships literal "| a | b |" text
+        #    instead of a rendered table. Insert the missing separator.
+        if (ln.lstrip().startswith("|") and out and out[-1].strip()
+                and not out[-1].lstrip().startswith("|")):
+            out.append("")
         out.append(ln)
     return _drop_placeholder_tables("\n".join(out))
 
