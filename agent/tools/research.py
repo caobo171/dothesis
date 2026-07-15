@@ -10,11 +10,64 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
+import httpx  # module-level so tests can monkeypatch research.httpx
 from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
+
+
+# Wall-clock discipline promoted from partner's _budgeted_scout (spec §3): the
+# deep scout can run minutes / rate-limit into a hang, and a hung tool is the
+# stall mode headless cannot distinguish from thinking. Cap it, fall back to a
+# direct Crossref query so a turn never hangs and never ships zero references.
+# Default 120s (not partner's old 45s): chat's scout legitimately runs 30-90s,
+# and the run-level wall clock now owns the per-report budget.
+_SCOUT_FALLBACK_N = 8
+
+
+def _crossref_fallback(query: str, n: int = _SCOUT_FALLBACK_N) -> list[dict]:
+    """Direct Crossref query — real peer-reviewed sources + DOIs in ~2s.
+
+    Ported from partner's _literature_search minus its LLM query-translation
+    hop (that inline prompt is deleted with the partner pipeline); Crossref
+    gets the raw topic, which is good enough for a degraded-mode fetch.
+    """
+    try:
+        r = httpx.get(
+            "https://api.crossref.org/works",
+            params={
+                "query.bibliographic": (query or "")[:200],
+                "rows": n,
+                "select": "title,author,issued,DOI,container-title,URL",
+                "filter": "type:journal-article,has-abstract:true",
+                "sort": "relevance",
+            },
+            timeout=20,
+            headers={"User-Agent": "DoThesis/1.0 (mailto:cao.nv17@gmail.com)"},
+        )
+        items = r.json().get("message", {}).get("items", [])
+    except Exception:
+        logger.exception("crossref fallback failed (returning no sources)")
+        return []
+    refs: list[dict] = []
+    for it in items:
+        title = (it.get("title") or [""])[0].strip()
+        if not title:
+            continue
+        parts = (it.get("issued", {}).get("date-parts") or [[None]])
+        refs.append({
+            "title": title,
+            "authors": [str(a.get("family")).strip() for a in it.get("author", []) if a.get("family")],
+            "year": parts[0][0] if parts and parts[0] else None,
+            "venue": (it.get("container-title") or [None])[0],
+            "doi": it.get("DOI"),
+            "url": it.get("URL"),
+            "verified": bool(it.get("DOI")),
+        })
+    return refs[:n]
 
 
 @tool
@@ -32,6 +85,12 @@ def research_scout(
     progress streams to the user automatically. Scope it tightly — see the M2
     skill's search playbook.
 
+    Capped by a wall clock (DOTHESIS_SCOUT_TIMEOUT_S, default 120s). If the deep
+    scout times out or fails, the result carries `note: "budgeted fallback
+    (Crossref)"` and holds lighter, unvalidated-but-real Crossref sources — say
+    so to the user and offer a retry rather than presenting them as the deep
+    search's output.
+
     Args:
         topic: One narrow sentence (population + platform + context beats a bare construct).
         research_questions: The M1 RQs verbatim — drives query planning.
@@ -47,17 +106,36 @@ def research_scout(
     if seed_refs:
         composed += "\nSeed references:\n" + "\n".join(f"- {r}" for r in seed_refs)
 
+    import concurrent.futures as _fut
+
+    timeout_s = int(os.getenv("DOTHESIS_SCOUT_TIMEOUT_S", "120"))
+    citations = None
+    # NOTE: do NOT use `with ThreadPoolExecutor(...)`. Its __exit__ calls
+    # shutdown(wait=True), which BLOCKS until the (possibly runaway) scout
+    # thread finishes — a result(timeout=...) that fires would still wait
+    # minutes for the hung thread, defeating the cap entirely (the lesson
+    # partner's _budgeted_scout learned on a Semantic Scholar 429 storm).
+    ex = _fut.ThreadPoolExecutor(max_workers=1)
     try:
         # Reuse the proven graph_v2 wrapper (engine-native model, quality
         # gate, progress emitter chain) instead of re-wiring the engine here.
         from orchestrator.tools.m2_literature import scout_citations
-        citations = scout_citations.func(composed, min_n=min_sources)
-    except Exception as e:  # engine failures must not kill the turn
-        logger.exception("research_scout failed")
+        future = ex.submit(scout_citations.func, composed, min_n=min_sources)
+        citations = future.result(timeout=timeout_s)
+    except Exception:
+        # TimeoutError, engine failure, rate limit — all degrade to Crossref.
+        logger.exception("research_scout: deep scout failed/timed out; Crossref fallback")
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+
+    if not citations:
+        refs = _crossref_fallback(composed)
         return json.dumps({
-            "error": f"scout failed: {e}",
-            "hint": "Tell the user the search failed and offer to retry or to add papers by upload/DOI instead.",
-        })
+            "sources": refs, "count": len(refs),
+            # Honesty marker: the agent should tell the user this was the
+            # light fallback, not the deep validated scout.
+            "note": "budgeted fallback (Crossref)",
+        }, ensure_ascii=False)
 
     # Normalize to the M2 Source shape; ids are assigned when the agent
     # commits the user-curated selection to the slice.
