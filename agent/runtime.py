@@ -636,8 +636,15 @@ async def stream_turn(
     if attachments:
         # Lazy import — multimodal.py pulls in google-genai which is heavy
         # and only needed when the user attached something.
+        from agent.model_factory import spec_from_env
         from agent.multimodal import build_user_message, detect_provider
-        msg = build_user_message(user_text, attachments, detect_provider())
+        # Capability-driven: provider AND vision support both derive from the
+        # ONE model-truth source. The old env-sniffing detect_provider()
+        # ignored DOTHESIS_MODEL_ROUTE and shipped Gemini media blocks into
+        # OpenAI-compat endpoints (design-doc defect 1).
+        spec = spec_from_env()
+        msg = build_user_message(user_text, attachments, detect_provider(spec),
+                                 supports_vision=spec.supports_vision)
         payload = {"messages": [msg]}
     else:
         payload = {"messages": [{"role": "user", "content": user_text}]}
