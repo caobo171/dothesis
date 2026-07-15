@@ -67,9 +67,13 @@ USAGE
 -----
     export OFOX_API_KEY=...
     ./run.sh python ../scripts/probe_prompt_cache.py                  # from api/
-    python scripts/probe_prompt_cache.py --model qwen/qwen-plus       # from root
+    python scripts/probe_prompt_cache.py --model bailian/qwen-plus    # from root
 
-    --model   gateway model id (default: qwen/qwen-plus)
+    --model   gateway model id (default: bailian/qwen-plus — the id the route
+              actually serves, per agent/model_factory.spec_from_env and
+              quality/model_prices. A default that names a model we do not run
+              would measure something other than the 96% cache result recorded
+              in agent/model_factory._ofox, while looking like a reproduction.)
     --base    gateway base url (default: https://api.ofox.ai/v1)
     --json    emit machine-readable JSON only
 
@@ -136,7 +140,10 @@ def _post(base: str, key: str, model: str, messages: list[dict]) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--model", default="qwen/qwen-plus")
+    # Must match the configured Ofox id (agent/model_factory.spec_from_env's ofox
+    # default), or a re-run silently probes a different/nonexistent model than the
+    # cache figure documented in agent/model_factory._ofox was taken on.
+    ap.add_argument("--model", default="bailian/qwen-plus")
     ap.add_argument("--base", default=os.getenv("DOTHESIS_EVAL_BASE_URL", "https://api.ofox.ai/v1"))
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
