@@ -118,7 +118,7 @@ New module `agent/headless.py`. The headless runner plays the student's part:
 
 ```
 run_headless(store, profile):
-    loop until roadmap.next_action() == done, or budget exhausted:
+    loop until all(status[m] == "done" for m in MODULES), or budget exhausted:
         before  = store.load()
         events  = stream_turn(agent, next_prompt, ...)
         after   = store.load()
@@ -138,9 +138,15 @@ run_headless(store, profile):
 ```
 
 Reuses `build_agent` (`agent/runtime.py:467`), `stream_turn` (`agent/runtime.py:608`),
-the existing `[OPTIONS]` parser (`agent/runtime.py:768-773`), `agent/roadmap.py:next_action`
-as the termination condition, and `commit_slice` as the only write path. **No new
-prompts, no new tools, no new state protocol.**
+the existing `[OPTIONS]` parser (`agent/runtime.py:768-773`), and `commit_slice` as
+the only write path. **No new prompts, no new tools, no new state protocol.**
+
+**Termination is a status check, not `next_action`.** `roadmap.next_action` has no
+"done" sentinel — when every module is done it returns the export/defense CTA
+(`agent/roadmap.py:140-145`), which is correct for chat coaching but never
+terminates a loop. The runner's terminal condition is
+`all(status[m] == "done" for m in MODULES)`. (`next_action` remains the source of
+the per-turn `[NEXT]` hint via `_state_header`, unchanged.)
 
 `RunProfile(interactive: bool, max_turns: int, wall_clock_s: int, max_stalls: int = 3,
 on_options: "ask" | "auto")` is **data**. Neither `stream_turn` nor `build_agent`
@@ -204,9 +210,14 @@ stops being a landmine.
   behind so `agent/tools/output_parse.py:126` and auto-mode keep working. Takes the
   model-truth sources from three to one and clears the path for D.
 
-Note `agent → orchestrator` is the existing direction (`output_parse.py:126` already
-does it), so no new cycle. `orchestrator/llm.py:12-15` documents the reverse
-(`orchestrator → agent`) as the cycle to avoid.
+**Correction (found during planning).** An earlier draft claimed this introduces no
+cycle because `agent → orchestrator` is the existing direction
+(`output_parse.py:126`). That reasoning had the arrow backwards for the *delegate*:
+once the implementation lives in `agent/model_factory`, the shim left in
+`orchestrator/llm` is an `orchestrator → agent` import — exactly the cycle
+`orchestrator/llm.py:9-11` warns about. Resolution: the delegate uses a **lazy
+in-function import**, matching the existing `# noqa: PLC0415` convention used
+throughout this codebase for precisely this reason.
 
 ### 3. Partner as the proof of the spine
 
@@ -222,14 +233,20 @@ POST /partner/report    (contract unchanged: multipart, shared secret, POST-only
 Partner is unshipped, so the contract is free to change; keeping it stable is a
 convenience, not a constraint.
 
-**Deleted:** inline prompts `_infer_topic` (`:155`), `_infer_model` (`:342`),
-`_search_query_en` (`:205`); `_CHAPTER_ORDER` copy (`:50`); `_NODE_BIN` (`:40`);
+**Deleted:** `_search_query_en` (`:205`); `_CHAPTER_ORDER` copy (`:50`); `_NODE_BIN` (`:40`);
 `build_partner_context_store` (`:499`); the private compose loop; the in-memory
 `_PROGRESS` dict (`:58`) and its single-process constraint; the private S3 presign
 client (`:83`) if the shared path suffices.
 
 **Gained the day it lands:** all ~20 tools, all 8 skills, threshold checks,
 questionnaire audit, rubric review, preflight — everything partner currently lacks.
+
+**Moved, not deleted — `_infer_topic` / `_infer_model`.** An earlier draft listed
+these for deletion. They have a live consumer: `api/app/import_work.py:11` imports
+both, and that module's docstring explicitly documents the layering ("this lives in
+api/app precisely so it can reach the partner-report inference helpers … without
+agent/ ever importing app/"). Deleting them would break mid-journey import. They
+move into `import_work.py`, their last remaining consumer.
 
 **Promoted rather than deleted** (these are good and should not die with partner):
 
@@ -261,8 +278,24 @@ The runner's auditability story is recording auto-decisions. A new top-level
 in this repo, not a hypothetical.
 
 **Decision: record decisions inside the owned slice** — `m1_topic["decisions"] = [...]`,
-written through `commit_slice`. Rides existing ownership, no store changes, no new
-failure surface. Decisions are naturally per-module.
+written through `commit_slice`. Decisions are naturally per-module.
+
+**Correction (found during planning).** An earlier draft of this spec justified
+this choice as "no store changes". That was wrong: `commit_slice` raises
+`SliceOwnershipError` for any key not in `SLICE_OWNERSHIP[module]`
+(`agent/state.py:198-202`), so `"decisions"` must be **added to `SLICE_OWNERSHIP`
+for each module** (the `field_it_*` keys are the precedent).
+
+That change is precisely what makes the choice safe, and it is the real rationale:
+both `ProjectStateStore` and `DbProjectStateStore.load`/`_save` iterate
+`SLICE_OWNERSHIP`, so adding the key there makes it round-trip in *both* stores by
+construction. A new top-level `context_store` key would have required hand-written
+`load`/`_save` support in the Db store and would silently work in file-backed tests
+while vanishing in prod.
+
+Related: seeding partner's M1 from the payload also requires extending
+`SLICE_OWNERSHIP["M1"]` (language/field/objectives/…), or `commit_slice` rejects
+the seed and it never reaches prod rows.
 
 This is worse data modelling — decisions are not really *part of* the M1 content —
 and considerably safer. Stating the trade-off explicitly rather than pretending it
