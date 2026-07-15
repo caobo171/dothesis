@@ -19,6 +19,38 @@ from __future__ import annotations
 import os
 
 
+def resolve_orchestrator_model(model: str | None = None) -> str:
+    """Resolve the engine's model id for the configured route. ONE resolution.
+
+    Why this is a function and not an inline getenv default: the route and the
+    model must not be settable into an incoherent pair. ORCHESTRATOR_LLM_MODEL used
+    to default to the unprefixed native id "gemini-2.5-flash" regardless of route,
+    so ORCHESTRATOR_LLM_ROUTE=ofox WITHOUT the model var sent the gateway an id it
+    does not serve — the same half-enabled-route shape that billed auto runs 4x
+    (job_runner.py:358). Making the DEFAULT route-aware means uncommenting the route
+    line alone lands on a coherent model, so a partial config can't fire the bug.
+
+    Mirrors agent/model_factory.spec_from_env() deliberately — same shape (pick a
+    default FROM the route, then let the env var override) so the brain and the
+    engine stay one mental model rather than two competing patterns.
+
+    Precedence: explicit arg (per-site overrides like ORCHESTRATOR_ROUTER_MODEL)
+    > ORCHESTRATOR_LLM_MODEL > the route's default.
+    """
+    if model:
+        return model
+    route = os.getenv("ORCHESTRATOR_LLM_ROUTE", "native")
+    # native keeps gemini-2.5-flash: the exact id every `_get_llm()` site used, so
+    # the no-new-env back-compat contract in this module's header still holds.
+    default_model = "gemini-2.5-flash"
+    if route == "ofox":
+        # Ofox uses provider/model ids. qwen-plus matches the brain's ofox default
+        # (agent/model_factory.spec_from_env) and is the model the owner's benchmark
+        # picked for the report pipeline — see ARCHITECTURE_NOTES.md.
+        default_model = "bailian/qwen-plus"
+    return os.getenv("ORCHESTRATOR_LLM_MODEL", default_model)
+
+
 def get_orchestrator_llm(
     model: str | None = None,
     temperature: float | None = None,
@@ -28,8 +60,10 @@ def get_orchestrator_llm(
 
     Args mirror the old per-site construction so callers can preserve their
     tool-specific settings:
-      - model:       defaults to ORCHESTRATOR_LLM_MODEL / "gemini-2.5-flash"
-                     (the exact default every `_get_llm()` used).
+      - model:       defaults via resolve_orchestrator_model() — ROUTE-AWARE, so
+                     route=ofox alone can't leave a native id pointed at the
+                     gateway. native still resolves "gemini-2.5-flash", the exact
+                     default every `_get_llm()` used.
       - temperature: defaults to 0.4 (the modal per-site value); each site
                      passes its own (e.g. m4 analysis uses 0.2).
       - timeout:     per-request timeout (seconds). Only the hot-path sites set
@@ -44,7 +78,7 @@ def get_orchestrator_llm(
     Fail fast: an unknown route raises here, at build time, not mid-run.
     """
     route = os.getenv("ORCHESTRATOR_LLM_ROUTE", "native")
-    model = model or os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash")
+    model = resolve_orchestrator_model(model)
     temperature = 0.4 if temperature is None else temperature
 
     if route == "native":
