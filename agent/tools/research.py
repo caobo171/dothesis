@@ -28,18 +28,55 @@ logger = logging.getLogger(__name__)
 _SCOUT_FALLBACK_N = 8
 
 
-def _crossref_fallback(query: str, n: int = _SCOUT_FALLBACK_N) -> list[dict]:
-    """Direct Crossref query — real peer-reviewed sources + DOIs in ~2s.
+def _search_query_en(topic: str, research_questions: list[str] | None) -> str:
+    """One short ENGLISH bibliographic query from the (possibly Vietnamese) topic.
 
-    Ported from partner's _literature_search minus its LLM query-translation
-    hop (that inline prompt is deleted with the partner pipeline); Crossref
-    gets the raw topic, which is good enough for a degraded-mode fetch.
+    Crossref indexes mostly English scholarship and our primary market writes in
+    Vietnamese, so handing it the raw topic returns near-nothing for most of our
+    users. A tiny LLM call turns the topic into an English keyword query.
+
+    Bounded by its own wall clock: this runs *inside* the degraded path that
+    exists because the deep scout already blew its budget, so a hung LLM here
+    would just relocate the stall it is meant to rescue us from. On timeout or
+    any failure we degrade to the raw topic — a weak query beats no sources.
     """
+    import concurrent.futures as _fut
+
+    def _translate() -> str:
+        from orchestrator.tools.m5_writing import _get_llm  # agent -> orchestrator is allowed
+        rq = ("; ".join(research_questions or []))[:300]
+        prompt = (
+            "Turn this research topic into ONE short English academic search query "
+            "(5-10 keywords, no punctuation, no quotes). Topic: "
+            f"{topic}\nQuestions: {rq}\nQuery:"
+        )
+        resp = _get_llm().invoke(prompt)
+        q = getattr(resp, "content", resp)
+        if isinstance(q, list):
+            q = " ".join(str(p.get("text", "") if isinstance(p, dict) else p) for p in q)
+        return str(q).strip().strip('"').splitlines()[0][:200]
+
+    # Same no-wait executor discipline as the deep scout below: shutdown(wait=True)
+    # would block on the runaway thread and void the cap.
+    ex = _fut.ThreadPoolExecutor(max_workers=1)
+    try:
+        q = ex.submit(_translate).result(timeout=int(os.getenv("DOTHESIS_TRANSLATE_TIMEOUT_S", "15")))
+        if q:
+            return q
+    except Exception:
+        logger.exception("research_scout: query translation failed; using raw topic")
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+    return (topic or "").strip()[:200]
+
+
+def _crossref_fallback(query: str, n: int = _SCOUT_FALLBACK_N) -> list[dict]:
+    """Direct Crossref query — real peer-reviewed sources + DOIs in ~2s."""
     try:
         r = httpx.get(
             "https://api.crossref.org/works",
             params={
-                "query.bibliographic": (query or "")[:200],
+                "query.bibliographic": query,
                 "rows": n,
                 "select": "title,author,issued,DOI,container-title,URL",
                 "filter": "type:journal-article,has-abstract:true",
@@ -129,7 +166,11 @@ def research_scout(
         ex.shutdown(wait=False, cancel_futures=True)
 
     if not citations:
-        refs = _crossref_fallback(composed)
+        # `composed` is scaffolding for the engine's *planner*, which reads the
+        # "Research questions:" / "Seed references:" labels as structure. A
+        # bibliographic index reads them as search terms, so Crossref gets the
+        # bare topic, translated to English.
+        refs = _crossref_fallback(_search_query_en(topic, research_questions))
         return json.dumps({
             "sources": refs, "count": len(refs),
             # Honesty marker: the agent should tell the user this was the
