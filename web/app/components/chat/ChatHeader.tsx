@@ -139,9 +139,6 @@ export function ChatHeader({
   const [quickOpen, setQuickOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const user = me.data;
-  const userInitials = user?.email
-    ? user.email.slice(0, 2).toUpperCase()
-    : "U";
   const userName = user?.username || user?.email?.split("@")[0] || "You";
   const userTier = user?.is_super_admin ? "Admin" : "Pro Student";
 
@@ -297,20 +294,12 @@ export function ChatHeader({
 
         <span className="hidden lg:block w-px h-[22px] bg-ink-200 mx-1" />
 
-        {/* User identity — solid ink avatar with serif-feel initials. On mobile
-            only the avatar shows; the name/tier text is hidden to save header
-            width (it's available on the account page). */}
-        <div className="flex items-center gap-2 pl-1">
-          <span
-            className="w-[30px] h-[30px] rounded-full bg-ink-800 inline-flex items-center justify-center text-white font-bold text-[12px] shrink-0"
-            aria-hidden="true"
-          >
-            {userInitials}
-          </span>
-          <div className="hidden lg:block leading-[1.15] whitespace-nowrap">
-            <div className="text-[12.5px] font-semibold text-ink-900">{userName}</div>
-            <div className="text-[10.5px] text-ink-500">{userTier}</div>
-          </div>
+        {/* User identity — name + tier only. The self-avatar was redundant
+            (you know who you are) and just ate header width, so it's dropped.
+            Hidden on mobile to save space (the account is on its own page). */}
+        <div className="hidden lg:block pl-1 leading-[1.15] whitespace-nowrap">
+          <div className="text-[12.5px] font-semibold text-ink-900">{userName}</div>
+          <div className="text-[10.5px] text-ink-500">{userTier}</div>
         </div>
       </div>
 
