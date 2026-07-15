@@ -28,8 +28,8 @@ class ModelSpec:
     temperature: float = 0.4
     max_tokens: int = 8000
     # Vision routing (headless convergence spec §2). vision_model "" means
-    # "resolve at make_vision_model time" — the brain itself when it can see,
-    # else the Gemini sidecar. supports_vision is derived from `model` and
+    # "use the default Gemini sidecar" — it picks WHICH Gemini make_vision_model
+    # builds, never the family. supports_vision is derived from `model` and
     # FAIL-CLOSED: unknown ids are assumed text-only, because the wrong default
     # ships Gemini media blocks into an OpenAI-compat endpoint and hard-fails,
     # while a needless transcription costs fractions of a cent.
@@ -192,9 +192,13 @@ def make_vision_model(spec: ModelSpec | None = None, temperature: float | None =
     from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: PLC0415 — lazy, heavy dep
 
     spec = spec or spec_from_env()
-    # "" = same as `model` when the brain can see; text-only brains get the
-    # Gemini sidecar default (mirrors the old get_vision_llm default).
-    m = spec.vision_model or (spec.model if spec.supports_vision else "gemini-2.5-flash")
+    # This is the SIDECAR factory: it exists only for brains that CANNOT see, so
+    # it is always Gemini. `vision_model` therefore overrides WHICH Gemini, never
+    # the family — "" just means "the default sidecar". Resolving "" to
+    # spec.model would hand e.g. a Claude id to the Gemini client below: it
+    # constructs fine and fails at invoke. A vision-capable brain never needs
+    # this function at all; build_user_message gives it native blocks instead.
+    m = spec.vision_model or "gemini-2.5-flash"
     t = 0.2 if temperature is None else temperature
     ofox_key = os.getenv("OFOX_API_KEY")
     if spec.route == "ofox" and ofox_key:

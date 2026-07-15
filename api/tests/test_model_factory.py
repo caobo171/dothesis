@@ -187,6 +187,19 @@ def test_make_vision_model_text_only_brain_defaults_to_gemini(monkeypatch):
     assert "gemini-2.5-flash" in m.model
 
 
+def test_make_vision_model_never_hands_a_claude_id_to_the_gemini_client(monkeypatch):
+    # supports_vision=True must NOT make the sidecar echo the brain's own id:
+    # make_vision_model always returns ChatGoogleGenerativeAI, so a Claude id
+    # here would construct fine and then fail at invoke. A brain that can see
+    # skips this factory entirely (build_user_message sends native blocks).
+    monkeypatch.setenv("GOOGLE_API_KEY", "test")
+    monkeypatch.delenv("OFOX_API_KEY", raising=False)
+    spec = ModelSpec(route="native", model="claude-sonnet-4-6", supports_vision=True)
+    m = make_vision_model(spec)
+    assert "claude" not in m.model.lower()
+    assert "gemini" in m.model.lower()
+
+
 def test_make_vision_model_ofox_prefixes_and_points_at_gateway(monkeypatch):
     monkeypatch.setenv("OFOX_API_KEY", "ok-test")
     spec = ModelSpec(route="ofox", model="qwen/qwen-plus",

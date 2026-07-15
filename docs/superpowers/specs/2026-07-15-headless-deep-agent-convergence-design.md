@@ -173,9 +173,22 @@ existing precedent for wall-clock discipline.)
 `ModelSpec` (`agent/model_factory.py:23-29`) gains:
 
 ```python
-vision_model: str = ""         # resolved per route; "" = same as `model`
+vision_model: str = ""         # which Gemini sidecar; "" = gemini-2.5-flash
 supports_vision: bool = False  # derived from `model`, FAIL-CLOSED
 ```
+
+**Correction (found during implementation review).** This block first documented
+`vision_model` as "resolved per route; `""` = same as `model`". That
+semantic is incoherent with `make_vision_model` always returning a Gemini
+client, and it produced a live defect: `_VISION_MODEL_HINTS` contains `claude`,
+so a Claude brain set `supports_vision=True`, `""` resolved to
+`"claude-sonnet-4-6"`, and that id was handed to `ChatGoogleGenerativeAI` —
+constructing fine and failing at invoke. `make_vision_model` is the **sidecar**
+factory: it exists only for brains that cannot see, so it is always Gemini.
+`vision_model` selects WHICH Gemini (e.g. a cheaper or newer flash), never the
+family, and `""` resolves to the default Gemini sidecar `gemini-2.5-flash` —
+never to the brain's own model. A vision-capable brain does not call this
+factory at all; `build_user_message` gives it native media blocks instead.
 
 `supports_vision` is a lookup on the model id — the same technique opencode uses
 for prompt selection (`session/system.ts:27-42`). It is a known maintenance point.
