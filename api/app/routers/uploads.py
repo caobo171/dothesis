@@ -7,6 +7,8 @@ the orchestrator wrapper.
 """
 from __future__ import annotations
 
+import io
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -23,8 +25,33 @@ from ..models import PaperUpload, Project, User
 from ..pdf_extract import extract_pdf_text
 
 router = APIRouter(tags=["uploads"])
+logger = logging.getLogger(__name__)
 
-_ALLOWED_MIME = {"application/pdf", "text/plain"}
+_DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+# Text-extractable upload formats. We only accept what we can pull real text
+# from (so analysis never runs on an empty extraction): PDF, Word (.docx),
+# plain text + markdown. Browsers sometimes send .docx as octet-stream on
+# drag-drop, so the gate also accepts by extension (see _ALLOWED_EXT).
+_ALLOWED_MIME = {"application/pdf", "text/plain", "text/markdown", _DOCX_MIME}
+_ALLOWED_EXT = (".pdf", ".txt", ".md", ".markdown", ".docx")
+
+
+def _extract_docx_text(body: bytes) -> tuple[str, int]:
+    """Pull paragraph + table text from a .docx. Table rows are flattened into
+    pipe rows so numbers inside result tables survive. Best-effort → ("", 0)."""
+    try:
+        from docx import Document  # local import keeps cold-start light
+        doc = Document(io.BytesIO(body))
+        parts = [p.text for p in doc.paragraphs if p.text and p.text.strip()]
+        for tbl in doc.tables:
+            for row in tbl.rows:
+                cells = [c.text.strip() for c in row.cells if c.text and c.text.strip()]
+                if cells:
+                    parts.append(" | ".join(cells))
+        return "\n".join(parts), 0
+    except Exception:
+        logger.exception("upload: docx text extraction failed")
+        return "", 0
 _DEFAULT_MAX_BYTES = 50 * 1024 * 1024
 
 
@@ -90,10 +117,13 @@ async def upload_paper(project_id: uuid.UUID,
     p = _owned_project(db, user, project_id)
 
     mime = file.content_type or "application/octet-stream"
-    if mime not in _ALLOWED_MIME:
+    fname = (file.filename or "").lower()
+    # Accept by MIME, or by extension when the browser sent a generic
+    # octet-stream (common for .docx on drag-drop).
+    if mime not in _ALLOWED_MIME and not fname.endswith(_ALLOWED_EXT):
         raise HTTPException(status_code=415,
                             detail={"error": {"code": "bad_mime",
-                                              "message": f"unsupported content type: {mime}"}})
+                                              "message": f"unsupported file type: {mime or fname}"}})
 
     body = await file.read()
     if len(body) > _max_bytes():
@@ -117,8 +147,10 @@ async def upload_paper(project_id: uuid.UUID,
     page_count = 0
     text_uri = None
     text_extracted_at = None
-    if mime == "application/pdf":
+    if mime == "application/pdf" or fname.endswith(".pdf"):
         text, page_count = extract_pdf_text(body)
+    elif mime == _DOCX_MIME or fname.endswith(".docx"):
+        text, page_count = _extract_docx_text(body)
     else:
         try:
             text = body.decode("utf-8", errors="ignore")

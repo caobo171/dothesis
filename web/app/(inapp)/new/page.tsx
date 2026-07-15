@@ -36,9 +36,14 @@ type ImportResult = {
  * where the thesis stands (the analysis screen) before handing off to chat.
  */
 
-// The uploads endpoint accepts PDF + plain-text only (api/app/routers/uploads.py:
-// _ALLOWED_MIME). The file picker advertises the same set so the OS dialog filters.
-const ACCEPT_TYPES = "application/pdf,text/plain,.pdf,.txt";
+// Keep in sync with the uploads endpoint's text-extractable set
+// (api/app/routers/uploads.py: _ALLOWED_MIME / _ALLOWED_EXT). The file picker
+// advertises the same set so the OS dialog filters. PDF, Word (.docx), and
+// plain text / markdown — every format we can pull real text from.
+const ACCEPT_TYPES =
+  "application/pdf,text/plain,text/markdown," +
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+  ".pdf,.txt,.md,.markdown,.docx";
 
 export default function NewThesisPage() {
   const router = useRouter();
@@ -240,7 +245,7 @@ export default function NewThesisPage() {
           Drop files here
         </span>
         <span className="text-[12.5px] text-ink-500">
-          or click to browse · PDF or .txt · multiple files OK
+          or click to browse · PDF, Word, or text · multiple files OK
         </span>
         <input
           ref={fileInputRef}
