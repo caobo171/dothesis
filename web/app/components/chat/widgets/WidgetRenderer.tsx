@@ -5,6 +5,7 @@ import { ExportArtifactsCard } from "./ExportArtifactsCard";
 import { FlowChartWidget } from "./FlowChartWidget";
 import { ListEditorWidget } from "./ListEditorWidget";
 import { PapersPanel } from "./PapersPanel";
+import { ReconstructedModulesWidget } from "./ReconstructedModulesWidget";
 import type { WidgetHint, WidgetSelectHandler } from "./types";
 
 
@@ -12,10 +13,12 @@ export function WidgetRenderer({
   hint,
   onSelect,
   disabled,
+  projectId,
 }: {
   hint: WidgetHint;
   onSelect: WidgetSelectHandler;
   disabled?: boolean;
+  projectId?: string;
 }) {
   // AttachmentsHint piggybacks on the same `tool_calls_json` slot (used by
   // user-message bubbles to render linked-file chips). It has no
@@ -29,7 +32,7 @@ export function WidgetRenderer({
       return (
         <>
           {hint.widgets.map((h, i) => (
-            <WidgetRenderer key={i} hint={h} onSelect={onSelect} disabled={disabled} />
+            <WidgetRenderer key={i} hint={h} onSelect={onSelect} disabled={disabled} projectId={projectId} />
           ))}
         </>
       );
@@ -61,6 +64,12 @@ export function WidgetRenderer({
       // DOCX/PDF download card rendered inside the assistant message after a
       // successful export (Claude-artifact style). Read-only — no onSelect.
       return <ExportArtifactsCard hint={hint} />;
+    case "reconstructed_modules":
+      // Backfill: editable confirm/skip cards for the reconstructed upstream
+      // modules. Confirm posts to /mid-journey-import/confirm (needs projectId).
+      return (
+        <ReconstructedModulesWidget hint={hint} projectId={projectId} disabled={disabled} />
+      );
     default:
       return null;
   }

@@ -518,6 +518,9 @@ export type MessageBubbleProps = {
   toolCallsJson?: WidgetHint | null;
   onWidgetSelect?: WidgetSelectHandler;
   widgetDisabled?: boolean;
+  // Project scope for widgets that call project-scoped endpoints directly
+  // (e.g. reconstructed_modules → /mid-journey-import/confirm).
+  projectId?: string;
   // Per-response cost + latency, shown in the assistant footer next to Copy.
   costCredits?: number;
   durationMs?: number;
@@ -532,6 +535,7 @@ export function MessageBubble({
   toolCallsJson,
   onWidgetSelect,
   widgetDisabled,
+  projectId,
   costCredits,
   durationMs,
   children,
@@ -596,6 +600,7 @@ export function MessageBubble({
           hint={toolCallsJson}
           onSelect={onWidgetSelect}
           disabled={widgetDisabled}
+          projectId={projectId}
         />
       )}
       {children}

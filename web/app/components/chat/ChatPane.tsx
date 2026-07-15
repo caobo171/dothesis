@@ -425,6 +425,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
           streamingError={streamingError}
           inflight={inflight}
           onWidgetSelect={onWidgetSelect}
+          projectId={projectId}
         />
       )}
       {outOfCredits && (

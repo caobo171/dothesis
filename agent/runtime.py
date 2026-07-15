@@ -108,6 +108,23 @@ def _parse_export_artifacts(content: Any) -> dict | None:
     return {"widget_type": "export_artifacts", "artifacts": artifacts}
 
 
+def _parse_reconstructed(content: Any) -> dict | None:
+    """Shape a backfill_upstream_modules tool result into a `reconstructed_modules`
+    widget hint. The tool returns {"ok": true, "reconstructed": [{module, candidate,
+    rationale, ready_to_confirm, review}, …]}. Returns None when there are no
+    candidates (nothing to review → no card)."""
+    try:
+        data = json.loads(content) if isinstance(content, str) else content
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    items = data.get("reconstructed") or []
+    if not items:
+        return None
+    return {"widget_type": "reconstructed_modules", "items": items}
+
+
 def _parse_papers_marker(text: str) -> dict | None:
     """Pull the first `[PAPERS] {json} [/PAPERS]` block out of `text` and
     shape it into a `PapersPanelHint`. Returns None when no marker is
@@ -141,6 +158,7 @@ from deepagents.backends.filesystem import FilesystemBackend
 
 from agent.preflight import make_preflight_tool
 from agent.state import MODULES, ProjectStateStore
+from agent.tools.backfill_tool import make_backfill_tool  # reconstruct upstream modules
 from agent.tools.defense import make_defense_tools  # F6: Mock Committee
 from agent.tools.forms import make_google_form_script
 from agent.tools.instrument import (  # F7: Questionnaire Doctor + sampling plan
@@ -315,6 +333,17 @@ answer without showing the papers — fetching sources but not displaying them i
 a failure. Never make an ungrounded landscape claim. When the tool returns
 nothing real, say so plainly and do not invent a panel.
 
+## Backfilling earlier steps — `backfill_upstream_modules` tool
+
+When a student has later work but is missing the earlier steps behind it (they
+imported an analysis, or ask to "fill in / reconstruct / backfill" the topic,
+literature, or design), call the `backfill_upstream_modules` tool. It infers each
+missing upstream module from what they already have and shows editable cards the
+student confirms or edits — you do NOT commit anything yourself. Be flexible: pass
+`targets` (e.g. ["M3"]) when they want just one step, or omit it to reconstruct
+every missing one. After the cards appear, briefly say what you reconstructed and
+why, and invite them to review each.
+
 ## Grounding — inline source pills `{{cite: label | title | url}}`
 
 Ground every factual / empirical / landscape claim with an inline source pill,
@@ -488,6 +517,11 @@ def build_agent(
         # open a survey with before fielding. Pure, no store needed.
         consent_notice,
         *make_writing_tools(store),
+        # Backfill — reconstruct missing UPSTREAM modules (Topic/Lit/Design/
+        # Analysis) from what the student already has. Store-bound so it reads
+        # THIS project's slices; returns candidates (nothing committed) that the
+        # runtime renders as reconstructed-modules cards for confirm/edit.
+        make_backfill_tool(store),
         # F6: Mock Committee — store-bound so it reads THIS project's real weak
         # points (small n, rejected H, quality findings) rather than a
         # model-supplied context_store, and folds in the F3 rubric best-effort.
@@ -659,6 +693,12 @@ async def stream_turn(
                             # store panel. Parsed from the tool's JSON result.
                             if _tool_name == "export_docx":
                                 hint = _parse_export_artifacts(m.content)
+                                if hint is not None:
+                                    yield {"type": "tool_calls", "payload": hint}
+                            # Backfill: surface the reconstructed upstream modules
+                            # as editable confirm/skip cards in the chat message.
+                            elif _tool_name == "backfill_upstream_modules":
+                                hint = _parse_reconstructed(m.content)
                                 if hint is not None:
                                     yield {"type": "tool_calls", "payload": hint}
                         else:

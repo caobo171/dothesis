@@ -133,6 +133,24 @@ export type ExportArtifactsHint = {
   artifacts: ExportArtifact[];
 };
 
+// Reconstructed upstream modules (backfill). Emitted when the
+// backfill_upstream_modules tool infers the earlier steps behind a student's
+// existing work. Each item is a CANDIDATE the student confirms/edits inline;
+// confirm posts to /mid-journey-import/confirm (needs the project id, threaded
+// from ChatPane). `items` mirrors ReconstructedModule from ../ReconstructedModules.
+export type ReconstructedModuleItem = {
+  module: string;
+  candidate: Record<string, unknown>;
+  rationale?: string | null;
+  ready_to_confirm: boolean;
+  review: string[];
+};
+
+export type ReconstructedModulesHint = {
+  widget_type: "reconstructed_modules";
+  items: ReconstructedModuleItem[];
+};
+
 // A single turn can emit several widgets (e.g. an export download card AND a
 // papers panel). When there's more than one, the backend wraps them in this so
 // none clobbers another; WidgetRenderer expands it.
@@ -149,6 +167,7 @@ export type WidgetHint =
   | PapersPanelHint
   | AttachmentsHint
   | ExportArtifactsHint
+  | ReconstructedModulesHint
   | MultiHint;
 
 export type WidgetSelectHandler = (

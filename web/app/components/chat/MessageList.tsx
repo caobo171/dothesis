@@ -24,6 +24,7 @@ export function MessageList({
   streamingError = null,
   inflight = false,
   onWidgetSelect,
+  projectId,
 }: {
   messages: Message[];
   streamingText: string;
@@ -47,6 +48,7 @@ export function MessageList({
    */
   inflight?: boolean;
   onWidgetSelect?: WidgetSelectHandler;
+  projectId?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // Latch true while the user is reading the tail. Once they scroll up past
@@ -121,6 +123,7 @@ export function MessageList({
               toolCallsJson={m.tool_calls_json}
               onWidgetSelect={onWidgetSelect}
               widgetDisabled={widgetDisabled}
+              projectId={projectId}
               costCredits={m.cost_credits}
               durationMs={m.duration_ms}
             />
