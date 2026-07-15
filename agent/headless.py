@@ -168,6 +168,15 @@ async def run_headless(
             # Hard wall-clock: a single runaway turn cannot overrun the budget
             # (bounded_invoke at orchestrator/agents/base.py is the precedent
             # for per-call wall-clock discipline).
+            # NOTE: `remaining` comes from _clock, but wait_for measures REAL
+            # time — the two agree in prod (_clock defaults to time.monotonic)
+            # and diverge under a fake clock. So this branch is UNTESTABLE as
+            # written, not merely untested: a fake clock that advances fast
+            # enough to expire the budget trips the pre-turn check above first.
+            # Covering it needs a genuinely blocking model (asyncio.sleep) plus
+            # a small REAL wall_clock_s. Left as-is deliberately: the injected
+            # clock keeps budget tests fast and deterministic, worth more than
+            # covering this 3-line second line of defence.
             await asyncio.wait_for(_drain(next_prompt), timeout=max(remaining, 0.001))
         except asyncio.TimeoutError:
             return RunResult("failed", "wall_clock", turns + 1, decisions)
