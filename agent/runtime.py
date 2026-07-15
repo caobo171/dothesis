@@ -264,6 +264,8 @@ yes-no / which-gap / which-paradigm), END the message with one line:
 
 The frontend turns this into a row of clickable cards. Rules:
 - The marker MUST be the last line of the message.
+- Order cards so the RECOMMENDED choice — the one that advances the work — is
+  FIRST; the rest follow as alternatives. A headless run takes the first card.
 - Separate options with ` | ` (pipe). 2–6 options is the sweet spot.
 - `[OPTIONS:field_name]` tags which slice field the pick maps to; defaults to
   `user_choice` when omitted.

@@ -80,10 +80,17 @@ class RunResult:
 def pick_option(options: list[str]) -> tuple[str, str]:
     """Headless option policy: FIRST option.
 
-    By the [OPTIONS] convention (runtime.SYSTEM_PROMPT) the first card is the
-    confirm/advance choice, so first-pick is the fire-and-forget default.
-    Deterministic (hence testable), and always auditable + overridable because
-    every pick flows through record_decision.
+    SYSTEM_PROMPT's [OPTIONS] rules tell the model to put the recommended /
+    advance choice first, so first-pick is the fire-and-forget default.
+
+    That ordering is an UNENFORCED PROMPT CONVENTION, not a boundary: the model
+    can ignore it and nothing here detects that, so headless output quality
+    leans on a card order this code cannot verify. Which is exactly why every
+    pick flows through record_decision — a bad auto-pick is then auditable
+    after the fact and overridable, instead of invisible.
+
+    First-option (not "smartest option") keeps the policy deterministic, hence
+    testable.
     """
     return options[0], "auto: first option (headless default policy)"
 
