@@ -123,10 +123,11 @@ def research_scout(
     skill's search playbook.
 
     Capped by a wall clock (DOTHESIS_SCOUT_TIMEOUT_S, default 120s). If the deep
-    scout times out or fails, the result carries `note: "budgeted fallback
-    (Crossref)"` and holds lighter, unvalidated-but-real Crossref sources — say
-    so to the user and offer a retry rather than presenting them as the deep
-    search's output.
+    scout times out or fails, the result's `note` starts with "budgeted fallback
+    (Crossref)" and holds lighter, unvalidated-but-real Crossref sources — say so
+    to the user and offer a retry rather than presenting them as the deep
+    search's output. If that fallback also comes back empty the note says so and
+    a `hint` explains what to do: never write the section anyway on `count: 0`.
 
     Args:
         topic: One narrow sentence (population + platform + context beats a bare construct).
