@@ -109,6 +109,63 @@ def test_v3_turn_debits_credits_and_records_transaction(client, monkeypatch):
         assert str(txns[0].ref_id) == str(tid)
 
 
+def test_v3_turn_bills_the_model_it_actually_runs(client, monkeypatch):
+    """The billed multiplier must come from the SAME resolution that picks the model.
+
+    Regression (the chat-side twin of d4382a6): the charge scaled by
+    credit_multiplier(getenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash")) — an env
+    guess with its OWN default, re-deriving what spec_from_env() had already
+    decided. The two defaults disagree: on route=ofox with DOTHESIS_AGENT_MODEL
+    unset, spec_from_env() resolves google/gemini-2.5-flash (multiplier 1.0) while
+    billing charged 3.5-flash's 4.0 — a 4x overcharge to students, one uncommented
+    .env line away from production.
+
+    This config is the one the ofox migration ships (.env.example comments the route
+    and the model on separate lines, so the route alone gets uncommented), and it is
+    exactly the config the 4.0x test above does NOT cover.
+    """
+    pid, tid = _setup_project(client)
+
+    # The live-migration config: route flipped, model left to the route's default.
+    monkeypatch.setenv("DOTHESIS_MODEL_ROUTE", "ofox")
+    monkeypatch.delenv("DOTHESIS_AGENT_MODEL", raising=False)
+
+    from agent.model_factory import spec_from_env
+    from app.pricing import credit_multiplier
+
+    # Derive the expectation from the run-model resolution rather than hardcoding a
+    # number: the property under test is "billed model == model actually run", so
+    # the test must fail on DISAGREEMENT, not on the constants changing.
+    resolved = spec_from_env().model
+    assert resolved == "google/gemini-2.5-flash"  # guard: pin the config we mean to test
+    expected = max(1, round(3000 / 1000 * credit_multiplier(resolved)))  # 3, not 12
+
+    async def fake_stream_turn(agent, thread_id, text, attachments=None, store=None):
+        yield {"type": "token", "text": "hi"}
+        yield {"type": "usage", "input_tokens": 1500, "output_tokens": 1500}
+        yield {"type": "done"}
+
+    async def fake_get_agent(db, project_id):
+        return object()
+
+    monkeypatch.setattr("app.routers.chat_v3._get_agent", fake_get_agent)
+    monkeypatch.setattr("agent.runtime.stream_turn", fake_stream_turn)
+
+    resp = client.post(f"/api/v1/threads/{tid}/messages", json={"text": "hello"})
+    assert resp.status_code == 200
+
+    from app.models import CreditTransaction, Project
+    sf = get_session_factory()
+    with sf() as db:
+        proj = db.get(Project, pid)
+        owner = db.get(User, proj.user_id)
+        assert owner.credit == 10000 - expected
+        txns = (db.query(CreditTransaction)
+                  .filter_by(user_id=owner.id, reason="chat_turn").all())
+        assert len(txns) == 1
+        assert txns[0].delta == -expected
+
+
 def test_v3_error_event_surfaces(client, monkeypatch):
     pid, tid = _setup_project(client)
 
