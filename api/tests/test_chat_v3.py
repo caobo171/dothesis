@@ -73,9 +73,16 @@ def test_v3_turn_streams_and_persists(client, monkeypatch):
 def test_v3_turn_debits_credits_and_records_transaction(client, monkeypatch):
     pid, tid = _setup_project(client)
 
+    # Pin the billed model. The charge scales by credit_multiplier(), so leaving
+    # this to the env default made the expectation silently track whatever that
+    # default happened to be — which is how this test rotted: it was written
+    # pre-multiplier and kept asserting an implicit 1.0 while the code correctly
+    # billed 4.0. State the rate here so a model/default change fails loudly.
+    monkeypatch.setenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash")  # multiplier 4.0
+
     async def fake_stream_turn(agent, thread_id, text, attachments=None, store=None):
         yield {"type": "token", "text": "hi"}
-        # 3000 tokens → max(1, round(3000/1000)) = 3 credits.
+        # 3000 tokens → max(1, round(3000/1000 * 4.0)) = 12 credits.
         yield {"type": "usage", "input_tokens": 1500, "output_tokens": 1500}
         yield {"type": "done"}
 
@@ -94,11 +101,11 @@ def test_v3_turn_debits_credits_and_records_transaction(client, monkeypatch):
     with sf() as db:
         proj = db.get(Project, pid)
         owner = db.get(User, proj.user_id)
-        assert owner.credit == 10000 - 3  # balance reduced
+        assert owner.credit == 10000 - 12  # balance reduced
         txns = (db.query(CreditTransaction)
                   .filter_by(user_id=owner.id, reason="chat_turn").all())
         assert len(txns) == 1
-        assert txns[0].delta == -3
+        assert txns[0].delta == -12
         assert str(txns[0].ref_id) == str(tid)
 
 
