@@ -10,21 +10,26 @@ than itself. qwen-plus with no cache beats gemini-3.5-flash with a perfect cache
 (~$0.013 vs ~$0.021 on a 30-turn chat's re-sent SYSTEM_PROMPT). Cache absence does
 not threaten the qwen decision.
 
-This exists for BILLING CORRECTNESS. `agent/usage.extract_usage` feeds the credit
-ledger and counts every input token at full rate. If a route does serve cached
-input at a discount, students are overcharged on precisely the long-prefix turns
-that caching makes cheap — the same species of bug as `job_runner.py:373` billing
-auto runs for a model they aren't running. This probe establishes whether that
-discount exists on a given route, which is the prerequisite for pricing it.
+This exists for BILLING PRECISION. `agent/usage.extract_usage` feeds the credit
+ledger. It now preserves `cached_in`, but no billing arithmetic prices it yet — so
+a cached turn is still charged at full input rate. Note this is NOT the same as
+`job_runner.py:373`-style bugs, which billed for a model that never ran and were
+unambiguously wrong; passing a received cache discount on to students is a pricing
+POLICY decision, not a defect. This probe supplies the measurement that decision
+needs. Pricing it requires a cached dimension on `quality/model_prices.cost()` and
+a place to record it on `TokenLedger`.
 
-`agent/model_factory._ofox` documents the open question honestly:
+ANSWERED for bailian/qwen-plus on 2026-07-16: Ofox's OpenAI-compat endpoint DOES
+cache. 3328/3456 input tokens (96%) were served from cache on turn 2 against the
+real SYSTEM_PROMPT. `agent/model_factory._ofox` previously warned the opposite
+("may NOT get the ~90% input cache discount here") — that caveat was disproven by
+this script and has been replaced with the measurement.
 
-    "Ofox documents caching on the provider-NATIVE protocol, not this
-     OpenAI-compatible endpoint — so the big system-prompt + skills prefix may
-     NOT get the ~90% input cache discount here. [...] verify `cached_*` token
-     counts on a real response"
+The result stands for qwen-plus only. Re-run this for any other model or route
+before assuming it caches; that is what the --model flag is for.
 
-Nothing in the repo can verify that:
+Nothing ELSE in the repo can measure this, which is why this script exists rather
+than a test:
 
   - `agent/usage.py:extract_usage` normalizes every provider to {"in", "out"} and
     DISCARDS the cache fields (`input_token_details.cache_read` on native,
