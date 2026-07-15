@@ -338,15 +338,31 @@ apply.
    stalls prove common in practice, the follow-up is to make asking a real tool
    (which LangGraph `interrupt()` + the existing checkpointer would support) — out
    of scope for A+B.
-2. **The qwen-plus cost premise is unverified.** `agent/model_factory.py:128-138`
-   already documents that Ofox's OpenAI-compat endpoint likely loses the ~90%
-   input-cache discount, and waves it off with "DoThesis cost is output-dominated
-   (uncacheable anyway)". That is an untested assumption. The system prompt is ~280
-   lines (`agent/runtime.py:187-464`) plus a skills index, re-sent every turn, and
-   chat is many-turn. If the prefix is not cached, qwen-plus-via-Ofox could land
-   **more expensive** than gemini-2.5-flash-via-native despite a better per-token
-   rate. **Measure with the existing benchmark harness (`a070354`) before
-   committing** — this is the entire premise of the qwen choice.
+2. **Prompt-cache absence is a billing bug, not a route risk.** *(Downgraded — an
+   earlier draft of this spec called it "the entire premise of the qwen choice".
+   That was wrong, and the correction is worth recording.)*
+
+   `agent/model_factory.py:128-138` notes Ofox's OpenAI-compat endpoint may lose the
+   ~90% input-cache discount. That does not threaten the route: `quality/model_prices`
+   (live-pulled from Ofox, 2026-07-10) prices `bailian/qwen-plus` at **$0.12/M input**
+   vs `gemini-3.5-flash` at **$1.50/M** — a 12.5x gap, while a perfect cache is only a
+   ~10x discount. **A cache cannot close a gap wider than itself.** Measured
+   `SYSTEM_PROMPT` is ~3,600 tokens; re-sent across a 30-turn chat that is
+   ~$0.013 on qwen-plus uncached vs ~$0.021 on gemini-3.5-flash fully cached. qwen
+   wins its own worst case.
+
+   The real exposure is **billing correctness**: `agent/usage.extract_usage` (`:12`)
+   normalizes to `{"in","out"}` and discards cache fields
+   (`input_token_details.cache_read` / `prompt_tokens_details.cached_tokens`), and
+   `quality/model_prices.cost(model, in, out)` (`:52`) has no cached dimension. If a
+   route ever does discount cached input, the ledger bills it at full rate and
+   students are overcharged on exactly the long-prefix turns caching makes cheap —
+   the same family as defect 3. `scripts/probe_prompt_cache.py` establishes whether
+   the discount exists on a given route; pricing it is follow-up work, out of scope
+   for A+B.
+
+   Note the existing harness cannot answer this: `quality/model_eval._complete`
+   (`:19`) is single-shot, and a first call is always a cache write, never a read.
 3. **`extract_pdf_text` has no OCR.** A scanned PDF returns empty and the agent
    silently gets nothing. Handling: if extraction yields near-empty on a PDF, fall
    back to the vision path rather than proceeding with a hollow message. Partner
