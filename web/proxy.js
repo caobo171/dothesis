@@ -33,5 +33,10 @@ export function proxy(request) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Exclude `api` — those requests are the Next-config rewrite proxy to the
+  // FastAPI backend (fetch("/api/v1/...")). The API does its own JWT auth and
+  // answers with 401 JSON; gating it here would 307-redirect the browser's
+  // API calls (including the public POST /api/v1/auth/login) to the /login
+  // PAGE, which breaks sign-in. Never route-gate the API through page middleware.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
