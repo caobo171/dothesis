@@ -164,6 +164,18 @@ def test_translation_hop_is_time_bounded(crossref_calls, dead_scout, monkeypatch
 
 # --- fix 2: the zero-source outcome must be unmistakable ----------------------
 
+def test_empty_crossref_yields_actionable_zero_signal(crossref_calls, dead_scout, fake_llm):
+    out = json.loads(research.research_scout.func(topic="a topic with no matches"))
+
+    assert out["count"] == 0
+    assert out["sources"] == []
+    # A zero-source fallback must not read like a successful one.
+    assert out["note"] != "budgeted fallback (Crossref)"
+    assert "hint" in out
+    hint = out["hint"].lower()
+    assert "doi" in hint or "upload" in hint
+
+
 def test_nonempty_fallback_keeps_the_honesty_marker(crossref_calls, dead_scout, fake_llm):
     crossref_calls["items"].append(_one_item())
     out = json.loads(research.research_scout.func(topic="digital banking"))

@@ -171,12 +171,24 @@ def research_scout(
         # bibliographic index reads them as search terms, so Crossref gets the
         # bare topic, translated to English.
         refs = _crossref_fallback(_search_query_en(topic, research_questions))
-        return json.dumps({
+        out = {
             "sources": refs, "count": len(refs),
             # Honesty marker: the agent should tell the user this was the
             # light fallback, not the deep validated scout.
             "note": "budgeted fallback (Crossref)",
-        }, ensure_ascii=False)
+        }
+        if not refs:
+            # A `count: 0` that reads identically to a successful fallback is
+            # how a thesis ends up composed from stubs — on the headless
+            # surface there is no human to notice the empty list. Say what
+            # happened and what to do instead.
+            out["note"] = "budgeted fallback (Crossref) returned NO sources — search failed"
+            out["hint"] = (
+                "Do NOT proceed as if literature was found and do not invent citations. "
+                "Tell the user the search came back empty and offer to retry, narrow the "
+                "topic, or add papers by upload/DOI instead."
+            )
+        return json.dumps(out, ensure_ascii=False)
 
     # Normalize to the M2 Source shape; ids are assigned when the agent
     # commits the user-curated selection to the slice.
