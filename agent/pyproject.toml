@@ -14,6 +14,13 @@ dependencies = [
   "pandas>=2.0",
   "scipy>=1.11",
   "pyreadstat>=1.2",
+  # PDF text extraction (agent/pdf_extract.py, moved here from api/app/pdf_extract.py).
+  # Declared on the agent distribution because the multimodal text-only-brain PDF path
+  # imports it — and that import is lazy behind `except ImportError: return ("", 0)`, so
+  # a missing pdfminer.six looks exactly like a legitimately image-only PDF and silently
+  # falls back to the expensive vision model instead of failing loudly. Version constraint
+  # matches api/pyproject.toml, which still declares it for the shim it ships.
+  "pdfminer.six>=20231228",
 ]
 
 [project.optional-dependencies]
