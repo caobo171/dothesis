@@ -160,6 +160,7 @@ from agent.preflight import make_preflight_tool
 from agent.state import MODULES, ProjectStateStore
 from agent.tools.backfill_tool import make_backfill_tool  # reconstruct upstream modules
 from agent.tools.defense import make_defense_tools  # F6: Mock Committee
+from agent.tools.diagram import render_model_diagram  # research-model figure, all surfaces
 from agent.tools.forms import make_google_form_script
 from agent.tools.instrument import (  # F7: Questionnaire Doctor + sampling plan
     audit_instrument,
@@ -537,6 +538,10 @@ def build_agent(
         # points (small n, rejected H, quality findings) rather than a
         # model-supplied context_store, and folds in the F3 rubric best-effort.
         *make_defense_tools(store),
+        # Research-model diagram (promoted from partner, spec §3): renders the
+        # M3 constructs/paths to an embeddable PNG so exported documents carry
+        # the figure — the swallowed partner diagram bug, turned into a feature.
+        render_model_diagram,
     ]
 
     return create_deep_agent(
