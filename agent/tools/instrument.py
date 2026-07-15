@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 _CONJ = (" and ", " or ", " và ", " hoặc ")
 
 
-def audit_instrument_findings(instrument: dict, hypotheses: list, constructs: list) -> dict:
+def audit_instrument_findings(instrument: dict, hypotheses: list[str], constructs: list[str]) -> dict:
     """Pure lint core. Returns {"findings": [...], "scale_provenance": [...]}.
 
     Findings are all "soft" — advisory. Shared by the @tool below and the
@@ -76,7 +76,7 @@ def audit_instrument_findings(instrument: dict, hypotheses: list, constructs: li
 
 
 @tool
-def audit_instrument(instrument: dict, hypotheses: list, constructs: list) -> str:
+def audit_instrument(instrument: dict, hypotheses: list[str], constructs: list[str]) -> str:
     """Lint a questionnaire before fielding.
 
     Checks for double-barreled/leading items, reverse-coded coverage per
