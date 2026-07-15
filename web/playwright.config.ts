@@ -25,6 +25,18 @@ const workRoot = path.resolve(__dirname, "e2e/.work");
 // the editable install happen to be the same path (a fresh CI clone).
 const repoRoot = path.resolve(__dirname, "..");
 
+// Playwright types webServer.env as Record<string, string>, but several values
+// below come from process.env (typed string | undefined) and are meant to be
+// omitted when unset — passing them through would either fail the build under
+// strict TS or leak a literal "undefined" to the child process. pruneEnv drops
+// undefined-valued keys and narrows the result to the required string map.
+const pruneEnv = (
+  env: Record<string, string | undefined>,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  );
+
 // Live tier (nightly): real model, no fixture mock — but the test-support
 // router stays on because the live smoke still needs seeded users.
 const LIVE = process.env.DOTHESIS_E2E_LIVE === "1";
@@ -90,7 +102,7 @@ export default defineConfig({
       stdout: "pipe",
       stderr: "pipe",
       timeout: 120_000,
-      env: {
+      env: pruneEnv({
         DATABASE_URL: process.env.DATABASE_URL,
         SESSION_SECRET: "dothesis-e2e-secret",
         // Force the sibling `agent`/`orchestrator` packages to load from THIS
@@ -142,7 +154,7 @@ export default defineConfig({
         AWS_SECRET_ACCESS_KEY: "minioadmin",
         AWS_REGION: "us-east-1",
         AWS_ENDPOINT_URL_S3: process.env.AWS_ENDPOINT_URL_S3 ?? "http://localhost:9123",
-      },
+      }),
     },
     {
       command: `npx next dev -p ${WEB_PORT}`,

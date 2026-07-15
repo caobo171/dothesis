@@ -121,9 +121,17 @@ else
   # handful of shared libraries to launch headless on a bare Ubuntu server —
   # otherwise `mmdc` times out with "TimeoutError waiting for WS endpoint".
   # Package list from the official Puppeteer troubleshooting doc.
+  # Ubuntu 24.04's 64-bit time_t transition renamed libasound2 -> libasound2t64
+  # and left the old name as a virtual package with no install candidate. Pick
+  # whichever the target's apt actually offers so this works on 22.04 and 24.04.
+  if apt-cache show libasound2t64 >/dev/null 2>&1; then
+    ASOUND_PKG=libasound2t64
+  else
+    ASOUND_PKG=libasound2
+  fi
   $SUDO apt-get install -y --no-install-recommends \
     pandoc libreoffice-writer \
-    ca-certificates fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 \
+    ca-certificates fonts-liberation "$ASOUND_PKG" libatk-bridge2.0-0 libatk1.0-0 \
     libc6 libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 libgbm1 \
     libgcc-s1 libglib2.0-0 libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 \
     libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
