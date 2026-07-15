@@ -50,6 +50,49 @@ def test_mark_feedback_addressed_clears_blocker(tmp_path, monkeypatch):
     assert cs["roadmap_tasks"][0]["status"] == "done"   # linked blocker cleared
 
 
+def test_model_cannot_write_the_decision_audit_trail(tmp_path):
+    # `decisions` is SLICE_OWNERSHIP-owned by every module (so both stores
+    # persist it), which means the ownership check ALONE would let the model
+    # author or clobber the trail that audits the model. An audit trail is only
+    # worth something if the audited party can't write it. Mirrors the
+    # client-side strip proven in api/tests/test_import_route.py.
+    from agent.headless import record_decision
+
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    store.commit_slice("M3", {"conceptual_model": {"constructs": ["A"]}}, "seed")
+    real = record_decision(store, options=["A", "B"], choice="A", rationale="auto")
+    tools = {t.name: t for t in make_state_tools(store)}
+
+    out = json.loads(tools["commit_slice"].func(
+        module="M3",
+        writes={"hypotheses": ["H1: A->B"],
+                "decisions": [{"ts": "2020-01-01", "module": "M3", "options": [],
+                               "choice": "FORGED", "rationale": "model-supplied"}]},
+        reason="write up the model"))
+    assert "error" not in out
+
+    cs = store.load()["contextStore"]
+    assert cs["decisions"] == [real]              # genuine trail untouched
+    assert cs["hypotheses"] == ["H1: A->B"]       # real content still committed
+
+
+def test_model_read_slice_never_carries_the_audit_trail(tmp_path):
+    # read_slice injects its result into model context on EVERY read (for the
+    # module and each read-dependency). The trail only grows, and the model has
+    # no use for it — keeping it out is context hygiene AND reinforces the
+    # "audited party can't see/rewrite its own trail" boundary above.
+    from agent.headless import record_decision
+
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    store.commit_slice("M1", {"research_title": "T"}, "seed")
+    record_decision(store, options=["A", "B"], choice="A", rationale="auto")
+    tools = {t.name: t for t in make_state_tools(store)}
+
+    for module in ("M1", "M2"):   # M2 reads M1's slice as a dependency
+        snap = json.loads(tools["read_slice"].func(module=module))
+        assert "decisions" not in snap["slices"]
+
+
 def test_set_defense_date_builds_timeline(tmp_path):
     # F11 Task 3 + F0 correction: the tool must read the project's REAL flat
     # contextStore (methodology + sample_plan.target_n) and actually reach

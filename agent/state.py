@@ -165,9 +165,17 @@ class ProjectStateStore:
         if not self.exists():
             return {"exists": False, "module": module}
         state = self.load()
-        visible_keys: list[str] = list(SLICE_OWNERSHIP[module])
+        # NON_CONTENT_KEYS stay out of the visible set: read_slice's result is
+        # injected into the model's context on every read (for this module AND
+        # each read-dependency), and the audit trail only grows — paying that
+        # context cost buys the model nothing it can act on. It also keeps the
+        # trail out of reach of the thing being audited, which is the point of
+        # having one.
+        visible_keys: list[str] = [k for k in SLICE_OWNERSHIP[module]
+                                   if k not in NON_CONTENT_KEYS]
         for dep in READS[module]:
-            visible_keys.extend(SLICE_OWNERSHIP[dep])
+            visible_keys.extend(k for k in SLICE_OWNERSHIP[dep]
+                                if k not in NON_CONTENT_KEYS)
         slices = {
             k: v for k, v in state["contextStore"].items() if k in visible_keys
         }
@@ -269,15 +277,26 @@ class ProjectStateStore:
         # untouched `locked` module is noise — there is nothing to re-review.
         # Bootstrap-style dependency holes are flagged explicitly via
         # status_overrides instead.
+        overrides = status_overrides or {}
         flagged: list[str] = []
         for down in DOWNSTREAM[module]:
             if state["status"][down] != "locked":
                 state["status"][down] = "needs_review"
                 flagged.append(down)
 
-        for mod, st in (status_overrides or {}).items():
+        for mod, st in overrides.items():
             _validate_module(mod)
             state["status"][mod] = st
+
+        # `flagged` is a REPORT of what this commit left at needs_review, not of
+        # what the pass above proposed — status_overrides run after it and win.
+        # Callers treat the list as the "a late upstream edit invalidated
+        # finished work" signal (api/app/agent_state.py emits an analytics event
+        # off it), so a module the overrides pinned back was never invalidated
+        # and must not appear. Without this, record_decision — which snapshots
+        # every status precisely so nothing moves — would report a false
+        # invalidation on every single headless auto-decision.
+        flagged = [m for m in flagged if m not in overrides]
 
         self._save(state)
         return {
