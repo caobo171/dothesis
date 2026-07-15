@@ -215,6 +215,16 @@ def artifact_to_module(key: str) -> str:
     return _SLICE_TO_MODULE[_ARTIFACT_BY_KEY[key].slice]
 
 
+# Inverse of artifact_to_module for the reconstruction path: a module maps back
+# to the single "primary" artifact key that reconstruct_artifact can infer for
+# it. M5 is deliberately absent — it splits into per-chapter artifacts and is
+# never an *upstream* reconstruction target (you reconstruct M1-M4 as the
+# prerequisites of imported work, not the write-up).
+MODULE_TO_ARTIFACT: dict[str, str] = {
+    "M1": "topic", "M2": "literature", "M3": "design", "M4": "analysis",
+}
+
+
 def dependents_closure(key: str) -> set[str]:
     """All artifacts that transitively depend on `key` (reverse of depends_on).
 

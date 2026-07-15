@@ -11,6 +11,10 @@ import { stashAnalyzeIntent, type AnalyzeAttachment } from "@/app/lib/bootstrap-
 import { Button } from "@/app/components/ui/button";
 import { Textarea } from "@/app/components/ui/textarea";
 import { ImportSummary } from "@/app/components/chat/ImportSummary";
+import {
+  ReconstructedModules,
+  type ReconstructedModule,
+} from "@/app/components/chat/ReconstructedModules";
 
 // Shape of POST /projects/{id}/mid-journey-import (F12).
 type ImportResult = {
@@ -18,6 +22,7 @@ type ImportResult = {
   ambiguous: string[];
   unreadable: string[];
   focus: string;
+  to_reconstruct: string[]; // upstream modules we can infer from the import
 };
 
 /**
@@ -60,6 +65,13 @@ export default function NewThesisPage() {
   // straight-to-chat path — see analyze().
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importedProjectId, setImportedProjectId] = useState<string | null>(null);
+  // Phase 2 of import: reconstruct the upstream modules the import evidences but
+  // didn't fill (e.g. imported M4 → infer M1/M2/M3). Candidates only — the
+  // student confirms/edits each before it's committed.
+  const [reconstructed, setReconstructed] = useState<ReconstructedModule[]>([]);
+  const [reconstructing, setReconstructing] = useState(false);
+  const [confirmedModules, setConfirmedModules] = useState<string[]>([]);
+  const [skippedModules, setSkippedModules] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Setup defaults still come from the user's cross-project memory (/me/prefs)
@@ -167,6 +179,18 @@ export default function NewThesisPage() {
         setImportedProjectId(newId);
         setSubmitting(false);
         setStatus(null);
+        // Kick off reconstruction of the upstream modules (non-blocking — the
+        // activation card renders immediately; suggestions stream in after).
+        if (res.imported.length > 0 && res.to_reconstruct.length > 0) {
+          setReconstructing(true);
+          apiFetch(`/projects/${newId}/mid-journey-import/reconstruct`, {
+            method: "POST",
+            body: {},
+          })
+            .then((r: any) => setReconstructed(r?.reconstructed ?? []))
+            .catch(() => setReconstructed([])) // graceful: card just shows none
+            .finally(() => setReconstructing(false));
+        }
         return;
       }
 
@@ -183,6 +207,13 @@ export default function NewThesisPage() {
   // F12: once the import lands, the page becomes the activation summary — the
   // first-session payoff — with a CTA into chat at the imported focus module.
   if (importResult && importedProjectId) {
+    const confirmModule = async (module: string, edited: Record<string, unknown>) => {
+      await apiFetch(`/projects/${importedProjectId}/mid-journey-import/confirm`, {
+        method: "POST",
+        body: { module, slice: edited },
+      });
+      setConfirmedModules((c) => [...c, module]);
+    };
     return (
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-7">
@@ -190,13 +221,23 @@ export default function NewThesisPage() {
             Here&apos;s where you are
           </h1>
         </div>
-        <ImportSummary
-          imported={importResult.imported}
-          focus={importResult.focus}
-          ambiguous={importResult.ambiguous}
-          unreadable={importResult.unreadable}
-          onContinue={() => router.push(`/chat/projects/${importedProjectId}`)}
-        />
+        <div className="flex flex-col gap-4">
+          <ImportSummary
+            imported={importResult.imported}
+            focus={importResult.focus}
+            ambiguous={importResult.ambiguous}
+            unreadable={importResult.unreadable}
+            onContinue={() => router.push(`/chat/projects/${importedProjectId}`)}
+          />
+          <ReconstructedModules
+            items={reconstructed}
+            reconstructing={reconstructing}
+            confirmedModules={confirmedModules}
+            skippedModules={skippedModules}
+            onConfirm={confirmModule}
+            onSkip={(m) => setSkippedModules((s) => [...s, m])}
+          />
+        </div>
       </div>
     );
   }

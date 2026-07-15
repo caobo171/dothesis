@@ -62,3 +62,97 @@ def test_reconstruct_excludes_target_slice_from_evidence():
     out = reconstruct_artifact("design", cs, llm=llm)
     assert out["paradigm"] == "qualitative"
     assert "ignore me" not in captured["prompt"]
+
+
+def test_reconstruct_artifact_extracts_rationale():
+    cs = ContextStore(m4_analysis={"analysis_results": "PLS-SEM A->B"})
+    out = reconstruct_artifact(
+        "design", cs,
+        llm=_fake_llm('{"paradigm": "quantitative", '
+                      '"_rationale": "inferred from the PLS-SEM path"}'))
+    # _rationale survives the field filter (so callers can surface the "why").
+    assert out["_rationale"] == "inferred from the PLS-SEM path"
+    assert out["paradigm"] == "quantitative"
+
+
+def test_reconstruct_artifact_rationale_only_is_not_a_candidate():
+    # A response with ONLY the meta rationale and no real field is not a slice.
+    cs = ContextStore(m4_analysis={"analysis_results": "x"})
+    assert reconstruct_artifact("design", cs,
+                                llm=_fake_llm('{"_rationale": "hmm"}')) == {}
+
+
+# --- reconstruct_upstream (the M4 -> M1/M2/M3 backfill loop) -----------------
+
+def _routing_llm():
+    """A fake whose reply depends on which artifact the prompt asks for, so one
+    llm can serve the whole bottom-up loop."""
+    captured = {"prompts": []}
+
+    def invoke(prompt):
+        captured["prompts"].append(prompt)
+        r = MagicMock()
+        if "'design'" in prompt:
+            r.content = ('{"conceptual_model": {"constructs": ["A", "B"]}, '
+                         '"hypotheses": ["H1: A->B"], '
+                         '"_rationale": "from M4 path coefficients"}')
+        elif "'literature'" in prompt:
+            r.content = '{"research_gaps": ["gap X"], "_rationale": "from constructs"}'
+        elif "'topic'" in prompt:
+            r.content = ('{"research_title": "Effect of A on B", '
+                         '"research_questions": ["RQ1"], "_rationale": "from gaps"}')
+        else:
+            r.content = "{}"
+        return r
+    llm = MagicMock(); llm.invoke = invoke
+    return llm, captured
+
+
+def test_reconstruct_upstream_targets_missing_below_imported():
+    from orchestrator.backfill import reconstruct_upstream
+    cs = ContextStore(m4_analysis={"analysis_results": "PLS-SEM A->B, R2=0.41"})
+    llm, cap = _routing_llm()
+    out = reconstruct_upstream(cs, llm=llm)
+    # Only M4 filled → reconstruct M1, M2, M3, returned in display order.
+    assert [e["module"] for e in out] == ["M1", "M2", "M3"]
+    # Rationale is lifted out of the candidate to a top-level field.
+    assert all("_rationale" not in e["candidate"] for e in out)
+    assert next(e for e in out if e["module"] == "M3")["rationale"]
+    # Every candidate is tagged reconstructed and carries review gaps.
+    assert all(e["candidate"]["_source"] == "reconstructed" for e in out)
+
+
+def test_reconstruct_upstream_feeds_forward_bottom_up():
+    from orchestrator.backfill import reconstruct_upstream
+    cs = ContextStore(m4_analysis={"analysis_results": "x"})
+    llm, cap = _routing_llm()
+    reconstruct_upstream(cs, llm=llm)
+    m2_prompt = next(p for p in cap["prompts"] if "'literature'" in p)
+    m1_prompt = next(p for p in cap["prompts"] if "'topic'" in p)
+    # M2's inference sees the freshly-reconstructed M3; M1 sees M2.
+    assert "constructs" in m2_prompt
+    assert "gap X" in m1_prompt
+
+
+def test_reconstruct_upstream_respects_explicit_targets():
+    from orchestrator.backfill import reconstruct_upstream
+    cs = ContextStore(m4_analysis={"analysis_results": "x"})
+    llm, _ = _routing_llm()
+    out = reconstruct_upstream(cs, targets=["M3"], llm=llm)
+    assert [e["module"] for e in out] == ["M3"]
+
+
+def test_reconstruct_upstream_skips_modules_with_content():
+    from orchestrator.backfill import reconstruct_upstream
+    # M1 already has content → never re-reconstructed; only M2, M3 targeted.
+    cs = ContextStore(
+        m1_topic={"research_title": "given"},
+        m4_analysis={"analysis_results": "x"})
+    llm, _ = _routing_llm()
+    out = reconstruct_upstream(cs, llm=llm)
+    assert [e["module"] for e in out] == ["M2", "M3"]
+
+
+def test_reconstruct_upstream_empty_when_nothing_filled():
+    from orchestrator.backfill import reconstruct_upstream
+    assert reconstruct_upstream(ContextStore(), llm=_fake_llm("{}")) == []
