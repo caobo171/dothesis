@@ -241,3 +241,18 @@ def test_make_vision_model_ofox_prefixes_and_points_at_gateway(monkeypatch):
                      vision_model="gemini-2.5-flash", supports_vision=False)
     m = make_vision_model(spec)
     assert "google/gemini-2.5-flash" in m.model  # Ofox needs provider-prefixed ids
+
+
+def test_ofox_docstring_does_not_carry_the_disproven_cache_caveat():
+    # Measured live 2026-07-16 via scripts/probe_prompt_cache.py against the real
+    # agent.runtime.SYSTEM_PROMPT: 3328/3456 input tokens cached on turn 2. The old
+    # docstring's "may NOT get the ~90% input cache discount here / use route=native
+    # if input caching matters" argued against the route the project is adopting, on
+    # a premise that is now false. This test pins the correction so it can't regress.
+    from agent.model_factory import _ofox
+    doc = _ofox.__doc__ or ""
+    assert "may NOT get" not in doc
+    assert "use route=native for that provider instead" not in doc
+    # It must cite the reproduction, not just drop the claim.
+    assert "probe_prompt_cache" in doc
+    assert "3328" in doc

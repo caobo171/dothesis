@@ -173,13 +173,22 @@ def _ofox(spec: ModelSpec):
     stronger/Vietnamese-better one (qwen) without a native SDK per provider.
     Model IDs are `provider/model`, e.g. "google/gemini-2.5-flash".
 
-    CACHING CAVEAT: Ofox documents caching on the provider-NATIVE protocol, not
-    this OpenAI-compatible endpoint — so the big system-prompt + skills prefix may
-    NOT get the ~90% input cache discount here. That's usually fine because DoThesis
-    cost is output-dominated (uncacheable anyway), but verify `cached_*` token
-    counts on a real response; if input caching turns out to matter for your model,
-    use route=native for that provider instead. Key check runs before the (lazy)
-    langchain_openai import so a misconfig fails fast, never mid-turn.
+    CACHING: this endpoint DOES cache prompt prefixes — measured, not assumed.
+    Reproduce with `scripts/probe_prompt_cache.py` (raw HTTP, real
+    agent.runtime.SYSTEM_PROMPT). On bailian/qwen-plus, 2026-07-16:
+        call 1: {"prompt_tokens": 3419, "completion_tokens": 16}
+        call 2: {"prompt_tokens": 3456, ..., "prompt_tokens_details":
+                 {"cached_tokens": 3328}}
+    i.e. 3328/3456 = 96% of input tokens cached on the second turn. Measured on
+    qwen-plus only — re-probe before assuming it for another model. Superseded an
+    earlier caveat here that guessed the OpenAI-compat endpoint would NOT cache and
+    advised route=native on that basis; the guess was wrong, so it is gone.
+    extract_usage surfaces the count as `cached_in`; note the credit ledger still
+    bills all input at full rate — passing the discount on is a pricing decision,
+    not an accident to be inherited from this docstring.
+
+    Key check runs before the (lazy) langchain_openai import so a misconfig fails
+    fast, never mid-turn.
     """
     key = os.getenv("OFOX_API_KEY", "")
     if not key:
