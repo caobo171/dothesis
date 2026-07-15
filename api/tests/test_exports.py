@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.db import get_session_factory
 from app.main import create_app
-from app.models import ContextStore, Project, User
+from app.models import Export, User
 from app.security import create_session
 
 
@@ -32,26 +32,26 @@ def _setup_user_and_project(client) -> tuple[uuid.UUID, User]:
     return uuid.UUID(pid), u
 
 
-def _add_m5_artifact(project_id: uuid.UUID, filename: str):
+def _add_export(project_id: uuid.UUID, filename: str):
+    """Record an export where the download route actually looks it up.
+
+    The route's source of truth moved to the exports table; this helper used to
+    seed only m5_writing.export_artifacts, the location that comment calls
+    deprecated, so every download 404'd. kind and scope are set because the
+    route reads both to build the download filename.
+    """
     sf = get_session_factory()
     with sf() as db:
-        cs = db.get(ContextStore, project_id)
-        cs.m5_writing = {
-            "export_artifacts": [
-                {"kind": "docx",
-                 "s3_key": f"projects/{project_id}/exports/{filename}",
-                 "download_url": f"/api/v1/projects/{project_id}/exports/{filename}",
-                 "size_bytes": 0,
-                 "uri": ""},
-            ],
-        }
+        db.add(Export(project_id=project_id, scope="full", kind="docx",
+                      s3_key=f"projects/{project_id}/exports/{filename}",
+                      filename=filename, size_bytes=0))
         db.commit()
 
 
 def test_download_redirects_to_signed_url(client, monkeypatch):
     """Happy path — 302 to a fresh signed URL."""
     pid, _ = _setup_user_and_project(client)
-    _add_m5_artifact(pid, "thesis-abc.docx")
+    _add_export(pid, "thesis-abc.docx")
 
     fake_s3 = MagicMock()
     fake_s3.generate_presigned_url.return_value = (
@@ -77,10 +77,10 @@ def test_download_redirects_to_signed_url(client, monkeypatch):
 
 def test_download_404_when_filename_unknown(client, monkeypatch):
     pid, _ = _setup_user_and_project(client)
-    _add_m5_artifact(pid, "thesis-abc.docx")
+    _add_export(pid, "thesis-abc.docx")
     monkeypatch.setattr("app.routers.exports.s3_from_env", lambda: MagicMock())
     # Mint a token for the requested filename so auth passes; the 404 then comes
-    # from the artifact lookup (filename not in export_artifacts).
+    # from the artifact lookup (no exports row matches this filename's s3_key).
     fname = "wrong-filename.docx"
     token = client.headers["Authorization"].split(" ", 1)[1]
     st = client.post("/api/v1/auth/stream-token",
@@ -92,7 +92,7 @@ def test_download_404_when_filename_unknown(client, monkeypatch):
 
 def test_download_404_when_user_does_not_own_project(client, monkeypatch):
     pid, _ = _setup_user_and_project(client)
-    _add_m5_artifact(pid, "thesis-abc.docx")
+    _add_export(pid, "thesis-abc.docx")
     # Switch to a different user
     sf = get_session_factory()
     with sf() as db:

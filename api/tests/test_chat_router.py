@@ -79,7 +79,13 @@ def test_create_additional_thread_in_project(client):
 
 
 def test_disabled_when_flag_off(monkeypatch):
-    monkeypatch.delenv("ORCHESTRATOR_ENABLED", raising=False)
+    # setenv, not delenv: Settings reads a real .env file (which sets the flag
+    # true on dev machines), so unsetting the process env only falls through to
+    # the file and leaves the router mounted — the test then saw chat's 401
+    # instead of the 404 it was written for, and only passed on hosts with no
+    # .env. An explicit "false" outranks the file. create_app() calls
+    # reset_settings(), so no cache to clear here.
+    monkeypatch.setenv("ORCHESTRATOR_ENABLED", "false")
     c = TestClient(create_app())
     # GET→POST migration: get_project is now POST (same path). The disabled
     # flag → 404 intent is unchanged via the same route.
