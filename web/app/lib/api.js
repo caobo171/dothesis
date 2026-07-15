@@ -9,16 +9,41 @@ const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
 
 class ApiError extends Error {
   constructor(status, body) {
-    // FastAPI wraps our { error: { code, message } } payload inside { detail: ... }.
-    // Normalize so callers can always read `err.body.error.code`.
-    const inner = body && typeof body.detail === "object" ? body.detail : body;
+    const detail = body?.detail;
+
+    // FastAPI request-validation errors (422) put an ARRAY under `detail`:
+    //   [{ loc: ["body","password"], msg: "String should have at least 8…" }]
+    // `typeof [] === "object"`, so the old code treated the array as our
+    // { error: {…} } payload, found no message, and fell back to "HTTP 422".
+    // Build a readable message from the field + msg of each validation error.
+    let validationMsg = null;
+    if (Array.isArray(detail)) {
+      validationMsg = detail
+        .map((e) => {
+          const loc = Array.isArray(e?.loc) ? e.loc.filter((s) => s !== "body") : [];
+          const field = loc.length ? loc[loc.length - 1] : null;
+          const label = field
+            ? String(field).charAt(0).toUpperCase() + String(field).slice(1)
+            : null;
+          return label && e?.msg ? `${label}: ${e.msg}` : e?.msg || null;
+        })
+        .filter(Boolean)
+        .join("; ");
+    }
+
+    // Our own { error: { code, message } } payload, possibly wrapped in { detail }.
+    // Only treat `detail` as that inner object when it is NOT the validation array.
+    const inner =
+      detail && typeof detail === "object" && !Array.isArray(detail) ? detail : body;
     const code = inner?.error?.code;
     const codeMsg = code
       ? String(code).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
       : null;
     const msg =
+      validationMsg ||
       inner?.error?.message ||
       (typeof inner?.detail === "string" ? inner.detail : null) ||
+      (typeof detail === "string" ? detail : null) ||
       codeMsg ||
       `HTTP ${status}`;
     super(msg);
