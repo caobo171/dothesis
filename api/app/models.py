@@ -330,7 +330,7 @@ class PaperUpload(Base):
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     s3_uri: Mapped[str] = mapped_column(Text, nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    mime_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
     text_extracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     text_extract_uri: Mapped[str | None] = mapped_column(Text)
     page_count: Mapped[int | None] = mapped_column(Integer)
