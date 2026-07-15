@@ -12,24 +12,12 @@ from ..deps import current_user, stream_user_factory
 from ..job_runner import cancel_job, start_monitor
 from ..models import Job, JobEvent, Paper, User
 from ..pubsub import pubsub
-from ..sse import sse_pack
+# Terminal-type set and SSE redaction moved to app.sse so the runs router can
+# reuse them instead of keeping a second copy that drifts. Same definitions,
+# same behaviour — only the home changed.
+from ..sse import TERMINAL_TYPES, redact_for_sse, sse_pack
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
-
-# Fields that may contain server-side diagnostic info (full Python tracebacks,
-# internal stack info). Stripped from every SSE payload before transmission so
-# they never reach a browser even though they remain in the DB for ops debugging.
-_SSE_REDACT_KEYS = {"traceback"}
-
-
-def _redact_for_sse(payload: dict) -> dict:
-    return {k: v for k, v in payload.items() if k not in _SSE_REDACT_KEYS}
-
-
-# Event types after which the job produces nothing further, so the SSE stream
-# must end. Shared by both delivery paths (DB backlog replay and live pubsub) —
-# a terminal event has to close the stream regardless of which one carried it.
-_TERMINAL_TYPES = {"job_done", "error"}
 
 
 def _owned_job(db: Session, user: User, job_id: uuid.UUID) -> Job:
@@ -84,7 +72,7 @@ async def stream_events(
         # Spread meta_json first so column fields take precedence on key collisions.
         payload = {**(ev.meta_json or {}),
                    "type": ev.type, "phase": ev.phase, "agent": ev.agent, "text": ev.text}
-        backlog.append((ev.id, _redact_for_sse(payload)))
+        backlog.append((ev.id, redact_for_sse(payload)))
 
     sub = pubsub.subscribe(job_id)
 
@@ -99,7 +87,7 @@ async def stream_events(
                 # stream for an already-finished job only ever closed because
                 # the browser hung up, which leaks a task per reconnect and
                 # hangs any client that waits for the response to end.
-                if payload.get("type") in _TERMINAL_TYPES:
+                if payload.get("type") in TERMINAL_TYPES:
                     return
 
             while True:
@@ -108,9 +96,9 @@ async def stream_events(
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
                     continue
-                yield sse_pack(_redact_for_sse({k: v for k, v in msg.items() if k != "id"}),
+                yield sse_pack(redact_for_sse({k: v for k, v in msg.items() if k != "id"}),
                                 event_id=msg.get("id"))
-                if msg.get("type") in _TERMINAL_TYPES:
+                if msg.get("type") in TERMINAL_TYPES:
                     break
         finally:
             pubsub.unsubscribe(job_id, sub)

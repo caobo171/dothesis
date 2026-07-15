@@ -97,6 +97,61 @@ def test_resume_running_run_rejected(client, monkeypatch):
     assert r.json()["detail"]["error"]["code"] == "not_resumable"
 
 
+def _seed_run_with_backlog(client, monkeypatch, events) -> str:
+    """Create a run that is already finished, with `events` waiting in the DB."""
+    pid = _setup(client)
+    monkeypatch.setattr("app.job_runner.spawn_orchestrator_run",
+                        lambda db, run, brief, resume_from=None: setattr(run, "status", "running"))
+    rid = client.post(f"/api/v1/projects/{pid}/runs",
+                      json={"mode": "auto", "topic": "x"}).json()["run_id"]
+    # status=done keeps the route from starting a monitor: the point of these
+    # tests is the client that connects AFTER the run finished, so every event
+    # it sees comes from the DB backlog and never from pubsub.
+    _mark_run(rid, status="done")
+    sf = get_session_factory()
+    with sf() as db:
+        from app.models import JobEvent
+        for ev in events:
+            db.add(JobEvent(job_id=uuid.UUID(rid), **ev))
+        db.commit()
+    return rid
+
+
+def test_run_sse_ends_when_backlog_holds_terminal_event(client, monkeypatch):
+    """Reaching the assertions at all is the real assertion: TestClient buffers
+    the whole ASGI response before returning, so this call only comes back if
+    the server ends the stream itself. The run finished before we connected, so
+    its terminal event replays from the DB backlog, not pubsub — a client
+    cannot read a few events and hang up to rescue a generator that never
+    returns."""
+    rid = _seed_run_with_backlog(client, monkeypatch, [
+        {"type": "activity", "phase": "research", "agent": "Scout", "text": "hi"},
+        {"type": "job_done"},
+    ])
+    r = client.post(f"/api/v1/runs/{rid}/events", json={})
+    assert r.status_code == 200
+    assert "activity" in r.text
+    assert "job_done" in r.text
+    # Nothing is emitted after the terminal event (no keepalive tail).
+    assert "keepalive" not in r.text
+    assert r.text.rstrip().endswith("}")
+
+
+def test_run_sse_redacts_traceback_from_backlog(client, monkeypatch):
+    """meta_json is merged into the SSE payload verbatim, so a server-side
+    traceback stored for ops debugging must be stripped before it reaches the
+    browser — same protection the jobs stream applies."""
+    rid = _seed_run_with_backlog(client, monkeypatch, [
+        {"type": "error", "text": "boom",
+         "meta_json": {"traceback": "Traceback (most recent call last):\n  secret internals"}},
+    ])
+    r = client.post(f"/api/v1/runs/{rid}/events", json={})
+    assert r.status_code == 200
+    assert "boom" in r.text  # the user-facing message still goes through
+    assert "traceback" not in r.text
+    assert "secret internals" not in r.text
+
+
 def test_pause_run_calls_cancel(client, monkeypatch):
     pid = _setup(client)
     called = []
