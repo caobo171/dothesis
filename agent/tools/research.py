@@ -145,6 +145,10 @@ def research_scout(
 
     import concurrent.futures as _fut
 
+    # This tool is sync, so run_headless's asyncio.wait_for (agent/headless.py)
+    # cannot interrupt a search in flight: a run can overrun its wall_clock_s by
+    # up to this cap. Harmless at defaults (120s vs 1800s), but any profile with
+    # wall_clock_s <= 120 is really governed by this number, not by its budget.
     timeout_s = int(os.getenv("DOTHESIS_SCOUT_TIMEOUT_S", "120"))
     citations = None
     # NOTE: do NOT use `with ThreadPoolExecutor(...)`. Its __exit__ calls
