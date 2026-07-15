@@ -78,11 +78,16 @@ def test_v3_turn_debits_credits_and_records_transaction(client, monkeypatch):
     # default happened to be — which is how this test rotted: it was written
     # pre-multiplier and kept asserting an implicit 1.0 while the code correctly
     # billed 4.0. State the rate here so a model/default change fails loudly.
-    monkeypatch.setenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash")  # multiplier 4.0
+    # ⚠️ REPRICED 4.0 → 12.86: the multiplier now reads quality/model_prices.py
+    # ($1.50/$9.00 — July-2026 research, corroborated by the live Ofox gateway pull)
+    # instead of engine/utils/model_config.py's stale Feb-2026 $0.50/$3.00. This is a
+    # ~3.2x charge increase on the CURRENT PRODUCTION DEFAULT and a business decision,
+    # not arithmetic — see .superpowers/sdd/fix-credit-multiplier-report.md.
+    monkeypatch.setenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash")  # multiplier 12.86
 
     async def fake_stream_turn(agent, thread_id, text, attachments=None, store=None):
         yield {"type": "token", "text": "hi"}
-        # 3000 tokens → max(1, round(3000/1000 * 4.0)) = 12 credits.
+        # 3000 tokens → max(1, round(3000/1000 * 12.857)) = 39 credits.
         yield {"type": "usage", "input_tokens": 1500, "output_tokens": 1500}
         yield {"type": "done"}
 
@@ -101,11 +106,11 @@ def test_v3_turn_debits_credits_and_records_transaction(client, monkeypatch):
     with sf() as db:
         proj = db.get(Project, pid)
         owner = db.get(User, proj.user_id)
-        assert owner.credit == 10000 - 12  # balance reduced
+        assert owner.credit == 10000 - 39  # balance reduced
         txns = (db.query(CreditTransaction)
                   .filter_by(user_id=owner.id, reason="chat_turn").all())
         assert len(txns) == 1
-        assert txns[0].delta == -12
+        assert txns[0].delta == -39
         assert str(txns[0].ref_id) == str(tid)
 
 
@@ -116,9 +121,10 @@ def test_v3_turn_bills_the_model_it_actually_runs(client, monkeypatch):
     credit_multiplier(getenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash")) — an env
     guess with its OWN default, re-deriving what spec_from_env() had already
     decided. The two defaults disagree: on route=ofox with DOTHESIS_AGENT_MODEL
-    unset, spec_from_env() resolves google/gemini-2.5-flash (multiplier 1.0) while
-    billing charged 3.5-flash's 4.0 — a 4x overcharge to students, one uncommented
-    .env line away from production.
+    unset, spec_from_env() resolves google/gemini-2.5-flash while billing charged
+    3.5-flash's rate — an overcharge to students, one uncommented .env line away
+    from production. (At the time both multipliers came from name matching, 1.0 vs
+    4.0; they are now table-derived, but the disagreement this guards is the same.)
 
     This config is the one the ofox migration ships (.env.example comments the route
     and the model on separate lines, so the route alone gets uncommented), and it is
@@ -138,7 +144,11 @@ def test_v3_turn_bills_the_model_it_actually_runs(client, monkeypatch):
     # the test must fail on DISAGREEMENT, not on the constants changing.
     resolved = spec_from_env().model
     assert resolved == "google/gemini-2.5-flash"  # guard: pin the config we mean to test
-    expected = max(1, round(3000 / 1000 * credit_multiplier(resolved)))  # 3, not 12
+    # Deliberately NOT a literal: the property is "billed model == model run", so this
+    # must track the resolver. (The value moved 3 → 10 when pricing moved to the table:
+    # the Ofox gateway resells 2.5-flash at 0.30/2.50, not Google's native 0.15/0.60,
+    # so this route was never actually the 1.0 baseline the old matcher assumed.)
+    expected = max(1, round(3000 / 1000 * credit_multiplier(resolved)))
 
     async def fake_stream_turn(agent, thread_id, text, attachments=None, store=None):
         yield {"type": "token", "text": "hi"}

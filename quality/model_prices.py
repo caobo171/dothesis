@@ -27,6 +27,18 @@ MODEL_PRICES: dict[str, dict] = {
                 "note": "over-thinks; output tokens balloon", "updated": "2026-07-08"},
     "claude-haiku-4-5": {"in": 1.00, "out": 5.00, "provider": "anthropic",
                          "note": "strong agentic, mid-price", "updated": "2026-07-08"},
+    # Priced because agent/runtime.py::_default_model and model_factory.spec_from_env
+    # switch to this AUTOMATICALLY the moment ANTHROPIC_API_KEY lands — no deploy, no
+    # code change. Absent from the table it billed at the unknown-model fallback while
+    # actually costing ~20x baseline. Anthropic list price, verified 2026-07-15.
+    "claude-sonnet-4-6": {"in": 3.00, "out": 15.00, "provider": "anthropic",
+                          "note": "architecture's preferred brain; auto-selected when ANTHROPIC_API_KEY is set",
+                          "updated": "2026-07-15"},
+    # The thread_namer's cheap tier (api/app/thread_namer.py). Both this table's
+    # sources and engine/utils/model_config.py agree on 0.10/0.40, so there is no
+    # conflict to resolve here — unlike the 3.5-flash row above.
+    "gemini-2.5-flash-lite": {"in": 0.10, "out": 0.40, "provider": "google",
+                              "note": "cheapest Gemini; thread-naming tier", "updated": "2026-07-15"},
     # --- Ofox gateway ids + LIVE prices pulled from GET api.ofox.ai/v1/models
     #     (the `pricing` field, 2026-07-10). Keys match the provider/model string
     #     passed to evaluate_models, so cost() resolves them directly. ---
