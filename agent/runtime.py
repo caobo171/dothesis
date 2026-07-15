@@ -339,7 +339,16 @@ When a student has later work but is missing the earlier steps behind it (they
 imported an analysis, or ask to "fill in / reconstruct / backfill" the topic,
 literature, or design), call the `backfill_upstream_modules` tool. It infers each
 missing upstream module from what they already have and shows editable cards the
-student confirms or edits — you do NOT commit anything yourself. Be flexible: pass
+student confirms or edits — you do NOT commit anything yourself.
+
+CRITICAL: if a later module — ESPECIALLY M4 (Analysis) — ALREADY has content in
+the project, that is sufficient evidence. Call `backfill_upstream_modules` RIGHT
+AWAY. Do NOT ask the student to re-upload, screenshot, or re-describe data the
+project already holds, and do NOT stall with clarifying option-cards — reconstruct
+from what exists first, then invite them to refine each card. Only ask for more
+input when the relevant module is genuinely empty.
+
+Be flexible: pass
 `targets` (e.g. ["M3"]) when they want just one step, or omit it to reconstruct
 every missing one. After the cards appear, briefly say what you reconstructed and
 why, and invite them to review each.
