@@ -26,6 +26,12 @@ def _redact_for_sse(payload: dict) -> dict:
     return {k: v for k, v in payload.items() if k not in _SSE_REDACT_KEYS}
 
 
+# Event types after which the job produces nothing further, so the SSE stream
+# must end. Shared by both delivery paths (DB backlog replay and live pubsub) —
+# a terminal event has to close the stream regardless of which one carried it.
+_TERMINAL_TYPES = {"job_done", "error"}
+
+
 def _owned_job(db: Session, user: User, job_id: uuid.UUID) -> Job:
     j = db.get(Job, job_id)
     if not j:
@@ -86,6 +92,15 @@ async def stream_events(
         try:
             for ev_id, payload in backlog:
                 yield sse_pack(payload, event_id=ev_id)
+                # The job may have finished before the client ever connected, in
+                # which case the terminal event arrives here (replayed from the
+                # DB) and never through pubsub. Without this the generator fell
+                # through to the loop below and emitted keepalives forever: a
+                # stream for an already-finished job only ever closed because
+                # the browser hung up, which leaks a task per reconnect and
+                # hangs any client that waits for the response to end.
+                if payload.get("type") in _TERMINAL_TYPES:
+                    return
 
             while True:
                 try:
@@ -95,7 +110,7 @@ async def stream_events(
                     continue
                 yield sse_pack(_redact_for_sse({k: v for k, v in msg.items() if k != "id"}),
                                 event_id=msg.get("id"))
-                if msg.get("type") in {"job_done", "error"}:
+                if msg.get("type") in _TERMINAL_TYPES:
                     break
         finally:
             pubsub.unsubscribe(job_id, sub)
