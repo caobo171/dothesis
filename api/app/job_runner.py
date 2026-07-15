@@ -350,28 +350,38 @@ def _charge_auto_run(db: Session, run: Job) -> None:
     if owner is None:
         return
 
-    total_tokens = int(
-        db.scalar(
-            select(
-                func.coalesce(
-                    func.sum(TokenLedger.prompt_tokens + TokenLedger.completion_tokens), 0
-                )
-            ).where(
-                TokenLedger.project_id == run.project_id,
-                TokenLedger.created_at >= run.started_at,
-            )
+    # Bill each ledger row at ITS OWN model's rate, grouped by the model the
+    # ledger recorded. token_meter writes the model that actually served the call
+    # (orchestrator/token_meter.py), so the truth is already in these rows.
+    #
+    # This previously summed tokens and scaled by credit_multiplier(getenv(
+    # "ORCHESTRATOR_LLM_MODEL", "gemini-3.5-flash")) — re-deriving from env what
+    # the ledger had already recorded. That default was correct when written, then
+    # orchestrator/llm.py landed defaulting to gemini-2.5-flash and the two drifted:
+    # with the env var unset (as .env.example ships it), auto runs EXECUTED on
+    # 2.5-flash and were BILLED at the 3.5-flash rate — a 4x overcharge, which
+    # test_auto_run_charges_actual_tokens_and_is_idempotent had been failing on.
+    # An env guess can only ever be right by luck; a run may also legitimately span
+    # several models (e.g. a Gemini citation planner alongside the main brain), and
+    # one scalar multiplier cannot price that at all.
+    rows = db.execute(
+        select(
+            TokenLedger.model,
+            func.coalesce(
+                func.sum(TokenLedger.prompt_tokens + TokenLedger.completion_tokens), 0
+            ),
         )
-        or 0
-    )
+        .where(
+            TokenLedger.project_id == run.project_id,
+            TokenLedger.created_at >= run.started_at,
+        )
+        .group_by(TokenLedger.model)
+    ).all()
+    total_tokens = sum(int(t or 0) for _, t in rows)
     if total_tokens <= 0:
         return
-    # Scale by the active orchestrator model's relative cost — the auto-draft
-    # pipeline runs on ORCHESTRATOR_LLM_MODEL (gemini-3.5-flash, ~4x a 2.5-flash
-    # turn), so the flat 1-credit/1k-token rate would undercharge it badly. Same
-    # multiplier the chat turn uses (pricing.credit_multiplier).
     from .pricing import credit_multiplier
-    mult = credit_multiplier(os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-3.5-flash"))
-    cost = max(1, round(total_tokens / 1000 * mult))
+    cost = max(1, round(sum(int(t or 0) / 1000 * credit_multiplier(m) for m, t in rows)))
     charge = min(cost, owner.credit or 0)
     if charge > 0:
         debit(db, owner, delta=charge, reason="auto_run", ref_type="run", ref_id=run.id)
