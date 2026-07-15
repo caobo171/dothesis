@@ -149,3 +149,47 @@ def test_spec_from_env_ofox_default_model(monkeypatch):
     spec = spec_from_env()
     assert spec.route == "ofox"
     assert spec.model == "google/gemini-2.5-flash"
+
+
+# --- A: vision capability fields (headless convergence spec §2) -------------
+from agent.model_factory import make_vision_model, model_supports_vision
+
+
+def test_supports_vision_lookup_fail_closed():
+    # FAIL-CLOSED is the load-bearing property: an unknown id must read as
+    # text-only, so the worst drift outcome is a needless transcription —
+    # never Gemini media blocks shipped into an OpenAI-compat endpoint
+    # (design-doc defect 1's failure shape).
+    assert model_supports_vision("gemini-3.5-flash") is True
+    assert model_supports_vision("google/gemini-2.5-flash") is True
+    assert model_supports_vision("claude-sonnet-4-6") is True
+    assert model_supports_vision("qwen/qwen-plus") is False
+    assert model_supports_vision("qwen-plus") is False
+    assert model_supports_vision("some-future-model") is False
+    assert model_supports_vision("") is False
+
+
+def test_spec_from_env_derives_vision_fields(monkeypatch):
+    monkeypatch.setenv("DOTHESIS_MODEL_ROUTE", "ofox")
+    monkeypatch.setenv("DOTHESIS_AGENT_MODEL", "qwen/qwen-plus")
+    monkeypatch.delenv("DOTHESIS_VISION_MODEL", raising=False)
+    spec = spec_from_env()
+    assert spec.supports_vision is False
+    assert spec.vision_model == ""  # "" = resolve at make_vision_model time
+
+
+def test_make_vision_model_text_only_brain_defaults_to_gemini(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "test")
+    monkeypatch.delenv("OFOX_API_KEY", raising=False)
+    spec = ModelSpec(route="native", model="qwen-plus", supports_vision=False)
+    m = make_vision_model(spec)
+    assert m.__class__.__name__ == "ChatGoogleGenerativeAI"
+    assert "gemini-2.5-flash" in m.model
+
+
+def test_make_vision_model_ofox_prefixes_and_points_at_gateway(monkeypatch):
+    monkeypatch.setenv("OFOX_API_KEY", "ok-test")
+    spec = ModelSpec(route="ofox", model="qwen/qwen-plus",
+                     vision_model="gemini-2.5-flash", supports_vision=False)
+    m = make_vision_model(spec)
+    assert "google/gemini-2.5-flash" in m.model  # Ofox needs provider-prefixed ids

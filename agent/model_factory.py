@@ -27,6 +27,25 @@ class ModelSpec:
     fallbacks: list[str] = field(default_factory=list)
     temperature: float = 0.4
     max_tokens: int = 8000
+    # Vision routing (headless convergence spec §2). vision_model "" means
+    # "resolve at make_vision_model time" — the brain itself when it can see,
+    # else the Gemini sidecar. supports_vision is derived from `model` and
+    # FAIL-CLOSED: unknown ids are assumed text-only, because the wrong default
+    # ships Gemini media blocks into an OpenAI-compat endpoint and hard-fails,
+    # while a needless transcription costs fractions of a cent.
+    vision_model: str = ""
+    supports_vision: bool = False
+
+
+# Substring lookup on the model id — the same technique opencode uses for
+# prompt selection. A KNOWN MAINTENANCE POINT: new vision-capable families
+# must be added here, and fail-closed keeps that drift cheap (spec Risk 4).
+_VISION_MODEL_HINTS = ("gemini", "claude")
+
+
+def model_supports_vision(model: str) -> bool:
+    m = (model or "").lower()
+    return any(h in m for h in _VISION_MODEL_HINTS)
 
 
 def spec_from_env() -> ModelSpec:
@@ -46,12 +65,15 @@ def spec_from_env() -> ModelSpec:
         # Ofox uses provider/model ids; default to the cheap Gemini-family tier
         # (dramatically cheaper output than 3.5-flash). Override via DOTHESIS_AGENT_MODEL.
         default_model = "google/gemini-2.5-flash"
+    model = os.getenv("DOTHESIS_AGENT_MODEL", default_model)
     return ModelSpec(
         route=route,
-        model=os.getenv("DOTHESIS_AGENT_MODEL", default_model),
+        model=model,
         fallbacks=[m for m in os.getenv("DOTHESIS_MODEL_FALLBACKS", "").split(",") if m.strip()],
         temperature=float(os.getenv("DOTHESIS_MODEL_TEMPERATURE", "0.4")),
         max_tokens=int(os.getenv("DOTHESIS_MODEL_MAX_TOKENS", "8000")),
+        vision_model=os.getenv("DOTHESIS_VISION_MODEL", ""),
+        supports_vision=model_supports_vision(model),
     )
 
 
@@ -152,3 +174,33 @@ def _ofox(spec: ModelSpec):
         # ledger reads it via extract_usage, so keep this on.
         model_kwargs={"stream_options": {"include_usage": True}},
     )
+
+
+def make_vision_model(spec: ModelSpec | None = None, temperature: float | None = None):
+    """Vision-capable model for image / screenshot / scanned-PDF turns.
+
+    Implementation moved here from orchestrator/llm.get_vision_llm so "what
+    model am I on" has ONE source of truth (spec §2 — this takes the
+    model-truth sources from three to one and clears the path for D).
+
+    Always a Gemini client: the vision path builds Gemini-format content
+    blocks, which the OpenAI-compat Ofox route can't consume. On route=ofox we
+    point the Gemini client at Ofox's Gemini-NATIVE endpoint (verified
+    working) with the Ofox key; else native Google. temperature defaults 0.2 —
+    transcription wants determinism, not creativity.
+    """
+    from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: PLC0415 — lazy, heavy dep
+
+    spec = spec or spec_from_env()
+    # "" = same as `model` when the brain can see; text-only brains get the
+    # Gemini sidecar default (mirrors the old get_vision_llm default).
+    m = spec.vision_model or (spec.model if spec.supports_vision else "gemini-2.5-flash")
+    t = 0.2 if temperature is None else temperature
+    ofox_key = os.getenv("OFOX_API_KEY")
+    if spec.route == "ofox" and ofox_key:
+        vm = m if "/" in m else f"google/{m}"  # Ofox needs provider-prefixed ids
+        return ChatGoogleGenerativeAI(
+            model=vm, google_api_key=ofox_key,
+            client_options={"api_endpoint": "https://api.ofox.ai/gemini"},
+            transport="rest", temperature=t)
+    return ChatGoogleGenerativeAI(model=m, temperature=t)
