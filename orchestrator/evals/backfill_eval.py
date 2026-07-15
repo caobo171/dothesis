@@ -87,9 +87,24 @@ FIXTURES = [
 
 
 def _judge_llm():
+    """Independent judge — deliberately pinned to Gemini, not the configured route.
+
+    Two reasons this does NOT go through resolve_orchestrator_model():
+
+    1. ChatGoogleGenerativeAI is a Gemini-native client, so it needs a Gemini id.
+       ORCHESTRATOR_LLM_MODEL may now hold a non-Gemini id (e.g. Ofox's
+       bailian/qwen-plus), which would break this client — the same half-enabled
+       route shape already fixed at m2_literature.py:48.
+    2. The judge must stay INDEPENDENT of the generator (SagaLLM principle, see
+       module docstring). reconstruct_artifact runs on the configured route, so
+       tying the judge to that same var would make a route flip silently grade the
+       model with itself and drift the eval's baseline.
+
+    Same pattern as CITATION_PLANNER_MODEL: a dedicated pinned var + Gemini default.
+    """
     from langchain_google_genai import ChatGoogleGenerativeAI
     return ChatGoogleGenerativeAI(
-        model=os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash"),
+        model=os.getenv("BACKFILL_EVAL_JUDGE_MODEL", "gemini-2.5-flash"),
         temperature=0.0,
         timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
     )
