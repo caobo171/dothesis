@@ -55,6 +55,18 @@ def spec_from_env() -> ModelSpec:
     ANTHROPIC_API_KEY is configured on the native route, else gemini-3.5-flash.
     DOTHESIS_AGENT_MODEL still overrides, exactly as before.
     """
+    # DEPLOY CONSTRAINT — the route stays `native` in code, deliberately.
+    # _ofox() raises RuntimeError without OFOX_API_KEY, so defaulting to ofox here
+    # would break every dev machine and any deploy lacking the key. Moving production
+    # onto ofox is a DEPLOYMENT change (DOTHESIS_MODEL_ROUTE=ofox in env); this file
+    # only decides WHICH model you get once you are already on ofox.
+    #
+    # ⚠️ SHIP-TOGETHER: the credit_multiplier correction (f64bf79) must NOT reach
+    # production while the live default is still gemini-3.5-flash. Table-derived
+    # pricing bills 3.5-flash at ~12.86x, and PACKAGES are sized on "1 pack ≈ 1 run",
+    # so a Starter pack would buy ~1/13 of a run and students hit a wall immediately.
+    # The env flip to ofox + qwen-plus (~0.62x) and that multiplier change are one
+    # deployment, not two.
     route = os.getenv("DOTHESIS_MODEL_ROUTE", "native")
     # Claude is the architecture's preferred model and takes over automatically
     # once a key lands; until then Gemini is the working default.
@@ -62,9 +74,19 @@ def spec_from_env() -> ModelSpec:
     if route == "native" and os.getenv("ANTHROPIC_API_KEY"):
         default_model = "claude-sonnet-4-6"
     elif route == "ofox":
-        # Ofox uses provider/model ids; default to the cheap Gemini-family tier
-        # (dramatically cheaper output than 3.5-flash). Override via DOTHESIS_AGENT_MODEL.
-        default_model = "google/gemini-2.5-flash"
+        # Ofox uses provider/model ids. qwen-plus (0.12/0.29) is the only default that
+        # bills BELOW the credit baseline (gemini-2.5-flash native, 0.15/0.60 → 1.0x by
+        # construction): it resolves to ~0.62x. That is load-bearing, not incidental —
+        # api/app/pricing.py::PACKAGES are sized on "1 pack ≈ 1 run", so a default above
+        # 1.0x silently shrinks what a pack buys.
+        #
+        # NOT google/gemini-2.5-flash (the previous default): Ofox RESELLS 2.5-flash at
+        # 0.30/2.50, not Google's native 0.15/0.60, so it bills ~3.24x — it was never the
+        # baseline the old name-matching multiplier assumed it was.
+        # Trade-off accepted: qwen-plus is text-only, so image turns go to the Gemini
+        # vision sidecar (make_vision_model) instead of the brain. Override via
+        # DOTHESIS_AGENT_MODEL.
+        default_model = "bailian/qwen-plus"
     model = os.getenv("DOTHESIS_AGENT_MODEL", default_model)
     return ModelSpec(
         route=route,

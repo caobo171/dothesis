@@ -148,7 +148,42 @@ def test_spec_from_env_ofox_default_model(monkeypatch):
     monkeypatch.delenv("DOTHESIS_AGENT_MODEL", raising=False)
     spec = spec_from_env()
     assert spec.route == "ofox"
-    assert spec.model == "google/gemini-2.5-flash"
+    assert spec.model == "bailian/qwen-plus"
+
+
+def test_ofox_default_is_cheaper_than_the_credit_baseline():
+    """The PROPERTY this default exists for: the ofox default must bill BELOW 1.0.
+
+    PACKAGES in api/app/pricing.py are sized on "1 pack ≈ 1 run". Once
+    credit_multiplier reads quality/model_prices.py instead of substring-matching
+    names (f64bf79), the old defaults price far above that assumption:
+    gemini-3.5-flash → ~12.9x (a Starter pack buys ~1/13 of a run) and the previous
+    ofox default google/gemini-2.5-flash → ~3.2x (the gateway RESELLS 2.5-flash at
+    0.30/2.50, not Google's native 0.15/0.60 baseline). qwen-plus at 0.12/0.29 is
+    the only default that keeps the packs honest without re-tuning them.
+
+    Asserted as an inequality against the baseline, not a literal: if a future price
+    update pushes the default above baseline, the packs are wrong again and this
+    must fail — that is the whole point of the model choice.
+    """
+    from app.pricing import credit_multiplier
+
+    assert credit_multiplier("bailian/qwen-plus") < 1.0
+    # The two defaults this one replaces, pinned so the reason stays legible.
+    assert credit_multiplier("google/gemini-2.5-flash") > 3.0
+    assert credit_multiplier("gemini-3.5-flash") > 12.0
+
+
+def test_ofox_default_is_text_only_so_vision_routes_to_the_sidecar(monkeypatch):
+    """qwen-plus is a text-only brain: image turns MUST go to the Gemini vision
+    sidecar (make_vision_model), never ship media blocks at qwen. Making it the
+    default is what puts the sidecar on the production path, so pin it here."""
+    monkeypatch.setenv("DOTHESIS_MODEL_ROUTE", "ofox")
+    monkeypatch.delenv("DOTHESIS_AGENT_MODEL", raising=False)
+    monkeypatch.delenv("DOTHESIS_VISION_MODEL", raising=False)
+    spec = spec_from_env()
+    assert spec.supports_vision is False
+    assert spec.vision_model == ""  # "" = resolve the Gemini sidecar at call time
 
 
 # --- A: vision capability fields (headless convergence spec §2) -------------

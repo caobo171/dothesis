@@ -120,15 +120,16 @@ def test_v3_turn_bills_the_model_it_actually_runs(client, monkeypatch):
     Regression (the chat-side twin of d4382a6): the charge scaled by
     credit_multiplier(getenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash")) — an env
     guess with its OWN default, re-deriving what spec_from_env() had already
-    decided. The two defaults disagree: on route=ofox with DOTHESIS_AGENT_MODEL
-    unset, spec_from_env() resolves google/gemini-2.5-flash while billing charged
+    decided. The two defaults disagreed: on route=ofox with DOTHESIS_AGENT_MODEL
+    unset, spec_from_env() resolved the route's default while billing charged
     3.5-flash's rate — an overcharge to students, one uncommented .env line away
     from production. (At the time both multipliers came from name matching, 1.0 vs
-    4.0; they are now table-derived, but the disagreement this guards is the same.)
+    4.0; they are now table-derived, and the route's default has since moved to
+    bailian/qwen-plus — but the disagreement this guards is the same.)
 
-    This config is the one the ofox migration ships (.env.example comments the route
-    and the model on separate lines, so the route alone gets uncommented), and it is
-    exactly the config the 4.0x test above does NOT cover.
+    This config is the one the ofox migration ships (the route gets uncommented and
+    the model is left to the code default), and it is exactly the config the 4.0x test
+    above does NOT cover.
     """
     pid, tid = _setup_project(client)
 
@@ -143,11 +144,12 @@ def test_v3_turn_bills_the_model_it_actually_runs(client, monkeypatch):
     # number: the property under test is "billed model == model actually run", so
     # the test must fail on DISAGREEMENT, not on the constants changing.
     resolved = spec_from_env().model
-    assert resolved == "google/gemini-2.5-flash"  # guard: pin the config we mean to test
+    assert resolved == "bailian/qwen-plus"  # guard: pin the config we mean to test
     # Deliberately NOT a literal: the property is "billed model == model run", so this
-    # must track the resolver. (The value moved 3 → 10 when pricing moved to the table:
-    # the Ofox gateway resells 2.5-flash at 0.30/2.50, not Google's native 0.15/0.60,
-    # so this route was never actually the 1.0 baseline the old matcher assumed.)
+    # must track the resolver. (The value has moved twice — 3 → 10 when pricing moved
+    # to the table, then down again when the ofox default moved off google/gemini-2.5-
+    # flash, which Ofox resells at 0.30/2.50 for ~3.24x, onto qwen-plus at ~0.62x.
+    # Both moves left this line untouched, which is the point of deriving it.)
     expected = max(1, round(3000 / 1000 * credit_multiplier(resolved)))
 
     async def fake_stream_turn(agent, thread_id, text, attachments=None, store=None):

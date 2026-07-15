@@ -337,9 +337,10 @@ async def send_message_v3(
             # guess — credit_multiplier(getenv("DOTHESIS_AGENT_MODEL",
             # "gemini-3.5-flash")) — carrying its own default, and the two defaults
             # drifted: on route=ofox with DOTHESIS_AGENT_MODEL unset, spec_from_env
-            # resolves google/gemini-2.5-flash (1.0x) while billing charged
-            # 3.5-flash's 4.0x — a 4x overcharge to students, one uncommented
-            # .env.example line away (route and model are commented separately).
+            # resolved the route's default while billing charged 3.5-flash's rate —
+            # an overcharge to students, one uncommented .env.example line away (the
+            # route and the model were commented on separate lines back then; both
+            # that split and the name-matching multipliers are since fixed).
             # This is the chat-side twin of d4382a6, and the same principle: billing
             # reads the model that served the call, never re-derives it from env.
             #

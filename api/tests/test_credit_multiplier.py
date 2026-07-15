@@ -79,8 +79,11 @@ def test_every_model_a_resolver_can_pick_by_default_is_priced():
     env set; adding a new default without a price now fails here, in CI, instead
     of silently mispricing production.
     """
+    # bailian/qwen-plus is the ofox route's default (agent/model_factory.py); if it
+    # ever fell out of the table it would bill at the 4.0x fallback — a ~6.5x
+    # OVERcharge on the model chosen precisely because it bills ~0.62x.
     for model in ("gemini-3.5-flash", "claude-sonnet-4-6", "google/gemini-2.5-flash",
-                  "gemini-2.5-flash"):
+                  "gemini-2.5-flash", "bailian/qwen-plus"):
         assert model in MODEL_PRICES, f"{model} is a resolver default but has no price"
 
 
