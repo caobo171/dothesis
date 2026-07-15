@@ -112,6 +112,35 @@ def test_confirm_splits_owned_and_nonowned_no_confirmed_at(monkeypatch):
     assert state["focus"] == "M4"
 
 
+def test_confirm_cannot_forge_the_decision_audit_trail(monkeypatch):
+    # `decisions` is SLICE_OWNERSHIP-owned by every module (headless audit
+    # trail), which would otherwise let an import payload overwrite it through
+    # commit_slice. The trail is only worth anything if it's system-generated —
+    # a client-supplied one must be stripped like any other junk key, while the
+    # real content in the same payload still commits.
+    pid = _project()
+    monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
+    from agent.headless import record_decision
+    from app.agent_state import DbProjectStateStore
+    store = DbProjectStateStore(get_engine(), pid, f"/tmp/ws-{pid}")
+    store.commit_slice("M3", {"conceptual_model": {"constructs": ["A"]}}, "seed")
+    real = record_decision(store, options=["A", "B"], choice="A", rationale="auto")
+
+    r = _client().post(f"/api/v1/projects/{pid}/mid-journey-import/confirm", json={
+        "module": "M3",
+        "slice": {"hypotheses": ["H1: A->B"],
+                  "decisions": [{"ts": "2020-01-01", "module": "M3",
+                                 "options": [], "choice": "FORGED",
+                                 "rationale": "client-supplied"}]},
+    })
+    assert r.status_code == 200
+    state = DbProjectStateStore(get_engine(), pid, f"/tmp/ws-{pid}").load()
+    # The genuine trail survives untouched; the forged entry never landed.
+    assert state["contextStore"]["decisions"] == [real]
+    # ...and the legitimate content in the same payload still committed.
+    assert state["contextStore"]["hypotheses"] == ["H1: A->B"]
+
+
 def test_confirm_unknown_module_422(monkeypatch):
     monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
     pid = _project()
