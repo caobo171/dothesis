@@ -532,12 +532,19 @@ def _mermaid_to_prose(prose: str) -> str:
         logger.exception("mermaid render step failed")
 
     rel = ["", "**Mối quan hệ giả thuyết trong mô hình:**", ""]
+    solid = [(s, t, e) for s, t, e in edges if not _is_moderation_label(e)]
+    for s, t, e in solid:
+        rel.append(f"- {s} → {t}" + (f" ({e})" if e else ""))
+    # Moderator edges point at the predictors; collapse them into ONE sentence
+    # per moderator, naming the moderated OUTCOME (the common target of the
+    # solid IV→DV edges) instead of listing each predictor arrow separately.
+    dv = solid[0][1] if solid else ""
+    seen_mod: list[str] = []
     for s, t, e in edges:
-        if _is_moderation_label(e):
-            # Moderator: phrase as moderation, not a direct-effect hypothesis.
-            rel.append(f"- {s} điều tiết mối quan hệ giữa các biến độc lập và {t}")
-        else:
-            rel.append(f"- {s} → {t}" + (f" ({e})" if e else ""))
+        if _is_moderation_label(e) and s not in seen_mod:
+            seen_mod.append(s)
+            tail = f" và {dv}" if dv else ""
+            rel.append(f"- {s} điều tiết mối quan hệ giữa các biến độc lập{tail}")
     return "\n".join(keep).rstrip() + img_line + "\n" + "\n".join(rel) + "\n"
 
 
@@ -732,12 +739,12 @@ def _variable_decomposition_to_graph(cm: dict) -> dict | None:
     mod_lbl = _lbl(mod)
     if mod_lbl:
         nodes.append({"id": "MOD", "label": mod_lbl, "type": "moderator"})
-        # A moderator does NOT have a direct effect on the DV like an IV — it
-        # moderates the IV→DV relationships. Mark the edge so the diagram draws
-        # it distinctly (dashed) and the hypothesis list phrases it as moderation
-        # instead of a plain "Trust → DV" arrow (reviewer feedback).
-        edges.append({"source": "MOD", "target": "DV", "effect": "moderates",
-                      "hypothesis": f"H{len(iv_lbls) + 1}"})
+        # A moderator conditions each IV→DV path — so it must point at the
+        # PREDICTORS it moderates, not sit as a plain arrow to the DV like an IV
+        # (reviewer feedback). One dashed "Điều tiết" edge to every independent
+        # variable.
+        for i in range(1, len(iv_lbls) + 1):
+            edges.append({"source": "MOD", "target": f"IV{i}", "effect": "moderates"})
     return {"nodes": nodes, "edges": edges}
 
 
