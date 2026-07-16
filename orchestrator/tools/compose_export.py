@@ -30,6 +30,25 @@ logger = logging.getLogger(__name__)
 ProgressFn = Callable[[int, str, str, str], None]
 
 
+def merged_chapter_keys(chapters: list[str]) -> list[str]:
+    """The chapter keys compose_sections(merge_conclusion=True) will actually
+    write — `conclusion` folded into `discussion`.
+
+    Public because a CALLER has to be able to report what was composed without
+    re-deriving the rule: the partner response echoes its `chapters` list, and
+    the old pipeline echoed the POST-merge keys because it merged before
+    composing. Now that the merge happens inside compose_sections, a caller that
+    restated the rule locally would be a second copy of it, free to drift — and
+    the drift would only ever surface in a partner's JSON.
+    """
+    if "conclusion" not in set(chapters):
+        return list(chapters)
+    out = [c for c in chapters if c != "conclusion"]
+    if "discussion" not in out:
+        out.append("discussion")
+    return out
+
+
 def compose_sections(
     context_store: dict,
     chapters: list[str],
@@ -47,9 +66,7 @@ def compose_sections(
         # already emits the full conclusion structure (summary → contributions
         # → limitations → future work), so drop `conclusion` and relabel
         # `discussion` — an export ARGUMENT, not a pipeline fork.
-        chapters = [c for c in chapters if c != "conclusion"]
-        if "discussion" not in chapters:
-            chapters = [*chapters, "discussion"]
+        chapters = merged_chapter_keys(chapters)
         combined = ("Chương 5 — Kết luận" if str(language).lower().startswith("vi")
                     else "Chapter 5 — Conclusion")
         title_overrides = {**(title_overrides or {}), "discussion": combined}
