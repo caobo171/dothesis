@@ -588,7 +588,7 @@ def _derive_scale_items(conceptual_model: dict | None,
     return [{"construct": c, "items": grouped[c]} for c in order]
 
 
-def _generate_scale_items(instrument: dict | None) -> list[dict]:
+def _generate_scale_items(instrument: dict | None, language: str = "en") -> list[dict]:
     """Generate real Likert items when the instrument is only a SPEC — i.e. it
     lists `constructs` + `items_per_construct` but no actual item texts (a shape
     headless often emits). Without this the questionnaire table is either empty
@@ -608,7 +608,8 @@ def _generate_scale_items(instrument: dict | None) -> list[dict]:
     n = max(1, min(n, 8))
     try:  # lazy import — avoids an m5↔m3 import cycle at module load
         from orchestrator.tools.m3_design import suggest_scale_items_batch
-        batch = suggest_scale_items_batch.invoke({"constructs": constructs, "n": n})
+        batch = suggest_scale_items_batch.invoke(
+            {"constructs": constructs, "n": n, "language": language})
     except Exception:
         logger.warning("_generate_scale_items: suggest_scale_items_batch failed", exc_info=True)
         return []
@@ -2046,7 +2047,8 @@ def compose_chapter(
         # real items so Chapter 3 ships a grounded scale table. Methodology-only
         # to avoid an extra LLM call on chapters that never render {scale_items}.
         if not safe_kwargs["scale_items"] and chapter_name == "methodology":
-            safe_kwargs["scale_items"] = _generate_scale_items(context_slice.get("instrument"))
+            safe_kwargs["scale_items"] = _generate_scale_items(
+                context_slice.get("instrument"), language)
 
     try:
         prompt = _fill_template(prompt_template, safe_kwargs) + _MARKDOWN_FORMAT_RULES

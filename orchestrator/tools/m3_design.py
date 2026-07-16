@@ -139,8 +139,9 @@ def build_conceptual_model(constructs: list[str], research_question: str) -> dic
 
 
 @tool
-def suggest_scale_items(construct_name: str, n: int = 5) -> list[dict]:
-    """Suggest `n` Likert items measuring the named construct.
+def suggest_scale_items(construct_name: str, n: int = 5, language: str = "en") -> list[dict]:
+    """Suggest `n` Likert items measuring the named construct, worded in
+    `language` (e.g. "vi" → Vietnamese).
 
     Returns: [{id, text}, ...].
 
@@ -157,7 +158,8 @@ def suggest_scale_items(construct_name: str, n: int = 5) -> list[dict]:
     llm = _get_llm()
     prompt = (
         f"Write {n} validated-style Likert items (5-point) measuring the construct "
-        f"'{construct_name}'. Respond with ONLY a JSON array: "
+        f"'{construct_name}'. {_item_language_rule(language)} "
+        "Respond with ONLY a JSON array: "
         f'[{{"id": "C1", "text": "..."}}, ...].'
     )
     try:
@@ -168,9 +170,20 @@ def suggest_scale_items(construct_name: str, n: int = 5) -> list[dict]:
         return []
 
 
+def _item_language_rule(language: str) -> str:
+    """One instruction line pinning the item wording to the report's language.
+    Defaults to English; Vietnamese reports were getting English items."""
+    if str(language or "").lower().startswith("vi"):
+        return "Write every item text in natural Vietnamese (tiếng Việt)."
+    return "Write every item text in English."
+
+
 @tool
-def suggest_scale_items_batch(constructs: list[str], n: int = 5) -> dict:
+def suggest_scale_items_batch(constructs: list[str], n: int = 5, language: str = "en") -> dict:
     """Suggest `n` Likert items for EACH construct — ONE LLM call total.
+
+    `language` pins the item wording (e.g. "vi" → Vietnamese) so a Vietnamese
+    report doesn't get English scale items.
 
     Returns: {<construct_name>: [{id, text}, ...], ...}. Every requested
     construct is guaranteed to appear as a key (mapped to [] if the LLM
@@ -189,7 +202,9 @@ def suggest_scale_items_batch(constructs: list[str], n: int = 5) -> dict:
     llm = _get_llm()
     prompt = (
         f"For EACH of the constructs below, write {n} validated-style 5-point "
-        "Likert items measuring that construct. Respond with ONLY a JSON object "
+        "Likert items measuring that construct. "
+        f"{_item_language_rule(language)} "
+        "Respond with ONLY a JSON object "
         "keyed by the EXACT construct name as it appears in the list, where "
         "each value is the array of items:\n"
         '{"<construct A>": [{"id":"A1","text":"..."}, ...], '
