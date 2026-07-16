@@ -83,6 +83,43 @@ def test_seed_lands_in_owned_slices(tmp_path):
     assert "needs_review" not in st["status"].values()
 
 
+def test_partner_composer_is_grounded_in_the_research_gaps(tmp_path, monkeypatch):
+    """REVENUE PATH REGRESSION PIN (task-11 finding A).
+
+    The deleted partner_report_service wrote the grounded brief's gaps into a
+    plain `m1_topic` dict with no ownership filter, so compose_sections' m1+m3+m4
+    slice picked them up and the Introduction argued against real literature.
+    Post-migration the gaps live where they are OWNED — m2_literature — which the
+    slice never merged, so the Introduction silently lost its grounding.
+
+    This asserts the composer's ACTUAL input through the real DB store, not the
+    slice-builder in isolation: the store round-trip is where an unowned key
+    would vanish (project_db_store_persistence_gap).
+    """
+    store, pid = _partner_project(tmp_path)
+    seed_partner_store(
+        store, analysis_text="AVE 0.62", language="en",
+        m1={"research_title": "Trust and PI", "research_questions": ["RQ1"]},
+        m2={"literature_sources": [{"title": "S", "year": 2020}],
+            "research_gaps": [{"description": "no VN evidence [3]", "refs": [3]}]},
+    )
+
+    import orchestrator.tools.compose_export as ce
+
+    import app.partner_run as pr
+    seen: dict = {}
+
+    class _Compose:
+        def invoke(self, payload):
+            seen.update(payload)
+            return {"prose": "PROSE"}
+
+    monkeypatch.setattr(ce, "compose_chapter", _Compose())
+    monkeypatch.setattr(pr, "run_export", lambda *a, **k: [])
+    run_partner_export(store, pid, {"depth": "analysis_report", "language": "en"})
+    assert seen["context_slice"]["research_gaps"] == "- no VN evidence"
+
+
 def test_run_partner_export_composes_and_persists(tmp_path, monkeypatch):
     store, pid = _partner_project(tmp_path)
     seed_partner_store(store, analysis_text="AVE 0.62", language="en")
