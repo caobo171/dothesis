@@ -278,6 +278,37 @@ def test_progress_reads_job(client, monkeypatch):
     assert r.json()["status"] == "unknown"
 
 
+def test_progress_reports_what_the_run_is_currently_doing(client, monkeypatch):
+    """`current` was hardcoded None, so the field the old contract used to fill
+    with the chapter being written became permanently dead — a silent
+    breaking change on a documented response. The chapter titles are gone (the
+    run is an agent working a roadmap, not a fixed compose loop), but the live
+    activity IS available: headless_entry already emits one per tool call.
+    A field this endpoint still advertises must carry the best truth it has.
+    """
+    monkeypatch.setattr(router_mod.prun, "_extract_text", _analysis_text)
+
+    def running(db, run, params):
+        run.status = "running"
+        run.phase = "M2"
+        run.progress = 0.2
+        db.add(JobEvent(job_id=run.id, type="activity", text="tool: quick_sources"))
+        db.add(JobEvent(job_id=run.id, type="activity", text="tool: research_scout"))
+        db.commit()
+
+    monkeypatch.setattr(job_runner, "spawn_headless_run", running)
+    monkeypatch.setattr(router_mod, "_wait_for_job", _async_return("failed"))
+    _post(client)
+    with Session(get_engine()) as s:
+        token = s.scalar(select(Job.partner_token))
+
+    r = client.post("/api/v1/partner/report/progress",
+                    headers={"X-Partner-Token": TOKEN},
+                    json={"progress_token": token})
+    # The LATEST activity, not the first — "what is it doing now".
+    assert r.json()["current"] == "tool: research_scout"
+
+
 def test_progress_requires_the_partner_token(client):
     r = client.post("/api/v1/partner/report/progress",
                     json={"progress_token": "whatever"})

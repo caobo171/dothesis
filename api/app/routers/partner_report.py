@@ -7,13 +7,20 @@ partner_report_service was a third generation engine — private prompts, a priv
 compose loop, zero tools and zero skills. Going through build_agent is what hands
 partner all ~20 tools and all 8 skills, which is the entire point of this switch.
 
-The multipart contract (shared X-Partner-Token secret, POST-only) is unchanged
-except that `progress_token` is now MINTED here and RETURNED, never accepted:
-jobs.partner_token is UNIQUE and partner auth is one global shared secret with no
-partner identity, so a caller-chosen value is both a collision (500 at INSERT)
-and a read capability anyone holding the shared secret could guess. Progress now
-reads the Job row instead of an in-memory dict, so it survives restarts and works
-across API processes.
+The multipart contract (shared X-Partner-Token secret, POST-only) is unchanged.
+TWO breaking changes to the RESPONSES, both deliberate:
+
+1. `progress_token` is now MINTED here and RETURNED, never accepted:
+   jobs.partner_token is UNIQUE and partner auth is one global shared secret with
+   no partner identity, so a caller-chosen value is both a collision (500 at
+   INSERT) and a read capability anyone holding the shared secret could guess.
+2. /partner/report/progress kept its SHAPE but changed the MEANING of phase /
+   total / done / current — see that endpoint's docstring. It shipped
+   undisclosed; a partner rendering the old semantics gets wrong labels rather
+   than an error, which is why it is written down there in full.
+
+Progress now reads the Job row instead of an in-memory dict, so it survives
+restarts and works across API processes.
 
 Auth is a single shared secret (settings.partner_api_token). Empty secret ->
 the endpoint 401s on every call, so it stays closed until explicitly enabled.
@@ -129,6 +136,21 @@ def _job_error(engine, job_id: uuid.UUID) -> dict:
         if ev is None:
             return {}
         return {"code": (ev.meta_json or {}).get("code"), "message": ev.text or ""}
+
+
+def _job_current_activity(db: Session, job_id: uuid.UUID) -> str | None:
+    """The run's most recent activity line, for the progress poll's `current`.
+
+    headless_entry's progress hook already emits one activity event per tool
+    call, so the live "what is it doing" string exists — it just wasn't being
+    read. None until the first tool runs, which is honest: nothing to report yet.
+    """
+    ev = db.scalars(
+        select(JobEvent)
+        .where(JobEvent.job_id == job_id, JobEvent.type == "activity")
+        .order_by(JobEvent.id.desc())
+    ).first()
+    return (ev.text or None) if ev is not None else None
 
 
 def _parse_module(name: str, raw: str | None) -> dict | None:
@@ -285,11 +307,14 @@ class ProgressIn(BaseModel):
 
 
 class ProgressOut(BaseModel):
+    """Shape is unchanged; the MEANING of every field but `status` changed in
+    Task 11 — see partner_report_progress's docstring for the field-by-field
+    before/after. Kept as one block there so the contract has a single home."""
     status: str  # processing | done | error | unknown
-    phase: str | None = None       # focus module (M1..M5)
-    total: int | None = None
-    done: int | None = None
-    current: str | None = None
+    phase: str | None = None       # focus MODULE (M1..M5) — was research/compose/export
+    total: int | None = None       # always len(MODULES) — was len(chapter_keys)
+    done: int | None = None        # modules finished — was chapters composed
+    current: str | None = None     # latest activity — was the chapter title
 
 
 @router.post("/partner/report/progress", response_model=ProgressOut)
@@ -299,16 +324,41 @@ async def partner_report_progress(
     db: Session = Depends(db_session),
 ):
     """Poll live progress for an in-flight report — reads the Job the token maps
-    to. Granularity is now MODULES (total/done count finished modules), not
-    chapters: the run is an agent working a roadmap, not a fixed compose loop."""
+    to.
+
+    !! BREAKING CONTRACT CHANGE (Task 11) — every field below changed meaning,
+    and unlike the `progress_token` change it shipped undisclosed. A partner
+    rendering the old shape gets wrong labels, not an error. Documented here so
+    it is a known contract rather than a surprise:
+
+      phase   — WAS "research" | "compose" | "export" (the old pipeline's three
+                stages). NOW the focus MODULE: "M1".."M5". No value overlaps, so
+                a switch on the old strings silently falls through to its
+                default forever.
+      total   — WAS len(chapter_keys): 3 for analysis_report, 5 for full_thesis,
+                i.e. it moved with the request. NOW always len(MODULES) == 5.
+                A caller that inferred the report shape from `total` is wrong.
+      done    — WAS chapters composed. NOW modules finished. Same range for a
+                full_thesis, different meaning; for an analysis_report the
+                denominator changed too.
+      current — WAS the chapter title being written ("Chapter 4 — Results").
+                NOW the run's latest activity ("tool: research_scout"): the
+                agent works a roadmap, not a fixed compose loop, so there is no
+                chapter-in-progress to name. Still a human-readable "what is it
+                doing right now" string, which is what the field was for.
+
+    The granularity change itself is not the bug — module progress is the honest
+    unit for an agent run, and it is durable across restarts and processes where
+    the old in-memory dict was not.
+    """
     _require_partner(x_partner_token)
-    j = db.scalars(
-        select(Job).where(Job.partner_token == body.progress_token)
-        .order_by(Job.started_at.desc().nulls_last())
-    ).first()
+    # No order_by: jobs.partner_token is UNIQUE (Task 9), so this matches at most
+    # one row. Sorting one row is theatre that reads as "the newest of several".
+    j = db.scalar(select(Job).where(Job.partner_token == body.progress_token))
     if j is None:
         return {"status": "unknown"}
     status = {"queued": "processing", "running": "processing",
               "done": "done"}.get(j.status, "error")
     return {"status": status, "phase": j.phase, "total": _TOTAL_MODULES,
-            "done": int(round((j.progress or 0.0) * _TOTAL_MODULES)), "current": None}
+            "done": int(round((j.progress or 0.0) * _TOTAL_MODULES)),
+            "current": _job_current_activity(db, j.id)}
