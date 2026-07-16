@@ -192,7 +192,13 @@ def make_writing_tools(store) -> list:
         _chapter_count = len([
             s for s in (sections or []) if (s.get("title") or "") != "References"
         ])
-        if not sections or _chapter_count < len(M5_CHAPTER_ORDER):
+        # "Complete" means every chapter the run is scoped to — the ORDERED set
+        # for a partner order, the whole thesis otherwise. Using the full-6 count
+        # here made a scoped 3-chapter draft look permanently incomplete and
+        # recompose on every export.
+        from agent.run_context import scoped_chapters  # noqa: PLC0415
+        _needed = len(scoped_chapters(list(M5_CHAPTER_ORDER)))
+        if not sections or _chapter_count < _needed:
             if full_cs:
                 missing = assess_export_readiness(full_cs)
                 if missing and not force:

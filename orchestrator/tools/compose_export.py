@@ -120,8 +120,24 @@ def compose_sections(
     ordered = [k for k in M5_CHAPTER_ORDER if k in set(chapters)]
     titles = {**_chapter_titles(language), **(title_overrides or {})}
 
+    # Reuse chapters the deep agent already composed THIS run
+    # (m5_writing.final_sections) instead of re-composing them — the partner
+    # export otherwise pays for the same chapters a second time. Only real prose
+    # is reused (stubs / "[Composition failed]" markers fall through to compose).
+    from orchestrator.tools.m5_writing import chapters_from_final_sections  # noqa: PLC0415
+    _m5 = context_store.get("m5_writing") or {}
+    _reuse: dict[str, str] = {}
+    for _k, _v in (chapters_from_final_sections(_m5.get("final_sections") or []) or {}).items():
+        _p = ((_v or {}).get("prose") or "").strip()
+        if _p and not _p.lstrip().startswith("["):
+            _reuse[_k] = _p
+
     def _compose_one(idx_name):
         idx, name = idx_name
+        if name in _reuse:
+            if progress:
+                progress(idx, name, titles[name], "end")
+            return name, _reuse[name]
         if progress:
             progress(idx, name, titles[name], "start")
         try:
