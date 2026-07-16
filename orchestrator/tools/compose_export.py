@@ -120,8 +120,8 @@ def compose_sections(
     ordered = [k for k in M5_CHAPTER_ORDER if k in set(chapters)]
     titles = {**_chapter_titles(language), **(title_overrides or {})}
 
-    out: list[dict] = []
-    for idx, name in enumerate(ordered):
+    def _compose_one(idx_name):
+        idx, name = idx_name
         if progress:
             progress(idx, name, titles[name], "start")
         try:
@@ -141,11 +141,21 @@ def compose_sections(
         # it, so a deterministic fallback keeps the section from being empty.
         if not prose.strip():
             prose = _fallback_section(name, context_store)
-        if prose.strip():
-            out.append({"title": titles[name], "prose": prose})
         if progress:
             progress(idx, name, titles[name], "end")
-    return out
+        return name, prose
+
+    # Chapters are independent LLM calls — compose them concurrently (this is the
+    # ~6-8 min bottleneck when done one-by-one). Cap workers so we don't hammer
+    # the Ofox gateway; assemble the results back in canonical order.
+    import concurrent.futures as _cf
+    proses: dict[str, str] = {}
+    workers = max(1, min(len(ordered), 5))
+    with _cf.ThreadPoolExecutor(max_workers=workers) as ex:
+        for name, prose in ex.map(_compose_one, list(enumerate(ordered))):
+            proses[name] = prose
+    return [{"title": titles[name], "prose": proses[name]}
+            for name in ordered if (proses.get(name) or "").strip()]
 
 
 def compose_and_export(
