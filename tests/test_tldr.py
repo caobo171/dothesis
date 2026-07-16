@@ -112,14 +112,14 @@ class TestTLDRCLI:
 
     def test_cli_file_not_found(self):
         """Test CLI error when file not found."""
-        from dothesis.cli import run_tldr_command
+        from opendraft.cli import run_tldr_command
 
         result = run_tldr_command(["/nonexistent/file.pdf"])
         assert result == 1
 
     def test_cli_help(self, capsys):
         """Test CLI help output."""
-        from dothesis.cli import run_tldr_command
+        from opendraft.cli import run_tldr_command
 
         with pytest.raises(SystemExit) as exc_info:
             run_tldr_command(["--help"])
