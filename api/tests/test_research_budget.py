@@ -8,12 +8,26 @@ swap the WHOLE object in the m2 namespace; research_scout resolves it by a
 call-time `from ... import scout_citations`, which reads the patched binding.
 
 No real network: the deep scout is always monkeypatched, and research.httpx.get
-is stubbed so the Crossref fallback never leaves the process.
+is stubbed so the Crossref fallback never leaves the process. The fallback's
+English-translation hop is stubbed too (autouse) — it is a real LLM call against
+a real, funded gateway, so leaving it live would bill this suite.
 """
 import json
 from types import SimpleNamespace
 
+import pytest
+
 import agent.tools.research as research
+
+
+@pytest.fixture(autouse=True)
+def _stub_translation_llm(monkeypatch):
+    """Never let the fallback's query-translation hop reach the gateway."""
+    import orchestrator.tools.m5_writing as m5
+
+    monkeypatch.setattr(
+        m5, "_get_llm",
+        lambda: SimpleNamespace(invoke=lambda p: SimpleNamespace(content="translated query")))
 
 
 class _Resp:
