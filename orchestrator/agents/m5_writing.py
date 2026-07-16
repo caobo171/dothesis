@@ -473,10 +473,16 @@ class M5Agent(WizardAgent, ModuleAgent):
             "discussion": "Writing Chapter 5 — Discussion…",
             "conclusion": "Writing Chapter 6 — Conclusion…",
         }
-        chapters: dict[str, dict] = {}
-        for name in _CHAPTER_ORDER:
+        # Compose only the chapters the partner ORDERED (interactive/chat runs
+        # leave the scope unset → the whole thesis). Skips wasted work + the
+        # fabricated Results/Discussion/Conclusion an analysis-only order never
+        # bought.
+        from agent.run_context import scoped_chapters  # noqa: PLC0415
+        names = scoped_chapters(_CHAPTER_ORDER)
+
+        def _one(name):
             _progress.emit("m5_compose", _CHAPTER_BEAT.get(name, f"Writing {name}…"))
-            chapters[name] = compose_chapter.invoke({
+            return name, compose_chapter.invoke({
                 "chapter_name": name,
                 "paradigm": context.get("paradigm") or "quantitative",
                 "context_slice": context,
@@ -484,13 +490,22 @@ class M5Agent(WizardAgent, ModuleAgent):
                 "citation_style": context.get("citation_style", "apa7"),
                 "language": context.get("language", "en"),
             })
+
+        # Chapters are independent LLM calls — the sequential loop was the ~6-8
+        # min bottleneck. Compose concurrently (capped so the Ofox gateway isn't
+        # hammered), keeping the canonical order in the result dict.
+        import concurrent.futures as _cf  # noqa: PLC0415
+        chapters: dict[str, dict] = {}
+        with _cf.ThreadPoolExecutor(max_workers=max(1, min(len(names), 5))) as ex:
+            for name, draft in ex.map(_one, names):
+                chapters[name] = draft
         _progress.emit("m5_compose", "Compiling references…")
         bib = compile_bibliography.invoke({
             "references": references,
             "citation_style": context.get("citation_style", "apa7"),
         })
         return ModuleStepResult(
-            assistant_message="[auto] Composed 6 chapters + bibliography.",
+            assistant_message=f"[auto] Composed {len(chapters)} chapters + bibliography.",
             context_patch={
                 "chapters": chapters,
                 "bibliography": bib,

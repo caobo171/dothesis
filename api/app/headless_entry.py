@@ -127,6 +127,14 @@ def main() -> int:
         # "resumes" by re-running against that state, not by replaying chat.
         agent = build_agent(workspace, checkpointer=InMemorySaver(), store=store)
         profile = _build_profile(params)
+        # Scope the deep agent's M5 writing to the chapters this partner ordered
+        # (the interactive flow leaves this unset → full thesis). Cuts the wasted
+        # composition of unordered/fabricated chapters. Best-effort: if the
+        # ContextVar doesn't propagate, M5 falls back to composing everything.
+        from agent.run_context import set_report_chapters  # noqa: PLC0415
+        from app.partner_run import resolve_chapters  # noqa: PLC0415
+        set_report_chapters(resolve_chapters(
+            params.get("depth") or "analysis_report", params.get("chapters")))
         result = asyncio.run(run_headless(
             agent, store, profile,
             thread_id=f"headless:{args.job_id}",
