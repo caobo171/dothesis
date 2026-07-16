@@ -74,12 +74,17 @@ Two connection points — **no direct object calls between the runtimes**:
   orchestrator LLM (qwen)** → `run_export()` renders DOCX/PDF (LibreOffice) → commits
   artifacts to the store.
 
-### 2c. Headless path (no chat agent at all)
-- `api/app/partner_report_service.py` (fillform/partner) builds the whole report via
-  `build_partner_context_store` + `compose_sections` (orchestrator) — **it does not import
-  `agent/`**. Press a button → server emits a full thesis PDF, no conversation.
-- **This is the load-bearing reason the two are separate**: the report engine has to run
-  server-side with no human in the loop; a conversational agent is the wrong tool for that.
+### 2c. Headless path (no chat, but the SAME agent)
+- `api/app/routers/partner_report.py` (fillform/partner) creates a real project row, seeds
+  the store from the payload, and spawns `python -m app.headless_entry` — which builds the
+  ordinary deep agent (`agent.runtime.build_agent`) and drives it with `run_headless`.
+  Press a button → server emits a thesis PDF, no conversation.
+- This **used to** be `api/app/partner_report_service.py`, a third generation engine with
+  its own prompts and compose loop and therefore **zero tools and zero skills**. Headless
+  means "no human in the loop", which is a property of the RUN PROFILE
+  (`agent.headless.RunProfile(interactive=False)`), not a reason for a second brain — the
+  old split is exactly why partner output quality trailed chat's. Deleted in the
+  convergence work; the shared back half is `orchestrator/tools/compose_export.py`.
 
 ```
 Student chat → Chat agent (Gemini) ─┐ read/write

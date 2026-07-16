@@ -1,25 +1,46 @@
 """Partner report endpoint — service-to-service ("Powered by DoThesis").
 
-A trusted partner app (e.g. Fillform) POSTs a statistical-analysis PDF plus a
-`depth`, authenticates with a shared token in the `X-Partner-Token` header, and
-gets back short-lived DOCX/PDF download URLs. This path is deliberately NOT the
-user chat/credit flow: no JWT, no project, no credit ledger — the partner owns
-the end-user relationship and any billing.
+Rebuilt as a headless CLIENT of the deep agent (convergence spec §3): the upload
+becomes a REAL project row + a Job running `run_headless` in a subprocess, then
+the shared compose/export path renders the requested report shape. The old
+partner_report_service was a third generation engine — private prompts, a private
+compose loop, zero tools and zero skills. Going through build_agent is what hands
+partner all ~20 tools and all 8 skills, which is the entire point of this switch.
+
+The multipart contract (shared X-Partner-Token secret, POST-only) is unchanged
+except that `progress_token` is now MINTED here and RETURNED, never accepted:
+jobs.partner_token is UNIQUE and partner auth is one global shared secret with no
+partner identity, so a caller-chosen value is both a collision (500 at INSERT)
+and a read capability anyone holding the shared secret could guess. Progress now
+reads the Job row instead of an in-memory dict, so it survives restarts and works
+across API processes.
 
 Auth is a single shared secret (settings.partner_api_token). Empty secret ->
 the endpoint 401s on every call, so it stays closed until explicitly enabled.
 """
 from __future__ import annotations
 
+import asyncio
 import hmac
+import json
 import logging
+import os
+import uuid
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from ..partner_report_service import ReportError, generate_partner_report, get_progress
+from .. import job_runner
+from .. import partner_run as prun
+from ..agent_state import DbProjectStateStore
+from ..db import db_session
+from ..models import Job, JobEvent, Project
 from ..settings import get_settings
+from ..workspace import workspace_dir
+from .uploads import s3_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +55,10 @@ _ALLOWED_MIME = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
     "application/msword",
 }
+
+# Module count the progress poll reports against (M1..M5) — the same denominator
+# headless_entry's progress hook divides by, so `done/total` means one thing.
+_TOTAL_MODULES = 5
 
 
 def _require_partner(x_partner_token: str | None) -> None:
@@ -55,7 +80,55 @@ class PartnerReportOut(BaseModel):
     docx_url: str | None
     pdf_key: str | None = None
     docx_key: str | None = None
+    # Server-minted. Additive to the old response: the caller used to CHOOSE this
+    # value and send it up, which the UNIQUE index turned into a 500 waiting to
+    # happen. Partners now read it back from here to poll /partner/report/progress.
+    progress_token: str | None = None
     powered_by: str = "DoThesis"
+
+
+async def _wait_for_job(engine, job_id: uuid.UUID, timeout_s: int) -> str:
+    """Poll the Job row until terminal — the endpoint stays synchronous (the
+    existing partner contract: one long call, progress polled alongside), but
+    completion is now observed through the same DB rows the monitor writes, so it
+    works across processes and restarts."""
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + timeout_s
+    while True:
+        with Session(engine) as s:
+            j = s.get(Job, job_id)
+            status = j.status if j else "failed"
+        if status in {"done", "failed", "canceled"}:
+            return status
+        if loop.time() > deadline:
+            return "timeout"
+        await asyncio.sleep(2.0)
+
+
+def _job_done_meta(engine, job_id: uuid.UUID) -> dict:
+    with Session(engine) as s:
+        ev = s.scalars(
+            select(JobEvent)
+            .where(JobEvent.job_id == job_id, JobEvent.type == "job_done")
+            .order_by(JobEvent.id.desc())
+        ).first()
+        return dict(ev.meta_json or {}) if ev else {}
+
+
+def _parse_module(name: str, raw: str | None) -> dict | None:
+    """Parse an optional module JSON up front so a malformed shape is a clean 422
+    (never a silent drop / silent overwrite of a caller-provided module)."""
+    if not raw:
+        return None
+    try:
+        val = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(422, detail={"error": {"code": "bad_module_json",
+                                                   "message": f"{name} must be valid JSON"}})
+    if not isinstance(val, dict):
+        raise HTTPException(422, detail={"error": {"code": "bad_module_json",
+                                                   "message": f"{name} must be a JSON object"}})
+    return val
 
 
 @router.post("/partner/report", response_model=PartnerReportOut)
@@ -66,92 +139,122 @@ async def create_partner_report(
     # discussion,conclusion. When set it overrides `depth` (the "tick Chương N"
     # path). Empty/absent falls back to `depth`.
     chapters: str | None = Form(None),
-    # Opaque token the partner also passes to /partner/report/progress to poll
-    # live per-chapter progress while this (long) call is still running.
-    progress_token: str | None = Form(None),
     title: str | None = Form(None),
     # Optional free-text context the end user typed to steer the writing.
     notes: str | None = Form(None),
     language: str = Form("en"),
     # Optional caller-supplied M1/M2/M3 modules as JSON strings (the input
-    # contract). Each present one is used verbatim by the service; missing ones
-    # are generated. Sent as form fields so they ride alongside the file upload.
+    # contract). Each present one seeds the project verbatim; missing ones are
+    # left for the agent to reconstruct (backfill). Sent as form fields so they
+    # ride alongside the file upload.
     m1: str | None = Form(None),
     m2: str | None = Form(None),
     m3: str | None = Form(None),
     x_partner_token: str | None = Header(None, alias="X-Partner-Token"),
+    db: Session = Depends(db_session),
 ):
     _require_partner(x_partner_token)
 
     if file.content_type and file.content_type not in _ALLOWED_MIME:
         raise HTTPException(
-            415,
-            detail={"error": {"code": "unsupported_media_type",
-                              "message": f"expected a PDF, got {file.content_type}"}},
-        )
-
+            415, detail={"error": {"code": "unsupported_media_type",
+                                   "message": f"expected a PDF, got {file.content_type}"}})
     pdf_bytes = await file.read()
     if not pdf_bytes:
-        raise HTTPException(422, detail={"error": {"code": "empty_file", "message": "no file bytes"}})
+        raise HTTPException(422, detail={"error": {"code": "empty_file",
+                                                   "message": "no file bytes"}})
     if len(pdf_bytes) > _MAX_BYTES:
-        raise HTTPException(
-            413,
-            detail={"error": {"code": "file_too_large",
-                              "message": f"max {_MAX_BYTES // (1024 * 1024)}MB"}},
-        )
+        raise HTTPException(413, detail={"error": {"code": "file_too_large",
+                                                   "message": f"max {_MAX_BYTES // (1024 * 1024)}MB"}})
 
     chapter_list = [c.strip() for c in chapters.split(",") if c.strip()] if chapters else None
+    m1_d, m2_d, m3_d = (_parse_module("m1", m1), _parse_module("m2", m2),
+                        _parse_module("m3", m3))
 
-    # Parse each optional module JSON up front so a malformed shape is a clean
-    # 422 (never a silent drop / silent overwrite of a caller-provided module).
-    import json
-
-    def _parse(name, raw):
-        if not raw:
-            return None
-        try:
-            val = json.loads(raw)
-        except json.JSONDecodeError:
-            raise HTTPException(422, detail={"error": {"code": "bad_module_json",
-                               "message": f"{name} must be valid JSON"}})
-        if not isinstance(val, dict):
-            raise HTTPException(422, detail={"error": {"code": "bad_module_json",
-                               "message": f"{name} must be a JSON object"}})
-        return val
-    m1_d, m2_d, m3_d = _parse("m1", m1), _parse("m2", m2), _parse("m3", m3)
-
+    # Everything below fails fast BEFORE any row is created — a 422 must not
+    # leave orphan projects/jobs behind.
     try:
-        # Blocking (pdfminer + LLM compose + LibreOffice render) — off the loop.
-        result = await run_in_threadpool(
-            generate_partner_report,
-            pdf_bytes,
-            depth=depth,
-            chapters=chapter_list,
-            progress_token=progress_token,
-            filename=file.filename,
-            title=title,
-            notes=notes,
-            language=language,
-            m1=m1_d,
-            m2=m2_d,
-            m3=m3_d,
-        )
-    except ReportError as e:
-        # bad_depth / bad_chapters / no_extractable_text -> 422; compose_failed -> 502.
-        status = 502 if e.code == "compose_failed" else 422
-        raise HTTPException(status, detail={"error": {"code": e.code, "message": e.message}})
-    except Exception:
-        logger.exception("partner_report: unexpected failure")
-        raise HTTPException(
-            500, detail={"error": {"code": "report_failed", "message": "report generation failed"}},
-        )
+        chapter_keys = prun.resolve_chapters(depth, chapter_list)
+    except prun.ReportError as e:
+        raise HTTPException(422, detail={"error": {"code": e.code, "message": e.message}})
 
-    # F5: partner surface export completed. Headless (no user id) — pass None;
-    # best-effort so the partner path gains no blocking logic (headless invariant).
+    text, pages = await run_in_threadpool(prun._extract_text, pdf_bytes, file.filename)
+    if not text.strip():
+        raise HTTPException(422, detail={"error": {"code": "no_extractable_text",
+                                                   "message": "the file has no machine-readable text (image-only scan?)"}})
+    if "results" in chapter_keys and not prun.pdf_looks_like_analysis(text):
+        raise HTTPException(422, detail={"error": {"code": "insufficient_m4_data",
+                                                   "message": "the uploaded file lacks the statistical analysis data "
+                                                              "needed to write the Results (M4) chapter"}})
+
+    # Real project row (system-owned) + workspace mirror + seeded store.
+    sys_user = prun.ensure_partner_user(db)
+    project = Project(user_id=sys_user.id,
+                      name=(title or "Partner report").strip()[:200] or "Partner report",
+                      language=language)
+    db.add(project)
+    db.commit()  # commit BEFORE seeding: the store opens its own connections
+
+    workspace = workspace_dir(project.id)
+    (workspace / "uploads").mkdir(parents=True, exist_ok=True)
+    # Mirror the raw upload so agent tools (read_file / parse_reference) can open
+    # it — same uploads/ convention chat uses. Seeding only carries the extracted
+    # TEXT; the file itself has to exist for a tool to reach it.
+    (workspace / "uploads" / (file.filename or "analysis.pdf")).write_bytes(pdf_bytes)
+
+    engine = db.get_bind()
+    store = DbProjectStateStore(engine, project.id, workspace)
+    # Seeding is sync DB I/O — keep it off the event loop.
+    await run_in_threadpool(
+        prun.seed_partner_store, store,
+        analysis_text=text, m1=m1_d, m2=m2_d, m3=m3_d,
+        title=title, notes=notes, language=language,
+    )
+
+    run = Job(paper_id=None, project_id=project.id, mode="partner",
+              status="queued", partner_token=prun.mint_partner_token(),
+              langgraph_thread_id=str(uuid.uuid4()))
+    db.add(run)
+    db.flush()
+    progress_token = run.partner_token
+    params = {
+        "depth": depth, "chapters": chapter_list, "language": language,
+        "max_turns": int(os.getenv("PARTNER_MAX_TURNS", "0")) or None,
+        "wall_clock_s": int(os.getenv("PARTNER_WALL_CLOCK_S", "0")) or None,
+    }
+    job_runner.spawn_headless_run(db, run, params)
+
+    status = await _wait_for_job(engine, run.id,
+                                 timeout_s=int(os.getenv("PARTNER_REPORT_TIMEOUT_S", "2100")))
+    if status != "done":
+        # Budget exhaustion / stall / crash — the partner gets a clean error, not
+        # a hollow report. The project + partial state survive for inspection.
+        raise HTTPException(502, detail={"error": {"code": "report_failed",
+                                                   "message": f"headless run ended: {status}"}})
+
+    meta = _job_done_meta(engine, run.id)
+    keys = meta.get("artifact_keys") or {}
+    s3 = s3_from_env()
+
+    def _sign(key):
+        return prun._presign(s3, key) if key else None
+
+    # F5: partner surface export completed. Headless (no user id) — best-effort.
     from ..analytics import emit
     emit("export_completed", None,
          {"scope": ",".join(chapter_list) if chapter_list else depth, "surface": "partner"})
-    return result
+
+    return {
+        "pages": pages,
+        "depth": depth,
+        "chapters": meta.get("chapters") or chapter_keys,
+        "sections": meta.get("sections") or [],
+        "pdf_url": _sign(keys.get("pdf")),
+        "docx_url": _sign(keys.get("docx")),
+        "pdf_key": keys.get("pdf"),
+        "docx_key": keys.get("docx"),
+        "progress_token": progress_token,
+    }
 
 
 class ProgressIn(BaseModel):
@@ -160,26 +263,29 @@ class ProgressIn(BaseModel):
 
 class ProgressOut(BaseModel):
     status: str  # processing | done | error | unknown
-    phase: str | None = None       # extract | compose | export | done
+    phase: str | None = None       # focus module (M1..M5)
     total: int | None = None
     done: int | None = None
-    current: str | None = None     # title of the chapter being composed
+    current: str | None = None
 
 
 @router.post("/partner/report/progress", response_model=ProgressOut)
 async def partner_report_progress(
     body: ProgressIn,
     x_partner_token: str | None = Header(None, alias="X-Partner-Token"),
+    db: Session = Depends(db_session),
 ):
-    """Poll live per-chapter progress for an in-flight report (by progress_token)."""
+    """Poll live progress for an in-flight report — reads the Job the token maps
+    to. Granularity is now MODULES (total/done count finished modules), not
+    chapters: the run is an agent working a roadmap, not a fixed compose loop."""
     _require_partner(x_partner_token)
-    p = get_progress(body.progress_token)
-    if not p:
+    j = db.scalars(
+        select(Job).where(Job.partner_token == body.progress_token)
+        .order_by(Job.started_at.desc().nulls_last())
+    ).first()
+    if j is None:
         return {"status": "unknown"}
-    return {
-        "status": p.get("status", "processing"),
-        "phase": p.get("phase"),
-        "total": p.get("total"),
-        "done": p.get("done"),
-        "current": p.get("current"),
-    }
+    status = {"queued": "processing", "running": "processing",
+              "done": "done"}.get(j.status, "error")
+    return {"status": status, "phase": j.phase, "total": _TOTAL_MODULES,
+            "done": int(round((j.progress or 0.0) * _TOTAL_MODULES)), "current": None}

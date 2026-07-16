@@ -104,16 +104,20 @@ class Job(Base):
     thread_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     mode: Mapped[str | None] = mapped_column(String(16))
     langgraph_thread_id: Mapped[str | None] = mapped_column(Text)
-    # Partner runs: the caller-supplied opaque progress_token, so the
-    # /partner/report/progress poll can find this Job. Durable + multi-process,
-    # unlike the in-memory _PROGRESS dict it replaces (convergence spec §3).
+    # Partner runs: the opaque progress_token the /partner/report/progress poll
+    # finds this Job by. Durable + multi-process, unlike the in-memory _PROGRESS
+    # dict it replaces (convergence spec §3).
     # Nullable because only mode="partner" rows carry a token; indexed because
     # the token is the only key the progress poll has to look the Job up by.
-    # Unique because the token is caller-supplied and partner auth is a single
-    # global shared secret with no partner-id claim, so two partners can send
-    # the same token — without uniqueness the poll would silently resolve to
-    # whichever row Postgres returned first, handing one partner another's
-    # progress. Unique makes that collision a loud IntegrityError at insert.
+    # Unique because it is a capability: holding it grants read access to this
+    # run's progress. It is MINTED server-side (partner_run.mint_partner_token,
+    # 256 bits of CSPRNG) and returned in the response — the caller used to
+    # choose it, which under a single global shared secret with no partner-id
+    # claim meant two partners could pick the same string and the poll would
+    # resolve to whichever row Postgres returned first, handing one partner
+    # another's progress. Minting makes uniqueness a property of the generator;
+    # this index is the belt to that's braces, and turns any regression that
+    # re-admits a caller value into a loud IntegrityError instead of a leak.
     # Postgres counts NULLs as distinct, so unique + nullable coexist.
     partner_token: Mapped[str | None] = mapped_column(Text, index=True, unique=True)
 
