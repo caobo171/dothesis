@@ -16,7 +16,7 @@ from ..db import db_session
 from ..deps import current_user
 from ..models import Job, JobEvent, Project, User
 from ..pubsub import pubsub
-from ..sse import sse_pack
+from ..sse import TERMINAL_TYPES, redact_for_sse, sse_pack
 
 router = APIRouter(tags=["runs"])
 
@@ -212,7 +212,10 @@ async def stream_run_events(
         # meta_json first so the column fields win on key collisions.
         payload = {**(ev.meta_json or {}),
                    "type": ev.type, "phase": ev.phase, "agent": ev.agent, "text": ev.text}
-        backlog.append((ev.id, payload))
+        # meta_json is spread in verbatim and can carry a full server-side
+        # traceback (job_runner stores one on failure for ops debugging). Redact
+        # on the way out — the row keeps it, the browser never sees it.
+        backlog.append((ev.id, redact_for_sse(payload)))
 
     sub = pubsub.subscribe(run_id)
 
@@ -220,15 +223,25 @@ async def stream_run_events(
         try:
             for ev_id, payload in backlog:
                 yield sse_pack(payload, event_id=ev_id)
+                # The run may have finished before the client ever connected, in
+                # which case the terminal event arrives here (replayed from the
+                # DB) and never through pubsub. Without this the generator fell
+                # through to the loop below and emitted keepalives forever: a
+                # stream for an already-finished run only ever closed because
+                # the browser hung up, which leaks a task per reconnect and
+                # hangs any client that waits for the response to end.
+                if payload.get("type") in TERMINAL_TYPES:
+                    return
+
             while True:
                 try:
                     msg = await asyncio.wait_for(sub.get(), timeout=15.0)
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
                     continue
-                yield sse_pack({k: v for k, v in msg.items() if k != "id"},
+                yield sse_pack(redact_for_sse({k: v for k, v in msg.items() if k != "id"}),
                                event_id=msg.get("id"))
-                if msg.get("type") in {"job_done", "error"}:
+                if msg.get("type") in TERMINAL_TYPES:
                     break
         finally:
             pubsub.unsubscribe(run_id, sub)

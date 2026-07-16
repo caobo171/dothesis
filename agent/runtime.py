@@ -160,6 +160,7 @@ from agent.preflight import make_preflight_tool
 from agent.state import MODULES, ProjectStateStore
 from agent.tools.backfill_tool import make_backfill_tool  # reconstruct upstream modules
 from agent.tools.defense import make_defense_tools  # F6: Mock Committee
+from agent.tools.diagram import render_model_diagram  # research-model figure, all surfaces
 from agent.tools.forms import make_google_form_script
 from agent.tools.instrument import (  # F7: Questionnaire Doctor + sampling plan
     audit_instrument,
@@ -264,6 +265,8 @@ yes-no / which-gap / which-paradigm), END the message with one line:
 
 The frontend turns this into a row of clickable cards. Rules:
 - The marker MUST be the last line of the message.
+- Order cards so the RECOMMENDED choice — the one that advances the work — is
+  FIRST; the rest follow as alternatives. A headless run takes the first card.
 - Separate options with ` | ` (pipe). 2–6 options is the sweet spot.
 - `[OPTIONS:field_name]` tags which slice field the pick maps to; defaults to
   `user_choice` when omitted.
@@ -535,6 +538,10 @@ def build_agent(
         # points (small n, rejected H, quality findings) rather than a
         # model-supplied context_store, and folds in the F3 rubric best-effort.
         *make_defense_tools(store),
+        # Research-model diagram (promoted from partner, spec §3): renders the
+        # M3 constructs/paths to an embeddable PNG so exported documents carry
+        # the figure — the swallowed partner diagram bug, turned into a feature.
+        render_model_diagram,
     ]
 
     return create_deep_agent(
@@ -636,8 +643,15 @@ async def stream_turn(
     if attachments:
         # Lazy import — multimodal.py pulls in google-genai which is heavy
         # and only needed when the user attached something.
+        from agent.model_factory import spec_from_env
         from agent.multimodal import build_user_message, detect_provider
-        msg = build_user_message(user_text, attachments, detect_provider())
+        # Capability-driven: provider AND vision support both derive from the
+        # ONE model-truth source. The old env-sniffing detect_provider()
+        # ignored DOTHESIS_MODEL_ROUTE and shipped Gemini media blocks into
+        # OpenAI-compat endpoints (design-doc defect 1).
+        spec = spec_from_env()
+        msg = build_user_message(user_text, attachments, detect_provider(spec),
+                                 supports_vision=spec.supports_vision)
         payload = {"messages": [msg]}
     else:
         payload = {"messages": [{"role": "user", "content": user_text}]}

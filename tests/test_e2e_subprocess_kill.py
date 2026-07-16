@@ -37,16 +37,30 @@ from phases.context import DraftContext
 # MOCK PIPELINE RUNNER (runs in subprocess)
 # =============================================================================
 
+# Substitution tokens for MOCK_PIPELINE_SCRIPT, filled in by the `mock_script`
+# fixture. The script is written to pytest's tmp_path, so it CANNOT derive the
+# repo location from its own __file__ — the paths must be baked in at write time.
+ENGINE_PATH_TOKEN = "@@ENGINE_PATH@@"
+REPO_ROOT_TOKEN = "@@REPO_ROOT@@"
+
+REPO_ROOT = Path(__file__).parent.parent
+ENGINE_PATH = REPO_ROOT / "engine"
+
 MOCK_PIPELINE_SCRIPT = '''
 #!/usr/bin/env python3
 """Mock pipeline that simulates phase execution with delays."""
+import os
 import sys
 import time
 import json
 import signal
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "engine"))
+# Absolute path baked in by the mock_script fixture. This script lives in
+# pytest's tmp_path, so deriving the engine location from __file__ (as the
+# test module itself does) would resolve to a nonexistent dir beside tmp_path
+# and kill this process with ModuleNotFoundError before any phase runs.
+sys.path.insert(0, "@@ENGINE_PATH@@")
 
 from utils.checkpoint import save_checkpoint, load_checkpoint, restore_context, get_next_phase, PHASES
 from utils.citation_database import Citation
@@ -150,8 +164,10 @@ if __name__ == "__main__":
     parser.add_argument("--resume-from", default=None)
     args = parser.parse_args()
 
-    import os
-    os.chdir(Path(__file__).parent.parent)  # CD to dothesis root
+    # Baked in for the same reason as the engine path above: __file__ is in
+    # pytest's tmp_path, so the old __file__-derived chdir landed beside
+    # tmp_path rather than at the repo root it claimed to target.
+    os.chdir("@@REPO_ROOT@@")
 
     success = run_mock_pipeline(
         output_dir=Path(args.output_dir),
@@ -173,28 +189,70 @@ class TestTrueE2ESubprocessKill:
     def mock_script(self, tmp_path):
         """Create mock pipeline script in temp directory."""
         script_path = tmp_path / "mock_pipeline.py"
-        script_path.write_text(MOCK_PIPELINE_SCRIPT)
+        source = MOCK_PIPELINE_SCRIPT.replace(
+            ENGINE_PATH_TOKEN, str(ENGINE_PATH)
+        ).replace(REPO_ROOT_TOKEN, str(REPO_ROOT))
+
+        # Fail loudly at write time if a token survives. An unsubstituted path
+        # only shows up as a dead subprocess and a "phase never started"
+        # timeout, which is how the engine-path bug hid here indefinitely.
+        for token in (ENGINE_PATH_TOKEN, REPO_ROOT_TOKEN):
+            assert token not in source, f"{token} was not substituted into mock script"
+        assert ENGINE_PATH.is_dir(), f"engine dir not found at {ENGINE_PATH}"
+
+        script_path.write_text(source)
         return script_path
 
-    def _wait_for_phase(self, output_dir: Path, phase: str, timeout: float = 10.0) -> bool:
-        """Wait for a phase to start (marker file appears)."""
-        marker = output_dir / f".phase_{phase}_started"
+    def _drain(self, proc) -> str:
+        """Best-effort stdout/stderr capture from an exited subprocess."""
+        try:
+            stdout, stderr = proc.communicate(timeout=5)
+        except Exception:  # noqa: BLE001 - diagnostics only, never mask the real assert
+            return "<could not read subprocess output>"
+        return f"exit={proc.returncode}\n--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}"
+
+    def _wait_for_marker(
+        self, output_dir: Path, marker_name: str, timeout: float, proc=None
+    ) -> bool:
+        """
+        Poll for a marker file, aborting early if the producing process dies.
+
+        Without the liveness check a subprocess that dies on startup is
+        indistinguishable from one that is merely slow: the caller burns the
+        full timeout and reports "never started", discarding the traceback that
+        explains why. Surfacing the subprocess output here turns a silent
+        timeout into an actionable error.
+        """
+        marker = output_dir / marker_name
         start = time.time()
         while time.time() - start < timeout:
             if marker.exists():
                 return True
+            if proc is not None and proc.poll() is not None:
+                # Re-check: the process may have exited right after writing.
+                if marker.exists():
+                    return True
+                raise AssertionError(
+                    f"subprocess exited before writing {marker_name}\n{self._drain(proc)}"
+                )
             time.sleep(0.05)
         return False
 
-    def _wait_for_phase_complete(self, output_dir: Path, phase: str, timeout: float = 10.0) -> bool:
+    def _wait_for_phase(
+        self, output_dir: Path, phase: str, timeout: float = 10.0, proc=None
+    ) -> bool:
+        """Wait for a phase to start (marker file appears)."""
+        return self._wait_for_marker(
+            output_dir, f".phase_{phase}_started", timeout, proc
+        )
+
+    def _wait_for_phase_complete(
+        self, output_dir: Path, phase: str, timeout: float = 10.0, proc=None
+    ) -> bool:
         """Wait for a phase to complete."""
-        marker = output_dir / f".phase_{phase}_complete"
-        start = time.time()
-        while time.time() - start < timeout:
-            if marker.exists():
-                return True
-            time.sleep(0.05)
-        return False
+        return self._wait_for_marker(
+            output_dir, f".phase_{phase}_complete", timeout, proc
+        )
 
     def test_kill_during_research_resume_from_start(self, tmp_path, mock_script):
         """
@@ -214,7 +272,9 @@ class TestTrueE2ESubprocessKill:
 
         try:
             # Wait for research to start
-            assert self._wait_for_phase(output_dir, "research", timeout=5), "Research never started"
+            assert self._wait_for_phase(
+                output_dir, "research", timeout=5, proc=proc
+            ), "Research never started"
 
             # Kill immediately (before checkpoint is saved)
             time.sleep(0.1)  # Let it start but not finish
@@ -262,7 +322,9 @@ class TestTrueE2ESubprocessKill:
 
         try:
             # Wait for research to complete
-            assert self._wait_for_phase_complete(output_dir, "research", timeout=10), "Research never completed"
+            assert self._wait_for_phase_complete(
+                output_dir, "research", timeout=10, proc=proc
+            ), "Research never completed"
 
             # Kill before structure completes
             time.sleep(0.1)
@@ -317,7 +379,9 @@ class TestTrueE2ESubprocessKill:
 
         try:
             # Wait for compose to complete
-            assert self._wait_for_phase_complete(output_dir, "compose", timeout=20), "Compose never completed"
+            assert self._wait_for_phase_complete(
+                output_dir, "compose", timeout=20, proc=proc
+            ), "Compose never completed"
 
             # Kill after compose
             time.sleep(0.1)
@@ -373,7 +437,7 @@ class TestTrueE2ESubprocessKill:
 
         try:
             # Wait for structure to start
-            assert self._wait_for_phase(output_dir, "structure", timeout=10)
+            assert self._wait_for_phase(output_dir, "structure", timeout=10, proc=proc)
 
             # Send SIGTERM (graceful)
             proc.terminate()

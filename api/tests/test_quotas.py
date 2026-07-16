@@ -1,12 +1,12 @@
-import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.orm import Session as OrmSession
 
 from app.db import get_engine
-from app.models import Job, Paper, User
+from app.models import Job, Paper
 from app import quotas as quotas_module
+from tests.conftest import make_user
 from app.quotas import (
     MAX_RUNNING_JOBS_PER_USER,
     QuotaError,
@@ -19,10 +19,7 @@ DAILY_CAP_FOR_TESTS = 3
 
 
 def _user(db):
-    u = User(email=f"{uuid.uuid4().hex}@x.com", password_hash="x")
-    db.add(u)
-    db.flush()
-    return u
+    return make_user(db)
 
 
 def _paper(db, u):

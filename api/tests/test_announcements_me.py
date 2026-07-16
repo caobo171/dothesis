@@ -4,16 +4,21 @@ from fastapi.testclient import TestClient
 
 from app.db import get_session_factory
 from app.main import create_app
-from app.models import Announcement, User
+from app.models import Announcement
+from tests.conftest import make_user
 
 
 @pytest.fixture
 def regular_user():
     Session = get_session_factory()
     with Session() as s:
-        u = User(email="reader@e.com", password_hash="x", credit=0)
-        s.add(u)
+        u = make_user(s, email="reader@e.com", credit=0)
         s.commit()
+        # The user outlives this session (it is handed to a dependency override),
+        # so detach it with its attributes already loaded rather than letting
+        # commit()'s expiry force a refresh on a closed session.
+        s.refresh(u)
+        s.expunge(u)
         return u
 
 

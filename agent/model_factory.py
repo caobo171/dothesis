@@ -27,6 +27,25 @@ class ModelSpec:
     fallbacks: list[str] = field(default_factory=list)
     temperature: float = 0.4
     max_tokens: int = 8000
+    # Vision routing (headless convergence spec §2). vision_model "" means
+    # "use the default Gemini sidecar" — it picks WHICH Gemini make_vision_model
+    # builds, never the family. supports_vision is derived from `model` and
+    # FAIL-CLOSED: unknown ids are assumed text-only, because the wrong default
+    # ships Gemini media blocks into an OpenAI-compat endpoint and hard-fails,
+    # while a needless transcription costs fractions of a cent.
+    vision_model: str = ""
+    supports_vision: bool = False
+
+
+# Substring lookup on the model id — the same technique opencode uses for
+# prompt selection. A KNOWN MAINTENANCE POINT: new vision-capable families
+# must be added here, and fail-closed keeps that drift cheap (spec Risk 4).
+_VISION_MODEL_HINTS = ("gemini", "claude")
+
+
+def model_supports_vision(model: str) -> bool:
+    m = (model or "").lower()
+    return any(h in m for h in _VISION_MODEL_HINTS)
 
 
 def spec_from_env() -> ModelSpec:
@@ -36,6 +55,18 @@ def spec_from_env() -> ModelSpec:
     ANTHROPIC_API_KEY is configured on the native route, else gemini-3.5-flash.
     DOTHESIS_AGENT_MODEL still overrides, exactly as before.
     """
+    # DEPLOY CONSTRAINT — the route stays `native` in code, deliberately.
+    # _ofox() raises RuntimeError without OFOX_API_KEY, so defaulting to ofox here
+    # would break every dev machine and any deploy lacking the key. Moving production
+    # onto ofox is a DEPLOYMENT change (DOTHESIS_MODEL_ROUTE=ofox in env); this file
+    # only decides WHICH model you get once you are already on ofox.
+    #
+    # ⚠️ SHIP-TOGETHER: the credit_multiplier correction (f64bf79) must NOT reach
+    # production while the live default is still gemini-3.5-flash. Table-derived
+    # pricing bills 3.5-flash at ~12.86x, and PACKAGES are sized on "1 pack ≈ 1 run",
+    # so a Starter pack would buy ~1/13 of a run and students hit a wall immediately.
+    # The env flip to ofox + qwen-plus (~0.62x) and that multiplier change are one
+    # deployment, not two.
     route = os.getenv("DOTHESIS_MODEL_ROUTE", "native")
     # Claude is the architecture's preferred model and takes over automatically
     # once a key lands; until then Gemini is the working default.
@@ -43,15 +74,28 @@ def spec_from_env() -> ModelSpec:
     if route == "native" and os.getenv("ANTHROPIC_API_KEY"):
         default_model = "claude-sonnet-4-6"
     elif route == "ofox":
-        # Ofox uses provider/model ids; default to the cheap Gemini-family tier
-        # (dramatically cheaper output than 3.5-flash). Override via DOTHESIS_AGENT_MODEL.
-        default_model = "google/gemini-2.5-flash"
+        # Ofox uses provider/model ids. qwen-plus (0.12/0.29) is the only default that
+        # bills BELOW the credit baseline (gemini-2.5-flash native, 0.15/0.60 → 1.0x by
+        # construction): it resolves to ~0.62x. That is load-bearing, not incidental —
+        # api/app/pricing.py::PACKAGES are sized on "1 pack ≈ 1 run", so a default above
+        # 1.0x silently shrinks what a pack buys.
+        #
+        # NOT google/gemini-2.5-flash (the previous default): Ofox RESELLS 2.5-flash at
+        # 0.30/2.50, not Google's native 0.15/0.60, so it bills ~3.24x — it was never the
+        # baseline the old name-matching multiplier assumed it was.
+        # Trade-off accepted: qwen-plus is text-only, so image turns go to the Gemini
+        # vision sidecar (make_vision_model) instead of the brain. Override via
+        # DOTHESIS_AGENT_MODEL.
+        default_model = "bailian/qwen-plus"
+    model = os.getenv("DOTHESIS_AGENT_MODEL", default_model)
     return ModelSpec(
         route=route,
-        model=os.getenv("DOTHESIS_AGENT_MODEL", default_model),
+        model=model,
         fallbacks=[m for m in os.getenv("DOTHESIS_MODEL_FALLBACKS", "").split(",") if m.strip()],
         temperature=float(os.getenv("DOTHESIS_MODEL_TEMPERATURE", "0.4")),
         max_tokens=int(os.getenv("DOTHESIS_MODEL_MAX_TOKENS", "8000")),
+        vision_model=os.getenv("DOTHESIS_VISION_MODEL", ""),
+        supports_vision=model_supports_vision(model),
     )
 
 
@@ -129,13 +173,22 @@ def _ofox(spec: ModelSpec):
     stronger/Vietnamese-better one (qwen) without a native SDK per provider.
     Model IDs are `provider/model`, e.g. "google/gemini-2.5-flash".
 
-    CACHING CAVEAT: Ofox documents caching on the provider-NATIVE protocol, not
-    this OpenAI-compatible endpoint — so the big system-prompt + skills prefix may
-    NOT get the ~90% input cache discount here. That's usually fine because DoThesis
-    cost is output-dominated (uncacheable anyway), but verify `cached_*` token
-    counts on a real response; if input caching turns out to matter for your model,
-    use route=native for that provider instead. Key check runs before the (lazy)
-    langchain_openai import so a misconfig fails fast, never mid-turn.
+    CACHING: this endpoint DOES cache prompt prefixes — measured, not assumed.
+    Reproduce with `scripts/probe_prompt_cache.py` (raw HTTP, real
+    agent.runtime.SYSTEM_PROMPT). On bailian/qwen-plus, 2026-07-16:
+        call 1: {"prompt_tokens": 3419, "completion_tokens": 16}
+        call 2: {"prompt_tokens": 3456, ..., "prompt_tokens_details":
+                 {"cached_tokens": 3328}}
+    i.e. 3328/3456 = 96% of input tokens cached on the second turn. Measured on
+    qwen-plus only — re-probe before assuming it for another model. Superseded an
+    earlier caveat here that guessed the OpenAI-compat endpoint would NOT cache and
+    advised route=native on that basis; the guess was wrong, so it is gone.
+    extract_usage surfaces the count as `cached_in`; note the credit ledger still
+    bills all input at full rate — passing the discount on is a pricing decision,
+    not an accident to be inherited from this docstring.
+
+    Key check runs before the (lazy) langchain_openai import so a misconfig fails
+    fast, never mid-turn.
     """
     key = os.getenv("OFOX_API_KEY", "")
     if not key:
@@ -152,3 +205,37 @@ def _ofox(spec: ModelSpec):
         # ledger reads it via extract_usage, so keep this on.
         model_kwargs={"stream_options": {"include_usage": True}},
     )
+
+
+def make_vision_model(spec: ModelSpec | None = None, temperature: float | None = None):
+    """Vision-capable model for image / screenshot / scanned-PDF turns.
+
+    Implementation moved here from orchestrator/llm.get_vision_llm so "what
+    model am I on" has ONE source of truth (spec §2 — this takes the
+    model-truth sources from three to one and clears the path for D).
+
+    Always a Gemini client: the vision path builds Gemini-format content
+    blocks, which the OpenAI-compat Ofox route can't consume. On route=ofox we
+    point the Gemini client at Ofox's Gemini-NATIVE endpoint (verified
+    working) with the Ofox key; else native Google. temperature defaults 0.2 —
+    transcription wants determinism, not creativity.
+    """
+    from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: PLC0415 — lazy, heavy dep
+
+    spec = spec or spec_from_env()
+    # This is the SIDECAR factory: it exists only for brains that CANNOT see, so
+    # it is always Gemini. `vision_model` therefore overrides WHICH Gemini, never
+    # the family — "" just means "the default sidecar". Resolving "" to
+    # spec.model would hand e.g. a Claude id to the Gemini client below: it
+    # constructs fine and fails at invoke. A vision-capable brain never needs
+    # this function at all; build_user_message gives it native blocks instead.
+    m = spec.vision_model or "gemini-2.5-flash"
+    t = 0.2 if temperature is None else temperature
+    ofox_key = os.getenv("OFOX_API_KEY")
+    if spec.route == "ofox" and ofox_key:
+        vm = m if "/" in m else f"google/{m}"  # Ofox needs provider-prefixed ids
+        return ChatGoogleGenerativeAI(
+            model=vm, google_api_key=ofox_key,
+            client_options={"api_endpoint": "https://api.ofox.ai/gemini"},
+            transport="rest", temperature=t)
+    return ChatGoogleGenerativeAI(model=m, temperature=t)

@@ -148,4 +148,111 @@ def test_spec_from_env_ofox_default_model(monkeypatch):
     monkeypatch.delenv("DOTHESIS_AGENT_MODEL", raising=False)
     spec = spec_from_env()
     assert spec.route == "ofox"
-    assert spec.model == "google/gemini-2.5-flash"
+    assert spec.model == "bailian/qwen-plus"
+
+
+def test_ofox_default_is_cheaper_than_the_credit_baseline():
+    """The PROPERTY this default exists for: the ofox default must bill BELOW 1.0.
+
+    PACKAGES in api/app/pricing.py are sized on "1 pack ≈ 1 run". Once
+    credit_multiplier reads quality/model_prices.py instead of substring-matching
+    names (f64bf79), the old defaults price far above that assumption:
+    gemini-3.5-flash → ~12.9x (a Starter pack buys ~1/13 of a run) and the previous
+    ofox default google/gemini-2.5-flash → ~3.2x (the gateway RESELLS 2.5-flash at
+    0.30/2.50, not Google's native 0.15/0.60 baseline). qwen-plus at 0.12/0.29 is
+    the only default that keeps the packs honest without re-tuning them.
+
+    Asserted as an inequality against the baseline, not a literal: if a future price
+    update pushes the default above baseline, the packs are wrong again and this
+    must fail — that is the whole point of the model choice.
+    """
+    from app.pricing import credit_multiplier
+
+    assert credit_multiplier("bailian/qwen-plus") < 1.0
+    # The two defaults this one replaces, pinned so the reason stays legible.
+    assert credit_multiplier("google/gemini-2.5-flash") > 3.0
+    assert credit_multiplier("gemini-3.5-flash") > 12.0
+
+
+def test_ofox_default_is_text_only_so_vision_routes_to_the_sidecar(monkeypatch):
+    """qwen-plus is a text-only brain: image turns MUST go to the Gemini vision
+    sidecar (make_vision_model), never ship media blocks at qwen. Making it the
+    default is what puts the sidecar on the production path, so pin it here."""
+    monkeypatch.setenv("DOTHESIS_MODEL_ROUTE", "ofox")
+    monkeypatch.delenv("DOTHESIS_AGENT_MODEL", raising=False)
+    monkeypatch.delenv("DOTHESIS_VISION_MODEL", raising=False)
+    spec = spec_from_env()
+    assert spec.supports_vision is False
+    assert spec.vision_model == ""  # "" = resolve the Gemini sidecar at call time
+
+
+# --- A: vision capability fields (headless convergence spec §2) -------------
+from agent.model_factory import make_vision_model, model_supports_vision
+
+
+def test_supports_vision_lookup_fail_closed():
+    # FAIL-CLOSED is the load-bearing property: an unknown id must read as
+    # text-only, so the worst drift outcome is a needless transcription —
+    # never Gemini media blocks shipped into an OpenAI-compat endpoint
+    # (design-doc defect 1's failure shape).
+    assert model_supports_vision("gemini-3.5-flash") is True
+    assert model_supports_vision("google/gemini-2.5-flash") is True
+    assert model_supports_vision("claude-sonnet-4-6") is True
+    assert model_supports_vision("qwen/qwen-plus") is False
+    assert model_supports_vision("qwen-plus") is False
+    assert model_supports_vision("some-future-model") is False
+    assert model_supports_vision("") is False
+
+
+def test_spec_from_env_derives_vision_fields(monkeypatch):
+    monkeypatch.setenv("DOTHESIS_MODEL_ROUTE", "ofox")
+    monkeypatch.setenv("DOTHESIS_AGENT_MODEL", "qwen/qwen-plus")
+    monkeypatch.delenv("DOTHESIS_VISION_MODEL", raising=False)
+    spec = spec_from_env()
+    assert spec.supports_vision is False
+    assert spec.vision_model == ""  # "" = resolve at make_vision_model time
+
+
+def test_make_vision_model_text_only_brain_defaults_to_gemini(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "test")
+    monkeypatch.delenv("OFOX_API_KEY", raising=False)
+    spec = ModelSpec(route="native", model="qwen-plus", supports_vision=False)
+    m = make_vision_model(spec)
+    assert m.__class__.__name__ == "ChatGoogleGenerativeAI"
+    assert "gemini-2.5-flash" in m.model
+
+
+def test_make_vision_model_never_hands_a_claude_id_to_the_gemini_client(monkeypatch):
+    # supports_vision=True must NOT make the sidecar echo the brain's own id:
+    # make_vision_model always returns ChatGoogleGenerativeAI, so a Claude id
+    # here would construct fine and then fail at invoke. A brain that can see
+    # skips this factory entirely (build_user_message sends native blocks).
+    monkeypatch.setenv("GOOGLE_API_KEY", "test")
+    monkeypatch.delenv("OFOX_API_KEY", raising=False)
+    spec = ModelSpec(route="native", model="claude-sonnet-4-6", supports_vision=True)
+    m = make_vision_model(spec)
+    assert "claude" not in m.model.lower()
+    assert "gemini" in m.model.lower()
+
+
+def test_make_vision_model_ofox_prefixes_and_points_at_gateway(monkeypatch):
+    monkeypatch.setenv("OFOX_API_KEY", "ok-test")
+    spec = ModelSpec(route="ofox", model="qwen/qwen-plus",
+                     vision_model="gemini-2.5-flash", supports_vision=False)
+    m = make_vision_model(spec)
+    assert "google/gemini-2.5-flash" in m.model  # Ofox needs provider-prefixed ids
+
+
+def test_ofox_docstring_does_not_carry_the_disproven_cache_caveat():
+    # Measured live 2026-07-16 via scripts/probe_prompt_cache.py against the real
+    # agent.runtime.SYSTEM_PROMPT: 3328/3456 input tokens cached on turn 2. The old
+    # docstring's "may NOT get the ~90% input cache discount here / use route=native
+    # if input caching matters" argued against the route the project is adopting, on
+    # a premise that is now false. This test pins the correction so it can't regress.
+    from agent.model_factory import _ofox
+    doc = _ofox.__doc__ or ""
+    assert "may NOT get" not in doc
+    assert "use route=native for that provider instead" not in doc
+    # It must cite the reproduction, not just drop the claim.
+    assert "probe_prompt_cache" in doc
+    assert "3328" in doc

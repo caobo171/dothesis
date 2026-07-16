@@ -22,22 +22,36 @@ MODULES = ["M1", "M2", "M3", "M4", "M5"]
 # Which context_store keys each module may write. Mirrors the slice map in
 # skills/dothesis/SKILL.md — keep the two in sync.
 SLICE_OWNERSHIP: dict[str, list[str]] = {
-    "M1": ["research_title", "research_questions"],
-    "M2": ["literature_sources", "research_gaps"],
+    "M1": ["research_title", "research_questions", "decisions"],
+    "M2": ["literature_sources", "research_gaps", "decisions"],
     # sample_plan / cmb_plan / missing_data_plan added for the F8 methods
     # pre-flight: commit_slice must be able to WRITE them (they're M3 design
     # decisions), and preflight_check reads them to gate M3->M4 readiness.
     "M3": ["conceptual_model", "hypotheses", "methodology", "instrument",
-           "sample_plan", "cmb_plan", "missing_data_plan"],
+           "sample_plan", "cmb_plan", "missing_data_plan", "decisions"],
     # field_it_* added for F7 results ingestion: fielded survey responses +
     # quality flags land in M4 (where F8's Output Sanity Layer reads). Making
     # them M4-owned is what lets DbProjectStateStore._save persist them into the
     # m4_analysis column automatically — the same mechanism as analysis_results,
     # so there is no Db-specific write path to forget (project_db_store_persistence_gap).
     "M4": ["analysis_outline", "analysis_results",
-           "field_it_collection_id", "field_it_responses", "field_it_quality"],
-    "M5": ["final_sections"],
+           "field_it_collection_id", "field_it_responses", "field_it_quality",
+           "decisions"],
+    "M5": ["final_sections", "decisions"],
 }
+# "decisions" (headless auto-decision audit trail, convergence spec §4) is
+# owned by EVERY module: the runner records each choice under whichever module
+# is in focus, and riding the slice map is what makes DbProjectStateStore
+# persist it with no store-specific code — the same mechanism as field_it_*.
+# The flat load() view holds ONE decisions list; _save mirrors it into every
+# module column, so the five copies are redundant but always identical. That
+# redundancy was accepted over a new top-level key, which would round-trip in
+# file-store tests and silently VANISH in prod (the known CRITICAL gap).
+# DELIBERATELY absent from SKILL.md's slice map despite the "keep in sync" note
+# above: that map tells the AGENT what it may write, and `decisions` is written
+# only by record_decision (deterministic code). Listing it would invite the model
+# to author its own audit trail — the trail is only worth anything if the thing
+# being audited can't write it. Don't "fix" the divergence.
 
 # Which modules each module may additionally READ (context dependencies).
 READS: dict[str, list[str]] = {
@@ -56,6 +70,15 @@ DOWNSTREAM: dict[str, list[str]] = {
     "M4": ["M5"],
     "M5": [],
 }
+
+# Owned keys that are BOOKKEEPING, not module output. They're in
+# SLICE_OWNERSHIP so commit_slice can write them and both stores persist them,
+# but they must never count as "this module produced something" — otherwise a
+# module with nothing behind it passes the strict done-gate below the moment an
+# audit row is appended, which is exactly the hallucinated-completion the gate
+# exists to catch (and headless records a decision under every module it
+# touches, so every module would become done-eligible while empty).
+NON_CONTENT_KEYS = {"decisions"}
 
 # Keep history bounded — old snapshots beyond this are dropped oldest-first.
 # 50 commits ≈ a full thesis project's worth of confirmed decisions.
@@ -142,9 +165,17 @@ class ProjectStateStore:
         if not self.exists():
             return {"exists": False, "module": module}
         state = self.load()
-        visible_keys: list[str] = list(SLICE_OWNERSHIP[module])
+        # NON_CONTENT_KEYS stay out of the visible set: read_slice's result is
+        # injected into the model's context on every read (for this module AND
+        # each read-dependency), and the audit trail only grows — paying that
+        # context cost buys the model nothing it can act on. It also keeps the
+        # trail out of reach of the thing being audited, which is the point of
+        # having one.
+        visible_keys: list[str] = [k for k in SLICE_OWNERSHIP[module]
+                                   if k not in NON_CONTENT_KEYS]
         for dep in READS[module]:
-            visible_keys.extend(SLICE_OWNERSHIP[dep])
+            visible_keys.extend(k for k in SLICE_OWNERSHIP[dep]
+                                if k not in NON_CONTENT_KEYS)
         slices = {
             k: v for k, v in state["contextStore"].items() if k in visible_keys
         }
@@ -161,13 +192,16 @@ class ProjectStateStore:
     def _has_done_content(self, module: str, context_store: dict[str, Any]) -> bool:
         """True when `module` has produced enough to be marked done.
 
-        Baseline: at least one of the module's owned keys is non-empty.
+        Baseline: at least one of the module's owned CONTENT keys is non-empty
+        (NON_CONTENT_KEYS are audit bookkeeping and never earn a done).
         M5 is special — the finished chapters can live in the m5_writing
         column (auto-draft path) rather than the owned `final_sections` key,
         so we also accept chapters when the store exposes the full view. A
         read failure there errs open (we don't block a done on a flaky read).
         """
-        if any(context_store.get(k) for k in SLICE_OWNERSHIP[module]):
+        content_keys = [k for k in SLICE_OWNERSHIP[module]
+                        if k not in NON_CONTENT_KEYS]
+        if any(context_store.get(k) for k in content_keys):
             return True
         if module == "M5":
             loader = getattr(self, "load_full_context_store", None)
@@ -213,7 +247,11 @@ class ProjectStateStore:
         # keys aren't blocked. Empty-done is rejected wholesale, with a message
         # telling the agent to commit progress first.
         if confirm_done and not self._has_done_content(module, {**state["contextStore"], **writes}):
-            owned = SLICE_OWNERSHIP[module]
+            # List only CONTENT keys: this message tells the agent what to
+            # commit to earn the done, and NON_CONTENT_KEYS (audit bookkeeping)
+            # no longer satisfy the gate — advertising them would send it down a
+            # route that can't work.
+            owned = [k for k in SLICE_OWNERSHIP[module] if k not in NON_CONTENT_KEYS]
             raise ValueError(
                 f"cannot mark {module} done: its slice is empty (owns {owned}). "
                 f"Commit the module's content first with confirm_done=False, "
@@ -239,15 +277,26 @@ class ProjectStateStore:
         # untouched `locked` module is noise — there is nothing to re-review.
         # Bootstrap-style dependency holes are flagged explicitly via
         # status_overrides instead.
+        overrides = status_overrides or {}
         flagged: list[str] = []
         for down in DOWNSTREAM[module]:
             if state["status"][down] != "locked":
                 state["status"][down] = "needs_review"
                 flagged.append(down)
 
-        for mod, st in (status_overrides or {}).items():
+        for mod, st in overrides.items():
             _validate_module(mod)
             state["status"][mod] = st
+
+        # `flagged` is a REPORT of what this commit left at needs_review, not of
+        # what the pass above proposed — status_overrides run after it and win.
+        # Callers treat the list as the "a late upstream edit invalidated
+        # finished work" signal (api/app/agent_state.py emits an analytics event
+        # off it), so a module the overrides pinned back was never invalidated
+        # and must not appear. Without this, record_decision — which snapshots
+        # every status precisely so nothing moves — would report a false
+        # invalidation on every single headless auto-decision.
+        flagged = [m for m in flagged if m not in overrides]
 
         self._save(state)
         return {

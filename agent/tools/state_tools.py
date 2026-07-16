@@ -11,7 +11,7 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-from agent.state import ProjectStateStore, SliceOwnershipError
+from agent.state import NON_CONTENT_KEYS, ProjectStateStore, SliceOwnershipError
 
 # An advisor directive names a thesis chapter; map it to the DoThesis module that
 # owns that chapter's work so the raised blocker lands on the right roadmap step.
@@ -62,6 +62,16 @@ def make_state_tools(store: ProjectStateStore) -> list:
             status_overrides: Bootstrap only — explicit status flags for
                 dependency holes (e.g. {"M2": "needs_review"}).
         """
+        # This wrapper is the MODEL-facing edge, so strip NON_CONTENT_KEYS here
+        # — the same guard import_route.py applies at the client-facing edge.
+        # `decisions` is owned by every module (so both stores persist it),
+        # which means commit_slice's ownership check alone would happily let the
+        # model author or overwrite the trail that audits the model. An audit
+        # trail is only worth something if the audited party can't write it.
+        # record_decision calls store.commit_slice directly and is unaffected:
+        # it's deterministic code, not the model.
+        writes = {k: v for k, v in (writes or {}).items()
+                  if k not in NON_CONTENT_KEYS}
         try:
             result = store.commit_slice(
                 module, writes, reason,

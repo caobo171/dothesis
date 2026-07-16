@@ -88,14 +88,18 @@ Changelog = "https://github.com/federicodeponte/dothesis/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/federicodeponte/dothesis/issues"
 
 [project.scripts]
-dothesis = "dothesis.cli:main"
-draft-ai = "dothesis.cli:main"
+# The `dothesis` / `draft-ai` entry points are gone with the standalone opendraft
+# CLI: that was the old single-user CLI product, and the web product never invoked
+# it (the API spawns `python -m engine`, see api/app/job_runner.py). These two
+# remain because they target top-level engine modules, not the removed package.
 dothesis-tldr = "tldr:main"
 dothesis-digest = "digest:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["dothesis*", "utils*", "concurrency*", "phases*"]
+# opendraft* dropped with the CLI package — globbing a directory that no longer
+# exists would silently ship an incomplete distribution rather than fail loudly.
+include = ["utils*", "concurrency*", "phases*"]
 
 [tool.setuptools]
 py-modules = ["config", "draft_generator", "tldr", "digest"]

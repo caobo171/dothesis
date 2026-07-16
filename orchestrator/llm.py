@@ -19,6 +19,38 @@ from __future__ import annotations
 import os
 
 
+def resolve_orchestrator_model(model: str | None = None) -> str:
+    """Resolve the engine's model id for the configured route. ONE resolution.
+
+    Why this is a function and not an inline getenv default: the route and the
+    model must not be settable into an incoherent pair. ORCHESTRATOR_LLM_MODEL used
+    to default to the unprefixed native id "gemini-2.5-flash" regardless of route,
+    so ORCHESTRATOR_LLM_ROUTE=ofox WITHOUT the model var sent the gateway an id it
+    does not serve — the same half-enabled-route shape that billed auto runs 4x
+    (job_runner.py:358). Making the DEFAULT route-aware means uncommenting the route
+    line alone lands on a coherent model, so a partial config can't fire the bug.
+
+    Mirrors agent/model_factory.spec_from_env() deliberately — same shape (pick a
+    default FROM the route, then let the env var override) so the brain and the
+    engine stay one mental model rather than two competing patterns.
+
+    Precedence: explicit arg (per-site overrides like ORCHESTRATOR_ROUTER_MODEL)
+    > ORCHESTRATOR_LLM_MODEL > the route's default.
+    """
+    if model:
+        return model
+    route = os.getenv("ORCHESTRATOR_LLM_ROUTE", "native")
+    # native keeps gemini-2.5-flash: the exact id every `_get_llm()` site used, so
+    # the no-new-env back-compat contract in this module's header still holds.
+    default_model = "gemini-2.5-flash"
+    if route == "ofox":
+        # Ofox uses provider/model ids. qwen-plus matches the brain's ofox default
+        # (agent/model_factory.spec_from_env) and is the model the owner's benchmark
+        # picked for the report pipeline — see ARCHITECTURE_NOTES.md.
+        default_model = "bailian/qwen-plus"
+    return os.getenv("ORCHESTRATOR_LLM_MODEL", default_model)
+
+
 def get_orchestrator_llm(
     model: str | None = None,
     temperature: float | None = None,
@@ -28,8 +60,10 @@ def get_orchestrator_llm(
 
     Args mirror the old per-site construction so callers can preserve their
     tool-specific settings:
-      - model:       defaults to ORCHESTRATOR_LLM_MODEL / "gemini-2.5-flash"
-                     (the exact default every `_get_llm()` used).
+      - model:       defaults via resolve_orchestrator_model() — ROUTE-AWARE, so
+                     route=ofox alone can't leave a native id pointed at the
+                     gateway. native still resolves "gemini-2.5-flash", the exact
+                     default every `_get_llm()` used.
       - temperature: defaults to 0.4 (the modal per-site value); each site
                      passes its own (e.g. m4 analysis uses 0.2).
       - timeout:     per-request timeout (seconds). Only the hot-path sites set
@@ -44,7 +78,7 @@ def get_orchestrator_llm(
     Fail fast: an unknown route raises here, at build time, not mid-run.
     """
     route = os.getenv("ORCHESTRATOR_LLM_ROUTE", "native")
-    model = model or os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash")
+    model = resolve_orchestrator_model(model)
     temperature = 0.4 if temperature is None else temperature
 
     if route == "native":
@@ -90,25 +124,20 @@ def get_orchestrator_llm(
 
 
 def get_vision_llm(model: str | None = None, temperature: float | None = None):
-    """Vision-capable model for image/screenshot turns (F13 output ingest, image
-    attachments). The text brain (e.g. Ofox qwen-plus) may be TEXT-ONLY, so vision
-    calls route HERE to a Gemini/VL model instead.
+    """Thin delegate — the implementation moved to agent.model_factory.
+    make_vision_model (headless convergence spec §2: one model-truth source).
+    Kept so agent/tools/output_parse.py and auto-mode call sites keep working.
 
-    Always a Gemini client: build_user_message(provider="gemini") emits Gemini-format
-    content, so the OpenAI-compat ofox route can't consume it. On route=ofox we point
-    the Gemini client at Ofox's Gemini-NATIVE endpoint (verified working) with the
-    Ofox key; else native Google. DOTHESIS_VISION_MODEL overrides (default
-    gemini-2.5-flash). Keeps vision on Ofox instead of forcing a separate Google key.
+    The import is LAZY (inside the function) on purpose: a module-level
+    `import agent...` here is exactly the orchestrator -> agent import cycle
+    this file's header warns against. Both directions being in-function keeps
+    module load acyclic.
+
+    Route resolution preserves this delegate's historical dual-env behavior
+    (auto-mode sets ORCHESTRATOR_LLM_ROUTE, chat sets DOTHESIS_MODEL_ROUTE).
     """
-    from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: PLC0415
-    m = model or os.getenv("DOTHESIS_VISION_MODEL", "gemini-2.5-flash")
-    t = 0.2 if temperature is None else temperature
+    from agent.model_factory import ModelSpec, make_vision_model  # noqa: PLC0415 — cycle-avoiding lazy import
+
     route = (os.getenv("ORCHESTRATOR_LLM_ROUTE") or os.getenv("DOTHESIS_MODEL_ROUTE") or "native").lower()
-    ofox_key = os.getenv("OFOX_API_KEY")
-    if route == "ofox" and ofox_key:
-        vm = m if "/" in m else f"google/{m}"   # Ofox needs provider-prefixed ids
-        return ChatGoogleGenerativeAI(
-            model=vm, google_api_key=ofox_key,
-            client_options={"api_endpoint": "https://api.ofox.ai/gemini"},
-            transport="rest", temperature=t)
-    return ChatGoogleGenerativeAI(model=m, temperature=t)
+    m = model or os.getenv("DOTHESIS_VISION_MODEL", "gemini-2.5-flash")
+    return make_vision_model(ModelSpec(route=route, vision_model=m), temperature=temperature)

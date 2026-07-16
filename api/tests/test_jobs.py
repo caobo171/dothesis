@@ -89,13 +89,17 @@ def test_sse_replays_backlog():
     token = c.headers["Authorization"].split(" ", 1)[1]
     st = c.post("/api/v1/auth/stream-token",
                 json={"access_token": token, "scope": f"job:{job_id}"}).json()["stream_token"]
-    with c.stream("GET", f"/api/v1/jobs/{job_id}/events?st={st}") as resp:
-        assert resp.status_code == 200
-        body = b""
-        for chunk in resp.iter_bytes():
-            body += chunk
-            if b"job_done" in body:
-                break
-    text = body.decode()
+    # Reaching the assertions at all is the real assertion: TestClient buffers
+    # the whole ASGI response before returning, so this call only comes back if
+    # the server ends the stream itself. The job was already done before we
+    # connected, so its terminal event comes from the DB backlog, not pubsub —
+    # the client cannot "read a few events and disconnect" to rescue a
+    # generator that never returns.
+    r = c.get(f"/api/v1/jobs/{job_id}/events?st={st}")
+    assert r.status_code == 200
+    text = r.text
     assert "activity" in text
     assert "job_done" in text
+    # Nothing is emitted after the terminal event (no keepalive tail).
+    assert "keepalive" not in text
+    assert text.rstrip().endswith("}")

@@ -238,6 +238,10 @@ Frontend turns this into a row of card buttons. Rules:
 
 - The marker MUST be the last line of the message.
 - Options are separated by ` | ` (pipe). 2–6 options is the sweet spot.
+- Put the **recommended / advance** option FIRST; the rest follow as alternatives.
+  A headless run (auto-mode, partner API) has no student to click, so it takes the
+  first card — first-position is the difference between a sensible default and a
+  coin flip on those surfaces.
 - `[OPTIONS:field_name]` (e.g., `[OPTIONS:paradigm]`) tags which slice field the
   pick maps to — defaults to `user_choice` when omitted.
 - `[OPTIONS:gap_ids multi]` enables multi-select (e.g., picking gaps in M2 phase

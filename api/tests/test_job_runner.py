@@ -8,15 +8,14 @@ from sqlalchemy.orm import Session as OrmSession
 
 from app.db import get_engine
 from app.job_runner import _monitor
-from app.models import Job, JobEvent, Paper, User
+from app.models import Job, JobEvent, Paper
 from app.pubsub import pubsub
+from tests.conftest import make_user
 
 
 def _make_running_job(tmp_path: Path) -> uuid.UUID:
     with OrmSession(get_engine()) as db:
-        u = User(email=f"{uuid.uuid4().hex}@x.com", password_hash="x")
-        db.add(u)
-        db.flush()
+        u = make_user(db)
         p = Paper(user_id=u.id, topic="t", academic_level="master", language="en",
                   citation_style="apa", model="gemini-flash", sources_json={}, status="running")
         db.add(p)

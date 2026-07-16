@@ -330,7 +330,35 @@ async def send_message_v3(
             duration_ms = int((_time.monotonic() - _turn_t0) * 1000)
             # Scale credits by the active model's relative cost (see
             # _credit_multiplier) so a Pro turn isn't charged like a Flash turn.
-            _mult = _credit_multiplier(os.getenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash"))
+            #
+            # Price the model this turn ACTUALLY RAN, by asking the same resolver
+            # that chose it: _get_agent -> build_agent -> _default_model ->
+            # make_model -> spec_from_env(). This used to be a SECOND, independent
+            # guess — credit_multiplier(getenv("DOTHESIS_AGENT_MODEL",
+            # "gemini-3.5-flash")) — carrying its own default, and the two defaults
+            # drifted: on route=ofox with DOTHESIS_AGENT_MODEL unset, spec_from_env
+            # resolved the route's default while billing charged 3.5-flash's rate —
+            # an overcharge to students, one uncommented .env.example line away (the
+            # route and the model were commented on separate lines back then; both
+            # that split and the name-matching multipliers are since fixed).
+            # This is the chat-side twin of d4382a6, and the same principle: billing
+            # reads the model that served the call, never re-derives it from env.
+            #
+            # Sourcing it from spec_from_env makes billed-model == run-model by
+            # CONSTRUCTION — one resolver, so there is no second copy left to drift.
+            # Two alternatives rejected: (a) fixing the default string re-creates
+            # two copies and is right only until the next default moves; (b) billing
+            # per `_served_models` (the d4382a6 ledger-row shape) doesn't fit here —
+            # chat debits an aggregate of the streamed `usage` events, whose `model`
+            # is best-effort and absent on most routes (agent/runtime.py), so it
+            # would need an env fallback for exactly the cases where drift lives and
+            # would make the charge depend on whether metadata happened to arrive.
+            # Residual gap, deliberately: an OpenRouter cascade that silently fails
+            # over to a pricier fallback still bills the requested primary — that
+            # switch is surfaced by the `model_served` analytics event below.
+            from agent.model_factory import spec_from_env  # agent-layer: safe to import
+
+            _mult = _credit_multiplier(spec_from_env().model)
             cost_credits = max(1, round(total_tokens / 1000 * _mult)) if total_tokens else 0
 
             full = "".join(chunks)

@@ -12,18 +12,12 @@ from ..deps import current_user, stream_user_factory
 from ..job_runner import cancel_job, start_monitor
 from ..models import Job, JobEvent, Paper, User
 from ..pubsub import pubsub
-from ..sse import sse_pack
+# Terminal-type set and SSE redaction moved to app.sse so the runs router can
+# reuse them instead of keeping a second copy that drifts. Same definitions,
+# same behaviour — only the home changed.
+from ..sse import TERMINAL_TYPES, redact_for_sse, sse_pack
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
-
-# Fields that may contain server-side diagnostic info (full Python tracebacks,
-# internal stack info). Stripped from every SSE payload before transmission so
-# they never reach a browser even though they remain in the DB for ops debugging.
-_SSE_REDACT_KEYS = {"traceback"}
-
-
-def _redact_for_sse(payload: dict) -> dict:
-    return {k: v for k, v in payload.items() if k not in _SSE_REDACT_KEYS}
 
 
 def _owned_job(db: Session, user: User, job_id: uuid.UUID) -> Job:
@@ -78,7 +72,7 @@ async def stream_events(
         # Spread meta_json first so column fields take precedence on key collisions.
         payload = {**(ev.meta_json or {}),
                    "type": ev.type, "phase": ev.phase, "agent": ev.agent, "text": ev.text}
-        backlog.append((ev.id, _redact_for_sse(payload)))
+        backlog.append((ev.id, redact_for_sse(payload)))
 
     sub = pubsub.subscribe(job_id)
 
@@ -86,6 +80,15 @@ async def stream_events(
         try:
             for ev_id, payload in backlog:
                 yield sse_pack(payload, event_id=ev_id)
+                # The job may have finished before the client ever connected, in
+                # which case the terminal event arrives here (replayed from the
+                # DB) and never through pubsub. Without this the generator fell
+                # through to the loop below and emitted keepalives forever: a
+                # stream for an already-finished job only ever closed because
+                # the browser hung up, which leaks a task per reconnect and
+                # hangs any client that waits for the response to end.
+                if payload.get("type") in TERMINAL_TYPES:
+                    return
 
             while True:
                 try:
@@ -93,9 +96,9 @@ async def stream_events(
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
                     continue
-                yield sse_pack(_redact_for_sse({k: v for k, v in msg.items() if k != "id"}),
+                yield sse_pack(redact_for_sse({k: v for k, v in msg.items() if k != "id"}),
                                 event_id=msg.get("id"))
-                if msg.get("type") in {"job_done", "error"}:
+                if msg.get("type") in TERMINAL_TYPES:
                     break
         finally:
             pubsub.unsubscribe(job_id, sub)

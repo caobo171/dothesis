@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from orchestrator.agents.base import bounded_invoke
+from orchestrator.llm import resolve_orchestrator_model
 
 logger = logging.getLogger(__name__)
 
@@ -129,8 +130,14 @@ def metered_invoke(
     the meter doesn't swallow errors; if the call failed we still write
     a ledger row marking the failure (zero tokens, real duration).
     """
+    # This label is what job_runner BILLS against (it groups ledger rows by model
+    # and prices each at its own rate), so a wrong label overcharges — it is not
+    # cosmetic. The fallback therefore resolves through the factory's route-aware
+    # helper rather than re-guessing an unprefixed native default: on route=ofox
+    # that guess labelled qwen-plus runs as gemini-2.5-flash. Prefer the object's
+    # real `.model` whenever it exposes one — that's ground truth over any env.
     model = (
-        os.getenv("ORCHESTRATOR_LLM_MODEL", "gemini-2.5-flash")
+        resolve_orchestrator_model()
         if not hasattr(llm, "model") else getattr(llm, "model", "unknown")
     )
     reserved = estimate_tokens(prompt)

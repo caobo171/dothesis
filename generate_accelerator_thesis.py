@@ -10,7 +10,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'engine'))
 # Change to engine directory for proper .env loading
 os.chdir(os.path.join(os.path.dirname(__file__), 'engine'))
 
-from dothesis.draft_generator import generate_draft
+# draft_generator is a top-level module inside engine/ (added to sys.path above),
+# not a submodule of a `dothesis` package. Matches engine/generate_accelerator_thesis.py.
+from draft_generator import generate_draft
 
 THESIS_TOPIC = """Entrepreneurial Accelerator Programmes: Critical Success Factors and Their Impact on Startup Development
 

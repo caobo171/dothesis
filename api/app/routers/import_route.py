@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from ..deps import current_user, db_session
 from ..import_work import import_existing_work
 from ..models import ContextStore as DbContextStore, PaperUpload, Project, User
-from agent.state import DOWNSTREAM, MODULES, SLICE_OWNERSHIP
+from agent.state import DOWNSTREAM, MODULES, NON_CONTENT_KEYS, SLICE_OWNERSHIP
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["import"])
@@ -164,6 +164,12 @@ def confirm_reconstruction(project_id: str, body: ConfirmReconstructionBody,
     schema = _schema_for_slice(_ARTIFACT_BY_KEY[MODULE_TO_ARTIFACT[module]].slice)
     allowed = set(SLICE_OWNERSHIP[module]) | set(schema.model_fields)
     allowed.discard("confirmed_at")
+    # NON_CONTENT_KEYS (e.g. `decisions`) are owned by every module so the
+    # stores persist them, but they're system-generated audit bookkeeping —
+    # never document content an import could legitimately reconstruct. Letting a
+    # client send one would let it forge/clobber the very trail that exists to
+    # be trustworthy, so strip them like any other junk key.
+    allowed -= NON_CONTENT_KEYS
     clean = {k: v for k, v in body.slice.items()
              if k in allowed and not str(k).startswith("_")}
     if not clean:

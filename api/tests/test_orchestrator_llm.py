@@ -137,3 +137,71 @@ def test_get_vision_llm_ofox_points_at_ofox(monkeypatch):
     assert m.__class__.__name__ == "ChatGoogleGenerativeAI"
     # ofox branch prefixes the id (google/...) for the gateway; native leaves it bare.
     assert str(m.model) == "google/gemini-2.5-flash"
+
+
+# -- Route-aware model default (engine footgun) ------------------------------
+# Setting ORCHESTRATOR_LLM_ROUTE=ofox WITHOUT ORCHESTRATOR_LLM_MODEL used to send
+# the gateway an unprefixed native id ("gemini-2.5-flash") that Ofox does not
+# serve. Same "half-enabled route" shape as the 4x auto-run billing bug: the route
+# and the model must not be settable independently into an incoherent pair.
+def test_ofox_route_defaults_to_qwen_when_model_unset(monkeypatch):
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "ofox")
+    monkeypatch.delenv("ORCHESTRATOR_LLM_MODEL", raising=False)
+    monkeypatch.setenv("OFOX_API_KEY", "sk-of-test")
+    captured = _install_fake_chatopenai(monkeypatch)
+    get_orchestrator_llm()
+    assert captured["model"] == "bailian/qwen-plus"
+
+
+def test_ofox_env_model_still_overrides_route_default(monkeypatch):
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "ofox")
+    monkeypatch.setenv("ORCHESTRATOR_LLM_MODEL", "google/gemini-2.5-flash")
+    monkeypatch.setenv("OFOX_API_KEY", "sk-of-test")
+    captured = _install_fake_chatopenai(monkeypatch)
+    get_orchestrator_llm()
+    assert captured["model"] == "google/gemini-2.5-flash"
+
+
+def test_explicit_model_arg_wins_over_route_default(monkeypatch):
+    # Per-site overrides (ORCHESTRATOR_ROUTER_MODEL / _READ_MODEL) arrive as the
+    # `model` arg and must still beat both env and the route default.
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "ofox")
+    monkeypatch.setenv("ORCHESTRATOR_LLM_MODEL", "bailian/qwen-plus")
+    monkeypatch.setenv("OFOX_API_KEY", "sk-of-test")
+    captured = _install_fake_chatopenai(monkeypatch)
+    get_orchestrator_llm(model="bailian/qwen-max")
+    assert captured["model"] == "bailian/qwen-max"
+
+
+def test_native_route_default_model_unchanged(monkeypatch):
+    # Back-compat contract: route=native must still resolve gemini-2.5-flash.
+    from orchestrator.llm import resolve_orchestrator_model
+    monkeypatch.delenv("ORCHESTRATOR_LLM_ROUTE", raising=False)
+    monkeypatch.delenv("ORCHESTRATOR_LLM_MODEL", raising=False)
+    assert resolve_orchestrator_model() == "gemini-2.5-flash"
+
+
+def test_resolve_is_route_aware_on_ofox(monkeypatch):
+    from orchestrator.llm import resolve_orchestrator_model
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "ofox")
+    monkeypatch.delenv("ORCHESTRATOR_LLM_MODEL", raising=False)
+    assert resolve_orchestrator_model() == "bailian/qwen-plus"
+
+
+def test_token_meter_ledger_label_is_route_aware(monkeypatch):
+    # The ledger's `model` string is what job_runner BILLS against, so a wrong
+    # label is a real overcharge, not cosmetics. When the llm object exposes no
+    # `.model`, the fallback must resolve the same way the factory does — an
+    # unprefixed native default while running on ofox is the 4x bug's shape.
+    import orchestrator.token_meter as tm
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "ofox")
+    monkeypatch.delenv("ORCHESTRATOR_LLM_MODEL", raising=False)
+    rows = []
+    monkeypatch.setattr(tm, "_SINK", rows.append)
+    monkeypatch.setattr(tm, "bounded_invoke", lambda *a, **k: type("R", (), {"usage_metadata": {"input_tokens": 5, "output_tokens": 2}})())
+
+    class LlmWithoutModelAttr:
+        pass
+
+    tm.metered_invoke(LlmWithoutModelAttr(), "hi", action_kind="probe")
+    assert rows[0].model == "bailian/qwen-plus"

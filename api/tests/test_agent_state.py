@@ -21,6 +21,18 @@ def test_fresh_project_reports_no_state(project_id, tmp_path):
     assert _store(project_id, tmp_path).read_slice("M1")["exists"] is False
 
 
+def test_audit_row_alone_is_not_a_started_project(project_id, tmp_path):
+    # exists() answers "has this project produced module content?" — an audit
+    # row is bookkeeping, not content. Counting it makes read_slice stop
+    # short-circuiting on `exists: False` for a project that holds nothing but
+    # a decision the runner recorded before any work happened.
+    from agent.headless import record_decision
+    store = _store(project_id, tmp_path)
+    record_decision(store, options=["A", "B"], choice="A", rationale="auto")
+    assert store.load()["contextStore"]["decisions"]      # the row did persist
+    assert _store(project_id, tmp_path).exists() is False
+
+
 def test_commit_lands_in_slice_columns_and_project_row(project_id, tmp_path):
     store = _store(project_id, tmp_path)
     store.commit_slice(

@@ -22,7 +22,13 @@ from typing import Any
 
 from sqlalchemy import select
 
-from agent.state import COACHING_KEYS, MODULES, SLICE_OWNERSHIP, ProjectStateStore
+from agent.state import (
+    COACHING_KEYS,
+    MODULES,
+    NON_CONTENT_KEYS,
+    SLICE_OWNERSHIP,
+    ProjectStateStore,
+)
 
 from .models import ContextStore as DbContextStore
 from .models import Project
@@ -97,7 +103,10 @@ class DbProjectStateStore(ProjectStateStore):
         # Coaching keys (e.g. an F4 institution_default seed) must NOT count
         # as "the project has started" — only actual module-slice content
         # should, or onboarding treats every fresh project as in-progress.
-        module_keys = set(state["contextStore"]) - COACHING_KEYS
+        # NON_CONTENT_KEYS are excluded for the same reason from the other side:
+        # they ARE module-slice keys (so the stores persist them), but an audit
+        # row is bookkeeping about the work, never the work itself.
+        module_keys = set(state["contextStore"]) - COACHING_KEYS - NON_CONTENT_KEYS
         return bool(module_keys) or any(
             s != "locked" for s in state["status"].values()
         )

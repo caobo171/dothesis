@@ -16,13 +16,12 @@ from app.models import (
     Thread,
     User,
 )
+from tests.conftest import make_user
 
 
 def test_can_persist_full_object_graph():
     with OrmSession(get_engine()) as s:
-        user = User(email="a@b.com", password_hash="x")
-        s.add(user)
-        s.flush()
+        user = make_user(s, email="a@b.com")
 
         sess = UserSession(user_id=user.id, expires_at=datetime.now(timezone.utc) + timedelta(days=30))
         s.add(sess)
@@ -53,17 +52,11 @@ def test_can_persist_full_object_graph():
         assert s.query(JobEvent).count() == 1
 
 
-def _make_user(db: OrmSession) -> User:
-    u = User(email=f"u{uuid.uuid4().hex[:6]}@x", username=f"u{uuid.uuid4().hex[:6]}",
-             password_hash="x")
-    db.add(u)
-    db.flush()
-    return u
 
 
 def test_project_thread_message_roundtrip():
     with OrmSession(get_engine()) as db:
-        u = _make_user(db)
+        u = make_user(db)
         p = Project(user_id=u.id, name="Test", language="en", citation_style="apa")
         db.add(p)
         db.flush()
@@ -82,7 +75,7 @@ def test_project_thread_message_roundtrip():
 
 def test_context_store_jsonb_roundtrip():
     with OrmSession(get_engine()) as db:
-        u = _make_user(db)
+        u = make_user(db)
         p = Project(user_id=u.id, name="T", language="en", citation_style="apa")
         db.add(p)
         db.flush()
@@ -99,7 +92,7 @@ def test_context_store_jsonb_roundtrip():
 def test_paper_upload_roundtrip():
     from app.models import PaperUpload
     with OrmSession(get_engine()) as db:
-        u = _make_user(db)
+        u = make_user(db)
         p = Project(user_id=u.id, name="X", language="en", citation_style="apa")
         db.add(p); db.flush()
         up = PaperUpload(
@@ -117,7 +110,7 @@ def test_paper_upload_roundtrip():
 
 def test_threads_can_have_many_per_project():
     with OrmSession(get_engine()) as db:
-        u = _make_user(db)
+        u = make_user(db)
         p = Project(user_id=u.id, name="T", language="en", citation_style="apa")
         db.add(p)
         db.flush()

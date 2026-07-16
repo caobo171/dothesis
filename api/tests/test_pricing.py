@@ -9,14 +9,33 @@ from app.pricing import (
 )
 
 
-def test_packages_match_survify_pricing():
+def test_packages_match_configured_pricing():
+    """Guard the live pack prices. These are no longer Survify's numbers.
+
+    The packs were deliberately re-priced off the margin model documented in
+    pricing.py; this test still asserted the original Survify figures
+    (900¢/300 credits), so it failed on an intentional change. Repricing again
+    is a business decision — update these numbers with it.
+    """
     by_id = {p["id"]: p for p in PACKAGES}
-    assert by_id["starter_package"]["price_cents"] == 900
-    assert by_id["starter_package"]["credits"] == 300
-    assert by_id["standard_package"]["price_cents"] == 1900
-    assert by_id["standard_package"]["credits"] == 700
-    assert by_id["expert_package"]["price_cents"] == 4900
-    assert by_id["expert_package"]["credits"] == 2000
+    assert by_id["starter_package"]["price_cents"] == 2499
+    assert by_id["starter_package"]["credits"] == 10000
+    assert by_id["standard_package"]["price_cents"] == 5799
+    assert by_id["standard_package"]["credits"] == 25000
+    assert by_id["expert_package"]["price_cents"] == 12999
+    assert by_id["expert_package"]["credits"] == 60000
+
+
+def test_packages_are_discounted_and_scale_with_size():
+    """The properties a repricing must never break, whatever the numbers become."""
+    packs = [p for p in PACKAGES]
+    for pkg in packs:
+        assert pkg["credits"] > 0
+        assert 0 < pkg["price_cents"] < pkg["old_price_cents"]
+    by_size = sorted(packs, key=lambda p: p["credits"])
+    # Bigger packs must never cost more per credit, or they're not worth buying.
+    rates = [p["price_cents"] / p["credits"] for p in by_size]
+    assert rates == sorted(rates, reverse=True)
 
 
 def test_package_fields_present():
