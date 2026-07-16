@@ -497,10 +497,13 @@ def _mermaid_to_prose(prose: str) -> str:
             lbl = labels.get(nid, nid).replace('"', "'")
             mmd_lines.append(f'    {nid}["{lbl}"]')
     for s_id, e_lbl, t_id in parsed_edges:
+        # Preserve the moderator's dashed arrow through the reconstruction so the
+        # rendered PNG keeps it visually distinct from the IV→DV hypothesis arrows.
+        arrow = "-.->" if _is_moderation_label(e_lbl) else "-->"
         if e_lbl:
-            mmd_lines.append(f'    {s_id} -->|{e_lbl}| {t_id}')
+            mmd_lines.append(f'    {s_id} {arrow}|{e_lbl}| {t_id}')
         else:
-            mmd_lines.append(f'    {s_id} --> {t_id}')
+            mmd_lines.append(f'    {s_id} {arrow} {t_id}')
     mmd_source = "\n".join(mmd_lines)
 
     # Drop mermaid syntax lines from the surrounding prose.
@@ -529,7 +532,12 @@ def _mermaid_to_prose(prose: str) -> str:
         logger.exception("mermaid render step failed")
 
     rel = ["", "**Mối quan hệ giả thuyết trong mô hình:**", ""]
-    rel += [f"- {s} → {t}" + (f" ({e})" if e else "") for s, t, e in edges]
+    for s, t, e in edges:
+        if _is_moderation_label(e):
+            # Moderator: phrase as moderation, not a direct-effect hypothesis.
+            rel.append(f"- {s} điều tiết mối quan hệ giữa các biến độc lập và {t}")
+        else:
+            rel.append(f"- {s} → {t}" + (f" ({e})" if e else ""))
     return "\n".join(keep).rstrip() + img_line + "\n" + "\n".join(rel) + "\n"
 
 
@@ -724,11 +732,22 @@ def _variable_decomposition_to_graph(cm: dict) -> dict | None:
     mod_lbl = _lbl(mod)
     if mod_lbl:
         nodes.append({"id": "MOD", "label": mod_lbl, "type": "moderator"})
-        edges.append({"source": "MOD", "target": "DV", "hypothesis": f"H{len(iv_lbls) + 1}"})
+        # A moderator does NOT have a direct effect on the DV like an IV — it
+        # moderates the IV→DV relationships. Mark the edge so the diagram draws
+        # it distinctly (dashed) and the hypothesis list phrases it as moderation
+        # instead of a plain "Trust → DV" arrow (reviewer feedback).
+        edges.append({"source": "MOD", "target": "DV", "effect": "moderates",
+                      "hypothesis": f"H{len(iv_lbls) + 1}"})
     return {"nodes": nodes, "edges": edges}
 
 
-def _conceptual_model_to_mermaid(conceptual_model: dict | None) -> str | None:
+def _is_moderation_label(label: str | None) -> bool:
+    low = str(label or "").lower()
+    return "điều tiết" in low or "moderat" in low
+
+
+def _conceptual_model_to_mermaid(conceptual_model: dict | None,
+                                 language: str = "vi") -> str | None:
     """Build a fenced ```mermaid``` flowchart from the STRUCTURED conceptual
     model (nodes/edges) in M3 state — so the research-model figure no longer
     depends on the LLM choosing to hand-write a diagram (headless qwen never
@@ -748,6 +767,7 @@ def _conceptual_model_to_mermaid(conceptual_model: dict | None) -> str | None:
             cm = coerced
     nodes = cm.get("nodes") or []
     edges = cm.get("edges") or []
+    node_type: dict[str, str] = {}
     lines = ["flowchart LR"]
     valid: set[str] = set()
     for n in nodes:
@@ -759,6 +779,8 @@ def _conceptual_model_to_mermaid(conceptual_model: dict | None) -> str | None:
         label = str(n.get("label") or nid).replace('"', "'")
         lines.append(f'    {nid}["{label}"]')
         valid.add(nid)
+        node_type[nid] = str(n.get("type") or "").lower()
+    mod_word = "Điều tiết" if str(language).lower().startswith("vi") else "Moderates"
     edge_lines: list[str] = []
     for e in edges:
         if not isinstance(e, dict):
@@ -769,6 +791,13 @@ def _conceptual_model_to_mermaid(conceptual_model: dict | None) -> str | None:
         s = str(e.get("from") or e.get("source") or "").strip()
         t = str(e.get("to") or e.get("target") or "").strip()
         if s not in valid or t not in valid:
+            continue
+        # A moderator moderates the IV→DV paths — draw it as a DASHED arrow
+        # labelled "Điều tiết", NOT a plain hypothesis arrow like an IV.
+        is_mod = (str(e.get("effect") or "").lower().startswith("moderat")
+                  or node_type.get(s) == "moderator")
+        if is_mod:
+            edge_lines.append(f'    {s} -.->|{mod_word}| {t}')
             continue
         lbl = str(e.get("label") or e.get("hypothesis") or "").strip()
         edge_lines.append(f'    {s} -->|{lbl}| {t}' if lbl else f'    {s} --> {t}')
@@ -790,7 +819,7 @@ def _ensure_model_diagram(prose: str, conceptual_model: dict | None,
     low = prose.lower()
     if "```mermaid" in low or "flowchart" in low or re.search(r"\bgraph\s+\w", low):
         return prose
-    block = _conceptual_model_to_mermaid(conceptual_model)
+    block = _conceptual_model_to_mermaid(conceptual_model, language)
     if not block:
         return prose
     caption = ("**Hình 3.1: Mô hình nghiên cứu đề xuất**"
