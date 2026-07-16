@@ -89,10 +89,10 @@ def main() -> int:
         from agent.runtime import build_agent
         from app.agent_state import DbProjectStateStore
         from app.db import get_engine
-        from app.routers.chat_v3 import _workspace_dir
+        from app.workspace import workspace_dir
 
         # Same dir chat would use — a later chat handoff sees the same files.
-        workspace = _workspace_dir(project_id)
+        workspace = workspace_dir(project_id)
         store = DbProjectStateStore(get_engine(), project_id, workspace)
         # InMemorySaver: the conversation only needs to outlive THIS run —
         # durable progress is whatever commit_slice wrote, and a failed run
