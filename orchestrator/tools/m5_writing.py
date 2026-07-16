@@ -588,6 +588,39 @@ def _derive_scale_items(conceptual_model: dict | None,
     return [{"construct": c, "items": grouped[c]} for c in order]
 
 
+def _generate_scale_items(instrument: dict | None) -> list[dict]:
+    """Generate real Likert items when the instrument is only a SPEC — i.e. it
+    lists `constructs` + `items_per_construct` but no actual item texts (a shape
+    headless often emits). Without this the questionnaire table is either empty
+    or, worse, hallucinated inline by the chapter LLM. Generating the scale is
+    legitimate instrument design (not fabricating data), and reuses the same
+    tool the interactive flow uses so wording stays consistent.
+    """
+    inst = instrument or {}
+    constructs = [str(c).strip() for c in (inst.get("constructs") or []) if str(c).strip()]
+    if not constructs:
+        return []
+    n = inst.get("items_per_construct")
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        n = 4
+    n = max(1, min(n, 8))
+    try:  # lazy import — avoids an m5↔m3 import cycle at module load
+        from orchestrator.tools.m3_design import suggest_scale_items_batch
+        batch = suggest_scale_items_batch.invoke({"constructs": constructs, "n": n})
+    except Exception:
+        logger.warning("_generate_scale_items: suggest_scale_items_batch failed", exc_info=True)
+        return []
+    out: list[dict] = []
+    for c in constructs:
+        items = [str(it.get("text")).strip() for it in (batch.get(c) or [])
+                 if isinstance(it, dict) and str(it.get("text") or "").strip()]
+        if items:
+            out.append({"construct": c, "items": items})
+    return out
+
+
 def _variable_decomposition_to_graph(cm: dict) -> dict | None:
     """Coerce the {independent_variables, dependent_variable, moderator} M3
     shape (a variant the headless agent emits) into nodes/edges so the model
@@ -2009,6 +2042,11 @@ def compose_chapter(
     if not safe_kwargs.get("scale_items"):
         safe_kwargs["scale_items"] = _derive_scale_items(
             context_slice.get("conceptual_model"), context_slice.get("instrument"))
+        # Instrument is only a spec (constructs + count, no item texts): generate
+        # real items so Chapter 3 ships a grounded scale table. Methodology-only
+        # to avoid an extra LLM call on chapters that never render {scale_items}.
+        if not safe_kwargs["scale_items"] and chapter_name == "methodology":
+            safe_kwargs["scale_items"] = _generate_scale_items(context_slice.get("instrument"))
 
     try:
         prompt = _fill_template(prompt_template, safe_kwargs) + _MARKDOWN_FORMAT_RULES
