@@ -163,8 +163,32 @@ def make_sampling_plan_tool(store):
         """
         cs = (store.load() or {}).get("contextStore") or {}
         method = cs.get("methodology") or "regression"
-        n_paths = len((cs.get("conceptual_model") or {}).get("paths") or [])
-        n_ind = len((cs.get("instrument") or {}).get("items") or [])
+        cm = cs.get("conceptual_model") or {}
+        inst = cs.get("instrument") or {}
+
+        # Count structural paths across every M3 shape: edges/paths, or — for the
+        # variable-decomposition shape — one path per independent variable (+1 for
+        # a moderator). The old code read only `.paths`, so every nodes/edges or
+        # decomposition model computed n_paths=0 → a wrong (too-small) sample.
+        n_paths = len(cm.get("edges") or cm.get("paths") or [])
+        if not n_paths and cm.get("dependent_variable"):
+            ivs = [v for v in (cm.get("independent_variables") or []) if v]
+            n_paths = len(ivs) + (1 if cm.get("moderator") else 0)
+
+        # Count measured items across shapes: a flat instrument.items, else a
+        # spec (constructs × items_per_construct), else per-node questions.
+        n_ind = len(inst.get("items") or [])
+        if not n_ind:
+            try:
+                per = int(inst.get("items_per_construct") or 0)
+            except (TypeError, ValueError):
+                per = 0
+            n_constructs = len(inst.get("constructs") or cm.get("nodes") or [])
+            if n_constructs and per:
+                n_ind = n_constructs * per
+            else:
+                n_ind = sum(len((n or {}).get("questions") or [])
+                            for n in (cm.get("nodes") or []) if isinstance(n, dict))
         n, rule = target_sample_n(method, n_paths, n_ind)
         plan = {
             "target_n": n,
