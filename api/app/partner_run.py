@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from agent.state import SLICE_OWNERSHIP
 # Module-level (not lazy) so tests can monkeypatch partner_run.compose_sections /
 # partner_run.run_export; m5_writing defers its own heavy LLM deps internally.
-from orchestrator.tools.compose_export import compose_sections
+from orchestrator.tools.compose_export import compose_sections, merged_chapter_keys
 from orchestrator.tools.m5_writing import M5_CHAPTER_ORDER, run_export
 
 from .models import User
@@ -100,8 +100,8 @@ def required_modules_for(chapters: list[str]) -> frozenset[str]:
     work the run has to produce, and the M1 data the chapters actually need is
     already gated by m5_writing.assess_export_readiness at compose time.
     """
-    from agent.tools.state_tools import _chapter_to_module  # noqa: PLC0415
-    return frozenset(_chapter_to_module(c) for c in chapters)
+    from agent.tools.state_tools import chapter_to_module  # noqa: PLC0415
+    return frozenset(chapter_to_module(c) for c in chapters)
 
 
 def ensure_partner_user(db: Session) -> User:
@@ -191,7 +191,11 @@ def run_partner_export(store, project_id, params: dict) -> dict:
     store.persist_export_artifacts(artifacts, scope="partner")
     return {
         "sections": [s["title"] for s in sections],
-        "chapters": chapters,
+        # POST-merge keys — what was actually WRITTEN, which is what the old
+        # pipeline echoed (it merged before composing, so its `chapter_keys` were
+        # already folded). Reporting the pre-merge request here would tell the
+        # partner about a `conclusion` chapter that exists in no section.
+        "chapters": merged_chapter_keys(chapters),
         "artifact_keys": {a.get("kind"): a.get("s3_key")
                           for a in artifacts if a.get("s3_key")},
     }
