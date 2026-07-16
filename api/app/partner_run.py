@@ -156,19 +156,36 @@ def seed_partner_store(
     m1.setdefault("language", language)
     if (notes or "").strip():
         m1.setdefault("user_context", notes.strip())
-    writes1 = {k: v for k, v in m1.items() if k in set(SLICE_OWNERSHIP["M1"])}
-    if writes1:
-        store.commit_slice("M1", writes1, "partner payload: topic framing seed")
+    _commit_owned(store, "M1", m1, "partner payload: topic framing seed")
     if m2:
-        writes2 = {k: v for k, v in m2.items() if k in set(SLICE_OWNERSHIP["M2"])}
-        if writes2:
-            store.commit_slice("M2", writes2, "partner payload: literature seed")
+        _commit_owned(store, "M2", m2, "partner payload: literature seed")
     if m3:
-        writes3 = {k: v for k, v in m3.items() if k in set(SLICE_OWNERSHIP["M3"])}
-        if writes3:
-            store.commit_slice("M3", writes3, "partner payload: design seed")
+        _commit_owned(store, "M3", m3, "partner payload: design seed")
     store.commit_slice("M4", {"analysis_results": analysis_text},
                        "partner payload: uploaded analysis output")
+
+
+def _commit_owned(store, module: str, payload: dict, reason: str) -> None:
+    """Commit a payload's OWNED keys and log the rest.
+
+    The filter is not optional — commit_slice enforces ownership, and a key the
+    module doesn't own would either raise or land somewhere DbProjectStateStore
+    never persists (project_db_store_persistence_gap). But dropping silently is
+    how a partner sending `research_gaps` under m1 (it is M2-owned) gets a report
+    that ignores the gaps they paid to supply, with nothing anywhere saying why.
+    One WARNING per module names the caller, the module and the keys, so the
+    answer is in the logs the first time it is asked. Deliberately not a 422: the
+    envelope is theirs to get wrong, but a stray key has never been fatal here and
+    making it so now would break callers over a field they were free to send.
+    """
+    owned = set(SLICE_OWNERSHIP[module])
+    writes = {k: v for k, v in payload.items() if k in owned}
+    dropped = sorted(set(payload) - owned)
+    if dropped:
+        logger.warning("partner_report: dropping %s key(s) not owned by %s: %s",
+                       len(dropped), module, ", ".join(dropped))
+    if writes:
+        store.commit_slice(module, writes, reason)
 
 
 def run_partner_export(store, project_id, params: dict) -> dict:

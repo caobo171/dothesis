@@ -102,6 +102,19 @@ def test_seed_lands_in_owned_slices(tmp_path):
     assert "needs_review" not in st["status"].values()
 
 
+def test_unowned_keys_are_dropped_LOUDLY(tmp_path, caplog):
+    """Dropping is correct — ownership is the invariant the store is built on —
+    but a partner who sends `research_gaps` under m1 (it is M2-owned) gets a
+    report that ignores the gaps they paid to supply. Silence makes that
+    unanswerable; the warning names the module and the keys."""
+    store, _ = _partner_project(tmp_path)
+    with caplog.at_level("WARNING"):
+        seed_partner_store(store, analysis_text="AVE 0.62", language="en",
+                           m1={"research_title": "T", "research_gaps": ["wrong module"]})
+    assert "research_gaps" in caplog.text
+    assert "M1" in caplog.text
+
+
 def test_partner_composer_is_grounded_in_the_research_gaps(tmp_path, monkeypatch):
     """REVENUE PATH REGRESSION PIN (task-11 finding A).
 

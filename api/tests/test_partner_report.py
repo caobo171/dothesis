@@ -204,6 +204,46 @@ def test_upload_is_mirrored_into_the_workspace(client, monkeypatch, tmp_path):
     assert (workspace_dir(pid) / "uploads" / "analysis.pdf").read_bytes() == b"%PDF-1.4 mirrored"
 
 
+def test_chapters_fallback_reports_post_merge_keys(client, monkeypatch):
+    """The fallback for a job_done event without `chapters` used the PRE-merge
+    request, which is the bug 9b7d862 fixed: analysis_report resolves to
+    [...,"discussion","conclusion"], the composer folds conclusion into
+    discussion, so echoing the request promises a chapter that exists in no
+    section. Both branches must answer post-merge."""
+    monkeypatch.setattr(router_mod.prun, "_extract_text", _analysis_text)
+    monkeypatch.setattr(router_mod, "s3_from_env", lambda: _FakeS3())
+
+    def spawn_without_chapters(db, run, params):
+        run.status = "done"
+        db.add(JobEvent(job_id=run.id, type="job_done",
+                        meta_json={"sections": ["Chapter 5 — Conclusion"],
+                                   "artifact_keys": {"pdf": "p/k.pdf"}}))
+        db.commit()
+
+    monkeypatch.setattr(job_runner, "spawn_headless_run", spawn_without_chapters)
+    r = _post(client, depth="analysis_report")
+    assert r.status_code == 200, r.text
+    assert r.json()["chapters"] == ["intro", "results", "discussion"]
+
+
+def test_done_run_with_no_sections_is_502_not_an_empty_200(client, monkeypatch):
+    """run_partner_export raises rather than return nothing, so a `done` run with
+    no sections is the plumbing failing. Defaulting to [] shipped a 200 with
+    sections:[] and pdf_url:null — the hollow-report-shaped success the old
+    engine refused with compose_failed."""
+    monkeypatch.setattr(router_mod.prun, "_extract_text", _analysis_text)
+    monkeypatch.setattr(router_mod, "s3_from_env", lambda: _FakeS3())
+
+    def spawn_without_job_done(db, run, params):
+        run.status = "done"  # done, but the job_done event never landed
+        db.commit()
+
+    monkeypatch.setattr(job_runner, "spawn_headless_run", spawn_without_job_done)
+    r = _post(client)
+    assert r.status_code == 502
+    assert r.json()["detail"]["error"]["code"] == "compose_failed"
+
+
 def test_failed_run_is_502(client, monkeypatch):
     monkeypatch.setattr(router_mod.prun, "_extract_text", _analysis_text)
 

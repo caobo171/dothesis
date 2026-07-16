@@ -40,6 +40,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from agent.state import MODULES
+
 from .. import job_runner
 from .. import partner_run as prun
 from ..agent_state import DbProjectStateStore
@@ -63,9 +65,13 @@ _ALLOWED_MIME = {
     "application/msword",
 }
 
-# Module count the progress poll reports against (M1..M5) — the same denominator
-# headless_entry's progress hook divides by, so `done/total` means one thing.
-_TOTAL_MODULES = 5
+# Module count the progress poll reports against — IMPORTED, not restated. This
+# is the literal denominator headless_entry's hook divides by (`done_n /
+# len(MODULES)`), so a local `= 5` is a second copy of someone else's constant:
+# add M6 and this endpoint reports progress against the wrong total, out of a
+# file that never mentions modules. `done/total` only means one thing if there is
+# one definition of total.
+_TOTAL_MODULES = len(MODULES)
 
 
 def _require_partner(x_partner_token: str | None) -> None:
@@ -154,8 +160,16 @@ def _job_current_activity(db: Session, job_id: uuid.UUID) -> str | None:
 
 
 def _parse_module(name: str, raw: str | None) -> dict | None:
-    """Parse an optional module JSON up front so a malformed shape is a clean 422
-    (never a silent drop / silent overwrite of a caller-provided module)."""
+    """Parse an optional module JSON up front so a malformed SHAPE is a clean 422
+    rather than a module that silently never arrives.
+
+    Scope note: this guarantees the envelope, not the contents. Individual KEYS
+    are still dropped downstream — seed_partner_store writes through commit_slice
+    and filters to each module's SLICE_OWNERSHIP, so a key sent to the wrong
+    module (research_gaps under m1: it is M2-owned) or a key nothing owns is
+    discarded. That is correct — ownership is the invariant the store is built on
+    — but it is a drop, so seed_partner_store LOGS it instead of this docstring
+    claiming a blanket "never a silent drop" it cannot deliver."""
     if not raw:
         return None
     try:
@@ -278,6 +292,14 @@ async def create_partner_report(
                                                    "message": f"headless run ended: {status}"}})
 
     meta = _job_done_meta(engine, run.id)
+    # A `done` run with no sections means the job_done event never arrived or
+    # arrived empty — run_partner_export raises compose_failed rather than return
+    # nothing, so this is the plumbing failing, not a legitimate empty report.
+    # Defaulting to [] answered 200 with sections:[] and pdf_url:null, which is
+    # the hollow-report-shaped success the old engine refused with compose_failed.
+    if not meta.get("sections"):
+        raise HTTPException(502, detail={"error": {"code": "compose_failed",
+                                                   "message": "the run reported no composed sections"}})
     keys = meta.get("artifact_keys") or {}
     s3 = s3_from_env()
 
@@ -292,8 +314,13 @@ async def create_partner_report(
     return {
         "pages": pages,
         "depth": depth,
-        "chapters": meta.get("chapters") or chapter_keys,
-        "sections": meta.get("sections") or [],
+        # POST-merge keys in BOTH branches. `chapter_keys` is the pre-merge
+        # request, so falling back to it re-introduced exactly what 9b7d862
+        # fixed: telling the partner about a `conclusion` chapter that exists in
+        # no section. The rule has one home (merged_chapter_keys) — restating it
+        # or bypassing it is how the two answers drift apart again.
+        "chapters": meta.get("chapters") or prun.merged_chapter_keys(chapter_keys),
+        "sections": meta["sections"],
         "pdf_url": _sign(keys.get("pdf")),
         "docx_url": _sign(keys.get("docx")),
         "pdf_key": keys.get("pdf"),
