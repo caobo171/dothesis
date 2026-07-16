@@ -37,8 +37,23 @@ def compose_sections(
     references: list[dict] | None = None,
     progress: ProgressFn | None = None,
     title_overrides: dict[str, str] | None = None,
+    merge_conclusion: bool = False,
 ) -> list[dict]:
     """Compose a requested subset of M5 chapters, in canonical order → [{title, prose}]."""
+    if merge_conclusion and "conclusion" in set(chapters):
+        # Presentation choice promoted from the partner pipeline (spec §3):
+        # standard VN thesis structure has ONE concluding chapter ("Chương 5 —
+        # Kết luận"), not Discussion + Conclusion. The discussion composer
+        # already emits the full conclusion structure (summary → contributions
+        # → limitations → future work), so drop `conclusion` and relabel
+        # `discussion` — an export ARGUMENT, not a pipeline fork.
+        chapters = [c for c in chapters if c != "conclusion"]
+        if "discussion" not in chapters:
+            chapters = [*chapters, "discussion"]
+        combined = ("Chương 5 — Kết luận" if str(language).lower().startswith("vi")
+                    else "Chapter 5 — Conclusion")
+        title_overrides = {**(title_overrides or {}), "discussion": combined}
+
     m1 = context_store.get("m1_topic") or {}
     m3 = context_store.get("m3_design") or {}
     m4 = context_store.get("m4_analysis") or {}

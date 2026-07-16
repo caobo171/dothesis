@@ -79,3 +79,23 @@ def test_compose_and_export_calls_run_export(monkeypatch):
                                  chapters=["results"], language="en")
     assert called == {"pid": "partner-abc", "n": 1}
     assert arts[0]["kind"] == "pdf"
+
+
+# --- headless convergence: Discussion+Conclusion merge is an export argument -
+def test_merge_conclusion_relabels_discussion(monkeypatch):
+    seen = []
+
+    class _FakeTool:
+        def invoke(self, payload):
+            seen.append(payload["chapter_name"])
+            return {"prose": f"prose for {payload['chapter_name']}"}
+
+    monkeypatch.setattr(ce, "compose_chapter", _FakeTool())
+    sections = ce.compose_sections(
+        {"m1_topic": {}, "m4_analysis": {}},
+        ["intro", "results", "discussion", "conclusion"],
+        "vi", merge_conclusion=True,
+    )
+    assert "conclusion" not in seen            # dropped, not composed twice
+    assert seen[-1] == "discussion"
+    assert sections[-1]["title"] == "Chương 5 — Kết luận"
