@@ -88,14 +88,18 @@ Changelog = "https://github.com/federicodeponte/dothesis/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/federicodeponte/dothesis/issues"
 
 [project.scripts]
-dothesis = "dothesis.cli:main"
-draft-ai = "dothesis.cli:main"
+# Command names stay `dothesis`/`draft-ai` (user-facing); only the module path
+# changed when the import package was renamed dothesis -> opendraft.
+dothesis = "opendraft.cli:main"
+draft-ai = "opendraft.cli:main"
 dothesis-tldr = "tldr:main"
 dothesis-digest = "digest:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["dothesis*", "utils*", "concurrency*", "phases*"]
+# `dothesis*` matched no directory after the rename, so the CLI package was
+# silently omitted from the built distribution.
+include = ["opendraft*", "utils*", "concurrency*", "phases*"]
 
 [tool.setuptools]
 py-modules = ["config", "draft_generator", "tldr", "digest"]

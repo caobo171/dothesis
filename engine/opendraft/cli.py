@@ -48,7 +48,8 @@ import json
 from pathlib import Path
 
 # Lazy import for version (fast, local file)
-from dothesis.version import __version__
+# Relative: the package is `opendraft`, not `dothesis` — see __init__.py.
+from .version import __version__
 
 # Background module preloader for faster generation start
 _preload_future = None
@@ -1182,13 +1183,13 @@ def main():
             print()
             print(f"  {c.BOLD}Verifying installation...{c.RESET}")
             print()
-            from dothesis.verify import verify_installation
+            from .verify import verify_installation
             return verify_installation()
         return 1
 
     # Handle 'verify' command
     if args.topic and args.topic.lower() == 'verify':
-        from dothesis.verify import verify_installation
+        from .verify import verify_installation
         return verify_installation()
 
 
