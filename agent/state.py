@@ -22,7 +22,19 @@ MODULES = ["M1", "M2", "M3", "M4", "M5"]
 # Which context_store keys each module may write. Mirrors the slice map in
 # skills/dothesis/SKILL.md — keep the two in sync.
 SLICE_OWNERSHIP: dict[str, list[str]] = {
-    "M1": ["research_title", "research_questions", "decisions"],
+    # Topic-framing keys added for partner seeding + richer M1 commits: the
+    # chapter composers read language/field/objectives/… from the m1_topic
+    # column, and DbProjectStateStore only persists OWNED keys — without
+    # ownership a partner-supplied framing would silently die before prod
+    # (project_db_store_persistence_gap). Same mechanism as field_it_* in M4.
+    # `user_context` is DELIBERATELY absent from SKILL.md's slice map, same
+    # reasoning as `decisions` below: it holds what the USER (or partner) said
+    # they want, so it must be writable by the seeding code but never advertised
+    # to the model — an agent that can rewrite the steering input it is steered
+    # by can talk itself into any brief. Don't "fix" that divergence either.
+    "M1": ["research_title", "research_questions", "decisions",
+           "language", "field", "research_type", "objectives",
+           "target_population", "scope", "user_context"],
     "M2": ["literature_sources", "research_gaps", "decisions"],
     # sample_plan / cmb_plan / missing_data_plan added for the F8 methods
     # pre-flight: commit_slice must be able to WRITE them (they're M3 design
