@@ -130,17 +130,29 @@ def _center_title_block(doc: Document, title_idx, date_idx):
 
 
 def _find_cover_end(doc: Document):
-    """Find the last paragraph of cover page content (before Abstract or first heading)."""
+    """Index of the LAST cover (title-block) paragraph — the last non-empty para
+    before the first real Heading. Break AFTER it so the cover is its own page.
+
+    The old heuristic (`style.startswith('Heading') and i > 5`) silently skipped
+    the actual first heading when the title block is short: with no Abstract the
+    first Heading is "Chương 1" at index ~2, the `i > 5` guard jumped past it AND
+    "1.1", and the break landed in the MIDDLE of Chapter 1 — leaving the cover
+    with no page break at all (title + year + TOC + chapter all crammed onto
+    page 1). Pandoc's `--toc` lives in a `w:sdt` that python-docx doesn't surface
+    as paragraphs, so we can't anchor on "Mục lục"; we anchor on the first VISIBLE
+    Heading (the first chapter) instead and break right before it — which, in XML
+    order, falls before the TOC sdt too, so the cover stands alone."""
+    first_heading = None
     for i, para in enumerate(doc.paragraphs):
         style = para.style.name if para.style else ""
-        text = para.text.strip().lower()
-
-        # Cover ends when we hit Abstract or a Heading
-        if 'abstract' in text and 'Heading' in style:
-            return i - 1
-        if style.startswith('Heading') and i > 5:
-            return i - 1
-
+        if style.startswith('Heading'):
+            first_heading = i
+            break
+    if not first_heading:  # None or 0 → no title block to separate
+        return None
+    for j in range(first_heading - 1, -1, -1):
+        if doc.paragraphs[j].text.strip():
+            return j
     return None
 
 
