@@ -57,6 +57,28 @@ def test_happy_path_runs_to_done(tmp_path):
     assert all(st["status"][m] == "done" for m in MODULES)
 
 
+def test_required_modules_subset_finishes_without_the_rest(tmp_path):
+    # A caller that only needs SOME modules (partner's analysis_report asks for
+    # chapters M2/M3 never feed) must not be forced to drive a full M1-M5 run to
+    # get a non-failure. "Done enough for THIS request" is data on the profile.
+    agent, store = _build(tmp_path, HAPPY)
+    result = asyncio.run(run_headless(
+        agent, store, RunProfile(max_turns=10, required_modules=frozenset({"M1"}))))
+    assert result.status == "done" and result.reason == "roadmap_done"
+    assert result.turns == 1
+    # The modules nobody asked for were never touched — no busywork, no cost.
+    assert store.load()["status"]["M5"] == "locked"
+
+
+def test_required_modules_defaults_to_every_module(tmp_path):
+    # Default profile = today's behaviour for every existing caller: one module
+    # done is not a done run.
+    agent, store = _build(tmp_path, HAPPY)
+    assert RunProfile().required_modules is None
+    result = asyncio.run(run_headless(agent, store, RunProfile(max_turns=1)))
+    assert result.status == "failed" and result.reason == "max_turns"
+
+
 def test_stall_fixture_fails_at_max_stalls(tmp_path):
     # A model that neither commits nor asks: store bytes never change, no
     # [OPTIONS] — deterministic stall regardless of WHY (missing marker,

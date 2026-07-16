@@ -10,6 +10,7 @@ from app.partner_run import (
     ReportError,
     ensure_partner_user,
     mint_partner_token,
+    required_modules_for,
     resolve_chapters,
     run_partner_export,
     seed_partner_store,
@@ -43,6 +44,19 @@ def test_resolve_chapters():
         resolve_chapters("bad", None)
     with pytest.raises(ReportError):
         resolve_chapters("analysis_report", ["bogus_only"])
+
+
+def test_required_modules_for():
+    # An analysis_report needs no literature review and no design chapter, so a
+    # seeded project with an EMPTY M2 must not have to run one to finish: the
+    # required set is exactly the modules that own the requested chapters.
+    assert required_modules_for(["intro", "results", "discussion", "conclusion"]) == \
+        frozenset({"M4", "M5"})
+    assert required_modules_for(["lit_review"]) == frozenset({"M2"})
+    assert required_modules_for(["methodology", "results"]) == frozenset({"M3", "M4"})
+    # full_thesis still demands every chapter-owning module.
+    assert required_modules_for(resolve_chapters("full_thesis", None)) == \
+        frozenset({"M2", "M3", "M4", "M5"})
 
 
 def test_seed_lands_in_owned_slices(tmp_path):

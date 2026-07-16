@@ -43,6 +43,34 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _build_profile(params: dict):
+    """The run's budgets + what "done" means for THIS request, as data.
+
+    required_modules is derived from the REQUESTED chapters (partner_run owns the
+    single chapter->module map): without it `done` meant all five modules, so a
+    4-chapter analysis_report on a seeded project — M2 empty, because payloads
+    rarely carry literature — had to drive a full literature review to completion
+    or the partner got a hard error for work they never asked for.
+    """
+    from agent.headless import RunProfile  # noqa: PLC0415
+    from app.partner_run import required_modules_for, resolve_chapters  # noqa: PLC0415
+
+    chapters = resolve_chapters(params.get("depth") or "analysis_report",
+                                params.get("chapters"))
+    return RunProfile(
+        interactive=False,
+        # Budgets have ONE home: RunProfile's defaults. This used to double
+        # max_turns to 80 with no stated basis, and a second unexplained number
+        # in a spend cap is how the cap stops meaning anything. A caller that
+        # genuinely needs a bigger budget passes it in the job params.
+        max_turns=int(params["max_turns"]) if params.get("max_turns")
+        else RunProfile.max_turns,
+        wall_clock_s=int(params["wall_clock_s"]) if params.get("wall_clock_s")
+        else RunProfile.wall_clock_s,
+        required_modules=required_modules_for(chapters),
+    )
+
+
 def _make_progress_hook(appender, store):
     """Per-turn progress beats over the events.jsonl → JobEvent → SSE pipe —
     the durable replacement for the deleted in-memory _PROGRESS dict. Module
@@ -85,7 +113,7 @@ def main() -> int:
 
         from langgraph.checkpoint.memory import InMemorySaver
 
-        from agent.headless import RunProfile, run_headless
+        from agent.headless import run_headless
         from agent.runtime import build_agent
         from app.agent_state import DbProjectStateStore
         from app.db import get_engine
@@ -98,11 +126,7 @@ def main() -> int:
         # durable progress is whatever commit_slice wrote, and a failed run
         # "resumes" by re-running against that state, not by replaying chat.
         agent = build_agent(workspace, checkpointer=InMemorySaver(), store=store)
-        profile = RunProfile(
-            interactive=False,
-            max_turns=int(params.get("max_turns") or 80),
-            wall_clock_s=int(params.get("wall_clock_s") or 1800),
-        )
+        profile = _build_profile(params)
         result = asyncio.run(run_headless(
             agent, store, profile,
             thread_id=f"headless:{args.job_id}",

@@ -83,6 +83,27 @@ def resolve_chapters(depth: str, chapters: list[str] | None) -> list[str]:
                       "depth must be one of ['analysis_report', 'full_thesis']")
 
 
+def required_modules_for(chapters: list[str]) -> frozenset[str]:
+    """The modules a headless run must finish to serve THIS chapter request.
+
+    Fed to RunProfile.required_modules so a partner asking for 4 chapters isn't
+    forced to drive a full M1-M5 run — a seeded project's M2 is usually empty
+    (payloads rarely carry literature), and demanding a literature review before
+    an analysis_report meant the partner got a hard error because work they never
+    requested stalled.
+
+    The chapter -> owning-module map is REUSED from the agent's advisor-feedback
+    router (`agent.tools.state_tools`) rather than restated here: two maps of the
+    same fact drift, and the disagreement would be invisible until a run ended in
+    the wrong place. M1 owns no chapter, so it is never in the required set — its
+    intake framing is a partner-supplied INPUT (seed_partner_store writes it), not
+    work the run has to produce, and the M1 data the chapters actually need is
+    already gated by m5_writing.assess_export_readiness at compose time.
+    """
+    from agent.tools.state_tools import _chapter_to_module  # noqa: PLC0415
+    return frozenset(_chapter_to_module(c) for c in chapters)
+
+
 def ensure_partner_user(db: Session) -> User:
     """Find-or-create the system user that owns partner projects.
 
