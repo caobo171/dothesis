@@ -143,8 +143,17 @@ def main() -> int:
                                     f"after {result.turns} turns"})
             return 1
 
-        from app.partner_run import run_partner_export
-        out = run_partner_export(store, project_id, params)
+        from app.partner_run import ReportError, run_partner_export
+        try:
+            out = run_partner_export(store, project_id, params)
+        except ReportError as e:
+            # A REFUSAL is not a crash. Carry the stable code out over the events
+            # pipe (it lands in JobEvent.meta_json) so the endpoint can answer
+            # with the specific contract — `needs_data` tells the partner what to
+            # send next, where a generic report_failed tells them to retry the
+            # same doomed payload.
+            appender.write({"type": "error", "code": e.code, "text": e.message})
+            return 1
         appender.write({"type": "job_done", **out})
         return 0
     except Exception:

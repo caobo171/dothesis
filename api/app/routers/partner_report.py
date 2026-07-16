@@ -115,6 +115,22 @@ def _job_done_meta(engine, job_id: uuid.UUID) -> dict:
         return dict(ev.meta_json or {}) if ev else {}
 
 
+def _job_error(engine, job_id: uuid.UUID) -> dict:
+    """The last error event's stable code + message, if the run refused rather
+    than crashed. run_partner_export's gate lives in the SUBPROCESS, so its
+    ReportError.code travels here as event meta_json (headless_entry) — there is
+    no in-process exception for the endpoint to catch."""
+    with Session(engine) as s:
+        ev = s.scalars(
+            select(JobEvent)
+            .where(JobEvent.job_id == job_id, JobEvent.type == "error")
+            .order_by(JobEvent.id.desc())
+        ).first()
+        if ev is None:
+            return {}
+        return {"code": (ev.meta_json or {}).get("code"), "message": ev.text or ""}
+
+
 def _parse_module(name: str, raw: str | None) -> dict | None:
     """Parse an optional module JSON up front so a malformed shape is a clean 422
     (never a silent drop / silent overwrite of a caller-provided module)."""
@@ -227,8 +243,15 @@ async def create_partner_report(
     status = await _wait_for_job(engine, run.id,
                                  timeout_s=int(os.getenv("PARTNER_REPORT_TIMEOUT_S", "2100")))
     if status != "done":
-        # Budget exhaustion / stall / crash — the partner gets a clean error, not
-        # a hollow report. The project + partial state survive for inspection.
+        # The readiness gate refusing is a 4xx about the INPUT, not a 5xx about
+        # us: the partner has to change the payload, and report_failed would tell
+        # them to retry the same one. Everything else (budget exhaustion / stall
+        # / crash) stays a clean 502 — never a hollow report. The project +
+        # partial state survive for inspection either way.
+        err = _job_error(engine, run.id)
+        if err.get("code") == "needs_data":
+            raise HTTPException(422, detail={"error": {"code": "needs_data",
+                                                       "message": err["message"]}})
         raise HTTPException(502, detail={"error": {"code": "report_failed",
                                                    "message": f"headless run ended: {status}"}})
 

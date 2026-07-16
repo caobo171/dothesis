@@ -24,7 +24,11 @@ from agent.state import SLICE_OWNERSHIP
 # Module-level (not lazy) so tests can monkeypatch partner_run.compose_sections /
 # partner_run.run_export; m5_writing defers its own heavy LLM deps internally.
 from orchestrator.tools.compose_export import compose_sections, merged_chapter_keys
-from orchestrator.tools.m5_writing import M5_CHAPTER_ORDER, run_export
+from orchestrator.tools.m5_writing import (
+    M5_CHAPTER_ORDER,
+    assess_export_readiness,
+    run_export,
+)
 
 from .models import User
 from .pdf_extract import extract_pdf_text
@@ -179,6 +183,33 @@ def run_partner_export(store, project_id, params: dict) -> dict:
                                 params.get("chapters"))
     language = params.get("language") or "en"
     full_cs = store.load_full_context_store()
+
+    # THE readiness gate — restored from the deleted service, which returned a
+    # `needs_data` error instead of composing. Without it compose_sections falls
+    # through to _fallback_section for every chapter it cannot write, so a
+    # payload that used to be refused for a validation fee instead buys a FULL
+    # agent run and gets a fallback-padded report at full price. Billing for a
+    # hollow report is worse than failing, so this fails.
+    #
+    # EXPORT-time, not submit-time, and deliberately so. The point of the
+    # migration is that the agent BACKFILLS what the payload lacks (it has all
+    # ~20 tools now), so gating the raw payload would refuse work the new engine
+    # can genuinely do — a regression in the opposite direction. The old engine
+    # gated here too: after its research phase had had its chance, never on the
+    # inbound payload. The cheap pre-run refusals that don't depend on the run
+    # (unreadable file, no analysis data for a Results chapter) still fire in the
+    # router before a single row is created, so the fail-fast property survives
+    # for the cases where it is actually decidable up front.
+    #
+    # ONE gate, reused: assess_export_readiness is the same function chat exports
+    # through (agent/tools/writing.py). Its `chapters` scoping is already
+    # required_modules-aware by construction — a chapter-specific check is owned
+    # by exactly the module required_modules_for derives from that chapter — so
+    # there is no second gate and no second chapter->module map to drift.
+    missing = assess_export_readiness(full_cs, chapters)
+    if missing:
+        raise ReportError("needs_data", "missing required data: " + "; ".join(missing))
+
     references = (full_cs.get("m2_literature") or {}).get("literature_sources") or None
     # merge_conclusion=True carries BOTH of the old service's merge sites (the
     # chapter-key drop and the separate retitle) as one Task 8 argument.

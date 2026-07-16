@@ -28,6 +28,25 @@ def _partner_project(tmp_path):
     return DbProjectStateStore(engine, pid, tmp_path), pid
 
 
+def _seed_ready(store, **over):
+    """Seed a store that PASSES the export readiness gate — i.e. what the agent
+    run leaves behind, which is the state run_partner_export actually runs
+    against. The bare `analysis_text=...` seed these tests used to share is a
+    PRE-run store: it has no title, no RQs and no literature, so post-gate it is
+    exactly the payload that must be refused. Tests about the export back half
+    must not double as tests that the gate is absent.
+    """
+    kwargs = {
+        "analysis_text": "AVE 0.62",
+        "language": "en",
+        "m1": {"research_title": "Trust and PI", "research_questions": ["RQ1"]},
+        "m2": {"literature_sources": [{"title": "S", "year": 2020}]},
+        "m3": {"conceptual_model": "TR -> PI"},
+    }
+    kwargs.update(over)
+    seed_partner_store(store, **kwargs)
+
+
 def test_ensure_partner_user_is_idempotent():
     with Session(get_engine()) as s:
         a = ensure_partner_user(s)
@@ -122,7 +141,7 @@ def test_partner_composer_is_grounded_in_the_research_gaps(tmp_path, monkeypatch
 
 def test_run_partner_export_composes_and_persists(tmp_path, monkeypatch):
     store, pid = _partner_project(tmp_path)
-    seed_partner_store(store, analysis_text="AVE 0.62", language="en")
+    _seed_ready(store)
 
     import app.partner_run as pr
     monkeypatch.setattr(pr, "compose_sections",
@@ -148,7 +167,7 @@ def test_run_partner_export_merges_conclusion_into_discussion(tmp_path, monkeypa
     partner must pass merge_conclusion=True or the old service's two merge sites
     (chapter-key drop + retitle) silently vanish with the pipeline."""
     store, pid = _partner_project(tmp_path)
-    seed_partner_store(store, analysis_text="AVE 0.62", language="en")
+    _seed_ready(store)
 
     import app.partner_run as pr
     seen: dict = {}
@@ -163,11 +182,64 @@ def test_run_partner_export_merges_conclusion_into_discussion(tmp_path, monkeypa
     assert seen["merge_conclusion"] is True
 
 
+def test_run_partner_export_gates_on_missing_data(tmp_path, monkeypatch):
+    """REVENUE PATH REGRESSION PIN (task-11 finding B).
+
+    The deleted service ran assess_export_readiness and returned `needs_data`,
+    so a payload with nothing to write from was refused for a validation fee.
+    Without a gate compose_sections falls through to `_fallback_section` for
+    every chapter, and the partner is BILLED FOR A FULL AGENT RUN in exchange
+    for a fallback-padded report. Shipping a hollow report at full price is
+    worse than failing.
+    """
+    store, pid = _partner_project(tmp_path)
+    # A pre-run store: analysis text and nothing else — no title, no RQs, no
+    # literature to cite.
+    seed_partner_store(store, analysis_text="AVE 0.62", language="en")
+
+    import app.partner_run as pr
+    composed = []
+    monkeypatch.setattr(pr, "compose_sections",
+                        lambda *a, **k: composed.append(1) or [])
+    monkeypatch.setattr(pr, "run_export", lambda *a, **k: [])
+    with pytest.raises(ReportError) as e:
+        run_partner_export(store, pid, {"depth": "analysis_report", "language": "en"})
+    assert e.value.code == "needs_data"
+    # The message must name what to fix — it is the partner's only instruction.
+    assert "research title" in e.value.message
+    assert "literature sources" in e.value.message
+    # Refused BEFORE composing: the gate exists to not spend the LLM, so a gate
+    # that fires after compose_sections has already run saves nothing.
+    assert composed == []
+
+
+def test_run_partner_export_gate_is_scoped_to_the_requested_chapters(tmp_path, monkeypatch):
+    """The gate must not block on data only a SKIPPED chapter would have used —
+    that is the whole reason assess_export_readiness takes `chapters`. An
+    analysis_report never writes a methodology chapter, so a missing M3 design
+    is not its problem (and required_modules_for agrees: chapter -> owning
+    module is the same fact, so there is no second map to drift)."""
+    store, pid = _partner_project(tmp_path)
+    _seed_ready(store, m3={})  # no conceptual_model / methodology
+
+    import app.partner_run as pr
+    monkeypatch.setattr(pr, "compose_sections",
+                        lambda *a, **k: [{"title": "T", "prose": "p"}])
+    monkeypatch.setattr(pr, "run_export", lambda *a, **k: [])
+    run_partner_export(store, pid, {"depth": "analysis_report", "language": "en"})
+
+    # ...but a full_thesis DOES write it, so the same store is refused there.
+    with pytest.raises(ReportError) as e:
+        run_partner_export(store, pid, {"depth": "full_thesis", "language": "en"})
+    assert e.value.code == "needs_data"
+    assert "methodology" in e.value.message
+
+
 def test_run_partner_export_raises_when_compose_yields_nothing(tmp_path, monkeypatch):
     """A hollow report is worse than an error (spec §1): no sections = a clean
     failure code, never an empty DOCX handed to the partner."""
     store, pid = _partner_project(tmp_path)
-    seed_partner_store(store, analysis_text="AVE 0.62", language="en")
+    _seed_ready(store)
 
     import app.partner_run as pr
     monkeypatch.setattr(pr, "compose_sections", lambda *a, **k: [])

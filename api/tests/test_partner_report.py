@@ -215,6 +215,29 @@ def test_failed_run_is_502(client, monkeypatch):
     assert r.json()["detail"]["error"]["code"] == "report_failed"
 
 
+def test_needs_data_run_is_422_not_a_generic_502(client, monkeypatch):
+    """The readiness gate's refusal must reach the partner as the SPECIFIC code
+    the old service returned. `needs_data` names what to send next; a blanket
+    report_failed just invites a retry of the same doomed payload. The gate runs
+    in the subprocess, so the code rides out on the error event's meta_json.
+    """
+    monkeypatch.setattr(router_mod.prun, "_extract_text", _analysis_text)
+
+    def needs_data_spawn(db, run, params):
+        run.status = "failed"
+        db.add(JobEvent(job_id=run.id, type="error",
+                        text="missing required data: M1 — research questions",
+                        meta_json={"code": "needs_data"}))
+        db.commit()
+
+    monkeypatch.setattr(job_runner, "spawn_headless_run", needs_data_spawn)
+    r = _post(client)
+    assert r.status_code == 422
+    err = r.json()["detail"]["error"]
+    assert err["code"] == "needs_data"
+    assert "research questions" in err["message"]
+
+
 def _async_return(value):
     async def _f(*a, **k):
         return value
@@ -364,9 +387,18 @@ def test_output_matches_the_deleted_pipeline_golden(client, monkeypatch, depth, 
 
     monkeypatch.setattr(job_runner, "spawn_headless_run", _inline_run)
 
+    # A payload complete enough to pass the export readiness gate. `_inline_run`
+    # stands in for a FINISHED agent loop, so the store it exports from has to
+    # look like one the run left behind — RQs and literature included. Seeding
+    # them here rather than weakening the gate keeps this test about the report
+    # contract (chapter keys, section titles, artifact keys) instead of quietly
+    # re-asserting that ungated composition is allowed.
     r = _post(client, depth=depth, language=language,
               m1=json.dumps({"research_title": "Trust and Purchase Intention",
-                             "objectives": "Examine how trust drives purchase intention."}),
+                             "objectives": "Examine how trust drives purchase intention.",
+                             "research_questions": ["Does trust drive purchase intention?"]}),
+              m2=json.dumps({"literature_sources": [
+                  {"title": "Trust in e-commerce", "authors": ["Gefen"], "year": 2003}]}),
               m3=json.dumps({"conceptual_model": "TR -> PI"}))
     assert r.status_code == 200, r.text
     body = r.json()
