@@ -80,11 +80,32 @@ CANONICAL = {
 # 6) empty / missing.
 EMPTY = {"methodology": {"paradigm": "quantitative"}}
 
+# 7) variable-decomposition (headless variant, no nodes/edges).
+VAR_DECOMP = {
+    "conceptual_model": {
+        "moderator": "Trust",
+        "theoretical_bases": ["TAM", "UTAUT2"],
+        "dependent_variable": "Behavioral Intention",
+        "independent_variables": ["Perceived Usefulness", "Perceived Ease of Use"],
+    },
+}
+
 ALL = {
     "interactive": INTERACTIVE, "headless": HEADLESS,
     "constructs_paths": CONSTRUCTS_PATHS, "import": IMPORT,
-    "canonical": CANONICAL, "empty": EMPTY,
+    "canonical": CANONICAL, "empty": EMPTY, "var_decomp": VAR_DECOMP,
 }
+
+
+def test_variable_decomposition_expands_to_graph():
+    out = normalize_m3(VAR_DECOMP)
+    cm = out["conceptual_model"]
+    labels = {n["label"] for n in cm["nodes"]}
+    assert {"Behavioral Intention", "Perceived Usefulness",
+            "Perceived Ease of Use", "Trust"} <= labels
+    # every independent var + the moderator points at the dependent var (DV)
+    assert len(cm["edges"]) == 3
+    assert all(e["target"] == "DV" for e in cm["edges"])
 
 
 @pytest.mark.parametrize("name", list(ALL))

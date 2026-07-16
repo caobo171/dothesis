@@ -150,6 +150,30 @@ def _norm_item(it: Any, idx: int, construct: str | None = None) -> dict | None:
     return item
 
 
+def _expand_variable_decomposition(cm: dict) -> dict:
+    """{independent_variables, dependent_variable, moderator} → nodes/edges.
+
+    Each independent variable gets a hypothesis edge to the dependent variable;
+    a moderator (if present) also points at it. Labels are preserved verbatim.
+    """
+    def _lbl(x):
+        return (str(x.get("label") or x.get("name") or "").strip()
+                if isinstance(x, dict) else str(x).strip())
+
+    dv = _lbl(cm.get("dependent_variable"))
+    ivs = [_lbl(v) for v in (cm.get("independent_variables") or []) if _lbl(v)]
+    mod = _lbl(cm.get("moderator"))
+    nodes = [{"id": "DV", "label": dv, "type": "dependent"}]
+    edges = []
+    for i, lbl in enumerate(ivs, 1):
+        nodes.append({"id": f"IV{i}", "label": lbl, "type": "independent"})
+        edges.append({"source": f"IV{i}", "target": "DV", "hypothesis": f"H{i}"})
+    if mod:
+        nodes.append({"id": "MOD", "label": mod, "type": "moderator"})
+        edges.append({"source": "MOD", "target": "DV", "hypothesis": f"H{len(ivs) + 1}"})
+    return {"nodes": nodes, "edges": edges}
+
+
 # --- public API -------------------------------------------------------------
 
 def normalize_conceptual_model(cm: Any) -> tuple[dict, list[dict]]:
@@ -176,6 +200,13 @@ def normalize_conceptual_model(cm: Any) -> tuple[dict, list[dict]]:
     desc = nested if isinstance(nested, str) else cm.get("description")
     if isinstance(desc, str) and desc.strip():
         out["description"] = desc.strip()
+
+    # Variable-decomposition shape (headless variant): {independent_variables,
+    # dependent_variable, moderator}. Expand into nodes/edges so it becomes a
+    # real graph instead of an unrenderable blob.
+    if (not cm.get("nodes") and not cm.get("edges") and not cm.get("paths")
+            and cm.get("dependent_variable") and cm.get("independent_variables")):
+        cm = _expand_variable_decomposition(cm)
 
     raw_nodes = cm.get("nodes")
     if not raw_nodes and cm.get("constructs"):

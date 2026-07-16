@@ -588,6 +588,34 @@ def _derive_scale_items(conceptual_model: dict | None,
     return [{"construct": c, "items": grouped[c]} for c in order]
 
 
+def _variable_decomposition_to_graph(cm: dict) -> dict | None:
+    """Coerce the {independent_variables, dependent_variable, moderator} M3
+    shape (a variant the headless agent emits) into nodes/edges so the model
+    still renders. Each independent variable gets a hypothesis edge to the
+    dependent variable; a moderator (if any) also points at it."""
+    dv = cm.get("dependent_variable")
+    ivs = cm.get("independent_variables") or []
+    mod = cm.get("moderator")
+
+    def _lbl(x):
+        return str(x.get("label") or x.get("name") or "").strip() if isinstance(x, dict) else str(x).strip()
+
+    dv_lbl = _lbl(dv)
+    iv_lbls = [_lbl(v) for v in ivs if _lbl(v)]
+    if not dv_lbl or not iv_lbls:
+        return None
+    nodes = [{"id": "DV", "label": dv_lbl, "type": "dependent"}]
+    edges = []
+    for i, lbl in enumerate(iv_lbls, 1):
+        nodes.append({"id": f"IV{i}", "label": lbl, "type": "independent"})
+        edges.append({"source": f"IV{i}", "target": "DV", "hypothesis": f"H{i}"})
+    mod_lbl = _lbl(mod)
+    if mod_lbl:
+        nodes.append({"id": "MOD", "label": mod_lbl, "type": "moderator"})
+        edges.append({"source": "MOD", "target": "DV", "hypothesis": f"H{len(iv_lbls) + 1}"})
+    return {"nodes": nodes, "edges": edges}
+
+
 def _conceptual_model_to_mermaid(conceptual_model: dict | None) -> str | None:
     """Build a fenced ```mermaid``` flowchart from the STRUCTURED conceptual
     model (nodes/edges) in M3 state — so the research-model figure no longer
@@ -599,6 +627,13 @@ def _conceptual_model_to_mermaid(conceptual_model: dict | None) -> str | None:
     what `_mermaid_to_prose` parses, so the block renders to a PNG downstream.
     """
     cm = conceptual_model or {}
+    # Headless sometimes emits a variable-decomposition shape instead of
+    # nodes/edges (independent_variables / dependent_variable / moderator) —
+    # coerce it so the diagram still renders instead of silently vanishing.
+    if not (cm.get("nodes") or cm.get("edges")) and cm.get("dependent_variable"):
+        coerced = _variable_decomposition_to_graph(cm)
+        if coerced:
+            cm = coerced
     nodes = cm.get("nodes") or []
     edges = cm.get("edges") or []
     lines = ["flowchart LR"]
