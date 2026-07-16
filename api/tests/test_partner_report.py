@@ -14,9 +14,12 @@ import json
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.outputs import ChatResult
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from agent.runtime import build_agent
 from app import job_runner
 from app.db import get_engine
 from app.models import Job, JobEvent, Project
@@ -281,7 +284,21 @@ def test_progress_requires_the_partner_token(client):
     assert r.status_code == 401
 
 
-def test_partner_runs_the_deep_agent_not_a_private_pipeline():
+class _FakeModel(BaseChatModel):
+    """A model that cannot reach the network. build_agent(model=...) is the seam
+    that keeps this test off the Ofox gateway — which is FUNDED, so a stray
+    _default_model() here would bill real tokens on every CI run. Never invoked:
+    the assertions read the bound tool list, they don't take a turn."""
+
+    @property
+    def _llm_type(self) -> str:
+        return "fake"
+
+    def _generate(self, messages, stop=None, run_manager=None, **kw) -> ChatResult:
+        raise AssertionError("the inheritance test must never call a model")
+
+
+def test_partner_runs_the_deep_agent_not_a_private_pipeline(tmp_path):
     """The POINT of the switch: partner had ZERO tools and ZERO skills because
     it ran its own straight-line pipeline. It inherits them structurally — not
     by being handed a list — by going through build_agent like every other
@@ -304,14 +321,26 @@ def test_partner_runs_the_deep_agent_not_a_private_pipeline():
     # 3. which builds THE agent — every tool and skill comes from here
     assert "build_agent(" in inspect.getsource(headless_entry.main)
 
-    # 4. and build_agent really does bind the two tools this convergence added:
-    #    render_model_diagram (Task 6 — was a swallowed hardcoded nvm path in the
-    #    deleted service) and research_scout (Task 7).
+    # 4. and build_agent really does bind the tools this convergence added.
     import agent.runtime as runtime
-    agent_src = inspect.getsource(runtime.build_agent)
-    assert "render_model_diagram," in agent_src
-    assert "research_scout" in inspect.getsource(runtime)
     assert runtime.SKILLS_DIR.is_dir()
+
+    # Off the COMPILED graph, not off the source text. `"research_scout" in
+    # inspect.getsource(runtime)` — what this asserted before — is satisfied by
+    # the import line at the top of the module, so it passed with the binding
+    # commented out of the tool list entirely: it proved the string exists, never
+    # that the tool is reachable. The report's real evidence was the bound tool
+    # list read off the graph by hand; this is that check, committed.
+    agent = build_agent(tmp_path, model=_FakeModel())
+    bound = set(agent.nodes["tools"].bound.tools_by_name)
+
+    # render_model_diagram (Task 6 — a swallowed hardcoded nvm path in the
+    # deleted service) and research_scout (Task 7) are what this convergence
+    # added; commit_slice is the only write path a headless run has.
+    assert {"render_model_diagram", "research_scout", "commit_slice"} <= bound
+    # The breadth IS the point of the switch — partner ran a straight-line
+    # pipeline with zero tools. A number that only ever moves up.
+    assert len(bound) >= 33, sorted(bound)
 
 
 # ---------------------------------------------------------------------------
