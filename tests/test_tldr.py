@@ -107,23 +107,7 @@ class TestTLDRGeneration:
         assert "Thesis" in tldr or "Finding" in tldr
 
 
-class TestTLDRCLI:
-    """Tests for TL;DR CLI command."""
-
-    def test_cli_file_not_found(self):
-        """Test CLI error when file not found."""
-        from opendraft.cli import run_tldr_command
-
-        result = run_tldr_command(["/nonexistent/file.pdf"])
-        assert result == 1
-
-    def test_cli_help(self, capsys):
-        """Test CLI help output."""
-        from opendraft.cli import run_tldr_command
-
-        with pytest.raises(SystemExit) as exc_info:
-            run_tldr_command(["--help"])
-
-        assert exc_info.value.code == 0
-        captured = capsys.readouterr()
-        assert "5-bullet TL;DR" in captured.out or "document" in captured.out
+# The TestTLDRCLI class was removed with the standalone `opendraft` CLI package.
+# It only covered opendraft.cli's argparse wiring (run_tldr_command), which no
+# longer exists. The library-level coverage above (tldr.generate_tldr and
+# utils.document_reader) is what the web product actually exercises, so it stays.

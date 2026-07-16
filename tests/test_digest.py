@@ -114,34 +114,11 @@ class TestDigestGeneration:
         assert "circa 1985" in _clean_script("Results from (circa 1985) experiments.")
 
 
-class TestDigestCLI:
-    """Tests for digest CLI command."""
-
-    def test_cli_file_not_found(self):
-        """Test CLI error when file not found."""
-        from opendraft.cli import run_digest_command
-
-        result = run_digest_command(["/nonexistent/file.pdf"])
-        assert result == 1
-
-    def test_cli_help(self, capsys):
-        """Test CLI help output."""
-        from opendraft.cli import run_digest_command
-
-        with pytest.raises(SystemExit) as exc_info:
-            run_digest_command(["--help"])
-
-        assert exc_info.value.code == 0
-        captured = capsys.readouterr()
-        assert "audio digest" in captured.out.lower() or "document" in captured.out
-
-    def test_cli_voice_choices(self):
-        """Test that voice argument accepts valid choices."""
-        from opendraft.cli import run_digest_command
-
-        # Invalid voice should fail
-        with pytest.raises(SystemExit):
-            run_digest_command(["test.pdf", "--voice", "invalid_voice"])
+# The TestDigestCLI class was removed with the standalone `opendraft` CLI package.
+# It only covered opendraft.cli's argparse wiring (run_digest_command) — including
+# the --voice choices gate, which was a CLI-parser concern, not a digest concern.
+# The library-level coverage of digest.py and utils.elevenlabs above/below is what
+# the web product actually exercises, so it stays.
 
 
 class TestDigestOutput:
