@@ -107,11 +107,24 @@ def _find_title_block(doc: Document):
 
 
 def _center_title_block(doc: Document, title_idx, date_idx):
-    """Center all paragraphs in the title block (Title through Date)."""
-    if title_idx is None or date_idx is None:
+    """Center the title block. Ends at the Date paragraph when one is styled;
+    otherwise (pandoc doesn't always style the date) center from the Title down
+    to the last non-empty cover paragraph before the first Heading — so a
+    title + year cover is centred instead of stranded left-aligned."""
+    if title_idx is None:
         return
 
-    for i in range(title_idx, date_idx + 1):
+    end = date_idx
+    if end is None:
+        end = title_idx
+        for j in range(title_idx + 1, min(len(doc.paragraphs), title_idx + 10)):
+            style = doc.paragraphs[j].style.name if doc.paragraphs[j].style else ""
+            if style.startswith("Heading"):
+                break
+            if doc.paragraphs[j].text.strip():
+                end = j
+
+    for i in range(title_idx, end + 1):
         if i < len(doc.paragraphs):
             doc.paragraphs[i].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
