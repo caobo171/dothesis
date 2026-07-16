@@ -696,6 +696,40 @@ def _localize_labels(labels: list[str], language: str) -> dict:
         return {}
 
 
+def _localize_title(title: str | None, language: str) -> str | None:
+    """Translate an English research title into the report language for the cover.
+
+    The M1 topic module sometimes stores an English `research_title` even when the
+    project language is Vietnamese — it tags `language: vi` but writes the title
+    (and questions/objectives) in English. The body then composes correctly in VN,
+    but the cover would carry an English title, giving an English-cover /
+    Vietnamese-body mismatch. This localizes the title at export time (same
+    read-side spot as `_localize_labels`); it does NOT touch the stored M1 slice.
+
+    No-ops when there's no title, the language isn't Vietnamese, or the title
+    already contains non-ASCII (i.e. Vietnamese diacritics) — so a title the user
+    genuinely wrote in Vietnamese is never round-tripped through the model."""
+    if not title or not str(language).lower().startswith("vi"):
+        return title
+    if not str(title).isascii():
+        return title
+    prompt = (
+        "Translate this thesis research title into natural academic Vietnamese. "
+        "Keep brand/product names, platform names (e.g. MoMo, Shopee, TPBank), and "
+        "model acronyms (e.g. TAM, UTAUT2, TPB, BNPL, SEM) unchanged. Return ONLY "
+        "the translated title on a single line — no quotes, no explanation.\n\n"
+        + str(title)
+    )
+    try:
+        out = text_of(_get_llm().invoke(prompt)).strip()
+        out = re.sub(r"^```(?:\w+)?|```$", "", out, flags=re.M).strip()
+        out = (out.splitlines()[0] if out else "").strip().strip('"').strip()
+        return out or title
+    except Exception:
+        logger.warning("_localize_title failed", exc_info=True)
+        return title
+
+
 def _apply_label_map_to_cm(conceptual_model: dict | None, m: dict) -> dict | None:
     """Return a copy of the conceptual_model with every label the map covers
     replaced — handles both the nodes/edges and variable-decomposition shapes."""
@@ -2046,6 +2080,10 @@ def run_export(sections: list[dict], project_id: str,
     render on any citeproc failure so export never breaks.
     """
     pid = str(project_id)
+    # Localize an English title onto a Vietnamese cover (M1 sometimes stores the
+    # title in English despite language=vi). Read-side only; leaves the M1 slice
+    # untouched. Done here so both the citeproc and plain paths get the same title.
+    title = _localize_title(title, language)
     if references:
         try:
             return _run_export_citeproc(sections, pid, references, language, title)
