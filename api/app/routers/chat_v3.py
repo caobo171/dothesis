@@ -14,10 +14,7 @@ and call tools in real time (the PDF session's trust-building beat).
 from __future__ import annotations
 
 import logging
-import os
-import tempfile
 import uuid
-from pathlib import Path
 
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -25,6 +22,7 @@ from sqlalchemy.orm import Session
 from ..credit_ledger import debit
 from ..models import Message, PaperUpload, Project, Thread, User
 from ..sse import sse_pack
+from ..workspace import workspace_dir
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +97,10 @@ async def _get_checkpointer():
     return _checkpointer
 
 
-def _workspace_dir(project_id: uuid.UUID) -> Path:
-    root = os.getenv("JOB_WORKDIR_ROOT") or tempfile.gettempdir()
-    return Path(root) / "agent_projects" / str(project_id)
+# Re-exported so the many `from .chat_v3 import _workspace_dir` callers keep
+# working; the definition moved to app.workspace so the HEADLESS entrypoint can
+# resolve a path without importing this chat router (see app/workspace.py).
+_workspace_dir = workspace_dir
 
 
 def _materialize_attachments(

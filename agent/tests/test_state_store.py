@@ -113,6 +113,28 @@ def test_confirm_done_rejected_when_slice_empty(store):
     assert store.read_slice("M1")["exists"] is False
 
 
+def test_confirm_done_rejected_when_slice_holds_only_non_earning_keys(store):
+    # `language` (and `user_context`) are OWNED by M1 and persisted, but they are
+    # caller-supplied inputs, not module output — partner seeding sets a language
+    # on every project at creation. If they counted, every seeded project would
+    # be M1-done-eligible on a 2-letter locale code, which is exactly the
+    # narrated-done the gate exists to refuse.
+    with pytest.raises(ValueError, match="cannot mark M1 done"):
+        store.commit_slice("M1", {"language": "vi", "user_context": "make it good"},
+                           reason="seed", confirm_done=True)
+
+
+def test_done_gate_message_lists_only_earnable_keys(store):
+    # The message tells the agent HOW to earn the done, so it must not advertise
+    # keys that cannot satisfy the gate — that routes it down a dead end.
+    with pytest.raises(ValueError) as exc:
+        store.commit_slice("M1", {}, reason="premature", confirm_done=True)
+    assert "language" not in str(exc.value)
+    assert "user_context" not in str(exc.value)
+    assert "decisions" not in str(exc.value)
+    assert "research_title" in str(exc.value)
+
+
 def test_confirm_done_allowed_once_slice_has_content(store):
     # The two-step the error message prescribes: commit progress, then done.
     store.commit_slice("M1", {"research_title": "T"}, reason="progress")

@@ -66,6 +66,15 @@ class RunProfile:
     wall_clock_s: int = 1800
     max_stalls: int = 3
     on_options: str = "auto"  # "auto": decide + record | "ask": stop, surface options
+    # Which modules must be `done` for THIS run to be done. None = all of MODULES,
+    # which is what every caller that doesn't care gets (and what the runner did
+    # unconditionally before). A caller asking for a chapter SUBSET — partner's
+    # analysis_report needs no literature review — would otherwise have to drive
+    # modules its request never reads to completion just to avoid a hard failure,
+    # turning "give me 4 chapters" into a full thesis run. Which modules a request
+    # needs is a property of the request, so it rides here as DATA rather than
+    # forking the spine.
+    required_modules: frozenset[str] | None = None
 
 
 @dataclass
@@ -107,12 +116,13 @@ def _options_from_events(events: list[dict]) -> list[str] | None:
     return None
 
 
-def _all_done(state: dict) -> bool:
+def _all_done(state: dict, required: frozenset[str] | None = None) -> bool:
     # Terminal condition. roadmap.next_action never returns a "done" sentinel —
     # with everything done it returns the export/defense CTA — so the runner
-    # reads the status map directly.
+    # reads the status map directly. `required` narrows it to the modules THIS
+    # request needs; None keeps the historical "all five" meaning.
     status = state.get("status") or {}
-    return all(status.get(m) == "done" for m in MODULES)
+    return all(status.get(m) == "done" for m in (required or MODULES))
 
 
 async def run_headless(
@@ -148,7 +158,7 @@ async def run_headless(
 
     while True:
         before = store.load()
-        if _all_done(before):
+        if _all_done(before, profile.required_modules):
             return RunResult("done", "roadmap_done", turns, decisions)
         if turns >= profile.max_turns:
             return RunResult("failed", "max_turns", turns, decisions)

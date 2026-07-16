@@ -19,7 +19,12 @@ _CHAPTER_TO_MODULE = {"intro": "M5", "lit_review": "M2", "methodology": "M3",
                       "results": "M4", "discussion": "M5", "conclusion": "M5"}
 
 
-def _chapter_to_module(chapter: str | None) -> str:
+def chapter_to_module(chapter: str | None) -> str:
+    """Which module owns a chapter's work. PUBLIC because it has a second caller
+    outside this module (app.partner_run.required_modules_for decides what a
+    headless run must finish for a chapter request). Reaching across for a
+    leading-underscore name is a promise nobody made — the alternative was a
+    second copy of the map, and two maps of the same fact drift silently."""
     return _CHAPTER_TO_MODULE.get((chapter or "").lower(), "M5")
 
 
@@ -114,7 +119,7 @@ def make_state_tools(store: ProjectStateStore) -> list:
             # Each open directive becomes a blocker (F2), linked by feedback_id so
             # mark_feedback_addressed can clear exactly the right one.
             store.upsert_roadmap_task({
-                "module": _chapter_to_module(stored.get("chapter")),
+                "module": chapter_to_module(stored.get("chapter")),
                 "substep": "", "title": f"Advisor: {stored.get('issue')}",
                 "why": stored.get("required_change") or "Address this advisor comment.",
                 "status": "open", "feedback_id": stored["id"]})

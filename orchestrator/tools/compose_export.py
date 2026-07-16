@@ -29,6 +29,34 @@ logger = logging.getLogger(__name__)
 # progress(idx, chapter_key, title, phase) — phase is "start" or "end".
 ProgressFn = Callable[[int, str, str, str], None]
 
+# The "[3]" / "[1, 4]" source markers a research brief leaves in a gap
+# description. Compiled at module level rather than inline in the f-string
+# below: the inline form was written as r'\\s*\\[[0-9,\\s]+\\]', where the raw
+# string keeps BOTH backslashes — so the pattern demanded a literal backslash
+# before "s" and never matched anything. Nothing caught it because
+# `research_gaps` was unreachable until m2 joined the slice; the moment it went
+# live it would have shipped dangling "[3]" markers into Chapter 1.
+_SOURCE_MARKER_RE = re.compile(r"\s*\[[0-9,\s]+\]")
+
+
+def merged_chapter_keys(chapters: list[str]) -> list[str]:
+    """The chapter keys compose_sections(merge_conclusion=True) will actually
+    write — `conclusion` folded into `discussion`.
+
+    Public because a CALLER has to be able to report what was composed without
+    re-deriving the rule: the partner response echoes its `chapters` list, and
+    the old pipeline echoed the POST-merge keys because it merged before
+    composing. Now that the merge happens inside compose_sections, a caller that
+    restated the rule locally would be a second copy of it, free to drift — and
+    the drift would only ever surface in a partner's JSON.
+    """
+    if "conclusion" not in set(chapters):
+        return list(chapters)
+    out = [c for c in chapters if c != "conclusion"]
+    if "discussion" not in out:
+        out.append("discussion")
+    return out
+
 
 def compose_sections(
     context_store: dict,
@@ -37,12 +65,40 @@ def compose_sections(
     references: list[dict] | None = None,
     progress: ProgressFn | None = None,
     title_overrides: dict[str, str] | None = None,
+    merge_conclusion: bool = False,
 ) -> list[dict]:
     """Compose a requested subset of M5 chapters, in canonical order → [{title, prose}]."""
+    if merge_conclusion and "conclusion" in set(chapters):
+        # Presentation choice promoted from the partner pipeline (spec §3):
+        # standard VN thesis structure has ONE concluding chapter ("Chương 5 —
+        # Kết luận"), not Discussion + Conclusion. The discussion composer
+        # already emits the full conclusion structure (summary → contributions
+        # → limitations → future work), so drop `conclusion` and relabel
+        # `discussion` — an export ARGUMENT, not a pipeline fork.
+        chapters = merged_chapter_keys(chapters)
+        combined = ("Chương 5 — Kết luận" if str(language).lower().startswith("vi")
+                    else "Chapter 5 — Conclusion")
+        title_overrides = {**(title_overrides or {}), "discussion": combined}
+
     m1 = context_store.get("m1_topic") or {}
+    m2 = context_store.get("m2_literature") or {}
     m3 = context_store.get("m3_design") or {}
     m4 = context_store.get("m4_analysis") or {}
-    context_slice: dict = {**m1, **m3, **m4}
+    # m2 IS part of the slice. It was the one module left out, which made
+    # `research_gaps` — an M2-OWNED key (agent/state.py SLICE_OWNERSHIP) that
+    # intro.md/lit_review.md/discussion.md all interpolate and explicitly label
+    # "from M2" — permanently empty, and the gap-rendering block below it dead.
+    # The deleted partner_report_service hid the bug: it wrote the grounded
+    # brief's gaps into a plain `m1_topic` dict with no ownership filter, so its
+    # Introductions were the ONLY ones that ever saw a real gap. Once partner
+    # started writing through commit_slice the gaps landed in m2 where they
+    # belong and silently stopped reaching the composer — same prompt, less
+    # grounded prose. Merging here fixes every surface at once: chat and
+    # auto-mode have been composing Introductions against an empty
+    # {research_gaps} this whole time, which is the bug, not a new feature.
+    # Merge order follows READS (m1 < m2 < m3 < m4) so a downstream module's
+    # value still wins any key collision.
+    context_slice: dict = {**m1, **m2, **m3, **m4}
     context_slice.setdefault("results", m4.get("analysis_results"))
     # Render grounded research gaps (list of {description, refs}) into a readable
     # block the Introduction prompt can ground its problem statement in. Always
@@ -54,7 +110,7 @@ def compose_sections(
         # would leave dangling "[3]" markers; the Introduction re-cites from the
         # report's reference pool as (Author, Year) instead.
         context_slice["research_gaps"] = "\n".join(
-            f"- {re.sub(r'\\s*\\[[0-9,\\s]+\\]', '', str(g.get('description', ''))).strip()}"
+            f"- {_SOURCE_MARKER_RE.sub('', str(g.get('description', ''))).strip()}"
             for g in _gaps if isinstance(g, dict)
         )
     elif not isinstance(_gaps, str):

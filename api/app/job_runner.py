@@ -448,3 +448,65 @@ def spawn_orchestrator_run(db: Session, run: Job, brief: dict,
     db.commit()
 
     start_monitor(run.id)
+
+
+def spawn_headless_run(db: Session, run: Job, params: dict) -> None:
+    """Spawn `python -m app.headless_entry` — the deep-agent twin of
+    spawn_orchestrator_run. Reuses the events.jsonl contract so the existing
+    _monitor works unchanged, which is exactly what makes C (auto-mode
+    migration) a swap later: point THIS spawner at auto briefs instead of
+    `python -m orchestrator --auto-draft`.
+    """
+    from .partner_run import mint_partner_token
+
+    settings = get_settings()
+    workdir = settings.job_workdir_root / str(run.id)
+    workdir.mkdir(parents=True, exist_ok=True)
+    (workdir / "params.json").write_text(json.dumps(params), encoding="utf-8")
+    (workdir / "events.jsonl").touch()
+
+    # Mint the progress token HERE rather than trusting a caller-supplied one.
+    # jobs.partner_token is UNIQUE and partner auth is a single shared secret,
+    # so two callers echoing the same value would collide at INSERT. Assigning
+    # at the spawner means every headless run gets a unique, unguessable token
+    # no matter which router calls it. `or` (not a plain set) so a caller that
+    # already minted one keeps it — this is a floor, not an override.
+    run.partner_token = run.partner_token or mint_partner_token()
+
+    env = os.environ.copy()
+    env["RUN_ID"] = str(run.id)
+    if run.project_id:
+        env["PROJECT_ID"] = str(run.project_id)
+    env["DATABASE_URL"] = os.environ.get("DATABASE_URL", "")
+    env["AWS_REGION"] = settings.aws_region
+    env["S3_BUCKET"] = settings.s3_bucket
+    env["S3_PREFIX"] = settings.s3_prefix
+    env["AWS_ACCESS_KEY"] = settings.aws_access_key
+    env["AWS_SECRET_KEY"] = settings.aws_secret_key
+    if settings.gemini_api_key:
+        env["GEMINI_API_KEY"] = settings.gemini_api_key
+        env["GOOGLE_API_KEY"] = settings.gemini_api_key
+    if settings.openai_api_key:
+        env["OPENAI_API_KEY"] = settings.openai_api_key
+    if settings.anthropic_api_key:
+        env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+
+    cmd = [sys.executable, "-m", "app.headless_entry",
+           "--project-id", str(run.project_id),
+           "--job-id", str(run.id),
+           "--workdir", str(workdir),
+           "--params-json", str(workdir / "params.json")]
+    proc = subprocess.Popen(
+        cmd,
+        # repo root: `app`/`agent`/`orchestrator` resolve via editable installs,
+        # `engine` via python -m's cwd-on-sys.path (same as the orchestrator spawn).
+        cwd=str(Path(__file__).resolve().parents[2]),
+        env=env,
+    )
+    run.pid = proc.pid
+    run.workdir = str(workdir)
+    run.status = "running"
+    run.started_at = datetime.now(timezone.utc)
+    db.commit()
+
+    start_monitor(run.id)

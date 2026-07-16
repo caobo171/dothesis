@@ -65,6 +65,51 @@ def test_compose_sections_orders_canonically_and_calls_compose(monkeypatch):
     assert seen == ["intro", "results"]  # canonical order enforced
 
 
+# --- the composer must SEE M2 -----------------------------------------------
+def test_context_slice_carries_m2_research_gaps(monkeypatch):
+    """The Introduction/Lit-review/Discussion prompts all interpolate
+    {research_gaps} and label it "from M2" — but the slice was built from
+    m1+m3+m4 only, so the key was ALWAYS empty and the gap-rendering block right
+    below it was dead code. `research_gaps` is M2-owned (agent/state.py), so the
+    only way a real gap reaches a prompt is by merging m2.
+    """
+    seen = {}
+
+    class _FakeTool:
+        def invoke(self, payload):
+            seen.update(payload)
+            return {"prose": "prose"}
+
+    monkeypatch.setattr(ce, "compose_chapter", _FakeTool())
+    ce.compose_sections(
+        {"m1_topic": {"research_title": "T"},
+         "m2_literature": {"research_gaps": [{"description": "no VN evidence [3]"}]}},
+        ["intro"], "en",
+    )
+    # Rendered prose, source numbers stripped (they index the brief's scout, not
+    # this report's bibliography).
+    assert seen["context_slice"]["research_gaps"] == "- no VN evidence"
+
+
+def test_context_slice_prefers_downstream_modules_over_m2(monkeypatch):
+    """m2 merges BETWEEN m1 and m3 so the module precedence m1 < m2 < m3 < m4
+    matches READS order — a later module's value still wins."""
+    seen = {}
+
+    class _FakeTool:
+        def invoke(self, payload):
+            seen.update(payload)
+            return {"prose": "prose"}
+
+    monkeypatch.setattr(ce, "compose_chapter", _FakeTool())
+    ce.compose_sections(
+        {"m1_topic": {"decisions": ["m1"]}, "m2_literature": {"decisions": ["m2"]},
+         "m3_design": {"decisions": ["m3"]}},
+        ["intro"], "en",
+    )
+    assert seen["context_slice"]["decisions"] == ["m3"]
+
+
 def test_compose_and_export_calls_run_export(monkeypatch):
     monkeypatch.setattr(ce, "compose_sections",
                         lambda *a, **k: [{"title": "Chapter 4 — Results", "prose": "p"}])
@@ -79,3 +124,23 @@ def test_compose_and_export_calls_run_export(monkeypatch):
                                  chapters=["results"], language="en")
     assert called == {"pid": "partner-abc", "n": 1}
     assert arts[0]["kind"] == "pdf"
+
+
+# --- headless convergence: Discussion+Conclusion merge is an export argument -
+def test_merge_conclusion_relabels_discussion(monkeypatch):
+    seen = []
+
+    class _FakeTool:
+        def invoke(self, payload):
+            seen.append(payload["chapter_name"])
+            return {"prose": f"prose for {payload['chapter_name']}"}
+
+    monkeypatch.setattr(ce, "compose_chapter", _FakeTool())
+    sections = ce.compose_sections(
+        {"m1_topic": {}, "m4_analysis": {}},
+        ["intro", "results", "discussion", "conclusion"],
+        "vi", merge_conclusion=True,
+    )
+    assert "conclusion" not in seen            # dropped, not composed twice
+    assert seen[-1] == "discussion"
+    assert sections[-1]["title"] == "Chương 5 — Kết luận"
