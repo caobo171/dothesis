@@ -814,25 +814,105 @@ def _conceptual_model_to_mermaid(conceptual_model: dict | None,
     return "```mermaid\n" + "\n".join(lines) + "\n```"
 
 
+def _render_model_figure(conceptual_model: dict | None, language: str = "vi") -> str | None:
+    """Render the research-model figure (PNG) + a hypothesis list, built from the
+    structured conceptual_model.
+
+    A moderator is drawn per the standard conceptual-diagram convention (Hayes;
+    Wikipedia "Moderation"): its arrow points at the IV→DV RELATIONSHIP, not at
+    a variable box. Mermaid can't target an edge, so we insert a junction node
+    on each moderated path and point the moderator at that junction — the arrow
+    visibly meets the path. Returns None when there's no drawable model.
+
+    We render the PNG here (not via `_mermaid_to_prose`) and return a plain
+    image + text so the junctions never leak into the hypothesis list.
+    """
+    cm = conceptual_model or {}
+    if not (cm.get("nodes") or cm.get("edges")) and cm.get("dependent_variable"):
+        cm = _variable_decomposition_to_graph(cm) or cm
+    nodes = cm.get("nodes") or []
+    edges = cm.get("edges") or []
+
+    label: dict[str, str] = {}
+    ntype: dict[str, str] = {}
+    for n in nodes:
+        if isinstance(n, dict) and str(n.get("id") or "").strip():
+            nid = str(n["id"]).strip()
+            label[nid] = str(n.get("label") or nid)
+            ntype[nid] = str(n.get("type") or "").lower()
+
+    def _end(e, a, b):
+        return str(e.get(a) or e.get(b) or "").strip()
+
+    solid: list[tuple[str, str, str]] = []   # (iv, dv, hypothesis)
+    for e in edges:
+        if not isinstance(e, dict):
+            continue
+        s, t = _end(e, "source", "from"), _end(e, "target", "to")
+        if not s or not t or s not in label or t not in label:
+            continue
+        is_mod = (str(e.get("effect") or "").lower().startswith("moderat")
+                  or ntype.get(s) == "moderator")
+        if is_mod:
+            continue  # moderator wiring is derived from node type below
+        solid.append((s, t, str(e.get("hypothesis") or e.get("label") or "").strip()))
+    if not solid:
+        return None
+    moderators = [nid for nid, ty in ntype.items() if ty == "moderator"]
+
+    mod_word = "Điều tiết" if str(language).lower().startswith("vi") else "Moderates"
+    lines = ["flowchart LR"]
+    for nid, lbl in label.items():
+        lines.append(f'    {nid}["{lbl.replace(chr(34), chr(39))}"]')
+    if moderators:
+        for i, (s, t, hyp) in enumerate(solid, 1):
+            j = f"MJ{i}"
+            lines.append(f'    {j}(( ))')
+            lines.append(f'    {s} -->|{hyp}| {j}' if hyp else f'    {s} --> {j}')
+            lines.append(f'    {j} --> {t}')
+            for m in moderators:
+                lines.append(f'    {m} -.->|{mod_word}| {j}')
+    else:
+        for s, t, hyp in solid:
+            lines.append(f'    {s} -->|{hyp}| {t}' if hyp else f'    {s} --> {t}')
+
+    img = ""
+    try:
+        png = _scratch_dir() / f"conceptmodel-{uuid4().hex[:8]}.png"
+        if _render_mermaid_png("\n".join(lines), png):
+            img = f'\n![Mô hình nghiên cứu]({png})\n'
+    except Exception:
+        logger.exception("model figure render failed")
+
+    dv = solid[0][1]
+    rel = ["", "**Mối quan hệ giả thuyết trong mô hình:**", ""]
+    for s, t, hyp in solid:
+        rel.append(f"- {label.get(s, s)} → {label.get(t, t)}" + (f" ({hyp})" if hyp else ""))
+    for m in moderators:
+        rel.append(f"- {label.get(m, m)} điều tiết mối quan hệ giữa các biến độc lập "
+                   f"và {label.get(dv, dv)}")
+    return img + "\n" + "\n".join(rel) + "\n"
+
+
 def _ensure_model_diagram(prose: str, conceptual_model: dict | None,
                           language: str = "vi") -> str:
     """Guarantee the methodology chapter carries the research-model figure.
 
     If the LLM already drew a diagram (prose contains a flowchart/mermaid
-    block) we leave it alone. Otherwise we append one built deterministically
-    from the conceptual_model, with a numbered caption, so `_mermaid_to_prose`
-    renders it into the exported document.
+    block) we leave it alone. Otherwise we render one deterministically from the
+    conceptual_model (moderator drawn onto the IV→DV path) and append it, image
+    + hypothesis list, with a numbered caption.
     """
     low = prose.lower()
     if "```mermaid" in low or "flowchart" in low or re.search(r"\bgraph\s+\w", low):
         return prose
-    block = _conceptual_model_to_mermaid(conceptual_model, language)
-    if not block:
+    fig = _render_model_figure(conceptual_model, language)
+    if not fig:
         return prose
     caption = ("**Hình 3.1: Mô hình nghiên cứu đề xuất**"
                if str(language).lower().startswith("vi")
                else "**Figure 3.1: Proposed research model**")
-    return prose.rstrip() + "\n\n" + caption + "\n\n" + block + "\n"
+    return prose.rstrip() + "\n\n" + caption + "\n" + fig
 
 
 def _normalize_prose_markdown(prose: str) -> str:
