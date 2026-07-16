@@ -622,6 +622,84 @@ def _generate_scale_items(instrument: dict | None, language: str = "en") -> list
     return out
 
 
+def _collect_construct_labels(conceptual_model: dict | None, instrument: dict | None,
+                              scale_items: list[dict] | None = None) -> list[str]:
+    """All construct/variable labels that appear in the model + questionnaire,
+    de-duplicated in first-seen order — the set we may need to localize."""
+    cm = conceptual_model or {}
+    labels: list[str] = []
+
+    def add(x):
+        if isinstance(x, dict):
+            x = x.get("label") or x.get("name") or x.get("id")
+        s = str(x or "").strip()
+        if s:
+            labels.append(s)
+
+    for n in cm.get("nodes") or []:
+        if isinstance(n, dict):
+            add(n.get("label") or n.get("id"))
+    add(cm.get("dependent_variable"))
+    for v in cm.get("independent_variables") or []:
+        add(v)
+    add(cm.get("moderator"))
+    for c in (instrument or {}).get("constructs") or []:
+        add(c)
+    for row in scale_items or []:
+        add(row.get("construct"))
+
+    seen, out = set(), []
+    for lbl in labels:
+        if lbl not in seen:
+            seen.add(lbl)
+            out.append(lbl)
+    return out
+
+
+def _localize_labels(labels: list[str], language: str) -> dict:
+    """Translate construct/variable labels into the report language (one LLM
+    call). Returns {original: translated}. Vietnamese-only for now, and skipped
+    when nothing looks foreign (every label already has non-ASCII chars)."""
+    if not labels or not str(language).lower().startswith("vi"):
+        return {}
+    if not any(l.isascii() for l in labels):
+        return {}
+    prompt = (
+        "Translate each research construct / variable name below into natural "
+        "academic Vietnamese (a concise noun phrase). Return ONLY a JSON object "
+        "mapping each ORIGINAL string to its Vietnamese translation.\n"
+        + json.dumps(labels, ensure_ascii=False)
+    )
+    try:
+        raw = text_of(_get_llm().invoke(prompt)).strip()
+        raw = re.sub(r"^```(?:json)?|```$", "", raw, flags=re.M).strip()
+        data = json.loads(raw)
+        return {str(k): str(v).strip() for k, v in data.items()
+                if str(k) in labels and str(v).strip()}
+    except Exception:
+        logger.warning("_localize_labels failed", exc_info=True)
+        return {}
+
+
+def _apply_label_map_to_cm(conceptual_model: dict | None, m: dict) -> dict | None:
+    """Return a copy of the conceptual_model with every label the map covers
+    replaced — handles both the nodes/edges and variable-decomposition shapes."""
+    if not conceptual_model or not m:
+        return conceptual_model
+    cm = json.loads(json.dumps(conceptual_model))  # deep copy
+    for n in cm.get("nodes") or []:
+        if isinstance(n, dict) and n.get("label") in m:
+            n["label"] = m[n["label"]]
+    if isinstance(cm.get("dependent_variable"), str) and cm["dependent_variable"] in m:
+        cm["dependent_variable"] = m[cm["dependent_variable"]]
+    if isinstance(cm.get("moderator"), str) and cm["moderator"] in m:
+        cm["moderator"] = m[cm["moderator"]]
+    if isinstance(cm.get("independent_variables"), list):
+        cm["independent_variables"] = [m.get(v, v) if isinstance(v, str) else v
+                                       for v in cm["independent_variables"]]
+    return cm
+
+
 def _variable_decomposition_to_graph(cm: dict) -> dict | None:
     """Coerce the {independent_variables, dependent_variable, moderator} M3
     shape (a variant the headless agent emits) into nodes/edges so the model
@@ -2050,6 +2128,22 @@ def compose_chapter(
             safe_kwargs["scale_items"] = _generate_scale_items(
                 context_slice.get("instrument"), language)
 
+    # Localize construct/variable NAMES so the model figure, the scale table,
+    # and the prose all speak the report language — M3 state often carries
+    # English labels even for a Vietnamese report. Translate once and reuse the
+    # same map everywhere so a construct reads identically in all three places.
+    localized_cm = context_slice.get("conceptual_model")
+    if chapter_name == "methodology":
+        _lmap = _localize_labels(
+            _collect_construct_labels(localized_cm, context_slice.get("instrument"),
+                                      safe_kwargs.get("scale_items")),
+            language)
+        if _lmap:
+            for _row in (safe_kwargs.get("scale_items") or []):
+                _row["construct"] = _lmap.get(_row.get("construct"), _row.get("construct"))
+            localized_cm = _apply_label_map_to_cm(localized_cm, _lmap)
+            safe_kwargs["conceptual_model"] = localized_cm
+
     try:
         prompt = _fill_template(prompt_template, safe_kwargs) + _MARKDOWN_FORMAT_RULES
         prose = text_of(_get_llm().invoke(prompt)).strip()
@@ -2074,8 +2168,7 @@ def compose_chapter(
     # ships regardless of the model's diagramming habits.
     if chapter_name == "methodology":
         prose = _ensure_model_diagram(
-            prose, context_slice.get("conceptual_model"),
-            safe_kwargs.get("language", "vi"))
+            prose, localized_cm, safe_kwargs.get("language", "vi"))
     return {
         "name": chapter_name,
         "prose": prose,
