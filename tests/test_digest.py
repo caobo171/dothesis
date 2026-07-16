@@ -160,7 +160,15 @@ class TestDigestOutput:
         mock_response = Mock()
         mock_response.text = "This is a test digest script about research findings and their implications for the field."
 
-        with patch('digest.GeminiModelWrapper') as MockModel:
+        # generate_script() gates on a real credential (engine/digest.py:58) before
+        # it ever touches the mocked wrapper, so this unit test previously only
+        # passed on machines with a GOOGLE_API_KEY in the ambient env (a local
+        # .env) and failed in CI. Stub the config so the test is hermetic — the
+        # genai client is mocked below, so no key is ever used for a real call.
+        stub_config = Mock(google_api_key="test-key-not-a-real-credential")
+
+        with patch('digest.get_config', return_value=stub_config), \
+                patch('digest.GeminiModelWrapper') as MockModel:
             mock_instance = MockModel.return_value
             mock_instance.generate_content.return_value = mock_response
 
