@@ -92,6 +92,17 @@ DOWNSTREAM: dict[str, list[str]] = {
 # touches, so every module would become done-eligible while empty).
 NON_CONTENT_KEYS = {"decisions"}
 
+# Owned, persisted, and VISIBLE — but caller-supplied INPUTS (locale, steering
+# notes), never module output. Distinct from NON_CONTENT_KEYS, which are ALSO
+# hidden from the model: the agent must SEE the language it writes in (the
+# composers and the M5 auto-export read it) and the notes it is steered by; it
+# just must not be able to cash them in for a `done`. Without this split,
+# partner seeding — which sets a language on EVERY project at creation — would
+# make every project M1-done-eligible on a 2-letter locale code, and under
+# headless budget pressure the done-gate is the only thing between a stalling
+# run and five hollow-green modules. Done must be earned, not narrated.
+NON_EARNING_KEYS = {"language", "user_context"}
+
 # Keep history bounded — old snapshots beyond this are dropped oldest-first.
 # 50 commits ≈ a full thesis project's worth of confirmed decisions.
 VERSION_HISTORY_CAP = 50
@@ -107,6 +118,17 @@ STATE_FILENAME = "context_store.json"
 # module column (where F8 reads), so they persist via normal ownership.
 COACHING_KEYS = {"roadmap_tasks", "advisor_feedback", "institution_profile",
                  "thesis_timeline"}
+
+
+def _earning_keys(module: str) -> list[str]:
+    """The module's owned keys that can actually EARN a `done`.
+
+    One definition shared by the gate and the gate's error message: the message
+    exists to tell the agent how to pass the gate, so anything that drifts
+    between the two is a lie the agent will act on.
+    """
+    return [k for k in SLICE_OWNERSHIP[module]
+            if k not in NON_CONTENT_KEYS and k not in NON_EARNING_KEYS]
 
 
 class SliceOwnershipError(ValueError):
@@ -204,15 +226,15 @@ class ProjectStateStore:
     def _has_done_content(self, module: str, context_store: dict[str, Any]) -> bool:
         """True when `module` has produced enough to be marked done.
 
-        Baseline: at least one of the module's owned CONTENT keys is non-empty
-        (NON_CONTENT_KEYS are audit bookkeeping and never earn a done).
+        Baseline: at least one of the module's owned EARNING keys is non-empty
+        (NON_CONTENT_KEYS are audit bookkeeping and NON_EARNING_KEYS are
+        caller-supplied inputs — neither is evidence the module did any work).
         M5 is special — the finished chapters can live in the m5_writing
         column (auto-draft path) rather than the owned `final_sections` key,
         so we also accept chapters when the store exposes the full view. A
         read failure there errs open (we don't block a done on a flaky read).
         """
-        content_keys = [k for k in SLICE_OWNERSHIP[module]
-                        if k not in NON_CONTENT_KEYS]
+        content_keys = _earning_keys(module)
         if any(context_store.get(k) for k in content_keys):
             return True
         if module == "M5":
@@ -259,11 +281,12 @@ class ProjectStateStore:
         # keys aren't blocked. Empty-done is rejected wholesale, with a message
         # telling the agent to commit progress first.
         if confirm_done and not self._has_done_content(module, {**state["contextStore"], **writes}):
-            # List only CONTENT keys: this message tells the agent what to
-            # commit to earn the done, and NON_CONTENT_KEYS (audit bookkeeping)
-            # no longer satisfy the gate — advertising them would send it down a
-            # route that can't work.
-            owned = [k for k in SLICE_OWNERSHIP[module] if k not in NON_CONTENT_KEYS]
+            # List only EARNING keys: this message tells the agent what to commit
+            # to earn the done, and neither audit bookkeeping nor caller-supplied
+            # inputs satisfy the gate — advertising them would send it down a
+            # route that can't work. Same filter as the gate itself, by
+            # construction, so the two can't drift apart.
+            owned = _earning_keys(module)
             raise ValueError(
                 f"cannot mark {module} done: its slice is empty (owns {owned}). "
                 f"Commit the module's content first with confirm_done=False, "
