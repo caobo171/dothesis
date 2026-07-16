@@ -462,7 +462,10 @@ def _mermaid_to_prose(prose: str) -> str:
     low = prose.lower()
     if "flowchart" not in low and "graph " not in low and "mermaid" not in low:
         return prose
-    labels = dict(re.findall(r"([A-Za-z0-9_]+)\[([^\]]+)\]", prose))
+    # Strip mermaid's own label quotes (`GO["Trust"]` → Trust) so the
+    # reconstructed diagram doesn't double-wrap them ('Trust') in the figure.
+    labels = {k: v.strip().strip('"').strip("'")
+              for k, v in re.findall(r"([A-Za-z0-9_]+)\[([^\]]+)\]", prose)}
     edges: list[tuple[str, str, str]] = []
     for em in re.finditer(
         r"([A-Za-z0-9_]+)(?:\[[^\]]*\])?\s*-\.?-?->\s*(?:\|([^|]*)\|)?\s*([A-Za-z0-9_]+)(?:\[[^\]]*\])?",
@@ -528,6 +531,125 @@ def _mermaid_to_prose(prose: str) -> str:
     rel = ["", "**Mối quan hệ giả thuyết trong mô hình:**", ""]
     rel += [f"- {s} → {t}" + (f" ({e})" if e else "") for s, t, e in edges]
     return "\n".join(keep).rstrip() + img_line + "\n" + "\n".join(rel) + "\n"
+
+
+def _derive_scale_items(conceptual_model: dict | None,
+                        instrument: dict | None = None) -> list[dict]:
+    """Return the questionnaire as [{construct, items:[text,...]}, ...] robustly
+    across BOTH M3 shapes we see in the wild:
+
+      A) interactive widget → per-node Likert items on
+         `conceptual_model.nodes[].questions`.
+      B) headless/partner backfill → a flat `instrument.items`
+         ([{id, text, construct}]) with the conceptual_model carrying only
+         node metadata (id/label/definition) and NO `questions`.
+
+    The old `_scale_items_from_conceptual_model` only handled (A), so headless
+    reports silently shipped an EMPTY {scale_items} → Chapter 3 had no
+    measurement table (reviewer feedback: "chưa có bảng hỏi"). Shape B is the
+    fallback here. Construct ids are mapped to their human label when the
+    conceptual_model declares one, so the table reads "Định hướng Mục tiêu"
+    not "GO".
+    """
+    cm = conceptual_model or {}
+    nodes = cm.get("nodes") or []
+    label_by_id = {
+        str(n.get("id")): (n.get("label") or n.get("id"))
+        for n in nodes if isinstance(n, dict) and n.get("id")
+    }
+
+    # Shape A: items already live on the nodes.
+    out: list[dict] = []
+    for n in nodes:
+        if not isinstance(n, dict):
+            continue
+        qs = [q for q in (n.get("questions") or []) if q]
+        if qs:
+            out.append({"construct": n.get("label") or n.get("id"), "items": qs})
+    if out:
+        return out
+
+    # Shape B: group the flat instrument items by construct, preserving order.
+    items = (instrument or {}).get("items") or []
+    grouped: dict[str, list[str]] = {}
+    order: list[str] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        text = (it.get("text") or "").strip()
+        if not text:
+            continue
+        cid = str(it.get("construct") or "")
+        disp = label_by_id.get(cid, cid) or "—"
+        if disp not in grouped:
+            grouped[disp] = []
+            order.append(disp)
+        grouped[disp].append(text)
+    return [{"construct": c, "items": grouped[c]} for c in order]
+
+
+def _conceptual_model_to_mermaid(conceptual_model: dict | None) -> str | None:
+    """Build a fenced ```mermaid``` flowchart from the STRUCTURED conceptual
+    model (nodes/edges) in M3 state — so the research-model figure no longer
+    depends on the LLM choosing to hand-write a diagram (headless qwen never
+    did → reviewer feedback: "chưa có mô hình").
+
+    Returns None if there aren't at least one node and one valid edge (a model
+    with no drawn relationships isn't worth a figure). Node/edge grammar matches
+    what `_mermaid_to_prose` parses, so the block renders to a PNG downstream.
+    """
+    cm = conceptual_model or {}
+    nodes = cm.get("nodes") or []
+    edges = cm.get("edges") or []
+    lines = ["flowchart LR"]
+    valid: set[str] = set()
+    for n in nodes:
+        if not isinstance(n, dict):
+            continue
+        nid = str(n.get("id") or "").strip()
+        if not nid:
+            continue
+        label = str(n.get("label") or nid).replace('"', "'")
+        lines.append(f'    {nid}["{label}"]')
+        valid.add(nid)
+    edge_lines: list[str] = []
+    for e in edges:
+        if not isinstance(e, dict):
+            continue
+        # Two edge vocabularies coexist: headless/tools write from/to, the
+        # interactive FlowChart widget writes source/target. Accept both so the
+        # diagram renders regardless of which runtime authored the model.
+        s = str(e.get("from") or e.get("source") or "").strip()
+        t = str(e.get("to") or e.get("target") or "").strip()
+        if s not in valid or t not in valid:
+            continue
+        lbl = str(e.get("label") or e.get("hypothesis") or "").strip()
+        edge_lines.append(f'    {s} -->|{lbl}| {t}' if lbl else f'    {s} --> {t}')
+    if not valid or not edge_lines:
+        return None
+    lines.extend(edge_lines)
+    return "```mermaid\n" + "\n".join(lines) + "\n```"
+
+
+def _ensure_model_diagram(prose: str, conceptual_model: dict | None,
+                          language: str = "vi") -> str:
+    """Guarantee the methodology chapter carries the research-model figure.
+
+    If the LLM already drew a diagram (prose contains a flowchart/mermaid
+    block) we leave it alone. Otherwise we append one built deterministically
+    from the conceptual_model, with a numbered caption, so `_mermaid_to_prose`
+    renders it into the exported document.
+    """
+    low = prose.lower()
+    if "```mermaid" in low or "flowchart" in low or re.search(r"\bgraph\s+\w", low):
+        return prose
+    block = _conceptual_model_to_mermaid(conceptual_model)
+    if not block:
+        return prose
+    caption = ("**Hình 3.1: Mô hình nghiên cứu đề xuất**"
+               if str(language).lower().startswith("vi")
+               else "**Figure 3.1: Proposed research model**")
+    return prose.rstrip() + "\n\n" + caption + "\n\n" + block + "\n"
 
 
 def _normalize_prose_markdown(prose: str) -> str:
@@ -1846,6 +1968,13 @@ def compose_chapter(
     for k in expected_keys:
         safe_kwargs.setdefault(k, "")
 
+    # Questionnaire recovery: if scale_items arrived empty (headless backfill
+    # stores items on the flat `instrument` key, not on conceptual_model nodes)
+    # rebuild them so Chapter 3 has a real measurement table instead of a blank.
+    if not safe_kwargs.get("scale_items"):
+        safe_kwargs["scale_items"] = _derive_scale_items(
+            context_slice.get("conceptual_model"), context_slice.get("instrument"))
+
     try:
         prompt = _fill_template(prompt_template, safe_kwargs) + _MARKDOWN_FORMAT_RULES
         prose = text_of(_get_llm().invoke(prompt)).strip()
@@ -1865,6 +1994,13 @@ def compose_chapter(
     # Sanitize here so EVERY caller (auto-mode graph, chat agent, partner) ships
     # normalized prose from one place instead of each surface re-cleaning.
     prose = sanitize_prose(prose)
+    # Methodology must SHOW the research model. If the LLM didn't draw one,
+    # inject a diagram built from the structured conceptual_model so the figure
+    # ships regardless of the model's diagramming habits.
+    if chapter_name == "methodology":
+        prose = _ensure_model_diagram(
+            prose, context_slice.get("conceptual_model"),
+            safe_kwargs.get("language", "vi"))
     return {
         "name": chapter_name,
         "prose": prose,

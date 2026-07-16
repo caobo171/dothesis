@@ -35,7 +35,13 @@ You are writing Chapter 3 (Methodology) of a master's thesis.
 For paradigm = quantitative, write sections:
 - 3.1 Research design rationale (justify quant approach + chosen design)
 - 3.2 Population and sampling (sampling_strategy + target_sample_size)
-- 3.3 Instrument: measurement model + scale items per construct
+- 3.3 Instrument: measurement model + scale items per construct. When
+  `{scale_items}` is provided, you MUST render the full item list as a Markdown
+  table with columns **Thang đo (construct) | Mã hóa | Biến quan sát (item)**
+  (Vietnamese) or **Construct | Code | Item** (English), one row per item, using
+  the exact item wording given — never summarise or invent items. Put a bold
+  caption `**Bảng 3.1: Thang đo các khái niệm nghiên cứu**` on its own line
+  immediately before the table, then interpret it briefly in prose after.
 - 3.4 Data collection procedure
 - 3.5 Data analysis approach (justify tool `{tool}` — and stay consistent with
   the metric family Chapter 4 will report)

@@ -15,7 +15,7 @@ from orchestrator.tools.m5_writing import (
     validate_draft, validate_citations,
     format_citations, compile_bibliography,
     compile_pdf, export_docx, run_export,
-    _chapter_titles, _references_title,
+    _chapter_titles, _references_title, _derive_scale_items,
 )
 
 
@@ -109,14 +109,17 @@ class M5Agent(WizardAgent, ModuleAgent):
             "design": m3.get("design"),
             "tool": m3.get("tool"),
             "conceptual_model": m3.get("conceptual_model"),
+            # Pass the raw instrument too: in the headless/partner flow the
+            # Likert items land on `instrument.items` (a flat list), NOT on
+            # conceptual_model nodes — compose_chapter's scale_items recovery
+            # reads it as the fallback so Chapter 3 always has a real table.
+            "instrument": m3.get("instrument"),
             # Design merge (2026-06): the standalone `scale_items` schema field
-            # is gone. Per-construct Likert items live on conceptual_model
-            # nodes (`conceptual_model.nodes[].questions`). For prompt-template
-            # back-compat, derive a flat scale_items list on the fly so the
-            # M5 chapter prompts that still reference {scale_items} keep
-            # rendering populated instead of "Scale items (quant): None".
-            "scale_items": _scale_items_from_conceptual_model(
-                m3.get("conceptual_model")
+            # is gone. Items live either on conceptual_model nodes (interactive)
+            # or on `instrument.items` (headless). `_derive_scale_items` handles
+            # both so {scale_items} renders populated instead of "None".
+            "scale_items": _derive_scale_items(
+                m3.get("conceptual_model"), m3.get("instrument")
             ),
             "themes": m3.get("themes"),
             "interview_guide": m3.get("interview_guide"),
