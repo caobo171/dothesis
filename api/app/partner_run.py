@@ -234,8 +234,10 @@ def run_partner_export(store, project_id, params: dict) -> dict:
                                 references=references, merge_conclusion=True)
     if not sections:
         raise ReportError("compose_failed", "the writing engine produced no sections")
+    report_title = (full_cs.get("m1_topic") or {}).get("research_title") or None
     artifacts = run_export(sections, str(project_id),
-                           references=references, language=language)
+                           references=references, language=language,
+                           title=report_title)
     store.persist_export_artifacts(artifacts, scope="partner")
     return {
         "sections": [s["title"] for s in sections],

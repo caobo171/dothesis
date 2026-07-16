@@ -1754,7 +1754,7 @@ def _artifact_dict(kind: str, pid: str, s3_key: str, size_bytes: int) -> dict:
 
 def run_export(sections: list[dict], project_id: str,
                references: list[dict] | None = None,
-               language: str = "en") -> list[dict]:
+               language: str = "en", title: str | None = None) -> list[dict]:
     """Render docx + pdf, upload to S3, return ContextPanel-ready artifacts.
 
     The single export entrypoint shared by the auto-export hook, the
@@ -1769,7 +1769,7 @@ def run_export(sections: list[dict], project_id: str,
     pid = str(project_id)
     if references:
         try:
-            return _run_export_citeproc(sections, pid, references, language)
+            return _run_export_citeproc(sections, pid, references, language, title)
         except Exception:
             logger.exception("citeproc export failed — falling back to plain render")
 
@@ -1831,8 +1831,32 @@ def _style_link_runs(docx_path: str) -> None:
         doc.save(docx_path)
 
 
+def _title_block_frontmatter_lines(title: str | None, language: str,
+                                   author: str | None = None,
+                                   institution: str | None = None) -> list[str]:
+    """YAML lines for a Pandoc title block → a real cover page. Emits nothing
+    without a title (no title block is better than an empty one). Always pairs
+    the title with a date, because docx_post_processor._find_title_block needs
+    both a Title and a Date paragraph to build the cover."""
+    def esc(s):
+        return str(s).replace("\\", "\\\\").replace('"', '\\"').strip()
+
+    t = esc(title)
+    if not t:
+        return []
+    from datetime import datetime  # server-side; real wall clock is fine here
+    year = datetime.now().year
+    date = f"Năm {year}" if str(language).lower().startswith("vi") else str(year)
+    lines = [f'title: "{t}"', f'date: "{date}"']
+    if author and esc(author):
+        lines.append(f'author: "{esc(author)}"')
+    if institution and esc(institution):
+        lines.append(f'institution: "{esc(institution)}"')
+    return lines
+
+
 def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict],
-                         language: str = "en") -> list[dict]:
+                         language: str = "en", title: str | None = None) -> list[dict]:
     """Render DOCX with pandoc citeproc (clickable citations + auto bibliography),
     then convert that DOCX to PDF via LibreOffice so both formats match."""
     csl_items, ly_to_key = _assign_citation_keys(references)
@@ -1860,7 +1884,9 @@ def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict],
     # regardless of which inline [@key]s matched). populate_toc → filled TOC.
     # toc-title makes the TOC heading match the document language.
     toc_title = "Mục lục" if str(language).lower().startswith("vi") else "Contents"
-    frontmatter = f'---\nnocite: |\n  @*\ntoc-title: "{toc_title}"\n---'
+    _fm = _title_block_frontmatter_lines(title, language) + \
+        ["nocite: |", "  @*", f'toc-title: "{toc_title}"']
+    frontmatter = "---\n" + "\n".join(_fm) + "\n---"
     _export_docx_via_engine(body, str(docx_local), bibliography=bib_path,
                             frontmatter=frontmatter, populate_toc=True)
     # Force the hyperlink look (blue + underline) on every link run, so in-text
