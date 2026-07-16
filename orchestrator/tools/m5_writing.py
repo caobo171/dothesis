@@ -1063,6 +1063,11 @@ _MARKDOWN_FORMAT_RULES = """
 
 ---
 OUTPUT FORMATTING (strict — the text is rendered to a Word document via Markdown):
+- ALL section headings and numbered subsection titles MUST be written in the
+  SAME language as the body prose. If you write the body in Vietnamese, the
+  headings are Vietnamese too (e.g. "1.1 Bối cảnh và động lực nghiên cứu", NOT
+  "1.1 Background and motivation"). Translate any English section name from the
+  instructions into that language — never copy it verbatim.
 - Write academic prose in full paragraphs. Separate paragraphs with a blank line.
 - For any list, put EACH item on its OWN line starting with "- ", and leave a
   blank line BEFORE the list. NEVER put multiple bullet items on one line.
