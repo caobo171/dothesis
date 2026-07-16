@@ -1741,8 +1741,13 @@ def compose_all_sections(context_store: dict) -> list[dict]:
     context_slice.setdefault("results", m4.get("analysis_results"))
 
     titles = _chapter_titles(language)
-    out: list[dict] = []
-    for name in M5_CHAPTER_ORDER:
+    # Compose only the chapters a partner ordered (interactive leaves the scope
+    # unset → the whole thesis) — skips the fabricated Results/Discussion an
+    # analysis-only order never bought.
+    from agent.run_context import scoped_chapters  # noqa: PLC0415
+    names = scoped_chapters(M5_CHAPTER_ORDER)
+
+    def _one(name):
         try:
             draft = compose_chapter.invoke({
                 "chapter_name": name,
@@ -1758,7 +1763,17 @@ def compose_all_sections(context_store: dict) -> list[dict]:
             prose = ""
         if not prose.strip():
             prose = _fallback_section(name, context_store)
-        out.append({"title": titles[name], "prose": prose})
+        return name, prose
+
+    # Chapters are independent LLM calls — this per-chapter loop is the ~6-8 min
+    # bottleneck of a partner report. Compose concurrently (capped for the Ofox
+    # gateway) and reassemble in canonical order.
+    import concurrent.futures as _cf  # noqa: PLC0415
+    proses: dict[str, str] = {}
+    with _cf.ThreadPoolExecutor(max_workers=max(1, min(len(names), 5))) as ex:
+        for name, prose in ex.map(_one, names):
+            proses[name] = prose
+    out: list[dict] = [{"title": titles[name], "prose": proses[name]} for name in names]
 
     # Append a References section built from the M2 sources, with clickable
     # DOI/URL links. Without this the document has inline "(Author, Year)"
