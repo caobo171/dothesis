@@ -894,19 +894,167 @@ def _render_model_figure(conceptual_model: dict | None, language: str = "vi") ->
     return img + "\n" + "\n".join(rel) + "\n"
 
 
+def _svg_model_figure(conceptual_model: dict | None, language: str = "vi") -> str | None:
+    """Render the research model as a clean hand-laid SVG → PNG (via cairosvg).
+
+    Prettier than mermaid for the common star topology (N independent variables
+    → one dependent variable, with an optional moderator whose dashed arrows fan
+    onto each IV→DV path — the Hayes convention). Returns None for anything the
+    star layout can't faithfully draw (mediators/chains, >1 outcome, >1
+    moderator, or cairosvg unavailable) so the caller falls back to mermaid.
+    """
+    try:
+        import cairosvg
+    except Exception:
+        return None
+    import html as _html
+
+    cm = conceptual_model or {}
+    if not (cm.get("nodes") or cm.get("edges")) and cm.get("dependent_variable"):
+        cm = _variable_decomposition_to_graph(cm) or cm
+    nodes, edges = cm.get("nodes") or [], cm.get("edges") or []
+    label: dict[str, str] = {}
+    ntype: dict[str, str] = {}
+    for n in nodes:
+        if isinstance(n, dict) and str(n.get("id") or "").strip():
+            nid = str(n["id"]).strip()
+            label[nid] = str(n.get("label") or nid)
+            ntype[nid] = str(n.get("type") or "").lower()
+
+    def _end(e, a, b):
+        return str(e.get(a) or e.get(b) or "").strip()
+
+    solid: list[tuple[str, str, str]] = []
+    for e in edges:
+        if not isinstance(e, dict):
+            continue
+        s, t = _end(e, "source", "from"), _end(e, "target", "to")
+        if not s or not t or s not in label or t not in label:
+            continue
+        if str(e.get("effect") or "").lower().startswith("moderat") or ntype.get(s) == "moderator":
+            continue
+        solid.append((s, t, str(e.get("hypothesis") or e.get("label") or "").strip()))
+    if not solid:
+        return None
+    targets = {t for _, t, _ in solid}
+    sources = {s for s, _, _ in solid}
+    if len(targets) != 1 or (sources & targets):
+        return None  # not a clean star (mediator/chain/multi-outcome) → use mermaid
+    dv = next(iter(targets))
+    seen, iv_order = set(), []
+    for s, _, _ in solid:
+        if s not in seen:
+            seen.add(s)
+            iv_order.append(s)
+    moderators = [nid for nid, ty in ntype.items() if ty == "moderator"]
+    if len(moderators) > 1:
+        return None
+
+    def wrap(s, mx=24):
+        words, lines, cur = str(s).split(), [], ""
+        for w in words:
+            if len(cur) + len(w) + 1 <= mx:
+                cur = (cur + " " + w).strip()
+            else:
+                lines.append(cur)
+                cur = w
+        if cur:
+            lines.append(cur)
+        return lines[:3]
+
+    def box(x, y, w, h, txt, fill, stroke, fs):
+        lns = wrap(txt)
+        ty0 = y + h/2 - (len(lns)-1)*fs*0.62
+        t = "".join(
+            f'<text x="{x+w/2:.0f}" y="{ty0+i*fs*1.25:.1f}" font-size="{fs}" text-anchor="middle" '
+            f'font-family="DejaVu Sans, sans-serif" fill="#1a1a2e">{_html.escape(l)}</text>'
+            for i, l in enumerate(lns))
+        return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="6" fill="{fill}" '
+                f'stroke="{stroke}" stroke-width="1.4"/>{t}')
+
+    def bez(x1, y1, cx, x2, y2, tt):
+        mt = 1 - tt
+        return (mt**3*x1 + 3*mt*mt*tt*cx + 3*mt*tt*tt*cx + tt**3*x2,
+                mt**3*y1 + 3*mt*mt*tt*y1 + 3*mt*tt*tt*y2 + tt**3*y2)
+
+    BOX_W, BOX_H, GAP, IV_X, DV_W, W = 210, 56, 26, 34, 210, 930
+    n = len(iv_order)
+    stack_h = n*BOX_H + (n-1)*GAP
+    has_mod = bool(moderators)
+    H = int(stack_h + (120 if has_mod else 40) + 60)
+    top, DV_X = 30, W - DV_W - 34
+    dv_cy = top + stack_h/2
+    s = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">',
+         f'<rect width="{W}" height="{H}" fill="white"/>',
+         '<defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">'
+         '<path d="M0,0 L7,3 L0,6 Z" fill="#333"/></marker>'
+         '<marker id="arrm" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">'
+         '<path d="M0,0 L7,3 L0,6 Z" fill="#8a6d3b"/></marker></defs>',
+         box(DV_X, dv_cy-BOX_H/2, DV_W, BOX_H, label[dv], "#E7E9F7", "#4a4e8c", 14)]
+    mids = []
+    for i, iv in enumerate(iv_order):
+        iy = top + i*(BOX_H+GAP)
+        s.append(box(IV_X, iy, BOX_W, BOX_H, label[iv], "#EEF0FB", "#6B6FB0", 13))
+        x1, y1, x2, y2 = IV_X+BOX_W, iy+BOX_H/2, DV_X, dv_cy
+        cx = (x1+x2)/2
+        s.append(f'<path d="M{x1},{y1} C{cx},{y1} {cx},{y2} {x2-2},{y2}" fill="none" '
+                 f'stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>')
+        hyp = solid[i][2] if i < len(solid) else ""
+        if has_mod:
+            mx, my = bez(x1, y1, cx, x2, y2, 0.5 + (i-(n-1)/2)*0.07)
+            mids.append((mx, my))
+            if hyp:
+                s.append(f'<text x="{mx+8:.0f}" y="{my-7:.0f}" font-size="12" '
+                         f'font-family="DejaVu Sans, sans-serif" fill="#333" font-weight="bold">{_html.escape(hyp)}</text>')
+        elif hyp:
+            mx, my = bez(x1, y1, cx, x2, y2, 0.5)
+            s.append(f'<text x="{mx:.0f}" y="{my-7:.0f}" font-size="12" '
+                     f'font-family="DejaVu Sans, sans-serif" fill="#333" font-weight="bold">{_html.escape(hyp)}</text>')
+    if has_mod:
+        mod_w = 190
+        mod_x, mod_y, mcx = (W-mod_w)/2, H-66, W/2
+        s.append(box(mod_x, mod_y, mod_w, 44, label[moderators[0]], "#FDF3E3", "#c79a3b", 13))
+        for mx, my in mids:
+            s.append(f'<path d="M{mcx},{mod_y} C{mcx+(mx-mcx)*0.35:.0f},{mod_y-40:.0f} '
+                     f'{mx},{(my+mod_y)/2:.0f} {mx},{my+5:.0f}" fill="none" stroke="#8a6d3b" '
+                     f'stroke-width="1.3" stroke-dasharray="5,4" marker-end="url(#arrm)"/>')
+            s.append(f'<circle cx="{mx}" cy="{my}" r="3.4" fill="#8a6d3b"/>')
+        mod_word = "Điều tiết" if str(language).lower().startswith("vi") else "Moderates"
+        s.append(f'<text x="{mcx:.0f}" y="{mod_y-10:.0f}" font-size="12.5" text-anchor="middle" '
+                 f'font-family="DejaVu Sans, sans-serif" fill="#8a6d3b" font-weight="bold" '
+                 f'font-style="italic">{mod_word}</text>')
+    s.append('</svg>')
+    svg_str = "\n".join(s)
+
+    try:
+        png = _scratch_dir() / f"conceptmodel-{uuid4().hex[:8]}.png"
+        cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), write_to=str(png), scale=2.0)
+    except Exception:
+        logger.exception("cairosvg model figure render failed")
+        return None
+
+    rel = ["", "**Mối quan hệ giả thuyết trong mô hình:**", ""]
+    for a, b, hyp in solid:
+        rel.append(f"- {label[a]} → {label[b]}" + (f" ({hyp})" if hyp else ""))
+    for m in moderators:
+        rel.append(f"- {label.get(m, m)} điều tiết mối quan hệ giữa các biến độc lập và {label[dv]}")
+    return f'\n![Mô hình nghiên cứu]({png})\n' + "\n" + "\n".join(rel) + "\n"
+
+
 def _ensure_model_diagram(prose: str, conceptual_model: dict | None,
                           language: str = "vi") -> str:
     """Guarantee the methodology chapter carries the research-model figure.
 
     If the LLM already drew a diagram (prose contains a flowchart/mermaid
-    block) we leave it alone. Otherwise we render one deterministically from the
-    conceptual_model (moderator drawn onto the IV→DV path) and append it, image
-    + hypothesis list, with a numbered caption.
+    block) we leave it alone. Otherwise we render one deterministically: a clean
+    SVG (cairosvg) for the common star topology, falling back to the mermaid
+    builder for shapes the SVG layout can't draw (or if cairosvg is missing).
     """
     low = prose.lower()
     if "```mermaid" in low or "flowchart" in low or re.search(r"\bgraph\s+\w", low):
         return prose
-    fig = _render_model_figure(conceptual_model, language)
+    fig = _svg_model_figure(conceptual_model, language) or \
+        _render_model_figure(conceptual_model, language)
     if not fig:
         return prose
     caption = ("**Hình 3.1: Mô hình nghiên cứu đề xuất**"
