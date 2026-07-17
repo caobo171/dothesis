@@ -15,7 +15,9 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
+import time
 import traceback
 from pathlib import Path
 from uuid import UUID
@@ -95,6 +97,41 @@ def _make_progress_hook(appender, store):
     return on_event
 
 
+class _PhaseTimer:
+    """Accumulate wall time per module phase (M1..M5) from phase_progress beats,
+    across retries. Phase i duration = start(phase i+1) - start(phase i); the last
+    phase runs to `now`. Informative, not exact — enough to see where a report
+    spends its minutes (the M1-M3 backfill vs the M5 compose split)."""
+
+    def __init__(self, clock=time.monotonic):
+        import time as _t  # noqa: PLC0415
+        self._clock = clock or _t.monotonic
+        self.t0 = self._clock()
+        self._order: list[str] = []
+        self._first: dict[str, float] = {}
+
+    def observe(self, ev: dict) -> None:
+        try:
+            if ev.get("type") == "phase_progress" and ev.get("phase"):
+                ph = str(ev["phase"])
+                if ph not in self._first:
+                    self._first[ph] = self._clock()
+                    self._order.append(ph)
+        except Exception:  # noqa: BLE001 — timing must never kill the run
+            pass
+
+    def summary(self, extra: dict | None = None, end: float | None = None) -> dict:
+        end = end if end is not None else self._clock()
+        secs: dict[str, float] = {}
+        for i, ph in enumerate(self._order):
+            nxt = self._first[self._order[i + 1]] if i + 1 < len(self._order) else end
+            secs[ph] = round(nxt - self._first[ph], 1)
+        out = {"phases": secs, "total_s": round(end - self.t0, 1)}
+        if extra:
+            out.update(extra)
+        return out
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -125,7 +162,6 @@ def main() -> int:
         # InMemorySaver: the conversation only needs to outlive THIS run —
         # durable progress is whatever commit_slice wrote, and a failed run
         # "resumes" by re-running against that state, not by replaying chat.
-        agent = build_agent(workspace, checkpointer=InMemorySaver(), store=store)
         profile = _build_profile(params)
         # Scope the deep agent's M5 writing to the chapters this partner ordered
         # (the interactive flow leaves this unset → full thesis). Cuts the wasted
@@ -138,23 +174,58 @@ def main() -> int:
         # Report path only: ground M2 with a real literature search (real DOIs +
         # domain-specialized sources) instead of the backfill's LLM recall.
         set_grounded_backfill()
-        result = asyncio.run(run_headless(
-            agent, store, profile,
-            thread_id=f"headless:{args.job_id}",
-            initial_prompt=KICKOFF_PROMPT,
-            on_event=_make_progress_hook(appender, store),
-        ))
-        if result.status != "done":
+
+        timer = _PhaseTimer()
+        progress_hook = _make_progress_hook(appender, store)
+
+        def _on_event(ev: dict) -> None:
+            timer.observe(ev)
+            progress_hook(ev)
+
+        # Internal auto-retry: a run that stalls / exhausts turns re-runs against
+        # the state commit_slice already persisted — a FRESH agent re-reads the
+        # committed store (the intended "resume"), not the stuck conversation.
+        # Credit-safe: only the final job_done charges, and an intermediate failure
+        # emits NO error event (so job_runner never marks failed / refunds) — the
+        # partner sees one eventual success instead of a flaky stall failure.
+        _RETRYABLE = {"max_stalls", "max_turns"}
+        max_attempts = int(os.getenv("DOTHESIS_HEADLESS_RETRIES", "2")) + 1
+        result = None
+        attempt = 0
+        for attempt in range(1, max_attempts + 1):
+            agent = build_agent(workspace, checkpointer=InMemorySaver(), store=store)
+            result = asyncio.run(run_headless(
+                agent, store, profile,
+                thread_id=f"headless:{args.job_id}:{attempt}",
+                initial_prompt=KICKOFF_PROMPT,
+                on_event=_on_event,
+            ))
+            if (result.status == "done" or result.reason not in _RETRYABLE
+                    or attempt == max_attempts):
+                break
+            appender.write({"type": "activity", "agent": "headless",
+                            "text": f"attempt {attempt} ended: {result.reason} — retrying"})
+
+        agent_end = time.monotonic()  # freeze phase timing before export
+
+        if result is None or result.status != "done":
             # Budget exhaustion / stalls = a FAILED run with partial state
             # preserved — never a silent success (spec §1). The store keeps
             # everything committed; the partner gets a clean error, not a
             # hollow report.
+            appender.write({"type": "phase_timings",
+                            **timer.summary({"attempts": attempt,
+                                             "final": result.reason if result else "no_result"},
+                                            end=agent_end)})
             appender.write({"type": "error",
-                            "text": f"headless run failed: {result.reason} "
-                                    f"after {result.turns} turns"})
+                            "text": f"headless run failed: "
+                                    f"{result.reason if result else 'no_result'} after "
+                                    f"{result.turns if result else 0} turns "
+                                    f"({attempt} attempt(s))"})
             return 1
 
         from app.partner_run import ReportError, run_partner_export
+        _export_t0 = time.monotonic()
         try:
             out = run_partner_export(store, project_id, params)
         except ReportError as e:
@@ -163,8 +234,17 @@ def main() -> int:
             # with the specific contract — `needs_data` tells the partner what to
             # send next, where a generic report_failed tells them to retry the
             # same doomed payload.
+            appender.write({"type": "phase_timings",
+                            **timer.summary({"attempts": attempt}, end=agent_end)})
             appender.write({"type": "error", "code": e.code, "text": e.message})
             return 1
+        export_s = round(time.monotonic() - _export_t0, 1)
+        # Per-run phase durations — informative: M1-M3 backfill vs M5 compose vs
+        # export, plus how many attempts it took.
+        appender.write({"type": "phase_timings",
+                        **timer.summary({"attempts": attempt, "export_s": export_s,
+                                         "report_total_s": round(time.monotonic() - timer.t0, 1)},
+                                        end=agent_end)})
         appender.write({"type": "job_done", **out})
         return 0
     except Exception:
