@@ -1,0 +1,3 @@
+[submodule "libs/thesis-stats"]
+	path = libs/thesis-stats
+	url = git@github.com:caobo171/thesis-stats.git

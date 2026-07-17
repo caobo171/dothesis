@@ -47,7 +47,8 @@ langchain-anthropic>=1.4.0,<2
 # Real PLS-SEM / EFA / mediation / moderation compute for run_stats' new ops,
 # shared with fillform. Pure in-process compute (no network) — the run_stats
 # sandbox posture is unchanged. Brings pandas/numpy/scipy/statsmodels/
-# scikit-learn/factor-analyzer transitively (pinned in the package). The sandbox
-# image must install this package.
-# For live local edits to the engine: pip install -e ../thesis-stats
-thesis-stats @ git+ssh://git@github.com/caobo171/thesis-stats.git
+# scikit-learn/factor-analyzer transitively (pinned in the package).
+# Vendored as a git submodule at libs/thesis-stats and installed editable, so
+# local engine edits apply immediately. `./dev.sh` runs `git submodule update
+# --init` for you; a bare checkout needs it once (or clone --recurse-submodules).
+-e ./libs/thesis-stats

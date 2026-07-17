@@ -189,6 +189,13 @@ log "installing api + engine deps (prod)"
 "$VENV_BIN/pip" install --quiet -e ./api                       # api package (no [dev])
 "$VENV_BIN/pip" install --quiet -r engine/requirements.txt      # engine subprocess imports
 
+# thesis-stats — shared statistics engine behind run_stats, vendored as a git
+# submodule at libs/thesis-stats. Check it out on the deploy host, then editable
+# -install it (brings the pinned science stack transitively).
+log "installing thesis-stats engine (submodule)"
+git submodule update --init --recursive libs/thesis-stats
+"$VENV_BIN/pip" install --quiet -e ./libs/thesis-stats
+
 log "running database migrations (alembic upgrade head)"
 ( cd api && "../$VENV_BIN/alembic" upgrade head )
 

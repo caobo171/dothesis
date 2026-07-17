@@ -144,6 +144,19 @@ if ! "$VENV_BIN/python" -c "import quality" >/dev/null 2>&1; then
   "$VENV_BIN/pip" install -e quality
 fi
 
+# thesis-stats: the shared statistics engine (PLS-SEM/EFA/mediation/moderation
+# behind run_stats), vendored as a git submodule at libs/thesis-stats. Ensure
+# it's checked out, then editable-install so local edits to the engine apply
+# immediately — no reinstall, in either project that submodules it.
+if [ ! -f libs/thesis-stats/pyproject.toml ]; then
+  echo "==> fetching thesis-stats submodule"
+  git submodule update --init --recursive libs/thesis-stats
+fi
+if ! "$VENV_BIN/python" -c "import thesis_stats" >/dev/null 2>&1; then
+  echo "==> installing thesis-stats into api/.venv (one-time)"
+  "$VENV_BIN/pip" install -e libs/thesis-stats
+fi
+
 # Check the M5 export toolchain. LibreOffice is MANDATORY — the PDF needs it for
 # its Table of Contents + clickable citations; without it the PDF silently
 # degrades (WeasyPrint, no TOC/links). So this HARD-FAILS the dev boot when
