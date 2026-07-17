@@ -288,8 +288,147 @@ def stats_validity_dimension(context_store: dict) -> dict:
             "findings": findings}
 
 
+# --- Source (DOI) verification (roadmap #5) ---------------------------------
+# Offline by default: Layer A (DOI syntax + engine author/metadata junk checks)
+# is pure; Layer B (CrossRef DOI existence) runs ONLY when a verifier is injected
+# or DOTHESIS_RUBRIC_DOI_CHECK=1. All findings SOFT — a 404 at CrossRef is strong
+# evidence, not proof (DataCite/arXiv DOIs 404 there), so nothing enters `blocking`.
+_DOI_CACHE: dict = {}  # normalized_doi -> (verdict: bool|None, ts: float)
+_DOI_TTL_OK, _DOI_TTL_NONE = 24 * 3600, 300
+_DOI_MAX_LOOKUPS, _DOI_TIME_BUDGET = 20, 10.0
+
+
+def _normalize_doi(doi) -> str:
+    if not isinstance(doi, str):
+        return ""
+    d = doi.strip().lower()
+    for pre in ("https://doi.org/", "http://doi.org/", "doi:"):
+        if d.startswith(pre):
+            d = d[len(pre):]
+    return d.strip()
+
+
+def _doi_syntax_ok(doi: str) -> bool:
+    import re  # noqa: PLC0415
+    return bool(re.match(r"^10\.\d{4,9}/\S+$", doi, re.I))
+
+
+def _default_doi_verifier():
+    """Real CrossRef verifier with a module-level cache + budget. Lazy engine
+    import; returns None (never raises) on any failure. Only built when enabled."""
+    import time  # noqa: PLC0415
+    try:
+        from engine.utils.citation_validator import CitationValidator  # noqa: PLC0415
+    except Exception:
+        return None
+    validator = CitationValidator(timeout=3)
+
+    def verify(doi: str):
+        now = time.time()
+        hit = _DOI_CACHE.get(doi)
+        if hit is not None:
+            verdict, ts = hit
+            if now - ts < (_DOI_TTL_OK if verdict is not None else _DOI_TTL_NONE):
+                return verdict
+        try:
+            verdict = validator.validate_doi(doi)
+        except Exception:
+            verdict = None
+        _DOI_CACHE[doi] = (verdict, now)
+        return verdict
+
+    return verify
+
+
+def _sv_finding(issue: str, fix: str = "Verify the source against its original record.") -> dict:
+    return {"issue": issue, "fix": fix, "chapter": "lit_review", "severity": "soft"}
+
+
+def source_verification_dimension(context_store: dict, doi_verifier=None) -> dict:
+    """Author/metadata sanity + (opt-in) CrossRef DOI existence over the M2
+    literature pool. Advisory (all soft), fail-open, offline unless a verifier is
+    injected or DOTHESIS_RUBRIC_DOI_CHECK=1. Weight 0.10."""
+    import os
+    import time
+    sources = (context_store.get("m2_literature") or {}).get("literature_sources") or []
+    findings: list[dict] = []
+    meta = {"checked": 0, "verified": 0, "unverified": 0, "no_doi": 0, "network_enabled": False}
+    events: list[tuple] = []
+
+    verifier = doi_verifier
+    if verifier is None and os.getenv("DOTHESIS_RUBRIC_DOI_CHECK") == "1":
+        verifier = _default_doi_verifier()
+    meta["network_enabled"] = verifier is not None
+
+    validator = None
+    try:
+        from engine.utils.citation_validator import CitationValidator  # noqa: PLC0415
+        validator = CitationValidator(timeout=3)
+    except Exception:
+        logger.debug("source_verification: engine validator unavailable", exc_info=True)
+
+    start, lookups = time.time(), 0
+    for src in sources:
+        if not isinstance(src, dict):
+            continue
+        if validator is not None:
+            try:
+                authors = src.get("authors")
+                alist = authors if isinstance(authors, list) else ([authors] if authors else [])
+                for msg in validator.check_author_sanity(alist):
+                    findings.append(_sv_finding(f"Author issue: {msg}"))
+                    events.append(("author_sanity", msg))
+                for msg in validator.check_metadata_quality(src):
+                    findings.append(_sv_finding(f"Citation metadata: {msg}"))
+                    events.append(("junk_metadata", msg))
+            except Exception:
+                logger.debug("source_verification: junk check failed", exc_info=True)
+
+        norm = _normalize_doi(src.get("doi"))
+        if not norm:
+            meta["no_doi"] += 1
+            continue
+        if not _doi_syntax_ok(norm):
+            findings.append(_sv_finding(f"Malformed DOI '{src.get('doi')}'.",
+                                        "Fix the DOI or remove it."))
+            events.append(("malformed_doi", src.get("doi")))
+            continue
+        if verifier is None:
+            continue
+        if lookups >= _DOI_MAX_LOOKUPS or (time.time() - start) > _DOI_TIME_BUDGET:
+            meta["unverified"] += 1
+            continue
+        lookups += 1
+        meta["checked"] += 1
+        try:
+            verdict = verifier(norm)
+        except Exception:
+            verdict = None
+        if verdict is True:
+            meta["verified"] += 1
+        elif verdict is False:
+            findings.append(_sv_finding(
+                f"DOI '{norm}' was not found in CrossRef — confirm it is correct and not fabricated.",
+                "Check the DOI at https://doi.org; correct or remove the source."))
+            events.append(("invalid_doi", norm))
+        else:
+            meta["unverified"] += 1
+
+    if events:
+        try:
+            from agent.analytics import emit  # noqa: PLC0415
+            for kind, val in events:
+                emit("citation_rejected", None, {"kind": kind, "citation": str(val)})
+        except Exception:
+            pass
+
+    return {"name": "source_verification", "weight": 0.10,
+            "score": round(max(0.0, 1.0 - 0.1 * len(findings)), 3),
+            "findings": findings, "meta": meta}
+
+
 def score_thesis(context_store: dict, *, institution_profile: dict | None = None,
-                 advisor_feedback: list[dict] | None = None) -> dict:
+                 advisor_feedback: list[dict] | None = None, doi_verifier=None) -> dict:
     """Full RubricResult. This task: deterministic dims only (judge + advisor + method
     overlay land in later tasks)."""
     method = _detect_method(context_store)
@@ -316,6 +455,8 @@ def score_thesis(context_store: dict, *, institution_profile: dict | None = None
     # Stats self-validation: correctness (not presence) of the reported numbers.
     # Hard findings (impossible/self-contradictory) flow into `blocking` below.
     dims.append(stats_validity_dimension(context_store))
+    # Source verification: author/metadata sanity + opt-in DOI existence (soft).
+    dims.append(source_verification_dimension(context_store, doi_verifier))
     # Institution overlay last — it can re-weight the dims above and add hard
     # requirements (min refs) before we compute overall/blocking.
     dims = apply_institution_overlay(dims, institution_profile, context_store)
