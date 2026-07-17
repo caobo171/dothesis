@@ -192,12 +192,40 @@ def _summarize_pls(raw: dict, bootstrap_samples: int) -> dict:
 
 
 def _op_pls_sem(file: str, conceptual_model=None, measurement=None,
-                bootstrap_samples: int = 500, **_: Any) -> dict:
+                bootstrap_samples: int = 500, q2=True, omission_distance: int = 7, **_: Any) -> dict:
     import thesis_stats as ts
     bs = max(0, min(int(bootstrap_samples), _BOOTSTRAP_CAP))
     model = _adapt(conceptual_model, measurement)
-    raw = ts.run_pls(model, _records(file), bootstrap_samples=bs)
-    return _summarize_pls(raw, bs)
+    q2d = int(omission_distance) if q2 else None
+    raw = ts.run_pls(model, _records(file), bootstrap_samples=bs, q2_omission_distance=q2d)
+    out = _summarize_pls(raw, bs)
+    rq = raw.get("raw_q2")
+    if rq is not None:
+        out["q2"] = {"omission_distance": rq.get("omission_distance", omission_distance),
+                     "values": rq.get("q2"), "interpretation": rq.get("interpretation"),
+                     "note": rq.get("note")}
+    return out
+
+
+def _op_mga(file: str, conceptual_model=None, measurement=None, group=None, group_values=None,
+            n_permutations: int = 1000, seed: int = 42, alpha: float = 0.05, **_: Any) -> dict:
+    import thesis_stats as ts
+    if not group:
+        raise ValueError("mga needs params.group (a column in the data)")
+    model = _adapt(conceptual_model, measurement)
+    return _round_floats(ts.run_mga(model, _records(file), group=group, group_values=group_values,
+                                    n_permutations=max(0, min(int(n_permutations), 2000)),
+                                    seed=int(seed), alpha=float(alpha)))
+
+
+def _op_ipma(file: str, conceptual_model=None, measurement=None, target=None,
+             scale_min=None, scale_max=None, **_: Any) -> dict:
+    import thesis_stats as ts
+    if not target:
+        raise ValueError("ipma needs params.target (an endogenous construct)")
+    model = _adapt(conceptual_model, measurement)
+    return _round_floats(ts.run_ipma(model, _records(file), target=target,
+                                     scale_min=scale_min, scale_max=scale_max))
 
 
 def _op_efa(file: str, conceptual_model=None, measurement=None, **_: Any) -> dict:
@@ -352,6 +380,8 @@ OPS = {
     "power": _op_power,
     "screening": _op_screening,
     "method_advice": _op_method_advice,
+    "mga": _op_mga,
+    "ipma": _op_ipma,
 }
 
 
@@ -437,6 +467,14 @@ def run_stats(op: str, file: str, params: dict | None = None) -> str:
                  posthoc|sensitivity, effect_size (num or small/medium/large),
                  alpha=.05, power=.80, predictors, n) → required_n / achieved_power
                  / mdes + a committee-ready justification sentence
+      mga      — multi-group analysis: MICOM invariance gating a permutation test
+                 of per-group path differences (params: conceptual_model, group=
+                 col, group_values, n_permutations, seed). Shows group betas +
+                 comparison_defensible; if invariance fails, betas shown but the
+                 difference must not be narrated as significant.
+      ipma     — importance-performance map for a target construct (params:
+                 conceptual_model, target, scale_min, scale_max) — the Chapter 5
+                 practical-implications map. (pls_sem also returns Q² by default.)
       method_advice — is the chosen analysis method defensible for this data +
                  model? ranked recommendation (pls_sem/cb_sem/regression/
                  nonparametric) with citable evidence rows + a conflict check

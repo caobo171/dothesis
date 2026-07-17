@@ -121,7 +121,7 @@ def test_pls_clamps_bootstrap_samples(pls, monkeypatch):
     path, cm = pls
     captured = {}
 
-    def fake_run_pls(model, data, bootstrap_samples=1000):
+    def fake_run_pls(model, data, bootstrap_samples=1000, q2_omission_distance=None):
         captured["bs"] = bootstrap_samples
         return {"raw_path_coefficients": {}, "raw_inner_summary": {},
                 "raw_unidimensionality": {}, "raw_outer_model": {}, "raw_bootstrap": None}
@@ -373,3 +373,74 @@ def test_method_advice_data_mode_conflict(survey_csv):
 def test_method_advice_never_blocks_no_hard():
     out = _run("method_advice", "", {"conceptual_model": _ADV_CM, "target_n": 90, "chosen": "CB-SEM"})
     assert '"hard"' not in json.dumps(out)
+
+
+# --- PLS completeness ops (roadmap #8) --------------------------------------
+
+def test_pls_sem_includes_q2(pls):
+    path, cm = pls
+    out = _run("pls_sem", path, {"conceptual_model": cm, "bootstrap_samples": 0})
+    assert out["q2"] and out["q2"]["values"]  # per-endogenous Q²
+    assert set(out["q2"]["values"]) <= {"B", "C"}
+
+
+def test_pls_sem_q2_off(pls):
+    path, cm = pls
+    out = _run("pls_sem", path, {"conceptual_model": cm, "bootstrap_samples": 0, "q2": False})
+    assert "q2" not in out
+
+
+def test_pls_sem_q2_divisor_clean_error(pls):
+    path, cm = pls  # n=120, k=3 → 360 % 6 == 0
+    out = _run("pls_sem", path, {"conceptual_model": cm, "bootstrap_samples": 0, "omission_distance": 6})
+    assert "error" in out
+
+
+@pytest.fixture
+def grouped_csv(tmp_path):
+    rng = np.random.default_rng(9)
+    def block(m, beta):
+        x = rng.normal(0, 1, m); y = beta * x + rng.normal(0, 0.8, m); z = 0.4 * x + 0.35 * y + rng.normal(0, 0.75, m)
+        cols = {}
+        for lat, p in ((x, "A"), (y, "B"), (z, "C")):
+            for i in (1, 2, 3):
+                cols[f"{p}{i}"] = np.clip(np.round(0.8 * lat + rng.normal(0, 0.6, m) + 3), 1, 5).astype(int)
+        return pd.DataFrame(cols)
+    a, b = block(120, 0.6), block(120, 0.05)
+    a["grp"] = "a"; b["grp"] = "b"
+    p = tmp_path / "grp.csv"
+    pd.concat([a, b], ignore_index=True).to_csv(p, index=False)
+    cm = {"nodes": [{"id": c, "label": c, "questions": [f"{c}1", f"{c}2", f"{c}3"]} for c in ("A", "B", "C")],
+          "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}, {"source": "A", "target": "C"}]}
+    return str(p), cm
+
+
+def test_mga_op(grouped_csv):
+    path, cm = grouped_csv
+    out = _run("mga", path, {"conceptual_model": cm, "group": "grp", "n_permutations": 150, "seed": 42})
+    assert out["op"] == "mga" and "micom" in out and "paths" in out
+    assert "comparison_defensible" in out
+
+
+def test_mga_op_missing_group_clean_error(grouped_csv):
+    path, cm = grouped_csv
+    out = _run("mga", path, {"conceptual_model": cm})
+    assert "error" in out
+
+
+def test_ipma_op(grouped_csv):
+    path, cm = grouped_csv
+    out = _run("ipma", path, {"conceptual_model": cm, "target": "C", "scale_min": 1, "scale_max": 5})
+    assert out["target"] == "C" and out["rows"]
+    assert all(0 <= r["performance"] <= 100 for r in out["rows"])
+
+
+def test_ipma_op_missing_target_clean_error(grouped_csv):
+    path, cm = grouped_csv
+    out = _run("ipma", path, {"conceptual_model": cm})
+    assert "error" in out
+
+
+def test_new_pls_ops_whitelisted():
+    for name in ("mga", "ipma"):
+        assert name in OPS

@@ -49,7 +49,17 @@ sandboxed stats service and returns structured numbers. Ops:
   engine — pass `params.conceptual_model`, plus `params.measurement={construct:[cols]}`
   when the model's questions are item texts rather than data columns):**
   - `pls_sem` — full PLS-SEM: path betas (+bootstrap t/CI), R², outer loadings,
-    AVE/CR/α, HTMT, Fornell-Larcker, VIF, f², GoF (`bootstrap_samples` ≤ 1000).
+    AVE/CR/α, HTMT, Fornell-Larcker, VIF, f², GoF (`bootstrap_samples` ≤ 1000),
+    and **Q²** (blindfolding predictive relevance, per endogenous construct; >0 = relevant,
+    bands 0.02/0.15/0.35) by default — `params.q2=false` to skip, `params.omission_distance`
+    (default 7, must not divide n·k) to tune.
+  - `mga` — **multi-group analysis** (e.g. male vs female): MICOM invariance is checked FIRST
+    and gates the comparison (params: `group`=data column, `group_values`, `n_permutations`,
+    `seed`). If `comparison_defensible` is false, show the per-group betas but **do not narrate
+    the difference as significant** — measurement invariance wasn't established.
+  - `ipma` — **importance-performance map** for a `target` construct (params: `target`,
+    `scale_min`, `scale_max`): the Chapter 5 practical-implications figure. Needs positive
+    (non-reversed) indicators — if it errors on that, run `screening` to recode first.
   - `efa` — EFA: KMO, Bartlett, factors.
   - `regression_full` — OLS toward the dependent construct (F-test, R², coefficients).
   - `mediation` — direct/indirect/total effects.

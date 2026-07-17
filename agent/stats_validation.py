@@ -87,6 +87,12 @@ def claims_from_run_stats(op: str, summary: dict) -> list[dict]:
     elif op == "screening":
         from thesis_stats.validation import claims_from_screening  # noqa: PLC0415
         claims += claims_from_screening(summary, source="computed")
+    elif op == "mga":
+        from thesis_stats.validation import claims_from_mga  # noqa: PLC0415
+        claims += claims_from_mga(summary, source="computed")
+    elif op == "ipma":
+        from thesis_stats.validation import claims_from_ipma  # noqa: PLC0415
+        claims += claims_from_ipma(summary, source="computed")
     return claims
 
 
@@ -140,6 +146,9 @@ def _pls_summary_claims(summary: dict, mk) -> list[dict]:
             claims.append(mk("f2", v, path=_norm_path(path), table="structural_model"))
     if isinstance(summary.get("goodness_of_fit"), (int, float)):
         claims.append(mk("gof", summary["goodness_of_fit"], table="model_fit"))
+    for con, v in ((summary.get("q2") or {}).get("values") or {}).items():
+        if isinstance(v, (int, float)):
+            claims.append(mk("q2", v, construct=con, table="structural_model"))
     return claims
 
 
