@@ -95,6 +95,36 @@ def make_state_tools(store: ProjectStateStore) -> list:
                     _repair_note = rep
             except Exception:
                 logger.debug("commit_slice: M3 model guard skipped", exc_info=True)
+        # M4 stats self-validation gate (deterministic, fail-open). Hard findings
+        # — numbers that are mathematically impossible or self-contradictory —
+        # block the commit so a wrong number never becomes product state. Soft
+        # findings never block; they ride the success payload as warnings the
+        # agent must acknowledge. A validator crash fails open (commit proceeds,
+        # marked unverified). See design §7.4.
+        _stats_warnings = None
+        if module == "M4" and "analysis_results" in writes:
+            try:
+                from agent.stats_validation import validate_analysis_results  # noqa: PLC0415
+                try:
+                    _m3 = (store.load() or {}).get("contextStore", {}).get("hypotheses")
+                except Exception:
+                    _m3 = None
+                _v = validate_analysis_results(writes["analysis_results"], _m3)
+                if _v.get("crashed"):
+                    _stats_warnings = "unavailable"
+                elif _v["hard"]:
+                    return json.dumps({
+                        "error": "stats_validation_failed — these numbers are mathematically "
+                                 "impossible or self-contradictory and cannot be committed",
+                        "findings": _v["findings_hard"],
+                        "hint": "Re-run the analysis, fix the parsed/typed values, or drop the "
+                                "impossible entries. Explain the finding to the student in both registers.",
+                    }, ensure_ascii=False)
+                elif _v["soft"]:
+                    _stats_warnings = _v["findings_soft"]
+            except Exception:
+                logger.debug("commit_slice: M4 stats validation skipped", exc_info=True)
+                _stats_warnings = "unavailable"
         try:
             result = store.commit_slice(
                 module, writes, reason,
@@ -107,6 +137,9 @@ def make_state_tools(store: ProjectStateStore) -> list:
             return json.dumps({"error": str(e)})
         if _repair_note is not None and isinstance(result, dict):
             result = {**result, "conceptual_model_repaired": _repair_note}
+        if _stats_warnings is not None and isinstance(result, dict):
+            key = "stats_validation" if _stats_warnings == "unavailable" else "stats_validation_warnings"
+            result = {**result, key: _stats_warnings}
         return json.dumps(result, ensure_ascii=False)
 
     @tool

@@ -212,3 +212,48 @@ def test_missing_thesis_stats_degrades_cleanly(pls, monkeypatch):
     path, cm = pls
     out = _run("pls_sem", path, {"conceptual_model": cm})
     assert "stats dependency missing" in out["error"]
+
+
+# --- Phase 5: self-validation wiring ---------------------------------------
+
+from agent.tools.stats import OPS, check_thresholds  # noqa: E402
+
+
+def test_run_stats_attaches_validation_on_impossible(monkeypatch, pls):
+    path, cm = pls
+    monkeypatch.setitem(OPS, "pls_sem", lambda file, **k: {"reliability": {"X": {"r_squared": 1.4}}, "paths": {}})
+    out = _run("pls_sem", path, {"conceptual_model": cm})
+    assert out["validation"]["hard"] >= 1
+    assert any(f["check"] == "bounds.r2" for f in out["validation"]["findings"])
+
+
+def test_run_stats_clean_has_no_hard_validation(pls):
+    path, cm = pls
+    out = _run("pls_sem", path, {"conceptual_model": cm, "bootstrap_samples": 0})
+    v = out.get("validation")
+    assert v is None or v["hard"] == 0
+
+
+def test_run_stats_validation_fail_open(monkeypatch, pls):
+    path, cm = pls
+    import agent.stats_validation as sv
+    monkeypatch.setattr(sv, "validate_run_stats", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    out = _run("pls_sem", path, {"conceptual_model": cm, "bootstrap_samples": 0})
+    assert "paths" in out and "validation" not in out  # numbers still returned, no crash
+
+
+def test_check_thresholds_catches_impossible_loading():
+    out = json.loads(check_thresholds.func("loadings", [{"item": "X1", "value": 1.31}, {"item": "X2", "value": 0.8}]))
+    assert any(f.get("check") == "bounds.loading" and f["severity"] == "hard" for f in out["findings"])
+
+
+def test_check_thresholds_htmt_above_one():
+    out = json.loads(check_thresholds.func("htmt", [{"pair": "X-Y", "value": 1.05}]))
+    checks = [f.get("check") for f in out["findings"]]
+    assert "bounds.htmt_high" in checks  # soft verification finding
+    assert any(f["severity"] == "hard" for f in out["findings"])  # existing threshold breach
+
+
+def test_check_thresholds_valid_values_unchanged():
+    out = json.loads(check_thresholds.func("loadings", [{"item": "X1", "value": 0.8}, {"item": "X2", "value": 0.75}]))
+    assert not any(f.get("check", "").startswith("bounds") for f in out["findings"])

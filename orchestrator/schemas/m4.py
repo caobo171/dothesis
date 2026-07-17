@@ -17,6 +17,9 @@ class StepResult(BaseModel):
     interpretation: str = ""
     raw_paste_excerpt: str = ""
     parser: Parser = "regex"
+    # Deterministic self-validation of this step's numbers (thesis-stats). Optional
+    # so older persisted rows still validate. {passed, hard, soft, findings}.
+    validation: dict | None = None
 
 
 class M4Output(BaseModel):

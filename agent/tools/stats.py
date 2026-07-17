@@ -318,6 +318,15 @@ def check_thresholds(table_kind: str, rows: list[dict]) -> str:
     if table_kind == "loadings" and values and min(values) >= 0.9:
         findings.append({"issue": "All loadings > 0.9 — suspiciously perfect; check for "
                                   "straight-lined data or a wrong matrix.", "severity": "soft"})
+    # Verification arithmetic (thesis-stats): catch impossible/self-contradictory
+    # values the compare-only thresholds cannot see (e.g. a pasted loading > 1, or
+    # a t/p pair that is arithmetically impossible). Fail-open. Still findings-only.
+    try:
+        from thesis_stats.validation import claims_from_table, validate_claims
+        for f in validate_claims(claims_from_table(table_kind, rows, source="parsed")):
+            findings.append({"issue": f["message"], "severity": f["severity"], "check": f["check"]})
+    except Exception:
+        logger.exception("check_thresholds validation failed (fail-open)")
     return json.dumps({"table_kind": table_kind, "findings": findings}, ensure_ascii=False)
 
 
@@ -364,4 +373,15 @@ def run_stats(op: str, file: str, params: dict | None = None) -> str:
     except Exception as e:
         logger.exception("run_stats %s failed", op)
         return json.dumps({"error": f"{op} failed: {e}"})
+    # Self-validation: attach (never withhold) findings so the agent can explain
+    # a problem; the hard BLOCK happens at the M4 commit gate. Fail-open (§8).
+    if isinstance(result, dict):
+        try:
+            from agent.stats_validation import validate_run_stats
+            v = validate_run_stats(op, result)
+            if v.get("findings"):
+                result["validation"] = {"passed": v["passed"], "hard": v["hard"],
+                                        "soft": v["soft"], "findings": v["findings"]}
+        except Exception:
+            logger.exception("run_stats validation failed for %s (fail-open)", op)
     return json.dumps({"op": op, **result}, ensure_ascii=False)

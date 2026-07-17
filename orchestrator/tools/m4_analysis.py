@@ -113,6 +113,25 @@ def generate_analysis_outline(data_type: str, methodology: dict | None = None) -
     return {"sections": sections, "data_type": data_type, "confirmed_by_user": False}
 
 
+def _validate_step_table(result: dict, data_type: str) -> dict | None:
+    """Deterministic self-validation of a parsed step's table (thesis-stats).
+    Lazy import + fail-open — the B2B/headless path must never crash on a
+    validator issue. Returns {passed, hard, soft, findings} or None."""
+    rows = result.get("table") or []
+    if not rows:
+        return None
+    try:
+        from thesis_stats.validation import (  # noqa: PLC0415
+            aggregate, claims_from_table, validate_claims,
+        )
+        kind = result.get("step_name") or data_type or "table"
+        return aggregate(validate_claims(claims_from_table(kind, rows, source="parsed")))
+    except Exception:
+        import logging  # noqa: PLC0415
+        logging.getLogger(__name__).debug("step validation skipped", exc_info=True)
+        return None
+
+
 @tool
 def run_analysis_step(step_name: str, data: dict) -> dict:
     """SP5: parse one outline step from the user's pasted analysis output.
@@ -128,6 +147,7 @@ def run_analysis_step(step_name: str, data: dict) -> dict:
     data_type = data.get("data_type", "Unknown")
     result = dispatch_parse(data_type, text, step_name)
     if result is not None:
+        result["validation"] = _validate_step_table(result, data_type)
         return result
     # Both regex and LLM fallback failed — return a stub so the walk continues.
     return {

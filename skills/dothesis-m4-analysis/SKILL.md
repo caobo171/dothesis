@@ -168,6 +168,28 @@ HTMT <0.85, VIF <3.3) AND flags suspiciously-perfect patterns (all loadings >0.9
 already have. Consult `references/output-interpretation.md` for the full threshold
 table, the "too good to be true" heuristics, and how to narrate a breach.
 
+**Self-validation runs automatically** (you don't call it). Every `run_stats`
+result and every `check_thresholds` call also runs deterministic *verification
+arithmetic* (thesis-stats): it checks a number is mathematically possible and
+internally consistent — e.g. a loading > 1, an AVE that disagrees with its own
+loadings, a t and p that can't both be true, a CI that doesn't contain its
+estimate, or PLS metrics mixed with CB-SEM fit indices. Findings come back on a
+`validation` key with two severities:
+
+- **hard** — the number is provably wrong (impossible or self-contradictory).
+  A hard finding **blocks the `commit_slice("M4", …)`** with a
+  `stats_validation_failed` error listing the offending values. You cannot
+  commit those results. **Fix the source, never retype the number to dodge the
+  gate:** re-run the op, re-paste the correct table, or drop the impossible
+  entry — then commit again.
+- **soft** — possible but suspicious (α > 0.98, HTMT > 1, a coverage gap). These
+  ride a successful commit as `stats_validation_warnings`; acknowledge them to
+  the student and confirm before moving on.
+
+Narrate a finding in both registers: plain ("these two numbers can't both be
+right") and formal ("the reported p is inconsistent with t=7.01 at any df"), then
+show the concrete fix path.
+
 ### Ingesting a results image or export (F13)
 
 When the student **attaches an image or an export file** of results instead of

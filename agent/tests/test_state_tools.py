@@ -109,3 +109,97 @@ def test_set_defense_date_builds_timeline(tmp_path):
     assert out["data_collection_weeks"] == 6          # reached build_timeline w/ real target_n
     # Persisted via the dedicated coaching path (not commit_slice).
     assert store.load()["contextStore"]["thesis_timeline"]["milestones"]
+
+
+# --- Phase 6: M4 stats self-validation commit gate --------------------------
+
+import copy  # noqa: E402
+import uuid as _uuid  # noqa: E402
+
+import pytest  # noqa: E402
+
+pytest.importorskip("thesis_stats")
+
+_GOOD_M4 = {
+    "measurement_model": [
+        {"construct": "LS",
+         "items": [{"item": "LS1", "loading": 0.81}, {"item": "LS2", "loading": 0.78},
+                   {"item": "LS3", "loading": 0.80}],
+         "cronbach_alpha": 0.86, "composite_reliability": 0.90, "ave": 0.63},
+        {"construct": "PI",
+         "items": [{"item": "PI1", "loading": 0.80}, {"item": "PI2", "loading": 0.76},
+                   {"item": "PI3", "loading": 0.74}],
+         "cronbach_alpha": 0.84, "composite_reliability": 0.88, "ave": 0.58},
+    ],
+    "discriminant_validity": {"method": "HTMT", "matrix": [["LS", "PI"], [1.0, 0.42], [0.42, 1.0]]},
+    "hypothesis_tests": [
+        {"id": "r-H1", "hypothesis": "H1", "path": "LS → PI",
+         "numbers": {"beta": 0.34, "t": 7.01, "p": "<0.001", "f2": 0.18}, "decision": "supported"},
+    ],
+    "structural_model": {"r2": {"PI": 0.56}},
+}
+
+
+def _tools(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{_uuid.uuid4().hex}")
+    return store, {t.name: t for t in make_state_tools(store)}
+
+
+def _commit(tools, writes, module="M4"):
+    return json.loads(tools["commit_slice"].func(module=module, writes=writes, reason="test"))
+
+
+def test_gate_clean_commit_succeeds_no_warnings(tmp_path):
+    store, tools = _tools(tmp_path)
+    out = _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+    assert "error" not in out
+    assert "stats_validation_warnings" not in out
+    assert store.load()["contextStore"].get("analysis_results") is not None
+
+
+def test_gate_blocks_impossible_and_store_unchanged(tmp_path):
+    store, tools = _tools(tmp_path)
+    bad = copy.deepcopy(_GOOD_M4)
+    bad["hypothesis_tests"][0]["numbers"]["p"] = 0.48  # with t=7.01
+    out = _commit(tools, {"analysis_results": bad})
+    assert out["error"].startswith("stats_validation_failed")
+    assert any(f["check"] == "consistency.t_p" for f in out["findings"])
+    assert store.load()["contextStore"].get("analysis_results") is None  # unchanged
+
+
+def test_gate_soft_only_commits_with_warnings(tmp_path):
+    store, tools = _tools(tmp_path)
+    soft = copy.deepcopy(_GOOD_M4)
+    soft["measurement_model"][0]["cronbach_alpha"] = 0.99  # suspiciously perfect (soft)
+    out = _commit(tools, {"analysis_results": soft})
+    assert "error" not in out
+    assert out["stats_validation_warnings"]
+    assert store.load()["contextStore"].get("analysis_results") is not None
+
+
+def test_gate_ignores_non_m4_and_m4_without_results(tmp_path):
+    store, tools = _tools(tmp_path)
+    # M4 commit without analysis_results is untouched by the gate.
+    out = _commit(tools, {"analysis_outline": {"steps": []}})
+    assert "error" not in out and "stats_validation" not in out
+
+
+def test_gate_fail_open_on_validator_crash(tmp_path, monkeypatch):
+    store, tools = _tools(tmp_path)
+    import agent.stats_validation as sv
+    monkeypatch.setattr(sv, "validate_analysis_results",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    out = _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+    assert "error" not in out
+    assert out.get("stats_validation") == "unavailable"
+    assert store.load()["contextStore"].get("analysis_results") is not None
+
+
+def test_gate_x2_hypothesis_coverage_soft(tmp_path):
+    store, tools = _tools(tmp_path)
+    # Seed M3 hypotheses so X2 can run; H3 has no result -> soft warning, commit ok.
+    tools["commit_slice"].func(module="M3", writes={"hypotheses": [{"id": "H1"}, {"id": "H3"}]}, reason="seed")
+    out = _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+    assert "error" not in out
+    warnings = out.get("stats_validation_warnings") or []
+    assert any(f["check"] == "xtable.hypothesis_coverage" for f in warnings)

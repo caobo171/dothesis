@@ -91,7 +91,10 @@ def results_validity_dimension(context_store: dict, method: str) -> dict:
     # in the analysis_results text — cheap, method-aware, no LLM. Findings are
     # SOFT (advisory): the hard data gate stays M4's job, not ours.
     import re  # noqa: PLC0415
-    text = ((context_store.get("m4_analysis") or {}).get("analysis_results") or "").lower()
+    raw = (context_store.get("m4_analysis") or {}).get("analysis_results") or ""
+    # analysis_results is a structured dict in the current M4 schema (and can be a
+    # legacy string); serialize non-strings so the presence regex still matches.
+    text = (raw if isinstance(raw, str) else _json.dumps(raw, default=str)).lower()
     crits = METHOD_CRITERIA.get(method, METHOD_CRITERIA["generic"])
     findings = []
     for pattern in crits:
@@ -251,6 +254,40 @@ def _weighted(dims: list[dict]) -> float:
     return round(sum(d["score"] * d["weight"] for d in dims) / total_w, 3)
 
 
+def stats_validity_dimension(context_store: dict) -> dict:
+    """Deterministic correctness of the reported statistics (F#1 self-validation).
+
+    Distinct from results_validity (which only presence-checks that a metric is
+    mentioned): this reruns the thesis-stats verification arithmetic over the
+    persisted results and turns HARD findings (impossible / self-contradictory
+    numbers) into blocking rubric findings — the safety net for results that
+    entered state without passing the chat commit gate (orchestrator path,
+    legacy projects, direct writes). Lazy import + never crashes; free text
+    scores ~1.0 with a soft 'unstructured' note. Weight 0.15."""
+    m4 = context_store.get("m4_analysis") or {}
+    block = m4.get("analysis_results")
+    if block is None and isinstance(m4.get("results"), dict):
+        block = m4  # orchestrator {results: {step: StepResult}} shape
+    findings: list[dict] = []
+    if block is not None:
+        try:
+            from agent.stats_validation import validate_analysis_results  # noqa: PLC0415
+            agg = validate_analysis_results(block)
+            for f in agg["findings"]:
+                findings.append({
+                    "issue": f["message"],
+                    "fix": ("Re-run the analysis or correct the pasted/typed values so this "
+                            "number is possible and internally consistent."),
+                    "chapter": "results", "severity": f["severity"]})
+        except Exception:
+            logger.exception("stats_validity_dimension failed (fail-open)")
+    hard = sum(1 for f in findings if f["severity"] == "hard")
+    soft = sum(1 for f in findings if f["severity"] == "soft")
+    score = max(0.0, 1.0 - 0.5 * hard - 0.1 * soft)
+    return {"name": "stats_validity", "weight": 0.15, "score": round(score, 3),
+            "findings": findings}
+
+
 def score_thesis(context_store: dict, *, institution_profile: dict | None = None,
                  advisor_feedback: list[dict] | None = None) -> dict:
     """Full RubricResult. This task: deterministic dims only (judge + advisor + method
@@ -276,6 +313,9 @@ def score_thesis(context_store: dict, *, institution_profile: dict | None = None
     # items, missing reverse-coded coverage, no attention check) caught before
     # fielding — same lint the live audit_instrument tool runs.
     dims.append(instrument_quality_dimension(context_store))
+    # Stats self-validation: correctness (not presence) of the reported numbers.
+    # Hard findings (impossible/self-contradictory) flow into `blocking` below.
+    dims.append(stats_validity_dimension(context_store))
     # Institution overlay last — it can re-weight the dims above and add hard
     # requirements (min refs) before we compute overall/blocking.
     dims = apply_institution_overlay(dims, institution_profile, context_store)
