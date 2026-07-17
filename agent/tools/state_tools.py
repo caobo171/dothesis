@@ -125,6 +125,41 @@ def make_state_tools(store: ProjectStateStore) -> list:
             except Exception:
                 logger.debug("commit_slice: M4 stats validation skipped", exc_info=True)
                 _stats_warnings = "unavailable"
+        # Coherence (M3↔M4↔M5). M4: advisory direction check only (no prose yet).
+        # M5: a prose number contradicting the persisted analysis_results HARD-
+        # blocks (the single source of truth already passed the M4 gate); soft
+        # findings ride the payload. Fail-open. See design §7.2-7.3.
+        _coherence_warnings = None
+        if module == "M4" and "analysis_results" in writes:
+            try:
+                from agent.coherence import m4_commit_findings  # noqa: PLC0415
+                _flat = (store.load() or {}).get("contextStore", {})
+                _cv = m4_commit_findings(writes["analysis_results"], _flat)
+                if _cv.get("soft"):
+                    _coherence_warnings = _cv["findings_soft"]
+            except Exception:
+                logger.debug("commit_slice: M4 coherence advisory skipped", exc_info=True)
+        elif module == "M5" and "final_sections" in writes:
+            try:
+                from agent.coherence import validate_m5_sections  # noqa: PLC0415
+                _flat = (store.load() or {}).get("contextStore", {})
+                _cv = validate_m5_sections(writes["final_sections"], _flat)
+                if _cv.get("crashed"):
+                    _coherence_warnings = "unavailable"
+                elif _cv["hard"]:
+                    return json.dumps({
+                        "error": "coherence_failed — this prose quotes statistics that contradict the "
+                                 "persisted analysis_results and cannot be committed",
+                        "findings": _cv["findings_hard"],
+                        "hint": "Quote the persisted value exactly (re-read the M4 slice), or recommit M4 "
+                                "if the analysis changed. Never adjust the prose number to something in "
+                                "between. Explain in both registers.",
+                    }, ensure_ascii=False)
+                elif _cv["soft"]:
+                    _coherence_warnings = _cv["findings_soft"]
+            except Exception:
+                logger.debug("commit_slice: M5 coherence gate skipped", exc_info=True)
+                _coherence_warnings = "unavailable"
         try:
             result = store.commit_slice(
                 module, writes, reason,
@@ -140,6 +175,9 @@ def make_state_tools(store: ProjectStateStore) -> list:
         if _stats_warnings is not None and isinstance(result, dict):
             key = "stats_validation" if _stats_warnings == "unavailable" else "stats_validation_warnings"
             result = {**result, key: _stats_warnings}
+        if _coherence_warnings is not None and isinstance(result, dict):
+            key = "coherence" if _coherence_warnings == "unavailable" else "coherence_warnings"
+            result = {**result, key: _coherence_warnings}
         return json.dumps(result, ensure_ascii=False)
 
     @tool

@@ -1,0 +1,137 @@
+"""Coherence gate (roadmap #6): registry, prose extraction, checks, entry points."""
+import json
+
+import pytest
+
+from agent.coherence import (
+    build_registry, check_coherence, coverage_findings, extract_number_claims,
+    normalize_hypothesis_id, segment_sentences, validate_coherence, validate_m5_sections,
+)
+
+HYPS = ["H1: LS has a positive effect on PI"]
+CM = {"nodes": [{"id": "n1", "label": "LS"}, {"id": "n2", "label": "PI"}],
+      "edges": [{"id": "H1", "source": "n1", "target": "n2", "effect_type": "positive",
+                 "hypothesis": "LS positively affects PI"}]}
+AR = {"hypothesis_tests": [{"id": "r-H1", "hypothesis": "H1", "path": "LS → PI",
+                           "numbers": {"beta": 0.3391, "t": 7.01, "p": "<0.001", "f2": 0.18},
+                           "decision": "supported"}],
+      "structural_model": {"r2": {"PI": 0.56}}}
+
+
+# --- id normalization -------------------------------------------------------
+
+@pytest.mark.parametrize("x,expected", [
+    ("H1", "H1"), ("h1", "H1"), ("r-H1", "H1"), ("H12", "H12"),
+    ("H1: LS has a positive effect", "H1"), ("Giả thuyết H2", "H2"), ("Hypothesis 3", "H3"),
+    ({"id": "H1"}, "H1"), ({"label": "H2"}, "H2"), ({"statement": "H3: x"}, "H3"),
+    (None, None), ({}, None), ("the moderating role", None),
+])
+def test_normalize_id(x, expected):
+    assert normalize_hypothesis_id(x) == expected
+
+
+# --- prose extraction -------------------------------------------------------
+
+def test_segment_keeps_decimals():
+    s = segment_sentences("H1 was supported (β = 0.34, p < .001). H2 was not.")
+    assert len(s) == 2
+
+
+@pytest.mark.parametrize("text,metric,val", [
+    ("β = .34", "beta", 0.34), ("beta = 0.34", "beta", 0.34), ("β = −0.34", "beta", -0.34),
+    ("β = –0.34", "beta", -0.34), ("hệ số hồi quy = 0,34", "beta", 0.34),
+    ("R² = 0.56", "r2", 0.56), ("t = 7.01", "t", 7.01), ("f² = 0.18", "f2", 0.18),
+])
+def test_number_extraction(text, metric, val):
+    claims = extract_number_claims(text)
+    assert any(c["metric"] == metric and abs(c["value"] - val) < 1e-9 for c in claims)
+
+
+def test_p_threshold_and_noise():
+    assert any(c["metric"] == "p" and c.get("threshold") for c in extract_number_claims("p < .001"))
+    assert extract_number_claims("published in (2024), see (Nguyen, 2020)") == []
+
+
+# --- coverage (CO1 delegation + CO2) ----------------------------------------
+
+def test_coverage_normalized_matching_no_miss():
+    # H1 covered by an r-H1-only entry → no coverage finding (shipped X2 missed this)
+    ar = {"hypothesis_tests": [{"id": "r-H1", "numbers": {}}]}
+    assert coverage_findings(["H1"], ar) == []
+
+
+def test_coverage_miss_keeps_shipped_id():
+    f = coverage_findings(["H1", "H2"], {"hypothesis_tests": [{"hypothesis": "H1"}]})
+    assert any(x["check"] == "xtable.hypothesis_coverage" and "H2" in x["message"] for x in f)
+
+
+def test_orphan_result_soft():
+    f = coverage_findings(["H1"], {"hypothesis_tests": [{"hypothesis": "H1"}, {"hypothesis": "H9"}]})
+    assert any(x["check"] == "coherence.orphan_result" and x["severity"] == "soft" for x in f)
+
+
+# --- NU1 number mismatch (the hard core) ------------------------------------
+
+def _reg(prose):
+    return build_registry(HYPS, CM, AR, {"results": prose, "discussion": prose})
+
+
+def test_number_match_within_tolerance():
+    reg = _reg("H1 was supported (β = .34, p < .001).")  # .34 ≈ stored .3391
+    hard = [f for f in check_coherence(reg) if f["severity"] == "hard"]
+    assert hard == []
+
+
+def test_number_mismatch_hard():
+    reg = _reg("H1 was supported (β = .31, p < .001).")
+    findings = check_coherence(reg)
+    assert any(f["check"] == "coherence.number_mismatch" and f["severity"] == "hard" for f in findings)
+
+
+def test_sign_mismatch_hard():
+    reg = build_registry(HYPS, CM,
+                         {"hypothesis_tests": [{"hypothesis": "H1", "numbers": {"beta": -0.34}, "decision": "supported"}]},
+                         {"results": "Hypothesis H1 yielded a path coefficient of β = .34 in the model.",
+                          "discussion": "x" * 30})
+    assert any(f["check"] == "coherence.number_mismatch" for f in check_coherence(reg))
+
+
+def test_p_threshold_agreement():
+    reg = _reg("H1: p < .001.")  # stored p is <0.001 threshold → agrees
+    assert not any(f["check"] == "coherence.number_mismatch" for f in check_coherence(reg))
+
+
+# --- direction / decision (soft) --------------------------------------------
+
+def test_direction_m3_m4_soft():
+    ar = {"hypothesis_tests": [{"hypothesis": "H1", "numbers": {"beta": -0.30}, "decision": "supported"}]}
+    reg = build_registry(HYPS, CM, ar, {"results": "x" * 30, "discussion": "y" * 30})
+    f = check_coherence(reg)
+    assert any(x["check"] == "coherence.direction_m3_m4" and x["severity"] == "soft" for x in f)
+
+
+def test_decision_prose_soft():
+    reg = _reg("H1 was not supported.")  # stored decision supported
+    f = check_coherence(reg)
+    assert any(x["check"] == "coherence.decision_prose" and x["severity"] == "soft" for x in f)
+
+
+# --- severity + determinism contracts ---------------------------------------
+
+def test_only_number_mismatch_is_hard():
+    reg = build_registry(HYPS, CM,
+                         {"hypothesis_tests": [{"hypothesis": "H1", "numbers": {"beta": -0.30}, "decision": "supported"}]},
+                         {"results": "H1 (β = .31), a negative effect, was not supported.", "discussion": "z" * 30})
+    hard = {f["check"] for f in check_coherence(reg) if f["severity"] == "hard"}
+    assert hard <= {"coherence.number_mismatch"}
+
+
+def test_entry_points_never_raise_and_deterministic():
+    flat = {"hypotheses": HYPS, "conceptual_model": CM, "analysis_results": AR}
+    a = validate_m5_sections({"results": "Hypothesis H1 produced a coefficient of β = .31 here.", "discussion": "d" * 30}, flat)
+    assert a["hard"] >= 1 and not a["crashed"]
+    b = validate_m5_sections({"results": "Hypothesis H1 produced a coefficient of β = .31 here.", "discussion": "d" * 30}, flat)
+    assert json.dumps(a) == json.dumps(b)
+    # garbage never raises
+    assert validate_coherence({"m4_analysis": "not a dict"})["crashed"] is False
+    assert validate_m5_sections(None, {})["hard"] == 0

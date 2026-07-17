@@ -324,21 +324,12 @@ def validate_analysis_results(block: Any, m3_hypotheses: Optional[list] = None) 
                 "location": {"table": "analysis_results", "construct": None, "item": None, "path": None},
                 "observed": None, "expected": "structured analysis_results", "tolerance": None,
                 "source": "parsed"}]
-        # X2 hypothesis coverage (soft, structural count).
-        if m3_hypotheses and isinstance(block, dict):
-            covered = {str(ht.get("hypothesis")) for ht in (block.get("hypothesis_tests") or [])
-                       if isinstance(ht, dict)}
-            covered |= {str(ht.get("id")) for ht in (block.get("hypothesis_tests") or [])
-                        if isinstance(ht, dict)}
-            for h in m3_hypotheses:
-                hid = str(h.get("id") if isinstance(h, dict) else h)
-                if hid and hid not in covered:
-                    findings.append({
-                        "check": "xtable.hypothesis_coverage", "severity": "soft",
-                        "message": f"Hypothesis {hid} has no result entry in the analysis.",
-                        "location": {"table": "hypothesis_tests", "construct": None, "item": None, "path": None},
-                        "observed": {"hypothesis": hid}, "expected": "a result for every hypothesis",
-                        "tolerance": None, "source": "parsed"})
+        # Coverage: CO1 (kept as xtable.hypothesis_coverage) + CO2 orphan_result,
+        # delegated to the coherence module (normalized id matching — the old
+        # inline version used exact strings and missed "H1" vs "r-H1"/"h1").
+        if m3_hypotheses:
+            from agent.coherence import coverage_findings  # noqa: PLC0415
+            findings += coverage_findings(m3_hypotheses, block)
         return _agg(findings)
     except Exception:
         logger.exception("validate_analysis_results crashed")

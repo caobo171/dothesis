@@ -427,6 +427,31 @@ def source_verification_dimension(context_store: dict, doi_verifier=None) -> dic
             "findings": findings, "meta": meta}
 
 
+def coherence_dimension(context_store: dict) -> dict:
+    """Cross-chapter coherence (M3↔M4↔M5, roadmap #6): the safety net over
+    persisted state for prose that entered without passing the M5 chat gate
+    (auto-draft, editor PATCH, legacy). Hard findings (a prose number
+    contradicting the persisted result) flow into `blocking`; everything else
+    is advisory. Lazy import + never crashes. Weight 0.10."""
+    findings: list[dict] = []
+    try:
+        from agent.coherence import validate_coherence  # noqa: PLC0415
+        agg = validate_coherence(context_store)
+        for f in agg["findings"]:
+            findings.append({
+                "issue": f["message"],
+                "fix": "Quote the persisted analysis result verbatim, or reconcile the analysis and the "
+                       "prose so they agree.",
+                "chapter": (f.get("location") or {}).get("chapter") or "results",
+                "severity": f["severity"]})
+    except Exception:
+        logger.exception("coherence_dimension failed (fail-open)")
+    hard = sum(1 for f in findings if f["severity"] == "hard")
+    soft = sum(1 for f in findings if f["severity"] == "soft")
+    return {"name": "coherence", "weight": 0.10,
+            "score": round(max(0.0, 1.0 - 0.5 * hard - 0.1 * soft), 3), "findings": findings}
+
+
 def score_thesis(context_store: dict, *, institution_profile: dict | None = None,
                  advisor_feedback: list[dict] | None = None, doi_verifier=None) -> dict:
     """Full RubricResult. This task: deterministic dims only (judge + advisor + method
@@ -457,6 +482,8 @@ def score_thesis(context_store: dict, *, institution_profile: dict | None = None
     dims.append(stats_validity_dimension(context_store))
     # Source verification: author/metadata sanity + opt-in DOI existence (soft).
     dims.append(source_verification_dimension(context_store, doi_verifier))
+    # Cross-chapter coherence: prose numbers must match persisted results (hard).
+    dims.append(coherence_dimension(context_store))
     # Institution overlay last — it can re-weight the dims above and add hard
     # requirements (min refs) before we compute overall/blocking.
     dims = apply_institution_overlay(dims, institution_profile, context_store)

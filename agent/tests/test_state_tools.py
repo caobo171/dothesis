@@ -203,3 +203,55 @@ def test_gate_x2_hypothesis_coverage_soft(tmp_path):
     assert "error" not in out
     warnings = out.get("stats_validation_warnings") or []
     assert any(f["check"] == "xtable.hypothesis_coverage" for f in warnings)
+
+
+# --- Phase 5: M5 coherence gate ---------------------------------------------
+
+_M3_COH = {"hypotheses": ["H1: LS positively affects PI"],
+           "conceptual_model": {"nodes": [{"id": "n1", "label": "LS"}, {"id": "n2", "label": "PI"}],
+                                "edges": [{"id": "H1", "source": "n1", "target": "n2", "effect_type": "positive"}]}}
+_M4_COH = {"hypothesis_tests": [{"id": "r-H1", "hypothesis": "H1", "path": "LS -> PI",
+                                "numbers": {"beta": 0.3391, "p": "<0.001"}, "decision": "supported"}]}
+
+
+def _coh_store(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{_uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store)}
+    tools["commit_slice"].func(module="M3", writes=_M3_COH, reason="seed")
+    tools["commit_slice"].func(module="M4", writes={"analysis_results": copy.deepcopy(_M4_COH)}, reason="seed")
+    return store, tools
+
+
+def _m5(tools, results):
+    return json.loads(tools["commit_slice"].func(module="M5",
+        writes={"final_sections": {"results": results,
+                                   "discussion": "Hypothesis H1 is discussed thoroughly here. " * 3}},
+        reason="write"))
+
+
+def test_m5_gate_clean_commit(tmp_path):
+    store, tools = _coh_store(tmp_path)
+    out = _m5(tools, "Hypothesis H1 was supported (β = .34, p < .001) in the analysis.")
+    assert "error" not in out and "coherence_warnings" not in out
+
+
+def test_m5_gate_blocks_number_mismatch(tmp_path):
+    store, tools = _coh_store(tmp_path)
+    out = _m5(tools, "Hypothesis H1 was supported (β = .55, p < .001) in the analysis.")
+    assert out["error"].startswith("coherence_failed")
+    assert store.load()["contextStore"].get("final_sections") is None  # unchanged
+
+
+def test_m5_gate_soft_decision_commits_with_warning(tmp_path):
+    store, tools = _coh_store(tmp_path)
+    out = _m5(tools, "Hypothesis H1 was not supported by the study, contrary to expectation here.")
+    assert "error" not in out
+    assert any(f["check"] == "coherence.decision_prose" for f in out.get("coherence_warnings", []))
+
+
+def test_m5_gate_no_analysis_results_passes(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{_uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store)}
+    tools["commit_slice"].func(module="M3", writes=_M3_COH, reason="seed")
+    out = _m5(tools, "Hypothesis H1 will be examined (β = .34).")
+    assert "error" not in out

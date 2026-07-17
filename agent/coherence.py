@@ -1,0 +1,507 @@
+"""Cross-chapter coherence (M3 ↔ M4 ↔ M5) — pure, offline, never raises.
+
+Builds a hypothesis registry (derived at check time, never persisted) and runs
+deterministic agreement checks: coverage (extends #1's X2), direction, decision,
+and — the only HARD check — prose numbers that contradict the persisted
+analysis_results. Everything word-shaped or structural is soft (natural-language
+polarity/decision wording and machine-defaulted M3 directions are not provable;
+#1's bar: only provably-wrong blocks). Deferred to a future LLM-judge: semantic
+coherence, markdown-table numbers, "56% of variance" R² renderings.
+
+stdlib re/unicodedata only; reuses #1's pure helpers from agent.stats_validation.
+"""
+from __future__ import annotations
+
+import logging
+import re
+import unicodedata
+from typing import Any, Optional
+
+from agent.stats_validation import _agg, _norm_path, _p_value
+
+logger = logging.getLogger(__name__)
+
+_RESULT_CHAPTERS = ("results", "discussion", "conclusion")
+
+
+# --- id normalization -------------------------------------------------------
+
+def normalize_hypothesis_id(x) -> Optional[str]:
+    if isinstance(x, dict):
+        for k in ("id", "label", "statement", "hypothesis", "text"):
+            r = normalize_hypothesis_id(x.get(k))
+            if r:
+                return r
+        return None
+    if not isinstance(x, str):
+        return None
+    s = x.strip().lower()
+    m = re.search(r"\bh[-\s]?(\d{1,2})\b", s)
+    if m:
+        return f"H{int(m.group(1))}"
+    m = re.search(r"(?:hypothesis|giả thuyết|gt)\s*[:#-]?\s*(\d{1,2})", s)
+    if m:
+        return f"H{int(m.group(1))}"
+    return None
+
+
+def _nfc(s: str) -> str:
+    return unicodedata.normalize("NFC", s).lower() if isinstance(s, str) else ""
+
+
+def _finding(check, severity, message, *, hypothesis=None, chapter=None,
+             observed=None, expected=None, tolerance=None, source="prose") -> dict:
+    return {"check": check, "severity": severity, "message": message,
+            "location": {"table": None, "construct": None, "item": None, "path": None,
+                         "hypothesis": hypothesis, "chapter": chapter},
+            "observed": observed, "expected": expected, "tolerance": tolerance, "source": source}
+
+
+# --- prose extraction -------------------------------------------------------
+
+def segment_sentences(prose: str) -> list[str]:
+    if not isinstance(prose, str):
+        return []
+    # split on newlines and on [.!?] + whitespace + non-digit (keep decimals intact)
+    parts = re.split(r"(?<=[.!?])\s+(?=\D)|\n+", prose)
+    return [p.strip() for p in parts if p and p.strip()]
+
+
+_ANCHOR = re.compile(r"\bh\s?-?\s?\d{1,2}\b|(?:hypothesis|giả thuyết)\s*\d{1,2}", re.I)
+
+
+def _anchors(sentence: str) -> list[str]:
+    ids = []
+    for m in _ANCHOR.finditer(sentence):
+        hid = normalize_hypothesis_id(m.group(0))
+        if hid:
+            ids.append(hid)
+    return ids
+
+
+_POS = ["tác động tích cực", "thuận chiều", "cùng chiều", "positively", "positive", "increases", "increase", "tăng"]
+_NEG = ["tác động tiêu cực", "nghịch chiều", "ngược chiều", "negatively", "negative", "decreases", "decrease", "giảm"]
+_NOT_SUP = ["không được ủng hộ", "không được chấp nhận", "bị bác bỏ", "not supported", "not accepted", "rejected"]
+_SUP = ["được ủng hộ", "được chấp nhận", "supported", "accepted"]
+_NOT_SIG = ["không có ý nghĩa thống kê", "không đáng kể", "no significant", "not significant", "non-significant"]
+_SIG = ["có ý nghĩa thống kê", "significant"]
+
+
+def _polarity(sentence: str) -> Optional[str]:
+    s = _nfc(sentence)
+    pos = any(w in s for w in _POS)
+    neg = any(w in s for w in _NEG)
+    if pos and not neg:
+        return "positive"
+    if neg and not pos:
+        return "negative"
+    return None
+
+
+def _decision_word(sentence: str) -> Optional[str]:
+    s = _nfc(sentence)
+    not_sup = any(w in s for w in _NOT_SUP)
+    sup = any(w in s for w in _SUP) and not not_sup
+    not_sig = any(w in s for w in _NOT_SIG)
+    sig = any(w in s for w in _SIG) and not not_sig
+    if not_sup or not_sig:
+        if sup or sig:
+            return None
+        return "not_supported"
+    if sup or sig:
+        return "supported"
+    return None
+
+
+_NUM = re.compile(
+    r"(?P<metric>β|ß|\bbeta\b|hệ số\s*(?:hồi quy|đường dẫn|tác động)?|r²|r\^?2|\bt\b|f²|f\^?2|\bp\b)"
+    r"\s*(?P<op>[<>=≤≥]?)\s*(?P<val>[-−–]?\s*\d*[.,]?\d+)", re.I)
+
+
+def _metric_of(raw: str) -> Optional[str]:
+    r = raw.lower().strip()
+    if r in ("β", "ß", "beta") or r.startswith("hệ số"):
+        return "beta"
+    if r.startswith("r"):
+        return "r2"
+    if r == "t":
+        return "t"
+    if r.startswith("f"):
+        return "f2"
+    if r == "p":
+        return "p"
+    return None
+
+
+def _parse_num(raw: str) -> tuple[Optional[float], int]:
+    s = raw.replace("−", "-").replace("–", "-").replace(" ", "").replace(",", ".")
+    if s.startswith("."):
+        s = "0" + s
+    elif s.startswith("-."):
+        s = "-0" + s[1:]
+    try:
+        val = float(s)
+    except ValueError:
+        return None, 0
+    dec = len(s.split(".")[-1]) if "." in s else 0
+    return val, dec
+
+
+def extract_number_claims(sentence: str) -> list[dict]:
+    out = []
+    for m in _NUM.finditer(sentence):
+        metric = _metric_of(m.group("metric"))
+        if metric is None:
+            continue
+        val, dec = _parse_num(m.group("val"))
+        if val is None:
+            continue
+        claim = {"kind": "number", "metric": metric, "value": val, "decimals": dec,
+                 "sentence": sentence[:160]}
+        if metric == "p" and m.group("op") in ("<", "≤"):
+            claim["threshold"] = True
+        out.append(claim)
+    return out
+
+
+# --- registry ---------------------------------------------------------------
+
+def _edges(cm: dict) -> list[dict]:
+    return cm.get("edges") or cm.get("paths") or []
+
+
+def _node_labels(cm: dict) -> dict:
+    labels = {}
+    for n in (cm.get("nodes") or []):
+        if isinstance(n, dict):
+            labels[n.get("id")] = n.get("label") or n.get("id")
+    return labels
+
+
+def build_registry(hypotheses, conceptual_model, analysis_results, m5) -> list[dict]:
+    cm = conceptual_model if isinstance(conceptual_model, dict) else {}
+    labels = _node_labels(cm)
+    edge_by_id = {}
+    for e in _edges(cm):
+        if isinstance(e, dict):
+            hid = normalize_hypothesis_id(e.get("id"))
+            if hid:
+                edge_by_id[hid] = e
+
+    entries: dict[str, dict] = {}
+
+    def _entry(hid):
+        return entries.setdefault(hid, {"id": hid, "in_m3": False, "statement": None,
+                                        "direction": None, "direction_source": None,
+                                        "edge": None, "m4": {"present": False}, "m5": {"mentioned_in": [], "claims": []}})
+
+    for h in (hypotheses or []):
+        hid = normalize_hypothesis_id(h)
+        if not hid:
+            continue
+        e = _entry(hid)
+        e["in_m3"] = True
+        if isinstance(h, str):
+            e["statement"] = re.sub(r"^\s*h\d{1,2}\s*[:.-]?\s*", "", h, flags=re.I).strip() or None
+        elif isinstance(h, dict):
+            e["statement"] = h.get("statement") or h.get("text") or h.get("hypothesis")
+
+    for hid, e in list(entries.items()):
+        edge = edge_by_id.get(hid)
+        if edge:
+            et = str(edge.get("effect_type") or edge.get("effectType") or "").lower()
+            if et in ("positive", "negative"):
+                e["direction"], e["direction_source"] = et, "edge_effect_type"
+            src, tgt = edge.get("source"), edge.get("target")
+            e["edge"] = {"source": labels.get(src, src), "target": labels.get(tgt, tgt)}
+            if not e["statement"] and edge.get("hypothesis"):
+                e["statement"] = edge["hypothesis"]
+        if e["direction"] is None and e["statement"]:
+            e["direction"] = _polarity(e["statement"])
+            if e["direction"]:
+                e["direction_source"] = "statement_wording"
+
+    # M4 side.
+    block = analysis_results if isinstance(analysis_results, dict) else {}
+    superseded: dict[str, int] = {}
+    for ht in (block.get("hypothesis_tests") or []):
+        if not isinstance(ht, dict):
+            continue
+        hid = normalize_hypothesis_id(ht.get("hypothesis")) or normalize_hypothesis_id(ht.get("id"))
+        if not hid:
+            continue
+        e = _entry(hid)
+        superseded[hid] = superseded.get(hid, 0) + 1
+        nums = ht.get("numbers") or {}
+        pv, thr = _p_value(nums.get("p")) if "p" in nums else (None, False)
+        decision = ht.get("decision")
+        e["m4"] = {
+            "present": True, "result_id": ht.get("id"), "path": _norm_path(ht.get("path")),
+            "decision": decision,
+            "decision_supported": None if decision is None else str(decision).lower().startswith("support"),
+            "significant": (pv is not None and pv < 0.05),
+            "numbers": {"beta": nums.get("beta"), "t": nums.get("t"), "p": pv,
+                        "p_is_threshold": thr, "f2": nums.get("f2")},
+        }
+    for hid, c in superseded.items():
+        if c > 1:
+            entries[hid]["m4"]["superseded_count"] = c - 1
+
+    # structural R² by construct.
+    r2_by_con = {}
+    sm = block.get("structural_model") or {}
+    for con, v in (sm.get("r2") or {}).items():
+        if isinstance(v, (int, float)):
+            r2_by_con[str(con).lower()] = float(v)
+
+    # M5 side.
+    chapters = _resolve_chapters(m5)
+    for chap in _RESULT_CHAPTERS:
+        prose = chapters.get(chap)
+        if not prose or _is_stub(prose):
+            continue
+        for sent in segment_sentences(prose):
+            anchors = _anchors(sent)
+            for hid in set(anchors):
+                if hid in entries and chap not in entries[hid]["m5"]["mentioned_in"]:
+                    entries[hid]["m5"]["mentioned_in"].append(chap)
+            if len(set(anchors)) == 1:
+                hid = anchors[0]
+                if hid not in entries:
+                    continue
+                for nc in extract_number_claims(sent):
+                    nc.update({"chapter": chap, "attribution": "strong"})
+                    entries[hid]["m5"]["claims"].append(nc)
+                pol = _polarity(sent)
+                if pol:
+                    entries[hid]["m5"]["claims"].append({"kind": "direction", "value": pol,
+                                                         "chapter": chap, "attribution": "strong", "sentence": sent[:160]})
+                dec = _decision_word(sent)
+                if dec:
+                    entries[hid]["m5"]["claims"].append({"kind": "decision", "value": dec,
+                                                        "chapter": chap, "attribution": "strong", "sentence": sent[:160]})
+    return list(entries.values())
+
+
+def _resolve_chapters(m5) -> dict:
+    if isinstance(m5, dict) and any(k in m5 for k in ("results", "discussion", "conclusion", "intro")):
+        # chapter values may be plain strings or {prose: ...} dicts (auto-mode).
+        return {str(k).lower(): (v.get("prose") if isinstance(v, dict) else v) for k, v in m5.items()}
+    if isinstance(m5, list):
+        try:
+            from orchestrator.tools.m5_writing import chapters_from_final_sections  # noqa: PLC0415
+            ch = chapters_from_final_sections(m5)
+            if isinstance(ch, dict):
+                return {str(k).lower(): (v.get("prose") if isinstance(v, dict) else v) for k, v in ch.items()}
+        except Exception:
+            pass
+        out = {}
+        for s in m5:
+            if isinstance(s, dict):
+                out[str(s.get("title") or s.get("name") or "").lower()] = s.get("prose") or s.get("content")
+        return out
+    return {}
+
+
+def _is_stub(prose) -> bool:
+    if not isinstance(prose, str) or len(prose.strip()) < 20:
+        return True
+    low = prose.lower()
+    return any(x in low for x in ("todo", "to be filled", "placeholder", "[unreadable]", "needs to be"))
+
+
+# --- check catalogue --------------------------------------------------------
+
+def coverage_findings(hypotheses, analysis_results) -> list[dict]:
+    """CO1 (kept as xtable.hypothesis_coverage) + CO2 orphan_result. Normalized
+    id matching (the shipped X2 used exact strings)."""
+    if not isinstance(analysis_results, dict):
+        # Free-text block: #1 already emits structure.unstructured; only M3-side
+        # coverage misses matter and require a dict to compare — skip here.
+        analysis_results = {}
+    covered = set()
+    for ht in (analysis_results.get("hypothesis_tests") or []):
+        if isinstance(ht, dict):
+            hid = normalize_hypothesis_id(ht.get("hypothesis")) or normalize_hypothesis_id(ht.get("id"))
+            if hid:
+                covered.add(hid)
+    findings = []
+    m3_ids = []
+    for h in (hypotheses or []):
+        hid = normalize_hypothesis_id(h)
+        if hid and hid not in m3_ids:
+            m3_ids.append(hid)
+    for hid in m3_ids:
+        if hid not in covered:
+            findings.append({
+                "check": "xtable.hypothesis_coverage", "severity": "soft",
+                "message": f"Hypothesis {hid} has no result entry in the analysis.",
+                "location": {"table": "hypothesis_tests", "construct": None, "item": None, "path": None},
+                "observed": {"hypothesis": hid}, "expected": "a result for every hypothesis",
+                "tolerance": None, "source": "parsed"})
+    for hid in covered:
+        if hid not in m3_ids:
+            findings.append(_finding("coherence.orphan_result", "soft",
+                                     f"Result entry {hid} has no matching hypothesis in M3.",
+                                     hypothesis=hid, source="parsed"))
+    return findings
+
+
+def _eps(decimals: int) -> float:
+    return 0.5 * (10 ** (-decimals))
+
+
+def _number_checks(entry) -> list[dict]:
+    out = []
+    nums = (entry["m4"].get("numbers") or {}) if entry["m4"].get("present") else {}
+    for claim in entry["m5"]["claims"]:
+        if claim.get("kind") != "number":
+            continue
+        metric = claim["metric"]
+        stored = nums.get(metric)
+        if stored is None:
+            continue
+        eps = _eps(claim["decimals"])
+        hard = claim.get("attribution") == "strong"
+        check = "coherence.number_mismatch" if hard else "coherence.number_mismatch_weak"
+        sev = "hard" if hard else "soft"
+        if metric == "p":
+            ok = _p_agrees(claim, stored, nums.get("p_is_threshold"))
+            if not ok:
+                out.append(_finding(check, sev,
+                                    f"{entry['id']}: prose quotes p {'<' if claim.get('threshold') else '='} "
+                                    f"{claim['value']} but the persisted p is {stored}.",
+                                    hypothesis=entry["id"], chapter=claim.get("chapter"),
+                                    observed={"sentence": claim["sentence"], "value": claim["value"]},
+                                    expected=stored, tolerance=eps))
+            continue
+        if abs(float(stored) - claim["value"]) > eps:
+            out.append(_finding(check, sev,
+                                f"{entry['id']}: prose quotes {metric} = {claim['value']} but the persisted "
+                                f"value is {stored}.", hypothesis=entry["id"], chapter=claim.get("chapter"),
+                                observed={"sentence": claim["sentence"], "value": claim["value"]},
+                                expected=stored, tolerance=eps))
+    return out
+
+
+def _p_agrees(claim, stored, stored_is_threshold) -> bool:
+    if claim.get("threshold"):  # prose "p < X"
+        thr = claim["value"]
+        return float(stored) < thr + _eps(claim["decimals"])
+    # prose "p = X" exact
+    return abs(float(stored) - claim["value"]) <= _eps(claim["decimals"])
+
+
+def _direction_checks(entry) -> list[dict]:
+    out = []
+    beta = (entry["m4"].get("numbers") or {}).get("beta") if entry["m4"].get("present") else None
+    # DI1: M3 direction vs β sign.
+    if entry.get("direction") in ("positive", "negative") and isinstance(beta, (int, float)) and beta != 0:
+        sign = "positive" if beta > 0 else "negative"
+        if sign != entry["direction"]:
+            supp = entry["m4"].get("decision_supported")
+            msg = (f"{entry['id']}: hypothesized a {entry['direction']} effect but β = {beta} is {sign}"
+                   + (" — a negative β cannot support a positive-effect hypothesis; flip the hypothesis "
+                      "direction or the decision." if supp else "."))
+            out.append(_finding("coherence.direction_m3_m4", "soft", msg, hypothesis=entry["id"],
+                                observed={"beta": beta}, expected=f"{entry['direction']} β", source="parsed"))
+    # DI2: prose direction word vs β sign.
+    if isinstance(beta, (int, float)) and beta != 0:
+        bsign = "positive" if beta > 0 else "negative"
+        for c in entry["m5"]["claims"]:
+            if c.get("kind") == "direction" and c["value"] != bsign:
+                out.append(_finding("coherence.direction_prose", "soft",
+                                    f"{entry['id']}: prose describes a {c['value']} effect but the persisted "
+                                    f"β = {beta} is {bsign}.", hypothesis=entry["id"], chapter=c.get("chapter"),
+                                    observed={"sentence": c["sentence"]}, expected=f"{bsign} β"))
+    return out
+
+
+def _decision_checks(entry) -> list[dict]:
+    out = []
+    if not entry["m4"].get("present"):
+        return out
+    supp = entry["m4"].get("decision_supported")
+    for c in entry["m5"]["claims"]:
+        if c.get("kind") != "decision":
+            continue
+        prose_sup = c["value"] == "supported"
+        if supp is not None and prose_sup != supp:
+            out.append(_finding("coherence.decision_prose", "soft",
+                                f"{entry['id']}: prose says {'supported' if prose_sup else 'not supported'} "
+                                f"but the recorded decision is {'supported' if supp else 'not supported'}.",
+                                hypothesis=entry["id"], chapter=c.get("chapter"),
+                                observed={"sentence": c["sentence"]},
+                                expected=f"decision_supported={supp}"))
+    return out
+
+
+def _co3(entry, chapters_present) -> list[dict]:
+    if not (entry["m4"].get("present") and chapters_present):
+        return []
+    if not set(entry["m5"]["mentioned_in"]) & {"results", "discussion"}:
+        return [_finding("coherence.undiscussed_hypothesis", "soft",
+                         f"{entry['id']} has an analysis result but is not discussed in the Results or "
+                         "Discussion chapter.", hypothesis=entry["id"], source="parsed")]
+    return []
+
+
+def check_coherence(registry, m3_hypotheses=None, analysis_results=None, chapters_present=False) -> list[dict]:
+    findings = []
+    if m3_hypotheses is not None or analysis_results is not None:
+        findings += coverage_findings(m3_hypotheses, analysis_results)
+    for e in registry:
+        findings += _co3(e, chapters_present)
+        findings += _direction_checks(e)
+        findings += _decision_checks(e)
+        findings += _number_checks(e)
+    return findings
+
+
+# --- entry points (never raise) ---------------------------------------------
+
+def validate_m5_sections(final_sections, flat_context: dict) -> dict:
+    try:
+        hyps = flat_context.get("hypotheses")
+        cm = flat_context.get("conceptual_model")
+        ar = flat_context.get("analysis_results")
+        registry = build_registry(hyps, cm, ar, final_sections)
+        chapters = _resolve_chapters(final_sections)
+        present = bool((chapters.get("results") and not _is_stub(chapters.get("results")))
+                       and (chapters.get("discussion") and not _is_stub(chapters.get("discussion"))))
+        return _agg(check_coherence(registry, hyps, ar, present))
+    except Exception:
+        logger.exception("validate_m5_sections crashed")
+        return _agg([], crashed=True)
+
+
+def validate_coherence(nested: dict) -> dict:
+    try:
+        def _d(k):
+            v = nested.get(k)
+            return v if isinstance(v, dict) else {}
+        m3, m4, m5 = _d("m3_design"), _d("m4_analysis"), _d("m5_writing")
+        ar = m4.get("analysis_results")
+        m5src = m5.get("final_sections") or m5.get("chapters") or {}
+        registry = build_registry(m3.get("hypotheses"), m3.get("conceptual_model"), ar, m5src)
+        chapters = _resolve_chapters(m5src)
+        present = bool((chapters.get("results") and not _is_stub(chapters.get("results")))
+                       and (chapters.get("discussion") and not _is_stub(chapters.get("discussion"))))
+        return _agg(check_coherence(registry, m3.get("hypotheses"), ar, present))
+    except Exception:
+        logger.exception("validate_coherence crashed")
+        return _agg([], crashed=True)
+
+
+def m4_commit_findings(analysis_results, flat_context: dict) -> dict:
+    """Soft-only DI1/CO2 for the M4 commit gate (no prose yet)."""
+    try:
+        registry = build_registry(flat_context.get("hypotheses"),
+                                  flat_context.get("conceptual_model"), analysis_results, None)
+        findings = []
+        for e in registry:
+            findings += _direction_checks(e)
+        return _agg([f for f in findings if f["severity"] == "soft"])
+    except Exception:
+        logger.exception("m4_commit_findings crashed")
+        return _agg([], crashed=True)

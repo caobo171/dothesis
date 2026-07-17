@@ -134,6 +134,12 @@ on S3 by the time you write that sentence.
 
 - **Every paragraph cited** in lit review, framework, and discussion.
 - **Numbers in Results match `analysis_results` exactly** — copy, never retype from memory.
+  This is now **enforced**: `commit_slice("M5", {"final_sections": …})` runs a coherence gate
+  and returns a `coherence_failed` error if any β/t/p/R²/f² you quote (attributed to a
+  hypothesis) contradicts the persisted M4 value. Fix by re-reading the M4 slice and quoting
+  the exact value — **never split the difference** to a number in between; if the analysis
+  itself changed, recommit M4 first. Soft `coherence_warnings` (a direction/decision wording
+  mismatch, or an undiscussed hypothesis) don't block — acknowledge them before `confirm_done`.
 - **Hypotheses stated verbatim** in the Discussion, then "supported" / "not supported"
   — never "kind of supported".
 - **Nothing from outside the project state.** *"Add context about COVID's impact on
