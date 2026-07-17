@@ -11,12 +11,67 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import httpx  # module-level so tests can monkeypatch research.httpx
 from langchain_core.tools import tool
 
+# Module-level so tests can monkeypatch research.EuropePmcClient / research.EricClient.
+# These submodules import only from .base (requests) — no heavy engine graph — so
+# importing them here does not inflate import cost the way pulling the orchestrator would.
+from engine.utils.api_citations.europe_pmc import EuropePmcClient
+from engine.utils.api_citations.eric import EricClient
+
 logger = logging.getLogger(__name__)
+
+
+# Domain routing: OpenAlex/Crossref/Semantic Scholar are the UNIVERSAL base for
+# every thesis. For two segments we ALSO query a specialized index — Europe PMC
+# (biomedical) and ERIC (education) — which carry MeSH/education-descriptor
+# precision and grey literature the general indexes under-cover. Deterministic
+# keyword match (no LLM): the primary market writes Vietnamese, so both languages
+# are covered. `sinh viên`/`student` is deliberately excluded from education —
+# it saturates business/IS topics and would misroute them.
+_MEDICAL_TERMS = (
+    "medicine", "medical", "health", "clinical", "nursing", "pharmac",
+    "epidemiolog", "dentist", "public health", "patient", "disease", "therapy",
+    "y khoa", "y học", "y tế", "điều dưỡng", "dược", "sức khỏe", "lâm sàng",
+    "bệnh nhân", "bệnh viện",
+)
+_EDUCATION_TERMS = (
+    "education", "pedagog", "teaching", "curriculum", "classroom", "teacher",
+    "e-learning", "literacy", "giáo dục", "sư phạm", "dạy học", "giảng dạy",
+    "chương trình đào tạo", "giáo viên", "học sinh",
+)
+
+
+def _classify_domain(field: str | None, topic: str = "",
+                     research_questions: list[str] | None = None) -> str:
+    """Return "medical" | "education" | "general" for source routing.
+
+    `field` (the M1/project discipline) is the highest-precision signal; the
+    topic + research-question text is the fallback. Ambiguous (both or neither)
+    → "general": a missed supplement is cheap, a wrong one is noise.
+    """
+    field_l = (field or "").strip().lower()
+    if field_l:
+        med = any(t in field_l for t in _MEDICAL_TERMS)
+        edu = any(t in field_l for t in _EDUCATION_TERMS)
+        if med and not edu:
+            return "medical"
+        if edu and not med:
+            return "education"
+        if med or edu:  # explicit field but ambiguous — trust it over free text
+            return "general"
+    text = " ".join([topic or "", *(research_questions or [])]).lower()
+    med = any(t in text for t in _MEDICAL_TERMS)
+    edu = any(t in text for t in _EDUCATION_TERMS)
+    if med and not edu:
+        return "medical"
+    if edu and not med:
+        return "education"
+    return "general"
 
 
 # Wall-clock discipline promoted from partner's _budgeted_scout (spec §3): the
@@ -107,6 +162,93 @@ def _crossref_fallback(query: str, n: int = _SCOUT_FALLBACK_N) -> list[dict]:
     return refs[:n]
 
 
+def _norm_source(p: dict) -> dict:
+    """OpenAlex/EuropePMC/ERIC client dict -> the M2 Source shape (same as quick_sources)."""
+    return {
+        "title": p.get("title"),
+        "authors": p.get("authors"),
+        "year": p.get("year"),
+        "venue": p.get("journal") or p.get("publisher"),
+        "doi": p.get("doi"),
+        "url": p.get("url"),
+        "verified": bool(p.get("doi")),
+    }
+
+
+def _domain_supplement(query: str, domain: str, n: int = 8) -> list[dict]:
+    """One bounded query to the domain-specialized index, normalized to the M2
+    Source shape. Structured exactly like `_crossref_fallback`: any failure /
+    timeout / rate-limit degrades to an empty list — a supplement NEVER hangs the
+    scout or zeroes its results. Returns [] for the "general" domain (no add).
+    """
+    client_cls = {"medical": EuropePmcClient, "education": EricClient}.get(domain)
+    if client_cls is None or not (query or "").strip():
+        return []
+
+    import concurrent.futures as _fut
+
+    def _fetch() -> list[dict]:
+        papers = client_cls().search_papers(query, limit=n)
+        return [_norm_source(p) for p in (papers or [])]
+
+    ex = _fut.ThreadPoolExecutor(max_workers=1)
+    try:
+        return ex.submit(_fetch).result(
+            timeout=int(os.getenv("DOTHESIS_DOMAIN_SOURCE_TIMEOUT_S", "20")))
+    except Exception:
+        logger.exception("research_scout: domain supplement (%s) failed/timed out", domain)
+        return []
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+
+
+_DOI_PREFIXES = ("https://doi.org/", "http://doi.org/",
+                 "https://dx.doi.org/", "http://dx.doi.org/")
+
+
+def _doi_key(doi) -> str:
+    d = str(doi or "").strip().lower()
+    for pref in _DOI_PREFIXES:
+        if d.startswith(pref):
+            d = d[len(pref):]
+            break
+    return d
+
+
+def _title_key(title) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(title or "").lower()).strip()
+
+
+def _dedup_sources(sources: list[dict]) -> list[dict]:
+    """First-wins dedup by DOI (fallback normalized title). Base sources should be
+    listed FIRST so a paper found by both a validated base source and a supplement
+    keeps the base row; a DOI-less kept row is backfilled from a later duplicate
+    that does carry a DOI (keep-most-complete-metadata, mirrors the engine's
+    deduplicate_citations policy)."""
+    out: list[dict] = []
+    by_doi: dict[str, dict] = {}
+    by_title: dict[str, dict] = {}
+    for s in sources or []:
+        dk = _doi_key(s.get("doi"))
+        tk = _title_key(s.get("title"))
+        keep = by_doi.get(dk) if dk else None
+        if keep is None and tk:
+            keep = by_title.get(tk)
+        if keep is not None:
+            # Backfill a DOI onto a kept row that lacked one.
+            if not _doi_key(keep.get("doi")) and dk:
+                keep["doi"] = s.get("doi")
+                keep["verified"] = True
+                by_doi[dk] = keep
+            continue
+        out.append(s)
+        if dk:
+            by_doi[dk] = s
+        if tk:
+            by_title[tk] = s
+    return out
+
+
 @tool
 def research_scout(
     topic: str,
@@ -135,6 +277,21 @@ def research_scout(
         seed_refs: Titles/DOIs of already-confirmed sources to expand from.
         min_sources: Minimum citations to aim for (default 10).
     """
+    return _research_scout_impl(topic, research_questions, seed_refs, min_sources)
+
+
+def _research_scout_impl(
+    topic: str,
+    research_questions: list[str] | None = None,
+    seed_refs: list[str] | None = None,
+    min_sources: int = 10,
+    domain: str | None = None,
+) -> str:
+    # Medical/education theses ALSO get a domain-specialized index (Europe PMC /
+    # ERIC) merged into the universal base. `domain` comes from the M1 field when
+    # a store-bound tool supplies it; otherwise classify from the topic text.
+    domain = domain or _classify_domain(None, topic, research_questions)
+
     # Compose the scout topic the way the engine planner expects: a focused
     # statement, with RQs appended as context lines (the planner extracts
     # query families from them).
@@ -175,7 +332,11 @@ def research_scout(
         # "Research questions:" / "Seed references:" labels as structure. A
         # bibliographic index reads them as search terms, so Crossref gets the
         # bare topic, translated to English.
-        refs = _crossref_fallback(_search_query_en(topic, research_questions))
+        q = _search_query_en(topic, research_questions)
+        refs = _crossref_fallback(q)
+        if domain != "general":
+            # Europe PMC / ERIC are English indexes — feed the translated query.
+            refs = _dedup_sources(refs + _domain_supplement(q, domain))
         out = {
             "sources": refs, "count": len(refs),
             # Honesty marker: the agent should tell the user this was the
@@ -209,6 +370,11 @@ def research_scout(
         }
         for c in (citations or [])
     ]
+    # Base sources FIRST so a paper found by both keeps its validated deep-scout row.
+    if domain != "general":
+        supplement = _domain_supplement(_search_query_en(topic, research_questions), domain)
+        if supplement:
+            sources = _dedup_sources(sources + supplement)
     return json.dumps({"sources": sources, "count": len(sources)}, ensure_ascii=False)
 
 
@@ -228,11 +394,17 @@ def quick_sources(query: str, limit: int = 5) -> str:
         query: A short, focused search phrase (the topic or the specific claim).
         limit: How many papers to return (default 5, keep it small).
     """
+    return _quick_sources_impl(query, limit)
+
+
+def _quick_sources_impl(query: str, limit: int = 5, domain: str | None = None) -> str:
+    domain = domain or _classify_domain(None, query, None)
+    _lim = max(1, min(limit, 10))
     try:
         # OpenAlex multi-result search: fast, free, no API key. Same validated
         # metadata path the engine's citation cascade trusts (verified DOIs).
         from engine.utils.api_citations.openalex import OpenAlexClient
-        papers = OpenAlexClient().search_papers(query, limit=max(1, min(limit, 10)))
+        papers = OpenAlexClient().search_papers(query, limit=_lim)
     except Exception as e:  # never kill the turn on a search hiccup
         logger.exception("quick_sources failed")
         return json.dumps({
@@ -242,18 +414,12 @@ def quick_sources(query: str, limit: int = 5) -> str:
 
     # Rank by citation count so the most established work surfaces first.
     papers = sorted(papers or [], key=lambda p: p.get("citation_count", 0) or 0, reverse=True)
-    sources = [
-        {
-            "title": p.get("title"),
-            "authors": p.get("authors"),
-            "year": p.get("year"),
-            "venue": p.get("journal") or p.get("publisher"),
-            "doi": p.get("doi"),
-            "url": p.get("url"),
-            "verified": bool(p.get("doi")),
-        }
-        for p in papers
-    ]
+    sources = [_norm_source(p) for p in papers]
+    # Medical/education: append a few specialized rows (Europe PMC / ERIC), base
+    # (cited) papers first. Self-bounded + degrades to [] — never breaks the hot path.
+    if domain != "general":
+        sources = _dedup_sources(sources + _domain_supplement(query, domain, n=_lim))
+    sources = sources[:_lim]
     return json.dumps({"sources": sources, "count": len(sources)}, ensure_ascii=False)
 
 

@@ -7,10 +7,14 @@ from .orchestrator import CitationResearcher
 from .crossref import CrossrefClient
 from .openalex import OpenAlexClient
 from .semantic_scholar import SemanticScholarClient
+from .europe_pmc import EuropePmcClient
+from .eric import EricClient
 
 __all__ = [
     "CitationResearcher",
     "CrossrefClient",
     "OpenAlexClient",
     "SemanticScholarClient",
+    "EuropePmcClient",
+    "EricClient",
 ]
