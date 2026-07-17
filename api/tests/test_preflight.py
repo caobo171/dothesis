@@ -17,8 +17,10 @@ def test_flags_missing_sample_and_reverse_coded():
 def test_complete_m3_is_ready():
     cs = {"m3_design": {"methodology": "PLS-SEM",
                         "instrument": {"items": [{"reverse_coded": True}]},
-                        "sample_plan": {"target_n": 200}, "cmb_plan": "Harman",
-                        "missing_data_plan": "listwise"}}
+                        "sample_plan": {"target_n": 200,
+                                        "power_analysis": {"required_n": 160,
+                                                           "justification": "Kock & Hadaya (2018)"}},
+                        "cmb_plan": "Harman", "missing_data_plan": "listwise"}}
     assert preflight_check(cs) == []
 
 
@@ -27,8 +29,10 @@ def test_flat_store_shape_is_read():
     # m3_design wrapper). preflight_check must read them there too (F0 correction).
     flat_ready = {"methodology": "PLS-SEM",
                   "instrument": {"items": [{"reverse_coded": True}]},
-                  "sample_plan": {"target_n": 150}, "cmb_plan": "marker variable",
-                  "missing_data_plan": "pairwise"}
+                  "sample_plan": {"target_n": 150,
+                                  "power_analysis": {"required_n": 140,
+                                                     "justification": "Kock & Hadaya (2018)"}},
+                  "cmb_plan": "marker variable", "missing_data_plan": "pairwise"}
     assert preflight_check(flat_ready) == []
     # Drop the sample plan -> the flat read still flags it.
     del flat_ready["sample_plan"]

@@ -101,8 +101,10 @@ def test_preflight_dimension_clean_when_ready():
     from quality.rubric import preflight_dimension
     cs = {"m3_design": {"methodology": "PLS-SEM",
                         "instrument": {"items": [{"reverse_coded": True}]},
-                        "sample_plan": {"target_n": 200}, "cmb_plan": "Harman",
-                        "missing_data_plan": "listwise"}}
+                        "sample_plan": {"target_n": 200,
+                                        "power_analysis": {"required_n": 160,
+                                                           "justification": "Kock & Hadaya (2018)"}},
+                        "cmb_plan": "Harman", "missing_data_plan": "listwise"}}
     d = preflight_dimension(cs)
     assert d["score"] == 1.0 and d["findings"] == []
 
