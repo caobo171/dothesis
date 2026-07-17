@@ -173,12 +173,11 @@ thesis compares (gender, region, cohort) — MGA gates the comparison on MICOM
 invariance so the difference is defensible. These are standard committee expectations
 for a structural model, not optional flourishes.
 
-**Save the FULL tables, not just summary numbers.** Chapter 4 of the thesis
-needs to render Table 4.1 (measurement model), Table 4.2 (discriminant
-validity), and Table 4.3 (structural paths) — it can only do that if M4
-persisted the per-item / per-construct / per-pair data here. So store these
-structured blocks (every value straight from `run_stats`, never typed from
-memory):
+**Save the FULL tables, not just summary numbers.** M5 renders Chapter 4's
+Tables 4.1–4.3 **verbatim** from these blocks (`render_verified_sections`) — so
+completeness HERE literally IS the chapter; a field you omit is a table cell the
+student has to fill by hand. Store these structured blocks (every value straight
+from `run_stats`, never typed from memory):
 
 ```json
 {

@@ -348,4 +348,45 @@ def make_writing_tools(store) -> list:
             logger.exception("review_thesis: gate summary failed (advisory)")
         return json.dumps(result, ensure_ascii=False)
 
-    return [export_docx, review_thesis]
+    @tool
+    def render_verified_sections(kind: str) -> str:
+        """Render a thesis section VERBATIM from the persisted, self-validated
+        analysis results — so every number in Chapter 4 / the data-cleaning
+        paragraph / the limitations is the computed number, never retyped.
+
+        kind: "results_tables" (Chapter 4 measurement/discriminant/fit/path/R²
+        tables), "data_cleaning" (Chapter 3 screening paragraph + summary), or
+        "limitations" (Chapter 5 disclosed-weakness bullets). Returns
+        {"ok": true, "markdown": ..., "kinds": [...]} — paste the markdown
+        verbatim, sentinels included; write only the connective prose around it.
+        Read-only, no LLM. Returns {"ok": false, "reason": "no_data"} when the
+        state doesn't carry what that section needs."""
+        try:
+            from orchestrator.tools.results_render import (  # noqa: PLC0415
+                render_cleaning_section, render_limitations, render_results_tables)
+            cs = store.load_full_context_store() or {}
+            ar = ((cs.get("m4_analysis") or {}).get("analysis_results")
+                  if isinstance(cs.get("m4_analysis"), dict) else None)
+            lang = ((cs.get("m1_topic") or {}).get("language") or "en") if isinstance(
+                cs.get("m1_topic"), dict) else "en"
+            if kind == "results_tables":
+                blocks = render_results_tables(ar, lang)
+                if not blocks:
+                    return json.dumps({"ok": False, "reason": "no_data"})
+                return json.dumps({"ok": True, "kinds": [b["kind"] for b in blocks],
+                                   "markdown": "\n\n".join(b["markdown"] for b in blocks)},
+                                  ensure_ascii=False)
+            if kind == "data_cleaning":
+                b = render_cleaning_section(ar, lang)
+                return json.dumps({"ok": True, "kinds": ["data_cleaning"], "markdown": b["markdown"]}
+                                  if b else {"ok": False, "reason": "no_data"}, ensure_ascii=False)
+            if kind == "limitations":
+                b = render_limitations(cs, language=lang)
+                return json.dumps({"ok": True, "kinds": ["limitations"], "markdown": b["markdown"]}
+                                  if b else {"ok": False, "reason": "no_data"}, ensure_ascii=False)
+            return json.dumps({"ok": False, "reason": f"unknown kind {kind!r}"})
+        except Exception:
+            logger.exception("render_verified_sections failed")
+            return json.dumps({"ok": False, "reason": "no_data"})
+
+    return [export_docx, review_thesis, render_verified_sections]

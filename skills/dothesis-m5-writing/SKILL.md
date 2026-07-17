@@ -133,19 +133,33 @@ on S3 by the time you write that sentence.
 ## Quality bars (apply to pipeline output review AND your revisions)
 
 - **Every paragraph cited** in lit review, framework, and discussion.
-- **Numbers in Results match `analysis_results` exactly** — copy, never retype from memory.
-  This is now **enforced**: `commit_slice("M5", {"final_sections": …})` runs a coherence gate
-  and returns a `coherence_failed` error if any β/t/p/R²/f² you quote (attributed to a
-  hypothesis) contradicts the persisted M4 value. Fix by re-reading the M4 slice and quoting
-  the exact value — **never split the difference** to a number in between; if the analysis
-  itself changed, recommit M4 first. Soft `coherence_warnings` (a direction/decision wording
-  mismatch, or an undiscussed hypothesis) don't block — acknowledge them before `confirm_done`.
+- **Do NOT hand-build the Chapter 4 tables.** Call
+  `render_verified_sections("results_tables")` and paste the returned markdown **verbatim,
+  sentinels and all** — Tables 4.1–4.3 (and the CB-SEM fit table) are rendered directly from
+  `analysis_results`, so the numbers are the computed numbers by construction. You write only
+  the overview sentence before each table and the interpretation paragraph after it — never a
+  statistics table of your own. Likewise the Chapter 3 data-cleaning passage =
+  `render_verified_sections("data_cleaning")` verbatim. Rendered blocks are **authoritative**:
+  the coherence gate checks your surrounding narrative against the same state the tables
+  rendered from, and does not re-litigate the tables themselves.
+- **Numbers your narrative quotes must match `analysis_results` exactly** — copy, never retype
+  from memory. This is **enforced**: `commit_slice("M5", {"final_sections": …})` runs a
+  coherence gate and returns a `coherence_failed` error if any β/t/p/R²/f² you quote
+  (attributed to a hypothesis) contradicts the persisted M4 value. Fix by re-reading the M4
+  slice and quoting the exact value — **never split the difference** to a number in between; if
+  the analysis itself changed, recommit M4 first. Soft `coherence_warnings` (a direction/
+  decision wording mismatch, or an undiscussed hypothesis) don't block — acknowledge them
+  before `confirm_done`.
 - **Hypotheses stated verbatim** in the Discussion, then "supported" / "not supported"
   — never "kind of supported".
 - **Nothing from outside the project state.** *"Add context about COVID's impact on
   retail"* with no M2 source → *"I'd need a source for that. Want to add a paper to
   M2 first?"*
-- **Limitations are honest** — actual sample/method/scope limits, not boilerplate.
+- **Limitations are honest** — actual sample/method/scope limits, not boilerplate. Seed them
+  with `render_verified_sections("limitations")`, which surfaces the REAL flagged weaknesses
+  (sub-threshold power, a not-supported hypothesis, screening removals, borderline validity)
+  framed for disclosure; discuss each bullet, delete none silently. If it returns `no_data`,
+  write honest limitations from state as before.
 
 ## How to act based on intent
 
