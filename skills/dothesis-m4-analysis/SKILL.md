@@ -40,10 +40,27 @@ results — full stop.
 ## The tool
 
 `run_stats(op, file?, params?)` — executes a **whitelisted** analysis operation in the
-sandboxed stats service and returns structured numbers. Ops include:
-`detect` (schema introspection: .sav via pyreadstat, .csv/.xlsx via pandas, SmartPLS
-exports), `describe`, `cronbach`, `efa`, `cfa_loadings`, `corr`, `regression`,
-`moderation`, `sobel`, `bootstrap_paths`, `ttest`, `anova`, `harman`.
+sandboxed stats service and returns structured numbers. Ops:
+
+- **Basic:** `detect` (schema introspection: .sav via pyreadstat, .csv/.xlsx via pandas),
+  `describe`, `corr`, `cronbach` (params: `items=[cols]`), `regression`
+  (params: `y=col, x=[cols]`), `ttest` (params: `value=col, group=col`).
+- **Model-based (compute real PLS-SEM/EFA from the RAW data via the shared thesis-stats
+  engine — pass `params.conceptual_model`, plus `params.measurement={construct:[cols]}`
+  when the model's questions are item texts rather than data columns):**
+  - `pls_sem` — full PLS-SEM: path betas (+bootstrap t/CI), R², outer loadings,
+    AVE/CR/α, HTMT, Fornell-Larcker, VIF, f², GoF (`bootstrap_samples` ≤ 1000).
+  - `efa` — EFA: KMO, Bartlett, factors.
+  - `regression_full` — OLS toward the dependent construct (F-test, R², coefficients).
+  - `mediation` — direct/indirect/total effects.
+  - `moderation` — interaction path from a moderated model (needs a moderator in the
+    conceptual_model — decomposition shape with `moderator`, or a moderate_effect node).
+  - `rigor` — assumption tests (Shapiro/Levene), Cohen's f²/d effect sizes, and Harman's
+    single-factor common-method-bias test (params: `group=col`, `regressions=[{y,x}]`,
+    `checks=[...]`).
+
+These compute from the student's raw uploaded data — they complement (do not replace)
+`check_thresholds`, which classifies numbers the student pasted from external SmartPLS/SPSS.
 
 Free-form code is not an op. If a needed analysis has no op, tell the user it needs
 to be added to the whitelist — do not improvise math in your head.
