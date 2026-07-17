@@ -160,6 +160,27 @@ def make_state_tools(store: ProjectStateStore) -> list:
             except Exception:
                 logger.debug("commit_slice: M5 coherence gate skipped", exc_info=True)
                 _coherence_warnings = "unavailable"
+        # Provenance injection (roadmap #12): after the model-edge strip (so a
+        # forged analysis_provenance is already gone) and after the hard gate (so
+        # only committable numbers are attributed), deterministic code matches the
+        # committed numbers against the stats ledger and writes the summary. The
+        # model can never author it; the matcher only upgrades tiers. Fail-open.
+        if module == "M4" and "analysis_results" in writes:
+            try:
+                from agent.provenance import load_ledger_rows, match_claims  # noqa: PLC0415
+                from agent.stats_validation import claims_from_analysis_results  # noqa: PLC0415
+                _pdir = getattr(store, "project_dir", None)
+                if _pdir:
+                    _rows = load_ledger_rows(str(_pdir))
+                    _summary = match_claims(
+                        claims_from_analysis_results(writes["analysis_results"]), _rows)
+                    from datetime import datetime, timezone  # noqa: PLC0415
+                    _summary["captured_at"] = datetime.now(timezone.utc).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ")
+                    _summary["numbers"] = _summary.pop("coverage")
+                    writes = {**writes, "analysis_provenance": _summary}
+            except Exception:
+                logger.debug("commit_slice: provenance injection skipped", exc_info=True)
         try:
             result = store.commit_slice(
                 module, writes, reason,

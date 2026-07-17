@@ -48,7 +48,7 @@ SLICE_OWNERSHIP: dict[str, list[str]] = {
     # so there is no Db-specific write path to forget (project_db_store_persistence_gap).
     "M4": ["analysis_outline", "analysis_results",
            "field_it_collection_id", "field_it_responses", "field_it_quality",
-           "decisions"],
+           "analysis_provenance", "decisions"],
     "M5": ["final_sections", "decisions"],
 }
 # "decisions" (headless auto-decision audit trail, convergence spec §4) is
@@ -90,7 +90,7 @@ DOWNSTREAM: dict[str, list[str]] = {
 # audit row is appended, which is exactly the hallucinated-completion the gate
 # exists to catch (and headless records a decision under every module it
 # touches, so every module would become done-eligible while empty).
-NON_CONTENT_KEYS = {"decisions"}
+NON_CONTENT_KEYS = {"decisions", "analysis_provenance"}
 
 # Owned, persisted, and VISIBLE — but caller-supplied INPUTS (locale, steering
 # notes), never module output. Distinct from NON_CONTENT_KEYS, which are ALSO

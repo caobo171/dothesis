@@ -535,4 +535,22 @@ def run_stats(op: str, file: str, params: dict | None = None) -> str:
                                         "soft": v["soft"], "findings": v["findings"]}
         except Exception:
             logger.exception("run_stats validation failed for %s (fail-open)", op)
+        # Provenance capture (roadmap #12): one ledger row per successful,
+        # file-backed op, AFTER validation attach so the row records the verdict.
+        # Fail-open — never let ledger I/O affect the op's return. Ops never touch
+        # the ledger themselves; this wrapper is the sole capture point.
+        if file and "error" not in result:
+            try:
+                from agent.provenance import (append_ledger_row, build_ledger_row,
+                                              dataset_fingerprint)
+                rows = cols = None
+                try:
+                    _df = _load_df(file)
+                    rows, cols = int(_df.shape[0]), int(_df.shape[1])
+                except Exception:
+                    pass
+                ds = dataset_fingerprint(file, rows=rows, cols=cols)
+                append_ledger_row(file, build_ledger_row(op, params or {}, result, ds, seq=0))
+            except Exception:
+                logger.exception("run_stats provenance capture failed for %s (fail-open)", op)
     return json.dumps({"op": op, **result}, ensure_ascii=False)
