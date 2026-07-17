@@ -470,19 +470,24 @@ def similarity_dimension(context_store: dict) -> dict:
 
 
 def score_thesis(context_store: dict, *, institution_profile: dict | None = None,
-                 advisor_feedback: list[dict] | None = None, doi_verifier=None) -> dict:
-    """Full RubricResult. This task: deterministic dims only (judge + advisor + method
-    overlay land in later tasks)."""
+                 advisor_feedback: list[dict] | None = None, doi_verifier=None,
+                 include_judge: bool = True) -> dict:
+    """Full RubricResult. `include_judge=False` skips the two LLM judge dims
+    (methodology/writing) entirely — a fully deterministic, offline scoring used
+    by the committee-readiness certificate (roadmap #12), which must never make
+    an LLM call by default."""
     method = _detect_method(context_store)
     dims = deterministic_dimensions(context_store)
     # Method-aware results-reporting checklist (PLS/CB-SEM/SPSS/generic).
     dims.append(results_validity_dimension(context_store, method))
     # Bounded LLM-judge dims: methodology (gap<->hypothesis trace) + writing
     # quality. Best-effort — a judge failure yields a neutral dim, never a crash.
-    dims.append(judge_dimension("methodology", 0.15,
-                                _judge_prompt("methodology", context_store), context_store))
-    dims.append(judge_dimension("writing", 0.10,
-                                _judge_prompt("writing", context_store), context_store))
+    # Skipped entirely when include_judge=False (no LLM constructed).
+    if include_judge:
+        dims.append(judge_dimension("methodology", 0.15,
+                                    _judge_prompt("methodology", context_store), context_store))
+        dims.append(judge_dimension("writing", 0.10,
+                                    _judge_prompt("writing", context_store), context_store))
     # Advisor-directive dim: open professor comments become hard findings on
     # their chapter. Read with an empty default so F3 works without F4.
     adv_dim, adv_summary = advisor_dimension(advisor_feedback or [])
