@@ -42,3 +42,11 @@ langchain-google-genai>=4.1.0,<5
 # backend API surface is still moving upstream.
 deepagents>=0.6.8,<0.7
 langchain-anthropic>=1.4.0,<2
+
+# === Statistics engine (thesis-stats) ===
+# Real PLS-SEM / EFA / mediation / moderation compute for run_stats' new ops,
+# shared with fillform. Pure in-process compute (no network) — the run_stats
+# sandbox posture is unchanged. Brings pandas/numpy/scipy/statsmodels/
+# scikit-learn/factor-analyzer transitively (pinned in the package). The sandbox
+# image must install this package. For CI, use: thesis-stats @ git+<repo-url>
+-e /Users/caonguyenvan/project/thesis-stats

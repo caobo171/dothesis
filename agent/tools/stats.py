@@ -116,6 +116,146 @@ def _op_ttest(file: str, value: str = None, group: str = None, **_: Any) -> dict
     }
 
 
+# --- thesis-stats-backed ops (real PLS-SEM / EFA / mediation / moderation) ---
+# These compute the numbers a quantitative thesis needs from the RAW uploaded
+# data via the shared thesis-stats engine, run IN-PROCESS (no network, no
+# subprocess). thesis_stats is imported lazily so a missing install degrades to
+# the existing "stats dependency missing" JSON error. Results are SUMMARIZED to
+# a bounded, construct-level payload (never row-level matrices) — the LLM needs
+# tables, not n×k floats.
+
+_BOOTSTRAP_CAP = 1000
+
+
+def _round_floats(obj: Any, nd: int = 4):
+    if isinstance(obj, dict):
+        return {k: _round_floats(v, nd) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_round_floats(v, nd) for v in obj]
+    if isinstance(obj, float):
+        return round(obj, nd)
+    return obj
+
+
+def _records(file: str) -> list[dict]:
+    return _load_df(file).to_dict("records")
+
+
+def _adapt(conceptual_model, measurement):
+    from agent.tools.model_adapter import to_advance_model
+    if not conceptual_model:
+        raise ValueError("this op needs a conceptual_model (params.conceptual_model)")
+    return to_advance_model(conceptual_model, measurement=measurement)
+
+
+def _summarize_pls(raw: dict, bootstrap_samples: int) -> dict:
+    boot_paths = (raw.get("raw_bootstrap") or {}).get("paths") or {}
+    paths: dict = {}
+    for target, sources in (raw.get("raw_path_coefficients") or {}).items():
+        for source, coef in (sources or {}).items():
+            if coef is None or abs(float(coef)) < 1e-12:
+                continue
+            key = f"{source} -> {target}"
+            entry = {"beta": round(float(coef), 4)}
+            b = boot_paths.get(key)
+            if b:
+                entry["t"] = round(float(b.get("t stat.") or 0.0), 3)
+                entry["ci95"] = [round(float(b.get("perc.025") or 0.0), 4),
+                                 round(float(b.get("perc.975") or 0.0), 4)]
+            paths[key] = entry
+
+    inner = raw.get("raw_inner_summary") or {}
+    uni = raw.get("raw_unidimensionality") or {}
+    reliability = {
+        c: {
+            "r_squared": round(float(s.get("r_squared", 0.0)), 4),
+            "ave": round(float(s.get("ave", 0.0)), 4),
+            "cronbach_alpha": round(float((uni.get(c) or {}).get("cronbach_alpha", 0.0)), 4),
+            "cr_rho": round(float((uni.get(c) or {}).get("dillon_goldstein_rho", 0.0)), 4),
+        }
+        for c, s in inner.items()
+    }
+    loadings = {item: round(float(v.get("loading", 0.0)), 4)
+                for item, v in (raw.get("raw_outer_model") or {}).items()}
+
+    return {
+        "paths": paths,
+        "reliability": reliability,
+        "outer_loadings": loadings,
+        "htmt": _round_floats(raw.get("raw_htmt")),
+        "fornell_larcker": _round_floats(raw.get("raw_fornell_larcker")),
+        "vif": _round_floats(raw.get("raw_vif")),
+        "f_squared": _round_floats(raw.get("raw_f_squared")),
+        "goodness_of_fit": round(float(raw.get("raw_goodness_of_fit") or 0.0), 4),
+        "bootstrap_samples": bootstrap_samples,
+    }
+
+
+def _op_pls_sem(file: str, conceptual_model=None, measurement=None,
+                bootstrap_samples: int = 500, **_: Any) -> dict:
+    import thesis_stats as ts
+    bs = max(0, min(int(bootstrap_samples), _BOOTSTRAP_CAP))
+    model = _adapt(conceptual_model, measurement)
+    raw = ts.run_pls(model, _records(file), bootstrap_samples=bs)
+    return _summarize_pls(raw, bs)
+
+
+def _op_efa(file: str, conceptual_model=None, measurement=None, **_: Any) -> dict:
+    import thesis_stats as ts
+    model = _adapt(conceptual_model, measurement)
+    raw = ts.run_spss_basic(model, _records(file))
+    efa = raw.get("efa_result") or {}
+    return {
+        "kmo": round(float(efa.get("kmo_measure", 0.0)), 4) if efa else None,
+        "bartlett_p": efa.get("bartlett_p_value"),
+        "total_variance_explained": efa.get("total_variance_explained"),
+        "factors": _round_floats(efa.get("factors")) if efa else None,
+    }
+
+
+def _op_regression_full(file: str, conceptual_model=None, measurement=None, **_: Any) -> dict:
+    import thesis_stats as ts
+    model = _adapt(conceptual_model, measurement)
+    raw = ts.run_spss_regression(model, _records(file))
+    return {"regression": _round_floats(raw.get("regression_result"))}
+
+
+def _op_mediation(file: str, conceptual_model=None, measurement=None,
+                  bootstrap_samples: int = 500, **_: Any) -> dict:
+    import thesis_stats as ts
+    bs = max(0, min(int(bootstrap_samples), _BOOTSTRAP_CAP))
+    model = _adapt(conceptual_model, measurement)
+    raw = ts.run_pls(model, _records(file), bootstrap_samples=bs)
+    return {"effects": _round_floats(raw.get("raw_effects")), "bootstrap_samples": bs}
+
+
+def _op_moderation(file: str, conceptual_model=None, measurement=None,
+                   bootstrap_samples: int = 500, **_: Any) -> dict:
+    import thesis_stats as ts
+    bs = max(0, min(int(bootstrap_samples), _BOOTSTRAP_CAP))
+    model = _adapt(conceptual_model, measurement)
+    raw = ts.run_pls(model, _records(file), bootstrap_samples=bs)
+    summary = _summarize_pls(raw, bs)
+    interactions = {k: v for k, v in summary["paths"].items() if "*" in k}
+    if not interactions:
+        return {"error": "no interaction term found — encode the moderator in the "
+                         "conceptual_model (decomposition shape with a 'moderator', or a "
+                         "moderate_effect node)", "paths": summary["paths"]}
+    return {"interactions": interactions, "all_paths": summary["paths"],
+            "f_squared": summary["f_squared"], "bootstrap_samples": bs}
+
+
+def _op_rigor(file: str, conceptual_model=None, measurement=None, group=None,
+              regressions=None, checks=None, **_: Any) -> dict:
+    import thesis_stats as ts
+    model = None
+    if conceptual_model:
+        model = _adapt(conceptual_model, measurement)
+    out = ts.run_rigor(_records(file), model=model, groups=group,
+                       regressions=regressions, checks=checks)
+    return _round_floats(out)
+
+
 # The whitelist. An op not in this dict does not run, full stop.
 OPS = {
     "detect": _op_detect,
@@ -124,6 +264,13 @@ OPS = {
     "cronbach": _op_cronbach,
     "regression": _op_regression,
     "ttest": _op_ttest,
+    # thesis-stats-backed (compute from raw data, not parsed from pasted output)
+    "pls_sem": _op_pls_sem,
+    "efa": _op_efa,
+    "regression_full": _op_regression_full,
+    "mediation": _op_mediation,
+    "moderation": _op_moderation,
+    "rigor": _op_rigor,
 }
 
 
@@ -178,10 +325,26 @@ def check_thresholds(table_kind: str, rows: list[dict]) -> str:
 def run_stats(op: str, file: str, params: dict | None = None) -> str:
     """Run ONE whitelisted statistical operation on an uploaded data file.
 
-    Ops: detect (schema introspection — always run this first), describe,
-    corr, cronbach (params: items=[cols]), regression (params: y=col,
-    x=[cols]), ttest (params: value=col, group=col). Free-form code is NOT
-    an op — if an analysis you need is missing, say so instead of improvising.
+    Basic ops: detect (schema introspection — always run this first), describe,
+    corr, cronbach (params: items=[cols]), regression (params: y=col, x=[cols]),
+    ttest (params: value=col, group=col).
+
+    Model-based ops (compute real PLS-SEM/EFA from the RAW data — pass
+    params.conceptual_model, and params.measurement={construct: [cols]} when the
+    model's questions are item texts rather than column names):
+      pls_sem  — full PLS-SEM: path betas (+bootstrap t/CI), R², outer loadings,
+                 AVE/CR/alpha, HTMT, Fornell-Larcker, VIF, f², GoF
+                 (params: conceptual_model, measurement, bootstrap_samples≤1000)
+      efa      — EFA: KMO, Bartlett, factors (params: conceptual_model, measurement)
+      regression_full — OLS toward the dependent construct (F-test, R², coeffs)
+      mediation — direct/indirect/total effects (params: …, bootstrap_samples)
+      moderation — interaction path from a moderated model (needs a moderator in
+                 the conceptual_model)
+      rigor    — assumptions + effect sizes + Harman CMB (params: group=col,
+                 regressions=[{y,x}], checks=[...])
+
+    Free-form code is NOT an op — if an analysis you need is missing, say so
+    instead of improvising.
 
     Args:
         op: One of the whitelisted operation names.

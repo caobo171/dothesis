@@ -65,3 +65,150 @@ def test_ttest_runs(csv):
 def test_missing_file_is_clean_error(tmp_path):
     out = _run("describe", str(tmp_path / "nope.csv"))
     assert "failed" in out["error"]
+
+
+# --- thesis-stats-backed ops ------------------------------------------------
+
+ts = pytest.importorskip("thesis_stats")
+np = pytest.importorskip("numpy")
+
+
+@pytest.fixture
+def pls(tmp_path):
+    """3-construct reflective model A->B->C (+A->C), 3 items each, positive."""
+    rng = np.random.default_rng(7)
+    n = 120
+    a = rng.normal(0, 1, n)
+    b = 0.6 * a + rng.normal(0, 0.8, n)
+    c = 0.5 * b + 0.3 * a + rng.normal(0, 0.8, n)
+
+    def items(latent, prefix):
+        out = {}
+        for i in (1, 2, 3):
+            raw = 0.8 * latent + rng.normal(0, 0.6, n)
+            out[f"{prefix}{i}"] = np.clip(np.round(raw * 1.2 + 3.0), 1, 5).astype(int)
+        return out
+
+    cols = {}
+    cols.update(items(a, "A"))
+    cols.update(items(b, "B"))
+    cols.update(items(c, "C"))
+    p = tmp_path / "pls.csv"
+    pd.DataFrame(cols).to_csv(p, index=False)
+    cm = {
+        "nodes": [
+            {"id": "A", "label": "A", "questions": ["A1", "A2", "A3"]},
+            {"id": "B", "label": "B", "questions": ["B1", "B2", "B3"]},
+            {"id": "C", "label": "C", "questions": ["C1", "C2", "C3"]},
+        ],
+        "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"},
+                  {"source": "A", "target": "C"}],
+    }
+    return str(p), cm
+
+
+def test_pls_sem_computes_bounded_payload(pls):
+    path, cm = pls
+    out = _run("pls_sem", path, {"conceptual_model": cm, "bootstrap_samples": 0})
+    assert out["paths"]["A -> B"]["beta"] > 0  # positive by construction
+    assert out["reliability"] and all("ave" in v for v in out["reliability"].values())
+    assert out["htmt"] and out["f_squared"]
+    # bounded, construct-level summary (schema not data)
+    assert len(json.dumps(out)) < 8192
+
+
+def test_pls_clamps_bootstrap_samples(pls, monkeypatch):
+    path, cm = pls
+    captured = {}
+
+    def fake_run_pls(model, data, bootstrap_samples=1000):
+        captured["bs"] = bootstrap_samples
+        return {"raw_path_coefficients": {}, "raw_inner_summary": {},
+                "raw_unidimensionality": {}, "raw_outer_model": {}, "raw_bootstrap": None}
+
+    monkeypatch.setattr(ts, "run_pls", fake_run_pls)
+    out = _run("pls_sem", path, {"conceptual_model": cm, "bootstrap_samples": 999999})
+    assert captured["bs"] == 1000  # clamped
+    assert out["bootstrap_samples"] == 1000
+
+
+def test_efa_returns_kmo_and_factors(pls):
+    path, cm = pls
+    out = _run("efa", path, {"conceptual_model": cm})
+    assert out["kmo"] is not None and 0.0 < out["kmo"] <= 1.0
+    assert out["factors"]
+
+
+def test_regression_full_returns_table(pls):
+    path, cm = pls
+    out = _run("regression_full", path, {"conceptual_model": cm})
+    assert out["regression"] is not None
+    assert "r_squared" in out["regression"]
+
+
+def test_mediation_returns_effects(pls):
+    path, cm = pls
+    out = _run("mediation", path, {"conceptual_model": cm, "bootstrap_samples": 0})
+    # A -> C has an indirect path via B
+    keys = list((out.get("effects") or {}).keys())
+    assert any("A -> C" == k for k in keys)
+
+
+def test_rigor_returns_envelope(pls):
+    path, cm = pls
+    out = _run("rigor", path, {"regressions": [{"y": "A1", "x": ["A2", "A3"]}]})
+    assert {"checks", "warnings"} <= set(out)  # run_stats also adds "op"
+    assert "normality" in out["checks"] and "effect_sizes" in out["checks"]
+
+
+@pytest.fixture
+def moderated(tmp_path):
+    rng = np.random.default_rng(11)
+    n = 300
+    x = rng.normal(0, 1, n)
+    w = rng.normal(0, 1, n)
+    y = 0.4 * x + 0.3 * w + 0.4 * (x * w) + rng.normal(0, 0.7, n)
+
+    def items(latent, prefix):
+        return {f"{prefix}{i}": np.clip(np.round((0.8 * latent + rng.normal(0, 0.6, n)) * 1.2 + 3.0), 1, 5).astype(int)
+                for i in (1, 2, 3)}
+
+    cols = {}
+    for latent, prefix in ((x, "X"), (w, "W"), (y, "Y")):
+        cols.update(items(latent, prefix))
+    p = tmp_path / "mod.csv"
+    pd.DataFrame(cols).to_csv(p, index=False)
+    cm = {"dependent_variable": "Y", "independent_variables": ["X"], "moderator": "W"}
+    measurement = {"Y": ["Y1", "Y2", "Y3"], "X": ["X1", "X2", "X3"], "W": ["W1", "W2", "W3"]}
+    return str(p), cm, measurement
+
+
+def test_moderation_returns_interaction(moderated):
+    path, cm, measurement = moderated
+    out = _run("moderation", path, {"conceptual_model": cm, "measurement": measurement,
+                                    "bootstrap_samples": 0})
+    assert out.get("interactions"), f"expected an interaction term, got {out}"
+
+
+def test_new_ops_are_whitelisted():
+    from agent.tools.stats import OPS
+    for name in ("pls_sem", "efa", "regression_full", "mediation", "moderation", "rigor"):
+        assert name in OPS
+    out = _run("eval_python", "x.csv")  # still rejected
+    assert "not whitelisted" in out["error"]
+    assert "pls_sem" in out["available"]
+
+
+def test_missing_thesis_stats_degrades_cleanly(pls, monkeypatch):
+    import builtins
+    real_import = builtins.__import__
+
+    def fake_import(name, *a, **k):
+        if name == "thesis_stats":
+            raise ModuleNotFoundError("No module named 'thesis_stats'", name="thesis_stats")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    path, cm = pls
+    out = _run("pls_sem", path, {"conceptual_model": cm})
+    assert "stats dependency missing" in out["error"]
