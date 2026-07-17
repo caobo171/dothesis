@@ -280,6 +280,18 @@ def make_writing_tools(store) -> list:
             _similarity = similarity_report(flat if isinstance(flat, dict) else {})
         except Exception:
             logger.exception("export_docx: similarity report failed (advisory)")
+        # Committee-readiness certificate (roadmap #12) — advisory, NEVER a gate.
+        # Deterministic + offline (include_judge=False): a failure must not fail
+        # an otherwise-good export. Ships the bounded gate_summary; the full
+        # certificate JSON + docx appendix are a separate web/export change.
+        _certificate = None
+        try:
+            from quality.certificate import build_certificate, gate_summary  # noqa: PLC0415
+            _cert = build_certificate(full_cs if isinstance(full_cs, dict) else {},
+                                      project_id=str(project_id))
+            _certificate = gate_summary(_cert)
+        except Exception:
+            logger.exception("export_docx: certificate build failed (advisory)")
         return json.dumps({
             "ok": True,
             "generated": generated,
@@ -287,6 +299,7 @@ def make_writing_tools(store) -> list:
             "chapters": chapter_titles,
             "chapter_count": len(chapter_titles),
             "similarity": _similarity,
+            "certificate": _certificate,
             # Instruction to the agent, NOT user-facing copy — the agent must
             # write its OWN confirmation in the conversation's language (the
             # user got an English message parroted from here before). A download
@@ -324,6 +337,15 @@ def make_writing_tools(store) -> list:
             "method": result.get("method"),
             "blocking_count": len(result.get("blocking") or []),
         })
+        # Committee-readiness gate summary (roadmap #12) rides the review payload,
+        # built from the SAME rubric result. Judge dims land under advisory only
+        # and provably do not change any checklist status (deterministic spine).
+        try:
+            from quality.certificate import build_certificate, gate_summary  # noqa: PLC0415
+            result = {**result, "gate_summary": gate_summary(
+                build_certificate(cs, rubric=result))}
+        except Exception:
+            logger.exception("review_thesis: gate summary failed (advisory)")
         return json.dumps(result, ensure_ascii=False)
 
     return [export_docx, review_thesis]

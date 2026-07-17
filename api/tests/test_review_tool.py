@@ -55,3 +55,23 @@ def test_review_thesis_surfaces_open_advisor_directive():
     adv = next(d for d in out["dimensions"] if d["name"] == "advisor")
     assert adv["findings"], "open advisor directive must produce a finding"
     assert out["advisor"]["open"] == fb
+
+
+def test_review_thesis_carries_gate_summary():
+    tools = {t.name: t for t in make_writing_tools(_Store())}
+    out = json.loads(tools["review_thesis"].func())
+    gs = out["gate_summary"]
+    assert gs["deterministic"] is True and len(gs["items"]) == 11
+    assert gs["ready"] in (True, False)
+
+
+def test_review_gate_summary_judge_does_not_change_items(monkeypatch):
+    # The judge dims land in the rubric but must NOT change any checklist status
+    # vs the deterministic build (the Task 1.3 invariant, re-proven at this surface).
+    from quality.certificate import build_certificate, gate_summary
+    cs = _Store().load_full_context_store()
+    det = gate_summary(build_certificate(cs))  # include_judge=False
+    tools = {t.name: t for t in make_writing_tools(_Store())}
+    surfaced = json.loads(tools["review_thesis"].func())["gate_summary"]
+    assert {i["id"]: i["status"] for i in det["items"]} == {
+        i["id"]: i["status"] for i in surfaced["items"]}
