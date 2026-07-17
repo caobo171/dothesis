@@ -654,6 +654,8 @@ def _collect_construct_labels(conceptual_model: dict | None, instrument: dict | 
     for n in cm.get("nodes") or []:
         if isinstance(n, dict):
             add(n.get("label") or n.get("id"))
+    for c in cm.get("constructs") or []:  # constructs+relationships shape
+        add(c)
     add(cm.get("dependent_variable"))
     for v in cm.get("independent_variables") or []:
         add(v)
@@ -782,6 +784,68 @@ def _variable_decomposition_to_graph(cm: dict) -> dict | None:
     return {"nodes": nodes, "edges": edges}
 
 
+def _constructs_relationships_to_graph(cm: dict) -> dict | None:
+    """Coerce the {constructs:[{name,source}], relationships:[{from,to,hypothesis}]}
+    M3 shape into nodes/edges. Relationships reference constructs BY NAME, so the
+    construct name IS the node id and the from/to keys already match. A moderation
+    relationship (effect/type says so) becomes a dashed moderator edge."""
+    cons = cm.get("constructs") or []
+    rels = cm.get("relationships") or cm.get("paths") or []
+    if not rels:
+        return None
+    # Relationships reference constructs by NAME, which contain spaces — invalid
+    # as mermaid node ids. Assign safe ids (N1, N2, …) and keep the name as label.
+    id_of: dict[str, str] = {}
+    nodes: list[dict] = []
+
+    def _sid(name) -> str | None:
+        name = str(name or "").strip()
+        if not name:
+            return None
+        if name not in id_of:
+            id_of[name] = f"N{len(id_of) + 1}"
+            nodes.append({"id": id_of[name], "label": name})
+        return id_of[name]
+
+    for c in cons:
+        _sid((c.get("name") or c.get("label") or c.get("id")) if isinstance(c, dict) else c)
+    edges: list[dict] = []
+    for r in rels:
+        if not isinstance(r, dict):
+            continue
+        # a relationship may name a construct not in the constructs list — _sid adds it
+        s = _sid(r.get("from") or r.get("source"))
+        t = _sid(r.get("to") or r.get("target"))
+        if not s or not t:
+            continue
+        edge: dict = {"from": s, "to": t}
+        h = str(r.get("hypothesis") or r.get("label") or "").strip()
+        if h:
+            edge["label"] = h
+        if (str(r.get("effect") or "").lower().startswith("moderat")
+                or _is_moderation_label(r.get("type"))):
+            edge["effect"] = "moderates"
+        edges.append(edge)
+    if not nodes or not edges:
+        return None
+    return {"nodes": nodes, "edges": edges}
+
+
+def _coerce_cm(cm: dict | None) -> dict:
+    """Normalize the alternative M3 conceptual_model shapes to nodes/edges so
+    every figure renderer sees one grammar. No-op when nodes/edges already exist.
+    Handles: variable-decomposition (independent/dependent/moderator) and
+    constructs+relationships. Unknown shapes pass through unchanged."""
+    cm = cm or {}
+    if cm.get("nodes") or cm.get("edges"):
+        return cm
+    if cm.get("dependent_variable"):
+        return _variable_decomposition_to_graph(cm) or cm
+    if cm.get("constructs") and (cm.get("relationships") or cm.get("paths")):
+        return _constructs_relationships_to_graph(cm) or cm
+    return cm
+
+
 def _is_moderation_label(label: str | None) -> bool:
     low = str(label or "").lower()
     return "điều tiết" in low or "moderat" in low
@@ -802,10 +866,7 @@ def _conceptual_model_to_mermaid(conceptual_model: dict | None,
     # Headless sometimes emits a variable-decomposition shape instead of
     # nodes/edges (independent_variables / dependent_variable / moderator) —
     # coerce it so the diagram still renders instead of silently vanishing.
-    if not (cm.get("nodes") or cm.get("edges")) and cm.get("dependent_variable"):
-        coerced = _variable_decomposition_to_graph(cm)
-        if coerced:
-            cm = coerced
+    cm = _coerce_cm(cm)
     nodes = cm.get("nodes") or []
     edges = cm.get("edges") or []
     node_type: dict[str, str] = {}
@@ -862,8 +923,7 @@ def _render_model_figure(conceptual_model: dict | None, language: str = "vi") ->
     image + text so the junctions never leak into the hypothesis list.
     """
     cm = conceptual_model or {}
-    if not (cm.get("nodes") or cm.get("edges")) and cm.get("dependent_variable"):
-        cm = _variable_decomposition_to_graph(cm) or cm
+    cm = _coerce_cm(cm)
     nodes = cm.get("nodes") or []
     edges = cm.get("edges") or []
 
@@ -944,8 +1004,7 @@ def _svg_model_figure(conceptual_model: dict | None, language: str = "vi") -> st
     import html as _html
 
     cm = conceptual_model or {}
-    if not (cm.get("nodes") or cm.get("edges")) and cm.get("dependent_variable"):
-        cm = _variable_decomposition_to_graph(cm) or cm
+    cm = _coerce_cm(cm)
     nodes, edges = cm.get("nodes") or [], cm.get("edges") or []
     label: dict[str, str] = {}
     ntype: dict[str, str] = {}
