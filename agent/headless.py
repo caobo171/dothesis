@@ -64,7 +64,9 @@ class RunProfile:
     interactive: bool = False
     max_turns: int = 40
     wall_clock_s: int = 1800
-    max_stalls: int = 3
+    # 5 (was 3): the stall nudge in run_headless needs a couple of turns to pull a
+    # spinning model out of a read-only loop before we give up. Still a firm bound.
+    max_stalls: int = 5
     on_options: str = "auto"  # "auto": decide + record | "ask": stop, surface options
     # Which modules must be `done` for THIS run to be done. None = all of MODULES,
     # which is what every caller that doesn't care gets (and what the runner did
@@ -202,7 +204,26 @@ async def run_headless(
             stalls += 1
             if stalls >= profile.max_stalls:
                 return RunResult("failed", "max_stalls", turns, decisions)
-            next_prompt = "continue"
+            # A bland "continue" lets a spinning model repeat the same read-only
+            # turn — the observed stall is qwen re-reading context at M3 (the most
+            # complex module) without committing anything, so the store never
+            # changes and it dies at max_stalls. Nudge it to WRITE or declare a
+            # blocker instead of reading more; escalate on repeat.
+            next_prompt = (
+                "STOP. Last turn produced NO change to the project — you only "
+                "read/inspected, you did not write. Do NOT read any more files or "
+                "slices this turn. Take ONE concrete write action now: call "
+                "commit_slice with your best current work for the module you are on "
+                "(for M3, commit the conceptual_model and hypotheses), which advances "
+                "the roadmap. If a specific obstacle truly blocks you, call "
+                "flag_blocker. Reading again is not allowed this turn."
+            )
+            if stalls >= 2:
+                next_prompt = (
+                    "You are stuck in a read-only loop. Commit whatever you have for "
+                    "the current module RIGHT NOW with commit_slice — even a "
+                    "minimal-but-valid slice is better than nothing. Do not read; write."
+                )
             continue
         stalls = 0
 
