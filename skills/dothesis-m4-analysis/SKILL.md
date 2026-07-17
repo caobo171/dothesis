@@ -35,7 +35,9 @@ results — full stop.
   real `run_stats` run or a parsed upload.
 - Keep the metric family consistent with M3's chosen tool: PLS-SEM → R²/f²/Q²,
   path coefficients, CR, AVE, HTMT (NO CFI/TLI/RMSEA); CB-SEM → CFI/TLI/RMSEA/
-  SRMR + loadings. Never report both.
+  SRMR + loadings. Never report both. **If M3 chose CB-SEM (AMOS/lavaan/
+  covariance-based), compute with the `cb_sem` op, never `pls_sem` — and vice
+  versa.** This closes the loop with `method_advice`: run the chosen estimator.
 
 ## The tool
 
@@ -60,6 +62,15 @@ sandboxed stats service and returns structured numbers. Ops:
   - `ipma` — **importance-performance map** for a `target` construct (params: `target`,
     `scale_min`, `scale_max`): the Chapter 5 practical-implications figure. Needs positive
     (non-reversed) indicators — if it errors on that, run `screening` to recode first.
+  - `cb_sem` — **covariance-based SEM** (the CB-SEM/AMOS/lavaan estimator): CFA standardized
+    loadings + α/CR/AVE, model fit (χ²/df, CFI, TLI, RMSEA + 90% CI, SRMR), and the structural
+    model with path SE/z/p + per-construct R² (params: `conceptual_model`, `estimator=ML`,
+    `residual_covariances=[[i,j],…]`). Fit thresholds to report against: CFI/TLI ≥ 0.90,
+    RMSEA ≤ 0.08, SRMR ≤ 0.08 (Hu & Bentler). If a `heywood_case` warning appears, narrate it as
+    a **respecification signal** (a boundary/improper solution), never as a clean result. Disclose
+    every `residual_covariances` pair as a post-hoc modification. Needs positive (non-reversed)
+    indicators — run `screening` to recode first. If the estimator is unavailable, the op returns
+    a clean error (install the `cbsem` extra).
   - `efa` — EFA: KMO, Bartlett, factors.
   - `regression_full` — OLS toward the dependent construct (F-test, R², coefficients).
   - `mediation` — direct/indirect/total effects.

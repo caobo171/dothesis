@@ -228,6 +228,17 @@ def _op_ipma(file: str, conceptual_model=None, measurement=None, target=None,
                                      scale_min=scale_min, scale_max=scale_max))
 
 
+def _op_cb_sem(file: str, conceptual_model=None, measurement=None, estimator: str = "ML",
+               residual_covariances=None, **_: Any) -> dict:
+    """Covariance-based SEM (semopy). Advisory: any failure (incl. the semopy
+    extra being absent) flows through run_stats' generic handler as an
+    {"error": ...} JSON — never a raise here beyond model coercion."""
+    import thesis_stats as ts
+    model = _adapt(conceptual_model, measurement)
+    return _round_floats(ts.run_cbsem(model, _records(file), estimator=estimator,
+                                      residual_covariances=residual_covariances))
+
+
 def _op_efa(file: str, conceptual_model=None, measurement=None, **_: Any) -> dict:
     import thesis_stats as ts
     model = _adapt(conceptual_model, measurement)
@@ -382,6 +393,7 @@ OPS = {
     "method_advice": _op_method_advice,
     "mga": _op_mga,
     "ipma": _op_ipma,
+    "cb_sem": _op_cb_sem,
 }
 
 
@@ -475,6 +487,11 @@ def run_stats(op: str, file: str, params: dict | None = None) -> str:
       ipma     — importance-performance map for a target construct (params:
                  conceptual_model, target, scale_min, scale_max) — the Chapter 5
                  practical-implications map. (pls_sem also returns Q² by default.)
+      cb_sem   — covariance-based SEM (semopy): CFA loadings + α/CR/AVE, model fit
+                 (χ²/df, CFI, TLI, RMSEA+CI, SRMR), structural paths (SE/z/p) + R²
+                 (params: conceptual_model, estimator=ML, residual_covariances).
+                 Use when M3 chose CB-SEM/AMOS/lavaan (never pls_sem, and vice
+                 versa); needs the cbsem extra installed, else a clean error.
       method_advice — is the chosen analysis method defensible for this data +
                  model? ranked recommendation (pls_sem/cb_sem/regression/
                  nonparametric) with citable evidence rows + a conflict check

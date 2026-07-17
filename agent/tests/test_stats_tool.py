@@ -444,3 +444,65 @@ def test_ipma_op_missing_target_clean_error(grouped_csv):
 def test_new_pls_ops_whitelisted():
     for name in ("mga", "ipma"):
         assert name in OPS
+
+
+# --- cb_sem op (roadmap #9) -------------------------------------------------
+
+@pytest.fixture
+def cbsem_csv(tmp_path):
+    import numpy as np, pandas as pd
+    rng = np.random.default_rng(42)
+    n = 200
+    lat = {c: rng.normal(0, 1, n) for c in ("A", "B", "C")}
+    lat["B"] = 0.6 * lat["A"] + rng.normal(0, 0.8, n)
+    lat["C"] = 0.5 * lat["B"] + rng.normal(0, 0.8, n)
+    cols = {f"{c.lower()}{i}": 0.8 * lat[c] + rng.normal(0, 0.6, n)
+            for c in ("A", "B", "C") for i in (1, 2, 3, 4)}
+    p = tmp_path / "cb.csv"
+    pd.DataFrame(cols).to_csv(p, index=False)
+    cm = {"nodes": [{"id": c, "label": c, "questions": [f"{c.lower()}{i}" for i in (1, 2, 3, 4)]}
+                    for c in ("A", "B", "C")],
+          "edges": [{"source": "A", "target": "B"}, {"source": "B", "target": "C"}]}
+    return str(p), cm
+
+
+def test_cb_sem_op_clean(cbsem_csv):
+    path, cm = cbsem_csv
+    out = _run("cb_sem", path, {"conceptual_model": cm})
+    assert out["op"] == "cb_sem" and out["estimator"] == "ML"
+    assert set(out["fit"]) >= {"cfi", "tli", "rmsea", "srmr", "chi2_df"}
+    assert out["loadings"] and out["reliability"] and out["paths"]
+    assert "validation" not in out  # clean → no ride-along findings
+
+
+def test_cb_sem_bad_estimator_clean_error(cbsem_csv):
+    path, cm = cbsem_csv
+    out = _run("cb_sem", path, {"conceptual_model": cm, "estimator": "ULS"})
+    assert "error" in out
+
+
+def test_cb_sem_failsoft_when_semopy_missing(cbsem_csv, monkeypatch):
+    import thesis_stats as ts
+    def boom(*a, **k):
+        from thesis_stats import EstimatorUnavailableError
+        raise EstimatorUnavailableError("CB-SEM estimator unavailable — install thesis-stats[cbsem]")
+    monkeypatch.setattr(ts, "run_cbsem", boom)
+    path, cm = cbsem_csv
+    out = _run("cb_sem", path, {"conceptual_model": cm})
+    assert "error" in out and "CB-SEM estimator unavailable" in out["error"]
+
+
+def test_cb_sem_validation_ride_along(cbsem_csv, monkeypatch):
+    from agent.tools.stats import OPS
+    monkeypatch.setitem(OPS, "cb_sem", lambda file, **k: {
+        "op": "cb_sem", "n": 200, "fit": {"cfi": 1.3, "tli": 0.9, "rmsea": 0.05, "srmr": 0.05, "chi2_df": 2.0},
+        "loadings": {}, "reliability": {}, "paths": {}, "warnings": []})
+    path, cm = cbsem_csv
+    out = _run("cb_sem", path, {"conceptual_model": cm})
+    assert out["validation"]["hard"] >= 1
+    assert any(f["check"] == "bounds.cfi" for f in out["validation"]["findings"])
+
+
+def test_cb_sem_whitelisted():
+    from agent.tools.stats import OPS
+    assert "cb_sem" in OPS

@@ -127,3 +127,49 @@ def test_data_screening_block_impossible_missing_pct_hard():
     block = dict(GOOD_BLOCK)
     block["data_screening"] = {"missing": {"per_variable": {"LS1": {"missing_pct": 180}}}}
     assert "bounds.missing_pct" in _hard(validate_analysis_results(block))
+
+
+# --- CB-SEM persisted block coverage (roadmap #9) ---------------------------
+
+CBSEM_BLOCK = {
+    "measurement_model": [
+        {"construct": "LS", "items": [{"item": "LS1", "loading": 0.81}, {"item": "LS2", "loading": 0.78},
+                                      {"item": "LS3", "loading": 0.80}],
+         "cronbach_alpha": 0.86, "composite_reliability": 0.90, "ave": 0.638},
+        {"construct": "PI", "items": [{"item": "PI1", "loading": 0.80}, {"item": "PI2", "loading": 0.76},
+                                      {"item": "PI3", "loading": 0.74}],
+         "cronbach_alpha": 0.84, "composite_reliability": 0.88, "ave": 0.581},
+    ],
+    "hypothesis_tests": [
+        {"id": "r-H1", "hypothesis": "H1", "path": "LS → PI",
+         "numbers": {"beta": 0.34, "t": 7.01, "p": "<0.001"}, "decision": "supported"},
+    ],
+    "structural_model": {"r2": {"PI": 0.42}, "cfi": 0.95, "tli": 0.94, "rmsea": 0.05,
+                         "srmr": 0.05, "chi2_df": 2.1, "tool": "AMOS"},
+}
+
+
+def test_cbsem_block_clean_no_hard():
+    agg = validate_analysis_results(CBSEM_BLOCK)
+    assert agg["hard"] == 0, _hard(agg)
+
+
+def test_cbsem_heywood_loading_soft_not_hard():
+    b = copy.deepcopy(CBSEM_BLOCK)
+    b["measurement_model"][0]["items"][0]["loading"] = 1.02
+    hard = _hard(validate_analysis_results(b))
+    assert "bounds.loading" not in hard
+    checks = {f["check"] for f in validate_analysis_results(b)["findings"]}
+    assert "bounds.loading_heywood" in checks
+
+
+def test_pls_block_heywood_loading_still_hard():
+    b = copy.deepcopy(GOOD_BLOCK)  # PLS block (no fit indices, has q2)
+    b["measurement_model"][0]["items"][0]["loading"] = 1.02
+    assert "bounds.loading" in _hard(validate_analysis_results(b))
+
+
+def test_cbsem_bad_cfi_hard_at_gate():
+    b = copy.deepcopy(CBSEM_BLOCK)
+    b["structural_model"]["cfi"] = 1.4
+    assert "bounds.cfi" in _hard(validate_analysis_results(b))

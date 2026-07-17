@@ -194,7 +194,7 @@ log "installing api + engine deps (prod)"
 # -install it (brings the pinned science stack transitively).
 log "installing thesis-stats engine (submodule)"
 git submodule update --init --recursive libs/thesis-stats
-"$VENV_BIN/pip" install --quiet -e ./libs/thesis-stats
+"$VENV_BIN/pip" install --quiet -e "./libs/thesis-stats[cbsem]"
 
 log "running database migrations (alembic upgrade head)"
 ( cd api && "../$VENV_BIN/alembic" upgrade head )

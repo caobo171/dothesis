@@ -93,6 +93,9 @@ def claims_from_run_stats(op: str, summary: dict) -> list[dict]:
     elif op == "ipma":
         from thesis_stats.validation import claims_from_ipma  # noqa: PLC0415
         claims += claims_from_ipma(summary, source="computed")
+    elif op == "cb_sem":
+        from thesis_stats.validation import claims_from_cbsem  # noqa: PLC0415
+        claims += claims_from_cbsem(summary, source="computed")
     return claims
 
 
@@ -233,13 +236,21 @@ def claims_from_analysis_results(block: Any) -> list[dict]:
             if isinstance(item, dict) and item.get("sd") is not None:
                 claims.append(mk("sd", item["sd"], item=item.get("item"), table="descriptives"))
 
+    # CB-SEM blocks carry model-fit indices; their standardized loadings may
+    # legitimately exceed 1 (Heywood → soft), so they ride as `loading_cbsem`,
+    # not the hard-bounded `loading`. Family-scoped by the fit-index presence.
+    _sm = block.get("structural_model")
+    _is_cbsem = isinstance(_sm, dict) and any(
+        isinstance(_sm.get(k), (int, float)) for k in ("cfi", "tli", "rmsea", "srmr", "chi2_df"))
+    _loading_metric = "loading_cbsem" if _is_cbsem else "loading"
+
     for con in (block.get("measurement_model") or []):
         if not isinstance(con, dict):
             continue
         name = con.get("construct")
         for it in (con.get("items") or []):
             if isinstance(it, dict) and it.get("loading") is not None:
-                claims.append(mk("loading", it["loading"], construct=name, item=it.get("item"),
+                claims.append(mk(_loading_metric, it["loading"], construct=name, item=it.get("item"),
                                  table="measurement_model"))
         if con.get("ave") is not None:
             claims.append(mk("ave", con["ave"], construct=name, table="measurement_model"))
@@ -292,7 +303,7 @@ def claims_from_analysis_results(block: Any) -> list[dict]:
             if isinstance(v, (int, float)):
                 claims.append(mk("r2", v, construct=con, table="structural_model"))
         # CB-SEM fit indices, when present (enables the PLS/CB-SEM family-mix check).
-        for key in ("cfi", "tli", "rmsea", "srmr"):
+        for key in ("cfi", "tli", "rmsea", "srmr", "chi2_df"):
             if isinstance(sm.get(key), (int, float)):
                 claims.append(mk(key, sm[key], table="model_fit"))
     # Everything from a persisted block is treated as parsed precision.

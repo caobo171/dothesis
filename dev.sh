@@ -152,9 +152,12 @@ if [ ! -f libs/thesis-stats/pyproject.toml ]; then
   echo "==> fetching thesis-stats submodule"
   git submodule update --init --recursive libs/thesis-stats
 fi
-if ! "$VENV_BIN/python" -c "import thesis_stats" >/dev/null 2>&1; then
-  echo "==> installing thesis-stats into api/.venv (one-time)"
-  "$VENV_BIN/pip" install -e libs/thesis-stats
+# Dual-import guard: semopy is the optional CB-SEM estimator (the [cbsem] extra).
+# Guarding on it too means a stale env that predates CB-SEM gets the extra
+# installed on the next run instead of silently lacking the cb_sem op.
+if ! "$VENV_BIN/python" -c "import thesis_stats, semopy" >/dev/null 2>&1; then
+  echo "==> installing thesis-stats[cbsem] into api/.venv (one-time)"
+  "$VENV_BIN/pip" install -e "libs/thesis-stats[cbsem]"
 fi
 
 # Check the M5 export toolchain. LibreOffice is MANDATORY — the PDF needs it for

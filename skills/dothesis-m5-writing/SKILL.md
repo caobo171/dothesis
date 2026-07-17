@@ -85,7 +85,7 @@ If any of M1–M4 is `needs_review`, warn first:
 | 3 | Literature Review | M2 (`literature_sources`, `research_gaps`) |
 | 4 | Theoretical Framework / Model | M3 (`conceptual_model`, `hypotheses`) |
 | 5 | Methodology | M3 (`methodology`, instrument) |
-| 6 | Results | M4 (`analysis_results`) |
+| 6 | Results | M4 (`analysis_results`) — quote the computed numbers verbatim; for a CB-SEM analysis, report the `fit` table (χ²/df, CFI, TLI, RMSEA, SRMR) and per-construct reliability exactly as computed, same sourcing rule as PLS |
 | 7 | Discussion | M4 results × M3 hypotheses × M2 gaps |
 | 8 | Conclusion | M1 RQs answered + limitations + future work |
 | 9 | References | M2 `literature_sources`, formatted by the pipeline |
