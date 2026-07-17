@@ -118,6 +118,7 @@ If it comes back ready, say so briefly and continue to Detect.
 ```
 0. pre-flight the M3 design               → methods_preflight (advisory)
 1. detect data type from upload         → run_stats(op="detect")
+1b. SCREEN the data (always, on upload)  → run_stats(op="screening")
 2. propose analysis outline              → each step tied to an M3 hypothesis
 3. user confirms/edits → commit outline
 4. execute step-by-step                  → run_stats per step, real numbers
@@ -139,6 +140,15 @@ If the user uploads *already-computed* results (SmartPLS export, tables), parse 
 store them as results with `source: "user-provided"` — interpretation discipline
 still applies.
 
+### Step 1b — Screen the data (always, before any analysis)
+
+As soon as raw data is detected, run `run_stats(op="screening")` — do NOT wait to be
+asked. It reports missingness + Little's MCAR test, Mahalanobis outliers, careless/
+straight-lining, and a reverse-coded audit, with a committee-ready cleaning narrative.
+This is the Chapter 3 data-cleaning paragraph, every number computed — surface it and
+let the user decide on `params.apply` (recode/drop/impute, which writes `_screened.csv`).
+Skip only when the upload is already-computed results (no raw rows to screen).
+
 ### Step 2 — Propose the outline
 Each step names its tests, its hypothesis, and why:
 
@@ -154,6 +164,14 @@ Ask: *"Run this as outlined, or adjust?"* On confirm → commit the outline.
 ### Steps 4–5 — Execute and interpret
 Per step: call `run_stats`, capture the returned numbers verbatim, append to
 `analysis_results`.
+
+**Method-appropriate extras (run them, don't wait to be asked):** after the core
+PLS/CB-SEM fit, run `run_stats(op="ipma", target=<the key outcome construct>)` to
+produce the Chapter 5 importance–performance (practical-implications) figure, and
+`run_stats(op="mga", group=<col>)` whenever the data has a grouping variable the
+thesis compares (gender, region, cohort) — MGA gates the comparison on MICOM
+invariance so the difference is defensible. These are standard committee expectations
+for a structural model, not optional flourishes.
 
 **Save the FULL tables, not just summary numbers.** Chapter 4 of the thesis
 needs to render Table 4.1 (measurement model), Table 4.2 (discriminant

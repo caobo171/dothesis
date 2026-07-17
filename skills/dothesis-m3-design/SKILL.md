@@ -107,12 +107,19 @@ The paradigm is fixed: **positivist / quantitative**. Pick a coherent
 | Secondary / archival data | existing numeric dataset | regression, SEM |
 
 Pick consciously — ask about **access** (can they reach the sample?), **time budget**,
-**skills**. State sample-size logic (n≥X for the planned analysis).
+**skills**. Do NOT hand-wave the sample size: call `sampling_plan` (or
+`run_stats(op="power")`) to COMPUTE the a-priori required N and persist its
+committee-ready justification into `sample_plan.power_analysis` — "n ≥ X because…
+(Kock & Hadaya 2018 / Cohen 1988)", not a guessed rule of thumb. This is the number
+the committee asks about at the defense; compute it now, at the step that owns it.
 
-**Before endorsing any analysis method, consult `references/design-test-matrix.md`
-and state the rule that applies + its citation.** Never approve CB-SEM below its
-sample minimum, or a reflective/formative mismatch — those are the #1 novice errors
-and the matrix lists them as hard stops.
+**Before endorsing any analysis method, run `run_stats(op="method_advice")`** (params:
+`conceptual_model`, `chosen`, `target_n`) for the data-aware ranked recommendation
+(pls_sem/cb_sem/regression/nonparametric) with a citable evidence row per criterion and
+a conflict check against the student's choice. Consult `references/design-test-matrix.md`
+for the narrative rationale, but let the advisor — not a static table — make the call.
+Never approve CB-SEM below its sample minimum, or a reflective/formative mismatch —
+those are the #1 novice errors the advisor flags as strongly-against.
 
 Then design the instrument: 3–7 items per construct, reusing validated scales from M2
 sources (cite them per item block). Offer the questionnaire as a document the user can
@@ -146,7 +153,8 @@ When all three sub-decisions are confirmed: `commit_slice("M3", …, confirm_don
 - The design × instrument × analysis is internally consistent (e.g. a survey
   design has a defined sampling frame; the analysis plan matches the model —
   regression for direct effects, PLS-SEM for a full structural model).
-- Sample size logic is stated (n≥X for the planned analysis).
+- Sample size is COMPUTED, not guessed: `sample_plan.power_analysis` holds the
+  a-priori required N + its citation (from `sampling_plan`/`run_stats(op="power")`).
 
 ## What you do NOT do
 
