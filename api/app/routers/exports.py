@@ -354,6 +354,24 @@ def export_module_docx(
     )
 
 
+@router.get("/projects/{project_id}/gate-summary")
+def get_gate_summary(
+    project_id: uuid.UUID,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """Committee-readiness gate summary for a project (roadmap #12) — a bounded,
+    fully deterministic, offline projection for B2B callers: 11 checklist items,
+    blocking findings, and provenance/source coverage. No LLM, no network
+    (include_judge=False, no DOI verifier). 404 on a foreign project."""
+    _owned_project(db, user, project_id)
+    store = DbProjectStateStore(db.bind, project_id, Path(tempfile.gettempdir()))
+    from quality.certificate import build_certificate, gate_summary  # noqa: PLC0415
+    cs = store.load_full_context_store()
+    cert = build_certificate(cs, project_id=str(project_id))
+    return gate_summary(cert)
+
+
 def _owned_project(db: Session, user: User, project_id: uuid.UUID) -> Project:
     # Raise 404 (not 403) to avoid leaking project existence to non-owners.
     p = db.get(Project, project_id)

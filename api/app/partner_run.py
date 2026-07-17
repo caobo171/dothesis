@@ -239,6 +239,15 @@ def run_partner_export(store, project_id, params: dict) -> dict:
                            references=references, language=language,
                            title=report_title)
     store.persist_export_artifacts(artifacts, scope="partner")
+    # Committee-readiness gate summary (roadmap #12) rides the partner export as
+    # an advisory field — deterministic + offline. A certificate failure must
+    # NEVER fail a paid export, so it's fully fail-open.
+    gate = None
+    try:
+        from quality.certificate import build_certificate, gate_summary  # noqa: PLC0415
+        gate = gate_summary(build_certificate(full_cs, project_id=str(project_id)))
+    except Exception:
+        logger.exception("run_partner_export: gate summary failed (advisory)")
     return {
         "sections": [s["title"] for s in sections],
         # POST-merge keys — what was actually WRITTEN, which is what the old
@@ -248,6 +257,7 @@ def run_partner_export(store, project_id, params: dict) -> dict:
         "chapters": merged_chapter_keys(chapters),
         "artifact_keys": {a.get("kind"): a.get("s3_key")
                           for a in artifacts if a.get("s3_key")},
+        "gate_summary": gate,
     }
 
 
