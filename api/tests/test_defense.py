@@ -25,7 +25,7 @@ def test_small_n_and_rejected_hypothesis_targeted():
 
 def test_always_returns_questions_even_on_empty_state():
     qs = committee_questions({})
-    assert len(qs) >= 3
+    assert len(qs) >= 4  # the four staples
 
 
 def test_rubric_findings_become_questions():
@@ -64,5 +64,29 @@ def test_generate_committee_questions_tool_reads_store(monkeypatch):
 
     tools = {t.name: t for t in make_defense_tools(_Store())}
     assert "generate_committee_questions" in tools
-    qs = json.loads(tools["generate_committee_questions"].func())
-    assert len(qs) >= 3
+    env = json.loads(tools["generate_committee_questions"].func())
+    # New contract: full envelope, not a bare list.
+    assert set(env) >= {"questions", "readiness", "meta"}
+    assert env["questions"] and env["meta"]["rubric_available"] is True
+    assert env["readiness"]["verdict"] in ("not_ready", "ready_with_disclosures", "ready")
+
+
+def test_tool_falls_back_when_rubric_raises(monkeypatch):
+    # score_thesis raising → tool still returns an envelope, rubric_available False.
+    import quality.rubric as _rub
+    monkeypatch.setattr(_rub, "score_thesis", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    class _Store:
+        def load_full_context_store(self):
+            return {"m3_design": {"sample_plan": {"target_n": 80}}}
+
+        def get_institution_profile(self):
+            return {}
+
+        def get_advisor_feedback(self):
+            return []
+
+    tools = {t.name: t for t in make_defense_tools(_Store())}
+    env = json.loads(tools["generate_committee_questions"].func())
+    assert env["meta"]["rubric_available"] is False
+    assert env["questions"]  # staples + state questions still present

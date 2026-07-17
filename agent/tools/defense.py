@@ -20,68 +20,16 @@ from langchain_core.tools import tool
 logger = logging.getLogger(__name__)
 
 
-def _state_weakpoints(cs: dict) -> list[dict]:
-    """Heuristic questions from the nested (full) context_store shape
-    (m3_design / m4_analysis), the same shape store.load_full_context_store()
-    returns. Decision: read straight off the persisted design/results so the
-    questions target what THIS student actually did, not a generic list."""
-    m3 = cs.get("m3_design") or {}
-    m4 = cs.get("m4_analysis") or {}
-    qs: list[dict] = []
-
-    # Small n → the classic power/generalizability challenge.
-    n = (m3.get("sample_plan") or {}).get("target_n")
-    if n and n < 200:
-        qs.append({"category": "methodology",
-                   "question": f"Your sample size is {n}. How do you justify statistical power "
-                               "and generalizability?", "targets": "sample size",
-                   "difficulty": "medium", "model_answer_hint": "Cite the 10x / inverse-sqrt rule "
-                   "and acknowledge it as a limitation with a future-work note."})
-
-    # A not-supported / rejected hypothesis is the examiner's first pull.
-    results = str(m4.get("analysis_results") or "").lower()
-    if "not support" in results or "reject" in results or "p=0.2" in results:
-        qs.append({"category": "results",
-                   "question": "One of your hypotheses was not supported. Why do you think that "
-                               "is, and what does it mean theoretically?",
-                   "targets": "rejected hypothesis", "difficulty": "hard",
-                   "model_answer_hint": "Offer a theoretical/contextual explanation, not a "
-                   "data-quality excuse."})
-
-    # Always-on staples so the drill is never empty (empty-state robustness).
-    qs += [
-        {"category": "contribution", "question": "What is the single most important contribution "
-         "of your study?", "targets": "contribution", "difficulty": "medium",
-         "model_answer_hint": "One theoretical + one practical contribution, in one sentence each."},
-        {"category": "methodology", "question": "Why did you choose this analysis method over the "
-         "alternatives?", "targets": "method choice", "difficulty": "medium",
-         "model_answer_hint": "Tie to model type, sample size, and construct nature."},
-        {"category": "limitations", "question": "What are the main limitations of your study?",
-         "targets": "limitations", "difficulty": "easy",
-         "model_answer_hint": "Name 2-3 honest limitations with mitigation/future work."},
-    ]
-    return qs
-
-
 def committee_questions(context_store: dict, rubric_result: dict | None = None) -> list[dict]:
-    """Pure question generator: state-only heuristics + (when a rubric is passed)
-    one targeted question per quality finding.
+    """Back-compat pure API: the ranked viva question list for THIS thesis.
 
-    `context_store` is the NESTED module shape (m1_topic..m5_writing). Decision:
-    fold the F3 rubric findings on TOP of the state heuristics so the drill hits
-    exactly the examiner's likely attack points; with no rubric it degrades to
-    the state-only staples (best-effort guarantee)."""
-    questions = _state_weakpoints(context_store or {})
-    if rubric_result:
-        for dim in rubric_result.get("dimensions", []):
-            for f in dim.get("findings", []):
-                questions.append({
-                    "category": dim.get("name", "general"),
-                    "question": f"A weakness was flagged: {f.get('issue')}. How do you respond?",
-                    "targets": dim.get("name"), "difficulty": "hard",
-                    "model_answer_hint": f.get(
-                        "fix", "Acknowledge and defend or disclose as a limitation.")})
-    return questions
+    Delegates to agent.viva.generate_viva (roadmap #10): every material rubric
+    finding + three state-direct signals (power shortfall, not-supported
+    hypotheses, data-quality flags) + the four staples, ranked must_fix →
+    disclosable → standard. Returns just the `questions` list; the store-bound
+    tool returns the full envelope (with readiness)."""
+    from agent.viva import generate_viva  # noqa: PLC0415
+    return generate_viva(context_store or {}, rubric_result)["questions"]
 
 
 def make_defense_tools(store) -> list:
@@ -93,15 +41,19 @@ def make_defense_tools(store) -> list:
 
     @tool
     def generate_committee_questions() -> str:
-        """Generate defense-committee questions targeted at THIS thesis's weak points
-        (small n, rejected hypotheses, method choice, sampling, borderline validity,
-        and any open quality findings). Returns categorized questions with
-        model-answer hints for a drill. Read-only over thesis state."""
-        # Read the whole nested context store (design/results) the heuristics need.
+        """Generate a defense-readiness viva targeted at THIS thesis's weak points.
+
+        Returns a JSON envelope: `questions` (each with category, difficulty,
+        `defensibility` = must_fix|disclosable|standard, a grounded
+        `model_answer_hint`, and `answer_criteria` to grade answers against),
+        plus `readiness` (verdict not_ready|ready_with_disclosures|ready, must_fix
+        / disclosable counts, per-dimension tally). must_fix items (number
+        mismatches, unverifiable citations, provably-wrong stats) must be FIXED
+        before the defense, not talked past. Read-only over thesis state."""
+        from agent.viva import generate_viva  # noqa: PLC0415
         cs = store.load_full_context_store()
-        # Best-effort F3 rubric so the drill also hits the examiner's likely
-        # quality attack points. Any failure (missing key, LLM down) falls back
-        # to state-only heuristics — the drill must always have material.
+        # Best-effort rubric so the viva targets the examiner's likely attack
+        # points. Any failure (missing key, judge LLM down) → state-only viva.
         rubric = None
         try:
             from quality.rubric import score_thesis  # noqa: PLC0415
@@ -111,6 +63,6 @@ def make_defense_tools(store) -> list:
         except Exception:
             logger.exception("generate_committee_questions: rubric pass failed; state-only")
             rubric = None
-        return json.dumps(committee_questions(cs, rubric), ensure_ascii=False)
+        return json.dumps(generate_viva(cs, rubric), ensure_ascii=False)
 
     return [generate_committee_questions]
