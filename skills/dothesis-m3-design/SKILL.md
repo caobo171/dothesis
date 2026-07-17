@@ -122,9 +122,14 @@ Never approve CB-SEM below its sample minimum, or a reflective/formative mismatc
 those are the #1 novice errors the advisor flags as strongly-against.
 
 Then design the instrument: 3–7 items per construct, reusing validated scales from M2
-sources (cite them per item block). Offer the questionnaire as a document the user can
-take to the field (M5's `export_docx` tool can render it — a one-off export, not a
-thesis chapter).
+sources (cite them per item block). Run `audit_instrument` (pass the M2 `sources` and the
+survey `language`) — it lints for double-barreled/leading items and reverse-coded coverage,
+and it now **scaffolds**: it returns ready-to-drop `suggested_attention_checks` (keyed to
+the scale, in the survey language) and a `scale_provenance` table pre-filled with the
+best-matching **adapted-from citation** per construct. Confirm each provenance row with the
+student (it's a candidate, not a fact — `adapted_from_confirmed` starts false) and drop in an
+attention check. Offer the questionnaire as a document the user can take to the field (M5's
+`export_docx` tool can render it — a one-off export, not a thesis chapter).
 
 **Google Form:** once a questionnaire/survey instrument is drafted, offer to turn it into
 a real **Google Form**. Call `make_google_form_script(title, questions, description)` — map

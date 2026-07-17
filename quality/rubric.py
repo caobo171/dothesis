@@ -147,7 +147,10 @@ def instrument_quality_dimension(context_store: dict) -> dict:
     items = instrument.get("items") or []
     # Ordered-unique construct names present on the items.
     constructs = list(dict.fromkeys(i.get("construct") for i in items if i.get("construct")))
-    findings = audit_instrument_findings(instrument, hypotheses, constructs)["findings"]
+    sources = (context_store.get("m2_literature") or {}).get("literature_sources") or []
+    language = (context_store.get("m1_topic") or {}).get("language") or "en"
+    findings = audit_instrument_findings(instrument, hypotheses, constructs,
+                                         sources=sources, language=language)["findings"]
     # Each flagged item/coverage gap shaves 0.1, floored at 0 — a couple of soft
     # issues still leaves a usable score.
     score = max(0.0, 1.0 - 0.1 * len(findings))

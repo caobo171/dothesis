@@ -30,11 +30,70 @@ logger = logging.getLogger(__name__)
 _CONJ = (" and ", " or ", " và ", " hoặc ")
 
 
-def audit_instrument_findings(instrument: dict, hypotheses: list[str], constructs: list[str]) -> dict:
-    """Pure lint core. Returns {"findings": [...], "scale_provenance": [...]}.
+_ATTENTION_TEMPLATES = {
+    "en": ["For quality control, please select '{high}' for this item.",
+           "Please answer '{low}' to show you are reading carefully.",
+           "This is an attention check — select '{mid}'."],
+    "vi": ["Để kiểm soát chất lượng, vui lòng chọn '{high}' cho mục này.",
+           "Vui lòng chọn '{low}' để cho thấy bạn đang đọc kỹ.",
+           "Đây là câu kiểm tra chú ý — hãy chọn '{mid}'."],
+}
+
+
+def _anchor_labels(language: str, likert_max: int):
+    vi = str(language).lower().startswith("vi")
+    if vi:
+        return ("Hoàn toàn đồng ý", "Hoàn toàn không đồng ý", "Trung lập")
+    return ("Strongly agree", "Strongly disagree", "Neither agree nor disagree")
+
+
+def generate_attention_check_items(language: str = "en", likert_max: int = 5, n: int = 1) -> list[dict]:
+    """Concrete, ready-to-drop attention-check items (deterministic). The student
+    was told 'add an attention check'; this hands them one, phrased in their
+    language and keyed to their scale — no more blank instruction."""
+    high, low, mid = _anchor_labels(language, likert_max)
+    tpls = _ATTENTION_TEMPLATES["vi" if str(language).lower().startswith("vi") else "en"]
+    out = []
+    for i in range(max(1, n)):
+        t = tpls[i % len(tpls)]
+        out.append({"id": f"AC{i + 1}", "construct": "_attention", "attention_check": True,
+                    "expected_answer": {"high": high, "low": low, "mid": mid}[["high", "low", "mid"][i % 3]],
+                    "text": t.format(high=high, low=low, mid=mid)})
+    return out
+
+
+def _keywords_i(text) -> set:
+    import re as _re  # noqa: PLC0415
+    stop = {"the", "and", "for", "of", "to", "a", "an", "in", "on", "scale", "construct"}
+    return {w for w in _re.findall(r"[a-zà-ỹ]{4,}", str(text or "").lower()) if w not in stop}
+
+
+def _suggest_source(construct: str, sources: list) -> str:
+    """Best token-overlap match of a construct to an M2 source → 'Author (Year)'."""
+    best, best_score = None, 0
+    ckw = _keywords_i(construct)
+    for s in (sources or []):
+        if not isinstance(s, dict):
+            continue
+        score = len(ckw & _keywords_i(s.get("title")))
+        if score > best_score:
+            best, best_score = s, score
+    if not best:
+        return ""
+    a = best.get("authors") or best.get("author")
+    author = (a[0] if isinstance(a, list) and a else a) or "Author"
+    author = str(author).split(",")[0].split()[-1] if author else "Author"
+    return f"{author} ({best.get('year') or 'n.d.'})"
+
+
+def audit_instrument_findings(instrument: dict, hypotheses: list[str], constructs: list[str],
+                              sources: list | None = None, language: str = "en") -> dict:
+    """Pure lint core. Returns {"findings", "scale_provenance", "suggested_attention_checks"}.
 
     Findings are all "soft" — advisory. Shared by the @tool below and the
-    rubric's instrument_quality dimension.
+    rubric's instrument_quality dimension. When `sources` (the M2 literature pool)
+    is supplied, the scale-provenance rows are PRE-FILLED with the best-matching
+    adapted-from citation instead of a blank skeleton (§3.4 generative depth).
     """
     items = (instrument or {}).get("items") or []
     findings: list[dict] = []
@@ -61,36 +120,52 @@ def audit_instrument_findings(instrument: dict, hypotheses: list[str], construct
                 "fix": "Add one reverse-coded item to catch careless responding.",
                 "severity": "soft"})
 
-    # 3) At least one attention check across the whole instrument.
+    # 3) At least one attention check across the whole instrument — and hand the
+    #    student a ready-made one instead of just saying "add one".
+    suggested_ac: list = []
     if items and not any(it.get("attention_check") for it in items):
+        suggested_ac = generate_attention_check_items(language, n=1)
         findings.append({
             "issue": "No attention-check item.",
-            "fix": "Add at least one attention check.", "severity": "soft"})
+            "fix": "Add at least one attention check — a ready-made item is provided in "
+                   "`suggested_attention_checks`; drop it into the questionnaire.", "severity": "soft"})
 
-    # Scale-provenance skeleton — one row per construct for the student to fill
-    # (where the scale came from, what it was adapted from, whether it was
-    # back-translated). An empty provenance table is itself the reminder.
-    provenance = [{"construct": c, "source": "", "adapted_from": "", "back_translated": False}
-                  for c in (constructs or [])]
-    return {"findings": findings, "scale_provenance": provenance}
+    # Scale-provenance — one row per construct, PRE-FILLED with the best-matching
+    # M2 source when a literature pool is supplied (§3.4), so "adapted_from" starts
+    # from a real citation candidate the student confirms, not a blank the student
+    # must research from scratch. An empty adapted_from is still the reminder.
+    provenance = []
+    for c in (constructs or []):
+        suggested = _suggest_source(c, sources) if sources else ""
+        provenance.append({"construct": c, "source": suggested, "adapted_from": suggested,
+                           "back_translated": False,
+                           "adapted_from_confirmed": False})
+    return {"findings": findings, "scale_provenance": provenance,
+            "suggested_attention_checks": suggested_ac}
 
 
 @tool
-def audit_instrument(instrument: dict, hypotheses: list[str], constructs: list[str]) -> str:
-    """Lint a questionnaire before fielding.
+def audit_instrument(instrument: dict, hypotheses: list[str], constructs: list[str],
+                     sources: list | None = None, language: str = "en") -> str:
+    """Lint AND scaffold a questionnaire before fielding.
 
     Checks for double-barreled/leading items, reverse-coded coverage per
-    construct, and attention checks, and returns a scale-provenance skeleton to
-    fill in (where each scale came from / what it was adapted from). Advisory —
-    surface the findings and offer fixes; never refuse to field.
+    construct, and attention checks. GENERATES: `suggested_attention_checks`
+    (ready-to-drop items keyed to the scale, in the survey language) and a
+    scale-provenance table pre-filled with the best-matching adapted-from
+    citation when `sources` (the M2 literature pool) is passed. Advisory —
+    surface the findings + suggestions; never refuse to field.
 
     Args:
         instrument: {"items": [{"id", "text", "construct", "reverse_coded",
                      "attention_check"}, ...]}.
         hypotheses: the study's hypotheses (reserved for future cross-checks).
         constructs: construct names to check reverse-coded coverage for.
+        sources: the M2 literature_sources pool, to pre-fill scale provenance.
+        language: survey language ("en"/"vi") for generated attention checks.
     """
-    return json.dumps(audit_instrument_findings(instrument, hypotheses, constructs),
+    return json.dumps(audit_instrument_findings(instrument, hypotheses, constructs,
+                                                sources=sources, language=language),
                       ensure_ascii=False)
 
 
