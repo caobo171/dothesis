@@ -492,19 +492,82 @@ def validate_m5_sections(final_sections, flat_context: dict) -> dict:
         return _agg([], crashed=True)
 
 
+_CITE_RE = re.compile(r"\([^)]*\b(?:1[89]|20)\d{2}[a-z]?\b[^)]*\)|\[\d+\]")
+_STOPWORDS = frozenset("the a an of to and or in on for with by is are be as that this "
+                       "between effect affect impact influence relationship among their its "
+                       "how what does do can will has have not no more less than".split())
+
+
+def _keywords(text) -> set:
+    return {w for w in re.findall(r"[a-zà-ỹ]{4,}", str(text or "").lower())
+            if w not in _STOPWORDS}
+
+
+def traceability_findings(m2: dict, m3: dict, chapters: dict) -> list[dict]:
+    """§3.2/§3.8a: every M3 hypothesis should trace to an M2 research gap, and
+    every M5 discussion paragraph about a hypothesis should cite the literature it
+    confirms/contradicts. All SOFT/advisory (linkage can be implicit); deterministic
+    token overlap + citation presence; never raises."""
+    out: list[dict] = []
+    try:
+        m2 = m2 or {}
+        # Only meaningful once the project has a literature base — otherwise we
+        # can't judge gap-grounding or citability, and shouldn't nag early work.
+        if not m2.get("literature_sources"):
+            return out
+        gaps = m2.get("research_gaps") or []
+        hyps = (m3 or {}).get("hypotheses") or []
+        gap_kw = set()
+        for g in gaps:
+            gap_kw |= _keywords(g.get("gap") or g.get("description") or g.get("text") if isinstance(g, dict) else g)
+        if hyps and not gaps:
+            out.append(_finding("traceability.no_gaps", "soft",
+                                "No M2 research gaps are recorded, so the hypotheses have nothing to "
+                                "trace back to. Add the gap(s) each hypothesis addresses.", chapter="framework"))
+        elif hyps and gap_kw:
+            ungrounded = []
+            for h in hyps:
+                stmt = h if isinstance(h, str) else (h.get("statement") or h.get("text") or h.get("hypothesis"))
+                hid = normalize_hypothesis_id(h)
+                if stmt and not (_keywords(stmt) & gap_kw):
+                    ungrounded.append(hid or (stmt[:24] + "…"))
+            for label in ungrounded[:5]:
+                out.append(_finding("traceability.hypothesis_gap", "soft",
+                                    f"Hypothesis {label} does not visibly connect to any stated research "
+                                    "gap — make the gap→hypothesis link explicit.", hypothesis=label,
+                                    chapter="framework"))
+
+        disc = chapters.get("discussion")
+        if isinstance(disc, str) and not _is_stub(disc):
+            for para in re.split(r"\n\s*\n", disc):
+                if _ANCHOR.search(para) and not _CITE_RE.search(para):
+                    hid = normalize_hypothesis_id(_ANCHOR.search(para).group(0))
+                    out.append(_finding("traceability.discussion_uncited", "soft",
+                                        f"The discussion of {hid or 'a hypothesis'} does not cite the "
+                                        "literature it confirms or contradicts — tie the result back to a "
+                                        "source.", hypothesis=hid, chapter="discussion"))
+                    if sum(1 for f in out if f["check"] == "traceability.discussion_uncited") >= 5:
+                        break
+    except Exception:
+        logger.debug("traceability_findings failed", exc_info=True)
+    return out
+
+
 def validate_coherence(nested: dict) -> dict:
     try:
         def _d(k):
             v = nested.get(k)
             return v if isinstance(v, dict) else {}
-        m3, m4, m5 = _d("m3_design"), _d("m4_analysis"), _d("m5_writing")
+        m2, m3, m4, m5 = _d("m2_literature"), _d("m3_design"), _d("m4_analysis"), _d("m5_writing")
         ar = m4.get("analysis_results")
         m5src = m5.get("final_sections") or m5.get("chapters") or {}
         registry = build_registry(m3.get("hypotheses"), m3.get("conceptual_model"), ar, m5src)
         chapters = _resolve_chapters(m5src)
         present = bool((chapters.get("results") and not _is_stub(chapters.get("results")))
                        and (chapters.get("discussion") and not _is_stub(chapters.get("discussion"))))
-        return _agg(check_coherence(registry, m3.get("hypotheses"), ar, present))
+        findings = check_coherence(registry, m3.get("hypotheses"), ar, present)
+        findings += traceability_findings(m2, m3, chapters)
+        return _agg(findings)
     except Exception:
         logger.exception("validate_coherence crashed")
         return _agg([], crashed=True)
