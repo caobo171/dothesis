@@ -29,8 +29,14 @@ def preflight_check(context_store: dict) -> list[str]:
         missing.append("M3 — analysis method not chosen (consult the design-test matrix).")
     if not items:
         missing.append("M3 — no questionnaire instrument yet.")
-    if not (m3.get("sample_plan") or {}).get("target_n"):
-        missing.append("Sample size not planned (10x rule / inverse-square-root).")
+    _plan = m3.get("sample_plan") or {}
+    if not _plan.get("target_n"):
+        missing.append("Sample size not planned — run `sampling_plan` (it computes an a-priori "
+                       "power analysis, not just a rule of thumb).")
+    elif not _plan.get("power_analysis"):
+        # A target_n from the heuristic alone can't answer "why n?" at the defense.
+        missing.append("Sample size is planned but not power-justified — re-run `sampling_plan` "
+                       "(or run_stats op=power) to get the a-priori N and its justification.")
     # A questionnaire with zero reverse-coded items usually means careless-
     # responding checks weren't designed in — flag it only once there ARE items.
     if items and not any(i.get("reverse_coded") for i in items):
@@ -38,7 +44,8 @@ def preflight_check(context_store: dict) -> list[str]:
     if not m3.get("cmb_plan"):
         missing.append("No common-method-bias plan (e.g. Harman / marker variable).")
     if not m3.get("missing_data_plan"):
-        missing.append("No missing-data handling plan.")
+        missing.append("No missing-data handling plan — `run_stats(op='screening')` computes the "
+                       "missingness profile, Little's MCAR test, and a recommended treatment.")
     return missing
 
 

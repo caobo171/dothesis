@@ -111,3 +111,19 @@ def test_validate_run_stats_never_raises_on_garbage():
 
 def test_unknown_op_yields_no_claims():
     assert claims_from_run_stats("mystery", {"foo": 1}) == []
+
+
+# --- deferred fast-follows: data_screening block coverage --------------------
+
+def test_data_screening_block_clean():
+    block = dict(GOOD_BLOCK)
+    block["data_screening"] = {"missing": {"per_variable": {"LS1": {"missing_pct": 2.5}},
+                                           "mcar": {"p": 0.34}},
+                               "outliers": {"mahalanobis": {"max_d2": 30.1}}}
+    assert validate_analysis_results(block)["hard"] == 0
+
+
+def test_data_screening_block_impossible_missing_pct_hard():
+    block = dict(GOOD_BLOCK)
+    block["data_screening"] = {"missing": {"per_variable": {"LS1": {"missing_pct": 180}}}}
+    assert "bounds.missing_pct" in _hard(validate_analysis_results(block))

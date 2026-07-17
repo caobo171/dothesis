@@ -267,6 +267,16 @@ def claims_from_analysis_results(block: Any) -> list[dict]:
         if ac.get("vif") is not None:
             claims.append(mk("vif", ac["vif"], path=path, table="collinearity"))
 
+    # Persisted data_screening block (roadmap #3) — the same bounds/consistency
+    # checks the op's ride-along applies, now enforced at the M4 commit gate.
+    ds = block.get("data_screening")
+    if isinstance(ds, dict):
+        try:
+            from thesis_stats.validation import claims_from_screening  # noqa: PLC0415
+            claims += claims_from_screening(ds, source="parsed")
+        except Exception:
+            logger.debug("claims_from_analysis_results: screening claims skipped", exc_info=True)
+
     sm = block.get("structural_model")
     if isinstance(sm, dict):
         for con, v in (sm.get("r2") or {}).items():
