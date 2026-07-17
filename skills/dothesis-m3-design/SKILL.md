@@ -38,19 +38,35 @@ Variables (`nodes`) + relationships (`edges`):
   ],
   "edges": [
     {"from":"LS","to":"PI","label":"H1: +"},
-    {"from":"PC","to":"LS->PI","label":"H4: moderates"}
+    {"from":"PC","to":"LS","label":"H4: moderates","effect":"moderates"}
   ]
 }
 ```
 
 Rules: every construct gets a 1-sentence operational definition traced to an M2
 source; every edge is a hypothesis (labeled H1, H2, …); mediators/moderators/controls
-typed explicitly.
+typed explicitly. An `id` must be a short token WITHOUT spaces or arrows
+(`LS`, `PU1`) — never `"LS->PI"`; a moderator points at the construct it moderates
+and carries `"effect":"moderates"`.
 
-**Default to parsimonious — direct effects first.** A bachelor's or master's thesis
-is well-served by 2–4 direct-effect hypotheses on a single IV → DV (or IV → mediator
-→ DV) tested with **multiple linear regression**. That's the sweet spot for time
-budget, sample-size requirements, and the student's analytical skills.
+**Coverage (required).** Read M1 FIRST. Every construct the student named in the
+`research_title`, `research_questions`, or `user_context` MUST appear as a node — do
+not silently drop them. If the topic names a framework (TAM, UTAUT, SDT, TPB…),
+include its core constructs.
+
+**Connectivity (required).** The model is ONE connected graph with exactly one
+dependent/outcome construct; every other construct must reach it via directed edges
+(directly or through a mediator). **Two or more isolated IV→DV pairs that share no
+node is NOT a valid research model** — never emit disconnected components or orphan
+nodes. When the topic names K constructs, use at least min(K, 5) nodes and at least
+(nodes − 1) edges.
+
+**Parsimony means few mediators/moderators — NOT dropping the student's constructs.**
+Prefer direct effects (each named IV → the DV) over elaborate mediation chains. A
+bachelor's/master's thesis is well-served by the named constructs as direct predictors
+of one outcome, tested with **multiple linear regression**. Include every construct the
+student named (Coverage rule above); keep the *structure* simple, don't shrink the
+*content*.
 
 Add moderators ONLY when there is a clear theoretical reason in the literature AND
 the student explicitly asks for / accepts the added complexity. The cost of every

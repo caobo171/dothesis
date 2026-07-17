@@ -7,9 +7,12 @@ semantics live in agent/state.py where they're unit-tested.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from langchain_core.tools import tool
+
+logger = logging.getLogger(__name__)
 
 from agent.state import NON_CONTENT_KEYS, ProjectStateStore, SliceOwnershipError
 
@@ -77,6 +80,21 @@ def make_state_tools(store: ProjectStateStore) -> list:
         # it's deterministic code, not the model.
         writes = {k: v for k, v in (writes or {}).items()
                   if k not in NON_CONTENT_KEYS}
+        # M3 model guard (deterministic, additive-only): a research model must be
+        # ONE connected graph converging on the dependent construct. Repair a
+        # disconnected/thin conceptual_model in place — never an LLM call, never a
+        # rejection (an error return here would count as a stalled turn), never a
+        # raise. Valid models pass through untouched.
+        _repair_note = None
+        if module == "M3" and isinstance(writes.get("conceptual_model"), dict):
+            try:
+                from orchestrator.graph_guard import repair_conceptual_model  # noqa: PLC0415
+                fixed, rep = repair_conceptual_model(writes["conceptual_model"])
+                if rep.get("repaired"):
+                    writes = {**writes, "conceptual_model": fixed}
+                    _repair_note = rep
+            except Exception:
+                logger.debug("commit_slice: M3 model guard skipped", exc_info=True)
         try:
             result = store.commit_slice(
                 module, writes, reason,
@@ -87,6 +105,8 @@ def make_state_tools(store: ProjectStateStore) -> list:
             # Surface the violation to the model so it can correct course —
             # a raise would abort the whole turn instead of one tool call.
             return json.dumps({"error": str(e)})
+        if _repair_note is not None and isinstance(result, dict):
+            result = {**result, "conceptual_model_repaired": _repair_note}
         return json.dumps(result, ensure_ascii=False)
 
     @tool

@@ -33,7 +33,17 @@ class M3Output(BaseModel):
     # — {nodes:[{id,label,questions:[...]}], edges:[{id,source,target,
     # hypothesis,effect_type}]}. The prior separate `scale_items` field is
     # gone; per-construct Likert items live on each node's `questions` list.
-    conceptual_model: dict | None = None
+    conceptual_model: dict | None = Field(
+        default=None,
+        description=(
+            'Research model as ONE connected graph: '
+            '{"nodes":[{"id","label","type"}],"edges":[{"source","target","hypothesis"}]}. '
+            "Include EVERY construct named in the research title/questions (and the core "
+            "constructs of any named framework: TAM, UTAUT, SDT, TPB). Every node must reach "
+            "the single dependent/outcome node via directed edges — never emit disconnected "
+            "IV->DV pairs or orphan nodes. ids are short tokens without spaces."
+        ),
+    )
     hypotheses: list[dict] | None = None
 
     # Qual-only (required when paradigm == qualitative, or part of mixed)
