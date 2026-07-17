@@ -122,8 +122,55 @@ def reconstruct_artifact(artifact_key: str, context_store, llm=None,
 _MODULE_ORDER = ("M1", "M2", "M3", "M4")  # M5 is never an upstream target
 
 
+def _m2_real_sources(context_store) -> list[dict]:
+    """A bounded REAL literature search to ground the M2 candidate — the deep
+    scout (OpenAlex/Crossref/Semantic Scholar) plus the domain supplement
+    (Europe PMC for medical, ERIC for education). Returns [] on any
+    failure/timeout/no-topic; the caller then keeps the LLM candidate. Read-side
+    only (no commit here). Same no-`with` executor discipline as research_scout:
+    shutdown(wait=False) so a runaway scout thread never blocks the report."""
+    m1 = getattr(context_store, "m1_topic", None) or {}
+    topic = str(m1.get("research_title") or "").strip()
+    if not topic:
+        return []  # M1 not seeded/reconstructed yet — nothing to search on
+    rqs = [str(q) for q in (m1.get("research_questions") or [])]
+    composed = topic
+    if rqs:
+        composed += "\nResearch questions:\n" + "\n".join(f"- {q}" for q in rqs)
+
+    import concurrent.futures as _fut
+    from orchestrator.tools.domain_sources import (
+        classify_domain, dedup_sources, domain_supplement, search_query_en)
+
+    citations = None
+    ex = _fut.ThreadPoolExecutor(max_workers=1)
+    try:
+        from orchestrator.tools.m2_literature import scout_citations
+        citations = ex.submit(scout_citations.func, composed, min_n=10).result(
+            timeout=int(os.getenv("DOTHESIS_SCOUT_TIMEOUT_S", "120")))
+    except Exception:
+        logger.exception("backfill: M2 deep scout failed/timed out — keeping LLM candidate")
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+
+    sources = [{
+        "title": c.get("title"), "authors": c.get("authors"), "year": c.get("year"),
+        "venue": c.get("source") or c.get("venue"),  # scout emits `source`
+        "doi": c.get("doi"), "url": c.get("url"),
+        "verified": bool(c.get("doi")),
+    } for c in (citations or []) if (c.get("title") or "").strip()]
+
+    domain = classify_domain(m1.get("field"), topic, rqs)
+    if domain != "general":
+        # Europe PMC / ERIC are English indexes — feed the translated query.
+        # Base first so a paper found by both keeps its validated deep-scout row.
+        sources = dedup_sources(sources + domain_supplement(search_query_en(topic, rqs), domain))
+    return dedup_sources(sources)
+
+
 def reconstruct_upstream(context_store, targets: list[str] | None = None,
-                         llm=None, language: str | None = None) -> list[dict]:
+                         llm=None, language: str | None = None,
+                         ground_m2: bool | None = None) -> list[dict]:
     """Reconstruct the missing UPSTREAM modules from whatever evidence exists.
 
     Bottom-up (M4→…→M1) so each adjacent inference (the only reliable jump — see
@@ -159,6 +206,12 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
     else:
         targets = [m for m in targets if m in MODULE_TO_ARTIFACT]
 
+    # Report-only: ground M2 with a real literature search. Env carrier set by
+    # api/app/headless_entry.py (report subprocess); chat/import backfill never
+    # sets it → stays LLM-fast. Explicit kwarg wins (tests).
+    if ground_m2 is None:
+        ground_m2 = os.getenv("DOTHESIS_BACKFILL_GROUND_M2", "").strip().lower() in ("1", "true", "yes")
+
     llm = llm or _llm()
     cs = context_store
     out: list[dict] = []
@@ -168,6 +221,15 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
         candidate = reconstruct_artifact(artifact, cs, llm=llm, language=language)
         if not candidate:
             continue
+        if module == "M2" and ground_m2:
+            # Replace the LLM-recalled sources with real, DOI-bearing ones. Both
+            # keys carry the same normalized dicts: literature_sources is what the
+            # report reads (agent SLICE_OWNERSHIP["M2"]); citation_list is what
+            # dod_literature counts. Empty search → leave the LLM candidate as-is.
+            real = _m2_real_sources(cs)
+            if real:
+                candidate["literature_sources"] = real
+                candidate["citation_list"] = real
         rationale = candidate.pop("_rationale", None)
         gate = {"design": dod_design_structural}.get(
             artifact, _ARTIFACT_BY_KEY[artifact].dod)

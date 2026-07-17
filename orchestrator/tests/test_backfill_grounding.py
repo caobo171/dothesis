@@ -1,0 +1,117 @@
+"""Report-only grounding of the M2 backfill with a REAL literature search.
+
+The headless report populates M2 via reconstruct_upstream (pure LLM recall) — no
+DOIs. With the report opt-in (ground_m2 / env DOTHESIS_BACKFILL_GROUND_M2) the M2
+candidate is grounded with a real deep scout + domain supplement. Chat/import
+backfill (no opt-in) stays LLM-fast. No network/LLM — everything is faked.
+"""
+from unittest.mock import MagicMock
+
+import orchestrator.backfill as B
+import orchestrator.tools.domain_sources as DS
+import orchestrator.tools.m2_literature as M2mod
+from orchestrator.state import ContextStore
+
+# A valid-enough M2 candidate JSON so reconstruct_artifact returns non-empty.
+_M2_LLM_JSON = ('{"citation_list": [{"title": "LLM recalled", "authors": ["X"], '
+                '"year": 2019}], "research_gaps": [{"description": "a gap"}]}')
+
+
+def _fake_llm(content=_M2_LLM_JSON) -> MagicMock:
+    llm = MagicMock()
+    llm.invoke.return_value.content = content
+    return llm
+
+
+class _CountingScout:
+    def __init__(self, rows=None, raises=False):
+        self.calls = 0
+        self.rows = rows or []
+        self.raises = raises
+
+    def func(self, topic, min_n=10):
+        self.calls += 1
+        if self.raises:
+            raise RuntimeError("scout blew up")
+        return self.rows
+
+
+class _FakeERIC:
+    def search_papers(self, q, limit=10):
+        return [{"title": "ERIC edu row", "authors": ["Tran"], "year": 2020,
+                 "doi": "", "url": "https://eric.ed.gov/?id=EJ9"}]
+
+
+def _edu_cs():
+    return ContextStore(
+        m1_topic={"research_title": "Language learning via Duolingo in education",
+                  "field": "Education", "research_questions": ["RQ1 teaching methods"]},
+        m4_analysis={"data_type_detected": "Quantitative", "results": {"n": 1}},
+    )
+
+
+def _m2_entry(out):
+    return next(e for e in out if e["module"] == "M2")
+
+
+def _patch_search(monkeypatch, scout, eric=True):
+    monkeypatch.setattr(M2mod, "scout_citations", scout)
+    monkeypatch.setattr(DS, "search_query_en", lambda t, rq: "duolingo language learning")
+    if eric:
+        monkeypatch.setattr(DS, "EricClient", _FakeERIC)
+
+
+def test_report_optin_grounds_m2_with_real_dois(monkeypatch):
+    scout = _CountingScout([{"title": "Real edtech", "authors": ["Ng"], "year": 2021,
+                             "source": "OpenAlex", "doi": "10.1/real", "url": "u"}])
+    _patch_search(monkeypatch, scout)
+    out = B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm(), ground_m2=True)
+    cand = _m2_entry(out)["candidate"]
+    dois = {s.get("doi") for s in cand["literature_sources"]}
+    assert scout.calls == 1
+    assert "10.1/real" in dois                       # real base DOI
+    assert any(s["title"] == "ERIC edu row" for s in cand["literature_sources"])  # domain supp
+    assert cand["citation_list"] == cand["literature_sources"]  # both keys carry the real list
+
+
+def test_chat_backfill_stays_llm_only(monkeypatch):
+    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
+    _patch_search(monkeypatch, scout)
+    monkeypatch.delenv("DOTHESIS_BACKFILL_GROUND_M2", raising=False)
+    out = B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm())  # ground_m2 unset
+    cand = _m2_entry(out)["candidate"]
+    assert scout.calls == 0                           # no real search
+    assert "literature_sources" not in cand           # LLM candidate untouched
+    assert cand["citation_list"][0]["title"] == "LLM recalled"
+
+
+def test_env_var_triggers_grounding(monkeypatch):
+    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
+    _patch_search(monkeypatch, scout)
+    monkeypatch.setenv("DOTHESIS_BACKFILL_GROUND_M2", "1")
+    B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm())
+    assert scout.calls == 1
+
+
+def test_search_failure_degrades_to_llm(monkeypatch):
+    # general-domain topic (no supplement) + scout raises → keep the LLM candidate
+    cs = ContextStore(
+        m1_topic={"research_title": "Brand loyalty in e-commerce", "field": "Marketing",
+                  "research_questions": ["RQ1"]},
+        m4_analysis={"data_type_detected": "Quantitative", "results": {"n": 1}})
+    scout = _CountingScout(raises=True)
+    monkeypatch.setattr(M2mod, "scout_citations", scout)
+    monkeypatch.setattr(DS, "search_query_en", lambda t, rq: "brand loyalty")
+    out = B.reconstruct_upstream(cs, targets=["M2"], llm=_fake_llm(), ground_m2=True)
+    cand = _m2_entry(out)["candidate"]
+    assert scout.calls == 1
+    assert "literature_sources" not in cand           # empty real search → untouched
+    assert cand["citation_list"][0]["title"] == "LLM recalled"
+
+
+def test_no_topic_skips_search(monkeypatch):
+    scout = _CountingScout([{"title": "Real", "doi": "10.1/x"}])
+    monkeypatch.setattr(M2mod, "scout_citations", scout)
+    cs = ContextStore(m4_analysis={"data_type_detected": "Quantitative", "results": {"n": 1}})
+    assert B._m2_real_sources(cs) == []               # no research_title
+    assert scout.calls == 0

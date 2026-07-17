@@ -131,10 +131,13 @@ def main() -> int:
         # (the interactive flow leaves this unset → full thesis). Cuts the wasted
         # composition of unordered/fabricated chapters. Best-effort: if the
         # ContextVar doesn't propagate, M5 falls back to composing everything.
-        from agent.run_context import set_report_chapters  # noqa: PLC0415
+        from agent.run_context import set_grounded_backfill, set_report_chapters  # noqa: PLC0415
         from app.partner_run import resolve_chapters  # noqa: PLC0415
         set_report_chapters(resolve_chapters(
             params.get("depth") or "analysis_report", params.get("chapters")))
+        # Report path only: ground M2 with a real literature search (real DOIs +
+        # domain-specialized sources) instead of the backfill's LLM recall.
+        set_grounded_backfill()
         result = asyncio.run(run_headless(
             agent, store, profile,
             thread_id=f"headless:{args.job_id}",

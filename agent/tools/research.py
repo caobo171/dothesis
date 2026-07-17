@@ -26,52 +26,29 @@ from engine.utils.api_citations.eric import EricClient
 logger = logging.getLogger(__name__)
 
 
-# Domain routing: OpenAlex/Crossref/Semantic Scholar are the UNIVERSAL base for
-# every thesis. For two segments we ALSO query a specialized index — Europe PMC
-# (biomedical) and ERIC (education) — which carry MeSH/education-descriptor
-# precision and grey literature the general indexes under-cover. Deterministic
-# keyword match (no LLM): the primary market writes Vietnamese, so both languages
-# are covered. `sinh viên`/`student` is deliberately excluded from education —
-# it saturates business/IS topics and would misroute them.
-_MEDICAL_TERMS = (
-    "medicine", "medical", "health", "clinical", "nursing", "pharmac",
-    "epidemiolog", "dentist", "public health", "patient", "disease", "therapy",
-    "y khoa", "y học", "y tế", "điều dưỡng", "dược", "sức khỏe", "lâm sàng",
-    "bệnh nhân", "bệnh viện",
-)
-_EDUCATION_TERMS = (
-    "education", "pedagog", "teaching", "curriculum", "classroom", "teacher",
-    "e-learning", "literacy", "giáo dục", "sư phạm", "dạy học", "giảng dạy",
-    "chương trình đào tạo", "giáo viên", "học sinh",
-)
+# Domain routing + the specialized-source helpers now live in the shared
+# orchestrator.tools.domain_sources (so the report backfill can use them too).
+# Re-export under the historical private names so this module's call sites and the
+# monkeypatch-based tests (which patch research.EuropePmcClient / research.EricClient)
+# are unchanged.
+from orchestrator.tools import domain_sources as _ds  # agent -> orchestrator is allowed
+
+_MEDICAL_TERMS = _ds._MEDICAL_TERMS
+_EDUCATION_TERMS = _ds._EDUCATION_TERMS
+_classify_domain = _ds.classify_domain
+_search_query_en = _ds.search_query_en
+_norm_source = _ds.norm_source
+_dedup_sources = _ds.dedup_sources
+_doi_key = _ds._doi_key
+_title_key = _ds._title_key
 
 
-def _classify_domain(field: str | None, topic: str = "",
-                     research_questions: list[str] | None = None) -> str:
-    """Return "medical" | "education" | "general" for source routing.
-
-    `field` (the M1/project discipline) is the highest-precision signal; the
-    topic + research-question text is the fallback. Ambiguous (both or neither)
-    → "general": a missed supplement is cheap, a wrong one is noise.
-    """
-    field_l = (field or "").strip().lower()
-    if field_l:
-        med = any(t in field_l for t in _MEDICAL_TERMS)
-        edu = any(t in field_l for t in _EDUCATION_TERMS)
-        if med and not edu:
-            return "medical"
-        if edu and not med:
-            return "education"
-        if med or edu:  # explicit field but ambiguous — trust it over free text
-            return "general"
-    text = " ".join([topic or "", *(research_questions or [])]).lower()
-    med = any(t in text for t in _MEDICAL_TERMS)
-    edu = any(t in text for t in _EDUCATION_TERMS)
-    if med and not edu:
-        return "medical"
-    if edu and not med:
-        return "education"
-    return "general"
+def _domain_supplement(query: str, domain: str, n: int = 8) -> list[dict]:
+    """Wrapper (not a bare alias): the client classes are resolved from THIS
+    module's globals at call time, so tests monkeypatching research.EuropePmcClient
+    / research.EricClient keep intercepting."""
+    return _ds.domain_supplement(query, domain, n=n,
+                                 clients={"medical": EuropePmcClient, "education": EricClient})
 
 
 # Wall-clock discipline promoted from partner's _budgeted_scout (spec §3): the
@@ -81,48 +58,6 @@ def _classify_domain(field: str | None, topic: str = "",
 # Default 120s (not partner's old 45s): chat's scout legitimately runs 30-90s,
 # and the run-level wall clock now owns the per-report budget.
 _SCOUT_FALLBACK_N = 8
-
-
-def _search_query_en(topic: str, research_questions: list[str] | None) -> str:
-    """One short ENGLISH bibliographic query from the (possibly Vietnamese) topic.
-
-    Crossref indexes mostly English scholarship and our primary market writes in
-    Vietnamese, so handing it the raw topic returns near-nothing for most of our
-    users. A tiny LLM call turns the topic into an English keyword query.
-
-    Bounded by its own wall clock: this runs *inside* the degraded path that
-    exists because the deep scout already blew its budget, so a hung LLM here
-    would just relocate the stall it is meant to rescue us from. On timeout or
-    any failure we degrade to the raw topic — a weak query beats no sources.
-    """
-    import concurrent.futures as _fut
-
-    def _translate() -> str:
-        from orchestrator.tools.m5_writing import _get_llm  # agent -> orchestrator is allowed
-        rq = ("; ".join(research_questions or []))[:300]
-        prompt = (
-            "Turn this research topic into ONE short English academic search query "
-            "(5-10 keywords, no punctuation, no quotes). Topic: "
-            f"{topic}\nQuestions: {rq}\nQuery:"
-        )
-        resp = _get_llm().invoke(prompt)
-        q = getattr(resp, "content", resp)
-        if isinstance(q, list):
-            q = " ".join(str(p.get("text", "") if isinstance(p, dict) else p) for p in q)
-        return str(q).strip().strip('"').splitlines()[0][:200]
-
-    # Same no-wait executor discipline as the deep scout below: shutdown(wait=True)
-    # would block on the runaway thread and void the cap.
-    ex = _fut.ThreadPoolExecutor(max_workers=1)
-    try:
-        q = ex.submit(_translate).result(timeout=int(os.getenv("DOTHESIS_TRANSLATE_TIMEOUT_S", "15")))
-        if q:
-            return q
-    except Exception:
-        logger.exception("research_scout: query translation failed; using raw topic")
-    finally:
-        ex.shutdown(wait=False, cancel_futures=True)
-    return (topic or "").strip()[:200]
 
 
 def _crossref_fallback(query: str, n: int = _SCOUT_FALLBACK_N) -> list[dict]:
@@ -162,91 +97,6 @@ def _crossref_fallback(query: str, n: int = _SCOUT_FALLBACK_N) -> list[dict]:
     return refs[:n]
 
 
-def _norm_source(p: dict) -> dict:
-    """OpenAlex/EuropePMC/ERIC client dict -> the M2 Source shape (same as quick_sources)."""
-    return {
-        "title": p.get("title"),
-        "authors": p.get("authors"),
-        "year": p.get("year"),
-        "venue": p.get("journal") or p.get("publisher"),
-        "doi": p.get("doi"),
-        "url": p.get("url"),
-        "verified": bool(p.get("doi")),
-    }
-
-
-def _domain_supplement(query: str, domain: str, n: int = 8) -> list[dict]:
-    """One bounded query to the domain-specialized index, normalized to the M2
-    Source shape. Structured exactly like `_crossref_fallback`: any failure /
-    timeout / rate-limit degrades to an empty list — a supplement NEVER hangs the
-    scout or zeroes its results. Returns [] for the "general" domain (no add).
-    """
-    client_cls = {"medical": EuropePmcClient, "education": EricClient}.get(domain)
-    if client_cls is None or not (query or "").strip():
-        return []
-
-    import concurrent.futures as _fut
-
-    def _fetch() -> list[dict]:
-        papers = client_cls().search_papers(query, limit=n)
-        return [_norm_source(p) for p in (papers or [])]
-
-    ex = _fut.ThreadPoolExecutor(max_workers=1)
-    try:
-        return ex.submit(_fetch).result(
-            timeout=int(os.getenv("DOTHESIS_DOMAIN_SOURCE_TIMEOUT_S", "20")))
-    except Exception:
-        logger.exception("research_scout: domain supplement (%s) failed/timed out", domain)
-        return []
-    finally:
-        ex.shutdown(wait=False, cancel_futures=True)
-
-
-_DOI_PREFIXES = ("https://doi.org/", "http://doi.org/",
-                 "https://dx.doi.org/", "http://dx.doi.org/")
-
-
-def _doi_key(doi) -> str:
-    d = str(doi or "").strip().lower()
-    for pref in _DOI_PREFIXES:
-        if d.startswith(pref):
-            d = d[len(pref):]
-            break
-    return d
-
-
-def _title_key(title) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", str(title or "").lower()).strip()
-
-
-def _dedup_sources(sources: list[dict]) -> list[dict]:
-    """First-wins dedup by DOI (fallback normalized title). Base sources should be
-    listed FIRST so a paper found by both a validated base source and a supplement
-    keeps the base row; a DOI-less kept row is backfilled from a later duplicate
-    that does carry a DOI (keep-most-complete-metadata, mirrors the engine's
-    deduplicate_citations policy)."""
-    out: list[dict] = []
-    by_doi: dict[str, dict] = {}
-    by_title: dict[str, dict] = {}
-    for s in sources or []:
-        dk = _doi_key(s.get("doi"))
-        tk = _title_key(s.get("title"))
-        keep = by_doi.get(dk) if dk else None
-        if keep is None and tk:
-            keep = by_title.get(tk)
-        if keep is not None:
-            # Backfill a DOI onto a kept row that lacked one.
-            if not _doi_key(keep.get("doi")) and dk:
-                keep["doi"] = s.get("doi")
-                keep["verified"] = True
-                by_doi[dk] = keep
-            continue
-        out.append(s)
-        if dk:
-            by_doi[dk] = s
-        if tk:
-            by_title[tk] = s
-    return out
 
 
 @tool

@@ -21,12 +21,23 @@ report_chapters: contextvars.ContextVar[tuple[str, ...] | None] = contextvars.Co
 # whichever is populated.
 _ENV_KEY = "DOTHESIS_REPORT_CHAPTERS"
 
+# Report-only: tell the backfill's M2 reconstruction to run a REAL literature
+# search (deep scout + domain supplement) instead of pure LLM recall, so report
+# citations carry real DOIs. Same subprocess-scoped env carrier as the chapters
+# hint. Interactive chat backfill never sets this → stays fast.
+_GROUND_M2_KEY = "DOTHESIS_BACKFILL_GROUND_M2"
+
 
 def set_report_chapters(chapters) -> None:
     """Set the ordered-chapters hint for the current run (no-op on empty)."""
     if chapters:
         report_chapters.set(tuple(chapters))
         os.environ[_ENV_KEY] = ",".join(str(c) for c in chapters)
+
+
+def set_grounded_backfill() -> None:
+    """Report-only opt-in: backfill's M2 runs a real literature search."""
+    os.environ[_GROUND_M2_KEY] = "1"
 
 
 def _current_scope() -> tuple[str, ...] | None:
