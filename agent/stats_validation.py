@@ -84,6 +84,9 @@ def claims_from_run_stats(op: str, summary: dict) -> list[dict]:
     elif op == "power":
         from thesis_stats.validation import claims_from_power  # noqa: PLC0415
         claims += claims_from_power(summary, source="computed")
+    elif op == "screening":
+        from thesis_stats.validation import claims_from_screening  # noqa: PLC0415
+        claims += claims_from_screening(summary, source="computed")
     return claims
 
 

@@ -292,3 +292,55 @@ def test_power_op_validation_ride_along(monkeypatch):
     out = _run("power", "", {"analysis": "regression"})
     assert out["validation"]["hard"] == 1
     assert any(f["check"] == "bounds.power" for f in out["validation"]["findings"])
+
+
+# --- screening op (roadmap #3) ----------------------------------------------
+
+@pytest.fixture
+def survey_csv(tmp_path):
+    rng = np.random.default_rng(5)
+    n = 120
+    cols = {}
+    for con in ("JS", "OC", "TI"):
+        latent = rng.normal(0, 1, n)
+        for i in (1, 2, 3, 4):
+            cols[f"{con}{i}"] = np.clip(np.round(0.7 * latent + rng.normal(0, 0.7, n) + 3), 1, 5).astype(float)
+    cols["JS1"][0] = np.nan  # one hole
+    p = tmp_path / "survey.csv"
+    pd.DataFrame(cols).to_csv(p, index=False)
+    meas = {"JS": ["JS1", "JS2", "JS3", "JS4"], "OC": ["OC1", "OC2", "OC3", "OC4"],
+            "TI": ["TI1", "TI2", "TI3", "TI4"]}
+    return str(p), meas
+
+
+def test_screening_report_only_writes_no_file(survey_csv, tmp_path):
+    path, meas = survey_csv
+    out = _run("screening", path, {"measurement": meas, "likert_min": 1, "likert_max": 5})
+    assert out["op"] == "screening" and "narrative" in out and "missing" in out
+    assert "applied" not in out
+    assert not (tmp_path / "survey_screened.csv").exists()  # no silent mutation
+
+
+def test_screening_apply_writes_derived_file(survey_csv, tmp_path):
+    path, meas = survey_csv
+    out = _run("screening", path, {"measurement": meas, "likert_min": 1, "likert_max": 5,
+                                   "apply": {"missing": "listwise"}})
+    assert (tmp_path / "survey_screened.csv").exists()
+    assert out["applied"]["n_after"] == out["applied"]["n_before"] - 1  # the NaN row dropped
+    assert "narrative_applied" in out
+
+
+def test_screening_bad_apply_missing_is_clean_error(survey_csv):
+    path, meas = survey_csv
+    out = _run("screening", path, {"measurement": meas, "likert_min": 1, "likert_max": 5,
+                                   "apply": {"missing": "regression"}})
+    assert "error" in out
+
+
+def test_screening_validation_ride_along(monkeypatch, survey_csv):
+    path, _ = survey_csv
+    monkeypatch.setitem(OPS, "screening", lambda file, **k: {
+        "missing": {"per_variable": {"JS1": {"missing_pct": 180}}}})
+    out = _run("screening", path, {})
+    assert out["validation"]["hard"] >= 1
+    assert any(f["check"] == "bounds.missing_pct" for f in out["validation"]["findings"])

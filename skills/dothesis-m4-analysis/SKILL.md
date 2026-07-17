@@ -63,6 +63,12 @@ sandboxed stats service and returns structured numbers. Ops:
     is data-free (answers "why n=?"); quote its `justification`. **Post-hoc power is a
     limitations disclosure only** (Hoenig & Heisey) — never sell it as proof of adequacy;
     prefer `sensitivity` (MDES) to argue what the achieved sample could detect.
+  - `screening` — **run FIRST, before the measurement/structural model**: missingness +
+    Little's MCAR, Mahalanobis outliers, careless/straight-lining, reverse-coded audit, and
+    a cleaning `narrative` M5 quotes (params: `measurement`, `likert_min/max`, `reverse_items`).
+    Report-only by default; only after the student confirms, pass `params.apply` — it writes
+    `<file>_screened.csv` and returns `applied.derived_file`; use that path for all downstream
+    ops. Never apply (recode/drop/impute) without showing the report and confirming first.
 
 These compute from the student's raw uploaded data — they complement (do not replace)
 `check_thresholds`, which classifies numbers the student pasted from external SmartPLS/SPSS.

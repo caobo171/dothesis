@@ -274,6 +274,38 @@ def _op_power(file: str = "", analysis: str = None, mode: str = "apriori",
         predictors=predictors, n=n, n1=n1, n2=n2, ratio=ratio, alternative=alternative))
 
 
+def _op_screening(file: str, checks=None, measurement=None, likert_min=None, likert_max=None,
+                  reverse_items=None, group=None, thresholds=None, apply=None, **_: Any) -> dict:
+    """Data screening (missingness/MCAR, outliers, careless, reverse-coded).
+    Report-only unless params.apply is given — then it writes <stem>_screened.csv
+    next to the source (the ONLY mutation path) and returns the accounting."""
+    import thesis_stats as ts
+    df = _load_df(file)
+    result = ts.run_screening(df, checks=checks, measurement=measurement,
+                              likert_min=likert_min, likert_max=likert_max,
+                              reverse_items=reverse_items, group=group, thresholds=thresholds)
+    if apply:
+        rc = (result.get("reverse_coded") or {})
+        outl = (result.get("outliers") or {}).get("mahalanobis") or {}
+        plan = {
+            "recode_reverse": rc.get("needs_recoding") or [] if apply.get("recode_reverse") else [],
+            "likert_min": result["likert"]["min"], "likert_max": result["likert"]["max"],
+            "drop_rows": {
+                "careless": (result.get("careless") or {}).get("flagged_indices") or [] if apply.get("drop_careless") else [],
+                "outliers": outl.get("flagged_indices") or [] if apply.get("drop_outliers") else [],
+            },
+            "missing": apply.get("missing"),
+        }
+        cleaned, applied = ts.apply_screening(df, plan)
+        from pathlib import Path
+        out_path = Path(file).with_name(Path(file).stem + "_screened.csv")
+        cleaned.to_csv(out_path, index=False)
+        applied["derived_file"] = str(out_path)
+        result["applied"] = applied
+        result["narrative_applied"] = applied.get("narrative_applied")
+    return _round_floats(result)
+
+
 # The whitelist. An op not in this dict does not run, full stop.
 OPS = {
     "detect": _op_detect,
@@ -290,6 +322,7 @@ OPS = {
     "moderation": _op_moderation,
     "rigor": _op_rigor,
     "power": _op_power,
+    "screening": _op_screening,
 }
 
 
@@ -375,6 +408,11 @@ def run_stats(op: str, file: str, params: dict | None = None) -> str:
                  posthoc|sensitivity, effect_size (num or small/medium/large),
                  alpha=.05, power=.80, predictors, n) → required_n / achieved_power
                  / mdes + a committee-ready justification sentence
+      screening — missingness + Little's MCAR, outliers (Mahalanobis), careless/
+                 straight-lining, reverse-coded audit + cleaning narrative (params:
+                 measurement, likert_min/max, reverse_items, checks). Report-only
+                 unless params.apply={recode_reverse,drop_careless,drop_outliers,
+                 missing:listwise|mean} — which writes <stem>_screened.csv
 
     Free-form code is NOT an op — if an analysis you need is missing, say so
     instead of improvising.
