@@ -81,6 +81,9 @@ def claims_from_run_stats(op: str, summary: dict) -> list[dict]:
                     claims.append(mk("corr", v, construct=f"{c1}-{c2}", table="correlations"))
     elif op == "rigor":
         claims += claims_from_rigor(summary, source="computed")
+    elif op == "power":
+        from thesis_stats.validation import claims_from_power  # noqa: PLC0415
+        claims += claims_from_power(summary, source="computed")
     return claims
 
 

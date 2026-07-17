@@ -138,6 +138,23 @@ def consent_notice(language: str = "en", institution: str = "", purpose: str = "
     return build_consent_notice(language, institution, purpose)
 
 
+def _max_in_degree(cm: dict) -> int:
+    """Largest number of arrows pointing at any single construct — the widest
+    regression in the model, i.e. the k that drives power (not total edges)."""
+    edges = cm.get("edges") or cm.get("paths") or []
+    indeg: dict = {}
+    for e in edges:
+        if isinstance(e, dict):
+            tgt = e.get("target") or e.get("to")
+            if tgt:
+                indeg[tgt] = indeg.get(tgt, 0) + 1
+    if indeg:
+        return max(indeg.values())
+    if cm.get("dependent_variable"):
+        return len([v for v in (cm.get("independent_variables") or []) if v]) + (1 if cm.get("moderator") else 0)
+    return 0
+
+
 def make_sampling_plan_tool(store):
     """Wrap the sampling-plan computation as a LangChain tool bound to a store.
 
@@ -190,14 +207,45 @@ def make_sampling_plan_tool(store):
                 n_ind = sum(len((n or {}).get("questions") or [])
                             for n in (cm.get("nodes") or []) if isinstance(n, dict))
         n, rule = target_sample_n(method, n_paths, n_ind)
+
+        # Power-primary sample size: a-priori power analysis is the committee-
+        # facing justification; the heuristic becomes a floor. predictors =
+        # MAX arrows into any one construct (the largest single regression),
+        # not total edges. CB-SEM/AMOS defer power (fit-index based) → heuristic
+        # only. Fail-open: any error keeps the heuristic-only plan.
+        ml = method.lower()
+        analysis = ("pls_sem" if "pls" in ml
+                    else "regression" if ("regress" in ml or "spss" in ml) else None)
+        if any(t in ml for t in ("cb-sem", "cbsem", "amos", "lavaan", "covariance")):
+            analysis = None
+        k = _max_in_degree(cm) or n_paths or 1
+        power_analysis = None
+        if analysis:
+            try:
+                import thesis_stats as ts  # noqa: PLC0415
+                power_analysis = ts.run_power(analysis, "apriori", effect_size="medium",
+                                              predictors=k)
+                power_n = power_analysis.get("recommended_n") or power_analysis.get("required_n")
+                if isinstance(power_n, int):
+                    n = max(n, power_n)
+            except Exception:
+                logger.exception("sampling_plan: power analysis failed (fail-open)")
+                power_analysis = None
+
+        rationale = f"{rule} With {n_paths} structural paths and {n_ind} items."
+        if power_analysis:
+            rationale = (power_analysis["justification"] + " " + rationale +
+                         " Recruit ~10–15% above target to absorb invalid/careless responses.")
         plan = {
             "target_n": n,
             "method_rule": rule,
             "screening": "Add a screening question to exclude ineligible respondents.",
             # A bigger target needs a longer field window; keep it coarse.
             "timeline_weeks": 3 if n <= 250 else 4,
-            "rationale": f"{rule} With {n_paths} structural paths and {n_ind} items.",
+            "rationale": rationale,
         }
+        if power_analysis:
+            plan["power_analysis"] = power_analysis
         # Persist as an M3 design decision (F0 correction). Best-effort: a store
         # write failure must not lose the model the computed plan, so we still
         # return it — the persistence is advisory plumbing, not the deliverable.

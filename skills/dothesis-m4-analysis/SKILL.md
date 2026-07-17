@@ -58,6 +58,11 @@ sandboxed stats service and returns structured numbers. Ops:
   - `rigor` — assumption tests (Shapiro/Levene), Cohen's f²/d effect sizes, and Harman's
     single-factor common-method-bias test (params: `group=col`, `regressions=[{y,x}]`,
     `checks=[...]`).
+  - `power` — sample-size power analysis (params: `analysis`=regression|correlation|ttest|
+    pls_sem, `mode`=apriori|posthoc|sensitivity, `effect_size`, `predictors`, `n`). A-priori
+    is data-free (answers "why n=?"); quote its `justification`. **Post-hoc power is a
+    limitations disclosure only** (Hoenig & Heisey) — never sell it as proof of adequacy;
+    prefer `sensitivity` (MDES) to argue what the achieved sample could detect.
 
 These compute from the student's raw uploaded data — they complement (do not replace)
 `check_thresholds`, which classifies numbers the student pasted from external SmartPLS/SPSS.

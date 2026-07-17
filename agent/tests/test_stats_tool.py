@@ -257,3 +257,38 @@ def test_check_thresholds_htmt_above_one():
 def test_check_thresholds_valid_values_unchanged():
     out = json.loads(check_thresholds.func("loadings", [{"item": "X1", "value": 0.8}, {"item": "X2", "value": 0.75}]))
     assert not any(f.get("check", "").startswith("bounds") for f in out["findings"])
+
+
+# --- power op (roadmap #2) --------------------------------------------------
+
+def test_power_op_apriori_textbook(tmp_path):
+    out = _run("power", "", {"analysis": "regression", "mode": "apriori",
+                             "effect_size": "medium", "predictors": 3})
+    assert out["op"] == "power" and out["required_n"] == 77
+    assert out["justification"]
+
+
+def test_power_op_posthoc_defaults_n_from_file(pls):
+    path, cm = pls  # 120-row CSV
+    out = _run("power", path, {"analysis": "regression", "mode": "posthoc",
+                               "effect_size": "medium", "predictors": 3})
+    assert 0 < out["achieved_power"] <= 1  # n defaulted to the file's row count
+
+
+def test_power_op_missing_n_no_file_is_clean_error():
+    out = _run("power", "", {"analysis": "regression", "mode": "posthoc",
+                             "effect_size": "medium", "predictors": 3})
+    assert "error" in out
+
+
+def test_power_op_unknown_analysis_clean_error():
+    out = _run("power", "", {"analysis": "anova", "mode": "apriori", "effect_size": "medium"})
+    assert "error" in out
+
+
+def test_power_op_validation_ride_along(monkeypatch):
+    monkeypatch.setitem(OPS, "power", lambda file="", **k: {"analysis": "regression",
+                        "mode": "posthoc", "achieved_power": 1.4, "inputs": {}})
+    out = _run("power", "", {"analysis": "regression"})
+    assert out["validation"]["hard"] == 1
+    assert any(f["check"] == "bounds.power" for f in out["validation"]["findings"])

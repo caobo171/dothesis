@@ -256,6 +256,24 @@ def _op_rigor(file: str, conceptual_model=None, measurement=None, group=None,
     return _round_floats(out)
 
 
+def _op_power(file: str = "", analysis: str = None, mode: str = "apriori",
+              effect_size=None, alpha: float = 0.05, power: float = 0.80,
+              predictors=None, n=None, n1=None, n2=None, ratio: float = 1.0,
+              alternative: str = "two-sided", **_: Any) -> dict:
+    """A-priori / post-hoc / sensitivity power. `file` is optional: a-priori is
+    data-free; for post-hoc/sensitivity, n defaults to the uploaded file's row
+    count when omitted (the one data-touching convenience)."""
+    import thesis_stats as ts
+    if mode != "apriori" and n is None and file:
+        try:
+            n = int(_load_df(file).shape[0])
+        except Exception:
+            n = None
+    return _round_floats(ts.run_power(
+        analysis, mode, effect_size=effect_size, alpha=alpha, power=power,
+        predictors=predictors, n=n, n1=n1, n2=n2, ratio=ratio, alternative=alternative))
+
+
 # The whitelist. An op not in this dict does not run, full stop.
 OPS = {
     "detect": _op_detect,
@@ -271,6 +289,7 @@ OPS = {
     "mediation": _op_mediation,
     "moderation": _op_moderation,
     "rigor": _op_rigor,
+    "power": _op_power,
 }
 
 
@@ -351,6 +370,11 @@ def run_stats(op: str, file: str, params: dict | None = None) -> str:
                  the conceptual_model)
       rigor    — assumptions + effect sizes + Harman CMB (params: group=col,
                  regressions=[{y,x}], checks=[...])
+      power    — sample-size power analysis, data-free for a-priori (params:
+                 analysis=regression|correlation|ttest|pls_sem, mode=apriori|
+                 posthoc|sensitivity, effect_size (num or small/medium/large),
+                 alpha=.05, power=.80, predictors, n) → required_n / achieved_power
+                 / mdes + a committee-ready justification sentence
 
     Free-form code is NOT an op — if an analysis you need is missing, say so
     instead of improvising.
