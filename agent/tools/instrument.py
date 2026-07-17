@@ -236,6 +236,19 @@ def make_sampling_plan_tool(store):
         if power_analysis:
             rationale = (power_analysis["justification"] + " " + rationale +
                          " Recruit ~10–15% above target to absorb invalid/careless responses.")
+        # Reconcile with the M1 early estimate (vision §3.1) so the two never look
+        # contradictory — this computed plan supersedes it. Fail-open on any
+        # malformed feasibility state.
+        try:
+            _feas = (cs.get("feasibility") or {}).get("sample_size") or {}
+            _early = _feas.get("headline_n")
+            if isinstance(_early, int):
+                _k = (_feas.get("assumed") or {}).get("predictors")
+                rationale += (f" Early M1 estimate was n ≈ {_early}"
+                              + (f" (assumed {_k} predictors)" if _k else "")
+                              + "; this plan supersedes it.")
+        except Exception:
+            logger.debug("sampling_plan: M1 reconciliation skipped", exc_info=True)
         plan = {
             "target_n": n,
             "method_rule": rule,

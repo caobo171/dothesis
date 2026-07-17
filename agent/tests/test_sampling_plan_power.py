@@ -57,3 +57,25 @@ def test_fail_open_when_power_raises(tmp_path, monkeypatch):
     store = _store_with(tmp_path, "PLS-SEM", _MODEL)
     plan = json.loads(make_sampling_plan_tool(store).func())
     assert "power_analysis" not in plan and plan["target_n"] > 0  # heuristic survived
+
+
+def test_sampling_plan_references_m1_estimate(tmp_path):
+    import json, uuid
+    from agent.state import ProjectStateStore
+    from agent.tools.instrument import make_sampling_plan_tool
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    store.commit_slice("M3", {"methodology": "PLS-SEM", "conceptual_model": _MODEL}, reason="seed")
+    store.commit_slice("M1", {"feasibility": {"sample_size": {
+        "headline_n": 155, "assumed": {"predictors": 2}}}}, reason="feas")
+    out = json.loads(make_sampling_plan_tool(store).func())
+    assert "Early M1 estimate was n ≈ 155" in out["rationale"]
+
+
+def test_sampling_plan_no_feasibility_no_sentence(tmp_path):
+    import json, uuid
+    from agent.state import ProjectStateStore
+    from agent.tools.instrument import make_sampling_plan_tool
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    store.commit_slice("M3", {"methodology": "PLS-SEM", "conceptual_model": _MODEL}, reason="seed")
+    out = json.loads(make_sampling_plan_tool(store).func())
+    assert "Early M1 estimate" not in out["rationale"]

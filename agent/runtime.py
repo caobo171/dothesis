@@ -156,6 +156,7 @@ from deepagents import create_deep_agent
 from deepagents.backends.composite import CompositeBackend
 from deepagents.backends.filesystem import FilesystemBackend
 
+from agent.feasibility import make_feasibility_tool
 from agent.preflight import make_preflight_tool
 from agent.state import MODULES, ProjectStateStore
 from agent.tools.backfill_tool import make_backfill_tool  # reconstruct upstream modules
@@ -513,6 +514,9 @@ def build_agent(
         # {table_kind, rows} that feed check_thresholds. Both take a workspace path.
         parse_smartpls_export,
         parse_output_table,
+        # Vision §3.1: M1 topic feasibility — early sample-size reality check +
+        # operationalizability, advisory. Run once before locking the topic.
+        *make_feasibility_tool(store),
         # F8: methods pre-flight — the M3->M4 readiness audit (advisory). Bound
         # to the store so the agent can run it before kicking off M4 analysis.
         make_preflight_tool(store),

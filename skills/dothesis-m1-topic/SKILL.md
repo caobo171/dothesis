@@ -82,7 +82,22 @@ Each RQ must:
 - Be answerable with the kind of data the user has access to
 
 ### Phase 4 — Confirm and commit
-Show the title + RQs in a clean block. Ask: *"Lock this in?"*
+Show the title + RQs in a clean block. Before asking *"Lock this in?"*, run
+`topic_feasibility` **once** (pass `expected_constructs`/`method_hint` only if the
+student actually stated them — otherwise call it bare). Then, briefly and warmly:
+- Surface the sample-size reality check with the population interpolated ("a model
+  like this typically needs n ≈ X from {population} — can you realistically reach
+  that?"), and offer the returned justification sentence as *"the sentence you'll
+  later paste into Chapter 3."*
+- If `operationalizability.findings` is non-empty, raise at most the **top 2** with
+  their reframe hints — as advice, not a veto.
+- If the student wants to proceed anyway, commit without further comment. This is
+  **advice, not a gate** — never refuse to lock a topic over sample size or
+  operationalizability. Run it once per topic; do not re-run on later passes unless
+  the topic substantially pivots.
+
+Deliver all of this in the student's language; keep the English justification
+sentence available (it's what goes into the methodology chapter later).
 
 On confirmation: `commit_slice("M1", {research_title, research_questions},
 reason="topic locked", confirm_done=True)`. Then one sentence on what's next (M2).
@@ -121,3 +136,5 @@ or a tighter scope — never refuse. Skip only if the student has no date yet.
 - ❌ Do not generate 20 RQs and let the user pick. ≤3 framings, then ≤4 RQs.
 - ❌ Do not skip Phase 1 because "you can guess the domain". Ask.
 - ❌ Do not commit `done` until the user has confirmed the exact title + RQs in writing.
+- ❌ Do not nag about feasibility — one `topic_feasibility` check at topic-lock, flag
+  warmly, then respect the student's call. It is advice, never a gate.

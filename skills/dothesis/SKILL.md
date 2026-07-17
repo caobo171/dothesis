@@ -175,7 +175,7 @@ The user should never learn the words `commit_slice`, `final_sections`, or
 
 | Module | Owns (writes) | Reads |
 |---|---|---|
-| M1 | `research_title`, `research_questions`, `language`, `field`, `research_type`, `objectives`, `target_population`, `scope` | — |
+| M1 | `research_title`, `research_questions`, `language`, `field`, `research_type`, `objectives`, `target_population`, `scope`, `feasibility` | — |
 | M2 | `literature_sources`, `research_gaps` | M1 |
 | M3 | `conceptual_model`, `hypotheses`, `methodology`, `instrument`, `sample_plan`, `cmb_plan`, `missing_data_plan` | M1, M2 |
 | M4 | `analysis_outline`, `analysis_results`, `field_it_collection_id`, `field_it_responses`, `field_it_quality` | M3 |

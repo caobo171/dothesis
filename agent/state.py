@@ -34,7 +34,10 @@ SLICE_OWNERSHIP: dict[str, list[str]] = {
     # by can talk itself into any brief. Don't "fix" that divergence either.
     "M1": ["research_title", "research_questions", "decisions",
            "language", "field", "research_type", "objectives",
-           "target_population", "scope", "user_context"],
+           "target_population", "scope", "user_context",
+           # advisory early sample-size/operationalizability estimate (vision
+           # §3.1); advertised in the skill slice map, unlike `decisions`.
+           "feasibility"],
     "M2": ["literature_sources", "research_gaps", "decisions"],
     # sample_plan / cmb_plan / missing_data_plan added for the F8 methods
     # pre-flight: commit_slice must be able to WRITE them (they're M3 design
