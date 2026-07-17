@@ -218,9 +218,23 @@ def source_label(source) -> str:
     return f"{surname} {year}" if year else surname
 
 
+def _strip_rendered(text):
+    """Drop DoThesis-rendered table blocks before similarity fingerprinting — a
+    rendered table is a verbatim projection of state shared across chapters (the
+    same n/values appear in the cleaning section and the results tables), so it
+    would otherwise read as intra-thesis 'duplication'. Lazy + fail-open."""
+    if not isinstance(text, str) or "dt-rendered:begin" not in text:
+        return text
+    try:
+        from orchestrator.tools.results_render import strip_rendered_blocks  # noqa: PLC0415
+        return strip_rendered_blocks(text)
+    except Exception:
+        return text
+
+
 def _resolve_chapters(m5) -> dict:
     if isinstance(m5, dict):
-        return {str(k).lower(): (v.get("prose") if isinstance(v, dict) else v)
+        return {str(k).lower(): _strip_rendered(v.get("prose") if isinstance(v, dict) else v)
                 for k, v in m5.items() if str(k).lower() in _CHAPTERS}
     if isinstance(m5, list):
         out = {}
@@ -230,7 +244,7 @@ def _resolve_chapters(m5) -> dict:
                 # Canonical chapters only — a References section is not prose.
                 for c in _CHAPTERS:
                     if c in name.replace(" ", "_"):
-                        out[c] = s.get("prose") or s.get("content")
+                        out[c] = _strip_rendered(s.get("prose") or s.get("content"))
                         break
         return out
     return {}

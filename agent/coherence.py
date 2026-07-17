@@ -283,23 +283,40 @@ def build_registry(hypotheses, conceptual_model, analysis_results, m5) -> list[d
     return list(entries.values())
 
 
+def _strip_rendered(text):
+    """Remove DoThesis-rendered table blocks (roadmap M5 renderer) before the
+    coherence check reads numbers: a rendered block IS a byte-projection of the
+    persisted state, so it cannot disagree with state — re-litigating it would be
+    a false positive. The narrative AROUND the block stays fully checked. Lazy +
+    fail-open: the renderer module must never break the gate."""
+    if not isinstance(text, str) or "dt-rendered:begin" not in text:
+        return text
+    try:
+        from orchestrator.tools.results_render import strip_rendered_blocks  # noqa: PLC0415
+        return strip_rendered_blocks(text)
+    except Exception:
+        return text
+
+
 def _resolve_chapters(m5) -> dict:
+    def _s(d):
+        return {k: _strip_rendered(v) for k, v in d.items()}
     if isinstance(m5, dict) and any(k in m5 for k in ("results", "discussion", "conclusion", "intro")):
         # chapter values may be plain strings or {prose: ...} dicts (auto-mode).
-        return {str(k).lower(): (v.get("prose") if isinstance(v, dict) else v) for k, v in m5.items()}
+        return _s({str(k).lower(): (v.get("prose") if isinstance(v, dict) else v) for k, v in m5.items()})
     if isinstance(m5, list):
         try:
             from orchestrator.tools.m5_writing import chapters_from_final_sections  # noqa: PLC0415
             ch = chapters_from_final_sections(m5)
             if isinstance(ch, dict):
-                return {str(k).lower(): (v.get("prose") if isinstance(v, dict) else v) for k, v in ch.items()}
+                return _s({str(k).lower(): (v.get("prose") if isinstance(v, dict) else v) for k, v in ch.items()})
         except Exception:
             pass
         out = {}
         for s in m5:
             if isinstance(s, dict):
                 out[str(s.get("title") or s.get("name") or "").lower()] = s.get("prose") or s.get("content")
-        return out
+        return _s(out)
     return {}
 
 
