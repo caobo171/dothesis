@@ -58,6 +58,12 @@ sandboxed stats service and returns structured numbers. Ops:
   - `rigor` — assumption tests (Shapiro/Levene), Cohen's f²/d effect sizes, and Harman's
     single-factor common-method-bias test (params: `group=col`, `regressions=[{y,x}]`,
     `checks=[...]`).
+  - `method_advice` — is the chosen analysis method defensible for THIS data + model?
+    Returns a ranked recommendation (pls_sem/cb_sem/regression/nonparametric) with a citable
+    evidence row per criterion (latent model, sample floors, normality, mediation, scale type…)
+    and a conflict check vs the M3 choice (params: `conceptual_model`, `chosen`, `target_n`,
+    `goal`; pass `file` for data-time normality + real n). Advisory — it never overrides the
+    student's choice, it arms them with the evidence a committee will ask for.
   - `power` — sample-size power analysis (params: `analysis`=regression|correlation|ttest|
     pls_sem, `mode`=apriori|posthoc|sensitivity, `effect_size`, `predictors`, `n`). A-priori
     is data-free (answers "why n=?"); quote its `justification`. **Post-hoc power is a

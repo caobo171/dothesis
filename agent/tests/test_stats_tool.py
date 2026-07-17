@@ -344,3 +344,32 @@ def test_screening_validation_ride_along(monkeypatch, survey_csv):
     out = _run("screening", path, {})
     assert out["validation"]["hard"] >= 1
     assert any(f["check"] == "bounds.missing_pct" for f in out["validation"]["findings"])
+
+
+# --- method_advice op (roadmap #7) ------------------------------------------
+
+_ADV_CM = {"nodes": [{"id": n, "label": n, "questions": [f"{n}1", f"{n}2", f"{n}3"]}
+                     for n in ("A", "B", "C")],
+           "edges": [{"source": "A", "target": "C"}, {"source": "B", "target": "C"}]}
+
+
+def test_method_advice_design_mode():
+    out = _run("method_advice", "", {"conceptual_model": _ADV_CM, "target_n": 250, "chosen": "PLS-SEM"})
+    assert out["op"] == "method_advice" and out["mode"] == "design"
+    assert [r["method"] for r in out["recommendation"]]
+    assert "inputs_fingerprint" in out
+
+
+def test_method_advice_data_mode_conflict(survey_csv):
+    path, meas = survey_csv  # 120 rows
+    cm = {"nodes": [{"id": c, "label": c, "questions": meas[c]} for c in ("JS", "OC", "TI")],
+          "edges": [{"source": "JS", "target": "TI"}, {"source": "OC", "target": "TI"}]}
+    out = _run("method_advice", path, {"conceptual_model": cm, "chosen": "CB-SEM (AMOS)"})
+    assert out["mode"] == "data"
+    # n=120 < 150 → cb_sem penalized; conflict may surface
+    assert out["recommendation"][0]["method"] in ("pls_sem", "regression", "cb_sem", "nonparametric")
+
+
+def test_method_advice_never_blocks_no_hard():
+    out = _run("method_advice", "", {"conceptual_model": _ADV_CM, "target_n": 90, "chosen": "CB-SEM"})
+    assert '"hard"' not in json.dumps(out)

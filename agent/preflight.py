@@ -41,6 +41,21 @@ def preflight_check(context_store: dict) -> list[str]:
     # responding checks weren't designed in — flag it only once there ARE items.
     if items and not any(i.get("reverse_coded") for i in items):
         missing.append("No reverse-coded items flagged — check for careless responding.")
+    # Method-vs-data advisability (roadmap #7): design-time conflict only (no
+    # data here). Pure + fail-open; a mismatch is advisory, not a hard gap.
+    if m3.get("methodology") and m3.get("conceptual_model"):
+        try:
+            from agent.method_advisor import advise, model_profile, normalize_method  # noqa: PLC0415
+            chosen = normalize_method(m3.get("methodology"))
+            adv = advise(profile=model_profile(m3["conceptual_model"], inst),
+                         n=(m3.get("sample_plan") or {}).get("target_n"),
+                         power_analysis=(m3.get("sample_plan") or {}).get("power_analysis"),
+                         chosen=chosen, mode="design")
+            if adv.get("conflict_with_choice"):
+                missing.append("Chosen method may not fit the model — run "
+                               "`run_stats(op='method_advice')`: " + adv["conflict_with_choice"]["sentence"])
+        except Exception:
+            pass  # advisory + pure; never let it break preflight
     if not m3.get("cmb_plan"):
         missing.append("No common-method-bias plan (e.g. Harman / marker variable).")
     if not m3.get("missing_data_plan"):

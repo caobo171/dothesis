@@ -306,6 +306,34 @@ def _op_screening(file: str, checks=None, measurement=None, likert_min=None, lik
     return _round_floats(result)
 
 
+def _op_method_advice(file: str = "", conceptual_model=None, instrument=None, target_n=None,
+                      power_analysis=None, chosen=None, goal=None, mcar_p=None,
+                      likert_levels=None, measurement=None, **_: Any) -> dict:
+    """Assumption-driven method advice. Data-time when a file is given (n = rows,
+    distribution computed via thesis-stats); design-time otherwise (n = target_n).
+    Advisory only — never blocks."""
+    from agent.method_advisor import advise, model_profile, normalize_method, fingerprint
+    profile = model_profile(conceptual_model or {}, instrument)
+    n = target_n
+    distribution = None
+    mode = "design"
+    if file:
+        try:
+            df = _load_df(file)
+            n = int(df.shape[0])
+            import thesis_stats as ts  # noqa: PLC0415
+            distribution = ts.run_rigor(df.to_dict("records"), checks=["normality"]).get("checks", {}).get("distribution")
+            mode = "data"
+        except Exception:
+            logger.exception("method_advice: data profiling skipped (fail-open)")
+    out = advise(profile=profile, n=n, distribution=distribution, power_analysis=power_analysis,
+                 mcar_p=mcar_p, likert_levels=likert_levels, goal=goal,
+                 chosen=normalize_method(chosen), mode=mode,
+                 source_note=("rows of uploaded data" if mode == "data" else "sample_plan.target_n"))
+    out["inputs_fingerprint"] = fingerprint(chosen, conceptual_model, target_n, mode, n)
+    return _round_floats(out)
+
+
 # The whitelist. An op not in this dict does not run, full stop.
 OPS = {
     "detect": _op_detect,
@@ -323,6 +351,7 @@ OPS = {
     "rigor": _op_rigor,
     "power": _op_power,
     "screening": _op_screening,
+    "method_advice": _op_method_advice,
 }
 
 
@@ -408,6 +437,11 @@ def run_stats(op: str, file: str, params: dict | None = None) -> str:
                  posthoc|sensitivity, effect_size (num or small/medium/large),
                  alpha=.05, power=.80, predictors, n) → required_n / achieved_power
                  / mdes + a committee-ready justification sentence
+      method_advice — is the chosen analysis method defensible for this data +
+                 model? ranked recommendation (pls_sem/cb_sem/regression/
+                 nonparametric) with citable evidence rows + a conflict check
+                 (params: conceptual_model, chosen, target_n, goal; pass file for
+                 data-time normality/n). Advisory — never blocks.
       screening — missingness + Little's MCAR, outliers (Mahalanobis), careless/
                  straight-lining, reverse-coded audit + cleaning narrative (params:
                  measurement, likert_min/max, reverse_items, checks). Report-only
