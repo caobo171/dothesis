@@ -248,7 +248,11 @@ def make_writing_tools(store) -> list:
                 logger.exception("export_docx: persisting generated draft failed")
 
         try:
-            artifacts = run_export(sections, str(project_id), references=references, language=language)
+            # Pass the nested store so ensure_rendered weaves any missing
+            # verified-state tables at export time (roadmap M5 renderer). Full
+            # thesis only — the module-scoped path above deliberately does not.
+            artifacts = run_export(sections, str(project_id), references=references,
+                                   language=language, context_store=full_cs)
         except Exception as e:
             logger.exception("export_docx: run_export failed")
             return json.dumps({"error": "export_failed", "detail": str(e)})

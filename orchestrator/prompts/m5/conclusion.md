@@ -22,4 +22,7 @@ Write a 500-800 word Chapter 6 with these sections:
 
 Use academic prose. Minimal new citations — only if essential. Write in {language}.
 
+If you restate study limitations, emit `[[DT:limitations]]` on its own line rather than
+listing them from memory — DoThesis renders the real flagged weaknesses from state.
+
 Output: Chapter 6 prose as markdown only.

@@ -20,7 +20,10 @@ Write a 1200-2000 word Chapter 5 with these sections:
 - 5.2 Discussion of findings (compare to prior literature; explain consistencies + surprises)
 - 5.3 Theoretical contributions (how findings extend / refine the theory used)
 - 5.4 Practical implications (managerial / policy recommendations)
-- 5.5 Limitations
+- 5.5 Limitations — introduce them in a sentence, then emit `[[DT:limitations]]` on
+  its own line: DoThesis fills in the REAL flagged weaknesses (sub-threshold power, a
+  not-supported hypothesis, screening removals, borderline validity) from the persisted
+  state, framed for disclosure. Discuss each; invent none; hide none.
 - 5.6 Suggestions for future research
 
 Cite extensively to back up each interpretation. Write in {language}.

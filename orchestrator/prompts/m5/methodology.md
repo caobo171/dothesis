@@ -77,4 +77,9 @@ Keep the analysis steps consistent with the metric family Chapter 4 reports
 
 Cite inline as (Author, Year). Write in {language}. Length: 800-1500 words.
 
+When you describe the data-screening/cleaning procedure, introduce it in a sentence,
+then emit `[[DT:data_cleaning]]` on its own line — DoThesis inserts the committee-ready
+cleaning paragraph + summary rendered verbatim from the screening results (every count
+computed). Do not hand-type the removal counts.
+
 Output: Chapter 3 prose as markdown only.

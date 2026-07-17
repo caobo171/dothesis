@@ -50,22 +50,31 @@ matches `{tool}`; never mix them.
 ### If paradigm == "quantitative"
 Write a 1200-2000 word Chapter 4 with these sub-sections (start at 4.1 — the
 chapter title is added automatically, do not repeat it):
-- 4.1 Sample characteristics — descriptives from `{results}` (use the real n).
+**Statistics tables are inserted for you — DO NOT write them yourself.** Where a
+table belongs, emit the matching token on its OWN line and nothing else; DoThesis
+replaces it with the exact table rendered from the persisted results (every number
+verbatim). Never hand-type a β/t/p/loading/AVE/fit table — a table you type can
+carry a transposed digit; a token cannot. Write only the overview sentence before
+each token and the interpretation paragraph after it.
+
+Available tokens: `[[DT:descriptives]]`, `[[DT:measurement_model]]`,
+`[[DT:discriminant_validity]]`, `[[DT:model_fit]]` (CB-SEM), `[[DT:structural_paths]]`,
+`[[DT:r2_q2]]`.
+
+- 4.1 Sample characteristics — overview sentence, then `[[DT:descriptives]]`.
 - 4.2 Measurement model evaluation (reliability + validity).
-  - **Present a Markdown table** (Table 4.1): construct, item, outer loading,
-    Cronbach's α, CR, AVE — one row per item/construct, values from `{results}`.
+  - Overview sentence, then `[[DT:measurement_model]]` (Table 4.1).
   - If any **AVE < 0.50** or **loading < 0.50** or **α/CR < 0.70**: state the
     breach explicitly, say which item is affected, and give the correct
     remediation — either the item was dropped and the model re-estimated, OR
     flag it as a measurement limitation to be carried into the Discussion and
     Conclusion (Chapter 5). Do NOT excuse a low AVE with "CR is high" and move on.
-  - **Present a discriminant-validity table** (Table 4.2): HTMT or
-    Fornell-Larcker matrix.
+  - Then `[[DT:discriminant_validity]]` (Table 4.2, HTMT or Fornell-Larcker).
 - 4.3 Hypothesis testing / structural model.
-  - **Present a Markdown table** (Table 4.3): hypothesis, path, β, t, p,
-    supported/not supported — from `{results}`.
-  - Report the structural metrics for the `{tool}` family (R²/f²/Q² for PLS-SEM;
-    fit indices for CB-SEM) and interpret effect sizes, not just significance.
+  - Overview sentence, then `[[DT:structural_paths]]` (Table 4.3), and
+    `[[DT:model_fit]]` for CB-SEM · `[[DT:r2_q2]]` for the explanatory/predictive power.
+  - Interpret the structural metrics for the `{tool}` family (R²/f²/Q² for PLS-SEM;
+    fit indices for CB-SEM) — effect sizes, not just significance.
 - 4.4 Summary of supported / rejected hypotheses.
 
 ### If paradigm == "qualitative"

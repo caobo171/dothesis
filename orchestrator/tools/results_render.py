@@ -532,3 +532,63 @@ def verify_rendered_blocks(prose: str, analysis_results: Any) -> List[dict]:
 
 def _norm_ws(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
+
+
+_TITLE_CHAPTER = [("result", "results"), ("methodolog", "methodology"),
+                  ("data collect", "methodology"), ("conclusion", "conclusion"),
+                  ("discussion", "discussion"), ("limitation", "discussion")]
+
+
+def _chapter_of(title: str) -> Optional[str]:
+    t = (title or "").lower()
+    for needle, chapter in _TITLE_CHAPTER:
+        if needle in t:
+            return chapter
+    return None
+
+
+def ensure_rendered(sections: list, nested_cs: dict, language: str = "en") -> list:
+    """Export-time safety net: for each section whose title maps to a
+    results/methodology/conclusion/discussion chapter, weave in any renderer block
+    NOT already present (by kind). Idempotent, pure, fail-open — a section that
+    already carries its rendered tables (composed via compose_chapter) is
+    unchanged. Covers sections that reached export without compose (chat-committed
+    final_sections, editor PATCHes)."""
+    try:
+        if not isinstance(sections, list):
+            return sections
+        cs = nested_cs if isinstance(nested_cs, dict) else {}
+        ar = ((cs.get("m4_analysis") or {}).get("analysis_results")
+              if isinstance(cs.get("m4_analysis"), dict) else None)
+        m3 = cs.get("m3_design") if isinstance(cs.get("m3_design"), dict) else {}
+        out = []
+        for sec in sections:
+            if not isinstance(sec, dict):
+                out.append(sec)
+                continue
+            chapter = _chapter_of(sec.get("title") or sec.get("name") or "")
+            prose = sec.get("prose") or sec.get("content")
+            if chapter is None or not isinstance(prose, str):
+                out.append(sec)
+                continue
+            have = rendered_kinds(prose)
+            if chapter == "results":
+                blocks = [b for b in render_results_tables(ar, language) if b["kind"] not in have]
+            elif chapter == "methodology":
+                b = render_cleaning_section(ar, language)
+                blocks = [b] if b and b["kind"] not in have else []
+            else:
+                nested = {"m3_design": m3, "m4_analysis": {"analysis_results": ar}}
+                b = render_limitations(nested, language=language)
+                blocks = [b] if b and b["kind"] not in have else []
+            if blocks:
+                woven = weave(prose, blocks, drop_llm_tables=(chapter == "results"))
+                new = dict(sec)
+                new["prose" if sec.get("prose") is not None else "content"] = woven
+                out.append(new)
+            else:
+                out.append(sec)
+        return out
+    except Exception:
+        logger.debug("ensure_rendered failed", exc_info=True)
+        return sections

@@ -2126,7 +2126,8 @@ def _artifact_dict(kind: str, pid: str, s3_key: str, size_bytes: int) -> dict:
 
 def run_export(sections: list[dict], project_id: str,
                references: list[dict] | None = None,
-               language: str = "en", title: str | None = None) -> list[dict]:
+               language: str = "en", title: str | None = None,
+               context_store: dict | None = None) -> list[dict]:
     """Render docx + pdf, upload to S3, return ContextPanel-ready artifacts.
 
     The single export entrypoint shared by the auto-export hook, the
@@ -2137,8 +2138,20 @@ def run_export(sections: list[dict], project_id: str,
     References section. `language` keeps the generated References heading
     consistent with the (possibly Vietnamese) document. Falls back to the plain
     render on any citeproc failure so export never breaks.
+
+    When `context_store` (the nested store) is provided, `ensure_rendered` weaves
+    any missing verified-state tables/cleaning/limitations blocks into the
+    chapters before rendering — the export-time safety net for sections that
+    reached export without passing through compose_chapter. `None` → byte-
+    identical to the prior behavior. Fail-open.
     """
     pid = str(project_id)
+    if context_store is not None:
+        try:
+            from orchestrator.tools.results_render import ensure_rendered  # noqa: PLC0415
+            sections = ensure_rendered(sections, context_store, language)
+        except Exception:
+            logger.debug("run_export: ensure_rendered skipped", exc_info=True)
     # Localize an English title onto a Vietnamese cover (M1 sometimes stores the
     # title in English despite language=vi). Read-side only; leaves the M1 slice
     # untouched. Done here so both the citeproc and plain paths get the same title.
@@ -2487,6 +2500,32 @@ def sanitize_prose(prose: str) -> str:
     return _sanitize_prose(prose)
 
 
+def _weave_verified_blocks(chapter_name: str, prose: str, context_slice: dict,
+                           language: str = "en") -> str:
+    """Splice renderer blocks into a chapter's prose (vision §3.6). Pure/fail-open;
+    imports results_render lazily so m5_writing's heavy deps never load it."""
+    if chapter_name not in ("results", "methodology", "conclusion", "discussion"):
+        return prose
+    from orchestrator.tools.results_render import (  # noqa: PLC0415
+        render_cleaning_section, render_limitations, render_results_tables, weave)
+    cs = context_slice if isinstance(context_slice, dict) else {}
+    ar = cs.get("results") or cs.get("analysis_results")
+    blocks = []
+    if chapter_name == "results":
+        blocks = render_results_tables(ar, language)
+    elif chapter_name == "methodology":
+        b = render_cleaning_section(ar, language)
+        blocks = [b] if b else []
+    else:  # conclusion / discussion → limitations
+        nested = {"m3_design": {"sample_plan": cs.get("sample_plan")},
+                  "m4_analysis": {"analysis_results": ar}}
+        b = render_limitations(nested, language=language)
+        blocks = [b] if b else []
+    if not blocks:
+        return prose
+    return weave(prose, blocks, drop_llm_tables=(chapter_name == "results"))
+
+
 @tool
 def compose_chapter(
     chapter_name: str, paradigm: str, context_slice: dict,
@@ -2576,6 +2615,17 @@ def compose_chapter(
     if chapter_name == "methodology":
         prose = _ensure_model_diagram(
             prose, localized_cm, safe_kwargs.get("language", "vi"))
+    # Renderer over verified state (vision §3.6): splice the Chapter 4 tables /
+    # cleaning paragraph / limitations bullets — rendered VERBATIM from the
+    # persisted analysis_results — into the LLM's prose at its [[DT:kind]] tokens
+    # (or appended if it omitted them). The numbers ship from the renderer, not
+    # the model. Fail-open: any renderer hiccup → compose exactly as before.
+    try:
+        prose = _weave_verified_blocks(chapter_name, prose, context_slice,
+                                       safe_kwargs.get("language", "en"))
+    except Exception:
+        logger.debug("compose_chapter: verified-block weave skipped for %s", chapter_name,
+                     exc_info=True)
     return {
         "name": chapter_name,
         "prose": prose,
