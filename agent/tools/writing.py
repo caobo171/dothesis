@@ -271,12 +271,22 @@ def make_writing_tools(store) -> list:
         from agent.analytics import emit  # noqa: PLC0415
         emit("export_completed", None,
              {"scope": "full", "surface": "chat", "project_id": str(project_id)})
+        # Similarity self-check (roadmap #11) — advisory, NEVER a gate: a report
+        # failure must not fail an otherwise-good export. The web run drawer
+        # renders this field (client wiring is a separate web change).
+        _similarity = None
+        try:
+            from quality.similarity import similarity_report  # noqa: PLC0415
+            _similarity = similarity_report(flat if isinstance(flat, dict) else {})
+        except Exception:
+            logger.exception("export_docx: similarity report failed (advisory)")
         return json.dumps({
             "ok": True,
             "generated": generated,
             "artifacts": artifacts,
             "chapters": chapter_titles,
             "chapter_count": len(chapter_titles),
+            "similarity": _similarity,
             # Instruction to the agent, NOT user-facing copy — the agent must
             # write its OWN confirmation in the conversation's language (the
             # user got an English message parroted from here before). A download

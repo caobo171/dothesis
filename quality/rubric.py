@@ -452,6 +452,23 @@ def coherence_dimension(context_store: dict) -> dict:
             "score": round(max(0.0, 1.0 - 0.5 * hard - 0.1 * soft), 3), "findings": findings}
 
 
+def similarity_dimension(context_store: dict) -> dict:
+    """Similarity & quote-hygiene self-check (roadmap #11): verbatim overlap with
+    the project's OWN sources + chapter-to-chapter duplication. All findings soft
+    — a match is evidence, not proof, and this is a self-check, not Turnitin (so
+    it never blocks). Lazy import + never crashes. Weight 0.10."""
+    findings: list[dict] = []
+    try:
+        from quality.similarity import similarity_findings  # noqa: PLC0415
+        findings = similarity_findings(context_store)
+    except Exception:
+        logger.exception("similarity_dimension failed (fail-open)")
+    src = sum(1 for f in findings if "duplicates" not in f["issue"])
+    intra = len(findings) - src
+    return {"name": "similarity", "weight": 0.10,
+            "score": round(max(0.0, 1.0 - 0.10 * src - 0.05 * intra), 3), "findings": findings}
+
+
 def score_thesis(context_store: dict, *, institution_profile: dict | None = None,
                  advisor_feedback: list[dict] | None = None, doi_verifier=None) -> dict:
     """Full RubricResult. This task: deterministic dims only (judge + advisor + method
@@ -484,6 +501,8 @@ def score_thesis(context_store: dict, *, institution_profile: dict | None = None
     dims.append(source_verification_dimension(context_store, doi_verifier))
     # Cross-chapter coherence: prose numbers must match persisted results (hard).
     dims.append(coherence_dimension(context_store))
+    # Similarity self-check: verbatim overlap w/ own sources + intra-thesis copy (soft).
+    dims.append(similarity_dimension(context_store))
     # Institution overlay last — it can re-weight the dims above and add hard
     # requirements (min refs) before we compute overall/blocking.
     dims = apply_institution_overlay(dims, institution_profile, context_store)
