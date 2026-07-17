@@ -239,3 +239,15 @@ def make_vision_model(spec: ModelSpec | None = None, temperature: float | None =
             client_options={"api_endpoint": "https://api.ofox.ai/gemini"},
             transport="rest", temperature=t)
     return ChatGoogleGenerativeAI(model=m, temperature=t)
+
+
+def make_vision_capable_model(spec: ModelSpec | None = None, *, use_sidecar: bool):
+    """Client for a vision turn: the Gemini sidecar (use_sidecar=True) or the
+    text brain itself (use_sidecar=False, when it can already see images).
+
+    Takes `use_sidecar` as a bool — decided by agent.multimodal.resolve_vision —
+    precisely so this module never imports agent.multimodal (no cycle)."""
+    spec = spec or spec_from_env()
+    if use_sidecar:
+        return make_vision_model(spec)
+    return make_model(spec)

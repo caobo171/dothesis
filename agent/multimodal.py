@@ -87,7 +87,9 @@ class Attachment:
         data = p.read_bytes()
         if mime_type is None:
             guess, _ = mimetypes.guess_type(p.name)
-            mime_type = guess or "application/octet-stream"
+            # Extension-less pasted screenshots (guess is None) get a magic-byte
+            # sniff so vision still recognizes them as images.
+            mime_type = guess or _sniff_image_mime(data) or "application/octet-stream"
         return cls(filename=p.name, bytes=data, mime_type=mime_type)
 
 
@@ -232,12 +234,7 @@ def _transcribe_via_vision(att: Attachment) -> str:
     # message uses the Gemini block shape regardless of the text brain.
     msg = _build_gemini_message(prompt, [att])
     out = make_vision_model().invoke([msg])
-    content = getattr(out, "content", "")
-    if isinstance(content, list):  # Gemini 3.x list-of-parts shape
-        content = "".join(
-            b.get("text", "") if isinstance(b, dict) else str(b) for b in content
-        )
-    return str(content or "")
+    return _flatten_content(getattr(out, "content", ""))
 
 
 def _textualize(att: Attachment) -> tuple[str, str]:
@@ -328,3 +325,63 @@ def detect_provider(spec: ModelSpec | None = None) -> Provider:
     if os.getenv("ANTHROPIC_API_KEY") and "claude" in spec.model:
         return "anthropic"
     return "gemini"
+
+
+@dataclass(frozen=True, slots=True)
+class VisionResolution:
+    """How to read an image for the ACTIVE model: which provider block-format to
+    build, and whether to send it to the Gemini vision *sidecar* (a separate
+    Gemini/VL model) rather than the text brain."""
+    provider: Provider
+    use_sidecar: bool
+
+
+def resolve_vision(spec: ModelSpec | None = None) -> VisionResolution:
+    """Pick the image block-format + client for the active model (spec §3.2).
+
+    Reuses detect_provider (route→provider) and spec.supports_vision — nothing
+    re-derived. When the brain can see images (native Claude, or a vision-capable
+    OpenAI-compatible model) we send them to the brain; otherwise we fall back to
+    the Gemini vision sidecar with Gemini-native blocks. DOTHESIS_VISION_FORCE_SIDECAR=1
+    forces the sidecar path (deploy-time rollback for an unverified gateway)."""
+    from agent.model_factory import spec_from_env  # noqa: PLC0415 — lazy
+    spec = spec or spec_from_env()
+    if os.getenv("DOTHESIS_VISION_FORCE_SIDECAR") == "1":
+        return VisionResolution("gemini", True)
+    provider = detect_provider(spec)
+    if provider == "anthropic":
+        return VisionResolution("anthropic", False)  # brain sees images
+    if provider == "openai":
+        if spec.supports_vision:
+            return VisionResolution("openai", False)  # brain over OpenAI-compat
+        return VisionResolution("gemini", True)       # text-only brain → sidecar
+    return VisionResolution("gemini", True)           # native Gemini → sidecar
+
+
+_IMAGE_MAGIC = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+    (b"BM", "image/bmp"),
+)
+
+
+def _sniff_image_mime(data: bytes) -> str | None:
+    """Best-effort image MIME from magic bytes — for extension-less pasted
+    screenshots where mimetypes.guess_type() returns nothing."""
+    for magic, mime in _IMAGE_MAGIC:
+        if data.startswith(magic):
+            return mime
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def _flatten_content(content: Any) -> str:
+    """LLM message content → str. Gemini 3.x returns a list of parts."""
+    if isinstance(content, list):
+        return "".join(
+            b.get("text", "") if isinstance(b, dict) else str(b) for b in content
+        )
+    return str(content or "")

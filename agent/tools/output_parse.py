@@ -105,28 +105,33 @@ def parse_smartpls_export(file: str) -> str:
 
 # --- Vision path (screenshot) --------------------------------------------
 # Convenience path for when the student only has a screenshot. It goes through the
-# REAL multimodal API (agent.multimodal) + the Gemini LLM factory, so it is isolated
-# behind _vision_read() — the single function tests stub — to keep the network/model
-# boundary out of the test suite.
+# REAL multimodal API (agent.multimodal): resolve_vision(spec) picks the per-provider
+# image block-format + client for the ACTIVE model (Gemini sidecar / Claude brain /
+# OpenAI-compatible vision model), so it is NOT hardwired to Gemini. Isolated behind
+# _vision_read() — the single function tests stub — to keep the network/model boundary
+# out of the test suite; parse_output_table wraps it fail-soft.
 _VISION_PROMPT = ("Transcribe ONLY the visible results table into STRICT JSON "
                   '{"table_kind": "...", "rows": [{"item": "", "value": <number or null>}]}. '
                   "Do NOT invent numbers; mark unreadable cells null. No prose.")
 
 
 def _vision_read(file: str) -> str:
-    """Read a results-table image via Gemini. `file` is already the workspace path.
+    """Read a results-table image, provider-agnostically. `file` is the workspace path.
 
-    Uses the real multimodal contract: build_user_message(text, [Attachment], provider)
-    -> HumanMessage, with provider="gemini" (the valid Provider literal in
-    agent/multimodal.py — "google" would raise ValueError). Uses get_vision_llm (NOT
-    the orchestrator text model): the text brain may be a text-only model (e.g. Ofox
-    qwen-plus) that can't read images, so vision goes to a Gemini/VL model, routed
-    through Ofox on route=ofox. Isolated so tests stub it and never call a model."""
-    from agent.multimodal import Attachment, build_user_message  # noqa: PLC0415 (real API)
-    from orchestrator.llm import get_vision_llm  # noqa: PLC0415 (vision-capable factory)
+    resolve_vision(spec) picks the image block-format + client for the ACTIVE model
+    (native Gemini sidecar, native Claude brain, or an OpenAI-compatible vision model
+    on Ofox/OpenRouter) — so screenshot parsing no longer silently depends on a Google
+    key when the brain is Claude. Isolated so tests stub it and never call a model."""
+    from agent.model_factory import make_vision_capable_model, spec_from_env  # noqa: PLC0415
+    from agent.multimodal import (  # noqa: PLC0415 (real API)
+        Attachment, _flatten_content, build_user_message, resolve_vision,
+    )
+    spec = spec_from_env()
+    res = resolve_vision(spec)
     att = Attachment.from_path(file)                       # `file` is already the path
-    msg = build_user_message(_VISION_PROMPT, [att], provider="gemini")  # valid Provider literal
-    return str(getattr(get_vision_llm().invoke([msg]), "content", ""))
+    msg = build_user_message(_VISION_PROMPT, [att], res.provider, supports_vision=True)
+    model = make_vision_capable_model(spec, use_sidecar=res.use_sidecar)
+    return _flatten_content(getattr(model.invoke([msg]), "content", ""))
 
 
 @tool
@@ -134,7 +139,13 @@ def parse_output_table(file: str) -> str:
     """Parse a SCREENSHOT (a workspace image file) of a SmartPLS/SPSS/AMOS results table into
     {table_kind, rows}. Prefer parse_smartpls_export if the student has the file. Never invents
     numbers; low-confidence parses ask the student to confirm."""
-    raw = _vision_read(file)
+    try:
+        raw = _vision_read(file)
+    except Exception as e:
+        # Fail-soft: a vision/model/key error must never crash the turn — hand the
+        # student a clear fallback instead of an exception.
+        return json.dumps({"error": f"vision parse failed: {e}",
+                           "hint": "paste the values or upload the SmartPLS HTML export"})
     # Extract the JSON object the model was asked to emit. If there is none, the
     # model didn't find a table — surface that, don't fabricate a parse.
     s, e = raw.find("{"), raw.rfind("}")
