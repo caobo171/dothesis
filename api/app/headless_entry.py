@@ -110,13 +110,13 @@ class _PhaseTimer:
         self._order: list[str] = []
         self._first: dict[str, float] = {}
 
-    def observe(self, ev: dict) -> None:
+    def mark(self, phase) -> None:
+        """Record the first time we see each phase (module focus)."""
         try:
-            if ev.get("type") == "phase_progress" and ev.get("phase"):
-                ph = str(ev["phase"])
-                if ph not in self._first:
-                    self._first[ph] = self._clock()
-                    self._order.append(ph)
+            ph = str(phase or "").strip()
+            if ph and ph not in self._first:
+                self._first[ph] = self._clock()
+                self._order.append(ph)
         except Exception:  # noqa: BLE001 — timing must never kill the run
             pass
 
@@ -179,17 +179,27 @@ def main() -> int:
         progress_hook = _make_progress_hook(appender, store)
 
         def _on_event(ev: dict) -> None:
-            timer.observe(ev)
+            # Phase timing keys off the module FOCUS at each turn boundary — the
+            # same signal the progress hook emits (phase_progress events are written
+            # to the appender, they don't come back through on_event, so observing
+            # the raw stream here would record nothing).
+            if ev.get("type") == "done":
+                try:
+                    timer.mark((store.load() or {}).get("focus") or "M1")
+                except Exception:  # noqa: BLE001
+                    pass
             progress_hook(ev)
 
         # Internal auto-retry: a run that stalls / exhausts turns re-runs against
         # the state commit_slice already persisted — a FRESH agent re-reads the
-        # committed store (the intended "resume"), not the stuck conversation.
-        # Credit-safe: only the final job_done charges, and an intermediate failure
-        # emits NO error event (so job_runner never marks failed / refunds) — the
-        # partner sees one eventual success instead of a flaky stall failure.
+        # committed store (the intended "resume"). Credit-safe: only the final
+        # job_done charges, and an intermediate failure emits NO error event.
+        # BUDGET-CAPPED: a retry only starts if enough of the report's time window
+        # remains, so retries never push total wall time past fillform's 30-min
+        # axios timeout (which turns a clean failure into a confusing "timeout").
         _RETRYABLE = {"max_stalls", "max_turns"}
-        max_attempts = int(os.getenv("DOTHESIS_HEADLESS_RETRIES", "2")) + 1
+        max_attempts = int(os.getenv("DOTHESIS_HEADLESS_RETRIES", "1")) + 1
+        _retry_budget_s = int(os.getenv("DOTHESIS_HEADLESS_RETRY_BUDGET_S", "1200"))
         result = None
         attempt = 0
         for attempt in range(1, max_attempts + 1):
@@ -206,6 +216,11 @@ def main() -> int:
             ))
             if (result.status == "done" or result.reason not in _RETRYABLE
                     or attempt == max_attempts):
+                break
+            if time.monotonic() - timer.t0 >= _retry_budget_s:
+                appender.write({"type": "activity", "agent": "headless",
+                                "text": f"attempt {attempt} ended: {result.reason} — "
+                                        f"retry budget exhausted, stopping"})
                 break
             appender.write({"type": "activity", "agent": "headless",
                             "text": f"attempt {attempt} ended: {result.reason} — retrying"})
