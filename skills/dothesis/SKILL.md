@@ -314,7 +314,10 @@ concept you introduce.
 
 ## What you do NOT do
 
-- ❌ Do not act on a module without having read its skill this session.
+- ❌ Do not act on a module without having read its skill this session. This is now
+  mechanically nudged: the first `commit_slice(module)` without a recorded read of that
+  module's SKILL.md returns a one-time `module_skill_not_read` error — read the named skill,
+  then re-run the commit. (It nudges once, never deadlocks.)
 - ❌ Do not bypass `commit_slice` — never edit `/project/context_store.json` directly.
 - ❌ Do not run a sprawling multi-module plan from one message. One message → one
   module's work → report → stop. (Multi-step *within* a module is fine — M4's

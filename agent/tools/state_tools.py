@@ -85,6 +85,21 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
         # it's deterministic code, not the model.
         writes = {k: v for k, v in (writes or {}).items()
                   if k not in NON_CONTENT_KEYS}
+        # Skill-adherence nudge (gap 3): the first commit of a module in a session
+        # without a recorded read of that module's skill returns ONE correctable
+        # nudge, then proceeds on retry (never a deadlock). Deterministic; before
+        # the content gates. record_decision bypasses this wrapper, so it's
+        # unaffected — same tool-edge posture as the NON_CONTENT strip above.
+        try:
+            from agent.skill_tracker import should_nudge, skill_path  # noqa: PLC0415
+            _pk = getattr(store, "project_dir", "")
+            if should_nudge(_pk, module):
+                return json.dumps({
+                    "error": "module_skill_not_read — read the module's skill before its first commit",
+                    "hint": f"read_file('{skill_path(module)}') then re-run this commit",
+                }, ensure_ascii=False)
+        except Exception:
+            logger.debug("commit_slice: skill nudge skipped", exc_info=True)
         # M3 model guard (deterministic, additive-only): a research model must be
         # ONE connected graph converging on the dependent construct. Repair a
         # disconnected/thin conceptual_model in place — never an LLM call, never a

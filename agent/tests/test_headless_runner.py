@@ -46,6 +46,12 @@ def _build(tmp_path, fixture):
     store = ProjectStateStore(proj)
     agent = build_agent(proj, model=FakeChatModel.from_fixtures_dir(str(fx)),
                         checkpointer=InMemorySaver(), store=store)
+    # The scripted FakeChatModel replays commits without a skill-read step; a real
+    # headless model reads each module's SKILL.md (which would clear the gap-3
+    # nudge). Pre-record those reads so the scripted flow mirrors the real one.
+    import agent.skill_tracker as _skt
+    for _m in ("M1", "M2", "M3", "M4", "M5"):
+        _skt.note_read(proj, _skt.skill_path(_m))
     return agent, store
 
 

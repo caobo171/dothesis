@@ -321,3 +321,33 @@ def test_strict_provenance_records_strict_policy(tmp_path):
     _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
     prov = store.load()["contextStore"]["analysis_provenance"]
     assert prov["gate"]["policy"] == "strict" and prov["gate"]["stats_validation"] == "ran"
+
+
+# --- boundary hardening (gap 3): skill-read nudge at the commit gate ---------
+
+def test_first_commit_without_skill_read_is_nudged_once(tmp_path):
+    import agent.skill_tracker as skt
+    store, tools = _tools(tmp_path)
+    skt.reset(); skt.arm(store.project_dir)          # simulate the agent's skill channel
+    out = _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+    assert out["error"].startswith("module_skill_not_read")
+    assert "dothesis-m4-analysis" in out["hint"]
+    assert store.load()["contextStore"].get("analysis_results") is None
+    # same commit again → proceeds (nudge recorded, no deadlock)
+    out2 = _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+    assert "error" not in out2
+
+
+def test_commit_after_skill_read_passes_first_time(tmp_path):
+    import agent.skill_tracker as skt
+    store, tools = _tools(tmp_path)
+    skt.reset(); skt.arm(store.project_dir)
+    skt.note_read(store.project_dir, "/skills/dothesis-m4-analysis/SKILL.md")
+    assert "error" not in _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+
+
+def test_unarmed_project_not_nudged(tmp_path):
+    import agent.skill_tracker as skt
+    store, tools = _tools(tmp_path)
+    skt.reset()                                      # not armed → no nudge (test posture)
+    assert "error" not in _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})

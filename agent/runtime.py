@@ -498,9 +498,15 @@ def build_agent(
     # virtual_mode=True: virtual path semantics so the /skills/ route works
     # and absolute-path / '..' escapes from root_dir are refused. (Not a
     # sandbox — script execution stays off; see architecture §7 risk 4.)
+    # The /skills/ backend is wrapped so a module SKILL.md read is recorded
+    # (gap 3): the commit gate can then nudge (once) a module commit that skipped
+    # its skill. Wrapping arms the tracker for this project — nudging is inert
+    # until the reading channel exists. Same bytes, same refusals otherwise.
+    from agent.skill_tracker import RecordingBackend  # noqa: PLC0415
     backend = CompositeBackend(
         default=FilesystemBackend(root_dir=project_dir, virtual_mode=True),
-        routes={"/skills/": FilesystemBackend(root_dir=SKILLS_DIR, virtual_mode=True)},
+        routes={"/skills/": RecordingBackend(
+            FilesystemBackend(root_dir=SKILLS_DIR, virtual_mode=True), project_dir)},
     )
 
     if model is None:
