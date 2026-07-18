@@ -3,6 +3,7 @@ import uuid
 
 import pytest
 from langchain_core.messages import HumanMessage
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db import get_engine
@@ -11,6 +12,24 @@ from orchestrator.agents.m2.translation import (
     _flatten_to_m2_output, _seed_from_outer,
 )
 from orchestrator.state import ContextStore
+
+
+@pytest.fixture(autouse=True)
+def _real_db(pg_url, monkeypatch):
+    """Unlike its mock-only siblings, this module actually hits the DB via
+    get_engine(). The agents-subtree conftest no-ops the parent's _bind_db, so
+    without this the tests would connect to whatever stale local Postgres is
+    configured — and fail on schema drift (e.g. a `projects` predating
+    `last_nudge_at`). Bind a fresh testcontainer schema built from current models.
+    """
+    monkeypatch.setenv("DATABASE_URL", pg_url)
+    from app.db import Base, get_engine as _ge, reset_engine_for_tests
+    reset_engine_for_tests(pg_url)
+    with _ge().begin() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+    Base.metadata.create_all(_ge())
+    yield
 
 
 def _make_user_project(db: Session) -> Project:

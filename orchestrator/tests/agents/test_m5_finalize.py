@@ -21,17 +21,29 @@ def _build_full_partial():
     }
 
 
+def _fake_run_export(pid: str):
+    """Mimic orchestrator.tools.m5_writing.run_export: returns the artifact-dict
+    list (docx + pdf) the agent maps into ExportArtifacts — WITHOUT touching S3.
+    The agent now routes exports through run_export, so that is the seam to mock
+    (the old per-tool export_docx/compile_pdf mocks were dead after that refactor)."""
+    def _f(sections, project_id, **kwargs):
+        return [
+            {"kind": "docx", "s3_key": f"projects/{pid}/exports/thesis-abc.docx",
+             "download_url": f"/api/v1/projects/{pid}/exports/thesis-abc.docx", "size_bytes": 1024},
+            {"kind": "pdf", "s3_key": f"projects/{pid}/exports/thesis-abc.pdf",
+             "download_url": f"/api/v1/projects/{pid}/exports/thesis-abc.pdf", "size_bytes": 2048},
+        ]
+    return _f
+
+
 def test_finalize_calls_export_tools_and_transitions(monkeypatch):
     from orchestrator.agents import m5_writing as m5_mod
+    captured = {}
 
-    # Tools now return {s3_key, size_bytes} dicts — not plain strings.
-    fake_docx = MagicMock()
-    fake_docx.invoke.return_value = {"s3_key": "projects/proj-xyz/exports/thesis-abc.docx", "size_bytes": 1024}
-    monkeypatch.setattr(m5_mod, "export_docx", fake_docx)
-
-    fake_pdf = MagicMock()
-    fake_pdf.invoke.return_value = {"s3_key": "projects/proj-xyz/exports/thesis-abc.pdf", "size_bytes": 2048}
-    monkeypatch.setattr(m5_mod, "compile_pdf", fake_pdf)
+    def _run_export(sections, project_id, **kwargs):
+        captured["project_id"] = project_id
+        return _fake_run_export("proj-xyz")(sections, project_id, **kwargs)
+    monkeypatch.setattr(m5_mod, "run_export", _run_export)
 
     agent = M5Agent()
     partial = _build_full_partial()
@@ -47,11 +59,8 @@ def test_finalize_calls_export_tools_and_transitions(monkeypatch):
     }
     result = agent.step(state)
 
-    # Both tools called with project_id
-    assert fake_docx.invoke.called
-    assert fake_pdf.invoke.called
-    docx_call = fake_docx.invoke.call_args.args[0]
-    assert docx_call["project_id"] == "proj-xyz"
+    # export routed through run_export with the project_id
+    assert captured["project_id"] == "proj-xyz"
 
     # export_artifacts populated
     artifacts = result.context_patch["export_artifacts"]
@@ -69,9 +78,11 @@ def test_finalize_calls_export_tools_and_transitions(monkeypatch):
 
 def test_finalize_emits_markdown_links(monkeypatch):
     from orchestrator.agents import m5_writing as m5_mod
-    # Tools now return {s3_key, size_bytes} dicts — not plain strings.
-    monkeypatch.setattr(m5_mod, "export_docx", MagicMock(invoke=lambda kw: {"s3_key": "projects/p/exports/x.docx", "size_bytes": 100}))
-    monkeypatch.setattr(m5_mod, "compile_pdf", MagicMock(invoke=lambda kw: {"s3_key": "projects/p/exports/x.pdf", "size_bytes": 200}))
+    monkeypatch.setattr(m5_mod, "run_export", lambda sections, project_id, **kw: [
+        {"kind": "docx", "s3_key": "projects/p/exports/x.docx",
+         "download_url": "/api/v1/projects/p/exports/x.docx", "size_bytes": 100},
+        {"kind": "pdf", "s3_key": "projects/p/exports/x.pdf",
+         "download_url": "/api/v1/projects/p/exports/x.pdf", "size_bytes": 200}])
 
     agent = M5Agent()
     partial = _build_full_partial()

@@ -36,12 +36,23 @@ def _bind_db(request, pg_url, monkeypatch):
         return
     monkeypatch.setenv("DATABASE_URL", pg_url)
     # Lazy import — only matters for tests that exercise app.db.
+    from sqlalchemy import text
     from app.db import Base, get_engine, reset_engine_for_tests
     reset_engine_for_tests(pg_url)
-    Base.metadata.drop_all(get_engine())
+    # Nuke and recreate the schema, not just drop_all: the shared container can
+    # carry a stale `projects` (e.g. from an Alembic migration test, or a schema
+    # predating a later column like `last_nudge_at`). `create_all` skips tables
+    # that already exist, so a stale table never gains new columns → ORM inserts
+    # fail on the missing column. DROP SCHEMA CASCADE guarantees a clean rebuild
+    # from the CURRENT models. (Migration tests take the alembic_env branch above
+    # and never reach here.)
+    with get_engine().begin() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
     Base.metadata.create_all(get_engine())
     yield
-    # Teardown: drop all tables so migration tests start from a clean DB
-    # (SQLAlchemy-created tables have no alembic_version row, which confuses
-    # Alembic's downgrade/upgrade cycle if tables are left behind).
-    Base.metadata.drop_all(get_engine())
+    # Teardown: leave a clean DB so a later Alembic migration test isn't confused
+    # by SQLAlchemy-created tables (which lack an alembic_version row).
+    with get_engine().begin() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))

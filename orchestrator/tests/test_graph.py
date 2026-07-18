@@ -56,6 +56,19 @@ def test_graph_routes_to_correct_first_unconfirmed(monkeypatch):
         m = MagicMock(); m.invoke.return_value.content = blob
         monkeypatch.setattr(cls, "_get_llm", lambda self, _m=m: _m)
 
+    # M5's auto-compose path calls the tools-module compose_chapter (its own LLM,
+    # not the agent's _get_llm) and run_export (S3). Stub both so M5 completes
+    # silently and offline — the test is about ROUTING, not real chapter writing.
+    import orchestrator.agents.m5_writing as _m5agent
+    monkeypatch.setattr(_m5agent, "compose_chapter", MagicMock(
+        invoke=lambda kw: {"name": kw.get("chapter_name", "intro"),
+                           "prose": "stub", "citations_used": [], "uncited_warnings": []}))
+    monkeypatch.setattr(_m5agent, "run_export", lambda sections, project_id, **kw: [
+        {"kind": "docx", "s3_key": f"projects/{project_id}/exports/x.docx",
+         "download_url": f"/api/v1/projects/{project_id}/exports/x.docx", "size_bytes": 1},
+        {"kind": "pdf", "s3_key": f"projects/{project_id}/exports/x.pdf",
+         "download_url": f"/api/v1/projects/{project_id}/exports/x.pdf", "size_bytes": 1}])
+
     # M2 now delegates to the sub-graph; stub get_m2_graph and the DB session.
     fake_m2_subgraph = MagicMock()
     fake_m2_subgraph.invoke.return_value = {
