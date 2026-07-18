@@ -168,10 +168,10 @@ from agent.tools.instrument import (  # F7: Questionnaire Doctor + sampling plan
     consent_notice,
     make_sampling_plan_tool,
 )
-from agent.tools.output_parse import parse_output_table, parse_smartpls_export
+from agent.tools.output_parse import make_parse_tools
 from agent.tools.research import parse_reference, quick_sources, research_scout
 from agent.tools.state_tools import make_state_tools
-from agent.tools.stats import check_thresholds, run_stats
+from agent.tools.stats import check_thresholds, make_stats_tools
 from agent.tools.writing import make_writing_tools
 from agent.usage import extract_usage  # F10: route-independent token accounting
 
@@ -506,14 +506,15 @@ def build_agent(
         quick_sources,
         research_scout,
         parse_reference,
-        run_stats,
+        # run_stats bound to the project workspace — data paths are confined to it.
+        *make_stats_tools(project_dir),
         # F8: output sanity layer — classify pasted result tables (loadings/AVE/
         # CR/HTMT/VIF) against thresholds + flag suspiciously-perfect data.
         check_thresholds,
         # F13: turn a results EXPORT (SmartPLS/SPSS HTML/xlsx) or a SCREENSHOT into
         # {table_kind, rows} that feed check_thresholds. Both take a workspace path.
-        parse_smartpls_export,
-        parse_output_table,
+        # results parsers bound to the project workspace (path-confined)
+        *make_parse_tools(project_dir),
         # Vision §3.1: M1 topic feasibility — early sample-size reality check +
         # operationalizability, advisory. Run once before locking the topic.
         *make_feasibility_tool(store),

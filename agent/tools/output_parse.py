@@ -2,9 +2,9 @@
 
 Design decisions:
 - Tools take a workspace FILE PATH, never bytes/base64 the model fills in. A model
-  cannot hand over raw file content, and letting it try invites fabrication. This
-  mirrors `run_stats` / `_load_df` (agent/tools/stats.py), which does `Path(file)`
-  directly — there is no separate workspace resolver to reuse.
+  cannot hand over raw file content, and letting it try invites fabrication. The
+  path is confined to the project workspace via `workspace_paths.resolve_data_path`
+  (gap 1a) — an escaping path is refused before any read.
 - We TRANSCRIBE the values the student's software already produced; we never compute
   a statistic here. Downstream, F8's `check_thresholds` only *compares* these numbers.
 - Unreadable cells become `null`, never a guessed number.
@@ -44,10 +44,9 @@ def infer_table_kind(headers: list[str]) -> str:
 
 
 def _load_bytes(file: str) -> bytes:
-    """Read the file. `file` is a path the runtime passes (same convention as
-    run_stats/_load_df, which does `Path(file)` directly — there is NO separate
-    workspace resolver). Isolated as its own function so tests stub it and never
-    touch disk."""
+    """Read the file. `file` is an ALREADY-RESOLVED, workspace-confined path
+    (the tool entry ran `resolve_data_path` first, gap 1a). Isolated as its own
+    function so tests stub it and never touch disk."""
     return Path(file).read_bytes()
 
 
@@ -78,10 +77,36 @@ def _rows(headers: list[str], data: list[list]) -> list[dict]:
     return out
 
 
-@tool
-def parse_smartpls_export(file: str) -> str:
-    """Parse a SmartPLS/SPSS HTML or .xlsx results export (a file in the workspace) into
-    {table_kind, rows}. Preferred over a screenshot when the student has the file."""
+_SMARTPLS_DOC = ("Parse a SmartPLS/SPSS HTML or .xlsx results export (a file in the workspace) into "
+                 "{table_kind, rows}. Preferred over a screenshot when the student has the file. "
+                 "Pass a workspace-relative path (e.g. 'uploads/export.xlsx').")
+_OUTPUT_TABLE_DOC = ("Parse a SCREENSHOT (a workspace image file) of a SmartPLS/SPSS/AMOS results "
+                     "table into {table_kind, rows}. Prefer parse_smartpls_export if the student "
+                     "has the file. Never invents numbers; low-confidence parses ask to confirm. "
+                     "Pass a workspace-relative path.")
+
+
+def _resolve_or_error(file: str, root) -> tuple:
+    """(resolved_path, None) or (None, fail-soft error JSON). Path confinement
+    (gap 1a): an escape is refused BEFORE any file read or model hop, in the same
+    fail-soft shape the parsers already use so the turn never crashes."""
+    try:
+        from agent.tools.workspace_paths import resolve_data_path, WorkspaceEscapeError  # noqa: PLC0415
+        return str(resolve_data_path(file, root)), None
+    except WorkspaceEscapeError:
+        return None, json.dumps({"error": "path_outside_workspace — the file must live inside the "
+                                 "project workspace; an escaping path is refused.",
+                                 "hint": "pass a workspace-relative path like 'uploads/your_file.xlsx'."})
+    except ValueError as e:
+        return None, json.dumps({"error": f"couldn't parse export: {e}",
+                                 "hint": "paste the values or upload a screenshot"})
+
+
+def _parse_smartpls_impl(file: str, root) -> str:
+    resolved, err = _resolve_or_error(file, root)
+    if err:
+        return err
+    file = resolved
     name = (file or "").lower()
     try:
         content = _load_bytes(file)
@@ -134,11 +159,11 @@ def _vision_read(file: str) -> str:
     return _flatten_content(getattr(model.invoke([msg]), "content", ""))
 
 
-@tool
-def parse_output_table(file: str) -> str:
-    """Parse a SCREENSHOT (a workspace image file) of a SmartPLS/SPSS/AMOS results table into
-    {table_kind, rows}. Prefer parse_smartpls_export if the student has the file. Never invents
-    numbers; low-confidence parses ask the student to confirm."""
+def _parse_output_table_impl(file: str, root) -> str:
+    resolved, err = _resolve_or_error(file, root)
+    if err:
+        return err              # refuse BEFORE any _vision_read / model hop
+    file = resolved
     try:
         raw = _vision_read(file)
     except Exception as e:
@@ -160,3 +185,25 @@ def parse_output_table(file: str) -> str:
     if not data.get("rows"):
         return json.dumps({"needs_confirmation": True, "parsed": data})
     return json.dumps(data, ensure_ascii=False)
+
+
+def make_parse_tools(project_dir) -> list:
+    """Build the results-parser tools bound to one project's workspace root
+    (boundary hardening, gap 1a). Both parsers resolve their file path against
+    `project_dir` and refuse escapes before any read or model call."""
+    from pathlib import Path as _Path  # noqa: PLC0415
+    _root = _Path(project_dir).resolve(strict=False)
+
+    @tool
+    def parse_smartpls_export(file: str) -> str:
+        """Parse a SmartPLS/SPSS HTML or .xlsx results export in the workspace."""
+        return _parse_smartpls_impl(file, _root)
+
+    @tool
+    def parse_output_table(file: str) -> str:
+        """Parse a screenshot of a results table in the workspace."""
+        return _parse_output_table_impl(file, _root)
+
+    parse_smartpls_export.description = _SMARTPLS_DOC
+    parse_output_table.description = _OUTPUT_TABLE_DOC
+    return [parse_smartpls_export, parse_output_table]

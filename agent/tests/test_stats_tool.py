@@ -5,7 +5,9 @@ import pytest
 
 pd = pytest.importorskip("pandas")
 
-from agent.tools.stats import run_stats
+from pathlib import Path
+
+from agent.tools.stats import make_stats_tools
 
 
 @pytest.fixture
@@ -25,8 +27,13 @@ def csv(tmp_path):
     return str(p)
 
 
-def _run(op, file, params=None):
-    return json.loads(run_stats.func(op, file, params))
+def _run(op, file, params=None, root=None):
+    # Boundary hardening: build the workspace-bound tool. Default root = the
+    # file's own directory, so every fixture's in-dir absolute path stays in-root
+    # (data files are written directly under tmp_path). Escape tests pass `root`.
+    r = root if root is not None else (Path(file).parent if file else Path("."))
+    tool = make_stats_tools(r)[0]
+    return json.loads(tool.func(op, file, params))
 
 
 def test_non_whitelisted_op_rejected(csv):
@@ -506,3 +513,49 @@ def test_cb_sem_validation_ride_along(cbsem_csv, monkeypatch):
 def test_cb_sem_whitelisted():
     from agent.tools.stats import OPS
     assert "cb_sem" in OPS
+
+
+# --- boundary hardening (gap 1a): workspace path confinement -----------------
+
+def test_run_stats_rejects_path_outside_workspace(tmp_path):
+    out = _run("detect", "/etc/passwd", root=tmp_path)
+    assert out["error"].startswith("path_outside_workspace")
+    assert "uploads/" in out["hint"]
+
+
+def test_run_stats_rejects_dotdot_escape(tmp_path):
+    (tmp_path / "uploads").mkdir()
+    out = _run("detect", "uploads/../../x.csv", root=tmp_path)
+    assert out["error"].startswith("path_outside_workspace")
+
+
+def test_run_stats_relative_path_resolves_against_workspace(tmp_path):
+    import numpy as np, pandas as pd
+    (tmp_path / "uploads").mkdir()
+    pd.DataFrame({"a": np.arange(20), "b": np.arange(20)}).to_csv(tmp_path / "uploads/data.csv", index=False)
+    out = _run("detect", "uploads/data.csv", root=tmp_path)
+    assert "error" not in out and out["op"] == "detect"
+
+
+def test_screening_apply_writes_inside_workspace_only(tmp_path):
+    import numpy as np, pandas as pd
+    (tmp_path / "uploads").mkdir()
+    rng = np.random.default_rng(0)
+    cm = {"nodes": [{"id": c, "label": c, "questions": [f"{c}1", f"{c}2", f"{c}3"]} for c in ("A", "B")],
+          "edges": [{"source": "A", "target": "B"}]}
+    df = pd.DataFrame({f"{c}{i}": rng.integers(1, 6, 60) for c in ("A", "B") for i in (1, 2, 3)})
+    df.to_csv(tmp_path / "uploads/data.csv", index=False)
+    out = _run("screening", "uploads/data.csv",
+               {"conceptual_model": cm, "apply": {"missing": "listwise"}}, root=tmp_path)
+    assert "error" not in out
+    derived = out.get("applied", {}).get("derived_file")
+    assert derived and Path(derived).resolve().is_relative_to(tmp_path.resolve())
+    # the derived file is itself addressable workspace-relative
+    out2 = _run("detect", "uploads/data_screened.csv", root=tmp_path)
+    assert "error" not in out2
+
+
+def test_power_apriori_without_file_still_works(tmp_path):
+    out = _run("power", "", {"analysis": "regression", "mode": "apriori", "effect_size": "medium",
+                             "predictors": 3, "power": 0.8}, root=tmp_path)
+    assert "error" not in out and out.get("required_n")

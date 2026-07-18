@@ -275,7 +275,11 @@ When every M3 hypothesis has a result entry → `commit_slice("M4", …, confirm
 ## Security (non-negotiable)
 
 1. Only whitelisted ops run. Never relay user-typed code into execution.
-2. The sandbox has no network and no filesystem beyond the workspace — don't fight it.
+2. Data-file paths are confined to the project workspace — a path that escapes it
+   (`..`, an outside symlink, an absolute path elsewhere) is REFUSED with a
+   `path_outside_workspace` error. Pass workspace-relative paths (e.g. `uploads/…`);
+   don't try to reach outside. (Ops currently run in-process; out-of-process
+   isolation is planned — path confinement is today's containment.)
 3. Show what you're about to run (op + params) before running it.
 4. Results come back through chat only.
 

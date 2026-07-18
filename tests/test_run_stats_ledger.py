@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from agent.tools.stats import run_stats
+from pathlib import Path
+from agent.tools.stats import make_stats_tools
 from agent.provenance import load_ledger_rows
 
 
@@ -18,7 +19,8 @@ def csv(tmp_path):
 
 
 def _run(op, file, params=None):
-    return json.loads(run_stats.func(op, file, params))
+    r = Path(file).parent if file else Path('.')
+    return json.loads(make_stats_tools(r)[0].func(op, file, params))
 
 
 def test_successful_op_appends_one_row(csv):

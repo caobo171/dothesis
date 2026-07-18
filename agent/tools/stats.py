@@ -2,9 +2,17 @@
 
 Architecture §2.3 / v2 brief risk §8.1: free-form model-written Python over
 user data is one prompt-injection away from arbitrary code. The whitelist IS
-the security boundary — every op is a vetted function here; the model only
-picks ops and parameters. In production these run inside the network-less
-sandbox service; the spike runs them in-process for the CLI.
+the primary security boundary — every op is a vetted function here; the model
+only picks ops and parameters.
+
+Two enforced boundaries today:
+  1. Op whitelist — an op not in OPS does not run (below).
+  2. Path confinement — every data-file path resolves through
+     `workspace_paths.resolve_data_path` against the project workspace root and
+     is REFUSED (fail-closed) if it escapes (`..`, symlink, absolute-outside).
+Ops still execute in-process; out-of-process isolation is planned (see the
+boundary-hardening design), not yet in place — so path confinement is the
+current containment, not a kernel sandbox.
 """
 from __future__ import annotations
 
@@ -453,9 +461,75 @@ def check_thresholds(table_kind: str, rows: list[dict]) -> str:
     return json.dumps({"table_kind": table_kind, "findings": findings}, ensure_ascii=False)
 
 
-@tool
-def run_stats(op: str, file: str, params: dict | None = None) -> str:
-    """Run ONE whitelisted statistical operation on an uploaded data file.
+def make_stats_tools(project_dir) -> list:
+    """Build the run_stats tool bound to one project's workspace root (boundary
+    hardening, gap 1a). Every data-file path is resolved against `project_dir`
+    and refused if it escapes — the model can name only workspace-relative files.
+    Mirrors make_state_tools' store-bound-factory pattern."""
+    from pathlib import Path as _Path  # noqa: PLC0415
+    _root = _Path(project_dir).resolve(strict=False)
+
+    @tool
+    def run_stats(op: str, file: str, params: dict | None = None) -> str:
+        """Run ONE whitelisted statistical operation on a workspace data file."""
+        return _run_stats_impl(op, file, params, _root)
+
+    run_stats.description = _RUN_STATS_DOC   # full op catalogue for the model
+    return [run_stats]
+
+
+def _run_stats_impl(op: str, file: str, params: dict | None, root) -> str:
+    fn = OPS.get(op)
+    if fn is None:
+        return json.dumps({"error": f"op {op!r} is not whitelisted", "available": sorted(OPS)})
+    # Path confinement (fail-CLOSED): resolve a supplied data file against the
+    # workspace root before any op touches it. Falsy file → data-free op (power,
+    # method_advice) — nothing to resolve.
+    if file:
+        try:
+            from agent.tools.workspace_paths import resolve_data_path, WorkspaceEscapeError  # noqa: PLC0415
+            file = str(resolve_data_path(file, root))
+        except WorkspaceEscapeError:
+            return json.dumps({"error": "path_outside_workspace — the data file must live inside the "
+                               "project workspace; a path that escapes it (…/.., a symlink out, or an "
+                               "absolute path elsewhere) is refused.",
+                               "hint": "pass a workspace-relative path like 'uploads/your_data.csv'."})
+        except ValueError as e:
+            return json.dumps({"error": f"{op} failed: {e}"})
+    try:
+        result = fn(file, **(params or {}))
+    except ModuleNotFoundError as e:
+        return json.dumps({"error": f"stats dependency missing: {e.name} — install pandas/scipy/pyreadstat"})
+    except Exception as e:
+        logger.exception("run_stats %s failed", op)
+        return json.dumps({"error": f"{op} failed: {e}"})
+    if isinstance(result, dict):
+        try:
+            from agent.stats_validation import validate_run_stats
+            v = validate_run_stats(op, result)
+            if v.get("findings"):
+                result["validation"] = {"passed": v["passed"], "hard": v["hard"],
+                                        "soft": v["soft"], "findings": v["findings"]}
+        except Exception:
+            logger.exception("run_stats validation failed for %s (fail-open)", op)
+        if file and "error" not in result:
+            try:
+                from agent.provenance import (append_ledger_row, build_ledger_row,
+                                              dataset_fingerprint)
+                rows = cols = None
+                try:
+                    _df = _load_df(file)
+                    rows, cols = int(_df.shape[0]), int(_df.shape[1])
+                except Exception:
+                    pass
+                ds = dataset_fingerprint(file, rows=rows, cols=cols)
+                append_ledger_row(file, build_ledger_row(op, params or {}, result, ds, seq=0))
+            except Exception:
+                logger.exception("run_stats provenance capture failed for %s (fail-open)", op)
+    return json.dumps({"op": op, **result}, ensure_ascii=False)
+
+
+_RUN_STATS_DOC = """Run ONE whitelisted statistical operation on an uploaded data file.
 
     Basic ops: detect (schema introspection — always run this first), describe,
     corr, cronbach (params: items=[cols]), regression (params: y=col, x=[cols]),
@@ -508,49 +582,6 @@ def run_stats(op: str, file: str, params: dict | None = None) -> str:
 
     Args:
         op: One of the whitelisted operation names.
-        file: Path to the uploaded data file (.csv, .xlsx, .sav).
+        file: Path to the uploaded data file, workspace-relative (.csv, .xlsx, .sav).
         params: Op-specific parameters (see op list).
     """
-    fn = OPS.get(op)
-    if fn is None:
-        return json.dumps({
-            "error": f"op {op!r} is not whitelisted",
-            "available": sorted(OPS),
-        })
-    try:
-        result = fn(file, **(params or {}))
-    except ModuleNotFoundError as e:
-        return json.dumps({"error": f"stats dependency missing: {e.name} — install pandas/scipy/pyreadstat"})
-    except Exception as e:
-        logger.exception("run_stats %s failed", op)
-        return json.dumps({"error": f"{op} failed: {e}"})
-    # Self-validation: attach (never withhold) findings so the agent can explain
-    # a problem; the hard BLOCK happens at the M4 commit gate. Fail-open (§8).
-    if isinstance(result, dict):
-        try:
-            from agent.stats_validation import validate_run_stats
-            v = validate_run_stats(op, result)
-            if v.get("findings"):
-                result["validation"] = {"passed": v["passed"], "hard": v["hard"],
-                                        "soft": v["soft"], "findings": v["findings"]}
-        except Exception:
-            logger.exception("run_stats validation failed for %s (fail-open)", op)
-        # Provenance capture (roadmap #12): one ledger row per successful,
-        # file-backed op, AFTER validation attach so the row records the verdict.
-        # Fail-open — never let ledger I/O affect the op's return. Ops never touch
-        # the ledger themselves; this wrapper is the sole capture point.
-        if file and "error" not in result:
-            try:
-                from agent.provenance import (append_ledger_row, build_ledger_row,
-                                              dataset_fingerprint)
-                rows = cols = None
-                try:
-                    _df = _load_df(file)
-                    rows, cols = int(_df.shape[0]), int(_df.shape[1])
-                except Exception:
-                    pass
-                ds = dataset_fingerprint(file, rows=rows, cols=cols)
-                append_ledger_row(file, build_ledger_row(op, params or {}, result, ds, seq=0))
-            except Exception:
-                logger.exception("run_stats provenance capture failed for %s (fail-open)", op)
-    return json.dumps({"op": op, **result}, ensure_ascii=False)
