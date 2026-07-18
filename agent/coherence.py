@@ -5,8 +5,10 @@ deterministic agreement checks: coverage (extends #1's X2), direction, decision,
 and — the only HARD check — prose numbers that contradict the persisted
 analysis_results. Everything word-shaped or structural is soft (natural-language
 polarity/decision wording and machine-defaulted M3 directions are not provable;
-#1's bar: only provably-wrong blocks). Deferred to a future LLM-judge: semantic
-coherence, markdown-table numbers, "56% of variance" R² renderings.
+#1's bar: only provably-wrong blocks). The HARD number check covers prose
+sentences, HAND-TYPED markdown-table cells (extract_table_claims), and "N% of
+variance" R² renderings (percent_variance_findings) — rendered tables are exempt
+(they ARE the state). Deferred to a future LLM-judge: semantic coherence.
 
 stdlib re/unicodedata only; reuses #1's pure helpers from agent.stats_validation.
 """
@@ -164,6 +166,76 @@ def extract_number_claims(sentence: str) -> list[dict]:
     return out
 
 
+_TABLE_METRIC_HDR = {
+    "beta": ("β", "ß", "beta", "hệ số", "path coef", "coefficient", "estimate", "std"),
+    "t": ("t-value", "t value", "t-stat", "t stat", "|t|", " t "),
+    "p": ("p-value", "p value", "p-val", "sig", " p "),
+    "f2": ("f²", "f2", "f-squared"),
+    "r2": ("r²", "r2", "r-squared"),
+}
+
+
+def _table_metric_of(header_cell: str) -> Optional[str]:
+    h = f" {str(header_cell).strip().lower()} "
+    for metric, needles in _TABLE_METRIC_HDR.items():
+        if any(n in h for n in needles):
+            return metric
+    # bare single-letter headers
+    b = h.strip()
+    if b in ("β", "ß", "b"):
+        return "beta"
+    if b == "t":
+        return "t"
+    if b == "p":
+        return "p"
+    return None
+
+
+def extract_table_claims(prose: str) -> list[dict]:
+    """Number claims from HAND-TYPED markdown tables (gap 4): a `| H | β | t | p |`
+    table row is a place a wrong number can hide from the sentence extractor.
+    Rendered (sentinel-wrapped) tables are already stripped upstream, so only the
+    LLM's own tables reach here. Emits the same claim shape as
+    extract_number_claims, tagged with the row's hypothesis id. A row with no
+    single identifiable H-id yields nothing (unchecked beats guessed)."""
+    out: list[dict] = []
+    if not isinstance(prose, str) or "|" not in prose:
+        return out
+    lines = [ln for ln in prose.splitlines() if ln.strip().startswith("|")]
+    i = 0
+    while i < len(lines) - 1:
+        header = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+        sep = lines[i + 1].strip()
+        if set(sep.replace("|", "").replace(" ", "")) <= set(":-") and "-" in sep:
+            metric_cols = {j: _table_metric_of(h) for j, h in enumerate(header)}
+            metric_cols = {j: m for j, m in metric_cols.items() if m}
+            for row_line in lines[i + 2:]:
+                if not row_line.strip().startswith("|"):
+                    break
+                cells = [c.strip() for c in row_line.strip().strip("|").split("|")]
+                anchors = set()
+                for c in cells:
+                    hid = normalize_hypothesis_id(c)
+                    if hid and _ANCHOR.search(c):
+                        anchors.add(hid)
+                if len(anchors) != 1:
+                    continue           # ambiguous / anchorless row → skip
+                hid = next(iter(anchors))
+                for j, metric in metric_cols.items():
+                    if j >= len(cells):
+                        continue
+                    val, dec = _parse_num(cells[j])
+                    if val is None:
+                        continue
+                    out.append({"kind": "number", "metric": metric, "value": val,
+                                "decimals": dec, "hid": hid,
+                                "sentence": f"(table) {header} | {cells}"[:160]})
+            i += 2
+        else:
+            i += 1
+    return out
+
+
 # --- registry ---------------------------------------------------------------
 
 def _edges(cm: dict) -> list[dict]:
@@ -280,6 +352,13 @@ def build_registry(hypotheses, conceptual_model, analysis_results, m5) -> list[d
                 if dec:
                     entries[hid]["m5"]["claims"].append({"kind": "decision", "value": dec,
                                                         "chapter": chap, "attribution": "strong", "sentence": sent[:160]})
+        # Hand-typed markdown tables in this chapter (gap 4) — route each row's
+        # cells to the hypothesis the row names, feeding the same _number_checks.
+        for tc in extract_table_claims(prose):
+            hid = tc.pop("hid")
+            if hid in entries:
+                tc.update({"chapter": chap, "attribution": "strong"})
+                entries[hid]["m5"]["claims"].append(tc)
     return list(entries.values())
 
 
@@ -486,7 +565,9 @@ def validate_m5_sections(final_sections, flat_context: dict) -> dict:
         chapters = _resolve_chapters(final_sections)
         present = bool((chapters.get("results") and not _is_stub(chapters.get("results")))
                        and (chapters.get("discussion") and not _is_stub(chapters.get("discussion"))))
-        return _agg(check_coherence(registry, hyps, ar, present))
+        findings = check_coherence(registry, hyps, ar, present)
+        findings += percent_variance_findings(chapters, ar)   # gap 4: percent R²
+        return _agg(findings)
     except Exception:
         logger.exception("validate_m5_sections crashed")
         return _agg([], crashed=True)
@@ -553,6 +634,47 @@ def traceability_findings(m2: dict, m3: dict, chapters: dict) -> list[dict]:
     return out
 
 
+_PERCENT_VAR_RE = re.compile(
+    r"(\d{1,3}(?:[.,]\d+)?)\s*%[^.]*?(?:variance|variation|phương sai|biến thiên)", re.I)
+
+
+def percent_variance_findings(chapters: dict, analysis_results) -> list[dict]:
+    """Gap 4: catch a prose R² written as a percent that contradicts the persisted
+    structural_model.r2 (e.g. 'explains 56% of the variance in PI' vs stored 0.31).
+    Hard ONLY when exactly one persisted construct is named in the sentence
+    (unchecked beats guessed). Soft/none otherwise. Never raises."""
+    out: list[dict] = []
+    try:
+        sm = (analysis_results or {}).get("structural_model") if isinstance(analysis_results, dict) else {}
+        r2 = (sm or {}).get("r2") if isinstance(sm, dict) else {}
+        if not isinstance(r2, dict) or not r2:
+            return out
+        con_r2 = {str(c).lower(): float(v) for c, v in r2.items() if isinstance(v, (int, float))}
+        for chap in _RESULT_CHAPTERS:
+            prose = chapters.get(chap)
+            if not isinstance(prose, str) or _is_stub(prose):
+                continue
+            for sent in segment_sentences(_strip_rendered(prose)):
+                m = _PERCENT_VAR_RE.search(sent)
+                if not m:
+                    continue
+                pct, _ = _parse_num(m.group(1))
+                if pct is None:
+                    continue
+                named = [c for c in con_r2 if c in sent.lower()]
+                if len(named) != 1:
+                    continue        # ambiguous → don't guess
+                stored = con_r2[named[0]]
+                if abs(pct / 100.0 - stored) > 0.015:   # ~1.5pt display tolerance
+                    out.append(_finding("coherence.number_mismatch", "hard",
+                        f"Prose says {m.group(1)}% of the variance in {named[0]} is explained, but the "
+                        f"persisted R² is {stored} ({stored*100:.1f}%).", chapter=chap))
+        return out
+    except Exception:
+        logger.debug("percent_variance_findings failed", exc_info=True)
+        return out
+
+
 def validate_coherence(nested: dict) -> dict:
     try:
         def _d(k):
@@ -567,6 +689,7 @@ def validate_coherence(nested: dict) -> dict:
                        and (chapters.get("discussion") and not _is_stub(chapters.get("discussion"))))
         findings = check_coherence(registry, m3.get("hypotheses"), ar, present)
         findings += traceability_findings(m2, m3, chapters)
+        findings += percent_variance_findings(chapters, ar)   # gap 4: percent R²
         return _agg(findings)
     except Exception:
         logger.exception("validate_coherence crashed")

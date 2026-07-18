@@ -135,3 +135,88 @@ def test_entry_points_never_raise_and_deterministic():
     # garbage never raises
     assert validate_coherence({"m4_analysis": "not a dict"})["crashed"] is False
     assert validate_m5_sections(None, {})["hard"] == 0
+
+
+# --- boundary hardening (gap 4): hand-typed table extraction -----------------
+
+from agent.coherence import extract_table_claims
+
+
+def _reg_with(results_prose):
+    return build_registry(HYPS, CM, AR, {"results": results_prose, "discussion": "x" * 40})
+
+
+def test_table_claim_mismatch_hard_blocks():
+    prose = ("Results below.\n\n| H | Path | β | t | p |\n|---|---|---|---|---|\n"
+             "| H1 | LS → PI | 0.45 | 7.01 | <0.001 |\n")
+    findings = check_coherence(_reg_with(prose))
+    assert any(f["check"] == "coherence.number_mismatch" and f["severity"] == "hard" for f in findings)
+
+
+def test_table_claim_within_tolerance_passes():
+    prose = ("| H | β | t | p |\n|---|---|---|---|\n| H1 | 0.34 | 7.01 | <0.001 |\n")
+    assert not any(f["check"] == "coherence.number_mismatch" for f in check_coherence(_reg_with(prose)))
+
+
+def test_rendered_table_still_exempt():
+    # same mismatching table wrapped in renderer sentinels → stripped, no finding
+    from orchestrator.tools.results_render import render_results_tables, weave
+    blocks = render_results_tables({"hypothesis_tests": AR["hypothesis_tests"],
+                                    "structural_model": AR["structural_model"]})
+    tampered_prose = ("<!--dt-rendered:begin kind=structural_paths sha=deadbeef0000-->\n"
+                      "| H | β | t | p |\n|---|---|---|---|\n| H1 | 0.99 | 7.01 | <0.001 |\n"
+                      "<!--dt-rendered:end kind=structural_paths-->\n")
+    agg = validate_m5_sections({"results": tampered_prose, "discussion": "H1 supported. " + "x" * 30},
+                               {"analysis_results": AR, "hypotheses": HYPS, "conceptual_model": CM})
+    assert not any(f["check"] == "coherence.number_mismatch" and f["severity"] == "hard"
+                   for f in agg.get("findings", []))
+
+
+def test_table_without_anchor_produces_no_claim():
+    prose = "| Metric | β |\n|---|---|\n| Loading | 0.45 |\n"   # no H-id in any row
+    assert extract_table_claims(prose) == []
+
+
+def test_table_eu_commas_parse():
+    prose = "| H | β |\n|---|---|\n| H1 | 0,45 |\n"
+    claims = extract_table_claims(prose)
+    assert claims and abs(claims[0]["value"] - 0.45) < 1e-9
+
+
+def test_vietnamese_header_maps_to_beta():
+    prose = "| GT | Hệ số | t | p |\n|---|---|---|---|\n| H1 | 0.45 | 7.0 | 0.01 |\n"
+    metrics = {c["metric"] for c in extract_table_claims(prose)}
+    assert "beta" in metrics
+
+
+# --- gap 4: percent-rendered R² ---------------------------------------------
+
+from agent.coherence import percent_variance_findings
+
+_AR_R2 = {"structural_model": {"r2": {"PI": 0.31}}}
+
+
+def test_percent_variance_mismatch_hard():
+    ch = {"results": "The model explains 56% of the variance in PI, a strong result overall."}
+    f = percent_variance_findings(ch, _AR_R2)
+    assert any(x["check"] == "coherence.number_mismatch" and x["severity"] == "hard" for x in f)
+
+
+def test_percent_variance_match_passes():
+    ch = {"results": "The model explains 31% of the variance in PI."}
+    assert percent_variance_findings(ch, _AR_R2) == []
+
+
+def test_percent_ambiguous_construct_skipped():
+    ar = {"structural_model": {"r2": {"PI": 0.31, "LS": 0.20}}}
+    ch = {"results": "Together PI and LS account for 56% of the variance explained."}
+    assert not any(x["severity"] == "hard" for x in percent_variance_findings(ch, ar))
+
+
+def test_percent_vietnamese_phrasing():
+    ch = {"results": "Mô hình giải thích 56% phương sai của PI trong nghiên cứu này."}
+    assert any(x["severity"] == "hard" for x in percent_variance_findings(ch, _AR_R2))
+
+
+def test_percent_no_r2_no_finding():
+    assert percent_variance_findings({"results": "explains 56% of the variance in PI"}, {}) == []
