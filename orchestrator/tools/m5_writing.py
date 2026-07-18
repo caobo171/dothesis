@@ -603,16 +603,30 @@ def _derive_scale_items(conceptual_model: dict | None,
     return [{"construct": c, "items": grouped[c]} for c in order]
 
 
-def _generate_scale_items(instrument: dict | None, language: str = "en") -> list[dict]:
+def _generate_scale_items(instrument: dict | None, language: str = "en",
+                          conceptual_model: dict | None = None) -> list[dict]:
     """Generate real Likert items when the instrument is only a SPEC — i.e. it
     lists `constructs` + `items_per_construct` but no actual item texts (a shape
     headless often emits). Without this the questionnaire table is either empty
     or, worse, hallucinated inline by the chapter LLM. Generating the scale is
     legitimate instrument design (not fabricating data), and reuses the same
     tool the interactive flow uses so wording stays consistent.
+
+    Fallback: when there is NO instrument at all (a common headless/partner
+    outcome — the agent designed the model but never a survey), derive the
+    construct list straight from the conceptual_model's node labels so a
+    quantitative methodology always ships a real measurement scale for every
+    latent construct instead of only describing one in prose (reviewer: "không
+    hề có bảng hỏi").
     """
     inst = instrument or {}
     constructs = [str(c).strip() for c in (inst.get("constructs") or []) if str(c).strip()]
+    if not constructs:
+        # No instrument spec → measure every construct the model declares.
+        nodes = (conceptual_model or {}).get("nodes") or []
+        constructs = [str(n.get("label") or n.get("id")).strip()
+                      for n in nodes if isinstance(n, dict) and (n.get("label") or n.get("id"))]
+        constructs = [c for c in constructs if c]
     if not constructs:
         return []
     n = inst.get("items_per_construct")
@@ -2625,7 +2639,8 @@ def compose_chapter(
         # to avoid an extra LLM call on chapters that never render {scale_items}.
         if not safe_kwargs["scale_items"] and chapter_name == "methodology":
             safe_kwargs["scale_items"] = _generate_scale_items(
-                context_slice.get("instrument"), language)
+                context_slice.get("instrument"), language,
+                conceptual_model=context_slice.get("conceptual_model"))
 
     # Localize construct/variable NAMES so the model figure, the scale table,
     # and the prose all speak the report language — M3 state often carries

@@ -310,6 +310,34 @@ def test_sanitize_blank_before_list_noop_when_already_separated():
     assert "Lead:\n\n\n- a" not in sanitize_prose(src)
 
 
+def test_generate_scale_items_falls_back_to_conceptual_model(monkeypatch):
+    # No instrument at all (headless/partner) → derive the construct list from
+    # the conceptual_model node labels so the methodology still ships a scale.
+    import orchestrator.tools.m3_design as m3
+    captured = {}
+
+    class _FakeTool:
+        def invoke(self, payload):
+            captured["constructs"] = payload["constructs"]
+            return {c: [{"text": f"{c} item {i}"} for i in range(payload["n"])]
+                    for c in payload["constructs"]}
+
+    monkeypatch.setattr(m3, "suggest_scale_items_batch", _FakeTool())
+    from orchestrator.tools.m5_writing import _generate_scale_items
+    cm = {"nodes": [{"id": "PU", "label": "Perceived Usefulness"},
+                    {"id": "BI", "label": "Behavioral Intention"}]}
+    out = _generate_scale_items(None, "vi", conceptual_model=cm)
+    assert captured["constructs"] == ["Perceived Usefulness", "Behavioral Intention"]
+    assert [r["construct"] for r in out] == ["Perceived Usefulness", "Behavioral Intention"]
+    assert all(len(r["items"]) == 4 for r in out)
+
+
+def test_generate_scale_items_empty_without_model_or_instrument():
+    from orchestrator.tools.m5_writing import _generate_scale_items
+    assert _generate_scale_items(None, "vi") == []
+    assert _generate_scale_items(None, "vi", conceptual_model={"nodes": []}) == []
+
+
 def test_validate_citations_empty_prose():
     from orchestrator.tools.m5_writing import validate_citations
     cited, uncited = validate_citations("", [])
