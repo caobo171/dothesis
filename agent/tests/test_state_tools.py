@@ -255,3 +255,69 @@ def test_m5_gate_no_analysis_results_passes(tmp_path):
     tools["commit_slice"].func(module="M3", writes=_M3_COH, reason="seed")
     out = _m5(tools, "Hypothesis H1 will be examined (β = .34).")
     assert "error" not in out
+
+
+# --- boundary hardening (gap 2): strict gate policy for headless/B2B ---------
+
+def _strict_tools(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{_uuid.uuid4().hex}")
+    return store, {t.name: t for t in make_state_tools(store, strict_gates=True)}
+
+
+def test_strict_gate_refuses_commit_on_validator_crash(tmp_path, monkeypatch):
+    store, tools = _strict_tools(tmp_path)
+    import agent.stats_validation as sv
+    monkeypatch.setattr(sv, "validate_analysis_results",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    out = _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+    assert out["error"].startswith("stats_gate_unavailable")
+    assert store.load()["contextStore"].get("analysis_results") is None
+
+
+def test_strict_gate_refuses_on_crashed_flag(tmp_path, monkeypatch):
+    store, tools = _strict_tools(tmp_path)
+    import agent.stats_validation as sv
+    monkeypatch.setattr(sv, "validate_analysis_results",
+                        lambda *a, **k: {"crashed": True, "hard": 0, "soft": 0,
+                                         "findings": [], "findings_hard": [], "findings_soft": []})
+    out = _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+    assert out["error"].startswith("stats_gate_unavailable")
+
+
+def test_strict_gate_refuses_m5_commit_on_coherence_crash(tmp_path, monkeypatch):
+    store, tools = _strict_tools(tmp_path)
+    tools["commit_slice"].func(module="M3", writes=copy.deepcopy(_M3_COH), reason="seed")
+    tools["commit_slice"].func(module="M4", writes={"analysis_results": copy.deepcopy(_M4_COH)}, reason="seed")
+    import agent.coherence as coh
+    monkeypatch.setattr(coh, "validate_m5_sections",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    out = json.loads(tools["commit_slice"].func(
+        module="M5", writes={"final_sections": {"results": "H1 supported (β = .34).", "discussion": "x" * 40}},
+        reason="test"))
+    assert out["error"].startswith("coherence_gate_unavailable")
+
+
+def test_strict_gate_clean_and_hard_paths_unchanged(tmp_path):
+    # strictness only changes the cannot-run branch: clean commits still succeed,
+    # hard findings still return stats_validation_failed.
+    store, tools = _strict_tools(tmp_path)
+    assert "error" not in _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+    bad = copy.deepcopy(_GOOD_M4)
+    bad["measurement_model"][0]["ave"] = 1.4   # impossible
+    out = _commit(tools, {"analysis_results": bad})
+    assert out["error"].startswith("stats_validation_failed")
+
+
+def test_provenance_records_gate_ran(tmp_path):
+    store, tools = _tools(tmp_path)   # advisory (default)
+    out = _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+    assert "error" not in out
+    prov = store.load()["contextStore"]["analysis_provenance"]
+    assert prov["gate"] == {"stats_validation": "ran", "policy": "advisory"}
+
+
+def test_strict_provenance_records_strict_policy(tmp_path):
+    store, tools = _strict_tools(tmp_path)
+    _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+    prov = store.load()["contextStore"]["analysis_provenance"]
+    assert prov["gate"]["policy"] == "strict" and prov["gate"]["stats_validation"] == "ran"

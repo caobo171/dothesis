@@ -31,7 +31,12 @@ def chapter_to_module(chapter: str | None) -> str:
     return _CHAPTER_TO_MODULE.get((chapter or "").lower(), "M5")
 
 
-def make_state_tools(store: ProjectStateStore) -> list:
+def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) -> list:
+    """`strict_gates` (boundary hardening, gap 2): when True (headless/B2B), a
+    validation/coherence gate that CANNOT RUN (crash/exception) refuses the commit
+    instead of committing "unverified" — the fabrication boundary fails CLOSED
+    where the gate is the product. Default False keeps interactive chat fail-open
+    (a validator hiccup must never block a real thesis)."""
     @tool
     def read_slice(module: str) -> str:
         """Read a module's slice of the project context_store.
@@ -111,6 +116,13 @@ def make_state_tools(store: ProjectStateStore) -> list:
                     _m3 = None
                 _v = validate_analysis_results(writes["analysis_results"], _m3)
                 if _v.get("crashed"):
+                    if strict_gates:
+                        return json.dumps({
+                            "error": "stats_gate_unavailable — the numbers could not be verified "
+                                     "(the validator did not run) and this run requires verification "
+                                     "before committing analysis results.",
+                            "hint": "Retry; if it persists, the analysis results cannot be attested.",
+                        }, ensure_ascii=False)
                     _stats_warnings = "unavailable"
                 elif _v["hard"]:
                     return json.dumps({
@@ -124,6 +136,13 @@ def make_state_tools(store: ProjectStateStore) -> list:
                     _stats_warnings = _v["findings_soft"]
             except Exception:
                 logger.debug("commit_slice: M4 stats validation skipped", exc_info=True)
+                if strict_gates:
+                    return json.dumps({
+                        "error": "stats_gate_unavailable — the numbers could not be verified "
+                                 "(the validator raised) and this run requires verification before "
+                                 "committing analysis results.",
+                        "hint": "Retry; if it persists, the analysis results cannot be attested.",
+                    }, ensure_ascii=False)
                 _stats_warnings = "unavailable"
         # Coherence (M3↔M4↔M5). M4: advisory direction check only (no prose yet).
         # M5: a prose number contradicting the persisted analysis_results HARD-
@@ -145,6 +164,13 @@ def make_state_tools(store: ProjectStateStore) -> list:
                 _flat = (store.load() or {}).get("contextStore", {})
                 _cv = validate_m5_sections(writes["final_sections"], _flat)
                 if _cv.get("crashed"):
+                    if strict_gates:
+                        return json.dumps({
+                            "error": "coherence_gate_unavailable — the chapter prose could not be "
+                                     "checked against the persisted results (the gate did not run) and "
+                                     "this run requires the check before committing final sections.",
+                            "hint": "Retry; if it persists, the sections cannot be attested.",
+                        }, ensure_ascii=False)
                     _coherence_warnings = "unavailable"
                 elif _cv["hard"]:
                     return json.dumps({
@@ -159,6 +185,13 @@ def make_state_tools(store: ProjectStateStore) -> list:
                     _coherence_warnings = _cv["findings_soft"]
             except Exception:
                 logger.debug("commit_slice: M5 coherence gate skipped", exc_info=True)
+                if strict_gates:
+                    return json.dumps({
+                        "error": "coherence_gate_unavailable — the chapter prose could not be checked "
+                                 "against the persisted results (the gate raised) and this run requires "
+                                 "the check before committing final sections.",
+                        "hint": "Retry; if it persists, the sections cannot be attested.",
+                    }, ensure_ascii=False)
                 _coherence_warnings = "unavailable"
         # Provenance injection (roadmap #12): after the model-edge strip (so a
         # forged analysis_provenance is already gone) and after the hard gate (so
@@ -178,6 +211,13 @@ def make_state_tools(store: ProjectStateStore) -> list:
                     _summary["captured_at"] = datetime.now(timezone.utc).strftime(
                         "%Y-%m-%dT%H:%M:%SZ")
                     _summary["numbers"] = _summary.pop("coverage")
+                    # Attest whether the verification gate actually RAN (gap 2) so
+                    # the certificate can say "all gates ran", not just "no gate
+                    # failed". In strict mode an unavailable gate already refused
+                    # above, so reaching here means it ran.
+                    _summary["gate"] = {
+                        "stats_validation": "unavailable" if _stats_warnings == "unavailable" else "ran",
+                        "policy": "strict" if strict_gates else "advisory"}
                     writes = {**writes, "analysis_provenance": _summary}
             except Exception:
                 logger.debug("commit_slice: provenance injection skipped", exc_info=True)

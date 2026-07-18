@@ -474,12 +474,17 @@ def build_agent(
     model: Any | None = None,
     checkpointer: Any | None = None,
     store: ProjectStateStore | None = None,
+    strict_gates: bool = False,
 ):
     """Create the deep agent bound to one project.
 
     `store` defaults to the file-backed store in project_dir (CLI spike);
     the api passes a DB-backed subclass so commits land in Postgres while
     project_dir stays the file workspace (uploads, exports).
+
+    `strict_gates` (boundary hardening, gap 2): headless/B2B runs pass True so an
+    unrunnable stats/coherence gate REFUSES the commit rather than committing
+    "unverified"; interactive chat leaves it False (fail-open).
     """
     project_dir = Path(project_dir)
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -502,7 +507,7 @@ def build_agent(
         model = _default_model()
 
     tools = [
-        *make_state_tools(store),
+        *make_state_tools(store, strict_gates=strict_gates),
         quick_sources,
         research_scout,
         parse_reference,

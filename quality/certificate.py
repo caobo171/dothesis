@@ -355,13 +355,22 @@ def _engine_version() -> str:
 def _attestation(status, checklist, prov, network_enabled) -> str:
     passed = sum(1 for it in checklist if it["status"] == "pass")
     nums = prov.get("numbers") or {}
+    gate = prov.get("gate") or {}
+    # "all gates ran" vs "no gate failed" (gap 2): only assertable when the gate
+    # record confirms the verifier actually executed.
+    if gate.get("stats_validation") == "ran":
+        gate_clause = " The statistics-verification gate ran on the committed numbers."
+    elif gate.get("stats_validation") == "unavailable":
+        gate_clause = " Note: the statistics-verification gate did not run for this commit."
+    else:
+        gate_clause = ""
     return (f"DoThesis ran {len(checklist)} deterministic committee-readiness checks; "
             f"{passed} passed. Of {nums.get('total', 0)} reported numbers, "
             f"{nums.get('computed', 0)} were computed by DoThesis and matched to a provenance "
             f"ledger, {nums.get('validated', 0)} were student-supplied and checked only for "
-            f"internal consistency. DoThesis did not run a plagiarism scan, did not verify DOIs "
-            f"{'online' if network_enabled else 'at all (offline)'}, and does not attest a defense "
-            f"rehearsal. Readiness: {status}.")
+            f"internal consistency.{gate_clause} DoThesis did not run a plagiarism scan, did not "
+            f"verify DOIs {'online' if network_enabled else 'at all (offline)'}, and does not attest "
+            f"a defense rehearsal. Readiness: {status}.")
 
 
 # --- gate_summary (B2B, <2 KB) ----------------------------------------------

@@ -193,7 +193,11 @@ def main() -> int:
         result = None
         attempt = 0
         for attempt in range(1, max_attempts + 1):
-            agent = build_agent(workspace, checkpointer=InMemorySaver(), store=store)
+            # Headless/B2B → strict gates: an unrunnable verification gate refuses
+            # the commit (fail-closed at the fabrication boundary, gap 2). Opt out
+            # only with an explicit params["strict_gates"] = false.
+            agent = build_agent(workspace, checkpointer=InMemorySaver(), store=store,
+                                strict_gates=params.get("strict_gates", True))
             result = asyncio.run(run_headless(
                 agent, store, profile,
                 thread_id=f"headless:{args.job_id}:{attempt}",

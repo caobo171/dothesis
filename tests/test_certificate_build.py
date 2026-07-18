@@ -212,3 +212,33 @@ def test_render_not_checked_no_fail_word(monkeypatch):
     for line in md.splitlines():
         if "not checked" in line:
             assert "fail" not in line.lower()
+
+
+def test_certificate_attests_all_gates_ran(monkeypatch):
+    _stub_judge(monkeypatch)
+    import copy as _c
+    cs = _c.deepcopy(CLEAN)
+    cs["m4_analysis"]["analysis_provenance"] = {
+        "numbers": {"total": 3, "computed": 3, "validated": 0, "unchecked": 0},
+        "ledger": {"pruned": False}, "ops_seen": {}, "gate": {"stats_validation": "ran", "policy": "strict"}}
+    cert = build_certificate(cs)
+    assert "verification gate ran" in cert["attestation"]
+
+
+def test_certificate_notes_gate_unavailable(monkeypatch):
+    _stub_judge(monkeypatch)
+    import copy as _c
+    cs = _c.deepcopy(CLEAN)
+    cs["m4_analysis"]["analysis_provenance"] = {
+        "numbers": {"total": 1, "computed": 0, "validated": 1, "unchecked": 0},
+        "ledger": {"pruned": False}, "gate": {"stats_validation": "unavailable", "policy": "advisory"}}
+    assert "verification gate did not run" in build_certificate(cs)["attestation"]
+
+
+def test_certificate_degrades_without_gate_field(monkeypatch):
+    _stub_judge(monkeypatch)
+    # legacy state with no gate field → no gate clause, schema still v1
+    cert = build_certificate(CLEAN)
+    assert cert["schema_version"] == 1
+    assert "verification gate ran" not in cert["attestation"]
+    assert "verification gate did not run" not in cert["attestation"]
