@@ -260,6 +260,33 @@ def test_validate_citations_flags_uncited():
     assert uncited == ["Smith, 2023"]
 
 
+def test_convert_cite_pills_to_apa():
+    from orchestrator.tools.m5_writing import _convert_cite_pills
+    prose = ("hành vi {{cite: Davis 1989 | Perceived Usefulness | "
+             "https://doi.org/10.2307/249040}}. Also {{cite: Nguyen et al. 2021 | T | http://x}} "
+             "and {{cite: Hair & Ringle, 2019 | T | http://y}}.")
+    out = _convert_cite_pills(prose)
+    assert "{{cite" not in out and "doi.org" not in out and "http://" not in out
+    assert "(Davis, 1989)" in out
+    assert "(Nguyen et al., 2021)" in out
+    assert "(Hair & Ringle, 2019)" in out
+
+
+def test_convert_cite_pills_variants():
+    from orchestrator.tools.m5_writing import _convert_cite_pills
+    assert _convert_cite_pills("x {{cite: WHO 2020}} y") == "x (WHO, 2020) y"        # label-only
+    assert _convert_cite_pills("x {{cite: Jeong 2025 | Title}} y") == "x (Jeong, 2025) y"  # 2-field
+    assert _convert_cite_pills("x {{cite: Some Org | R | http://z}} y") == "x (Some Org) y"  # no year
+    assert _convert_cite_pills("no pills here") == "no pills here"                    # idempotent-noop
+
+
+def test_sanitize_prose_strips_raw_pill_markup():
+    from orchestrator.tools.m5_writing import sanitize_prose
+    out = sanitize_prose("thực tế {{cite: Davis 1989 | Long Title | https://doi.org/10.2307/249040}}.")
+    assert "{{cite" not in out and "|" not in out
+    assert "(Davis, 1989)" in out
+
+
 def test_validate_citations_empty_prose():
     from orchestrator.tools.m5_writing import validate_citations
     cited, uncited = validate_citations("", [])

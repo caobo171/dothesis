@@ -1443,6 +1443,10 @@ OUTPUT FORMATTING (strict — the text is rendered to a Word document via Markdo
   prose only — do not emit a table shell of placeholders.
 - Use "## Heading" on its own line for sub-sections.
 - Do not output the chapter title as an H1 — it is added automatically.
+- Cite sources ONLY as plain "(Author, Year)" in the body. NEVER use the
+  frontend pill markup "{{cite: … | … | url}}" — it renders as raw braces in the
+  Word/PDF document. The bibliography is generated automatically; do not paste
+  titles or URLs inline.
 - Never write meta-commentary about the writing process, missing inputs, or
   assumptions you made to fill gaps (e.g. "the author assumed", "due to limited
   information", "giả định", "thiếu thông tin"). Write as a finished scholarly
@@ -2393,6 +2397,39 @@ def _reflow_inline_bullets(line: str) -> list[str]:
     return out
 
 
+# A frontend/chat "source pill": `{{cite: label | title | url}}` (see
+# agent.runtime SYSTEM_PROMPT §"inline source pills"). It's a CHAT convention the
+# browser renders as a clickable pill — it must NEVER reach the exported thesis,
+# where pandoc prints the raw braces verbatim ("{{cite: Davis 1989 | … | https…}}"
+# in the PDF). The composer occasionally borrows the format; we convert every pill
+# to a plain APA "(Author, Year)" inline cite (the bibliography is emitted
+# separately from the M2 pool via citeproc nocite:@*).
+_CITE_PILL_RE = re.compile(r"\{\{\s*cite:\s*(?P<body>[^{}]*?)\s*\}\}", re.IGNORECASE)
+
+
+def _pill_label_to_citation(label: str) -> str:
+    """'Davis 1989' / 'Nguyen et al. 2021' / 'Roslan, 2023' -> '(Author, Year)'.
+    No trailing 4-digit year -> '(label)'; empty -> '' (drop the pill entirely)."""
+    label = label.strip().strip(".,; ")
+    if not label:
+        return ""
+    m = re.search(r"^(?P<author>.*?)[,\s]+(?P<year>(?:19|20)\d{2}[a-z]?)$", label)
+    if m:
+        return f"({m.group('author').strip().rstrip(',')}, {m.group('year')})"
+    return f"({label})"
+
+
+def _convert_cite_pills(prose: str) -> str:
+    """Replace `{{cite: label | title | url}}` pills with `(Author, Year)`.
+
+    Keeps only the label (first `|`-separated field) and drops the title/url —
+    those live in the reference list, not inline. Idempotent and pool-agnostic:
+    runs on every export path via _sanitize_prose so a stray pill can never render
+    as raw markup again."""
+    return _CITE_PILL_RE.sub(lambda m: _pill_label_to_citation(m.group("body").split("|", 1)[0]),
+                             prose)
+
+
 def _sanitize_prose(prose: str) -> str:
     """Normalize LLM markdown quirks before export.
 
@@ -2405,6 +2442,9 @@ def _sanitize_prose(prose: str) -> str:
     and demote any heading whose text is a full sentence (a real section title is
     short and doesn't end in a period) — never a legitimate heading.
     """
+    # Convert `{{cite: …}}` frontend pills to plain "(Author, Year)" BEFORE any
+    # line normalization so no raw pill markup can survive into the export.
+    prose = _convert_cite_pills(prose)
     out: list[str] = []
     # Expand any inline "* a * b" lists into one-item-per-line first, then run
     # the per-line normalizations over the expanded lines.
