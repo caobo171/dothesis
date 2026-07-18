@@ -200,14 +200,29 @@ def main() -> int:
         _RETRYABLE = {"max_stalls", "max_turns"}
         max_attempts = int(os.getenv("DOTHESIS_HEADLESS_RETRIES", "1")) + 1
         _retry_budget_s = int(os.getenv("DOTHESIS_HEADLESS_RETRY_BUDGET_S", "1200"))
+
+        # Headless/B2B → strict gates: an unrunnable verification gate refuses the
+        # commit (fail-closed at the fabrication boundary, gap 2). BUT distinguish
+        # "gate not deployed" (thesis_stats submodule missing → the import can NEVER
+        # succeed → strict would refuse EVERY M4 commit forever, deadlocking the run)
+        # from "gate crashed at runtime on real data". If the validator can't even
+        # import, degrade to advisory LOUDLY (attested in provenance) — the same
+        # fail-open behavior that let reports complete before strict gates existed.
+        strict = params.get("strict_gates", True)
+        if strict:
+            try:
+                from thesis_stats.validation import validate_claims  # noqa: F401,PLC0415
+            except Exception:
+                logger.error("thesis_stats not importable — strict gates degraded to advisory")
+                appender.write({"type": "activity", "agent": "headless",
+                                "text": "stats gate unavailable (validator not installed) — "
+                                        "running advisory; numbers marked unverified"})
+                strict = False
         result = None
         attempt = 0
         for attempt in range(1, max_attempts + 1):
-            # Headless/B2B → strict gates: an unrunnable verification gate refuses
-            # the commit (fail-closed at the fabrication boundary, gap 2). Opt out
-            # only with an explicit params["strict_gates"] = false.
             agent = build_agent(workspace, checkpointer=InMemorySaver(), store=store,
-                                strict_gates=params.get("strict_gates", True))
+                                strict_gates=strict)
             result = asyncio.run(run_headless(
                 agent, store, profile,
                 thread_id=f"headless:{args.job_id}:{attempt}",
