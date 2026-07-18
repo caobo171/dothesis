@@ -20,6 +20,31 @@ import os
 from dataclasses import dataclass, field
 
 
+def _http_timeout_kwargs() -> dict:
+    """Timeout + retry policy for the OpenAI-compatible routes (ofox/openrouter).
+
+    Without this, ChatOpenAI inherits the openai SDK default (a 600s total
+    timeout, and for a STREAMING call a stalled connection can hold the socket
+    open for that whole window). A single hung LLM turn then blocks the headless
+    run for ~10 min — the observed "agent treo" symptom — and quietly eats the
+    report's wall-clock budget with no error until far too late.
+
+    The fix keys off httpx's granular timeouts: `read` is the max gap BETWEEN
+    received chunks, not the total call length, so a long-but-progressing stream
+    (a full M5 chapter) is never cut off, while a stalled stream dies after
+    DOTHESIS_LLM_READ_TIMEOUT_S. max_retries lets the client transparently retry
+    a stalled/5xx attempt instead of surfacing it as a hard turn failure.
+    """
+    import httpx  # noqa: PLC0415 — only the openai-compat routes need it
+    read = float(os.getenv("DOTHESIS_LLM_READ_TIMEOUT_S", "90"))
+    connect = float(os.getenv("DOTHESIS_LLM_CONNECT_TIMEOUT_S", "15"))
+    retries = int(os.getenv("DOTHESIS_LLM_MAX_RETRIES", "2"))
+    return {
+        "timeout": httpx.Timeout(read, connect=connect, write=60.0, pool=connect),
+        "max_retries": retries,
+    }
+
+
 @dataclass
 class ModelSpec:
     route: str = "native"  # "native" | "openrouter" | "ofox"
@@ -161,6 +186,7 @@ def _openrouter(spec: ModelSpec):
         # OpenAI-compatible streaming reports usage only when asked — the credit
         # ledger reads it via extract_usage, so keep this on.
         model_kwargs={"stream_options": {"include_usage": True}},
+        **_http_timeout_kwargs(),
     )
 
 
@@ -204,6 +230,9 @@ def _ofox(spec: ModelSpec):
         # OpenAI-compatible streaming reports usage only when asked — the credit
         # ledger reads it via extract_usage, so keep this on.
         model_kwargs={"stream_options": {"include_usage": True}},
+        # Bounded read timeout + retries so a stalled ofox stream can't hang the
+        # whole headless run for the openai SDK's 600s default (see _http_timeout).
+        **_http_timeout_kwargs(),
     )
 
 
