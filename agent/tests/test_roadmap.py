@@ -90,3 +90,28 @@ def test_all_done_offers_defense_prep():
     na = next_action(s)
     labels = " ".join(na.get("cta_options", [])).lower()
     assert "defense" in labels or "defence" in labels
+
+
+def test_required_modules_skips_unordered_m4():
+    # A 3-chapter order needs {M2, M3, M5}. When M1-M3 are done and the agent is
+    # parked on M4, the roadmap must route to M5 (not keep grinding M4 analysis
+    # the order never asked for — the wall-clock churn). Chat (required=None)
+    # keeps the historical M4 behavior.
+    from agent.roadmap import next_action
+    st = {"focus": "M4", "contextStore": {},
+          "status": {"M1": "done", "M2": "done", "M3": "done",
+                     "M4": "in_progress", "M5": "locked"}}
+    assert next_action(st)["module"] == "M4"                       # chat: unchanged
+    assert next_action(st, required=frozenset({"M2", "M3", "M5"}))["module"] == "M5"
+    # An order that DOES include Results still drives M4.
+    assert next_action(st, required=frozenset({"M2", "M3", "M4", "M5"}))["module"] == "M4"
+
+
+def test_required_modules_from_report_scope(monkeypatch):
+    import agent.run_context as rc
+    monkeypatch.setenv("DOTHESIS_REPORT_CHAPTERS", "intro,lit_review,methodology")
+    rc.report_chapters.set(None)  # force the env-var path
+    assert rc.required_modules() == frozenset({"M2", "M3", "M5"})
+    monkeypatch.delenv("DOTHESIS_REPORT_CHAPTERS", raising=False)
+    rc.report_chapters.set(None)
+    assert rc.required_modules() is None

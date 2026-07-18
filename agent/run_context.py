@@ -50,6 +50,27 @@ def _current_scope() -> tuple[str, ...] | None:
     return None
 
 
+def required_modules() -> frozenset[str] | None:
+    """The modules THIS run must finish, derived from the ordered chapters — the
+    same fact RunProfile.required_modules carries, but reachable from the agent's
+    per-turn roadmap steering (which has no RunProfile in hand). None when no
+    partner scope is set (interactive chat) → the roadmap keeps all five modules.
+
+    This is what lets the [NEXT] header skip a module the order doesn't need: a
+    3-chapter {intro, lit_review, methodology} order needs {M2, M3, M5}, so the
+    agent must NOT be steered into a full M4 analysis (the ~10-min, 58×run_stats
+    churn that blew the wall-clock). Reuses chapter_to_module so this map can
+    never drift from app.partner_run.required_modules_for."""
+    scope = _current_scope()
+    if not scope:
+        return None
+    try:
+        from agent.tools.state_tools import chapter_to_module  # noqa: PLC0415
+        return frozenset(chapter_to_module(c) for c in scope)
+    except Exception:
+        return None
+
+
 def scoped_chapters(all_chapters: list[str]) -> list[str]:
     """Filter `all_chapters` (canonical order) down to the ordered subset when a
     partner scope is set; otherwise return them unchanged."""

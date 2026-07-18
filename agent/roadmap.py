@@ -85,17 +85,26 @@ def _title_for(module: str, substep: str | None) -> str:
     return SUBSTEP_LABELS.get(substep, substep)
 
 
-def next_action(state: dict) -> dict | None:
+def next_action(state: dict, required: frozenset[str] | None = None) -> dict | None:
     """The single next thing the student should do. Deterministic precedence:
     open blocker > needs_review > advance focus > next module > done.
 
     Null-safe on headless-produced state (no roadmap_tasks, minimal status) so it
     never crashes an auto-mode / partner turn — the chat coaching layer must not
     couple into the headless surfaces.
+
+    `required` (partner reports) narrows module advancement to the modules the
+    ordered chapters actually need: without it a 3-chapter order still marched the
+    agent through a full M4 analysis it never asked for (~10 min of run_stats
+    churn that blew the wall-clock). None → all five modules (interactive default).
     """
     cs = state.get("contextStore") or {}
     status = state.get("status") or {}
     focus = state.get("focus") or "M1"
+    # Modules this run is allowed to steer toward. A non-required module is
+    # treated as out-of-scope for focus-advance and next-module, so the roadmap
+    # routes M3 → M5 directly when M4 isn't ordered.
+    eligible = required or frozenset(MODULES)
 
     # 1) An open agent-inserted blocker jumps the queue.
     for t in cs.get("roadmap_tasks") or []:
@@ -113,8 +122,11 @@ def next_action(state: dict) -> dict | None:
                     "why": "An upstream change flagged it for review — resolve it before moving on.",
                     "cta_options": [f"Review {m}", "Why does this need review?"]}
 
-    # 3) Advance the focus module.
-    if status.get(focus) not in ("done", None) or derive_substep(focus, state) is not None:
+    # 3) Advance the focus module — only if it's a module this run needs. A
+    #    focus parked on an out-of-scope module (e.g. M4 on a no-Results order)
+    #    falls through to step 4, which routes to the next REQUIRED module.
+    if focus in eligible and (
+            status.get(focus) not in ("done", None) or derive_substep(focus, state) is not None):
         sub = derive_substep(focus, state)
         if sub is not None:
             return {"module": focus, "substep": sub, "title": _title_for(focus, sub),
@@ -125,9 +137,9 @@ def next_action(state: dict) -> dict | None:
                     "why": f"{focus} has all its content — confirm it so we move on.",
                     "cta_options": [f"Mark {focus} done", "Not yet"]}
 
-    # 4) Move to the first not-done module in order.
+    # 4) Move to the first not-done REQUIRED module in order.
     for m in MODULES:
-        if status.get(m) != "done":
+        if m in eligible and status.get(m) != "done":
             sub = derive_substep(m, state)
             return {"module": m, "substep": sub or "", "title": _title_for(m, sub),
                     "why": f"{focus} is done — {m} is next.",

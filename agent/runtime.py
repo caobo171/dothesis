@@ -619,7 +619,8 @@ def _state_header(store: ProjectStateStore | None) -> str:
     # turn (same rationale as the state line: it can't narrate its own position).
     try:
         from agent.roadmap import next_action  # local import: avoid load cycle
-        na = next_action(state)
+        from agent.run_context import required_modules  # noqa: PLC0415
+        na = next_action(state, required=required_modules())
         if na:
             header += (f"\n[NEXT] {na['module']}/{na.get('substep') or '-'} — "
                        f"{na['title']} :: {na['why']}")
