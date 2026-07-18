@@ -237,12 +237,22 @@ def make_writing_tools(store) -> list:
 
         # Only persist once we know the draft is worth keeping (no stubs).
         if generated:
+            # A partner/report run (a chapter scope is set) must flip M5 to DONE
+            # here: it's past the stub gate, so every ORDERED chapter is real, and
+            # the headless agent otherwise never confirms M5 itself — _all_done
+            # stays false and the run churns to the wall-clock even though the
+            # chapters are finished (observed live on job 04c5b417: chapters
+            # drafted, M5 stuck "in_progress", run heading for a 30-min timeout).
+            # Interactive chat keeps confirm_done=False — there an export is a
+            # preview and the student declares the module done.
+            from agent.run_context import required_modules  # noqa: PLC0415
+            _report_run = required_modules() is not None
             try:
                 store.commit_slice(
                     "M5",
                     {"final_sections": sections},
                     "Drafted chapters to export the thesis",
-                    confirm_done=False,
+                    confirm_done=_report_run,
                 )
             except Exception:
                 logger.exception("export_docx: persisting generated draft failed")
