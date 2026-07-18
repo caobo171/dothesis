@@ -346,7 +346,10 @@ def test_compose_chapter_flags_uncited(monkeypatch):
     })
     assert "Bass, 1990" in out["citations_used"]
     assert "Smith, 2023" in out["uncited_warnings"]
-    assert "uncited" in out["prose"].lower() or "⚠️" in out["prose"]
+    # Shipped behavior (m5_writing._strip_uncited_citations): the uncited citation
+    # is STRIPPED from the prose (which renders verbatim) and surfaced only in the
+    # returned uncited_warnings metadata — never injected back into the prose.
+    assert "Smith" not in out["prose"] and "(Bass, 1990)" in out["prose"]
 
 
 def test_compose_chapter_falls_back_on_llm_error(monkeypatch):

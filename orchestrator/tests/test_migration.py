@@ -1,5 +1,6 @@
 """Verifies the orchestrator migration runs up/down/up cleanly."""
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,7 @@ def alembic_env(pg_url, monkeypatch):
 
 
 def _alembic(args: list[str]) -> None:
-    subprocess.run(["alembic", *args], check=True)
+    subprocess.run([sys.executable, "-m", "alembic", *args], check=True)
 
 
 def test_migration_up_down_up_clean(alembic_env):
