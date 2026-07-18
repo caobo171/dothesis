@@ -2406,6 +2406,9 @@ def _reflow_inline_bullets(line: str) -> list[str]:
 # separately from the M2 pool via citeproc nocite:@*).
 _CITE_PILL_RE = re.compile(r"\{\{\s*cite:\s*(?P<body>[^{}]*?)\s*\}\}", re.IGNORECASE)
 
+# A markdown list item: "- ", "* ", "+ " bullets or "1." / "1)" ordered markers.
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)")
+
 
 def _pill_label_to_citation(label: str) -> str:
     """'Davis 1989' / 'Nguyen et al. 2021' / 'Roslan, 2023' -> '(Author, Year)'.
@@ -2482,6 +2485,16 @@ def _sanitize_prose(prose: str) -> str:
         #    instead of a rendered table. Insert the missing separator.
         if (ln.lstrip().startswith("|") and out and out[-1].strip()
                 and not out[-1].lstrip().startswith("|")):
+            out.append("")
+        # 4) blank line BEFORE a bullet/numbered list glued under a paragraph.
+        #    Markdown only parses a list when a blank line precedes it; the
+        #    composer routinely writes the lead-in ("...sau:") directly above
+        #    "- item", so pandoc reads the whole block as ONE paragraph and the
+        #    "- "/"1." markers render literally (the RQ1–RQ4 / "Về mặt …" runs
+        #    that collapsed into a wall of text). Insert the missing separator —
+        #    only when the previous line is prose, never between list items.
+        elif (_LIST_ITEM_RE.match(ln) and out and out[-1].strip()
+              and not _LIST_ITEM_RE.match(out[-1])):
             out.append("")
         out.append(ln)
     return _drop_placeholder_tables("\n".join(out))

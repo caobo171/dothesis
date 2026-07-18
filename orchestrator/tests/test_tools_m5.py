@@ -287,6 +287,29 @@ def test_sanitize_prose_strips_raw_pill_markup():
     assert "(Davis, 1989)" in out
 
 
+def test_sanitize_inserts_blank_before_glued_list():
+    from orchestrator.tools.m5_writing import sanitize_prose
+    # lead-in paragraph directly above list items (no blank line) — markdown
+    # needs the separator or pandoc renders "- " markers as one run-on paragraph.
+    src = ("Nghiên cứu có các câu hỏi sau:\n"
+           "- **RQ1**: một\n- **RQ2**: hai\n- **RQ3**: ba\nĐoạn kế tiếp.")
+    out = sanitize_prose(src).split("\n")
+    assert out[0] == "Nghiên cứu có các câu hỏi sau:"
+    assert out[1] == "", "expected a blank line inserted before the list"
+    assert [l for l in out if l.startswith("- ")] == [
+        "- **RQ1**: một", "- **RQ2**: hai", "- **RQ3**: ba"]
+    # no blank line inserted BETWEEN consecutive items
+    assert "\n\n- **RQ2**" not in sanitize_prose(src)
+
+
+def test_sanitize_blank_before_list_noop_when_already_separated():
+    from orchestrator.tools.m5_writing import sanitize_prose
+    src = "Lead:\n\n- a\n- b\n"
+    # already has the blank line — must not add a second one
+    assert "Lead:\n\n- a" in sanitize_prose(src)
+    assert "Lead:\n\n\n- a" not in sanitize_prose(src)
+
+
 def test_validate_citations_empty_prose():
     from orchestrator.tools.m5_writing import validate_citations
     cited, uncited = validate_citations("", [])
