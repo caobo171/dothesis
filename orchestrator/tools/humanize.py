@@ -328,6 +328,14 @@ EXAMPLES:
 Rewrite the user's text in {language_name}, borrowing the anchor's RHYTHM but
 keeping the ORIGINAL text's own register.
 
+NATURALNESS — write {language_name} the way a native academic writer actually
+writes it. Idiomatic word choice and collocations only; never stiff, translated,
+or awkward phrasing. Readability must not drop below the original — if your only
+way to reword a clause is a clunkier one, leave that clause as it was. In
+Vietnamese specifically, keep natural prepositions/collocations (e.g. "khảo sát
+được gửi đến / thu thập từ" rather than a stilted "phát … tới"); do not swap a
+natural word for a rarer stiff synonym just to look different.
+
 REGISTER — this is critical:
 - Match the formality of the ORIGINAL, not the anchor. If the original is a formal
   academic passage (a thesis results chapter, a report), the rewrite stays formal
