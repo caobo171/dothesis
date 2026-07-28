@@ -91,9 +91,32 @@ else
   exit 1
 fi
 
+# Force venv tooling onto arm64 when possible (same reason as api/run.sh).
+#
+# Why: api/.venv's compiled wheels (pydantic_core, numpy, scipy, ...) are arm64,
+# but the venv's python is a *universal* binary. When dev.sh is launched from a
+# Rosetta / x86_64 shell (an x86_64 terminal, an agent harness, `arch -x86_64
+# zsh`), macOS propagates that CPU preference to every universal child — so the
+# interpreter loads as x86_64 and the first import dies with
+#   ImportError: ... incompatible architecture (have 'arm64', need 'x86_64')
+# which is exactly what `alembic upgrade head` used to blow up on.
+#
+# `arch -arm64` is a no-op on a native arm64 shell, and the probe below simply
+# fails on Intel macs / Linux / Windows, leaving ARCH_PREFIX empty so tools run
+# directly as before.
+ARCH_PREFIX=()
+if arch -arm64 true >/dev/null 2>&1; then
+  ARCH_PREFIX=(arch -arm64)
+fi
+# Bash 3.2 (the /bin/bash macOS ships) errors on "${arr[@]}" for an empty array
+# under `set -u`, so expand through this guard everywhere.
+venv_run() { "${ARCH_PREFIX[@]+"${ARCH_PREFIX[@]}"}" "$@"; }
+
 if [ ! -d api/.venv ]; then
   echo "==> creating api/.venv and installing deps (one-time, ~2 min)"
-  (cd api && "$PYTHON" -m venv .venv)
+  # Create the venv under the same arch the wheels will be installed for,
+  # otherwise a fresh venv made from a Rosetta shell pulls x86_64 wheels.
+  (cd api && venv_run "$PYTHON" -m venv .venv)
 fi
 
 # Detect venv layout AFTER (possibly) creating it: Windows uses Scripts/,
@@ -109,17 +132,17 @@ fi
 
 # Install / refresh deps. Idempotent — pip is fast when nothing changes, and
 # this also covers the case where the venv pre-existed but deps drifted.
-if ! "$VENV_BIN/python" -c "import app" >/dev/null 2>&1; then
+if ! venv_run "$VENV_BIN/python" -c "import app" >/dev/null 2>&1; then
   echo "==> installing api deps into api/.venv"
-  "$VENV_BIN/pip" install --upgrade pip
-  "$VENV_BIN/pip" install -e "api[dev]"
-  "$VENV_BIN/pip" install -r engine/requirements.txt
+  venv_run "$VENV_BIN/pip" install --upgrade pip
+  venv_run "$VENV_BIN/pip" install -e "api[dev]"
+  venv_run "$VENV_BIN/pip" install -r engine/requirements.txt
 fi
 
 # Make sure engine deps are present even if the venv was created on an older dev.sh.
-if ! "$VENV_BIN/python" -c "import google.genai" >/dev/null 2>&1; then
+if ! venv_run "$VENV_BIN/python" -c "import google.genai" >/dev/null 2>&1; then
   echo "==> installing engine deps into api/.venv (one-time)"
-  "$VENV_BIN/pip" install -r engine/requirements.txt
+  venv_run "$VENV_BIN/pip" install -r engine/requirements.txt
 fi
 
 # orchestrator/ and agent/ are sibling packages at the repo root, each with their
@@ -127,21 +150,21 @@ fi
 # imports both at module load (api/app/routers/m5_editor.py → orchestrator.*),
 # so without these editable installs the API blows up at boot with
 # ModuleNotFoundError: No module named 'orchestrator'.
-if ! "$VENV_BIN/python" -c "import orchestrator" >/dev/null 2>&1; then
+if ! venv_run "$VENV_BIN/python" -c "import orchestrator" >/dev/null 2>&1; then
   echo "==> installing orchestrator into api/.venv (one-time)"
-  "$VENV_BIN/pip" install -e orchestrator
+  venv_run "$VENV_BIN/pip" install -e orchestrator
 fi
 
-if ! "$VENV_BIN/python" -c "import agent" >/dev/null 2>&1; then
+if ! venv_run "$VENV_BIN/python" -c "import agent" >/dev/null 2>&1; then
   echo "==> installing agent into api/.venv (one-time)"
-  "$VENV_BIN/pip" install -e agent
+  venv_run "$VENV_BIN/pip" install -e agent
 fi
 
 # quality/ holds the model-eval + rubric packages (F9/F3). Same editable-install
 # pattern; without it `import quality.model_eval` fails in the api process/tests.
-if ! "$VENV_BIN/python" -c "import quality" >/dev/null 2>&1; then
+if ! venv_run "$VENV_BIN/python" -c "import quality" >/dev/null 2>&1; then
   echo "==> installing quality into api/.venv (one-time)"
-  "$VENV_BIN/pip" install -e quality
+  venv_run "$VENV_BIN/pip" install -e quality
 fi
 
 # thesis-stats: the shared statistics engine (PLS-SEM/EFA/mediation/moderation
@@ -155,9 +178,9 @@ fi
 # Dual-import guard: semopy is the optional CB-SEM estimator (the [cbsem] extra).
 # Guarding on it too means a stale env that predates CB-SEM gets the extra
 # installed on the next run instead of silently lacking the cb_sem op.
-if ! "$VENV_BIN/python" -c "import thesis_stats, semopy" >/dev/null 2>&1; then
+if ! venv_run "$VENV_BIN/python" -c "import thesis_stats, semopy" >/dev/null 2>&1; then
   echo "==> installing thesis-stats[cbsem] into api/.venv (one-time)"
-  "$VENV_BIN/pip" install -e "libs/thesis-stats[cbsem]"
+  venv_run "$VENV_BIN/pip" install -e "libs/thesis-stats[cbsem]"
 fi
 
 # Check the M5 export toolchain. LibreOffice is MANDATORY — the PDF needs it for
@@ -169,7 +192,7 @@ fi
 bash scripts/check-export-deps.sh --require-libreoffice
 
 echo "==> running alembic migrations"
-(cd api && "../$VENV_BIN/alembic" upgrade head)
+(cd api && venv_run "../$VENV_BIN/alembic" upgrade head)
 
 echo "==> starting api on port ${API_PORT:-7100}"
 # Watch api/, engine/, orchestrator/, and the v3 deep agent runtime (agent/) —
@@ -180,7 +203,7 @@ echo "==> starting api on port ${API_PORT:-7100}"
 # restarted the worker and killed the in-flight SSE stream, so the bootstrap
 # analysis turn saved the user message but never reached commit_slice/_finalize
 # (empty module_status, no assistant reply). Drop it.
-(cd api && "../$VENV_BIN/uvicorn" app.main:app --reload \
+(cd api && venv_run "../$VENV_BIN/uvicorn" app.main:app --reload \
   --reload-dir app --reload-dir ../engine --reload-dir ../orchestrator \
   --reload-dir ../agent \
   --port "${API_PORT:-7100}") &
@@ -231,7 +254,7 @@ if [ -n "$LANGGRAPH_BIN" ] && [ "${STUDIO_ENABLED:-true}" = "true" ]; then
   # only on the langgraph dev process silences root INFO without
   # affecting the rest of the dev stack — warnings/errors still surface,
   # so a real graph reload failure won't be hidden.
-  LOG_LEVEL=WARNING "$VENV_BIN/$LANGGRAPH_BIN" dev --no-browser \
+  LOG_LEVEL=WARNING venv_run "$VENV_BIN/$LANGGRAPH_BIN" dev --no-browser \
     --port "${STUDIO_PORT:-8123}" &
   STUDIO_PID=$!
   echo "    → studio UI: https://smith.langchain.com/studio/?baseUrl=http://localhost:${STUDIO_PORT:-8123}"
