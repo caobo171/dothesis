@@ -22,8 +22,18 @@ DESIGN — pluggable on purpose (the "#3" decision):
     interface and the concrete backend is chosen by env:
 
         HUMANIZE_SCORER = none        -> no scoring, single-pass (v2 behavior)
-        HUMANIZE_SCORER = videtect    -> local PhoBERT/mDeBERTa (free, no key)
+        HUMANIZE_SCORER = stylometric -> pure-Python burstiness proxy (0 deps)
+        HUMANIZE_SCORER = perplexity  -> VN language-model perplexity (free, torch)
+        HUMANIZE_SCORER = videtect    -> local PhoBERT/mDeBERTa (free, needs data)
         HUMANIZE_SCORER = originality -> Originality.ai API (correlates, costs)
+
+The backends form a cost/signal ladder. `stylometric` needs nothing installed
+and runs instantly, but measures only burstiness — a weak lone signal (Pangram
+2025), useful to wire and observe the loop today, not to trust as a verdict.
+`perplexity` adds the real DetectGPT-style signal but pulls torch + a VN LM.
+`videtect` is a trained classifier (best in-house signal, but needs a labeled
+corpus to train — see scripts/train_videtect.py). `originality` is the only one
+that correlates with the detector a reader actually runs, and it costs money.
 
 Every backend DEGRADES TO None when its model/key/dependency is absent — so
 this file is safe to ship before the model is trained or a key is bought. A
@@ -171,6 +181,114 @@ class OriginalityScorer:
             return None
 
 
+class StylometricScorer:
+    """Training-free, dependency-free burstiness proxy — runs anywhere, instantly.
+
+    Detectors lean on two statistics: perplexity and BURSTINESS (variance in
+    sentence length/structure). This measures the second one cheaply — human
+    academic prose alternates short and long sentences, LLM drafts land on a
+    metronome. It cannot see perplexity, so on its own it is a WEAK signal
+    (Pangram 2025) and must not be read as a verdict; its job is to give the v4
+    loop a real, observable score today, with zero install, so the escalation
+    ladder can be driven and watched before heavier backends are wired.
+
+    Score = blend of (1 - normalized burstiness) and formulaic-connector density,
+    in [0,1], higher = more machine-even.
+    """
+
+    # Sentence-length coefficient of variation (stdev/mean) typical of varied
+    # human academic prose. Scores at/above this read as "human-bursty" (-> 0).
+    _CV_HUMAN = 0.6
+    _CONNECTORS = ("hơn nữa", "bên cạnh đó", "đồng thời", "đáng chú ý",
+                   "nhìn chung", "không những vậy", "có thể nói", "ngoài ra",
+                   "furthermore", "moreover", "additionally", "in conclusion")
+
+    def score(self, text: str) -> float | None:
+        import re  # noqa: PLC0415 — stdlib, kept local for symmetry with siblings
+        if not (text or "").strip():
+            return None
+        sents = [s for s in re.split(r"[.!?…]+\s+", text.strip()) if s.strip()]
+        if len(sents) < 3:
+            return None                       # too short to judge rhythm
+        lens = [len(s.split()) for s in sents]
+        mean = sum(lens) / len(lens)
+        if mean <= 0:
+            return None
+        var = sum((n - mean) ** 2 for n in lens) / len(lens)
+        cv = (var ** 0.5) / mean              # burstiness
+        burstiness_ai = max(0.0, 1.0 - cv / self._CV_HUMAN)
+        low = text.lower()
+        starts = sum(low.count(c) for c in self._CONNECTORS)
+        connector_ai = min(1.0, starts / max(1, len(sents)) * 3)
+        # Burstiness is the primary signal; connectors nudge it.
+        return round(0.75 * burstiness_ai + 0.25 * connector_ai, 4)
+
+
+class PerplexityScorer:
+    """VN language-model perplexity — the DetectGPT-style signal, training-free.
+
+    LLM text is low-perplexity under an LM (the model wrote what the model
+    expected); human text is bumpier. This scores a passage by its mean token
+    negative-log-likelihood under a small Vietnamese causal LM, squashed to
+    [0,1]. Needs torch + transformers + one model download (~0.5-2GB), so it is
+    lazy and degrades to None when the stack or model is absent.
+
+    Free (local inference) and needs no labeled data — the pragmatic step up from
+    StylometricScorer when the ML deps can be installed. Still a proxy: it does
+    not know the reader's detector, only whether the text looks model-typical.
+    """
+
+    def __init__(self, model_path: str | None = None):
+        self._model_path = model_path or os.getenv(
+            "HUMANIZE_PERPLEXITY_MODEL", "vinai/PhoGPT-4B")
+        self._tok = None
+        self._model = None
+        self._broken = False
+        # Perplexity range to normalize into [0,1]; low ppl -> AI (score ->1).
+        try:
+            self._lo = float(os.getenv("HUMANIZE_PPL_LOW", "10"))
+            self._hi = float(os.getenv("HUMANIZE_PPL_HIGH", "100"))
+        except ValueError:
+            self._lo, self._hi = 10.0, 100.0
+
+    def _ensure(self):
+        if self._model is not None or self._broken:
+            return
+        try:
+            import torch  # noqa: F401,PLC0415
+            from transformers import (AutoModelForCausalLM,  # noqa: PLC0415
+                                      AutoTokenizer)
+            self._tok = AutoTokenizer.from_pretrained(
+                self._model_path, trust_remote_code=True)
+            self._model = AutoModelForCausalLM.from_pretrained(
+                self._model_path, trust_remote_code=True)
+            self._model.eval()
+        except Exception:
+            logger.exception("PerplexityScorer: could not load %s — disabling.",
+                             self._model_path)
+            self._broken = True
+
+    def score(self, text: str) -> float | None:
+        if not (text or "").strip():
+            return None
+        self._ensure()
+        if self._model is None:
+            return None
+        try:
+            import torch  # noqa: PLC0415
+            enc = self._tok(text[:4000], return_tensors="pt", truncation=True,
+                            max_length=1024)
+            with torch.no_grad():
+                out = self._model(**enc, labels=enc["input_ids"])
+            ppl = float(torch.exp(out.loss))
+            # Low perplexity -> model-typical -> AI. Linear squash lo..hi -> 1..0.
+            frac = (ppl - self._lo) / max(1e-6, self._hi - self._lo)
+            return round(min(1.0, max(0.0, 1.0 - frac)), 4)
+        except Exception:
+            logger.exception("PerplexityScorer: scoring failed")
+            return None
+
+
 def get_scorer() -> Scorer | None:
     """Build the configured scorer, or None when scoring is off (the default).
 
@@ -181,6 +299,10 @@ def get_scorer() -> Scorer | None:
     backend = (os.getenv("HUMANIZE_SCORER", "none") or "none").strip().lower()
     if backend in ("", "none", "off", "0", "false"):
         return None
+    if backend == "stylometric":
+        return StylometricScorer()
+    if backend == "perplexity":
+        return PerplexityScorer()
     if backend == "videtect":
         return ViDetectScorer()
     if backend == "originality":
