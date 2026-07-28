@@ -22,6 +22,29 @@ from langchain_core.tools import tool
 logger = logging.getLogger(__name__)
 
 
+def _maybe_humanize(sections: list[dict], enabled: bool,
+                    language: str) -> tuple[list[dict], list[dict] | None]:
+    """Optionally re-voice composed sections before rendering.
+
+    Opt-in and best-effort by construction. This runs on the shared export path
+    — the same one headless auto-mode and the partner API use — so it must not
+    be able to change or fail an export nobody asked to humanize: `enabled` is
+    False for every caller that doesn't pass it, and any failure inside the pass
+    returns the sections untouched.
+
+    Returns (sections, report) where report is None when the pass didn't run.
+    """
+    if not enabled:
+        return sections, None
+    try:
+        from orchestrator.tools.humanize import humanize_sections  # noqa: PLC0415
+
+        return humanize_sections(sections, language=language)
+    except Exception:
+        logger.exception("export_docx: humanize pass failed — exporting as composed")
+        return sections, [{"ok": False, "error": "humanizer_failed"}]
+
+
 def make_writing_tools(store) -> list:
     """Build the writing/export tools bound to one project's state store.
 
@@ -33,7 +56,55 @@ def make_writing_tools(store) -> list:
     """
 
     @tool
-    def export_docx(citation_style: str = "apa7", force: bool = False, scope: str = "full") -> str:
+    def humanize_text(text: str, user_anchor: str = "") -> str:
+        """Rewrite a passage so it reads as human-written rather than AI-drafted.
+
+        Use when a supervisor / reviewer / detector flagged the writing as AI
+        ("bị chê là toàn AI", "giống ChatGPT", "viết lại cho tự nhiên hơn").
+        Read the `dothesis-humanize` skill before using this.
+
+        Changes voice ONLY. Every number, p-value, β, table reference and
+        citation is frozen and verified after the rewrite — if one moved, the
+        rewrite is discarded and the ORIGINAL text is returned with
+        `ok: false`. When that happens, say so; never report the passage as
+        humanized.
+
+        The rewrite is anchored on real human prose and will NOT run without an
+        anchor (`error: "no_anchor"`): an unanchored "make it sound human" pass
+        measurably does nothing while appearing to work. Ask the student for
+        ~150 words they wrote themselves and pass it as `user_anchor`.
+
+        Works on ONE passage at a time — a section, not the whole thesis.
+
+        Args:
+            text: the passage to rewrite.
+            user_anchor: ~150 words of the student's own writing (optional if a
+                library anchor is installed for the project language).
+        """
+        try:
+            from orchestrator.tools.humanize import humanize_prose  # noqa: PLC0415
+        except Exception:
+            logger.exception("humanize_text: engine import failed")
+            return json.dumps({"ok": False, "error": "humanizer_unavailable"})
+
+        # Language comes from project state, not from the caller: the agent
+        # guessing "vi"/"en" per call is how the wrong anchor set gets loaded.
+        language = "vi"
+        try:
+            loader = getattr(store, "load_full_context_store", None)
+            if loader is not None:
+                cs = loader() or {}
+                language = ((cs.get("m1_topic") or {}).get("language") or "vi")
+        except Exception:
+            logger.exception("humanize_text: language lookup failed, defaulting to vi")
+
+        result = humanize_prose(text, language=language,
+                                user_anchor=user_anchor or None)
+        return json.dumps(result, ensure_ascii=False)
+
+    @tool
+    def export_docx(citation_style: str = "apa7", force: bool = False, scope: str = "full",
+                    humanize: bool = False) -> str:
         """Export thesis work to Word + PDF.
 
         `scope` controls WHAT is exported:
@@ -55,10 +126,18 @@ def make_writing_tools(store) -> list:
         user to fill those gaps first. Only pass force=True after the user
         explicitly says to export with whatever data exists.
 
+        Set `humanize=True` ONLY when the user asked for a version that doesn't
+        read as AI-written (see the `dothesis-humanize` skill). It re-voices
+        every chapter before rendering, costs ~2 extra LLM calls per chapter,
+        and reports per-chapter results under `humanized` — chapters that
+        failed verification are exported unchanged, so name them rather than
+        claiming the whole document was rewritten.
+
         Args:
             citation_style: apa7 (default), vancouver, ieee, …
             force: skip the missing-data check and export anyway (user opt-in).
             scope: "full" (default) or "M1".."M4" for a single-module export.
+            humanize: re-voice the prose before rendering (opt-in, chat only).
         """
         project_id = getattr(store, "project_id", None)
         if project_id is None:
@@ -157,6 +236,7 @@ def make_writing_tools(store) -> list:
                     "hint": "None of the selected modules have content to export.",
                 })
             scope_tag = ",".join(mods)
+            built, _hum_report = _maybe_humanize(built, humanize, language)
             try:
                 artifacts = run_export(
                     built, str(project_id), references=references, language=language,
@@ -178,9 +258,14 @@ def make_writing_tools(store) -> list:
                 "ok": True,
                 "scope": scope_tag,
                 "artifacts": artifacts,
+                "humanized": _hum_report,
                 "instruction": "Module export succeeded. Reply with a SHORT "
                                "confirmation in the user's language. The DOCX/PDF "
-                               "download buttons are already shown.",
+                               "download buttons are already shown."
+                               + (" If `humanized` is present, state which "
+                                  "sections were rewritten and which were kept "
+                                  "unchanged — do not claim all of them."
+                                  if _hum_report else ""),
             }, ensure_ascii=False)
 
         # A FULL thesis export needs every chapter. Compose when there's NO
@@ -257,6 +342,12 @@ def make_writing_tools(store) -> list:
             except Exception:
                 logger.exception("export_docx: persisting generated draft failed")
 
+        # Humanize the RENDERED copy only — after the commit above, never before.
+        # Persisting the rewrite would make it the new source of truth, and the
+        # next export would humanize an already-humanized chapter, compounding
+        # drift away from the composed text with every run.
+        sections, _hum_report = _maybe_humanize(sections, humanize, language)
+
         try:
             # Pass the nested store so ensure_rendered weaves any missing
             # verified-state tables at export time (roadmap M5 renderer). Full
@@ -314,6 +405,7 @@ def make_writing_tools(store) -> list:
             "chapter_count": len(chapter_titles),
             "similarity": _similarity,
             "certificate": _certificate,
+            "humanized": _hum_report,
             # Instruction to the agent, NOT user-facing copy — the agent must
             # write its OWN confirmation in the conversation's language (the
             # user got an English message parroted from here before). A download
@@ -323,7 +415,12 @@ def make_writing_tools(store) -> list:
                            "Vietnamese). State the ACTUAL chapter_count above — do "
                            "NOT claim a number of chapters that isn't in `chapters`. "
                            "Do NOT paste chapter text. The DOCX/PDF download "
-                           "buttons are already shown in your message.",
+                           "buttons are already shown in your message."
+                           + (" `humanized` lists per-chapter results: name the "
+                              "chapters where ok=false — they were exported "
+                              "UNCHANGED because the rewrite altered a number or "
+                              "citation. Never claim the whole document was "
+                              "rewritten." if _hum_report else ""),
         }, ensure_ascii=False)
 
     @tool
@@ -403,4 +500,4 @@ def make_writing_tools(store) -> list:
             logger.exception("render_verified_sections failed")
             return json.dumps({"ok": False, "reason": "no_data"})
 
-    return [export_docx, review_thesis, render_verified_sections]
+    return [export_docx, review_thesis, render_verified_sections, humanize_text]
