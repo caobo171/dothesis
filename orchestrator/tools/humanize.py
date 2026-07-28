@@ -350,7 +350,7 @@ REGISTER — this is critical:
     ("mình vừa kiểm tra lại…", "mình thấy…", "as I checked…") — keep the
     impersonal academic voice; the writer never appears in the sentence.
   · interjections, emoji, or exclamations.
-
+{restructure_section}
 ABSOLUTE CONSTRAINTS — a rewrite that breaks any of these is discarded:
 {protected_section}
 - Invent NOTHING. No new numbers, no new citations, no new claims, and no new
@@ -366,6 +366,48 @@ possible edit — keep the voice and rhythm you already produced.
 {problem}
 
 Output the corrected text ONLY — no preamble, no commentary, no code fences."""
+
+# --- Restructure ladder (v4 detector loop) -------------------------------
+#
+# Escalating directives, injected into the rewrite prompt on rounds where a
+# detector still flags the text. Round 0 injects NOTHING — the single-pass v2
+# path is byte-for-byte unchanged (only reached when no scorer is configured, or
+# as the first iteration when one is). Each higher rung pushes harder on the two
+# statistics detectors actually measure — perplexity and BURSTINESS (sentence-
+# length/structure variance) — because synonym-swaps move neither. The ABSOLUTE
+# CONSTRAINTS below the injection point still bind: frozen tokens and claim
+# direction are never negotiable, however aggressive the restructure.
+_RESTRUCTURE_LADDER: list[str] = [
+    # Round 1 — vary rhythm.
+    "\nRESTRUCTURE (the previous rewrite still reads as machine-even):\n"
+    "- Vary sentence length deliberately. Mix short (6–12 word) sentences with "
+    "long (25+ word) ones; do not let every sentence land at a similar length.\n"
+    "- Merge two adjacent short sentences, or split one long sentence, wherever "
+    "meaning allows — break the uniform cadence.\n",
+    # Round 2 — vary structure and openings.
+    "\nRESTRUCTURE HARDER (still too even — change structure, not just length):\n"
+    "- Reorder clauses: move a subordinate clause to the front or end; lead some "
+    "sentences with the finding, others with the condition.\n"
+    "- Ensure no two consecutive sentences open the same way (same subject, same "
+    "connector). Kill any repeating template.\n"
+    "- Vary how findings are introduced — not every one needs 'Kết quả cho thấy'.\n",
+    # Round 3+ — re-express syntactic frames.
+    "\nRE-EXPRESS AGGRESSIVELY (prior rounds were still flagged):\n"
+    "- Change syntactic frames: swap active↔passive, verb↔nominalization, and "
+    "recombine clauses across sentence boundaries.\n"
+    "- Where meaning is preserved, reorder the presentation of findings within "
+    "the paragraph. Maximize sentence-structure variance.\n"
+    "- This is the strongest rewrite: change everything about HOW it is said, and "
+    "NOTHING about what it says. Frozen tokens and every claim's direction stay "
+    "exactly as given.\n",
+]
+
+
+def _restructure_directive(round_idx: int) -> str:
+    """The ladder rung for this round. Round 0 -> "" (v2 prompt unchanged)."""
+    if round_idx <= 0:
+        return ""
+    return _RESTRUCTURE_LADDER[min(round_idx - 1, len(_RESTRUCTURE_LADDER) - 1)]
 
 
 def _language_name(language: str) -> str:
@@ -418,6 +460,84 @@ def pick_anchor(text: str, anchors: list[dict], llm=None) -> dict:
     return anchors[0]
 
 
+def _rewrite_once(
+    llm,
+    *,
+    input_text: str,
+    original_text: str,
+    language: str,
+    anchor: dict,
+    protected_section: str,
+    round_idx: int = 0,
+) -> dict:
+    """One anchored rewrite of `input_text`, plus up to one frozen-token repair.
+
+    Frozen tokens are always diffed against `original_text`, never against
+    `input_text` — in the detector loop a later round rewrites the PREVIOUS
+    round's output, but the numbers/citations it must preserve are still the
+    ones from the true source. `round_idx` selects the restructure-ladder rung;
+    round 0 injects nothing, so the single-pass call is byte-for-byte the v2
+    prompt.
+
+    Returns {"ok", "text", "check", "repairs", "error"}. `error` is set only for
+    a provider failure ("llm_failed") or an empty generation ("empty_rewrite");
+    a frozen violation is a normal `ok: False` with the diff in `check`.
+    """
+    system = _REWRITE_PROMPT.format(
+        anchor=anchor["text"],
+        language_name=_language_name(language),
+        protected_section=protected_section,
+        restructure_section=_restructure_directive(round_idx),
+    )
+    try:
+        out = _clean_output(
+            _invoke(llm, f"{system}\n\nTEXT TO REWRITE:\n{input_text}"))
+    except Exception as e:
+        logger.exception("humanize: rewrite call failed")
+        return {"ok": False, "error": "llm_failed", "detail": str(e),
+                "text": None, "check": None, "repairs": 0}
+    if not out:
+        return {"ok": False, "error": "empty_rewrite",
+                "text": None, "check": None, "repairs": 0}
+
+    out = strip_ai_tells(out, language)
+    check = verify_frozen(original_text, out)
+    repairs = 0
+
+    if not check["ok"]:
+        # One repair attempt, with the exact diff. A second failure means the
+        # model can't hold the numbers for this passage; the caller keeps the
+        # original (single-pass) or escalates to the next round (loop).
+        problem_lines = []
+        if check["missing"]:
+            problem_lines.append(
+                "These tokens are in the ORIGINAL but missing from your rewrite. "
+                "Put each one back, unchanged:\n"
+                + "\n".join(f"  {m.split(':', 1)[1]}" for m in check["missing"]))
+        if check["added"]:
+            problem_lines.append(
+                "These appear in your rewrite but NOT in the original — you "
+                "invented them. Remove them:\n"
+                + "\n".join(f"  {a.split(':', 1)[1]}" for a in check["added"]))
+        try:
+            repaired = _clean_output(_invoke(
+                llm,
+                _REPAIR_PROMPT.format(problem="\n\n".join(problem_lines))
+                + f"\n\nORIGINAL:\n{original_text}\n\nYOUR REWRITE:\n{out}"))
+            repairs = 1
+            if repaired:
+                repaired = strip_ai_tells(repaired, language)
+                recheck = verify_frozen(original_text, repaired)
+                if recheck["ok"]:
+                    out, check = repaired, recheck
+                else:
+                    check = recheck
+        except Exception:
+            logger.exception("humanize: repair call failed")
+
+    return {"ok": check["ok"], "text": out, "check": check, "repairs": repairs}
+
+
 def humanize_prose(
     text: str,
     *,
@@ -425,6 +545,7 @@ def humanize_prose(
     user_anchor: str | None = None,
     anchor_id: str | None = None,
     llm=None,
+    scorer=None,
 ) -> dict:
     """Run the anchored rewrite over one passage.
 
@@ -433,8 +554,18 @@ def humanize_prose(
     result in the bake-off, because idiosyncratic real writing is by definition
     outside the training distribution.
 
+    `scorer` is the v4 detector-in-the-loop. When None (the default) it is
+    resolved from HUMANIZE_SCORER; if that is unset/`none`, the pass runs
+    EXACTLY as v2 — one anchored rewrite + optional frozen-repair, no scoring.
+    When a Scorer is active, the rewrite is iterated adversarial-paraphrasing
+    style: each round escalates the restructure directive, re-scores, keeps the
+    lowest-scoring candidate that still passes the frozen gate, and stops early
+    once the score drops to HUMANIZE_AI_THRESHOLD. A None score (backend down /
+    unconfigured) degrades to single-pass — it never blocks the passage.
+
     Returns:
         {"ok", "text", "anchor", "changed", "frozen", "repairs", "error"}
+        plus, when scored: {"score", "rounds", "threshold"}.
 
     On rejection `ok` is False and `text` is the ORIGINAL, unmodified. The
     caller ships the original — never a rewrite that failed verification.
@@ -497,65 +628,74 @@ def humanize_prose(
     cleaned = strip_ai_tells(text, language)
     anchor = pick_anchor(cleaned, anchors, llm=llm)
 
-    system = _REWRITE_PROMPT.format(
-        anchor=anchor["text"],
-        language_name=_language_name(language),
-        protected_section=protected_section,
-    )
-    try:
-        out = _clean_output(_invoke(llm, f"{system}\n\nTEXT TO REWRITE:\n{cleaned}"))
-    except Exception as e:
-        logger.exception("humanize: rewrite call failed")
-        return {"ok": False, "error": "llm_failed", "detail": str(e),
-                "text": text, "changed": False}
-    if not out:
-        return {"ok": False, "error": "empty_rewrite", "text": text, "changed": False}
+    _FROZEN_HINT = ("The rewrite altered numbers or citations, so the original "
+                    "was kept. Report this — do not claim the passage was "
+                    "humanized.")
 
-    out = strip_ai_tells(out, language)
-    check = verify_frozen(text, out)
-    repairs = 0
+    # Resolve the detector. None (env unset/`none`) is the switch back to the
+    # untouched v2 single-pass path — so an un-configured deployment, and every
+    # existing test that passes no scorer, behaves exactly as before.
+    if scorer is None:
+        from orchestrator.tools.detector import get_scorer  # noqa: PLC0415
+        scorer = get_scorer()
 
-    if not check["ok"]:
-        # One repair attempt, with the exact diff. Two failures means the model
-        # can't hold the numbers for this passage; keep the original.
-        problem_lines = []
-        if check["missing"]:
-            problem_lines.append(
-                "These tokens are in the ORIGINAL but missing from your rewrite. "
-                "Put each one back, unchanged:\n"
-                + "\n".join(f"  {m.split(':', 1)[1]}" for m in check["missing"]))
-        if check["added"]:
-            problem_lines.append(
-                "These appear in your rewrite but NOT in the original — you "
-                "invented them. Remove them:\n"
-                + "\n".join(f"  {a.split(':', 1)[1]}" for a in check["added"]))
-        try:
-            repaired = _clean_output(_invoke(
-                llm,
-                _REPAIR_PROMPT.format(problem="\n\n".join(problem_lines))
-                + f"\n\nORIGINAL:\n{text}\n\nYOUR REWRITE:\n{out}"))
-            repairs = 1
-            if repaired:
-                repaired = strip_ai_tells(repaired, language)
-                recheck = verify_frozen(text, repaired)
-                if recheck["ok"]:
-                    out, check = repaired, recheck
-                else:
-                    check = recheck
-        except Exception:
-            logger.exception("humanize: repair call failed")
+    rw = dict(original_text=text, language=language, anchor=anchor,
+              protected_section=protected_section)
 
-    if not check["ok"]:
+    # --- v2 single-pass: no detector, one rewrite (+optional repair) ---------
+    if scorer is None:
+        r = _rewrite_once(llm, input_text=cleaned, round_idx=0, **rw)
+        if r.get("error") == "llm_failed":
+            return {"ok": False, "error": "llm_failed", "detail": r.get("detail"),
+                    "text": text, "changed": False}
+        if r.get("error") == "empty_rewrite":
+            return {"ok": False, "error": "empty_rewrite", "text": text,
+                    "changed": False}
+        if not r["ok"]:
+            return {"ok": False, "error": "frozen_violation", "text": text,
+                    "changed": False, "anchor": anchor["id"], "frozen": r["check"],
+                    "repairs": r["repairs"], "hint": _FROZEN_HINT}
+        return {"ok": True, "text": r["text"], "anchor": anchor["id"],
+                "changed": r["text"].strip() != text.strip(),
+                "frozen": r["check"], "repairs": r["repairs"]}
+
+    # --- v4 detector loop: rewrite -> score -> escalate, keep the best -------
+    from orchestrator.tools.detector import ai_threshold, max_rounds  # noqa: PLC0415
+    threshold, rounds = ai_threshold(), max_rounds()
+    best: dict | None = None       # lowest-scoring candidate that passed frozen
+    input_text = cleaned
+    for i in range(rounds):
+        r = _rewrite_once(llm, input_text=input_text, round_idx=i, **rw)
+        if r.get("error") == "llm_failed":
+            break                  # provider down — stop and fall back below
+        if not r.get("text") or not r["ok"]:
+            continue               # empty or frozen-violating round: escalate
+        sc = scorer.score(r["text"])
+        if sc is None:
+            # Backend unavailable — behave like single-pass: take the first
+            # verified rewrite rather than burning rounds against no signal.
+            best = {"text": r["text"], "check": r["check"],
+                    "repairs": r["repairs"], "score": None, "round": i}
+            break
+        if best is None or sc < best["score"]:
+            best = {"text": r["text"], "check": r["check"],
+                    "repairs": r["repairs"], "score": sc, "round": i}
+        if sc <= threshold:
+            break
+        # Iterate on the champion so far, escalating the restructure directive.
+        input_text = best["text"]
+
+    if best is None:
+        # Every round failed the frozen gate (or the provider died) — the one
+        # thing the pass must never do is ship an unverified rewrite.
         return {"ok": False, "error": "frozen_violation", "text": text,
-                "changed": False, "anchor": anchor["id"], "frozen": check,
-                "repairs": repairs,
-                "hint": "The rewrite altered numbers or citations, so the "
-                        "original was kept. Report this — do not claim the "
-                        "passage was humanized."}
+                "changed": False, "anchor": anchor["id"], "hint": _FROZEN_HINT}
 
-    return {"ok": True, "text": out, "anchor": anchor["id"],
-            "changed": out.strip() != text.strip(), "frozen": check,
-            "repairs": repairs}
+    return {"ok": True, "text": best["text"], "anchor": anchor["id"],
+            "changed": best["text"].strip() != text.strip(),
+            "frozen": best["check"], "repairs": best["repairs"],
+            "score": best["score"], "rounds": best["round"] + 1,
+            "threshold": threshold}
 
 
 def humanize_sections(
@@ -564,6 +704,7 @@ def humanize_sections(
     language: str = "vi",
     user_anchor: str | None = None,
     llm=None,
+    scorer=None,
 ) -> tuple[list[dict], list[dict]]:
     """Humanize a composed chapter list in place-ish, section by section.
 
@@ -571,6 +712,9 @@ def humanize_sections(
     original prose — the export must never be blocked by this pass, and must
     never silently ship an unverified rewrite either. "References" is skipped:
     a bibliography has no voice to humanize and everything in it is frozen.
+
+    `scorer` threads the v4 detector through to every section; when None it is
+    resolved once per section from HUMANIZE_SCORER (default: off = v2 behavior).
     """
     out: list[dict] = []
     report: list[dict] = []
@@ -580,9 +724,11 @@ def humanize_sections(
         if title == "References" or not prose.strip():
             out.append(s)
             continue
-        r = humanize_prose(prose, language=language, user_anchor=user_anchor, llm=llm)
+        r = humanize_prose(prose, language=language, user_anchor=user_anchor,
+                           llm=llm, scorer=scorer)
         report.append({"title": title, "ok": r.get("ok", False),
                        "anchor": r.get("anchor"), "error": r.get("error"),
-                       "frozen": r.get("frozen")})
+                       "frozen": r.get("frozen"), "score": r.get("score"),
+                       "rounds": r.get("rounds")})
         out.append({**s, "prose": r["text"]} if r.get("ok") else s)
     return out, report

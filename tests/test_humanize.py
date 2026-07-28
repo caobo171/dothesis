@@ -279,6 +279,79 @@ def test_frozen_tokens_reach_the_rewrite_prompt(tmp_path, monkeypatch, user_anch
     assert "(nguyễn, 2019)" in prompt.lower()
 
 
+class FakeScorer:
+    """Returns queued AI-likelihood scores in order; records what it scored."""
+
+    def __init__(self, *scores):
+        self.scores = list(scores)
+        self.calls = []
+
+    def score(self, text):
+        self.calls.append(text)
+        return self.scores.pop(0) if self.scores else 0.0
+
+
+# Rewrites that preserve every frozen token of SRC (num 4.3, Bảng 4.3, 0,412,
+# 0,003, and the Nguyễn|2019 citation) — kept dash-free so strip_ai_tells leaves
+# them byte-for-byte and the assertions can compare on identity.
+_G1 = "Bảng 4.3 cho β = 0,412; p = 0,003 (Nguyễn, 2019). Kết quả một."
+_G2 = "Bảng 4.3 cho β = 0,412 và p = 0,003, theo Nguyễn (2019). Kết quả hai."
+_G3 = "β = 0,412 và p = 0,003 tại Bảng 4.3, phù hợp Nguyễn (2019). Kết quả ba."
+
+
+def test_scorer_stops_early_when_below_threshold(tmp_path, monkeypatch, user_anchor):
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    r = H.humanize_prose(SRC, language="vi", user_anchor=user_anchor,
+                         llm=FakeLLM(_G1), scorer=FakeScorer(0.2))
+    assert r["ok"] is True
+    assert r["text"] == _G1
+    assert r["score"] == 0.2
+    assert r["rounds"] == 1          # one round, no escalation needed
+
+
+def test_scorer_iterates_and_keeps_the_lowest_scoring_candidate(tmp_path,
+                                                                monkeypatch,
+                                                                user_anchor):
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    # 0.9 and 0.7 stay above the 0.5 threshold, so the loop escalates; 0.3 wins.
+    r = H.humanize_prose(SRC, language="vi", user_anchor=user_anchor,
+                         llm=FakeLLM(_G1, _G2, _G3),
+                         scorer=FakeScorer(0.9, 0.7, 0.3))
+    assert r["ok"] is True
+    assert r["text"] == _G3
+    assert r["score"] == 0.3
+    assert r["rounds"] == 3
+
+
+def test_scorer_none_score_degrades_to_single_pass(tmp_path, monkeypatch,
+                                                   user_anchor):
+    # Backend down / unconfigured — take the first verified rewrite, don't loop.
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    r = H.humanize_prose(SRC, language="vi", user_anchor=user_anchor,
+                         llm=FakeLLM(_G1, _G2, _G3), scorer=FakeScorer(None))
+    assert r["ok"] is True
+    assert r["text"] == _G1
+    assert r["score"] is None
+    assert r["rounds"] == 1
+
+
+def test_scorer_loop_never_ships_a_frozen_violation(tmp_path, monkeypatch,
+                                                    user_anchor):
+    # Even under scoring, a rewrite that can't hold the numbers is discarded and
+    # the ORIGINAL is kept — the frozen gate outranks the detector score.
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    monkeypatch.setenv("HUMANIZE_MAX_ROUNDS", "2")
+    bad = "Bảng 4.3 cho β = 0,41 và p = 0,003 (Nguyễn, 2019)."   # β lost 0,412
+    scorer = FakeScorer(0.1, 0.1)
+    r = H.humanize_prose(SRC, language="vi", user_anchor=user_anchor,
+                         llm=FakeLLM(bad, bad, bad, bad), scorer=scorer)
+    assert r["ok"] is False
+    assert r["error"] == "frozen_violation"
+    assert r["text"] == SRC
+    assert "score" not in r          # a rejected candidate is never scored
+    assert scorer.calls == []
+
+
 def test_export_hook_is_inert_unless_asked(monkeypatch):
     # The export path is shared with headless auto-mode and the partner API.
     # Default-off must mean the pass is never even imported for those callers.
