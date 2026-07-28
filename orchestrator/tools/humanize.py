@@ -318,21 +318,35 @@ ANCHORS:
 Answer with the anchor id ALONE — no punctuation, no explanation."""
 
 _REWRITE_PROMPT = """Below are paragraphs written by a real human. Study their cadence, sentence-length
-variance, word choice, punctuation rhythm, and natural imperfections (run-ons,
-hedges, idiosyncratic phrasing). DO NOT copy their phrases or their subject
-matter — mimic only the style and rhythm.
+variance, clause structure, and punctuation rhythm. DO NOT copy their phrases,
+their subject matter, or their level of formality — mimic ONLY the rhythm and the
+natural unevenness of real writing.
 
 EXAMPLES:
 {anchor}
 
-Rewrite the user's text in that voice, in {language_name}.
+Rewrite the user's text in {language_name}, borrowing the anchor's RHYTHM but
+keeping the ORIGINAL text's own register.
+
+REGISTER — this is critical:
+- Match the formality of the ORIGINAL, not the anchor. If the original is a formal
+  academic passage (a thesis results chapter, a report), the rewrite stays formal
+  academic prose — impersonal, precise, third-person. You are loosening templated
+  phrasing, NOT lowering the register to casual/spoken language.
+- FORBIDDEN — these read as spoken/texting, never as human academic writing:
+  · conversational fillers & discourse particles
+    (Vietnamese: "à", "ừ", "nhỉ", "nhé", "luôn ấy", "ấy mà", "khá là", "kiểu",
+     "nói chung là", "thật ra thì"; English: "well", "you know", "I mean", "sort of").
+  · rhetorical questions to the reader ("đúng không nhỉ?", "right?").
+  · first-person narration or asides about your own process
+    ("mình vừa kiểm tra lại…", "mình thấy…", "as I checked…") — keep the
+    impersonal academic voice; the writer never appears in the sentence.
+  · interjections, emoji, or exclamations.
 
 ABSOLUTE CONSTRAINTS — a rewrite that breaks any of these is discarded:
-- Every one of these tokens must appear in your output, character for character.
-  Do not round, reformat, translate, or spell them out:
-{frozen_list}
-- Invent NOTHING. No new numbers, no new citations, no new claims. If the source
-  does not state it, it does not go in.
+{protected_section}
+- Invent NOTHING. No new numbers, no new citations, no new claims, and no new
+  narrative actions. If the source does not state it, it does not go in.
 - Keep every factual claim and its direction (a positive effect stays positive).
 - Preserve the paragraph and heading structure, and any markdown tables verbatim.
 
@@ -447,16 +461,29 @@ def humanize_prose(
         }
 
     frozen = frozen_tokens(text)
-    frozen_list = "\n".join(
+    frozen_lines = [
         f"  {t.split(':', 1)[1]}" for t in sorted(frozen)
         if t.startswith(("num:", "ref:"))
-    ) or "  (none)"
+    ]
     # Citations are listed in their source form so the model sees what to keep,
     # while verification stays form-insensitive (see _cite_tokens).
     cites = sorted({t.split(":", 1)[1].replace("|", ", ")
                     for t in frozen if t.startswith("cite:")})
-    if cites:
-        frozen_list += "\n" + "\n".join(f"  ({c})" for c in cites)
+    frozen_lines += [f"  ({c})" for c in cites]
+    # Only present the "must appear verbatim" list when there ARE protected
+    # tokens. Feeding a literal "(none)" under that instruction made the model
+    # dutifully echo "(none)" into the prose — protect against that leak.
+    if frozen_lines:
+        protected_section = (
+            "- Every one of these tokens must appear in your output, character "
+            "for character. Do not round, reformat, translate, or spell them "
+            "out:\n" + "\n".join(frozen_lines)
+        )
+    else:
+        protected_section = (
+            "- This passage contains no numbers or citations — there are no "
+            "protected tokens, and you must not introduce any."
+        )
 
     llm = llm or _get_llm(0.95)
     cleaned = strip_ai_tells(text, language)
@@ -465,7 +492,7 @@ def humanize_prose(
     system = _REWRITE_PROMPT.format(
         anchor=anchor["text"],
         language_name=_language_name(language),
-        frozen_list=frozen_list,
+        protected_section=protected_section,
     )
     try:
         out = _clean_output(_invoke(llm, f"{system}\n\nTEXT TO REWRITE:\n{cleaned}"))
