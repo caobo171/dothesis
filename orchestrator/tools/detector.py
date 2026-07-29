@@ -239,17 +239,25 @@ class PerplexityScorer:
     """
 
     def __init__(self, model_path: str | None = None):
+        # A SMALL VN causal LM by default: perplexity is scored 1-4x per section
+        # inside the loop, so a 4B model (slow on CPU, ~8GB download) is the wrong
+        # trade — a ~124M GPT-2 gives a usable perplexity signal in tens of ms.
+        # Override with HUMANIZE_PERPLEXITY_MODEL for a stronger (heavier) LM.
         self._model_path = model_path or os.getenv(
-            "HUMANIZE_PERPLEXITY_MODEL", "vinai/PhoGPT-4B")
+            "HUMANIZE_PERPLEXITY_MODEL", "NlpHUST/gpt2-vietnamese")
         self._tok = None
         self._model = None
         self._broken = False
         # Perplexity range to normalize into [0,1]; low ppl -> AI (score ->1).
+        # Defaults are CALIBRATED for the default NlpHUST/gpt2-vietnamese, whose
+        # ppl runs ~15 (AI-typical) to ~30 (human) on academic VN prose — measured
+        # on this repo's sample results text. A different --model has a different
+        # range; recalibrate HUMANIZE_PPL_LOW/HIGH (decision boundary ~ppl 22).
         try:
-            self._lo = float(os.getenv("HUMANIZE_PPL_LOW", "10"))
-            self._hi = float(os.getenv("HUMANIZE_PPL_HIGH", "100"))
+            self._lo = float(os.getenv("HUMANIZE_PPL_LOW", "12"))
+            self._hi = float(os.getenv("HUMANIZE_PPL_HIGH", "35"))
         except ValueError:
-            self._lo, self._hi = 10.0, 100.0
+            self._lo, self._hi = 12.0, 35.0
 
     def _ensure(self):
         if self._model is not None or self._broken:

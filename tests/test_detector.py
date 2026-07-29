@@ -44,9 +44,12 @@ def test_stylometric_returns_none_on_too_short_text():
 
 # --- graceful degradation (no deps / no key) -----------------------------
 
-def test_perplexity_scorer_degrades_to_none_without_torch():
-    # torch/transformers are not a hard dep of the pass; missing -> None.
-    assert D.PerplexityScorer().score(_AI_EVEN) is None
+def test_perplexity_scorer_degrades_to_none_on_unloadable_model():
+    # Whether or not torch is installed, an unloadable model must degrade to
+    # None (single-pass fallback) rather than raise — a bogus path exercises the
+    # load-failure branch deterministically, independent of the environment.
+    assert D.PerplexityScorer(model_path="__no_such_model_xyz__").score(
+        _AI_EVEN) is None
 
 
 def test_videtect_scorer_degrades_to_none_without_model(monkeypatch):
