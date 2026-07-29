@@ -352,6 +352,33 @@ def test_scorer_loop_never_ships_a_frozen_violation(tmp_path, monkeypatch,
     assert scorer.calls == []
 
 
+def test_humanize_llm_override_is_passed_through(monkeypatch):
+    # HUMANIZE_LLM_ROUTE/MODEL let humanize run on Gemini while the report writer
+    # stays on qwen — verify _get_llm forwards them to the factory.
+    import orchestrator.llm as L
+    captured = {}
+    monkeypatch.setattr(L, "get_orchestrator_llm",
+                        lambda **kw: captured.update(kw) or object())
+    monkeypatch.setenv("HUMANIZE_LLM_ROUTE", "native")
+    monkeypatch.setenv("HUMANIZE_LLM_MODEL", "gemini-2.5-flash")
+    H._get_llm(0.95)
+    assert captured["route"] == "native"
+    assert captured["model"] == "gemini-2.5-flash"
+    assert captured["temperature"] == 0.95
+
+
+def test_humanize_llm_override_absent_forwards_none(monkeypatch):
+    # No override env → route/model are None, so the engine default (qwen) stands.
+    import orchestrator.llm as L
+    captured = {}
+    monkeypatch.setattr(L, "get_orchestrator_llm",
+                        lambda **kw: captured.update(kw) or object())
+    monkeypatch.delenv("HUMANIZE_LLM_ROUTE", raising=False)
+    monkeypatch.delenv("HUMANIZE_LLM_MODEL", raising=False)
+    H._get_llm(0.5)
+    assert captured["route"] is None and captured["model"] is None
+
+
 def test_export_hook_is_inert_unless_asked(monkeypatch):
     # The export path is shared with headless auto-mode and the partner API.
     # Default-off must mean the pass is never even imported for those callers.

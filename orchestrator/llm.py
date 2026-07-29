@@ -55,6 +55,7 @@ def get_orchestrator_llm(
     model: str | None = None,
     temperature: float | None = None,
     timeout: int | None = None,
+    route: str | None = None,
 ):
     """Build the engine's chat model for the configured route.
 
@@ -76,8 +77,13 @@ def get_orchestrator_llm(
                      passthrough for either route.
 
     Fail fast: an unknown route raises here, at build time, not mid-run.
+
+    `route` lets one call site pick a different provider than the global engine
+    without touching env — used by the humanize pass to run on Gemini while the
+    report writer stays on qwen. None keeps the env default, so every existing
+    caller is byte-for-byte unchanged.
     """
-    route = os.getenv("ORCHESTRATOR_LLM_ROUTE", "native")
+    route = route or os.getenv("ORCHESTRATOR_LLM_ROUTE", "native")
     model = resolve_orchestrator_model(model)
     temperature = 0.4 if temperature is None else temperature
 

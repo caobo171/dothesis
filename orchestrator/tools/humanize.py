@@ -425,7 +425,16 @@ def _clean_output(raw: str) -> str:
 def _get_llm(temperature: float):
     from orchestrator.llm import get_orchestrator_llm  # noqa: PLC0415 — import-light
 
-    return get_orchestrator_llm(temperature=temperature)
+    # Humanize may run on a different provider than the report writer: Gemini
+    # reads far more idiomatic Vietnamese for prose polish (measured — it avoids
+    # qwen's stilted "phát…tới" and splits dense sentences), while qwen stays the
+    # benchmarked, cheapest, tool-reliable engine for report GENERATION. Set
+    # HUMANIZE_LLM_ROUTE/HUMANIZE_LLM_MODEL to override; unset = engine default.
+    return get_orchestrator_llm(
+        temperature=temperature,
+        route=os.getenv("HUMANIZE_LLM_ROUTE") or None,
+        model=os.getenv("HUMANIZE_LLM_MODEL") or None,
+    )
 
 
 def _invoke(llm, prompt: str) -> str:
