@@ -3,6 +3,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { AuthBrand } from "../components/layout/Brand";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth-context";
 
@@ -46,7 +47,7 @@ function VerifyInner() {
 
   return (
     <div className="w-full max-w-md bg-white rounded-2xl border border-ink-100 shadow-sm p-8 text-center space-y-4">
-      <div className="font-extrabold text-2xl text-ink-900">Do<span className="text-primary-600">Thesis</span></div>
+      <AuthBrand />
 
       {state === "pending" && (
         <>
@@ -66,7 +67,7 @@ function VerifyInner() {
           <div className="text-4xl">⚠️</div>
           <h1 className="text-xl font-bold text-ink-900">Verification failed</h1>
           <p className="text-sm text-ink-500">{errorMsg}</p>
-          <Link href="/login" className="inline-block rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white">
+          <Link href="/login" className="inline-block rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white">
             Back to sign in
           </Link>
         </>

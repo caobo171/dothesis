@@ -3,6 +3,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
+import { AuthBrand } from "../components/layout/Brand";
 import { apiFetch } from "../lib/api";
 
 function WaitVerifyInner() {
@@ -40,7 +41,7 @@ function WaitVerifyInner() {
 
   return (
     <div className="w-full max-w-md bg-white rounded-2xl border border-ink-100 shadow-sm p-8 text-center space-y-4">
-      <div className="font-extrabold text-2xl text-ink-900">Do<span className="text-primary-600">Thesis</span></div>
+      <AuthBrand />
       <div className="text-4xl">📬</div>
       <h1 className="text-xl font-bold text-ink-900">Check your inbox</h1>
       <p className="text-sm text-ink-500">
@@ -48,7 +49,7 @@ function WaitVerifyInner() {
       </p>
       <button
         type="button" onClick={resend} disabled={sending || cooldown > 0}
-        className="rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
+        className="rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
       >
         {sending ? "Sending…" : cooldown > 0 ? `Resend in ${cooldown}s` : "Resend email"}
       </button>

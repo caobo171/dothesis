@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
+import { AuthBrand } from "../components/layout/Brand";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth-context";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
+import { PasswordInput } from "../components/ui/password-input";
 import { Label } from "../components/ui/label";
 
 function LoginForm() {
@@ -65,7 +67,7 @@ function LoginForm() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
-        <div className="font-extrabold text-2xl text-ink-900">Do<span className="text-primary-600">Thesis</span></div>
+        <AuthBrand />
         <CardTitle className="mt-2 text-xl">Sign in</CardTitle>
         <CardDescription>Continue to your draft workspace.</CardDescription>
       </CardHeader>
@@ -81,11 +83,13 @@ function LoginForm() {
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+            {/* Placeholders, not just labels: an empty bordered box gives no hint
+                about what belongs in it once the label scrolls out of focus. */}
+            <Input id="email" type="email" placeholder="Enter your email address" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+            <PasswordInput id="password" placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
           </div>
 
           {unverifiedEmail && (

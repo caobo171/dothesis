@@ -18,8 +18,15 @@ const PUBLIC_PATHS = [
 
 const AUTH_MARKER_COOKIE = "dothesis_access_token";
 
+// Files served straight out of web/public. The matcher below only spares
+// `_next/*` and `favicon.ico`, so anything else in public/ (the logo mark, the
+// actual favicon.png) was being 307'd to /login and rendering as a broken image
+// on the signed-out auth screens — the one audience guaranteed to see them.
+const PUBLIC_FILE = /\.(png|jpe?g|gif|svg|webp|avif|ico|woff2?|txt|xml|json)$/i;
+
 export function proxy(request) {
   const { pathname } = request.nextUrl;
+  if (PUBLIC_FILE.test(pathname)) return NextResponse.next();
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
   const marker = request.cookies.get(AUTH_MARKER_COOKIE);

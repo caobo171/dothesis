@@ -3,6 +3,8 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { AuthBrand } from "../components/layout/Brand";
+import { PasswordInput } from "../components/ui/password-input";
 import { apiFetch } from "../lib/api";
 
 function ResetInner() {
@@ -45,28 +47,33 @@ function ResetInner() {
   return (
     <div className="w-full max-w-md bg-white rounded-2xl border border-ink-100 shadow-sm p-8 space-y-5">
       <div className="text-center">
-        <div className="font-extrabold text-2xl text-ink-900">Do<span className="text-primary-600">Thesis</span></div>
+        <AuthBrand />
         <h1 className="mt-3 text-xl font-bold text-ink-900">Choose a new password</h1>
       </div>
       {!token && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           This page expects a reset token in the URL. Use the link from your email.
         </div>
       )}
       <form onSubmit={submit} className="space-y-3">
         <label className="block">
           <span className="text-xs font-medium text-ink-500">New password (8+ chars)</span>
-          <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} autoFocus
-                 className="mt-1 w-full rounded-xl border border-ink-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
+          {/* Wrapper carries the margin: PasswordInput renders a relative box and
+              the eye toggle centres on it, so margin on the input itself would
+              push the icon off-centre. */}
+          <div className="mt-1">
+            <PasswordInput placeholder="Enter a new password" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} autoFocus />
+          </div>
         </label>
         <label className="block">
           <span className="text-xs font-medium text-ink-500">Confirm password</span>
-          <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} required minLength={8}
-                 className="mt-1 w-full rounded-xl border border-ink-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
+          <div className="mt-1">
+            <PasswordInput placeholder="Re-enter the new password" value={pw2} onChange={(e) => setPw2(e.target.value)} required minLength={8} />
+          </div>
         </label>
         {error && <div className="text-xs text-red-700">{error}</div>}
         <button type="submit" disabled={busy || !token}
-                className="w-full rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50">
+                className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50">
           {busy ? "Updating…" : "Update password"}
         </button>
         <div className="text-center text-xs">

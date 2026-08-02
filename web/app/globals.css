@@ -131,7 +131,10 @@
   --border: 240 5.9% 90%;
   --input: 240 5.9% 90%;
   --ring: 235 100% 55%;
-  --radius: 0.6rem;
+  /* 8px. Inputs and buttons read as over-rounded above this — the pill look
+     fights the dense, document-heavy UI. `rounded-lg` resolves to exactly this,
+     which is what the shared Input/Button/Textarea use. */
+  --radius: 0.5rem;
 
   /* Status (matches Survify badges) */
   --run-bg: #dbe6ff;   --run-fg: #1c2eff;
@@ -145,7 +148,7 @@
   --accent-violet: #5b3aa8;
 
   --radius-card: 18px;
-  --radius-btn: 12px;
+  --radius-btn: 8px;
   --radius-chip: 999px;
 
   --shadow-card: 0 1px 0 rgba(15, 18, 60, 0.04), 0 6px 18px -10px rgba(15, 18, 60, 0.08);
@@ -176,6 +179,17 @@ body {
 }
 button { font: inherit; cursor: pointer; }
 ::selection { background: var(--blue-100); color: var(--ink-900); }
+
+/* Google Identity Services renders its sign-in button as real DOM (not an
+   iframe) but hard-codes a 4px radius, and its `shape` option only offers
+   rectangular|pill|circle|square — none of which is our 8px token. Restyling
+   the button itself is the only way to match the inputs beneath it; clipping
+   the wrapper instead shears the corners off the button's own 1px border.
+   `[role="button"]` is the hook because the class names are obfuscated and
+   change between GIS releases. */
+.gis-button [role="button"] {
+  border-radius: var(--radius) !important;
+}
 
 /* ============ App shell ============ */
 .app {

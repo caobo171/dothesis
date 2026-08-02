@@ -3,7 +3,7 @@ import "./globals.css";
 // in MessageBubble). Loaded once at the root so every rendered equation is styled.
 import "katex/dist/katex.min.css";
 import type { ReactNode } from "react";
-import { Nunito_Sans, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 
 import { AuthProvider } from "./lib/auth-context";
 
@@ -11,11 +11,12 @@ import { AuthProvider } from "./lib/auth-context";
 // expose them as CSS variables. tailwind.config.ts wires --font-sans /
 // --font-mono into font-sans / font-mono utilities.
 //
-// Sans is Nunito Sans: a rounded humanist face that stays highly legible, and
-// crucially ships a `vietnamese` subset — non-negotiable for this product. The
-// --font-sans variable name is unchanged so Tailwind + every existing utility
-// just pick it up.
-const fontSans = Nunito_Sans({
+// Sans is Inter: matching the neutral grotesque the category leaders (Jenni AI)
+// use — tighter and more "product tool" than the rounded humanist Nunito Sans it
+// replaces, and it still ships the `vietnamese` subset that is non-negotiable
+// for this product. The --font-sans variable name is unchanged so Tailwind +
+// every existing utility just pick it up.
+const fontSans = Inter({
   subsets: ["latin", "latin-ext", "vietnamese"],
   variable: "--font-sans",
   display: "swap",

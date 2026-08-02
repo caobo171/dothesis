@@ -109,7 +109,11 @@ export function GoogleSignInButton({ onError }: { onError?: (msg: string) => voi
 
   return (
     <>
-      <div ref={ref} className="w-full min-h-[2.75rem]" />
+      {/* `gis-button` is the hook for the radius override in globals.css — see
+          the note there. Don't clip this wrapper with overflow-hidden: GIS
+          draws the button's own 1px border at a 4px radius, and clipping at
+          8px shears the corners off it. */}
+      <div ref={ref} className="gis-button w-full min-h-[2.75rem]" />
       <div className="flex items-center gap-3 text-xs text-ink-400">
         <span className="flex-1 h-px bg-ink-100" />
         <span>or with email</span>

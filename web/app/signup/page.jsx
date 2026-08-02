@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
+import { AuthBrand } from "../components/layout/Brand";
 import { apiFetch } from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
+import { PasswordInput } from "../components/ui/password-input";
 import { Label } from "../components/ui/label";
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
@@ -48,7 +50,7 @@ export default function SignupPage() {
     <main className="min-h-screen flex items-center justify-center bg-ink-50 px-4 py-12">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="font-extrabold text-2xl text-ink-900">Do<span className="text-primary-600">Thesis</span></div>
+          <AuthBrand />
           <CardTitle className="mt-2 text-xl">Create your account</CardTitle>
           <CardDescription>Sign up to start drafting verified-citation theses.</CardDescription>
         </CardHeader>
@@ -70,11 +72,11 @@ export default function SignupPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input id="email" type="email" placeholder="Enter your email address" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">Password (8+ chars)</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+              <PasswordInput id="password" placeholder="Create a password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
             </div>
             {error && <div className="text-sm text-destructive">{error}</div>}
             <Button type="submit" className="w-full" disabled={busy}>
