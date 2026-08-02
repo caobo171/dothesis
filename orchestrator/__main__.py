@@ -78,6 +78,39 @@ def _install_sigterm_handler(appender: Any, current: dict) -> None:
     signal.signal(signal.SIGTERM, _on_term)
 
 
+def _install_token_ledger_sink(appender: Any) -> None:
+    """Route token_meter entries into events.jsonl so the API can bill them.
+
+    Why events and not a direct INSERT: this process is explicitly NOT a DB
+    writer (see the module header and api/app/job_runner._sync_context_store_
+    from_checkpoint — "The API is the single DB writer"). api/app/main.py's sink
+    writes token_ledger directly, but it is registered in the API process; this
+    subprocess got the default no-op, which is why auto runs produced ZERO ledger
+    rows and `_charge_auto_run` therefore billed nothing at all.
+
+    events.jsonl is also the durable choice: the file survives a crashed or
+    SIGKILLed run, so tokens already spent still get billed when _monitor
+    catches up, rather than vanishing with the process.
+    """
+    from orchestrator.token_meter import LedgerEntry, register_sink
+
+    def _sink(entry: LedgerEntry) -> None:
+        appender.write({
+            "type": "token_usage",
+            "action_kind": entry.action_kind,
+            "model": entry.model,
+            "prompt_tokens": entry.prompt_tokens,
+            "completion_tokens": entry.completion_tokens,
+            "reserved": entry.reserved,
+            "duration_ms": entry.duration_ms,
+            # str(): uuid isn't JSON-serialisable and this crosses a process
+            # boundary as text. The API side parses it back.
+            "project_id": str(entry.project_id) if entry.project_id else None,
+        })
+
+    register_sink(_sink)
+
+
 def _emit_event(appender, event: dict, current_module: dict) -> None:
     """Translate a LangGraph stream event into our events.jsonl format."""
     for node_name, payload in event.items():
@@ -157,6 +190,7 @@ def main() -> int:
     current_module: dict[str, str | None] = {"module": None}
     _install_sigterm_handler(appender, current_module)
     _progress_bind = None
+    _install_token_ledger_sink(appender)
 
     try:
         from langchain_core.messages import HumanMessage

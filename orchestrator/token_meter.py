@@ -61,6 +61,16 @@ class LedgerEntry:
 _SINK: Callable[[LedgerEntry], None] = lambda _e: None
 
 
+def get_sink() -> Callable[[LedgerEntry], None]:
+    """Current sink, resolved at CALL time.
+
+    Callers must not capture `_SINK` at import time: orchestrator/__main__.py
+    installs the real sink after the module graph is already loaded, so a
+    captured reference would stay the default no-op and silently drop every row.
+    """
+    return _SINK
+
+
 def register_sink(sink: Callable[[LedgerEntry], None]) -> None:
     """Install the persistence writer. Idempotent — last writer wins.
 
@@ -99,6 +109,105 @@ def _usage_from_response(resp: Any) -> tuple[int, int]:
     return (
         int(usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0) or 0),
         int(usage.get("output_tokens", 0) or usage.get("completion_tokens", 0) or 0),
+    )
+
+
+def project_id_from_env() -> uuid.UUID | None:
+    """The run's project, as job_runner puts it in the subprocess env.
+
+    job_runner.spawn_orchestrator_run sets PROJECT_ID (job_runner.py:407). Reading
+    it here is what lets metering be attached ONCE at client construction instead
+    of threading project_id through 20 tool call sites — none of which currently
+    take it.
+    """
+    raw = os.getenv("PROJECT_ID", "").strip()
+    if not raw:
+        return None
+    try:
+        return uuid.UUID(raw)
+    except ValueError:
+        logger.warning("PROJECT_ID=%r is not a uuid — ledger rows will be unattributed", raw)
+        return None
+
+
+from langchain_core.callbacks import BaseCallbackHandler
+
+
+class LedgerCallback(BaseCallbackHandler):
+    """LangChain callback that writes one ledger row per completed LLM call.
+
+    A CALLBACK rather than a wrapper object around the client, deliberately.
+    Tools do not share one call style: 9 modules go through `bounded_invoke`
+    while m1_topic, m4_analysis, m4_parsers and intake call `llm.invoke(...)`
+    straight, and several then `.bind_tools()` or `.with_structured_output()`.
+    A proxy would have to re-wrap every derived client and would silently stop
+    metering the ones it missed; callbacks are copied onto derived clients by
+    LangChain itself, so they cannot be shed that way.
+
+    Failures here are swallowed: a billing-telemetry bug must never take down a
+    student's run. A dropped row under-bills, which is visible in aggregate; a
+    raised exception loses the whole draft.
+
+    Subclasses BaseCallbackHandler because the LangChain clients are Pydantic
+    models that validate `callbacks` with an isinstance check — a duck-typed
+    handler is rejected at construction.
+    """
+
+    def __init__(self, action_kind: str, project_id: uuid.UUID | None) -> None:
+        super().__init__()
+        self.action_kind = action_kind
+        self.project_id = project_id
+        self._t0: dict[Any, float] = {}
+
+    def on_llm_start(self, serialized, prompts, *, run_id=None, **kw):  # noqa: ANN001
+        self._t0[run_id] = time.monotonic()
+
+    on_chat_model_start = on_llm_start
+
+    def on_llm_end(self, response, *, run_id=None, **kw):  # noqa: ANN001
+        try:
+            t0 = self._t0.pop(run_id, None)
+            duration_ms = int((time.monotonic() - t0) * 1000) if t0 else 0
+            prompt_tok, completion_tok, model = _usage_from_llm_result(response)
+            entry = LedgerEntry(
+                project_id=self.project_id,
+                action_kind=self.action_kind,
+                model=model or resolve_orchestrator_model(),
+                prompt_tokens=prompt_tok,
+                completion_tokens=completion_tok,
+                reserved=0,  # callbacks meter after the fact; no reservation step
+                duration_ms=duration_ms,
+            )
+            _SINK(entry)
+        except Exception:  # noqa: BLE001
+            logger.exception("LedgerCallback failed for action=%s", self.action_kind)
+
+
+def _usage_from_llm_result(response: Any) -> tuple[int, int, str | None]:
+    """Pull (prompt, completion, model) out of a LangChain LLMResult.
+
+    Checks the message's `usage_metadata` first — the normalised shape both the
+    OpenAI and Gemini integrations populate — then falls back to the provider's
+    raw `llm_output["token_usage"]`, which is what older integrations set.
+    """
+    model = None
+    try:
+        gen = response.generations[0][0]
+        msg = getattr(gen, "message", None)
+        usage = getattr(msg, "usage_metadata", None) or {}
+        meta = getattr(msg, "response_metadata", None) or {}
+        model = meta.get("model_name") or meta.get("model")
+        if usage:
+            return (int(usage.get("input_tokens", 0) or 0),
+                    int(usage.get("output_tokens", 0) or 0), model)
+    except (AttributeError, IndexError, TypeError):
+        pass
+    out = getattr(response, "llm_output", None) or {}
+    tu = out.get("token_usage") or out.get("usage") or {}
+    return (
+        int(tu.get("prompt_tokens", 0) or tu.get("input_tokens", 0) or 0),
+        int(tu.get("completion_tokens", 0) or tu.get("output_tokens", 0) or 0),
+        model or out.get("model_name"),
     )
 
 

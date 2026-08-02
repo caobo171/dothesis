@@ -283,3 +283,93 @@ def test_verify_page_numbers_returns_status(monkeypatch):
         "claim": {"author": "Wang", "year": 2011, "page": 118, "quote": "leadership inspires"},
     })
     assert out["status"] in {"verified", "unverified", "not_found"}
+
+
+# --- citation planner client selection + the OpenAI adapter ------------------
+# The planner is the one LLM caller that cannot go through get_orchestrator_llm
+# (B5: LangChain has no generate_content(), and the engine degrades SILENTLY).
+# These pin the interface contract the engine actually depends on.
+
+def test_planner_selects_client_from_the_model_id(monkeypatch):
+    from orchestrator.tools import m2_literature as m2
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("CITATION_PLANNER_MODEL", "gpt-5.6-luna")
+    assert type(m2._engine_model()._inner).__name__ == "_OpenAIPlannerClient"
+
+    # A Gemini id must still build the Gemini client — reverting is env-only.
+    monkeypatch.setenv("CITATION_PLANNER_MODEL", "gemini-3-flash-preview")
+    monkeypatch.setattr(m2, "_MeteredGeminiClient", lambda c: c)
+    called = {}
+    import engine.utils.gemini_client as gc
+
+    def _fake_create(**kw):
+        called["kw"] = kw
+        return "gemini"
+
+    monkeypatch.setattr(gc, "create_gemini_client", _fake_create)
+    assert m2._engine_model() == "gemini"
+    assert called["kw"]["model_name"] == "gemini-3-flash-preview"
+
+
+def test_openai_planner_adapter_maps_the_gemini_generation_config(monkeypatch):
+    """The two params the engine sends that OpenAI rejects verbatim:
+    max_output_tokens (must be max_completion_tokens) and temperature (gpt-5.6-*
+    accepts only the default). response_mime_type must become response_format."""
+    from orchestrator.tools import m2_literature as m2
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    client = m2._OpenAIPlannerClient("gpt-5.6-luna", "sk-test")
+
+    sent = {}
+
+    class _Msg:  message = type("M", (), {"content": '{"ok": true}'})(); finish_reason = "stop"
+    class _Resp: choices = [_Msg()]; usage = type("U", (), {"prompt_tokens": 5, "completion_tokens": 7})()
+
+    client._client = MagicMock()
+    client._client.chat.completions.create = lambda **kw: sent.update(kw) or _Resp()
+
+    r = client.generate_content(
+        "plan it",
+        generation_config={"temperature": 0.3, "max_output_tokens": 8192,
+                           "response_mime_type": "application/json"},
+    )
+
+    assert "max_tokens" not in sent, "max_tokens is rejected by gpt-5.6-*"
+    assert sent["max_completion_tokens"] == 8192
+    assert "temperature" not in sent, "gpt-5.6-* 400s on any temperature but the default"
+    assert sent["response_format"] == {"type": "json_object"}
+    assert r.text == '{"ok": true}'
+    assert r.usage_metadata.prompt_token_count == 5
+    assert r.usage_metadata.candidates_token_count == 7
+
+
+def test_openai_planner_response_satisfies_the_engines_block_detection():
+    """engine/utils/deep_research.safe_get_response_text checks `.candidates`
+    falsiness FIRST, then finish_reason. A content_filter stop must therefore
+    read as blocked through the engine's own helper, not just ours."""
+    from engine.utils.deep_research import safe_get_response_text
+    from orchestrator.tools import m2_literature as m2
+
+    blocked = m2._PlannerResponse("", "content_filter", m2._PlannerUsage(1, 0))
+    ok = m2._PlannerResponse("hi", "stop", m2._PlannerUsage(1, 1))
+
+    assert safe_get_response_text(blocked) == ("", True)
+    assert safe_get_response_text(ok) == ("hi", False)
+
+
+def test_openai_planner_accepts_list_prompts():
+    """api_citations/orchestrator.py calls generate_content([scout, user_input])."""
+    from orchestrator.tools import m2_literature as m2
+
+    client = m2._OpenAIPlannerClient.__new__(m2._OpenAIPlannerClient)
+    client.model_name = "gpt-5.6-luna"
+    sent = {}
+
+    class _Msg:  message = type("M", (), {"content": "ok"})(); finish_reason = "stop"
+    class _Resp: choices = [_Msg()]; usage = None
+
+    client._client = MagicMock()
+    client._client.chat.completions.create = lambda **kw: sent.update(kw) or _Resp()
+    client.generate_content(["alpha", "beta"])
+    assert sent["messages"][0]["content"] == "alpha\nbeta"

@@ -10,7 +10,12 @@ import math
 
 import pytest
 
-from app.pricing import BASELINE_MODEL, OUTPUT_TOKEN_SHARE, credit_multiplier
+from app.pricing import (
+    BASELINE_MODEL,
+    OUTPUT_TOKEN_SHARE,
+    UNKNOWN_MODEL_MULTIPLIER,
+    credit_multiplier,
+)
 from quality.model_prices import MODEL_PRICES
 
 
@@ -39,7 +44,12 @@ def test_claude_sonnet_is_not_billed_as_baseline():
     no "pro"/"flash" substring, so it fell through to 1.0 and undercharged ~20x.
     """
     m = credit_multiplier("claude-sonnet-4-6")
-    assert m > 15.0, f"claude-sonnet-4-6 must not bill near baseline, got {m}"
+    # Threshold rescaled 2026-08-02 with the BASELINE_MODEL price correction
+    # ($0.15/$0.60 -> Google's published $0.30/$2.50). Every multiplier divided by
+    # ~3.24, so this was >15.0 when the denominator was 3.24x too small; sonnet is
+    # 7.06x now. The INTENT is unchanged and is what the number encodes: several
+    # times baseline, never the 1.0 the substring matcher fell through to.
+    assert m > 4.0, f"claude-sonnet-4-6 must not bill near baseline, got {m}"
     assert math.isclose(m, _expected("claude-sonnet-4-6"), rel_tol=1e-6)
 
 
@@ -52,22 +62,37 @@ def test_deepseek_v4_pro_is_not_billed_as_a_pro_tier():
 
 
 def test_qwen_max_is_not_billed_as_baseline():
-    """No Gemini substring -> fell through to 1.0, but qwen-max blends ~2.3x."""
+    """No Gemini substring -> fell through to 1.0, so it billed AS the baseline.
+
+    The bug was "silently defaults to exactly 1.0", not "is expensive". This used
+    to assert >2.0, which was true only while the baseline row was 3.24x too
+    cheap; against Google's real gemini-2.5-flash price qwen-max is 0.72x —
+    genuinely CHEAPER than baseline, and the >2.0 form would now be asserting the
+    opposite of the truth. Pinning "!= 1.0" plus the table-derived value tests the
+    actual defect and cannot rot when prices move again.
+    """
     m = credit_multiplier("bailian/qwen-max")
-    assert m > 2.0, f"qwen-max must not bill at baseline, got {m}"
+    assert m != 1.0, f"qwen-max must be priced from its row, not defaulted, got {m}"
     assert math.isclose(m, _expected("bailian/qwen-max"), rel_tol=1e-6)
 
 
 def test_ofox_gemini_25_flash_bills_the_gateway_rate_not_the_native_rate():
-    """The Ofox gateway resells gemini-2.5-flash at 0.30/2.50, NOT Google's
-    0.15/0.60 (live rates pulled from the gateway, quality/model_prices.py).
-    Substring matching saw "flash" and billed 1.0 — reading the baseline's native
-    price for a gateway id that costs several times more. This is the route the
-    ofox migration makes the default, so it undercharges on the live config.
+    """The gateway id is priced from its OWN row, never from the bare id's.
+
+    This used to assert m > 2.0, on the premise that Ofox resold 2.5-flash at
+    0.30/2.50 while Google charged 0.15/0.60 natively. That gap closed on
+    2026-08-02: Google's published rate IS 0.30/2.50, so the two rows now agree
+    and the gateway multiplier is legitimately ~1.0. Asserting ">2.0" would now
+    be asserting a price gap that no longer exists.
+
+    What still matters — and is what the original bug was really about — is that
+    the value comes from the row for the id ACTUALLY SENT, not from substring
+    matching "flash" onto the baseline. That is what _expected() pins.
     """
     m = credit_multiplier("google/gemini-2.5-flash")
-    assert m > 2.0, f"the Ofox resale of 2.5-flash is not the baseline, got {m}"
     assert math.isclose(m, _expected("google/gemini-2.5-flash"), rel_tol=1e-6)
+    # Priced from its own row, not silently defaulted.
+    assert credit_multiplier("google/gemini-2.5-flash") != UNKNOWN_MODEL_MULTIPLIER
 
 
 def test_every_model_a_resolver_can_pick_by_default_is_priced():

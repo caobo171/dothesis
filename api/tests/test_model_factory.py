@@ -170,8 +170,16 @@ def test_ofox_default_is_cheaper_than_the_credit_baseline():
 
     assert credit_multiplier("bailian/qwen-plus") < 1.0
     # The two defaults this one replaces, pinned so the reason stays legible.
-    assert credit_multiplier("google/gemini-2.5-flash") > 3.0
-    assert credit_multiplier("gemini-3.5-flash") > 12.0
+    # Rebased 2026-08-02 with the BASELINE_MODEL price correction:
+    #   - google/gemini-2.5-flash was >3.0 ONLY because the baseline row was
+    #     3.24x too cheap. Google publishes 0.30/2.50, so the gateway id and the
+    #     native id now price identically at ~1.0x and the ">3.0" premise (a
+    #     resale markup over native) describes a gap that no longer exists.
+    #   - gemini-3.5-flash 12.86x -> 3.97x by the same 3.24x rescale.
+    # The inequality that carries the actual meaning — the default must stay
+    # BELOW baseline or the packs are wrong — is the first assert, unchanged.
+    assert credit_multiplier("google/gemini-2.5-flash") >= 1.0
+    assert credit_multiplier("gemini-3.5-flash") > 3.0
 
 
 def test_ofox_default_is_text_only_so_vision_routes_to_the_sidecar(monkeypatch):

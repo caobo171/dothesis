@@ -83,11 +83,16 @@ def test_v3_turn_debits_credits_and_records_transaction(client, monkeypatch):
     # instead of engine/utils/model_config.py's stale Feb-2026 $0.50/$3.00. This is a
     # ~3.2x charge increase on the CURRENT PRODUCTION DEFAULT and a business decision,
     # not arithmetic — see .superpowers/sdd/fix-credit-multiplier-report.md.
-    monkeypatch.setenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash")  # multiplier 12.86
+    # ⚠️ REBASED 12.86 → 3.97 on 2026-08-02: the BASELINE_MODEL row was corrected
+    # from $0.15/$0.60 to Google's published $0.30/$2.50, dividing every multiplier
+    # by ~3.24. The charge here is derived from credit_multiplier() below rather
+    # than hardcoded, so a future price move changes the number without silently
+    # inverting what this test claims to prove.
+    monkeypatch.setenv("DOTHESIS_AGENT_MODEL", "gemini-3.5-flash")
 
     async def fake_stream_turn(agent, thread_id, text, attachments=None, store=None):
         yield {"type": "token", "text": "hi"}
-        # 3000 tokens → max(1, round(3000/1000 * 12.857)) = 39 credits.
+        # 3000 tokens → max(1, round(3000/1000 * credit_multiplier)) credits.
         yield {"type": "usage", "input_tokens": 1500, "output_tokens": 1500}
         yield {"type": "done"}
 
@@ -106,11 +111,14 @@ def test_v3_turn_debits_credits_and_records_transaction(client, monkeypatch):
     with sf() as db:
         proj = db.get(Project, pid)
         owner = db.get(User, proj.user_id)
-        assert owner.credit == 10000 - 39  # balance reduced
+        from app.pricing import credit_multiplier
+        expected = max(1, round(3000 / 1000 * credit_multiplier("gemini-3.5-flash")))
+        assert expected == 12, f"baseline sanity: expected 12 credits, got {expected}"
+        assert owner.credit == 10000 - expected  # balance reduced
         txns = (db.query(CreditTransaction)
                   .filter_by(user_id=owner.id, reason="chat_turn").all())
         assert len(txns) == 1
-        assert txns[0].delta == -39
+        assert txns[0].delta == -expected
         assert str(txns[0].ref_id) == str(tid)
 
 

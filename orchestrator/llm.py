@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import os
 
-
 def resolve_orchestrator_model(model: str | None = None) -> str:
     """Resolve the engine's model id for the configured route. ONE resolution.
 
@@ -48,6 +47,11 @@ def resolve_orchestrator_model(model: str | None = None) -> str:
         # (agent/model_factory.spec_from_env) and is the model the owner's benchmark
         # picked for the report pipeline — see ARCHITECTURE_NOTES.md.
         default_model = "bailian/qwen-plus"
+    if route == "openai":
+        # Bare id — OpenAI direct, no provider/ prefix. Matches the brain's
+        # openai default (agent.model_factory.spec_from_env) so engine and brain
+        # stay on one model, which is the whole point of this function.
+        default_model = "gpt-5.6-luna"
     return os.getenv("ORCHESTRATOR_LLM_MODEL", default_model)
 
 
@@ -86,6 +90,22 @@ def get_orchestrator_llm(
     route = route or os.getenv("ORCHESTRATOR_LLM_ROUTE", "native")
     model = resolve_orchestrator_model(model)
     temperature = 0.4 if temperature is None else temperature
+    # Metering is attached HERE, at the one place every tool gets its client,
+    # rather than at the ~29 call sites — 9 of which use bounded_invoke and the
+    # rest call llm.invoke() directly, so there is no single invoke path to hook.
+    # Auto runs previously wrote ZERO token_ledger rows (metered_invoke has no
+    # production callers), so _charge_auto_run found nothing and billed nothing.
+    # project_id comes from the PROJECT_ID env job_runner already sets on the
+    # subprocess; outside that process it is None and rows are simply unattributed
+    # (chat is billed separately by chat_v3._finalize, so no double-charge).
+    #
+    # Import is LAZY: token_meter imports orchestrator.agents.base for
+    # bounded_invoke, and base.py imports THIS module — a module-level import
+    # here is a genuine circular-import crash, not a style preference.
+    from orchestrator.token_meter import (  # noqa: PLC0415 — cycle-avoiding
+        LedgerCallback, project_id_from_env,
+    )
+    _cb = [LedgerCallback("orchestrator_llm", project_id_from_env())]
 
     if route == "native":
         # Native SDK, unchanged construction: Gemini gets model + temperature
@@ -93,7 +113,7 @@ def get_orchestrator_llm(
         # `_get_llm()` sites. Import stays local so this module is import-light.
         from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: PLC0415
 
-        kwargs = {"model": model, "temperature": temperature}
+        kwargs = {"model": model, "temperature": temperature, "callbacks": _cb}
         if timeout is not None:
             kwargs["timeout"] = timeout
         return ChatGoogleGenerativeAI(**kwargs)
@@ -119,9 +139,42 @@ def get_orchestrator_llm(
             # OpenAI-compatible streaming reports usage only when asked — the
             # credit ledger reads it via extract_usage, so keep this on.
             "model_kwargs": {"stream_options": {"include_usage": True}},
+            "callbacks": _cb,
         }
         # Preserve the hot-path per-request timeout across the gateway too, so
         # the ofox route has the same anti-wedge protection the native sites had.
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return ChatOpenAI(**kwargs)
+
+    if route == "openai":
+        # OpenAI direct — no gateway. Mirrors agent.model_factory._openai; see
+        # that docstring for why Ofox costs 5x for the same model.
+        #
+        # The `temperature` arg every call site passes is ACCEPTED AND DROPPED
+        # here, deliberately. gpt-5.6-* rejects any temperature but the default
+        # (400 "Only the default (1) value is supported"), so honouring
+        # m4_analysis's 0.2 is impossible on this model — on any route. Dropping
+        # it in ONE place keeps all 20 call sites byte-for-byte unchanged rather
+        # than spreading route-awareness through the pipeline; switching back to
+        # route=ofox or native restores the parameter with no code edits.
+        key = os.getenv("OPENAI_API_KEY", "")
+        if not key:
+            raise RuntimeError(
+                "openai route needs OPENAI_API_KEY (set it or use ORCHESTRATOR_LLM_ROUTE=ofox)"
+            )
+        from langchain_openai import ChatOpenAI  # noqa: PLC0415 — route-only, lazy
+
+        kwargs = {
+            "model": model,  # bare id, e.g. "gpt-5.6-luna"
+            "api_key": key,
+            # stream_usage, not a raw stream_options in model_kwargs: OpenAI 400s
+            # on stream_options for non-streaming requests, and the orchestrator
+            # calls invoke() far more than it streams. Same usage numbers for the
+            # credit ledger, attached only when streaming.
+            "stream_usage": True,
+            "callbacks": _cb,
+        }
         if timeout is not None:
             kwargs["timeout"] = timeout
         return ChatOpenAI(**kwargs)

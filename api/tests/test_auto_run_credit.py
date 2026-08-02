@@ -84,7 +84,18 @@ def test_auto_run_bills_each_model_at_its_own_rate(monkeypatch):
         # rate is 12.86x and 4.0 was a ~3.2x UNDERCHARGE on the production default.
         # This number is a business decision, not arithmetic: see
         # .superpowers/sdd/fix-credit-multiplier-report.md before deploying.
-        assert u.credit == 10000 - 30  # round(4.0 + 25.7), not 6000/1000 * one_scalar
+        # Derived from the table, not hardcoded: this assertion exists to prove the
+        # ENV VAR doesn't leak into the charge, and that property must survive a
+        # repricing. The literal used to be 30 (4.0 + 25.7) when the baseline row
+        # was 3.24x too cheap; after the 2026-08-02 baseline correction it is 12 —
+        # which is exactly the total this test's own comment records it having
+        # BEFORE the stale row landed. A hardcoded number here just re-breaks on
+        # the next price move.
+        from app.pricing import credit_multiplier as _cm
+        expected = round(4000 / 1000 * _cm("gemini-2.5-flash")
+                         + 2000 / 1000 * _cm("gemini-3.5-flash"))
+        assert expected == 12, f"baseline sanity: expected 12 credits, got {expected}"
+        assert u.credit == 10000 - expected
 
 
 def test_auto_run_ignores_tokens_from_before_it_started():
@@ -104,3 +115,52 @@ def test_auto_run_ignores_tokens_from_before_it_started():
         assert u.credit == 10000  # nothing to charge for this run
         assert (db.query(CreditTransaction)
                   .filter_by(ref_type="run", ref_id=run.id).count() == 0)
+
+
+def test_token_usage_event_becomes_ledger_row_and_gets_charged():
+    """The gap this closes: the orchestrator runs as a SUBPROCESS with a no-op
+    sink, so auto runs wrote zero token_ledger rows and _charge_auto_run billed
+    nothing. Ledger entries now travel as `token_usage` events on the existing
+    events.jsonl contract and are persisted API-side (the single DB writer)."""
+    import asyncio
+
+    from app.job_runner import _ingest_event
+
+    sf = get_session_factory()
+    with sf() as db:
+        u, p, run = _seed(db)
+        db.commit()
+        run_id, project_id, before = run.id, p.id, u.credit
+        events_before = run.events_processed
+
+    payload = {
+        "type": "token_usage",
+        "action_kind": "m2_citation_planner",
+        "model": "gemini-3-flash-preview",
+        "prompt_tokens": 3000,
+        "completion_tokens": 1000,
+        "reserved": 0,
+        "duration_ms": 1234,
+        "project_id": str(project_id),
+    }
+    # asyncio.run, not get_event_loop(): the latter is deprecated and raises
+    # "no current event loop" depending on what earlier tests left behind, which
+    # made this pass alone and fail in a full run.
+    terminal = asyncio.run(_ingest_event(run_id, payload))
+    assert terminal is False
+
+    with sf() as db:
+        rows = db.query(TokenLedger).filter_by(project_id=project_id).all()
+        assert len(rows) == 1
+        assert rows[0].model == "gemini-3-flash-preview"
+        assert rows[0].action_kind == "m2_citation_planner"
+        assert rows[0].prompt_tokens + rows[0].completion_tokens == 4000
+
+        # Bookkeeping still advances, or _monitor replays the line and double-bills.
+        job = db.get(Job, run_id)
+        assert job.events_processed == events_before + 1
+
+        # And it actually bills: 4000 tokens at gemini-3-flash-preview's 4.286x.
+        _charge_auto_run(db, job); db.commit()
+        owner = db.get(User, db.get(Project, project_id).user_id)
+        assert owner.credit < before, "auto run must now be charged"

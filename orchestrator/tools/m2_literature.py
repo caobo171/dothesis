@@ -43,15 +43,203 @@ def _engine_model():
     Resolves the API key via the same dual-name fallback the rest of the
     engine uses (B5 fix).
     """
-    from engine.utils.gemini_client import create_gemini_client
-    # The citation planner is a native-genai structured call, so it needs a Gemini
-    # model — NOT ORCHESTRATOR_LLM_MODEL, which may now be a non-Gemini id (e.g.
-    # Ofox's bailian/qwen-plus) that would break the Gemini client. create_gemini_client
-    # routes this through Ofox's Gemini-native endpoint when the deployment is on Ofox.
-    return create_gemini_client(
-        model_name=os.getenv("CITATION_PLANNER_MODEL", "gemini-2.5-flash"),
-        temperature=0.3,
-    )
+    # DO NOT "consolidate" this onto get_orchestrator_llm(). That was tried and
+    # reverted (B5): LangChain's ChatGoogleGenerativeAI has no generate_content(),
+    # so the planner crashed and the engine SILENTLY degraded to "standard mode
+    # with basic queries" — a quality regression with no error to notice.
+    #
+    # The constraint is the INTERFACE (generate_content -> .text/.candidates), not
+    # the provider — engine/utils/groq_adapter.py already puts a non-Gemini model
+    # in this slot. So CITATION_PLANNER_MODEL selects the client: a gpt-* id gets
+    # the OpenAI adapter, anything else the Gemini one. ONE knob, and reverting to
+    # Gemini is an env change with no code edit.
+    #
+    # Default moved 2026-08-02: gemini-2.5-flash -> gemini-3-flash-preview ->
+    # gpt-5.6-luna. luna is ~2.5x cheaper than the Gemini flash tier (0.529x vs
+    # 1.324x), has 1.05M context vs 400k/1M, is already priced in
+    # quality/model_prices.py, and is the same model the brain and orchestrator
+    # run — so "what model is DoThesis on?" now has ONE answer.
+    model_name = os.getenv("CITATION_PLANNER_MODEL", "gpt-5.6-luna")
+
+    if model_name.startswith("gpt-"):
+        key = os.getenv("OPENAI_API_KEY", "")
+        if not key:
+            raise RuntimeError(
+                "CITATION_PLANNER_MODEL is an OpenAI id but OPENAI_API_KEY is unset "
+                "(set it, or pin CITATION_PLANNER_MODEL to a Gemini id)"
+            )
+        client: Any = _OpenAIPlannerClient(model_name, key)
+    else:
+        from engine.utils.gemini_client import create_gemini_client
+        # create_gemini_client routes through Ofox's Gemini-native endpoint when
+        # the deployment is on Ofox, else Google direct.
+        client = create_gemini_client(model_name=model_name, temperature=0.3)
+    return _MeteredGeminiClient(client)
+
+
+_GEMINI_FINISH_STOP = 1
+_GEMINI_FINISH_SAFETY = 2  # deep_research.SAFETY_BLOCKED compares against this
+
+
+class _PlannerCandidate:
+    """Stands in for a google-genai candidate. Only finish_reason is read."""
+
+    def __init__(self, finish_reason: int) -> None:
+        self.finish_reason = finish_reason
+
+
+class _PlannerUsage:
+    """google-genai usage field names, so the meter needs no special-casing."""
+
+    def __init__(self, prompt_token_count: int, candidates_token_count: int) -> None:
+        self.prompt_token_count = prompt_token_count
+        self.candidates_token_count = candidates_token_count
+
+
+class _PlannerResponse:
+    def __init__(self, text: str, finish: str, usage: Any) -> None:
+        self.text = text
+        # `candidates` empty == "blocked" to the engine (deep_research.py:43 and
+        # api_citations/orchestrator.py:1008 both branch on falsiness first).
+        # OpenAI's content_filter is the same condition, so map it to an EMPTY
+        # list rather than a candidate with a safety finish_reason — that way the
+        # engine's existing block handling fires on its first check.
+        if finish == "content_filter":
+            self.candidates: list[Any] = []
+        else:
+            self.candidates = [_PlannerCandidate(
+                _GEMINI_FINISH_SAFETY if finish == "content_filter" else _GEMINI_FINISH_STOP
+            )]
+        self.usage_metadata = usage
+
+
+class _OpenAIPlannerClient:
+    """Exposes Gemini's generate_content() over OpenAI chat completions.
+
+    Why this exists: the citation planner is pinned to a Gemini client only
+    because it calls the raw `generate_content(prompt, generation_config=...)`
+    interface — NOT because it needs Google. The same slot already takes a
+    non-Gemini model in engine/utils/groq_adapter.py ("Mimics Gemini's
+    generate_content interface"), so this follows an established pattern.
+
+    Moving the planner onto gpt-5.6-luna makes it ~2.5x cheaper than
+    gemini-3-flash-preview (0.529x vs 1.324x), on a model with 1.05M context
+    instead of Google's flash tier, and unifies the stack: brain, orchestrator
+    and planner all run one model with one price row.
+
+    The engine's contract, satisfied exactly:
+      response.text                      -> str
+      response.candidates                -> [] when blocked, else 1 candidate
+      response.candidates[0].finish_reason
+      response.usage_metadata            -> google-genai field names
+
+    ⚠ temperature is DROPPED. deep_research sets 0.3 "for systematic planning",
+    but gpt-5.6-* only accepts the default (400 otherwise). JSON mode still pins
+    the output shape, which is what the planner actually depends on. If that
+    determinism turns out to matter, gpt-5.4-nano costs 0.544x (vs 0.529x) and
+    DOES honour temperature — it is the fallback, at a weaker model tier.
+    """
+
+    def __init__(self, model_name: str, api_key: str) -> None:
+        self.model_name = model_name
+        from openai import OpenAI  # noqa: PLC0415 — planner-only, lazy
+        self._client = OpenAI(api_key=api_key)
+
+    @staticmethod
+    def _cfg_get(cfg: Any, key: str) -> Any:
+        # generation_config arrives as a dict from every engine call site, but
+        # GeminiModelWrapper also accepted attribute-style objects — match both.
+        if cfg is None:
+            return None
+        if isinstance(cfg, dict):
+            return cfg.get(key)
+        return getattr(cfg, key, None)
+
+    def generate_content(self, prompt: Any, generation_config: Any = None,
+                         safety_settings: Any = None) -> _PlannerResponse:
+        _ = safety_settings  # provider-side on OpenAI, same as GeminiModelWrapper
+        # api_citations/orchestrator.py passes a LIST ([scout_prompt, user_input]);
+        # deep_research passes a str. Join exactly like GeminiModelWrapper does.
+        if isinstance(prompt, list):
+            contents = "\n".join(str(p) for p in prompt)
+        else:
+            contents = str(prompt)
+
+        kwargs: dict[str, Any] = {
+            "model": self.model_name,
+            "messages": [{"role": "user", "content": contents}],
+        }
+        max_out = self._cfg_get(generation_config, "max_output_tokens")
+        if max_out:
+            # NOT max_tokens — gpt-5.6-* rejects it outright.
+            kwargs["max_completion_tokens"] = int(max_out)
+        if self._cfg_get(generation_config, "response_mime_type") == "application/json":
+            kwargs["response_format"] = {"type": "json_object"}
+
+        resp = self._client.chat.completions.create(**kwargs)
+        choice = resp.choices[0]
+        u = getattr(resp, "usage", None)
+        usage = _PlannerUsage(
+            int(getattr(u, "prompt_tokens", 0) or 0),
+            int(getattr(u, "completion_tokens", 0) or 0),
+        )
+        return _PlannerResponse(choice.message.content or "",
+                                choice.finish_reason or "stop", usage)
+
+
+class _MeteredGeminiClient:
+    """Records citation-planner token usage into the same ledger everything else bills from.
+
+    The planner is the one LLM caller that LangChain callbacks cannot reach — it
+    is a raw google-genai client (see _engine_model), so orchestrator/llm.py's
+    LedgerCallback never sees it. Its tokens were therefore invisible to
+    _charge_auto_run and the planner ran free.
+
+    Delegation is via __getattr__ so the engine's DeepResearchPlanner keeps
+    seeing the GeminiModelWrapper interface it expects — only generate_content is
+    intercepted, and the response object is passed through untouched.
+
+    The model is read AFTER the call, not before: GeminiModelWrapper walks a
+    fallback chain on overload and MUTATES self.model_name, so a run that starts
+    on gemini-3-flash-preview can finish on something cheaper. Billing the
+    configured model rather than the served one would overcharge exactly when the
+    student already got the degraded model.
+    """
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    def generate_content(self, *args: Any, **kwargs: Any) -> Any:
+        import time  # noqa: PLC0415
+        from orchestrator.token_meter import (  # noqa: PLC0415 — cycle-avoiding
+            LedgerEntry, get_sink, project_id_from_env,
+        )
+        t0 = time.monotonic()
+        prompt_tok = completion_tok = 0
+        try:
+            resp = self._inner.generate_content(*args, **kwargs)
+            um = getattr(resp, "usage_metadata", None)
+            if um is not None:
+                prompt_tok = int(getattr(um, "prompt_token_count", 0) or 0)
+                completion_tok = int(getattr(um, "candidates_token_count", 0) or 0)
+            return resp
+        finally:
+            try:
+                get_sink()(LedgerEntry(
+                    project_id=project_id_from_env(),
+                    action_kind="m2_citation_planner",
+                    model=str(getattr(self._inner, "model_name", "unknown")),
+                    prompt_tokens=prompt_tok,
+                    completion_tokens=completion_tok,
+                    reserved=0,
+                    duration_ms=int((time.monotonic() - t0) * 1000),
+                ))
+            except Exception:  # noqa: BLE001
+                # Billing telemetry must never break a student's citation run.
+                logger.exception("citation planner ledger write failed")
 
 
 # Re-exported here so tests can monkeypatch easily — the real import is late

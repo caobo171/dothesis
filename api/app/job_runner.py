@@ -12,7 +12,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from .db import get_session_factory
-from .models import Job, JobEvent, Paper
+from .models import Job, JobEvent, Paper, TokenLedger
 from .pubsub import pubsub
 from .settings import get_settings
 
@@ -211,6 +211,30 @@ async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
     """Persist one event, update job state, publish to subscribers. Returns True when terminal."""
     type_ = payload.get("type", "activity")
     session_factory = get_session_factory()
+
+    if type_ == "token_usage":
+        # Billing telemetry from the orchestrator subprocess, not user-facing
+        # activity — it becomes a token_ledger row, NOT a JobEvent, so the run's
+        # activity feed stays readable. `events_processed` is still incremented
+        # because _monitor uses it to skip already-consumed lines on resume;
+        # dropping that would replay every prior line and double-bill the run.
+        with session_factory() as db:
+            job = db.get(Job, job_id)
+            if job:
+                job.events_processed += 1
+            pid = payload.get("project_id")
+            db.add(TokenLedger(
+                project_id=uuid.UUID(pid) if pid else None,
+                action_kind=payload.get("action_kind", "unknown"),
+                model=payload.get("model", "unknown"),
+                prompt_tokens=int(payload.get("prompt_tokens") or 0),
+                completion_tokens=int(payload.get("completion_tokens") or 0),
+                reserved=int(payload.get("reserved") or 0),
+                duration_ms=int(payload.get("duration_ms") or 0),
+            ))
+            db.commit()
+        return False
+
     with session_factory() as db:
         event = JobEvent(
             job_id=job_id,
