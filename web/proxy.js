@@ -45,5 +45,10 @@ export const config = {
   // answers with 401 JSON; gating it here would 307-redirect the browser's
   // API calls (including the public POST /api/v1/auth/login) to the /login
   // PAGE, which breaks sign-in. Never route-gate the API through page middleware.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // `mcp` and `.well-known` are excluded for the SAME reason as `api`, and it
+  // is the same bug: they are machine endpoints, not pages. Gating them here
+  // 307-redirected Claude's connector to the /login PAGE — it then failed OAuth
+  // discovery (also redirected) and reported "Couldn't register with dothesis's
+  // sign-in service". MCP does its own auth; page middleware must never see it.
+  matcher: ["/((?!api|mcp(?:/|$)|\\.well-known/|_next/static|_next/image|favicon.ico).*)"],
 };

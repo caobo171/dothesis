@@ -44,7 +44,10 @@ export function useSidebarSections(): SidebarSection[] {
           // Under ACCOUNT, not ADMIN: connecting Claude/ChatGPT is a per-user
           // action (each person adds the connector in their own client), not
           // something an operator does once for everybody.
-          { name: "MCP", href: "/mcp", icon: PuzzlePieceIcon },
+          // href is /connect, NOT /mcp — /mcp is the MCP PROTOCOL endpoint that
+          // Claude connects to. A guide page sitting on that path would shadow
+          // the server and hand connectors an HTML page.
+          { name: "MCP", href: "/connect", icon: PuzzlePieceIcon },
         ],
       },
     ];
