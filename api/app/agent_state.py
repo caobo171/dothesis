@@ -16,6 +16,7 @@ conversation checkpointer.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -32,6 +33,8 @@ from agent.state import (
 
 from .models import ContextStore as DbContextStore
 from .models import Project
+
+logger = logging.getLogger(__name__)
 
 _MODULE_COLUMN = {
     "M1": "m1_topic",
@@ -110,6 +113,60 @@ class DbProjectStateStore(ProjectStateStore):
         return bool(module_keys) or any(
             s != "locked" for s in state["status"].values()
         )
+
+    # --- Humanize style anchor -------------------------------------------
+    #
+    # Exposed on the STORE, duck-typed like persist_export_artifacts, because
+    # the caller is agent/tools/writing.py and `agent -> api.app` is the banned
+    # import direction. The store is the seam that already crosses it.
+    #
+    # Anchored on the USER, not the project: a student's writing voice is the
+    # same across theses, and asking for 150 words once per project instead of
+    # once per student is the difference between a feature people use and one
+    # they avoid. The owner is resolved from project_id since the store is not
+    # owner-aware.
+
+    def _owner_id(self) -> uuid.UUID | None:
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                select(Project.__table__.c.user_id)
+                .where(Project.__table__.c.id == self.project_id)
+            ).first()
+        return row[0] if row else None
+
+    def load_writing_anchor(self) -> str | None:
+        """The student's stored ~150-word writing sample, if they've given one."""
+        from .db import get_session_factory  # noqa: PLC0415 — avoid import cycle
+        from .user_memory import load_user_prefs  # noqa: PLC0415
+        uid = self._owner_id()
+        if uid is None:
+            return None
+        try:
+            with get_session_factory()() as db:
+                anchor = (load_user_prefs(db, uid) or {}).get("writing_anchor")
+            return anchor if isinstance(anchor, str) and anchor.strip() else None
+        except Exception:  # noqa: BLE001
+            logger.exception("load_writing_anchor failed for project %s", self.project_id)
+            return None
+
+    def save_writing_anchor(self, anchor: str) -> None:
+        """Remember the sample so humanize never has to ask this student again.
+
+        Best-effort: a failure here must not fail the humanize turn the student
+        actually asked for — they still get their rewrite, they just get asked
+        again next time.
+        """
+        from .db import get_session_factory  # noqa: PLC0415
+        from .user_memory import write_user_prefs  # noqa: PLC0415
+        uid = self._owner_id()
+        if uid is None or not anchor.strip():
+            return
+        try:
+            with get_session_factory()() as db:
+                write_user_prefs(db, uid, {"writing_anchor": anchor.strip()})
+                db.commit()
+        except Exception:  # noqa: BLE001
+            logger.exception("save_writing_anchor failed for project %s", self.project_id)
 
     def load(self) -> dict[str, Any]:
         with self.engine.connect() as conn:

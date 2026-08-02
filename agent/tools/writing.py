@@ -71,8 +71,13 @@ def make_writing_tools(store) -> list:
 
         The rewrite is anchored on real human prose and will NOT run without an
         anchor (`error: "no_anchor"`): an unanchored "make it sound human" pass
-        measurably does nothing while appearing to work. Ask the student for
-        ~150 words they wrote themselves and pass it as `user_anchor`.
+        measurably does nothing while appearing to work.
+
+        CALL IT WITHOUT `user_anchor` FIRST. If this student has already given a
+        sample it is loaded automatically and you must not ask again. Only when
+        you get back `error: "no_anchor"` should you ask for ~150 words they
+        wrote themselves (an old essay, a report — anything pre-AI) and retry
+        with `user_anchor`. It is then remembered, so you ask at most once ever.
 
         Works on ONE passage at a time — a section, not the whole thesis.
 
@@ -98,8 +103,40 @@ def make_writing_tools(store) -> list:
         except Exception:
             logger.exception("humanize_text: language lookup failed, defaulting to vi")
 
+        # Anchor persistence: ask the student ONCE, not once per project.
+        #
+        # Without this the tool returns no_anchor forever — the shipped anchor
+        # library is empty on purpose (an anchor has to be off the LLM training
+        # distribution, so it cannot be generated), so the student's own sample
+        # is the only thing that makes humanize work at all. Re-asking for 150
+        # words every time is how a working feature goes unused.
+        #
+        # Duck-typed via getattr because the file-backed CLI store has no user
+        # to attach an anchor to — there, this degrades to today's behaviour
+        # (ask each time) rather than crashing.
+        anchor = user_anchor or ""
+        if not anchor.strip():
+            loader = getattr(store, "load_writing_anchor", None)
+            if loader is not None:
+                try:
+                    anchor = loader() or ""
+                except Exception:  # noqa: BLE001
+                    logger.exception("humanize_text: stored anchor lookup failed")
+
         result = humanize_prose(text, language=language,
-                                user_anchor=user_anchor or None)
+                                user_anchor=anchor.strip() or None)
+
+        # Save only what the CALLER supplied and only once it actually worked:
+        # persisting a sample that produced no_anchor/frozen_violation would
+        # pin the student to a bad anchor they can never see or correct.
+        if user_anchor.strip() and result.get("ok"):
+            saver = getattr(store, "save_writing_anchor", None)
+            if saver is not None:
+                try:
+                    saver(user_anchor)
+                except Exception:  # noqa: BLE001
+                    logger.exception("humanize_text: anchor save failed")
+
         return json.dumps(result, ensure_ascii=False)
 
     @tool

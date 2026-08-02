@@ -45,14 +45,21 @@ Call `humanize_text`. It handles anchor selection, the rewrite, and verification
 humanize_text(text="<the passage>", user_anchor="<optional 150 words>")
 ```
 
-**When it returns `error: "no_anchor"`** — no library anchor is installed for
-this language. Ask the student for their own writing:
+**Call it WITHOUT `user_anchor` first.** If this student has given a sample
+before, it is loaded automatically and asking again is a wasted turn — the
+anchor is saved per student, not per project, so it carries across their
+theses.
+
+**When it returns `error: "no_anchor"`** — nothing is installed for this
+language and nothing is saved for this student yet. Ask for their own writing:
 
 > "Để viết lại cho tự nhiên, mình cần khoảng 150 chữ do chính bạn viết —
 > một bài luận cũ, một báo cáo, bất cứ thứ gì viết trước khi dùng AI. Càng
-> đúng giọng bạn thì kết quả càng giống bạn."
+> đúng giọng bạn thì kết quả càng giống bạn. Mình chỉ hỏi một lần thôi —
+> lần sau sẽ tự nhớ."
 
-Then call again with that text as `user_anchor`. Do not proceed without one and
+Then call again with that text as `user_anchor`. It is remembered on success,
+so you should never have to ask a second time. Do not proceed without one and
 do not substitute your own prose.
 
 **When it returns `error: "frozen_violation"`** — the rewrite altered a number
