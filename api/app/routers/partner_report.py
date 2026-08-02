@@ -254,13 +254,17 @@ async def create_partner_report(
     # undifferentiated blob. Files that yield no text are skipped rather than
     # fatal — one image-only scan alongside three good documents should not
     # sink the report; only an entirely unreadable SET is a 422.
+    # The banner is added ONLY when there is more than one document. A single
+    # upload must seed byte-identical text to before, so the common path's
+    # prompt (and its golden) is untouched by multi-file support.
     parts: list[str] = []
     pages = 0
+    multi = len(docs) > 1
     for name, raw in docs:
         one_text, one_pages = await run_in_threadpool(prun._extract_text, raw, name)
         pages += one_pages
         if one_text.strip():
-            parts.append(f"===== FILE: {name} =====\n{one_text}")
+            parts.append(f"===== FILE: {name} =====\n{one_text}" if multi else one_text)
     text = "\n\n".join(parts)
     if not text.strip():
         raise HTTPException(422, detail={"error": {"code": "no_extractable_text",

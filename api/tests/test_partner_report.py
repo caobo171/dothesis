@@ -508,3 +508,87 @@ def test_output_matches_the_deleted_pipeline_golden(client, monkeypatch, depth, 
     assert body["docx_key"] == "projects/FIXED/report.docx"
     assert body["pages"] == 3
     assert body["depth"] == depth
+
+
+def _post_multi(client, docs, *, token=TOKEN, depth="analysis_report", **extra):
+    """Post several files under the repeated `files` field, as a browser would."""
+    headers = {"X-Partner-Token": token} if token is not None else {}
+    data = {"depth": depth, "title": "My Study", "language": "en", **extra}
+    files = [("files", (name, io.BytesIO(body), "application/pdf")) for name, body in docs]
+    return client.post("/api/v1/partner/report", headers=headers, files=files, data=data)
+
+
+def test_multiple_files_are_all_mirrored(client, monkeypatch, tmp_path):
+    """A report is routinely built from an đề cương PLUS an SPSS output (and
+    SmartPLS emits several exports). Every one has to reach the workspace, or
+    the agent writes chapters 4+5 without the data it was given."""
+    monkeypatch.setattr(router_mod.prun, "_extract_text", _analysis_text)
+    monkeypatch.setattr(job_runner, "spawn_headless_run", _fake_spawn)
+    monkeypatch.setattr(router_mod, "s3_from_env", lambda: _FakeS3())
+
+    r = _post_multi(client, [
+        ("de-cuong.docx", b"%PDF-1.4 outline"),
+        ("output-spss.pdf", b"%PDF-1.4 spss"),
+        ("smartpls.pdf", b"%PDF-1.4 pls"),
+    ])
+    assert r.status_code == 200, r.text
+    with Session(get_engine()) as s:
+        job = s.scalar(select(Job).where(Job.partner_token == r.json()["progress_token"]))
+        pid = job.project_id
+    from app.workspace import workspace_dir
+    up = workspace_dir(pid) / "uploads"
+    assert (up / "de-cuong.docx").read_bytes() == b"%PDF-1.4 outline"
+    assert (up / "output-spss.pdf").read_bytes() == b"%PDF-1.4 spss"
+    assert (up / "smartpls.pdf").read_bytes() == b"%PDF-1.4 pls"
+
+
+def test_same_named_files_do_not_overwrite_each_other(client, monkeypatch):
+    """Two exports both called output.pdf must both survive — silently keeping
+    one would drop half the analysis with no error anywhere."""
+    monkeypatch.setattr(router_mod.prun, "_extract_text", _analysis_text)
+    monkeypatch.setattr(job_runner, "spawn_headless_run", _fake_spawn)
+    monkeypatch.setattr(router_mod, "s3_from_env", lambda: _FakeS3())
+
+    r = _post_multi(client, [("output.pdf", b"%PDF-1.4 first"), ("output.pdf", b"%PDF-1.4 second")])
+    assert r.status_code == 200, r.text
+    with Session(get_engine()) as s:
+        job = s.scalar(select(Job).where(Job.partner_token == r.json()["progress_token"]))
+        pid = job.project_id
+    from app.workspace import workspace_dir
+    up = workspace_dir(pid) / "uploads"
+    assert (up / "output.pdf").read_bytes() == b"%PDF-1.4 first"
+    assert (up / "output-2.pdf").read_bytes() == b"%PDF-1.4 second"
+
+
+def test_directory_components_in_filenames_cannot_escape_the_workspace(client, monkeypatch):
+    """A filename is attacker-controlled; ../ in it must not write outside uploads/."""
+    monkeypatch.setattr(router_mod.prun, "_extract_text", _analysis_text)
+    monkeypatch.setattr(job_runner, "spawn_headless_run", _fake_spawn)
+    monkeypatch.setattr(router_mod, "s3_from_env", lambda: _FakeS3())
+
+    r = _post_multi(client, [("../../escaped.pdf", b"%PDF-1.4 evil")])
+    assert r.status_code == 200, r.text
+    with Session(get_engine()) as s:
+        job = s.scalar(select(Job).where(Job.partner_token == r.json()["progress_token"]))
+        pid = job.project_id
+    from app.workspace import workspace_dir
+    ws = workspace_dir(pid)
+    assert (ws / "uploads" / "escaped.pdf").read_bytes() == b"%PDF-1.4 evil"
+    assert not (ws.parent / "escaped.pdf").exists()
+
+
+def test_legacy_single_file_field_still_works(client, monkeypatch):
+    """Fillform deploys separately from this API — an older build still sending
+    `file` must keep working through the rollout."""
+    monkeypatch.setattr(router_mod.prun, "_extract_text", _analysis_text)
+    monkeypatch.setattr(job_runner, "spawn_headless_run", _fake_spawn)
+    monkeypatch.setattr(router_mod, "s3_from_env", lambda: _FakeS3())
+
+    assert _post(client, body=b"%PDF-1.4 legacy").status_code == 200
+
+
+def test_no_files_at_all_is_422(client):
+    headers = {"X-Partner-Token": TOKEN}
+    r = client.post("/api/v1/partner/report", headers=headers,
+                    data={"depth": "analysis_report", "language": "en"})
+    assert r.status_code == 422
