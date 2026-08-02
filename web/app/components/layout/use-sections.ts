@@ -3,6 +3,7 @@
 import {
   ClockIcon,
   CpuChipIcon,
+  PuzzlePieceIcon,
   CreditCardIcon,
   CurrencyDollarIcon,
   DocumentTextIcon,
@@ -40,6 +41,10 @@ export function useSidebarSections(): SidebarSection[] {
         options: [
           { name: "Credit", href: "/credit", icon: CurrencyDollarIcon },
           { name: "Transactions", href: "/transactions", icon: ClockIcon },
+          // Under ACCOUNT, not ADMIN: connecting Claude/ChatGPT is a per-user
+          // action (each person adds the connector in their own client), not
+          // something an operator does once for everybody.
+          { name: "MCP", href: "/mcp", icon: PuzzlePieceIcon },
         ],
       },
     ];
