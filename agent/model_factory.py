@@ -65,7 +65,14 @@ class ModelSpec:
 # Substring lookup on the model id — the same technique opencode uses for
 # prompt selection. A KNOWN MAINTENANCE POINT: new vision-capable families
 # must be added here, and fail-closed keeps that drift cheap (spec Risk 4).
-_VISION_MODEL_HINTS = ("gemini", "claude")
+# "gpt-5.6" covers luna/sol/terra — all three report text+image->text in both the
+# OpenAI and Ofox catalogues (checked 2026-08-02). Naming the FAMILY, not each id,
+# keeps the dated -2026-07-09 snapshots and the provider/-prefixed gateway ids
+# matching too. Deliberately not a blanket "gpt": gpt-4.1-nano and the -codex-mini
+# tiers are text-only, and fail-closed means a wrong True is the expensive
+# direction (Gemini blocks into an OpenAI endpoint hard-fails; a needless
+# transcription costs fractions of a cent).
+_VISION_MODEL_HINTS = ("gemini", "claude", "gpt-5.6")
 
 
 def model_supports_vision(model: str) -> bool:
@@ -105,13 +112,21 @@ def spec_from_env() -> ModelSpec:
         # api/app/pricing.py::PACKAGES are sized on "1 pack ≈ 1 run", so a default above
         # 1.0x silently shrinks what a pack buys.
         #
-        # NOT google/gemini-2.5-flash (the previous default): Ofox RESELLS 2.5-flash at
-        # 0.30/2.50, not Google's native 0.15/0.60, so it bills ~3.24x — it was never the
-        # baseline the old name-matching multiplier assumed it was.
+        # NOTE (2026-08-02): this paragraph used to warn that Ofox RESOLD 2.5-flash at
+        # 0.30/2.50 versus Google's native 0.15/0.60, making it ~3.24x baseline. That
+        # gap was an artefact of a stale baseline row — Google's published rate IS
+        # 0.30/2.50, so the gateway id and the native id now price the same and both
+        # sit at ~1.0x. The multipliers quoted below are pre-correction figures.
         # Trade-off accepted: qwen-plus is text-only, so image turns go to the Gemini
         # vision sidecar (make_vision_model) instead of the brain. Override via
         # DOTHESIS_AGENT_MODEL.
         default_model = "bailian/qwen-plus"
+    elif route == "openai":
+        # Bare ids here (no provider/ prefix) — this talks to OpenAI, not a
+        # gateway. luna is the cheapest 5.6 tier at $0.20/$1.20 post-cut, which
+        # blends to ~1.71x baseline: pricier than qwen-plus (0.62x) but 5x
+        # cheaper than the same model through Ofox's stale launch pricing.
+        default_model = "gpt-5.6-luna"
     model = os.getenv("DOTHESIS_AGENT_MODEL", default_model)
     return ModelSpec(
         route=route,
@@ -136,6 +151,8 @@ def make_model(spec: ModelSpec | None = None):
         return _openrouter(spec)  # Task 2
     if spec.route == "ofox":
         return _ofox(spec)
+    if spec.route == "openai":
+        return _openai(spec)
     raise ValueError(f"unknown model route: {spec.route!r}")
 
 
@@ -232,6 +249,54 @@ def _ofox(spec: ModelSpec):
         model_kwargs={"stream_options": {"include_usage": True}},
         # Bounded read timeout + retries so a stalled ofox stream can't hang the
         # whole headless run for the openai SDK's 600s default (see _http_timeout).
+        **_http_timeout_kwargs(),
+    )
+
+
+def _openai(spec: ModelSpec):
+    """OpenAI's own API, no gateway in front.
+
+    Exists because the gateway stopped being free. Ofox still bills gpt-5.6-luna
+    at its LAUNCH price ($1.00/$6.00 per 1M) while OpenAI cut it 80% on
+    2026-07-30 to $0.20/$1.20 — a live 5x on every token, for a hop that adds
+    nothing but parameter normalisation (below). Verified against both
+    catalogues on 2026-08-02.
+
+    Two hard incompatibilities this route must handle, both confirmed by probing
+    the real endpoint — they are the reason `_ofox` cannot simply be pointed at
+    api.openai.com:
+
+      max_tokens            -> 400 "Unsupported parameter … Use
+                               'max_completion_tokens' instead."
+      temperature=<anything
+        other than 1>       -> 400 "Unsupported value … Only the default (1)
+                               value is supported."
+
+    So temperature is NOT passed at all. That is a real capability loss, not an
+    oversight: spec.temperature (and the per-site 0.2 that m4_analysis uses for
+    determinism) cannot be honoured by this model on ANY route. Ofox accepted the
+    parameter without erroring, which means it was being dropped upstream
+    silently — the control was already gone, just not visibly. Sending nothing
+    makes that explicit instead of pretending.
+    """
+    key = os.getenv("OPENAI_API_KEY", "")
+    if not key:
+        raise RuntimeError("openai route needs OPENAI_API_KEY (set it or use route=ofox)")
+    from langchain_openai import ChatOpenAI  # noqa: PLC0415 — route-only, lazy
+
+    return ChatOpenAI(
+        model=spec.model,  # bare id, e.g. "gpt-5.6-luna" — no provider/ prefix
+        api_key=key,
+        # NOT max_tokens, and NO temperature — see docstring.
+        max_completion_tokens=spec.max_tokens,
+        # `stream_usage=True`, NOT model_kwargs={"stream_options": …} the way the
+        # gateway routes do. Both ask for the same token counts the credit ledger
+        # reads via extract_usage, but a raw stream_options is sent on EVERY
+        # request and OpenAI rejects it on non-streaming ones ("only allowed when
+        # 'stream' is enabled" — 400). stream_usage attaches it only when actually
+        # streaming, so invoke() and stream() both work. Ofox tolerated the raw
+        # form, which is why the gateway routes never had to make this distinction.
+        stream_usage=True,
         **_http_timeout_kwargs(),
     )
 

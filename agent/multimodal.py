@@ -319,8 +319,12 @@ def detect_provider(spec: ModelSpec | None = None) -> Provider:
     from agent.model_factory import spec_from_env  # noqa: PLC0415 — lazy; keeps import-light callers cheap
 
     spec = spec or spec_from_env()
-    if spec.route in ("ofox", "openrouter"):
-        return "openai"  # OpenAI-compatible wire format on both gateways
+    if spec.route in ("ofox", "openrouter", "openai"):
+        # OpenAI-compatible wire format on both gateways AND on OpenAI direct —
+        # `openai` must be listed or a direct-route brain falls through to the
+        # native branch below and gets Gemini-native {type:"media"} blocks, the
+        # exact malformed-request defect this function was written to fix.
+        return "openai"
     # native route mirrors model_factory._native's branch condition exactly.
     if os.getenv("ANTHROPIC_API_KEY") and "claude" in spec.model:
         return "anthropic"

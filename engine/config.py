@@ -38,17 +38,27 @@ class ModelConfig:
     """
     Model configuration with sensible defaults.
 
-    Supports Gemini models with configurable parameters.
+    Gemini only, deliberately. This config does NOT select the product's model.
+
+    The live model surfaces are agent/model_factory.spec_from_env (chat brain)
+    and orchestrator/llm.resolve_orchestrator_model (M1-M5 pipeline). What is
+    left here feeds exactly one thing: engine.utils.agent_runner.setup_model,
+    plus the standalone generator scripts in engine/dev + draft_generator.
+
+    A `provider` field and an AI_PROVIDER env switch used to live here, offering
+    'gemini' | 'claude' | 'openai'. Removed 2026-08-02: AI_PROVIDER was set in no
+    env file, no deploy script and no CI config, and the only path that read it
+    (setup_model) is reachable only from engine's own tests. Its cost was real
+    though — it read as a THIRD model-configuration surface next to the brain and
+    the orchestrator, so "what model is this product on?" had three plausible
+    answers and only two true ones.
+
+    Note the citation planner does NOT come through here either: M2 builds its
+    own client in orchestrator/tools/m2_literature._engine_model, pinned by
+    CITATION_PLANNER_MODEL (default gemini-2.5-flash).
     """
-    provider: Literal['gemini', 'claude', 'openai'] = field(
-        default_factory=lambda: os.getenv('AI_PROVIDER', 'gemini')
-    )
     model_name: str = field(
-        default_factory=lambda: (
-            os.getenv('OPENAI_MODEL', 'gpt-4.1-nano')
-            if os.getenv('AI_PROVIDER') == 'openai'
-            else os.getenv('GEMINI_MODEL', 'gemini-3-pro-preview')
-        )
+        default_factory=lambda: os.getenv('GEMINI_MODEL', 'gemini-3-pro-preview')
     )
     temperature: float = 0.7
     max_output_tokens: Optional[int] = None
@@ -66,20 +76,10 @@ class ModelConfig:
             'gemini-1.5-pro',
         ]
 
-        valid_openai_models = [
-            'gpt-4.1-nano',
-        ]
-
-        if self.provider == 'gemini' and self.model_name not in valid_gemini_models:
+        if self.model_name not in valid_gemini_models:
             raise ValueError(
                 f"Invalid Gemini model: {self.model_name}. "
                 f"Valid options: {', '.join(valid_gemini_models)}"
-            )
-
-        if self.provider == 'openai' and self.model_name not in valid_openai_models:
-            raise ValueError(
-                f"Invalid OpenAI model: {self.model_name}. "
-                f"Valid options: {', '.join(valid_openai_models)}"
             )
 
 
@@ -126,8 +126,13 @@ class AppConfig:
     google_api_key_fallback: str = field(default_factory=lambda: os.getenv('GOOGLE_API_KEY_FALLBACK', ''))
     google_api_key_fallback_2: str = field(default_factory=lambda: os.getenv('GOOGLE_API_KEY_FALLBACK_2', ''))
     google_api_key_fallback_3: str = field(default_factory=lambda: os.getenv('GOOGLE_API_KEY_FALLBACK_3', ''))
-    anthropic_api_key: str = field(default_factory=lambda: os.getenv('ANTHROPIC_API_KEY', ''))
-    openai_api_key: str = field(default_factory=lambda: os.getenv('OPENAI_API_KEY', ''))
+    # anthropic_api_key / openai_api_key removed 2026-08-02 along with the
+    # provider switch that was their only reader. Nothing in api/, agent/,
+    # orchestrator/ or quality/ ever read them from HERE — those processes get
+    # ANTHROPIC_API_KEY / OPENAI_API_KEY from api/app/settings.py, which
+    # job_runner forwards into the headless subprocess env. Keeping duplicate
+    # fields here just invited the "which one is live?" question this file has
+    # already cost us once.
 
     # Sub-configurations
     model: ModelConfig = field(default_factory=ModelConfig)
@@ -145,35 +150,24 @@ class AppConfig:
         pass
 
     def validate_api_keys(self) -> None:
-        """
-        Validate that required API keys are present.
+        """Raise if the Gemini key this config needs is missing.
 
-        Call this before operations that need API access.
-        Raises ValueError if required keys are missing.
+        The claude/openai branches went with the provider switch (2026-08-02).
+        This method has no callers in the repo today; it is kept because it is
+        the documented pre-flight for the engine/dev generator scripts, and a
+        clear raise beats a None key surfacing as a confusing SDK error.
         """
-        if self.model.provider == 'gemini' and not self.google_api_key:
+        if not self.google_api_key:
             raise ValueError(
                 "GOOGLE_API_KEY environment variable is required for Gemini models. "
                 "Set it in .env file or environment. "
                 "Get your key at: https://makersuite.google.com/app/apikey"
             )
 
-        if self.model.provider == 'claude' and not self.anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY required for Claude models")
-
-        if self.model.provider == 'openai' and not self.openai_api_key:
-            raise ValueError("OPENAI_API_KEY required for OpenAI models")
-
     @property
     def has_api_key(self) -> bool:
-        """Check if required API key is configured (without raising)."""
-        if self.model.provider == 'gemini':
-            return bool(self.google_api_key)
-        if self.model.provider == 'claude':
-            return bool(self.anthropic_api_key)
-        if self.model.provider == 'openai':
-            return bool(self.openai_api_key)
-        return False
+        """Non-raising counterpart to validate_api_keys."""
+        return bool(self.google_api_key)
 
 
 # Global configuration instance - lazy loaded
@@ -209,8 +203,7 @@ if __name__ == '__main__':
     # Configuration validation test
     cfg = get_config()
     print(f"✅ Configuration loaded successfully")
-    print(f"Model: {cfg.model.model_name}")
-    print(f"Provider: {cfg.model.provider}")
+    print(f"Model: {cfg.model.model_name} (Gemini — this config is Gemini-only)")
     print(f"API Key configured: {cfg.has_api_key}")
     print(f"Validation per section: {cfg.validation.validate_per_section}")
     print(f"Output directory: {cfg.paths.output_dir}")
