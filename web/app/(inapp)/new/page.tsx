@@ -3,14 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, FileText, Loader2, UploadCloud, X } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 
 import { apiFetch } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
 import { stashAnalyzeIntent, type AnalyzeAttachment } from "@/app/lib/bootstrap-payload";
 import { Button } from "@/app/components/ui/button";
-import { Textarea } from "@/app/components/ui/textarea";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 import { ImportSummary } from "@/app/components/chat/ImportSummary";
+import { ThesisComposer } from "@/app/components/chat/ThesisComposer";
 import {
   ReconstructedModules,
   type ReconstructedModule,
@@ -52,10 +53,9 @@ const ACCEPT_TYPES =
 
 export default function NewThesisPage() {
   const router = useRouter();
+  const t = useT();
   const [files, setFiles] = useState<File[]>([]);
   const [note, setNote] = useState("");
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +72,6 @@ export default function NewThesisPage() {
   const [reconstructing, setReconstructing] = useState(false);
   const [confirmedModules, setConfirmedModules] = useState<string[]>([]);
   const [skippedModules, setSkippedModules] = useState<string[]>([]);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Setup defaults still come from the user's cross-project memory (/me/prefs)
   // so a returning user's field/language/citation carry over — they're just no
@@ -228,6 +227,11 @@ export default function NewThesisPage() {
             ambiguous={importResult.ambiguous}
             unreadable={importResult.unreadable}
             onContinue={() => router.push(`/chat/projects/${importedProjectId}`)}
+            // Gate on the SAME state the card below renders from. Continuing
+            // mid-reconstruction navigates away from steps the student has not
+            // reviewed yet — and the confirm/skip choices are made on this
+            // screen, so leaving early silently drops them.
+            reconstructing={reconstructing}
           />
           <ReconstructedModules
             items={reconstructed}
@@ -248,114 +252,35 @@ export default function NewThesisPage() {
         href="/"
         className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-500 hover:text-ink-900 no-underline mb-6"
       >
-        <ArrowLeft className="w-3.5 h-3.5" /> Back to home
+        <ArrowLeft className="w-3.5 h-3.5" /> {t("new.back")}
       </Link>
 
       <div className="text-center mb-7">
         <h1 className="m-0 text-[26px] font-extrabold font-serif tracking-tight text-ink-900">
-          Analyze your thesis
+          {t("new.title")}
         </h1>
-        <p className="text-[14px] text-ink-500 mt-1.5">
-          Drop whatever you have — a draft, papers, a proposal, a questionnaire —
-          and we'll tell you where your quantitative thesis stands.
-        </p>
       </div>
 
-      {/* PRIMARY: the drop zone. Big, centered, the obvious thing to do. */}
-      <button
-        type="button"
-        onClick={() => fileInputRef.current?.click()}
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={e => {
-          e.preventDefault();
-          setDragging(false);
-          addFiles(e.dataTransfer?.files ?? null);
-        }}
-        disabled={submitting}
-        className={`w-full rounded-3xl border-2 border-dashed px-8 py-14 flex flex-col items-center justify-center gap-3 text-center transition-colors ${
-          dragging
-            ? "border-primary-500 bg-primary-50"
-            : "border-ink-300 bg-white hover:border-primary-400 hover:bg-primary-50/30"
-        } disabled:opacity-60`}
-      >
-        <span className="w-14 h-14 rounded-2xl bg-primary-50 text-primary-600 inline-flex items-center justify-center">
-          <UploadCloud className="w-7 h-7" />
-        </span>
-        <span className="text-[15px] font-bold text-ink-900">
-          Drop files here
-        </span>
-        <span className="text-[12.5px] text-ink-500">
-          or click to browse · PDF, Word, or text · multiple files OK
-        </span>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={ACCEPT_TYPES}
-          onChange={e => { addFiles(e.target.files); e.target.value = ""; }}
-          className="hidden"
-        />
-      </button>
+      {/* The composer IS the page now. Subtitle deleted on purpose: the
+          placeholder and the starter chips already say what to do, and three
+          restatements of the same instruction is noise, not guidance. */}
+      <ThesisComposer
+        value={note}
+        onChange={setNote}
+        files={files}
+        onAddFiles={addFiles}
+        onRemoveFile={removeFile}
+        onSubmit={() => void analyze()}
+        canSubmit={canSubmit}
+        busy={submitting}
+        accept={ACCEPT_TYPES}
+      />
 
-      {/* Queued files */}
-      {files.length > 0 && (
-        <div className="mt-3 flex flex-col gap-1.5">
-          {files.map((f, i) => (
-            <div
-              key={`${f.name}-${f.size}-${i}`}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-ink-200 bg-white text-[12.5px]"
-            >
-              <FileText className="w-4 h-4 text-ink-500 shrink-0" />
-              <span className="font-medium text-ink-800 truncate flex-1">{f.name}</span>
-              <span className="text-ink-500 tabular-nums shrink-0">{formatBytes(f.size)}</span>
-              <button
-                type="button"
-                onClick={() => removeFile(i)}
-                disabled={submitting}
-                aria-label={`Remove ${f.name}`}
-                className="w-5 h-5 rounded-full text-ink-400 hover:bg-ink-100 hover:text-ink-700 inline-flex items-center justify-center shrink-0 disabled:opacity-50"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* SECONDARY: describe it instead. Collapsed by default so it stays a
-          sub-action — the drop zone is the headline. */}
-      <div className="mt-5">
-        {!noteOpen ? (
-          <button
-            type="button"
-            onClick={() => setNoteOpen(true)}
-            className="text-[13px] text-ink-500 hover:text-primary-700 font-medium"
-          >
-            ▸ Nothing to upload? Describe it instead
-          </button>
-        ) : (
-          <div>
-            <label htmlFor="note" className="block text-[13px] font-semibold text-ink-700 mb-1.5">
-              Describe what you have so far
-            </label>
-            <Textarea
-              id="note"
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              placeholder={
-                "e.g. I have a topic — Gen Z TikTok livestream buying in Hà Nội — a conceptual model with 5 hypotheses, and survey data ready for SmartPLS, but no literature review yet."
-              }
-              rows={4}
-              className="resize-y leading-relaxed"
-              autoFocus
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="mt-7 flex items-center gap-3">
+      {/* Footer — status and the blank-start escape hatch only.
+          The Analyze button lives INSIDE the composer now; a second one here
+          was a leftover from the drop-zone layout and shipped two competing
+          primary actions on one screen. */}
+      <div className="mt-5 flex items-center gap-3">
         {error && (
           <span role="alert" className="text-[12.5px] text-red-700 font-semibold">{error}</span>
         )}
@@ -365,20 +290,11 @@ export default function NewThesisPage() {
           </span>
         )}
         <span className="flex-1" />
-        {/* Blank start escape hatch — create an empty project, skip analysis. */}
         <Button variant="ghost" asChild>
-          <Link href="/">Cancel</Link>
-        </Button>
-        <Button type="button" onClick={() => void analyze()} disabled={!canSubmit}>
-          {submitting ? "Analyzing…" : "Analyze"}
+          <Link href="/">{t("new.cancel")}</Link>
         </Button>
       </div>
     </div>
   );
 }
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}

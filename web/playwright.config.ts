@@ -64,6 +64,13 @@ export default defineConfig({
   use: {
     baseURL: WEB_URL,
     trace: "retain-on-failure",
+    // Pinned because the UI language is now DETECTED from the browser timezone
+    // (app/lib/i18n/locale.ts). Without this, Playwright inherits the host
+    // clock, so the same suite renders English on a CI runner in UTC and
+    // Vietnamese on a developer's machine in Asia/Ho_Chi_Minh — and every
+    // assertion on English copy fails depending on who ran it. UTC is the
+    // neutral choice: it maps to the default locale.
+    timezoneId: "UTC",
   },
   projects: [
     // Runs first (project dependencies); Playwright starts webServers before

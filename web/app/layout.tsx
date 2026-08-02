@@ -3,9 +3,12 @@ import "./globals.css";
 // in MessageBubble). Loaded once at the root so every rendered equation is styled.
 import "katex/dist/katex.min.css";
 import type { ReactNode } from "react";
+import { cookies } from "next/headers";
 import { Inter, JetBrains_Mono } from "next/font/google";
 
 import { AuthProvider } from "./lib/auth-context";
+import { LocaleProvider } from "./lib/i18n/LocaleProvider";
+import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale } from "./lib/i18n/locale";
 
 // shadcn convention: load fonts via next/font (self-hosted, no FOUT) and
 // expose them as CSS variables. tailwind.config.ts wires --font-sans /
@@ -40,11 +43,21 @@ export const viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Read the locale SERVER-side from the cookie. This is what makes the whole
+  // scheme hydration-safe: the server renders the same locale the client's first
+  // render will use. Timezone detection (client-only) runs in LocaleProvider and
+  // only when this cookie is absent — i.e. once per browser.
+  const cookieStore = await cookies();
+  const raw = cookieStore.get(LOCALE_COOKIE)?.value;
+  const locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
+
   return (
-    <html lang="en" className={`${fontSans.variable} ${fontMono.variable}`}>
+    <html lang={locale} className={`${fontSans.variable} ${fontMono.variable}`}>
       <body className="bg-white text-ink-900 font-sans antialiased">
-        <AuthProvider>{children}</AuthProvider>
+        <LocaleProvider initialLocale={locale} hasCookie={isLocale(raw)}>
+          <AuthProvider>{children}</AuthProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

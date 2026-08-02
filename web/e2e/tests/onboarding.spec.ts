@@ -8,10 +8,11 @@ test("drop-first onboarding: describe-it flow reaches chat with an options card"
   await page.goto("/new");
   await expect(page.getByRole("heading", { name: "Analyze your thesis" })).toBeVisible();
 
-  // "Describe it instead" (note-only) keeps PDF parsing out of this journey —
-  // upload handling gets covered where it matters (export seeds via API).
-  await page.getByRole("button", { name: /Nothing to upload\? Describe it instead/ }).click();
-  await page.getByLabel("Describe what you have so far").fill(
+  // Note-only (no upload) keeps PDF parsing out of this journey — upload
+  // handling gets covered where it matters (export seeds via API). The composer
+  // textarea is now the page's primary control, so there is no longer a
+  // "Describe it instead" disclosure to open first.
+  await page.getByLabel("Analyze your thesis").fill(
     "I am studying how TikTok livestream shopping affects Gen Z purchase intention in Hanoi. " +
     "I have survey data ready for SmartPLS but no literature review yet.",
   );
