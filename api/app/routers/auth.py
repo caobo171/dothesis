@@ -11,6 +11,7 @@ The Session table itself is left in place (not dropped) so existing
 migration history stays clean, but no new rows are written.
 """
 from datetime import datetime, timezone
+import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -29,6 +30,7 @@ from ..models import User
 from ..security import hash_password, verify_password
 from ..settings import Settings, get_settings
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -132,10 +134,20 @@ def login(body: LoginRequest,
     if not user:
         raise HTTPException(401, detail={"error": {"code": "bad_credentials",
                                                     "message": "invalid email or password"}})
+    # "No password on this account" is a precondition, not a flavour of wrong
+    # password — so it is checked BEFORE verify_password, on the one field that
+    # actually answers it. The old code asked `if user.google_id` *inside* the
+    # verify-failed branch, which meant a plain typo on an account that had
+    # both a password and a linked Google identity was reported as "linked to
+    # Google", pushing the user away from the login that works for them.
+    #
+    # Both halves matter: an empty hash with no linked Google identity is a
+    # broken row, not a Google one, so it falls through to bad_credentials
+    # rather than swapping one false message for another.
+    if not user.password_hash and user.google_id:
+        raise HTTPException(401, detail={"error": {"code": "use_google",
+                                                    "message": "This account is linked to Google"}})
     if not verify_password(body.password, user.password_hash):
-        if user.google_id:
-            raise HTTPException(401, detail={"error": {"code": "use_google",
-                                                        "message": "This account is linked to Google"}})
         raise HTTPException(401, detail={"error": {"code": "bad_credentials",
                                                     "message": "invalid email or password"}})
     if not user.email_verified:
@@ -224,9 +236,17 @@ def resend_verification(body: EmailRequest,
             }})
     token = make_verify_token(user.id)
     verify_url = f"{settings.web_origin}/verify?token={token}"
-    send_template(user.email, "verify_email",
-                  {"username": user.username, "verify_url": verify_url, "expires_hours": 24},
-                  "Confirm your DoThesis email")
+    sent = send_template(user.email, "verify_email",
+                         {"username": user.username, "verify_url": verify_url, "expires_hours": 24},
+                         "Confirm your DoThesis email")
+    if not sent:
+        # Report the failure *and* skip the throttle stamp: recording
+        # last_verify_sent_at for a mail that never left would lock the user
+        # out of retrying for 60s over our error, not their impatience.
+        raise HTTPException(502, detail={"error": {
+            "code": "mail_send_failed",
+            "message": "Could not send the verification email. Please try again shortly.",
+        }})
     user.last_verify_sent_at = now
     db.commit()
     return {"ok": True}
@@ -238,12 +258,26 @@ def forgot_password(body: EmailRequest,
                     settings: Settings = Depends(get_settings)):
     user = db.scalar(select(User).where(User.email == body.email.lower()))
     if not user:
+        # Deliberate no-op response so the endpoint can't be used to enumerate
+        # accounts. Logged (server-side only) because "typed an email that was
+        # never registered" and "mail provider is down" are indistinguishable
+        # from the client, and the silent branch is by far the more common one.
+        log.info("forgot-password: no account for %s, nothing sent", body.email.lower())
         return {"ok": True}
     token = make_reset_token(user.id)
     reset_url = f"{settings.web_origin}/reset-password?token={token}"
-    send_template(user.email, "reset_password",
-                  {"username": user.username, "reset_url": reset_url, "expires_minutes": 60},
-                  "Reset your DoThesis password")
+    sent = send_template(user.email, "reset_password",
+                         {"username": user.username, "reset_url": reset_url, "expires_minutes": 60},
+                         "Reset your DoThesis password")
+    if not sent:
+        # The account exists, so the send genuinely failed (SES error) — that
+        # is not information an attacker can use to enumerate, and reporting it
+        # is what stops the UI from claiming "we sent a reset link" for a mail
+        # that never left the box.
+        raise HTTPException(502, detail={"error": {
+            "code": "mail_send_failed",
+            "message": "Could not send the reset email. Please try again shortly.",
+        }})
     return {"ok": True}
 
 
@@ -333,7 +367,7 @@ def google_signin(body: GoogleRequest,
     # 3. Else create new
     created = False
     if not user:
-        import random, secrets
+        import random
         email_prefix = re.sub(r"[^a-zA-Z0-9]", "", info["email"].split("@")[0])[:24] or "user"
         for _ in range(20):
             candidate = f"{email_prefix}{random.randint(1000, 9999)}"
@@ -345,7 +379,12 @@ def google_signin(body: GoogleRequest,
         user = User(
             email=info["email"],
             username=candidate,
-            password_hash=hash_password(secrets.token_urlsafe(32)),
+            # Empty, not a hash of a random throwaway. The old random hash was
+            # unguessable but indistinguishable from a real password, which
+            # left login unable to tell "never set a password" from "typed the
+            # wrong one". Empty means exactly what it says; /reset-password
+            # fills it in the moment the user chooses a password.
+            password_hash="",
             email_verified=True,
             google_id=info["google_id"],
         )

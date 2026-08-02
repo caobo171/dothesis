@@ -86,3 +86,77 @@ def test_google_bad_token_returns_401():
         r = c.post("/api/v1/auth/google", json={"id_token": "BAD"})
     assert r.status_code == 401
     assert r.json()["detail"]["error"]["code"] == "bad_google_token"
+
+
+def test_google_created_user_has_no_password_hash():
+    # Google-created accounts must store an EMPTY password_hash, not a hash of
+    # a random throwaway string. The empty value is the signal that the human
+    # has never set a password; fabricating a hash makes such an account
+    # indistinguishable from a real password account (see the login tests).
+    fake_info = {"email": "nopw@gmail.com", "google_id": "g_nopw", "name": "No PW"}
+    with patch("app.routers.auth.verify_google_id_token", return_value=fake_info):
+        c = _client()
+        r = c.post("/api/v1/auth/google", json={"id_token": "FAKE"})
+    assert r.status_code == 200, r.text
+
+    Session = get_session_factory()
+    with Session() as s:
+        from sqlalchemy import select
+        u = s.scalar(select(User).where(User.email == "nopw@gmail.com"))
+        assert u.password_hash == ""
+
+
+def test_login_google_only_account_says_use_google():
+    # No password ever set -> the "use Google" hint is the correct, useful answer.
+    Session = get_session_factory()
+    with Session() as s:
+        s.add(User(email="gonly@e.com", username="gonly", password_hash="",
+                   email_verified=True, google_id="g_only"))
+        s.commit()
+    c = _client()
+    r = c.post("/api/v1/auth/login", json={"email": "gonly@e.com", "password": "whatever123"})
+    assert r.status_code == 401
+    assert r.json()["detail"]["error"]["code"] == "use_google"
+
+
+def test_login_password_account_linked_to_google_reports_bad_credentials():
+    # THE BUG: a real password account that later linked Google. A typo must
+    # report bad credentials, not shove the user at Google -- password login
+    # genuinely works for this account.
+    Session = get_session_factory()
+    with Session() as s:
+        s.add(User(email="both@e.com", username="both",
+                   password_hash=hash_password("realpass1234"),
+                   email_verified=True, google_id="g_both"))
+        s.commit()
+    c = _client()
+    r = c.post("/api/v1/auth/login", json={"email": "both@e.com", "password": "WRONGpass1234"})
+    assert r.status_code == 401
+    assert r.json()["detail"]["error"]["code"] == "bad_credentials"
+
+
+def test_login_password_account_linked_to_google_still_logs_in():
+    Session = get_session_factory()
+    with Session() as s:
+        s.add(User(email="both2@e.com", username="both2",
+                   password_hash=hash_password("realpass1234"),
+                   email_verified=True, google_id="g_both2"))
+        s.commit()
+    c = _client()
+    r = c.post("/api/v1/auth/login", json={"email": "both2@e.com", "password": "realpass1234"})
+    assert r.status_code == 200, r.text
+    assert r.json()["access_token"]
+
+
+def test_login_empty_hash_without_google_is_bad_credentials():
+    # An empty hash with no linked Google identity is a broken row, not a
+    # Google account -- it must not claim "linked to Google".
+    Session = get_session_factory()
+    with Session() as s:
+        s.add(User(email="broken@e.com", username="broken", password_hash="",
+                   email_verified=True))
+        s.commit()
+    c = _client()
+    r = c.post("/api/v1/auth/login", json={"email": "broken@e.com", "password": "anything123"})
+    assert r.status_code == 401
+    assert r.json()["detail"]["error"]["code"] == "bad_credentials"

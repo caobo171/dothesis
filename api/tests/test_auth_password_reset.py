@@ -45,6 +45,19 @@ def test_forgot_known_email_sends_template():
     assert "reset_url" in args[2]
 
 
+def test_forgot_reports_failure_when_send_fails():
+    # send_template returns False when SES rejects the message. Returning
+    # {"ok": True} there makes the UI claim "we sent a reset link" for a mail
+    # that never left, which is exactly the failure mode that made this bug
+    # impossible to diagnose from the outside.
+    _seed("bob@e.com")
+    c = _client()
+    with patch("app.routers.auth.send_template", return_value=False):
+        r = c.post("/api/v1/auth/forgot-password", json={"email": "bob@e.com"})
+    assert r.status_code == 502
+    assert r.json()["detail"]["error"]["code"] == "mail_send_failed"
+
+
 def test_reset_with_valid_token_changes_password():
     """JWT auth migration note: this test used to also assert that all
     UserSession rows for the user were deleted on reset. With stateless

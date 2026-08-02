@@ -14,11 +14,13 @@ def _client():
 
 
 def _seed_user(email, *, password="supersecret", verified=False, google_id=None):
+    # password=None seeds an account with NO password (empty hash) — how
+    # Google-created accounts are stored. Anything else is hashed normally.
     Session = get_session_factory()
     with Session() as s:
         u = User(
             email=email, username=email.split("@")[0],
-            password_hash=hash_password(password),
+            password_hash=hash_password(password) if password is not None else "",
             email_verified=verified,
             google_id=google_id,
         )
@@ -49,7 +51,11 @@ def test_login_verified_succeeds():
 
 
 def test_login_google_account_bad_password_returns_use_google():
-    _seed_user("g@e.com", password="random-throwaway", verified=True, google_id="abc123")
+    # A Google-only account stores an empty hash. (This used to seed a hash of
+    # a "random-throwaway" string, mirroring the old fabricated-hash scheme —
+    # which is precisely what made a Google-only account indistinguishable
+    # from a password account that had merely been mistyped.)
+    _seed_user("g@e.com", password=None, verified=True, google_id="abc123")
     c = _client()
     r = c.post("/api/v1/auth/login", json={"email": "g@e.com", "password": "wrong-guess"})
     assert r.status_code == 401
