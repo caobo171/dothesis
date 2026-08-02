@@ -31,6 +31,8 @@ export type ImportSummaryProps = {
   /** Reconstruction still running below. Continuing now would skip past steps
    *  the student never got to review, so the button waits for it. */
   reconstructing?: boolean;
+  /** Modules the student has confirmed from the reconstruction list. */
+  confirmed?: string[];
 };
 
 export function ImportSummary({
@@ -40,6 +42,7 @@ export function ImportSummary({
   unreadable = [],
   onContinue,
   reconstructing = false,
+  confirmed = [],
 }: ImportSummaryProps) {
   const importedLabels = imported.map(label).join(", ");
 
@@ -69,6 +72,24 @@ export function ImportSummary({
       {imported.length === 0 && (
         <p className="text-[13px] text-ink-700 m-0">
           Nothing to import yet — we&apos;ll start you at {focus} ({label(focus)}).
+        </p>
+      )}
+
+      {/* Confirming a reconstruction does NOT advance you, and without saying so
+          this card looks frozen: you confirm M1/M2/M3 and it still reads
+          "You're at: M1 · Next: Topic". That is correct — the API commits a
+          confirmed reconstruction as `in_progress`, deliberately "never silently
+          done", because an inferred module is a starting point to review rather
+          than work the student actually did. So the fix is to SAY that, not to
+          move the focus. */}
+      {confirmed.length > 0 && (
+        <p className="text-[12.5px] text-ink-600 m-0 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
+          <span className="font-semibold text-green-800">
+            Confirmed: {confirmed.map((m) => `${m} (${label(m)})`).join(", ")}
+          </span>
+          {" — "}
+          saved as starting points to review, not finished steps. That&apos;s why
+          you still pick up at {focus} ({label(focus)}).
         </p>
       )}
 

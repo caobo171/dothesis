@@ -232,6 +232,7 @@ export default function NewThesisPage() {
             // reviewed yet — and the confirm/skip choices are made on this
             // screen, so leaving early silently drops them.
             reconstructing={reconstructing}
+            confirmed={confirmedModules}
           />
           <ReconstructedModules
             items={reconstructed}
