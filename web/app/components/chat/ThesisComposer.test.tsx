@@ -16,7 +16,7 @@ function Harness({
   locale?: Locale;
   onSubmit?: () => void;
   files?: File[];
-  onAddFiles?: (f: FileList | null) => void;
+  onAddFiles?: (f: File[] | FileList | null) => void;
 }) {
   function Inner() {
     const [value, setValue] = useState("");
@@ -98,5 +98,27 @@ describe("ThesisComposer", () => {
     const box = screen.getByRole("textbox").parentElement!;
     fireEvent.drop(box, { dataTransfer: { files: [new File(["x"], "a.pdf")] } });
     expect(onAddFiles).toHaveBeenCalled();
+  });
+
+  test("the file input hands over a SNAPSHOT, not the live FileList", () => {
+    // The regression this pins: onChange used to pass e.target.files straight
+    // through and THEN set e.target.value = "". Clearing the input empties that
+    // FileList in place, so a consumer reading it later (a deferred setState
+    // updater) got nothing. It presented as "you can only ever attach one
+    // file" — React eagerly evaluates the first update from initial state and
+    // defers the rest. Reported from the field as "chỉ up dc 1 file".
+    const received: unknown[] = [];
+    render(<Harness onAddFiles={(f) => received.push(f)} />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const a = new File(["a"], "a.pdf");
+    Object.defineProperty(input, "files", { value: [a], configurable: true });
+    fireEvent.change(input);
+
+    // An Array survives the input reset; a FileList would not.
+    expect(Array.isArray(received[0])).toBe(true);
+    expect((received[0] as File[])[0].name).toBe("a.pdf");
+    // And the input is cleared, so re-picking the SAME filename still fires.
+    expect(input.value).toBe("");
   });
 });

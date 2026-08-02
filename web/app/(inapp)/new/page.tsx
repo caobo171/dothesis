@@ -94,11 +94,25 @@ export default function NewThesisPage() {
 
   const addFiles = (incoming: FileList | File[] | null) => {
     if (!incoming) return;
+    // SNAPSHOT FIRST — this line must not move inside the updater below.
+    //
+    // `incoming` is usually the input's LIVE FileList, and the caller clears
+    // `input.value` right after calling us so the same file can be re-picked.
+    // Clearing the input empties that FileList in place. Array.from() used to
+    // run inside the setFiles updater, which React defers to the next render —
+    // by then the list was empty and the pick was silently dropped.
+    //
+    // It looked like "you can only ever attach one file": React eagerly
+    // evaluates the FIRST update from initial state (so file #1 landed) and
+    // defers every one after it (so #2 onward vanished). Reported from the
+    // field as "chỉ up dc 1 file".
+    const picked = Array.from(incoming);
+    if (picked.length === 0) return;
     setFiles(prev => {
       // De-dup by (name, size) so re-dropping the same file doesn't queue it twice.
       const seen = new Set(prev.map(f => `${f.name}::${f.size}`));
       const next = [...prev];
-      for (const f of Array.from(incoming)) {
+      for (const f of picked) {
         const k = `${f.name}::${f.size}`;
         if (!seen.has(k)) { seen.add(k); next.push(f); }
       }

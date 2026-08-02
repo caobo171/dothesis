@@ -185,7 +185,13 @@ def _parse_module(name: str, raw: str | None) -> dict | None:
 
 @router.post("/partner/report", response_model=PartnerReportOut)
 async def create_partner_report(
-    file: UploadFile = File(...),
+    # A report is routinely assembled from SEVERAL documents — an đề cương plus
+    # an SPSS output to write chapters 4+5, or the handful of exports SmartPLS
+    # produces. `files` is the current field; `file` is kept so an older partner
+    # build (or an in-flight request during a rollout) keeps working, since the
+    # two sides do not deploy atomically. Both may be sent; they concatenate.
+    files: list[UploadFile] | None = File(None),
+    file: UploadFile | None = File(None),
     depth: str = Form("analysis_report"),
     # Optional comma-separated subset of intro,lit_review,methodology,results,
     # discussion,conclusion. When set it overrides `depth` (the "tick Chương N"
@@ -207,17 +213,30 @@ async def create_partner_report(
 ):
     _require_partner(x_partner_token)
 
-    if file.content_type and file.content_type not in _ALLOWED_MIME:
-        raise HTTPException(
-            415, detail={"error": {"code": "unsupported_media_type",
-                                   "message": f"expected a PDF, got {file.content_type}"}})
-    pdf_bytes = await file.read()
-    if not pdf_bytes:
+    uploads = [u for u in [*(files or []), *([file] if file else [])] if u is not None]
+    if not uploads:
         raise HTTPException(422, detail={"error": {"code": "empty_file",
                                                    "message": "no file bytes"}})
-    if len(pdf_bytes) > _MAX_BYTES:
-        raise HTTPException(413, detail={"error": {"code": "file_too_large",
-                                                   "message": f"max {_MAX_BYTES // (1024 * 1024)}MB"}})
+
+    # (filename, bytes) in upload order. The size cap is now a TOTAL across the
+    # set, not per file — otherwise N files each just under the limit would slip
+    # through and blow the same budget the cap exists to protect.
+    docs: list[tuple[str, bytes]] = []
+    total_bytes = 0
+    for up in uploads:
+        if up.content_type and up.content_type not in _ALLOWED_MIME:
+            raise HTTPException(
+                415, detail={"error": {"code": "unsupported_media_type",
+                                       "message": f"expected a PDF, got {up.content_type}"}})
+        raw = await up.read()
+        if not raw:
+            raise HTTPException(422, detail={"error": {"code": "empty_file",
+                                                       "message": "no file bytes"}})
+        total_bytes += len(raw)
+        if total_bytes > _MAX_BYTES:
+            raise HTTPException(413, detail={"error": {"code": "file_too_large",
+                                                       "message": f"max {_MAX_BYTES // (1024 * 1024)}MB total"}})
+        docs.append((up.filename or "analysis.pdf", raw))
 
     chapter_list = [c.strip() for c in chapters.split(",") if c.strip()] if chapters else None
     m1_d, m2_d, m3_d = (_parse_module("m1", m1), _parse_module("m2", m2),
@@ -230,7 +249,19 @@ async def create_partner_report(
     except prun.ReportError as e:
         raise HTTPException(422, detail={"error": {"code": e.code, "message": e.message}})
 
-    text, pages = await run_in_threadpool(prun._extract_text, pdf_bytes, file.filename)
+    # Extract every document and concatenate under a filename banner, so the
+    # agent can tell the đề cương from the SPSS output instead of reading one
+    # undifferentiated blob. Files that yield no text are skipped rather than
+    # fatal — one image-only scan alongside three good documents should not
+    # sink the report; only an entirely unreadable SET is a 422.
+    parts: list[str] = []
+    pages = 0
+    for name, raw in docs:
+        one_text, one_pages = await run_in_threadpool(prun._extract_text, raw, name)
+        pages += one_pages
+        if one_text.strip():
+            parts.append(f"===== FILE: {name} =====\n{one_text}")
+    text = "\n\n".join(parts)
     if not text.strip():
         raise HTTPException(422, detail={"error": {"code": "no_extractable_text",
                                                    "message": "the file has no machine-readable text (image-only scan?)"}})
@@ -252,7 +283,23 @@ async def create_partner_report(
     # Mirror the raw upload so agent tools (read_file / parse_reference) can open
     # it — same uploads/ convention chat uses. Seeding only carries the extracted
     # TEXT; the file itself has to exist for a tool to reach it.
-    (workspace / "uploads" / (file.filename or "analysis.pdf")).write_bytes(pdf_bytes)
+    # Mirror every upload. os.path.basename strips any directory component a
+    # client may have put in the filename — without it "../../x" would escape
+    # the workspace. Same-named files get a numeric suffix so one cannot
+    # silently overwrite another.
+    seen_names: set[str] = set()
+    for name, raw in docs:
+        safe = os.path.basename(name) or "analysis.pdf"
+        if safe in seen_names:
+            stem, dot, ext = safe.rpartition(".")
+            base = stem if dot else safe
+            suffix = f".{ext}" if dot else ""
+            n = 2
+            while f"{base}-{n}{suffix}" in seen_names:
+                n += 1
+            safe = f"{base}-{n}{suffix}"
+        seen_names.add(safe)
+        (workspace / "uploads" / safe).write_bytes(raw)
 
     engine = db.get_bind()
     store = DbProjectStateStore(engine, project.id, workspace)

@@ -49,7 +49,9 @@ export function ThesisComposer({
   value: string;
   onChange: (next: string) => void;
   files: File[];
-  onAddFiles: (files: FileList | null) => void;
+  /** Receives a SNAPSHOT array, never a live FileList — see the input's
+   *  onChange for why that distinction matters. */
+  onAddFiles: (files: File[] | FileList | null) => void;
   onRemoveFile: (index: number) => void;
   onSubmit: () => void;
   canSubmit: boolean;
@@ -175,8 +177,14 @@ export function ThesisComposer({
             multiple
             accept={accept}
             onChange={(e) => {
-              onAddFiles(e.target.files);
+              // Copy out of the live FileList BEFORE resetting the input:
+              // clearing `value` empties `files` in place, so anything that
+              // reads it later (a deferred setState updater, say) sees nothing.
+              // The reset itself is required — without it, re-picking the same
+              // filename fires no change event at all.
+              const picked = Array.from(e.target.files ?? []);
               e.target.value = "";
+              if (picked.length) onAddFiles(picked);
             }}
             className="hidden"
           />
