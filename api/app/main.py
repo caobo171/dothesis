@@ -137,6 +137,7 @@ def create_app() -> FastAPI:
         from .routers import roadmap as roadmap_router  # F2: derived coaching roadmap
         from .routers import field_it as field_it_router  # F7: survey handoff + results ingestion
         from .routers import humanize as humanize_router  # MCP: humanize tool endpoint
+        from .routers import skills as skills_router      # chat skill picker catalogue
         app.include_router(chat_router.router, prefix="/api/v1")
         app.include_router(exports_router.router, prefix="/api/v1")  # SP6
         app.include_router(m5_editor_router.router, prefix="/api/v1")  # SP6.5
@@ -151,6 +152,9 @@ def create_app() -> FastAPI:
         # + DbProjectStateStore); orchestrator block like the roadmap surface.
         app.include_router(field_it_router.router, prefix="/api/v1")
         app.include_router(humanize_router.router, prefix="/api/v1")  # MCP humanize
+        # Skill catalogue for the chat picker. Orchestrator block because the
+        # skills it lists are the ones the deep agent loads (agent/runtime.py).
+        app.include_router(skills_router.router, prefix="/api/v1")
 
     # F4: wire the cross-project advisor-theme distill hook. The agent tool
     # mark_feedback_addressed calls agent.memory_hook.distill_advisor_themes once

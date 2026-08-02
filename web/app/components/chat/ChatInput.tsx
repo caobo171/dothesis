@@ -5,8 +5,8 @@ import {
   AtSign, ChevronDown, Paperclip, Send, X,
 } from "lucide-react";
 import { FileDropZone } from "./FileDropZone";
-import { ExpertAvatar, ExpertPicker } from "./ExpertPicker";
-import { applyExpertPersona, type Expert } from "@/app/lib/experts";
+import { SkillAvatar, SkillPicker } from "./SkillPicker";
+import { applySkillDirective, type Skill } from "@/app/lib/skills";
 import { Button } from "@/app/components/ui/button";
 
 
@@ -37,16 +37,17 @@ type Attachment = {
  * Bottom composer — matches the design's `Composer`:
  *
  *   ┌──────────────────────────────────────────────────────────────┐
- *   │  [@ Methodologist · Research design, paradigms… ]      [✕]   │  ← active-expert chip
+ *   │  [@ Humanize · re-voice AI-sounding prose ]            [✕]   │  ← active-skill chip
  *   │  Ask Methodologist — they'll handle this turn                │
  *   │                                                       [Send ↵]│
  *   │  ───────────────────────────────────────────────────────────  │
- *   │  [@ Ask an expert ▾]   📎 Attach   ◇ Draw model              │
+ *   │  [@ Skills ▾]          📎 Attach   ◇ Draw model              │
  *   └──────────────────────────────────────────────────────────────┘
  *      ⌘K to jump module · Shift+↵ for newline
  *
- * Picking an expert prefixes the outgoing message with a persona directive
- * (see lib/experts.ts) so the same backend agent tunes voice + grounding
+ * Picking a skill prefixes the outgoing message with a directive naming the
+ * skill (see lib/skills.ts), so the agent READS /skills/<id>/SKILL.md. This
+ * replaced an "expert persona" chooser that only nudged tone —
  * for that specialist — no extra credit cost, same thread. The Draw model
  * button hands a pre-filled prompt fragment into the textarea so the
  * agent picks up the intent — a shortcut to compose, not a separate tool.
@@ -77,11 +78,11 @@ export function ChatInput({
 }) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  // Active expert persona for THIS turn. Cleared back to `null` after each
+  // Active skill for THIS turn. Cleared back to `null` after each
   // send so the chooser is an opt-in per-turn move, not a sticky channel
   // that silently rebrands every future reply. Matches the design intent
   // ("Each one has its own grounding and voice — still one thread.").
-  const [expert, setExpert] = useState<Expert | null>(null);
+  const [skill, setSkill] = useState<Skill | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const handleSubmit = () => {
@@ -104,10 +105,10 @@ export function ChatInput({
     // Persona directive lives in the user-visible message text, not a
     // hidden system field — so a later read of the transcript still
     // explains why the assistant suddenly answered like a statistician.
-    onSubmit(applyExpertPersona(trimmed, expert), ready);
+    onSubmit(applySkillDirective(trimmed, skill), ready);
     setText("");
     setAttachments([]);
-    setExpert(null);
+    setSkill(null);
   };
 
   // Add chips immediately when files are picked (so the user gets instant
@@ -161,8 +162,8 @@ export function ChatInput({
     input.click();
   };
 
-  const placeholder = expert
-    ? `Ask ${expert.name} — they'll handle this turn`
+  const placeholder = skill
+    ? `${skill.name} will handle this turn`
     : focusModule
       ? `Reply to DoThesis (currently in ${focusModule}) — or ask about any module`
       : "Reply to DoThesis — or ask about any module";
@@ -172,32 +173,32 @@ export function ChatInput({
       <div className="px-6 pt-3.5 pb-5 bg-ink-50">
         <div
           className={`max-w-[880px] mx-auto bg-white border rounded-[20px] px-4 pt-2.5 pb-2 flex flex-col gap-2 transition-shadow ${
-            expert ? "border-primary-600 shadow-[0_0_0_3px_rgba(28,46,255,0.12)]" : "border-ink-200"
+            skill ? "border-primary-600 shadow-[0_0_0_3px_rgba(28,46,255,0.12)]" : "border-ink-200"
           }`}
           style={
-            expert
+            skill
               ? undefined
               : { boxShadow: "0 1px 0 rgba(11,16,32,.04), 0 2px 8px rgba(11,16,32,.06)" }
           }
         >
-          {/* Row -1: active-expert chip — surfaces who's answering this turn */}
-          {expert && (
+          {/* Row -1: active-skill chip — surfaces which pass runs this turn */}
+          {skill && (
             <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl bg-primary-50 border border-primary-100">
-              <ExpertAvatar expert={expert} size={26} />
+              <SkillAvatar name={skill.name} size={26} />
               <div className="leading-tight min-w-0">
                 <div className="text-[12.5px] font-bold text-primary-700 truncate">
-                  Consulting {expert.name}
+                  Using {skill.name}
                 </div>
                 <div className="text-[11px] text-primary-700/75 truncate">
-                  {expert.tagline}
+                  {skill.description}
                 </div>
               </div>
               <span className="flex-1" />
               <button
                 type="button"
-                onClick={() => setExpert(null)}
+                onClick={() => setSkill(null)}
                 className="px-2 py-1 rounded-md text-[11px] font-semibold text-primary-700 hover:bg-primary-100 transition-colors"
-                aria-label="Clear expert"
+                aria-label="Clear skill"
               >
                 ✕ Clear
               </button>
@@ -244,9 +245,9 @@ export function ChatInput({
             </Button>
           </div>
 
-          {/* Row 2: expert picker + file upload + Draw model. The active LLM
+          {/* Row 2: skill picker + file upload + Draw model. The active LLM
               model name is intentionally not surfaced to users — the
-              "expert" chooser is a persona selector, not a model switcher. */}
+              skill chooser picks a capability, not a model. */}
           <div className="flex items-center gap-1 pt-1.5 border-t border-ink-100 relative">
             <div className="relative">
               <button
@@ -256,29 +257,29 @@ export function ChatInput({
                 aria-haspopup="dialog"
                 aria-expanded={pickerOpen}
                 className={`inline-flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full text-[12.5px] font-semibold border transition-colors disabled:opacity-50 ${
-                  expert
+                  skill
                     ? "text-primary-700 border-primary-200 bg-primary-50/60 hover:bg-primary-50"
                     : pickerOpen
                       ? "text-ink-700 border-ink-200 bg-ink-100"
                       : "text-ink-700 border-ink-200 hover:bg-ink-100"
                 }`}
               >
-                {expert ? (
-                  <ExpertAvatar expert={expert} size={20} />
+                {skill ? (
+                  <SkillAvatar name={skill.name} size={20} />
                 ) : (
                   <span className="w-5 h-5 rounded-full bg-ink-200 text-ink-600 inline-flex items-center justify-center">
                     <AtSign className="w-3 h-3" />
                   </span>
                 )}
-                <span>{expert ? expert.name : "Ask an expert"}</span>
+                <span>{skill ? skill.name : "Skills"}</span>
                 <ChevronDown className="w-3 h-3 opacity-55" />
               </button>
 
               {pickerOpen && (
-                <ExpertPicker
+                <SkillPicker
                   focusModule={focusModule}
-                  selectedId={expert?.id}
-                  onSelect={e => { setExpert(e); setPickerOpen(false); }}
+                  selectedId={skill?.id}
+                  onSelect={s => { setSkill(s); setPickerOpen(false); }}
                   onClose={() => setPickerOpen(false)}
                 />
               )}

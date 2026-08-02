@@ -49,6 +49,22 @@ USER_MEMORY_KEYS: frozenset[str] = frozenset({
     # F11 — weekly-nudge opt-in. A durable per-user preference (defaults True at
     # send time), not thesis content — safe under the anti-fabrication invariant.
     "nudge_opt_in",
+    # Humanize style anchor: ~150 words the STUDENT wrote themselves, before
+    # using AI. A deliberate widening of the invariant above, so the reasoning
+    # matters: this is the student's own prior prose kept as a voice sample —
+    # not thesis content, not a source, not a citation, not a result. Nothing
+    # derived from it can be fabricated into a claim, because the humanize pass
+    # freezes every number/term/citation and discards any rewrite that moved one
+    # (orchestrator/tools/humanize.verify_frozen).
+    #
+    # It lives here rather than per-project because a student's writing voice is
+    # exactly the kind of durable, cross-project fact this layer exists for —
+    # asking for 150 words once per thesis instead of once per student is the
+    # difference between a feature people use and one they avoid. The anchor
+    # library ships EMPTY on purpose (an anchor must be off the LLM training
+    # distribution, so it cannot be generated), which is why the student's own
+    # sample is the only thing that makes humanize work today.
+    "writing_anchor",
 })
 
 
