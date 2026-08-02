@@ -173,6 +173,24 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   }>(
     `/projects/${projectId}`, fetcher,
   );
+
+  // Suggested actions for an EMPTY thread. Same POST /projects/{id}/roadmap the
+  // right panel uses, so the chips in both places are always the same advice —
+  // a second, locally-derived "what next" would drift the moment either changed.
+  //
+  // Gated on `messages.length === 0`: the roadmap is only rendered by the empty
+  // state, so fetching it on every populated thread would be a request per chat
+  // open for markup nobody sees. SWR's null key skips the call entirely.
+  const { data: roadmap } = useSWR<{
+    next_action?: { title?: string; cta_options?: string[] } | Record<string, never>;
+  }>(
+    messages.length === 0 ? `/projects/${projectId}/roadmap` : null,
+    (url: string) => apiFetch(url, { method: "POST" }),
+  );
+  const emptyStateNextAction =
+    roadmap?.next_action && "title" in roadmap.next_action
+      ? (roadmap.next_action as { title: string; cta_options?: string[] })
+      : null;
   const { data: thread } = useSWR<{ name: string }>(`/threads/${threadId}`, fetcher);
   const { data: latestRun, mutate: mutateRun } = useSWR<{ run: { id: string; status: RunStatus } | null }>(
     `/projects/${projectId}/runs/list?latest=true`, fetcher,
@@ -407,10 +425,37 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
           ) : (
             (() => {
               const copy = getEmptyStateCopy(project);
+              const na = emptyStateNextAction;
               return (
                 <>
                   <p className="text-lg font-semibold text-ink-800">{copy.title}</p>
                   <p className="mt-1 text-sm max-w-md">{copy.body}</p>
+                  {/* An empty thread used to offer nothing but a blank box, even
+                      though the roadmap already knows exactly what to do next —
+                      next_action() returns a title AND cta_options, and the
+                      right panel has rendered them for ages. Landing a student
+                      on "type something" when the system can say "confirm M1 is
+                      done" is a needless dead end. Same data source as the
+                      panel, so the two can't drift. */}
+                  {na?.cta_options?.length ? (
+                    <div className="mt-5 flex flex-col items-center gap-2">
+                      <p className="text-[12px] uppercase tracking-[0.08em] text-ink-400 font-semibold">
+                        {na.title}
+                      </p>
+                      <div className="flex flex-wrap justify-center gap-2 max-w-lg">
+                        {na.cta_options.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => void send(c)}
+                            className="rounded-full border border-primary-200 bg-primary-50 px-3.5 py-1.5 text-[13px] font-semibold text-primary-700 hover:bg-primary-100 hover:border-primary-400 transition-colors"
+                          >
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </>
               );
             })()
