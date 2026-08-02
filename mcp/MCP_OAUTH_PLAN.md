@@ -50,7 +50,7 @@ MCP access token bound to the DoThesis user.
    Issue MCP access tokens tied to the existing user record.
 3. **Wire humanize as an HTTP-callable** if not already — currently humanize lives in
    the orchestrator, not as a REST route; expose it internally for the MCP tool.
-4. **Deploy:** public HTTPS domain (e.g. `mcp.dothesis.xyz`) — REQUIRED, Claude connects
+4. **Deploy:** public HTTPS endpoint — REQUIRED, Claude connects
    over the internet, localhost won't work. Terminate TLS, reverse-proxy to the MCP app.
 5. **Register in Claude:** add connector by URL → OAuth handshake → tools appear.
 6. **Guardrails:** rate limits + credits per user (giveaway = free tier with a cap);
@@ -58,7 +58,14 @@ MCP access token bound to the DoThesis user.
 
 ## Two things only the owner can provide (everything else I can build)
 
-- **A public HTTPS domain/subdomain** for the MCP endpoint (+ ability to point DNS + TLS).
+- **A public HTTPS endpoint** for the MCP server. A dedicated subdomain works,
+  but so does path-routing (`dothesis.xyz/mcp`) on the existing host — MCP needs
+  reachability, not a hostname. If path-routed, the proxy must ALSO send
+  `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`
+  to the MCP process: clients look for those near the ORIGIN ROOT, not under the
+  `/mcp` path, so the web app must not claim them. Verify the exact discovery
+  path convention against the current MCP spec when implementing — it defines a
+  path-aware form for exactly this case.
 - **Confirm the auth approach:** reuse DoThesis Google login as the identity source
   (recommended, no new vendor) — vs. plug an external IdP. Default = reuse Google.
 

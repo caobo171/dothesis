@@ -1,7 +1,7 @@
 # DoThesis + MCP — run behind the webkaze tunnel (dev)
 
 The exact steps to bring the whole stack up so the MCP is reachable at
-`https://dothesis-mcp.webkaze.com/mcp`. All commands run from the repo root
+`https://dothesislocal-api.webkaze.com/mcp`. All commands run from the repo root
 (`.../learning_app/dothesis`) unless noted. This is the DEV setup (Mac +
 Cloudflare tunnel); production hosting is a later step.
 
@@ -12,7 +12,7 @@ Ports / hosts:
 | Postgres (docker) | `:5432` | — |
 | API (FastAPI) | `:7100` | `dothesislocal-api.webkaze.com` |
 | Frontend (Next.js) | `:3006` | `dothesislocal.webkaze.com` |
-| **MCP server** | `:9000` | **`dothesis-mcp.webkaze.com`** |
+| **MCP server** | `:9000` | **`dothesislocal-api.webkaze.com/mcp`** (path-routed) |
 | cloudflared tunnel | — | routes all of the above (`webkaze-local`) |
 
 ## 0. Prereqs (one-time)
@@ -81,14 +81,33 @@ DOTHESIS_API_URL=http://localhost:7100 DOTHESIS_ACCESS_TOKEN="$TOK" DOTHESIS_MCP
 
 ## 5. Cloudflare tunnel
 
-Ingress rule already added to `~/.cloudflared/config.yml`:
+MCP is PATH-ROUTED onto the existing API host rather than given its own
+subdomain. What MCP actually requires is a publicly reachable HTTPS URL (Claude
+cannot reach localhost) — not a hostname of its own. Sharing the host means one
+DNS record and one certificate, and it keeps the process isolation that matters:
+the MCP server still runs in its own venv and still talks to DoThesis over HTTP,
+so the conflicting `fastmcp` / pinned-pydantic dependency trees never meet
+(see `README.md`). Separate PROCESS, same ORIGIN.
+
+Ingress rules in `~/.cloudflared/config.yml` — ORDER MATTERS, cloudflared takes
+the first match, so the `/mcp` and `.well-known` rules must come BEFORE the
+catch-all for the same hostname:
 
 ```yaml
-  - hostname: dothesis-mcp.webkaze.com
+  - hostname: dothesislocal-api.webkaze.com
+    path: ^/mcp
     service: http://localhost:9000
+  # OAuth discovery is fetched near the ORIGIN ROOT, not under /mcp, so these
+  # must reach the MCP process too once the OAuth façade lands
+  # (MCP_OAUTH_PLAN.md). Until then they 404 harmlessly.
+  - hostname: dothesislocal-api.webkaze.com
+    path: ^/.well-known/oauth-
+    service: http://localhost:9000
+  - hostname: dothesislocal-api.webkaze.com
+    service: http://localhost:7100
 ```
 
-DNS route (one-time): `cloudflared tunnel route dns webkaze-local dothesis-mcp.webkaze.com`
+No new DNS route is needed — `dothesislocal-api.webkaze.com` already resolves.
 
 Run / reload the tunnel (a config change needs a RESTART — SIGHUP does not reload ingress):
 
@@ -99,12 +118,19 @@ cloudflared tunnel run webkaze-local
 ## 6. Verify end-to-end (public)
 
 ```bash
-curl -s -XPOST https://dothesis-mcp.webkaze.com/mcp \
+curl -s -XPOST https://dothesislocal-api.webkaze.com/mcp \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
 Should list the `humanize` tool. A `tools/call` runs the real humanize (Gemini, ~20-30s).
+
+⚠️ The path-routed URL above is NOT yet verified end-to-end — the ingress rules
+in §5 changed from a dedicated `dothesis-mcp.webkaze.com` hostname to a `/mcp`
+path on the API host, and cloudflared needs a RESTART (SIGHUP does not reload
+ingress) before this curl can pass. Run it after restarting; if it returns the
+API's 404 instead of a JSON-RPC result, the catch-all rule is matching first —
+the `/mcp` rule must be listed BEFORE it.
 
 ## Notes / gotchas
 

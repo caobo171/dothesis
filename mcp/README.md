@@ -43,8 +43,14 @@ Then point an MCP client at `http://127.0.0.1:9000` and call `humanize`.
 
 ## Go public (phase 2) — what's needed
 
-1. **A public HTTPS domain** (e.g. `mcp.dothesis.xyz`) — the ONE external thing
-   the owner must provide. Claude connects over the internet; localhost won't work.
+1. **A public HTTPS endpoint** — the ONE external thing the owner must provide.
+   Claude connects over the internet; localhost won't work. This does NOT have
+   to be its own subdomain: path-routing `dothesis.xyz/mcp` at the proxy works
+   and costs one less DNS record + certificate. The isolation that matters is
+   the PROCESS (own venv, talks to DoThesis over HTTP), not the hostname — see
+   the architecture note above. A subdomain is only simpler in one respect: it
+   owns its whole origin, so the `.well-known/oauth-*` discovery paths can't
+   collide with the web app's routes.
 2. The **OAuth 2.1 façade** (`MCP_OAUTH_PLAN.md`): `.well-known` metadata, dynamic
    client registration, `/authorize` → DoThesis Google login, `/token` (PKCE),
    minting a per-user token (drops the static `DOTHESIS_ACCESS_TOKEN`).
@@ -61,9 +67,13 @@ Then point an MCP client at `http://127.0.0.1:9000` and call `humanize`.
 
 - ✅ DoThesis API `POST /api/v1/humanize` (existing Bearer/JWT auth) — built, mapping
   unit-tested, verified end-to-end (real Gemini rewrite, frozen tokens preserved).
-- ✅ `server_lite.py` — running on `127.0.0.1:9000`, tunneled at
-  **`https://dothesis-mcp.webkaze.com/mcp`** (Cloudflare tunnel `webkaze-local`).
-  `initialize` / `tools/list` / `tools/call humanize` all verified over the public URL.
+- ✅ `server_lite.py` — running on `127.0.0.1:9000`, tunneled via Cloudflare
+  (`webkaze-local`). `initialize` / `tools/list` / `tools/call humanize` were all
+  verified over the public URL **on the old `dothesis-mcp.webkaze.com` subdomain**.
+- ⚠️ The tunnel is being moved to path-routing on the API host
+  (**`https://dothesislocal-api.webkaze.com/mcp`**, RUNBOOK §5) so MCP stops
+  needing its own DNS record + certificate. That reroute is NOT re-verified yet:
+  it needs a cloudflared restart, then the §6 curl.
 - ⚠️ **DEV ONLY, NOT SECURE YET:** the tunnel uses a single static `DOTHESIS_ACCESS_TOKEN`
   (acts as one real user) and has no auth in front — do not publish the URL. Claude's
   connector also *requires* OAuth for remote MCP, so it can't be added to claude.ai

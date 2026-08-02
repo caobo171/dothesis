@@ -20,11 +20,32 @@ import { Check, Copy, ExternalLink } from "lucide-react";
  * page that implies otherwise would be the dishonest version of this feature.
  */
 
-// Public tunnel host from mcp/RUNBOOK.md. Env-overridable so a production
-// deploy doesn't need a code change — hardcoding it is how the logo mark ended
-// up stale on one surface out of four.
-const MCP_URL =
-  process.env.NEXT_PUBLIC_MCP_URL || "https://dothesis-mcp.webkaze.com/mcp";
+/**
+ * DERIVED from NEXT_PUBLIC_API_BASE, not its own env var.
+ *
+ * MCP is path-routed onto the API host rather than given a subdomain (see
+ * mcp/RUNBOOK.md §5) — MCP needs a publicly reachable HTTPS URL, not a hostname
+ * of its own, and sharing the host saves a DNS record and a certificate. The
+ * process stays isolated either way, which is what actually keeps fastmcp's
+ * deps away from DoThesis's pinned pydantic.
+ *
+ * Because it shares the API's ORIGIN, a dedicated NEXT_PUBLIC_MCP_URL would be
+ * a second copy of a value the app already has — one more thing to set per
+ * environment and one more thing to forget, which is exactly how a "same
+ * domain" setup silently drifts into pointing at the wrong host.
+ */
+function mcpUrl(): string {
+  const base = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
+  try {
+    return `${new URL(base).origin}/mcp`;
+  } catch {
+    // A malformed base shouldn't blank the page — fall back to trimming the
+    // known /api/v1 suffix.
+    return `${base.replace(/\/api\/v1\/?$/, "")}/mcp`;
+  }
+}
+
+const MCP_URL = mcpUrl();
 
 function CopyRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
