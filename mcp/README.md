@@ -50,10 +50,23 @@ Then point an MCP client at `http://127.0.0.1:9000` and call `humanize`.
    minting a per-user token (drops the static `DOTHESIS_ACCESS_TOKEN`).
 3. Add the connector in Claude by URL → OAuth handshake → `humanize` appears.
 
-## Status
+## Two server variants
 
-- ✅ DoThesis API `POST /api/v1/humanize` (auth via existing Bearer/JWT) — built,
-  mapping unit-tested.
-- ✅ `server.py` phase-1 adapter — code complete (deps install on the deploy host;
-  the build sandbox has no `fastmcp` index).
-- ⏳ OAuth façade + public deploy — blocked only on the domain above.
+| File | Deps | Use |
+|---|---|---|
+| `server.py` | `fastmcp` | Production path (proper protocol/SSE/sessions). Needs the SDK. |
+| `server_lite.py` | `starlette` only (already in DoThesis's venv) | SDK-free minimal Streamable-HTTP MCP for hosts where `fastmcp` can't be installed. What's running on the live dev tunnel now. |
+
+## Status (2026-08-02)
+
+- ✅ DoThesis API `POST /api/v1/humanize` (existing Bearer/JWT auth) — built, mapping
+  unit-tested, verified end-to-end (real Gemini rewrite, frozen tokens preserved).
+- ✅ `server_lite.py` — running on `127.0.0.1:9000`, tunneled at
+  **`https://dothesis-mcp.webkaze.com/mcp`** (Cloudflare tunnel `webkaze-local`).
+  `initialize` / `tools/list` / `tools/call humanize` all verified over the public URL.
+- ⚠️ **DEV ONLY, NOT SECURE YET:** the tunnel uses a single static `DOTHESIS_ACCESS_TOKEN`
+  (acts as one real user) and has no auth in front — do not publish the URL. Claude's
+  connector also *requires* OAuth for remote MCP, so it can't be added to claude.ai
+  until the OAuth façade lands.
+- ⏳ Next: OAuth 2.1 façade (reuse Google login) → per-user tokens → add to Claude.
+  Then run all three (API, MCP, tunnel) under a process manager for persistence.
