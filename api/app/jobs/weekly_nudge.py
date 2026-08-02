@@ -24,6 +24,9 @@ def run_weekly_nudge(db, mail_send, now=None, *, _projects=None, _email_for=None
     A project with no timeline (timeline_status -> {}) is skipped — nothing to say.
     """
     from agent.timeline import timeline_status  # noqa: PLC0415
+
+    from ..settings import get_settings  # noqa: PLC0415
+    origin = get_settings().web_origin
     now = now or datetime.now(timezone.utc)
     projects = (_projects or _default_projects)(db)
     sent = skipped = 0
@@ -45,7 +48,7 @@ def run_weekly_nudge(db, mail_send, now=None, *, _projects=None, _email_for=None
             behind = (f"You're about {st['weeks_behind']} week(s) behind."
                       if not st["on_track"] else "You're on track — keep going.")
             html = (f"<p>This week: <b>{st['this_week']}</b>.</p><p>{behind}</p>"
-                    f"<p><a href='https://dothesis.app'>Open your thesis</a></p>")
+                    f"<p><a href='{origin}'>Open your thesis</a></p>")
             to = (_email_for or _default_email_for)(db, p.owner_id)
             if mail_send(to, "Your thesis this week", html):
                 (_mark or _default_mark)(db, p, now)

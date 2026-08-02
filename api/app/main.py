@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -14,6 +15,8 @@ from .routers import credit as credit_router
 from .routers import jobs as jobs_router
 from .routers import papers as papers_router
 from .settings import get_settings, reset_settings
+
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -89,6 +92,14 @@ def create_app() -> FastAPI:
     # Reset cached settings so that env-var monkeypatching in tests takes effect.
     reset_settings()
     settings = get_settings()
+    # A localhost WEB_ORIGIN behind a real deployment is silent-but-fatal: the
+    # verify / reset-password links mailed out point at the user's own machine.
+    # Nothing else fails, so it only surfaces when someone clicks the link.
+    for name, value in (("WEB_ORIGIN", settings.web_origin),
+                        ("DOTHESIS_BASE_URL", settings.dothesis_base_url)):
+        if "localhost" in value or "127.0.0.1" in value:
+            log.warning("%s is %s — emailed links and payment return URLs will "
+                        "point at localhost. Set it to the public origin.", name, value)
     app = FastAPI(title="DoThesis API", version="0.1.0", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
