@@ -1,7 +1,7 @@
 # DoThesis + MCP — run behind the webkaze tunnel (dev)
 
 The exact steps to bring the whole stack up so the MCP is reachable at
-`https://dothesislocal-api.webkaze.com/mcp`. All commands run from the repo root
+`https://dothesislocal.webkaze.com/mcp`. All commands run from the repo root
 (`.../learning_app/dothesis`) unless noted. This is the DEV setup (Mac +
 Cloudflare tunnel); production hosting is a later step.
 
@@ -12,7 +12,7 @@ Ports / hosts:
 | Postgres (docker) | `:5432` | — |
 | API (FastAPI) | `:7100` | `dothesislocal-api.webkaze.com` |
 | Frontend (Next.js) | `:3006` | `dothesislocal.webkaze.com` |
-| **MCP server** | `:9000` | **`dothesislocal-api.webkaze.com/mcp`** (path-routed) |
+| **MCP server** | `:9000` | **`dothesislocal.webkaze.com/mcp`** (path-routed on the WEB host) |
 | cloudflared tunnel | — | routes all of the above (`webkaze-local`) |
 
 ## 0. Prereqs (one-time)
@@ -94,18 +94,24 @@ the first match, so the `/mcp` and `.well-known` rules must come BEFORE the
 catch-all for the same hostname:
 
 ```yaml
-  - hostname: dothesislocal-api.webkaze.com
+  - hostname: dothesislocal.webkaze.com
     path: ^/mcp
     service: http://localhost:9000
   # OAuth discovery is fetched near the ORIGIN ROOT, not under /mcp, so these
   # must reach the MCP process too once the OAuth façade lands
   # (MCP_OAUTH_PLAN.md). Until then they 404 harmlessly.
-  - hostname: dothesislocal-api.webkaze.com
+  - hostname: dothesislocal.webkaze.com
     path: ^/.well-known/oauth-
     service: http://localhost:9000
-  - hostname: dothesislocal-api.webkaze.com
-    service: http://localhost:7100
+  - hostname: dothesislocal.webkaze.com
+    service: http://localhost:3006
 ```
+
+Routed on the WEB host, not the API host. From a browser the whole product is
+already ONE origin — `web/proxy.js` shows `/api/v1/*` is a Next rewrite onto
+FastAPI — so putting `/mcp` there too means the connector URL is simply the
+address the student is already looking at. That is what lets the setup page read
+it off `window.location` with nothing to configure per environment.
 
 No new DNS route is needed — `dothesislocal-api.webkaze.com` already resolves.
 
@@ -118,7 +124,7 @@ cloudflared tunnel run webkaze-local
 ## 6. Verify end-to-end (public)
 
 ```bash
-curl -s -XPOST https://dothesislocal-api.webkaze.com/mcp \
+curl -s -XPOST https://dothesislocal.webkaze.com/mcp \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```

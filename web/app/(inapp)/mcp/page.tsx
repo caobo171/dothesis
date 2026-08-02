@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Copy, ExternalLink } from "lucide-react";
 
 /**
@@ -21,31 +21,29 @@ import { Check, Copy, ExternalLink } from "lucide-react";
  */
 
 /**
- * DERIVED from NEXT_PUBLIC_API_BASE, not its own env var.
+ * The MCP URL is THIS PAGE'S OWN ORIGIN + /mcp. No env var, no derivation.
  *
- * MCP is path-routed onto the API host rather than given a subdomain (see
- * mcp/RUNBOOK.md §5) — MCP needs a publicly reachable HTTPS URL, not a hostname
- * of its own, and sharing the host saves a DNS record and a certificate. The
- * process stays isolated either way, which is what actually keeps fastmcp's
- * deps away from DoThesis's pinned pydantic.
+ * `/api/v1/*` is already a Next rewrite onto FastAPI (see web/proxy.js), so
+ * from a browser the whole product is one origin. Routing `/mcp` the same way
+ * makes the connector URL something the page can simply read off the address
+ * bar — correct in dev, on the tunnel, and in production without anything to
+ * configure.
  *
- * Because it shares the API's ORIGIN, a dedicated NEXT_PUBLIC_MCP_URL would be
- * a second copy of a value the app already has — one more thing to set per
- * environment and one more thing to forget, which is exactly how a "same
- * domain" setup silently drifts into pointing at the wrong host.
+ * A first attempt derived this from NEXT_PUBLIC_API_BASE. That broke exactly
+ * because of the rewrite: the base is relative (or unset), `new URL()` threw,
+ * and the field rendered a bare "/mcp" with no host — a URL nobody can paste
+ * into Claude.
  */
-function mcpUrl(): string {
-  const base = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
-  try {
-    return `${new URL(base).origin}/mcp`;
-  } catch {
-    // A malformed base shouldn't blank the page — fall back to trimming the
-    // known /api/v1 suffix.
-    return `${base.replace(/\/api\/v1\/?$/, "")}/mcp`;
-  }
+function useMcpUrl(): string {
+  // Computed after mount rather than during render: window doesn't exist during
+  // SSR, and rendering a different value on the server than on the first client
+  // pass is a hydration mismatch. Both start empty, then this fills it in.
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    setUrl(`${window.location.origin}/mcp`);
+  }, []);
+  return url;
 }
-
-const MCP_URL = mcpUrl();
 
 function CopyRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
@@ -87,6 +85,7 @@ type Tab = "claude" | "chatgpt";
 
 export default function McpSetupPage() {
   const [tab, setTab] = useState<Tab>("claude");
+  const MCP_URL = useMcpUrl();
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 flex flex-col gap-6">

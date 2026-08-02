@@ -71,7 +71,7 @@ Then point an MCP client at `http://127.0.0.1:9000` and call `humanize`.
   (`webkaze-local`). `initialize` / `tools/list` / `tools/call humanize` were all
   verified over the public URL **on the old `dothesis-mcp.webkaze.com` subdomain**.
 - ⚠️ The tunnel is being moved to path-routing on the API host
-  (**`https://dothesislocal-api.webkaze.com/mcp`**, RUNBOOK §5) so MCP stops
+  (**`https://dothesislocal.webkaze.com/mcp`**, RUNBOOK §5) so MCP stops
   needing its own DNS record + certificate. That reroute is NOT re-verified yet:
   it needs a cloudflared restart, then the §6 curl.
 - ⚠️ **DEV ONLY, NOT SECURE YET:** the tunnel uses a single static `DOTHESIS_ACCESS_TOKEN`
