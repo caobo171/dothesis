@@ -33,4 +33,32 @@ describe("ImportSummary", () => {
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
     expect(onContinue).toHaveBeenCalled();
   });
+
+  test("Continue is disabled while reconstruction is still running", () => {
+    // Continuing mid-reconstruction navigates away from steps the student has
+    // not reviewed, and the confirm/skip choices live on THIS screen — so an
+    // early click silently drops them.
+    const onContinue = vi.fn();
+    render(
+      <ImportSummary imported={["M1"]} focus="M2" onContinue={onContinue} reconstructing />,
+    );
+    const btn = screen.getByRole("button");
+    expect(btn).toBeDisabled();
+    expect(btn.getAttribute("aria-busy")).toBe("true");
+    expect(btn.textContent).toMatch(/Reconstructing/);
+    fireEvent.click(btn);
+    expect(onContinue).not.toHaveBeenCalled();
+  });
+
+  test("Continue is enabled once reconstruction finishes", () => {
+    const onContinue = vi.fn();
+    render(
+      <ImportSummary imported={["M1"]} focus="M2" onContinue={onContinue} reconstructing={false} />,
+    );
+    const btn = screen.getByRole("button");
+    expect(btn).not.toBeDisabled();
+    expect(btn.textContent).toMatch(/Continue to Literature/);
+    fireEvent.click(btn);
+    expect(onContinue).toHaveBeenCalledTimes(1);
+  });
 });

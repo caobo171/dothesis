@@ -7,6 +7,28 @@ import Link from "next/link";
 // "DoThesis" so the two products are never confused for each other.
 const MARK_SRC = "/logo-mark.png";
 
+/**
+ * The logo mark on its own. Exported so no surface re-implements it — the chat
+ * WorkflowSidebar used to hand-roll a gradient square with a letter "D", which
+ * is exactly the drift the AuthBrand comment below warns about: when
+ * logo-mark.png was replaced, every surface updated except that one.
+ */
+export function BrandMark({ size = 38, className = "rounded-lg" }: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <img
+      src={MARK_SRC}
+      alt=""
+      aria-hidden="true"
+      className={`shrink-0 ${className}`}
+      width={size}
+      height={size}
+    />
+  );
+}
+
 type BrandProps = {
   collapsed?: boolean;
 };
@@ -14,14 +36,7 @@ type BrandProps = {
 export function Brand({ collapsed = false }: BrandProps) {
   return (
     <Link href="/" className="flex items-center gap-3 no-underline">
-      <img
-        src={MARK_SRC}
-        alt=""
-        aria-hidden="true"
-        className="rounded-lg"
-        width={38}
-        height={38}
-      />
+      <BrandMark size={38} />
       {!collapsed && (
         <div className="flex flex-col leading-tight">
           <span className="text-base font-extrabold tracking-tight text-ink-900">
@@ -40,7 +55,7 @@ export function Brand({ collapsed = false }: BrandProps) {
 export function AuthBrand() {
   return (
     <div className="flex flex-col items-center gap-2">
-      <img src={MARK_SRC} alt="" aria-hidden="true" className="rounded-xl" width={48} height={48} />
+      <BrandMark size={48} className="rounded-xl" />
       <div className="font-extrabold text-2xl text-ink-900">
         Do<span className="text-primary-600">Thesis</span>
       </div>

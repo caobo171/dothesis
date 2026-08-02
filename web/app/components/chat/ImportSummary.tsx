@@ -28,6 +28,9 @@ export type ImportSummaryProps = {
   ambiguous?: string[]; // filenames we couldn't confidently slot (e.g. raw datasets)
   unreadable?: string[]; // filenames with no extractable text
   onContinue?: () => void;
+  /** Reconstruction still running below. Continuing now would skip past steps
+   *  the student never got to review, so the button waits for it. */
+  reconstructing?: boolean;
 };
 
 export function ImportSummary({
@@ -36,6 +39,7 @@ export function ImportSummary({
   ambiguous = [],
   unreadable = [],
   onContinue,
+  reconstructing = false,
 }: ImportSummaryProps) {
   const importedLabels = imported.map(label).join(", ");
 
@@ -84,9 +88,17 @@ export function ImportSummary({
         <button
           type="button"
           onClick={onContinue}
-          className="self-start mt-1 rounded-xl bg-primary-600 px-4 py-2 text-[13px] font-bold text-white hover:bg-primary-700"
+          disabled={reconstructing}
+          aria-busy={reconstructing}
+          className="self-start mt-1 rounded-xl bg-primary-600 px-4 py-2 text-[13px] font-bold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary-600 inline-flex items-center gap-2"
         >
-          Continue to {label(focus)} →
+          {reconstructing && (
+            <span
+              aria-hidden="true"
+              className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin"
+            />
+          )}
+          {reconstructing ? "Reconstructing…" : `Continue to ${label(focus)} →`}
         </button>
       )}
 

@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { MessageSquare, Plus } from "lucide-react";
 
+import { LocaleSwitcher } from "../LocaleSwitcher";
+import { BrandMark } from "../layout/Brand";
+import { useT } from "../../lib/i18n/LocaleProvider";
 import type { Thread } from "./ThreadsSidebar";
 
 
@@ -35,6 +38,7 @@ export function WorkflowSidebar({
   onSelectThread?: (tid: string) => void;
   onNewThread?: () => void;
 }) {
+  const t = useT();
   return (
     <aside
       className="w-[296px] min-w-[296px] flex flex-col h-full bg-white border-r border-ink-200 shrink-0"
@@ -42,15 +46,11 @@ export function WorkflowSidebar({
     >
       {/* Brand row */}
       <div className="px-5 pt-[18px] pb-3.5 flex items-center gap-2.5">
-        <span
-          className="w-9 h-9 rounded-[10px] inline-flex items-center justify-center text-white font-extrabold font-serif text-[18px] shrink-0"
-          style={{
-            background: "linear-gradient(135deg, #2540FF 0%, #1B2FD6 100%)",
-            boxShadow: "0 4px 12px rgba(37,64,255,.22)",
-          }}
-        >
-          D
-        </span>
+        {/* Was a hand-rolled gradient square with a letter "D". Using the shared
+            mark means this rail can't fall out of step with the auth screens and
+            the global sidebar when logo-mark.png changes — which is exactly how
+            it drifted last time. */}
+        <BrandMark size={36} className="rounded-[10px]" />
         <div className="min-w-0 flex-1">
           <div className="font-extrabold text-[17.5px] tracking-[-0.01em] text-ink-900">DoThesis</div>
           <div className="text-[11px] uppercase tracking-[0.08em] text-ink-500 font-medium mt-px">
@@ -94,7 +94,8 @@ export function WorkflowSidebar({
         </div>
         {threads && (
           <div className="text-[10.5px] tabular-nums text-ink-400 font-semibold">
-            {threads.filter(t => t.status === "active").length}
+            {/* `th`, not `t` — `t` is the translator in this scope now. */}
+            {threads.filter(th => th.status === "active").length}
           </div>
         )}
       </div>
@@ -117,12 +118,19 @@ export function WorkflowSidebar({
           threads of this project. */}
       {typeof projectCredits === "number" && (
         <div className="px-4 py-3 border-t border-ink-200 flex items-center justify-between text-[12px]">
-          <span className="text-ink-500">Tổng credits dự án</span>
+          <span className="text-ink-500">{t("sidebar.projectCredits")}</span>
           <span className="font-bold text-ink-900 tabular-nums">
             {projectCredits.toLocaleString()}
           </span>
         </div>
       )}
+
+      {/* Language lives here because this rail is on screen for the whole
+          working session — a student who got the wrong auto-detected language
+          shouldn't have to hunt through settings to fix it. */}
+      <div className="px-4 pb-3 pt-1">
+        <LocaleSwitcher />
+      </div>
     </aside>
   );
 }

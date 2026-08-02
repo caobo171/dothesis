@@ -101,13 +101,24 @@ function ModuleCard({
         <div className="flex flex-col gap-2">
           {editableKeys.map((k) => {
             const v = buf[k];
-            if (Array.isArray(v)) {
+            // Only a list of PRIMITIVES is line-editable. An array of objects
+            // (research_gaps, hypotheses, constructs, purposive_criteria …) used
+            // to land here too, where String({…}) rendered every row as
+            // "[object Object]" — and the onChange was worse than the display:
+            // split("\n") would have replaced each object with the literal
+            // string "[object Object]", silently destroying the reconstruction
+            // the moment anyone touched the field. Structured values fall
+            // through to the read-only "refine in chat" preview below.
+            const isEditableList =
+              Array.isArray(v) &&
+              v.every((x) => typeof x === "string" || typeof x === "number");
+            if (isEditableList) {
               return (
                 <label key={k} className="flex flex-col gap-1">
                   <span className="text-[11.5px] font-semibold text-ink-700">{k}</span>
                   <textarea
                     className="rounded-lg border border-ink-200 px-2 py-1 text-[12.5px] min-h-[52px]"
-                    value={(v as unknown[]).map(String).join("\n")}
+                    value={(v as (string | number)[]).map(String).join("\n")}
                     onChange={(e) =>
                       setField(
                         k,
@@ -130,13 +141,25 @@ function ModuleCard({
                 </label>
               );
             }
-            // Objects / numbers: read-only preview; refine in chat.
+            // Nothing reconstructed for this field. Rendering JSON here printed a
+            // bare `null`, which reads like a bug to a student — say it in words.
+            if (v === null || v === undefined || (Array.isArray(v) && v.length === 0)) {
+              return (
+                <div key={k} className="flex flex-col gap-1">
+                  <span className="text-[11.5px] font-semibold text-ink-700">{k}</span>
+                  <span className="rounded-lg bg-ink-50 px-2 py-1 text-[11.5px] text-ink-400 italic">
+                    Not reconstructed — you can fill this in chat.
+                  </span>
+                </div>
+              );
+            }
+            // Objects / arrays of objects / numbers: read-only preview; refine in chat.
             return (
               <div key={k} className="flex flex-col gap-1">
                 <span className="text-[11.5px] font-semibold text-ink-700">
                   {k} <span className="font-normal text-ink-400">(refine in chat)</span>
                 </span>
-                <pre className="rounded-lg bg-ink-50 px-2 py-1 text-[11px] text-ink-600 overflow-x-auto m-0">
+                <pre className="rounded-lg bg-ink-50 px-2 py-1 text-[11px] text-ink-600 overflow-x-auto m-0 max-h-[220px] overflow-y-auto">
                   {JSON.stringify(v, null, 2)}
                 </pre>
               </div>
@@ -198,7 +221,14 @@ export function ReconstructedModules({
       </div>
 
       {reconstructing && items.length === 0 && (
-        <div className="rounded-xl border border-ink-200 bg-white p-4 text-[12.5px] text-ink-500">
+        <div className="rounded-xl border border-ink-200 bg-white p-4 text-[12.5px] text-ink-500 flex items-center gap-2.5">
+          {/* A bare line of grey text read as an empty box — several seconds of
+              silence with nothing moving looks like a failed load. A spinner is
+              the difference between "working" and "broken". */}
+          <span
+            aria-hidden="true"
+            className="w-4 h-4 shrink-0 rounded-full border-2 border-ink-200 border-t-primary-600 animate-spin"
+          />
           Reconstructing earlier steps from what you imported…
         </div>
       )}
