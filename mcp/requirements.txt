@@ -1,0 +1,5 @@
+# DoThesis MCP server — isolated deps. Install in mcp/.venv ONLY, never in the
+# main DoThesis venv (the MCP SDK requires pydantic>=2.12 and would break
+# thesis-stats, which pins 2.11.9).
+fastmcp>=2.0
+httpx>=0.27
