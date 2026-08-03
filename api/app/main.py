@@ -170,6 +170,10 @@ def create_app() -> FastAPI:
         # + DbProjectStateStore); orchestrator block like the roadmap surface.
         app.include_router(field_it_router.router, prefix="/api/v1")
         app.include_router(humanize_router.router, prefix="/api/v1")  # MCP humanize
+        # Stateless helper tools (writing rhythm, citation check). In the
+        # orchestrator block because writing-rhythm imports the detector.
+        from .routers import tools as tools_router  # noqa: PLC0415
+        app.include_router(tools_router.router, prefix="/api/v1")
         # Skill catalogue for the chat picker. Orchestrator block because the
         # skills it lists are the ones the deep agent loads (agent/runtime.py).
         app.include_router(skills_router.router, prefix="/api/v1")

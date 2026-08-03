@@ -40,6 +40,8 @@ from starlette.routing import Route
 
 import audit
 import oauth
+import ratelimit
+import tools as toolreg
 
 API_URL = os.getenv("DOTHESIS_API_URL", "http://localhost:7100").rstrip("/")
 DEFAULT_PROTOCOL = "2025-06-18"
@@ -52,47 +54,41 @@ DEFAULT_PROTOCOL = "2025-06-18"
 REQUIRE_AUTH = os.getenv("DOTHESIS_MCP_REQUIRE_AUTH", "1") != "0"
 DEV_TOKEN = os.getenv("DOTHESIS_ACCESS_TOKEN", "")
 
-TOOLS = [{
-    "name": "humanize",
-    "description": (
-        "Re-voice already-written academic prose so it reads less AI-generated, "
-        "while freezing every number, table reference, term and citation (a rewrite "
-        "that changes one is discarded and the original returned). Reduces the "
-        "AI-detection smell; it is NOT a plagiarism/similarity tool and does NOT "
-        "guarantee passing any detector. Work section by section."),
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "text": {"type": "string", "description": "Passage to re-voice."},
-            "user_anchor": {"type": "string", "description":
-                            "~150 words the USER wrote themselves; required if the "
-                            "result is error='no_anchor'. Never fabricate it."},
-            "language": {"type": "string", "default": "vi"},
-        },
-        "required": ["text"],
-    },
-}]
+async def _call_tool(tool: toolreg.Tool, args: dict, token: str) -> dict:
+    """Forward one tool call to its DoThesis endpoint as the calling user.
 
+    The bearer goes through untouched, so the API applies its own auth,
+    ownership checks, quota gates and credit debits. This server decides
+    nothing — a tool that needed a decision of its own would be business logic
+    the web app doesn't get, which is how the two surfaces drift apart.
 
-async def _call_humanize(args: dict, token: str) -> dict:
-    """Forward the caller's own token so the humanize runs as the caller.
-
-    Async because a humanize is a 20-30s Gemini round-trip. The previous
-    blocking `httpx.post` inside an `async def` handler pinned the event loop
-    for its whole duration, so a second user's `tools/list` would sit behind a
-    stranger's rewrite. Harmless with one shared dev token; not harmless once
-    the endpoint is public and per-user.
+    Async because a humanize is a 20-30s model round-trip: a blocking client
+    here would pin the event loop and make one user's rewrite stall everyone
+    else's tools/list.
     """
+    path, body = tool.request(args)
     async with httpx.AsyncClient(
             timeout=float(os.getenv("DOTHESIS_MCP_TIMEOUT", "180"))) as client:
         r = await client.post(
-            f"{API_URL}/api/v1/humanize",
+            f"{API_URL}{path}",
             headers={"Authorization": f"Bearer {token}"} if token else {},
-            json={"text": args.get("text", ""),
-                  "user_anchor": args.get("user_anchor"),
-                  "language": args.get("language", "vi")})
-    r.raise_for_status()
+            json=body)
+    if r.status_code >= 400:
+        # Surface the API's own structured error instead of an httpx traceback:
+        # "insufficient_credit" or "already_running" is something the student
+        # can act on, and the model can explain it.
+        try:
+            detail = r.json()
+        except Exception:  # noqa: BLE001
+            detail = {"message": r.text[:300]}
+        raise ToolError(r.status_code, detail)
     return r.json()
+
+
+class ToolError(Exception):
+    def __init__(self, status: int, detail):
+        self.status, self.detail = status, detail
+        super().__init__(f"HTTP {status}: {detail}")
 
 
 def _rpc_result(mid, result):
@@ -142,7 +138,8 @@ def _caller(request: Request):
     return token, user_id, client_id, None
 
 
-async def _audit(user_id, client_id, tool, *, ok, error, started, args, out):
+async def _audit(user_id, client_id, name, *, ok, error, started, args, out,
+                 tool=None):
     """Write the audit row off the event loop. Never raises.
 
     In a threadpool because the INSERT is synchronous psycopg: blocking the loop
@@ -158,12 +155,20 @@ async def _audit(user_id, client_id, tool, *, ok, error, started, args, out):
     try:
         await run_in_threadpool(
             audit.record,
-            user_id=user_id, client_id=client_id, tool=tool, ok=ok, error=error,
+            user_id=user_id, client_id=client_id, tool=name, ok=ok, error=error,
             duration_ms=int((time.monotonic() - started) * 1000),
-            input_chars=len(str((args or {}).get("text") or "")),
-            output_chars=len(str((out or {}).get("text") or "")))
+            input_chars=_size(args),
+            output_chars=len(tool.text_of(out)) if (tool and isinstance(out, dict)) else 0)
     except Exception:  # noqa: BLE001
-        logging.getLogger(__name__).exception("mcp audit failed (tool=%s)", tool)
+        logging.getLogger(__name__).exception("mcp audit failed (tool=%s)", name)
+
+
+def _size(args) -> int:
+    """How much text the caller sent. Only the free-text fields count — an id
+    argument is not volume, and counting it would make list_projects look as
+    heavy as a humanize in the admin view."""
+    a = args or {}
+    return sum(len(str(a.get(k) or "")) for k in ("text", "reference", "topic"))
 
 
 async def mcp_endpoint(request: Request):
@@ -187,34 +192,65 @@ async def mcp_endpoint(request: Request):
     if method == "ping":
         return _rpc_result(mid, {})
     if method == "tools/list":
-        return _rpc_result(mid, {"tools": TOOLS})
+        return _rpc_result(mid, {"tools": toolreg.as_mcp_schema()})
     if method == "tools/call":
         params = msg.get("params") or {}
-        if params.get("name") != "humanize":
-            return _rpc_error(mid, -32602, f"unknown tool: {params.get('name')}")
+        name = params.get("name")
+        tool = toolreg.BY_NAME.get(name)
+        if tool is None:
+            return _rpc_error(mid, -32602, f"unknown tool: {name}")
         args = params.get("arguments") or {}
         started = time.monotonic()
+
+        # Rate limit BEFORE the work, and record the refusal — a throttled user
+        # asking "why did nothing happen?" should be answerable from
+        # /admin/connectors like every other outcome.
+        try:
+            await run_in_threadpool(ratelimit.check, user_id,
+                                    toolreg.TIERS[tool.tier], tool.tier)
+        except ratelimit.RateLimited as e:
+            await _audit(user_id, client_id, name, ok=False, error="rate_limited",
+                         started=started, args=args, out=None, tool=tool)
+            return _rpc_result(mid, {
+                "content": [{"type": "text", "text": str(e)}], "isError": True})
+
         # Audited on BOTH paths. A connector that throws for one user is exactly
         # what the log exists to surface, so a success-only record would hide
         # the interesting half.
         try:
-            out = await _call_humanize(args, token)
-        except Exception as e:  # noqa: BLE001 — surface upstream failure to the client
-            await _audit(user_id, client_id, "humanize", ok=False, error=str(e),
-                         started=started, args=args, out=None)
+            out = await _call_tool(tool, args, token)
+        except ToolError as e:
+            await _audit(user_id, client_id, name, ok=False,
+                         error=f"http_{e.status}", started=started, args=args,
+                         out=None, tool=tool)
             return _rpc_result(mid, {
-                "content": [{"type": "text", "text": f"humanize call failed: {e}"}],
+                "content": [{"type": "text",
+                             "text": json.dumps(e.detail, ensure_ascii=False)}],
                 "isError": True})
-        # `ok=false` inside a 200 is the tool declining (no_anchor,
-        # frozen_violation) -- a real outcome, not a transport error, and the
-        # one an admin most often needs to explain to a student.
-        await _audit(user_id, client_id, "humanize", ok=not out.get("error"),
-                     error=out.get("error"), started=started, args=args, out=out)
-        return _rpc_result(mid, {
-            "content": [{"type": "text",
-                         "text": json.dumps(out, ensure_ascii=False)}],
-            "structuredContent": out,
-            "isError": bool(out.get("error"))})
+        except Exception as e:  # noqa: BLE001 — surface upstream failure to the client
+            await _audit(user_id, client_id, name, ok=False, error=str(e),
+                         started=started, args=args, out=None, tool=tool)
+            return _rpc_result(mid, {
+                "content": [{"type": "text", "text": f"{name} call failed: {e}"}],
+                "isError": True})
+
+        # A dict with `ok=false` is the tool DECLINING (no_anchor,
+        # frozen_violation) -- a real outcome, not a transport error, and the one
+        # an admin most often has to explain to a student. Tools that return a
+        # list (list_projects) have no such field and are always successes.
+        failed = isinstance(out, dict) and bool(out.get("error"))
+        await _audit(user_id, client_id, name, ok=not failed,
+                     error=(out.get("error") if isinstance(out, dict) else None),
+                     started=started, args=args, out=out, tool=tool)
+        result = {
+            "content": [{"type": "text", "text": json.dumps(out, ensure_ascii=False)}],
+            "isError": failed,
+        }
+        # structuredContent must be an object per the MCP schema; list-returning
+        # tools ship their payload in `content` only.
+        if isinstance(out, dict):
+            result["structuredContent"] = out
+        return _rpc_result(mid, result)
     return _rpc_error(mid, -32601, f"method not found: {method}")
 
 

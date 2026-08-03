@@ -16,6 +16,8 @@ freezing all numbers/tables/terms/citations. It is **not** a plagiarism
 | `server_lite.py` | The MCP server in production: `humanize` tool + bearer auth. Thin adapter → DoThesis API. |
 | `oauth.py` | OAuth 2.1 façade — discovery, dynamic client registration, `/authorize`, `/token`, `/revoke`. Stores grants in DoThesis's Postgres. |
 | `audit.py` | Records every tool call to `mcp_tool_calls`. Never raises — bookkeeping must not veto the tool result. |
+| `tools.py` | The tool registry — one entry per tool: schema, tier, and the DoThesis endpoint it forwards to. |
+| `ratelimit.py` | Per-user, per-tier throttle counted off `mcp_tool_calls`. Fails open. |
 | `server.py` | fastmcp variant, unused in production. Kept for the day the protocol surface outgrows `server_lite.py`. |
 | `requirements.txt` | Isolated deps (`fastmcp`, `httpx`). **Own venv, not DoThesis's.** |
 | `SKILL.md` | End-user Claude skill packaging the humanize workflow. |
@@ -159,8 +161,28 @@ pinned-pydantic conflict entirely rather than working around it.
   no credits are charged — for the web path either. `input_chars` is the only
   volume signal today. Fixing it means surfacing `usage_metadata` out of
   `orchestrator/tools/humanize.py`.
-- ⏳ **No rate limit** (`MCP_OAUTH_PLAN.md` item 6). A connector can call as fast
-  as it likes; the audit log now makes that visible after the fact, not before.
+- ✅ **Nine tools** (`tools.py`): `humanize`, `writing_rhythm`, `verify_citation`,
+  `check_credits`, `list_projects`, `project_status`, `get_artifacts`,
+  `start_thesis`, `check_thesis_run`. Each is a thin forward to an existing
+  DoThesis endpoint carrying the caller's own bearer, so auth, ownership,
+  quotas and credit debits all apply unchanged.
+- ✅ **Rate limited** per user per tier (`ratelimit.py`): light 120/10min,
+  model 20/10min, heavy 5/hr. Counted off `mcp_tool_calls`, so the limit is
+  enforced against exactly the history `/admin/connectors` shows. Fails open.
+
+### Two honesty constraints baked into the tools
+
+- **`writing_rhythm` is not a detector.** It runs `StylometricScorer`, whose own
+  docstring calls it "a WEAK signal ... must not be read as a verdict" — it sees
+  burstiness, not perplexity. The tool description and the endpoint both say so,
+  and `test_tools_router.py` asserts the response never names a detector or
+  implies flagging. If that ever needs to become a real prediction, wire a
+  scorer backend (`HUMANIZE_SCORER=originality`) rather than re-wording this.
+- **`verify_citation` distinguishes proof from evidence.** A DOI hit is exact; a
+  bibliographic search is fuzzy and says so, because CrossRef returns a best
+  guess for any query. A network failure returns `ok=false`, never
+  `found=false` — telling a student a real source is fabricated because an API
+  blipped is the worst error this tool could make.
 - ✅ `server_lite.py` — bearer-protected; 401s carry the `resource_metadata`
   hint that starts the OAuth flow. The static `DOTHESIS_ACCESS_TOKEN` path is
   now off by default (`DOTHESIS_MCP_REQUIRE_AUTH=0` to restore it, dev only).

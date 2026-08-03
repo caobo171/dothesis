@@ -287,6 +287,16 @@ def bearer_identity(token: str) -> tuple[str | None, str | None]:
     sub = claims.get("sub")
     if not isinstance(sub, str) or not sub:
         return None, None
+    # Same UUID guard as _session_user. Everything downstream treats `sub` as a
+    # users.id: the audit INSERT casts it to uuid, and the API looks it up. A
+    # signed token with a malformed sub can only have come from us, so this is
+    # a consistency check rather than a security boundary — but letting one
+    # through trades a clean 401 for a failed audit write and a confusing error
+    # from the API instead.
+    try:
+        _uuid.UUID(sub)
+    except ValueError:
+        return None, None
     cid = claims.get("client_id")
     return sub, cid if isinstance(cid, str) and cid else None
 

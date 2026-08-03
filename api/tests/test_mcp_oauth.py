@@ -456,7 +456,8 @@ def test_an_issued_token_unlocks_tools_list(client, user_id):
     r = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
                     headers={"Authorization": f"Bearer {access}"})
     assert r.status_code == 200
-    assert [t["name"] for t in r.json()["result"]["tools"]] == ["humanize"]
+    # The full registry (mcp/tools.py); humanize is the one this file cares about.
+    assert "humanize" in [t["name"] for t in r.json()["result"]["tools"]]
 
 
 def test_registered_clients_survive_a_process_restart(mcp, user_id):
@@ -508,9 +509,9 @@ def test_a_tool_call_is_recorded_with_user_and_client(client, user_id, pg_url, m
     access log says only 'POST /mcp 200'."""
     import server_lite
 
-    async def _fake(args, token):
+    async def _fake(tool, args, token):
         return {"ok": True, "text": "re-voiced output", "changed": True}
-    monkeypatch.setattr(server_lite, "_call_humanize", _fake)
+    monkeypatch.setattr(server_lite, "_call_tool", _fake)
 
     access, client_id = _authed(client, user_id)
     r = client.post("/mcp", headers={"Authorization": f"Bearer {access}"},
@@ -533,9 +534,9 @@ def test_a_tool_refusal_is_recorded_as_a_failure(client, user_id, pg_url, monkey
     admin most often has to explain to a student, so it must not read as success."""
     import server_lite
 
-    async def _fake(args, token):
+    async def _fake(tool, args, token):
         return {"ok": False, "error": "no_anchor", "text": args["text"]}
-    monkeypatch.setattr(server_lite, "_call_humanize", _fake)
+    monkeypatch.setattr(server_lite, "_call_tool", _fake)
 
     access, _ = _authed(client, user_id)
     client.post("/mcp", headers={"Authorization": f"Bearer {access}"},
@@ -553,9 +554,9 @@ def test_an_upstream_crash_is_still_recorded(client, user_id, pg_url, monkeypatc
     surface; a success-only record would hide it."""
     import server_lite
 
-    async def _boom(args, token):
+    async def _boom(tool, args, token):
         raise RuntimeError("upstream exploded")
-    monkeypatch.setattr(server_lite, "_call_humanize", _boom)
+    monkeypatch.setattr(server_lite, "_call_tool", _boom)
 
     access, _ = _authed(client, user_id)
     r = client.post("/mcp", headers={"Authorization": f"Bearer {access}"},
@@ -575,9 +576,9 @@ def test_auditing_never_breaks_the_tool_call(client, user_id, monkeypatch):
     import audit
     import server_lite
 
-    async def _fake(args, token):
+    async def _fake(tool, args, token):
         return {"ok": True, "text": "fine", "changed": True}
-    monkeypatch.setattr(server_lite, "_call_humanize", _fake)
+    monkeypatch.setattr(server_lite, "_call_tool", _fake)
 
     def _explode(**kw):
         raise RuntimeError("database on fire")
@@ -596,9 +597,9 @@ def test_no_prose_reaches_the_audit_table(client, user_id, pg_url, monkeypatch):
     import server_lite
     secret_text = "MY UNPUBLISHED THESIS PARAGRAPH"
 
-    async def _fake(args, token):
+    async def _fake(tool, args, token):
         return {"ok": True, "text": "rewritten " + secret_text}
-    monkeypatch.setattr(server_lite, "_call_humanize", _fake)
+    monkeypatch.setattr(server_lite, "_call_tool", _fake)
 
     access, _ = _authed(client, user_id)
     client.post("/mcp", headers={"Authorization": f"Bearer {access}"},
