@@ -110,3 +110,41 @@ def test_download_404_when_user_does_not_own_project(client, monkeypatch):
                            "scope": f"project-export:{pid}/{fname}"}).json()["stream_token"]
     resp = client.get(f"/api/v1/projects/{pid}/exports/{fname}?st={st}")
     assert resp.status_code == 404
+
+
+def test_download_allowed_for_super_admin(client, monkeypatch):
+    """A super admin can download another user's artifact.
+
+    Regression: the chat read path was widened to owner-or-admin
+    (auth_admin.readable_project) so an admin can open a student's thread to
+    debug a run, but the export routes kept the owner-only check. The result
+    was a thread that rendered its DOCX/PDF download card and then 404'd on
+    click. Downloading a finished artifact is a read, so it follows the read
+    gate. The write asymmetry is unaffected — admins still cannot post.
+    """
+    pid, _ = _setup_user_and_project(client)
+    _add_export(pid, "thesis-abc.docx")
+    monkeypatch.setattr("app.routers.exports.s3_from_env", lambda: MagicMock())
+
+    # An email on the super-admin seed allowlist (app/admin_config.py).
+    sf = get_session_factory()
+    with sf() as db:
+        admin = User(email="caotest171@gmail.com",
+                     username=f"admin{uuid.uuid4().hex[:6]}",
+                     password_hash="x", email_verified=True)
+        db.add(admin); db.commit(); db.refresh(admin)
+        admin_token = create_session(db, admin)
+    client.headers["Authorization"] = f"Bearer {admin_token}"
+
+    fname = "thesis-abc.docx"
+    st = client.post("/api/v1/auth/stream-token",
+                     json={"access_token": admin_token,
+                           "scope": f"project-export:{pid}/{fname}"}).json()["stream_token"]
+    resp = client.get(f"/api/v1/projects/{pid}/exports/{fname}?st={st}")
+    assert resp.status_code == 302
+
+    # …and the exports panel beside it lists the artifact rather than 404ing.
+    listed = client.post(f"/api/v1/projects/{pid}/exports/list",
+                         json={"access_token": admin_token})
+    assert listed.status_code == 200
+    assert [r["filename"] for r in listed.json()] == [fname]

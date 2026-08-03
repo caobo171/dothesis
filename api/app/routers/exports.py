@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..agent_state import DbProjectStateStore
+from ..auth_admin import readable_project as _readable_project
 from ..db import db_session
 from ..deps import current_user, stream_user_factory
 from ..models import ContextStore, Export, Project, User
@@ -393,7 +394,15 @@ def download_export(
     db: Session = Depends(db_session),
 ):
     """302-redirect to a fresh 5-minute signed URL for the requested artifact."""
-    proj = _owned_project(db, user, project_id)
+    # Downloading a finished artifact is a READ, so it takes the same
+    # owner-or-super-admin gate as the thread itself (auth_admin.readable_project).
+    # It used to use the owner-only `_owned_project`, which meant an admin could
+    # open a student's thread and see the DOCX/PDF card rendered from the
+    # message's widget hint, then get a silent 404 on click — the chat read path
+    # was widened for admins but the export routes here were never updated with
+    # it. readable_project also journals the access, which is what we want:
+    # reading someone's thesis draft is a privacy event worth logging.
+    proj = _readable_project(db, user, project_id)
     expected_key = f"projects/{project_id}/exports/{filename}"
     # Only redirect if this artifact is a recorded export for the project —
     # prevents guessing other S3 keys. Authoritative source is now the exports
@@ -439,7 +448,10 @@ def list_exports(
     ever want the most recent one. We keep one per (kind, scope) pair. Older
     documents stay in the DB (still downloadable via a direct download URL) —
     they're just hidden from the panel."""
-    _owned_project(db, user, project_id)
+    # Read — same owner-or-admin gate as download_export above. Without this the
+    # Exports panel 404s for an admin viewing a student's project while the chat
+    # transcript beside it loads fine.
+    _readable_project(db, user, project_id)
     rows = (
         db.query(Export)
         .filter(Export.project_id == project_id)
