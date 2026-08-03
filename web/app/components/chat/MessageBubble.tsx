@@ -3,11 +3,12 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { Check, Copy, FileText } from "lucide-react";
+import { Check, Copy, FileText, Loader2 } from "lucide-react";
 import { Mermaid } from "./Mermaid";
 import { CitationChip } from "./CitationChip";
 import { triggerExportDownload } from "@/app/lib/api";
 import { WidgetRenderer } from "./widgets/WidgetRenderer";
+import { useArtifactDownload } from "./hooks/useArtifactDownload";
 import type {
   AttachmentChipMeta,
   WidgetHint,
@@ -225,6 +226,38 @@ function _withCitations(children: ReactNode): ReactNode {
   return children;
 }
 
+// An export link inside assistant prose ("Tải bản .docx tại đây"). A plain <a>
+// navigation hits the GET-auth'd /exports route WITHOUT the ?st= token and the
+// download never starts, so the click mints a scoped token first. That mint is
+// a round trip, which is why this needs state at all: previously the promise
+// was discarded, so a slow mint looked like a dead link and a failed one was
+// invisible.
+function ExportLink({ href, children }: { href: string; children?: ReactNode }) {
+  const { busy, error, start } = useArtifactDownload();
+  return (
+    <>
+      <a
+        href={href}
+        aria-busy={busy}
+        onClick={(e) => {
+          e.preventDefault();
+          void start(() => triggerExportDownload(href));
+        }}
+        className="underline text-primary-600 hover:text-primary-700"
+      >
+        {children}
+      </a>
+      {busy && (
+        <Loader2 className="inline-block w-3 h-3 ml-1 align-baseline animate-spin text-primary-600" aria-hidden />
+      )}
+      {error && (
+        <span className="ml-1 text-[11px] text-[#8E6B2A]" role="alert">({error})</span>
+      )}
+    </>
+  );
+}
+
+
 const _markdownComponents = {
   // Lists — tight spacing so multi-level bullets stay legible inside a bubble.
   ul: ({ children, className }: { children?: ReactNode; className?: string }) => {
@@ -336,10 +369,13 @@ const _markdownComponents = {
   // download. All other links keep the normal new-tab behavior.
   a: ({ href, children }: { href?: string; children?: ReactNode }) => {
     const isExport = !!href && /\/projects\/[^/]+\/exports\//.test(href);
+    // Export links go through a component rather than an inline handler because
+    // the download needs hook state (in-flight + error), and hooks can't live
+    // in a branch of this renderer.
+    if (isExport) return <ExportLink href={href!}>{children}</ExportLink>;
     return (
       <a
         href={href}
-        onClick={isExport ? (e) => { e.preventDefault(); void triggerExportDownload(href!); } : undefined}
         className="underline text-primary-600 hover:text-primary-700"
         target="_blank"
         rel="noreferrer noopener"

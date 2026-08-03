@@ -18,6 +18,7 @@ import {
 import { useMe } from "@/app/lib/use-me";
 import { swrFetcher as fetcher } from "@/app/lib/api";
 import { Card } from "@/app/components/ui/card";
+import { Skeleton } from "@/app/components/ui/skeleton";
 
 
 // Mirrors ProjectOut from api/app/routers/chat.py. focus + module_status are
@@ -103,8 +104,14 @@ function dayPartGreeting(): string {
 
 
 export function HomeDashboard() {
-  const { data: projects } = useSWR<Project[]>("/projects/list", fetcher, { dedupingInterval: 0 });
+  const { data: projects, isLoading } = useSWR<Project[]>("/projects/list", fetcher, { dedupingInterval: 0 });
   const me = useMe();
+
+  // Two independent fetches feed this page, so they get two loading flags —
+  // the hero's name/credit come from /auth/me while everything else waits on
+  // /projects/list, and skeletoning them together would keep resolved data
+  // hidden behind the slower request.
+  const meLoading = me.isLoading;
 
   // /projects is ordered updated_at desc, so [0] is "where you left off".
   const current = projects?.[0];
@@ -120,9 +127,11 @@ export function HomeDashboard() {
         firstName={firstName}
         current={current}
         credit={me.data?.credit}
+        loading={isLoading}
+        meLoading={meLoading}
       />
 
-      <StatsRow projects={projects} reviewCount={reviewCount} />
+      <StatsRow projects={projects} reviewCount={reviewCount} loading={isLoading} />
 
       <div className="flex items-end justify-between mt-7 mb-4 px-0.5">
         <div>
@@ -130,9 +139,11 @@ export function HomeDashboard() {
             Your theses
           </h2>
           <div className="text-[12.5px] text-ink-500 mt-1">
-            {projects
-              ? `${projects.length} active${reviewCount ? ` · ${reviewCount} need${reviewCount === 1 ? "s" : ""} review` : ""}`
-              : "Loading…"}
+            {isLoading ? (
+              <Skeleton className="h-3.5 w-28 my-[1px]" />
+            ) : (
+              `${projects?.length ?? 0} active${reviewCount ? ` · ${reviewCount} need${reviewCount === 1 ? "s" : ""} review` : ""}`
+            )}
           </div>
         </div>
         <Link
@@ -150,7 +161,9 @@ export function HomeDashboard() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-[18px]">
-        {projects?.map(p => <ProjectCard key={p.id} p={p} />)}
+        {isLoading
+          ? [0, 1].map(i => <ProjectCardSkeleton key={i} />)
+          : projects?.map(p => <ProjectCard key={p.id} p={p} />)}
       </div>
 
       {projects && projects.length > 0 && (
@@ -169,10 +182,14 @@ function Hero({
   firstName,
   current,
   credit,
+  loading,
+  meLoading,
 }: {
   firstName: string;
   current: Project | undefined;
   credit: number | undefined;
+  loading: boolean;
+  meLoading: boolean;
 }) {
   const focusModule = current ? (current.focus ?? current.current_module) : null;
   const focusLabel = MODULES.find(m => m.id === focusModule)?.label;
@@ -199,15 +216,34 @@ function Hero({
           <div className="text-xs uppercase tracking-[0.18em] text-white/60 font-bold">
             {dayPartGreeting()}
           </div>
+          {/* Everything below the greeting swings on whether the user already
+              has a thesis, so it stays skeletoned until /projects/list lands —
+              otherwise the hero asserts "ready to start your thesis?" to
+              someone mid-M3 and then rewrites itself a moment later. */}
           <h1 className="mt-2 mb-1.5 text-[34px] font-extrabold tracking-tight font-serif leading-[1.1]">
-            Hello, {firstName} —
+            Hello,{" "}
+            {meLoading ? (
+              <Skeleton tone="dark" className="inline-block align-baseline h-[26px] w-32 translate-y-[3px] rounded-lg" />
+            ) : (
+              firstName
+            )}{" "}
+            —
             <br />
-            <span className="text-white/75 font-semibold">
-              {current ? "pick up where you left off?" : "ready to start your thesis?"}
-            </span>
+            {loading ? (
+              <Skeleton tone="dark" className="inline-block h-[30px] w-[340px] max-w-full mt-1.5 rounded-lg" />
+            ) : (
+              <span className="text-white/75 font-semibold">
+                {current ? "pick up where you left off?" : "ready to start your thesis?"}
+              </span>
+            )}
           </h1>
           <div className="text-sm text-white/70 max-w-[520px] mt-2 leading-relaxed">
-            {current ? (
+            {loading ? (
+              <div className="flex flex-col gap-1.5 py-1">
+                <Skeleton tone="dark" className="h-3 w-full max-w-[480px]" />
+                <Skeleton tone="dark" className="h-3 w-2/3 max-w-[320px]" />
+              </div>
+            ) : current ? (
               <>
                 You&apos;re in <span className="font-semibold text-white">{focusModule}</span>
                 {focusLabel ? ` · ${focusLabel}` : ""} on “{current.name}” — resume to keep going.
@@ -217,24 +253,33 @@ function Hero({
             )}
           </div>
           <div className="flex flex-wrap gap-2.5 mt-4">
-            {current && (
-              <Link
-                href={`/chat/projects/${current.id}`}
-                className="inline-flex items-center gap-2 bg-white text-ink-900 px-5 py-[11px] rounded-full text-sm font-semibold no-underline hover:bg-ink-100 transition-colors"
-              >
-                <Play className="w-3.5 h-3.5" /> Resume current thesis
-              </Link>
+            {loading ? (
+              <>
+                <Skeleton tone="dark" className="h-[42px] w-[196px] rounded-full" />
+                <Skeleton tone="dark" className="h-[42px] w-[172px] rounded-full" />
+              </>
+            ) : (
+              <>
+                {current && (
+                  <Link
+                    href={`/chat/projects/${current.id}`}
+                    className="inline-flex items-center gap-2 bg-white text-ink-900 px-5 py-[11px] rounded-full text-sm font-semibold no-underline hover:bg-ink-100 transition-colors"
+                  >
+                    <Play className="w-3.5 h-3.5" /> Resume current thesis
+                  </Link>
+                )}
+                <Link
+                  href="/new"
+                  className={
+                    current
+                      ? "inline-flex items-center gap-2 bg-white/10 text-white border border-white/20 px-5 py-[11px] rounded-full text-sm font-semibold hover:bg-white/20 transition-colors no-underline"
+                      : "inline-flex items-center gap-2 bg-white text-ink-900 px-5 py-[11px] rounded-full text-sm font-semibold hover:bg-ink-100 transition-colors no-underline"
+                  }
+                >
+                  <Plus className="w-4 h-4" /> Start a new thesis
+                </Link>
+              </>
             )}
-            <Link
-              href="/new"
-              className={
-                current
-                  ? "inline-flex items-center gap-2 bg-white/10 text-white border border-white/20 px-5 py-[11px] rounded-full text-sm font-semibold hover:bg-white/20 transition-colors no-underline"
-                  : "inline-flex items-center gap-2 bg-white text-ink-900 px-5 py-[11px] rounded-full text-sm font-semibold hover:bg-ink-100 transition-colors no-underline"
-              }
-            >
-              <Plus className="w-4 h-4" /> Start a new thesis
-            </Link>
           </div>
         </div>
 
@@ -247,9 +292,13 @@ function Hero({
             <span>Credit balance</span>
           </div>
           <div className="flex items-baseline gap-1.5 mt-1 tabular-nums">
-            <span className="text-3xl font-extrabold tracking-tight">
-              {credit !== undefined ? credit.toLocaleString() : "—"}
-            </span>
+            {meLoading ? (
+              <Skeleton tone="dark" className="h-[30px] w-20 my-[3px] rounded-lg" />
+            ) : (
+              <span className="text-3xl font-extrabold tracking-tight">
+                {credit !== undefined ? credit.toLocaleString() : "—"}
+              </span>
+            )}
             <span className="text-xs text-white/60">credits</span>
           </div>
           <div className="flex gap-1.5 mt-3">
@@ -268,7 +317,15 @@ function Hero({
 
 
 /* ---------- Stats row ---------- */
-function StatsRow({ projects, reviewCount }: { projects: Project[] | undefined; reviewCount: number }) {
+function StatsRow({
+  projects,
+  reviewCount,
+  loading,
+}: {
+  projects: Project[] | undefined;
+  reviewCount: number;
+  loading: boolean;
+}) {
   const modulesDone =
     projects?.reduce((acc, p) => acc + MODULES.filter(m => moduleStatus(p, m) === "done").length, 0) ?? 0;
   const modulesActive =
@@ -292,9 +349,21 @@ function StatsRow({ projects, reviewCount }: { projects: Project[] | undefined; 
           <div className={`w-7 h-7 rounded-lg inline-flex items-center justify-center ${c.chip}`}>
             <c.icon className="w-4 h-4" />
           </div>
-          <div className="text-[26px] font-extrabold tracking-tight tabular-nums mt-0.5 text-ink-900">{c.v}</div>
+          {/* Only the number and the sub-line are data — the icon and label
+              are fixed, so they render straight through and the card keeps its
+              shape while the count resolves. "0 modules completed / all clear"
+              on a loading dashboard is a claim, not a placeholder. */}
+          {loading ? (
+            <Skeleton className="h-[26px] w-12 mt-0.5 rounded-lg" />
+          ) : (
+            <div className="text-[26px] font-extrabold tracking-tight tabular-nums mt-0.5 text-ink-900">{c.v}</div>
+          )}
           <div className="text-[12.5px] text-ink-500 font-medium">{c.l}</div>
-          <div className="text-[11px] text-ink-400 mt-0.5">{c.sub}</div>
+          {loading ? (
+            <Skeleton className="h-[11px] w-24 mt-1 mb-[3px]" />
+          ) : (
+            <div className="text-[11px] text-ink-400 mt-0.5">{c.sub}</div>
+          )}
         </Card>
       ))}
     </div>
@@ -373,6 +442,40 @@ function ProjectCard({ p }: { p: Project }) {
         last touched {relativeTime(p.updated_at)} · {focusModule}
       </div>
     </Link>
+  );
+}
+
+
+// Mirrors ProjectCard's box model line for line (same padding, the same
+// min-h-[44px] title block, five module segments) so the real cards drop in
+// without the grid jumping when /projects/list resolves.
+function ProjectCardSkeleton() {
+  return (
+    <div className="bg-white rounded-[18px] border border-ink-200 px-[22px] py-5">
+      <div className="flex items-center gap-2 mb-2.5">
+        <Skeleton className="h-[11px] w-28" />
+        <span className="flex-1" />
+        <Skeleton className="h-3 w-8" />
+      </div>
+
+      <div className="min-h-[44px] flex flex-col gap-1.5 pt-0.5">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/5" />
+      </div>
+      <Skeleton className="h-3 w-32 mt-1.5" />
+
+      <div className="flex gap-1.5 mt-3.5">
+        {MODULES.map(m => (
+          <Skeleton key={m.id} className="flex-1 h-7 rounded-lg" />
+        ))}
+      </div>
+
+      <div className="mt-3.5 pt-3.5 border-t border-dashed border-ink-200 flex items-center gap-2">
+        <Skeleton className="h-3 w-8" />
+        <Skeleton className="h-3.5 flex-1 max-w-[220px]" />
+      </div>
+      <Skeleton className="h-[11px] w-40 mt-2" />
+    </div>
   );
 }
 

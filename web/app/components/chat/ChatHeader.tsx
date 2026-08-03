@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ReactNode, useContext, useState } from "react";
-import { ArrowLeft, Bell, ChevronDown, Download, FileDown, History, Menu, PanelRight, PenSquare, Sparkles } from "lucide-react";
+import { ArrowLeft, Bell, ChevronDown, Download, FileDown, History, Loader2, Menu, PanelRight, PenSquare, Sparkles } from "lucide-react";
 
 import { useMe } from "@/app/lib/use-me";
 import { triggerExportDownload } from "@/app/lib/api";
+import { useArtifactDownload } from "./hooks/useArtifactDownload";
 
 // Export is agent-driven: the user picks any modules in the ExportModulesModal,
 // and we ask the agent to call `export_docx(scope="M1,M3,…")` — which composes
@@ -46,6 +47,9 @@ function ExportDownloadButton({
 }: {
   artifacts?: { kind: string; download_url: string }[];
 }) {
+  // Above the early return — the disabled branch below is a conditional exit,
+  // and a hook after it would change hook order between renders.
+  const { busy, error, start } = useArtifactDownload();
   const docx = artifacts?.find(a => a.kind === "docx") ?? artifacts?.[0];
   if (!docx) {
     return (
@@ -63,11 +67,25 @@ function ExportDownloadButton({
     <a
       href={docx.download_url}
       download
-      onClick={(e) => { e.preventDefault(); void triggerExportDownload(docx.download_url); }}
-      title="Download final thesis (DOCX)"
-      className="w-8 h-8 rounded-full text-primary-600 hover:bg-primary-50 inline-flex items-center justify-center transition-colors"
+      aria-busy={busy}
+      onClick={(e) => {
+        e.preventDefault();
+        void start(() => triggerExportDownload(docx.download_url));
+      }}
+      // Icon-only button, so the title carries the state — there is nowhere to
+      // put a status line, and the error still needs somewhere to go.
+      title={
+        error
+          ? `Download failed: ${error}`
+          : busy
+            ? "Preparing download…"
+            : "Download final thesis (DOCX)"
+      }
+      className={`w-8 h-8 rounded-full inline-flex items-center justify-center transition-colors ${
+        error ? "text-[#8E6B2A] hover:bg-[#F5EFE2]" : "text-primary-600 hover:bg-primary-50"
+      }`}
     >
-      <Download className="w-4 h-4" />
+      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
     </a>
   );
 }

@@ -2,9 +2,10 @@
 
 import { useMemo } from "react";
 import useSWR from "swr";
-import { X, Pause, Play, XCircle, RotateCcw } from "lucide-react";
+import { X, Pause, Play, XCircle, RotateCcw, Loader2 } from "lucide-react";
 import { ModuleProgressDot, type ModuleStatus } from "./ModuleProgressDot";
 import { useAutoDraftRun } from "./hooks/useAutoDraftRun";
+import { useArtifactDownload } from "./hooks/useArtifactDownload";
 import { apiFetch, swrFetcher as fetcher, triggerExportDownload } from "@/app/lib/api";
 
 
@@ -105,14 +106,7 @@ export function AutoDraftDrawer({
           <div className="mt-6 space-y-2">
             <h4 className="text-xs uppercase tracking-wider text-gray-500 font-semibold">Exports</h4>
             {Object.entries(exports.exports).map(([kind, uri]) => (
-              <a
-                key={kind}
-                href={uri as string}
-                onClick={(e) => { e.preventDefault(); void triggerExportDownload(uri as string); }}
-                className="block text-sm text-primary-600 hover:underline"
-              >
-                Download {kind.toUpperCase()}
-              </a>
+              <ExportLine key={kind} kind={kind} uri={uri as string} />
             ))}
           </div>
         )}
@@ -141,5 +135,30 @@ export function AutoDraftDrawer({
         )}
       </footer>
     </aside>
+  );
+}
+
+
+// One export line in the drawer. Was `void triggerExportDownload(...)` inline:
+// the token mint is a round trip, so the link looked dead while it ran and
+// silent when it failed.
+function ExportLine({ kind, uri }: { kind: string; uri: string }) {
+  const { busy, error, start } = useArtifactDownload();
+  return (
+    <div>
+      <a
+        href={uri}
+        aria-busy={busy}
+        onClick={(e) => {
+          e.preventDefault();
+          void start(() => triggerExportDownload(uri));
+        }}
+        className="inline-flex items-center gap-1.5 text-sm text-primary-600 hover:underline"
+      >
+        {busy && <Loader2 className="w-3 h-3 animate-spin" aria-hidden />}
+        {busy ? "Preparing" : "Download"} {kind.toUpperCase()}
+      </a>
+      {error && <div className="text-[11px] text-[#8E6B2A]" role="alert">{error}</div>}
+    </div>
   );
 }

@@ -28,12 +28,17 @@ export function WorkflowSidebar({
   onSelectThread,
   onNewThread,
   projectCredits,
+  threadsFailed = false,
 }: {
   projectName?: string;
   projectSubtitle?: string;
   /** Total credits spent across the whole project — shown at the bottom. */
   projectCredits?: number;
   threads?: Thread[];
+  /** The thread list request failed. Without this, `threads === undefined`
+   *  means both "still fetching" and "the fetch died", and the rail sat on
+   *  "Loading…" forever while the console filled with 404s. */
+  threadsFailed?: boolean;
   currentThreadId?: string;
   onSelectThread?: (tid: string) => void;
   onNewThread?: () => void;
@@ -109,6 +114,17 @@ export function WorkflowSidebar({
             onSelect={onSelectThread}
             onNew={onNewThread}
           />
+        ) : threadsFailed ? (
+          <div className="text-[12px] text-[#6E5121] px-5 py-3 leading-relaxed">
+            Couldn’t load threads.{" "}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="underline font-semibold hover:no-underline"
+            >
+              Retry
+            </button>
+          </div>
         ) : (
           <div className="text-[12px] text-ink-500 px-5 py-3">Loading…</div>
         )}

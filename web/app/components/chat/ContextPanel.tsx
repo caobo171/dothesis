@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { AlertTriangle, Clock, Coins, Download, ExternalLink } from "lucide-react";
+import { AlertTriangle, Clock, Coins, Download, ExternalLink, Loader2 } from "lucide-react";
 
 import { SliceModal } from "./SliceModal";
 import { Mermaid } from "./Mermaid";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { RoadmapPanel } from "./RoadmapPanel";
+import { useArtifactDownload } from "./hooks/useArtifactDownload";
 import {
   triggerExportDownload,
   triggerUploadDownload,
@@ -395,14 +396,31 @@ function ExportRowItem({ row }: { row: ExportRow }) {
     row.size_bytes >= 1024 * 1024
       ? `${(row.size_bytes / (1024 * 1024)).toFixed(1)} MB`
       : `${(row.size_bytes / 1024).toFixed(0)} KB`;
+  // Was `void triggerExportDownload(...)`: the token mint showed nothing while
+  // in flight and swallowed its own failure. The spinner takes the file icon's
+  // slot so the row keeps its width.
+  const { busy, error, start } = useArtifactDownload();
   return (
+    <>
     <a
       href={row.download_url}
       download
-      onClick={(e) => { e.preventDefault(); void triggerExportDownload(row.download_url); }}
-      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50 transition-colors"
+      aria-busy={busy}
+      onClick={(e) => {
+        e.preventDefault();
+        void start(() => triggerExportDownload(row.download_url));
+      }}
+      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-colors ${
+        busy
+          ? "border-primary-300 bg-primary-50 cursor-progress"
+          : "border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50"
+      }`}
     >
-      <FileTypeIcon kind={row.kind} className="w-[18px] h-[22px] shrink-0" />
+      {busy ? (
+        <Loader2 className="w-[18px] h-[22px] shrink-0 text-primary-600 animate-spin" aria-hidden />
+      ) : (
+        <FileTypeIcon kind={row.kind} className="w-[18px] h-[22px] shrink-0" />
+      )}
       <span className="font-serif text-[12px] font-extrabold text-ink-900 shrink-0">
         {row.kind.toUpperCase()}
       </span>
@@ -416,6 +434,10 @@ function ExportRowItem({ row }: { row: ExportRow }) {
       <span className="text-ink-400 text-[11.5px] ml-auto shrink-0">{size}</span>
       <Download className="w-3.5 h-3.5 text-ink-400 shrink-0" aria-hidden />
     </a>
+    {error && (
+      <div className="text-[11px] text-[#8E6B2A] px-2.5 pt-1" role="alert">{error}</div>
+    )}
+    </>
   );
 }
 
@@ -425,14 +447,25 @@ function ExportRowItem({ row }: { row: ExportRow }) {
 // → S3 signed URL). Kind is derived from mime_type.
 function UploadRow({ upload }: { upload: UploadItem }) {
   const kind = (upload.mime_type || "").includes("pdf") ? "pdf" : "file";
+  const { busy, error, start } = useArtifactDownload();
   return (
+    <>
     <button
       type="button"
-      onClick={() => { void triggerUploadDownload(upload.id); }}
+      aria-busy={busy}
+      onClick={() => void start(() => triggerUploadDownload(upload.id))}
       title={`Download ${upload.filename}`}
-      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50 transition-colors text-left"
+      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-colors text-left ${
+        busy
+          ? "border-primary-300 bg-primary-50 cursor-progress"
+          : "border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50"
+      }`}
     >
-      <FileTypeIcon kind={kind} className="w-[18px] h-[22px] shrink-0" />
+      {busy ? (
+        <Loader2 className="w-[18px] h-[22px] shrink-0 text-primary-600 animate-spin" aria-hidden />
+      ) : (
+        <FileTypeIcon kind={kind} className="w-[18px] h-[22px] shrink-0" />
+      )}
       <span className="text-[12.5px] text-ink-800 truncate flex-1 min-w-0">
         {upload.filename}
       </span>
@@ -443,6 +476,10 @@ function UploadRow({ upload }: { upload: UploadItem }) {
       )}
       <Download className="w-3.5 h-3.5 text-ink-400 shrink-0" aria-hidden />
     </button>
+    {error && (
+      <div className="text-[11px] text-[#8E6B2A] px-2.5 pt-1" role="alert">{error}</div>
+    )}
+    </>
   );
 }
 
