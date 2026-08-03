@@ -11,6 +11,7 @@ import {
   LinkIcon,
   ShieldCheckIcon,
   SpeakerWaveIcon,
+  WrenchScrewdriverIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useMemo } from "react";
@@ -34,6 +35,11 @@ export function useSidebarSections(): SidebarSection[] {
         options: [
           { name: "Dashboard", href: "/", icon: HomeIcon, default: true },
           { name: "Theses", href: "/papers", icon: DocumentTextIcon },
+          // Under WORKSPACE, next to the thesis surfaces: these are standalone
+          // jobs (text in, answer out, no project) rather than an account
+          // setting. The agent remains the main surface — this is the door for
+          // work that needs no thesis context.
+          { name: "Tools", href: "/tools", icon: WrenchScrewdriverIcon },
         ],
       },
       {
