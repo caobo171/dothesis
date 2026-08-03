@@ -8,6 +8,7 @@ import {
   CurrencyDollarIcon,
   DocumentTextIcon,
   HomeIcon,
+  LinkIcon,
   ShieldCheckIcon,
   SpeakerWaveIcon,
   UserIcon,
@@ -62,6 +63,7 @@ export function useSidebarSections(): SidebarSection[] {
           { name: "Jobs", href: "/admin/jobs", icon: CpuChipIcon },
           { name: "Announcements", href: "/admin/announcements", icon: SpeakerWaveIcon },
           { name: "Orders", href: "/admin/orders", icon: CreditCardIcon },
+          { name: "Connectors", href: "/admin/connectors", icon: LinkIcon },
         ],
       });
     }

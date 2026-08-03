@@ -15,6 +15,7 @@ freezing all numbers/tables/terms/citations. It is **not** a plagiarism
 |---|---|
 | `server_lite.py` | The MCP server in production: `humanize` tool + bearer auth. Thin adapter → DoThesis API. |
 | `oauth.py` | OAuth 2.1 façade — discovery, dynamic client registration, `/authorize`, `/token`, `/revoke`. Stores grants in DoThesis's Postgres. |
+| `audit.py` | Records every tool call to `mcp_tool_calls`. Never raises — bookkeeping must not veto the tool result. |
 | `server.py` | fastmcp variant, unused in production. Kept for the day the protocol surface outgrows `server_lite.py`. |
 | `requirements.txt` | Isolated deps (`fastmcp`, `httpx`). **Own venv, not DoThesis's.** |
 | `SKILL.md` | End-user Claude skill packaging the humanize workflow. |
@@ -148,6 +149,18 @@ pinned-pydantic conflict entirely rather than working around it.
   `api/tests/test_mcp_oauth.py`.
 - ✅ `POST /api/v1/connectors/list` + `/revoke` — see and disconnect a connected
   AI app from DoThesis itself. 8 tests in `api/tests/test_connectors.py`.
+- ✅ **Usage is audited.** Every tool call writes a `mcp_tool_calls` row (user,
+  connector, tool, ok/error, duration, input/output SIZES — never the prose).
+  Admin view at `/admin/connectors`; API is `POST /api/v1/admin/connectors/calls`
+  and `/summary`. 10 tests in `api/tests/test_admin_connectors.py`, 5 more in
+  `test_mcp_oauth.py`.
+- ⏳ **No per-call token cost yet.** `humanize_prose` calls the LLM directly
+  rather than through `metered_invoke`, so nothing lands in `token_ledger` and
+  no credits are charged — for the web path either. `input_chars` is the only
+  volume signal today. Fixing it means surfacing `usage_metadata` out of
+  `orchestrator/tools/humanize.py`.
+- ⏳ **No rate limit** (`MCP_OAUTH_PLAN.md` item 6). A connector can call as fast
+  as it likes; the audit log now makes that visible after the fact, not before.
 - ✅ `server_lite.py` — bearer-protected; 401s carry the `resource_metadata`
   hint that starts the OAuth flow. The static `DOTHESIS_ACCESS_TOKEN` path is
   now off by default (`DOTHESIS_MCP_REQUIRE_AUTH=0` to restore it, dev only).

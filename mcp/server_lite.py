@@ -27,14 +27,18 @@ Run (the API's venv already has starlette+uvicorn+httpx+PyJWT):
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 
 import httpx
 from starlette.applications import Starlette
+from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+import audit
 import oauth
 
 API_URL = os.getenv("DOTHESIS_API_URL", "http://localhost:7100").rstrip("/")
@@ -117,24 +121,56 @@ def _unauthorized(request: Request, detail: str) -> Response:
                  f'resource_metadata="{base}/.well-known/oauth-protected-resource/mcp"'})
 
 
-def _caller_token(request: Request) -> tuple[str | None, Response | None]:
-    """(token to forward, error response). Exactly one is non-None."""
+def _caller(request: Request):
+    """(token, user_id, client_id, error_response). The error is None on success.
+
+    Identity comes back alongside the token because every tool call is audited
+    by user + connector (audit.py); resolving it twice would mean decoding the
+    JWT twice per request.
+    """
     if not REQUIRE_AUTH:
-        return DEV_TOKEN, None
+        # Dev static-token path: there is no user to attribute calls to, so
+        # nothing gets audited. See audit.record().
+        return DEV_TOKEN, None, None, None
     auth = request.headers.get("authorization", "")
     if not auth.lower().startswith("bearer "):
-        return None, _unauthorized(request, "missing Bearer token")
+        return None, None, None, _unauthorized(request, "missing Bearer token")
     token = auth.split(" ", 1)[1].strip()
-    if not token or oauth.verify_bearer(token) is None:
-        return None, _unauthorized(request, "token is invalid or expired")
-    return token, None
+    user_id, client_id = oauth.bearer_identity(token) if token else (None, None)
+    if not user_id:
+        return None, None, None, _unauthorized(request, "token is invalid or expired")
+    return token, user_id, client_id, None
+
+
+async def _audit(user_id, client_id, tool, *, ok, error, started, args, out):
+    """Write the audit row off the event loop. Never raises.
+
+    In a threadpool because the INSERT is synchronous psycopg: blocking the loop
+    on it would repeat the bug that made a single humanize stall every other
+    caller's tools/list.
+
+    The try/except is here as well as inside `audit.record` on purpose. Guarding
+    only the INSERT leaves everything AROUND it — resolving the DSN, the
+    threadpool hop, measuring the sizes — able to take down a call that had
+    already succeeded. The tool result is the product; the audit row is
+    bookkeeping, and bookkeeping does not get to veto the product.
+    """
+    try:
+        await run_in_threadpool(
+            audit.record,
+            user_id=user_id, client_id=client_id, tool=tool, ok=ok, error=error,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            input_chars=len(str((args or {}).get("text") or "")),
+            output_chars=len(str((out or {}).get("text") or "")))
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).exception("mcp audit failed (tool=%s)", tool)
 
 
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
         # No server-initiated stream in this minimal build.
         return Response(status_code=405)
-    token, err = _caller_token(request)
+    token, user_id, client_id, err = _caller(request)
     if err:
         return err
     msg = await request.json()
@@ -156,12 +192,24 @@ async def mcp_endpoint(request: Request):
         params = msg.get("params") or {}
         if params.get("name") != "humanize":
             return _rpc_error(mid, -32602, f"unknown tool: {params.get('name')}")
+        args = params.get("arguments") or {}
+        started = time.monotonic()
+        # Audited on BOTH paths. A connector that throws for one user is exactly
+        # what the log exists to surface, so a success-only record would hide
+        # the interesting half.
         try:
-            out = await _call_humanize(params.get("arguments") or {}, token)
+            out = await _call_humanize(args, token)
         except Exception as e:  # noqa: BLE001 — surface upstream failure to the client
+            await _audit(user_id, client_id, "humanize", ok=False, error=str(e),
+                         started=started, args=args, out=None)
             return _rpc_result(mid, {
                 "content": [{"type": "text", "text": f"humanize call failed: {e}"}],
                 "isError": True})
+        # `ok=false` inside a 200 is the tool declining (no_anchor,
+        # frozen_violation) -- a real outcome, not a transport error, and the
+        # one an admin most often needs to explain to a student.
+        await _audit(user_id, client_id, "humanize", ok=not out.get("error"),
+                     error=out.get("error"), started=started, args=args, out=out)
         return _rpc_result(mid, {
             "content": [{"type": "text",
                          "text": json.dumps(out, ensure_ascii=False)}],

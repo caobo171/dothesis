@@ -516,3 +516,51 @@ class McpOAuthRefreshToken(Base):
     revoked: Mapped[bool] = mapped_column(
         nullable=False, default=False, server_default="false"
     )
+
+
+class McpToolCall(Base):
+    """One MCP tool invocation — the audit trail for connector usage.
+
+    WHY IT EXISTS: without this, a super admin can answer "who connected
+    Claude?" (the grant tables above) but not "who USED it, how much, and did it
+    work?" — which is the question that matters for the giveaway campaign
+    (MCP_OAUTH_PLAN.md item 6) and the only way to notice abuse. The MCP
+    process's uvicorn access log shows `POST /mcp 200` and nothing else: every
+    user's calls look identical, and journald rotates them away.
+
+    WHAT IT DELIBERATELY DOES NOT STORE: the prose. Only `input_chars` /
+    `output_chars`. An audit log that quietly accumulates a copy of everyone's
+    thesis drafts is a liability you have to defend later, and sizes answer the
+    operational questions (how heavy, did it return anything) without holding
+    the content. Storing the text is a separate decision worth making on
+    purpose, not a side effect of adding logging.
+
+    Rows are kept when the call FAILS too — a connector that errors for one user
+    is exactly what you want to find, and a success-only log hides it.
+
+    Written by the MCP process (mcp/audit.py) with plain psycopg; read by the
+    API (routers/admin_connectors.py). Same shared-database, separate-process
+    arrangement as the OAuth tables — so the SQL there must match this model.
+    """
+    __tablename__ = "mcp_tool_calls"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    # No FK to mcp_oauth_clients: a call must still be recordable if the client
+    # row is deleted (de-registered) mid-flight, and losing the audit row would
+    # be worse than holding a dangling id.
+    client_id: Mapped[str | None] = mapped_column(Text)
+    tool: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    ok: Mapped[bool] = mapped_column(nullable=False, index=True)
+    # The tool's own error key ("no_anchor", "frozen_violation") or a transport
+    # failure. Free text because it spans both layers.
+    error: Mapped[str | None] = mapped_column(Text)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    input_chars: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_chars: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )

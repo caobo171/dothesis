@@ -478,3 +478,133 @@ def test_registered_clients_survive_a_process_restart(mcp, user_id):
             "code_challenge": challenge, "code_challenge_method": "S256",
         }, headers={"X-Forwarded-Proto": "https"})
     assert r.status_code == 200
+
+
+# --- audit trail ------------------------------------------------------------
+
+def _authed(client, user_id):
+    """Complete the handshake and return the bearer, as a real client would."""
+    reg = _register(client)
+    verifier, challenge = _pkce()
+    code = _consent_to_code(client, reg, challenge, user_id)
+    tok = client.post("/oauth/token", data={
+        "grant_type": "authorization_code", "code": code,
+        "redirect_uri": reg["redirect_uris"][0],
+        "client_id": reg["client_id"], "code_verifier": verifier}).json()
+    return tok["access_token"], reg["client_id"]
+
+
+def _calls(pg_url, user_id):
+    import psycopg
+    from psycopg.rows import dict_row
+    dsn = pg_url.replace("postgresql+psycopg://", "postgresql://")
+    with psycopg.connect(dsn, row_factory=dict_row) as c:
+        return c.execute("SELECT * FROM mcp_tool_calls WHERE user_id = %s::uuid "
+                         "ORDER BY id", (user_id,)).fetchall()
+
+
+def test_a_tool_call_is_recorded_with_user_and_client(client, user_id, pg_url, monkeypatch):
+    """The whole point: attribute a call to a person and a connector. The MCP
+    access log says only 'POST /mcp 200'."""
+    import server_lite
+
+    async def _fake(args, token):
+        return {"ok": True, "text": "re-voiced output", "changed": True}
+    monkeypatch.setattr(server_lite, "_call_humanize", _fake)
+
+    access, client_id = _authed(client, user_id)
+    r = client.post("/mcp", headers={"Authorization": f"Bearer {access}"},
+                    json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                          "params": {"name": "humanize",
+                                     "arguments": {"text": "some input prose"}}})
+    assert r.status_code == 200
+
+    rows = _calls(pg_url, user_id)
+    assert len(rows) == 1
+    assert rows[0]["tool"] == "humanize"
+    assert rows[0]["ok"] is True
+    assert rows[0]["client_id"] == client_id
+    assert rows[0]["input_chars"] == len("some input prose")
+    assert rows[0]["output_chars"] == len("re-voiced output")
+
+
+def test_a_tool_refusal_is_recorded_as_a_failure(client, user_id, pg_url, monkeypatch):
+    """ok=false inside a 200 is the tool declining (no_anchor). It is the case an
+    admin most often has to explain to a student, so it must not read as success."""
+    import server_lite
+
+    async def _fake(args, token):
+        return {"ok": False, "error": "no_anchor", "text": args["text"]}
+    monkeypatch.setattr(server_lite, "_call_humanize", _fake)
+
+    access, _ = _authed(client, user_id)
+    client.post("/mcp", headers={"Authorization": f"Bearer {access}"},
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                      "params": {"name": "humanize", "arguments": {"text": "x"}}})
+
+    rows = _calls(pg_url, user_id)
+    assert len(rows) == 1
+    assert rows[0]["ok"] is False
+    assert rows[0]["error"] == "no_anchor"
+
+
+def test_an_upstream_crash_is_still_recorded(client, user_id, pg_url, monkeypatch):
+    """A connector that throws for one user is exactly what the log exists to
+    surface; a success-only record would hide it."""
+    import server_lite
+
+    async def _boom(args, token):
+        raise RuntimeError("upstream exploded")
+    monkeypatch.setattr(server_lite, "_call_humanize", _boom)
+
+    access, _ = _authed(client, user_id)
+    r = client.post("/mcp", headers={"Authorization": f"Bearer {access}"},
+                    json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                          "params": {"name": "humanize", "arguments": {"text": "x"}}})
+    assert r.json()["result"]["isError"] is True
+
+    rows = _calls(pg_url, user_id)
+    assert len(rows) == 1
+    assert rows[0]["ok"] is False
+    assert "upstream exploded" in rows[0]["error"]
+
+
+def test_auditing_never_breaks_the_tool_call(client, user_id, monkeypatch):
+    """The tool result is the product; the audit row is bookkeeping. Bookkeeping
+    does not get to veto the product."""
+    import audit
+    import server_lite
+
+    async def _fake(args, token):
+        return {"ok": True, "text": "fine", "changed": True}
+    monkeypatch.setattr(server_lite, "_call_humanize", _fake)
+
+    def _explode(**kw):
+        raise RuntimeError("database on fire")
+    monkeypatch.setattr(audit, "record", _explode)
+
+    access, _ = _authed(client, user_id)
+    r = client.post("/mcp", headers={"Authorization": f"Bearer {access}"},
+                    json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                          "params": {"name": "humanize", "arguments": {"text": "x"}}})
+    assert r.status_code == 200
+    assert r.json()["result"]["structuredContent"]["text"] == "fine"
+
+
+def test_no_prose_reaches_the_audit_table(client, user_id, pg_url, monkeypatch):
+    """Sizes, never content. Thesis drafts are the most private thing here."""
+    import server_lite
+    secret_text = "MY UNPUBLISHED THESIS PARAGRAPH"
+
+    async def _fake(args, token):
+        return {"ok": True, "text": "rewritten " + secret_text}
+    monkeypatch.setattr(server_lite, "_call_humanize", _fake)
+
+    access, _ = _authed(client, user_id)
+    client.post("/mcp", headers={"Authorization": f"Bearer {access}"},
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                      "params": {"name": "humanize", "arguments": {"text": secret_text}}})
+
+    row = _calls(pg_url, user_id)[0]
+    assert secret_text not in " ".join(str(v) for v in row.values())
+    assert row["input_chars"] == len(secret_text)

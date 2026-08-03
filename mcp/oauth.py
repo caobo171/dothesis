@@ -266,14 +266,29 @@ def mint_access_token(user_id: str, client_id: str) -> tuple[str, int]:
 
 def verify_bearer(token: str) -> str | None:
     """Return the user id for a bearer token issued here, else None."""
+    return bearer_identity(token)[0]
+
+
+def bearer_identity(token: str) -> tuple[str | None, str | None]:
+    """(user_id, client_id) for a bearer token, or (None, None) if it's no good.
+
+    The client id rides in the token because the audit log wants to say WHICH
+    connector made a call, not just which user — a student with both Claude and
+    ChatGPT connected is otherwise indistinguishable from one hammering a single
+    client. It is absent on tokens minted before this claim existed, and on the
+    dev static-token path, so callers must tolerate None.
+    """
     try:
         claims = _jwt.decode(token, _secret(), algorithms=[JWT_ALGO])
     except _jwt.InvalidTokenError:
-        return None
+        return None, None
     if claims.get("typ") == "stream":
-        return None
+        return None, None
     sub = claims.get("sub")
-    return sub if isinstance(sub, str) and sub else None
+    if not isinstance(sub, str) or not sub:
+        return None, None
+    cid = claims.get("client_id")
+    return sub, cid if isinstance(cid, str) and cid else None
 
 
 # --- Discovery --------------------------------------------------------------
