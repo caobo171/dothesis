@@ -47,6 +47,13 @@ _HIDDEN = {"dothesis", "dothesis-bootstrap"}
 _SUGGESTED_FOR: dict[str, list[str]] = {
     "dothesis-humanize": ["M5"],
     "dothesis-defense": ["M5"],
+    # The QuillBot-shaped writing tools. All four act on prose that already
+    # exists, so they surface alongside M5; paraphrase also earns M2, where
+    # students are restating sources and are most likely to over-copy.
+    "dothesis-grammar": ["M5"],
+    "dothesis-paraphrase": ["M2", "M5"],
+    "dothesis-writing-rhythm": ["M5"],
+    "dothesis-plagiarism": ["M2", "M5"],
 }
 
 
