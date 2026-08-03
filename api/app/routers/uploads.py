@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..db import db_session
+from ..auth_admin import readable_project as _readable_project
 from ..deps import current_user, stream_user_factory
 from ..models import PaperUpload, Project, User
 from ..pdf_extract import extract_pdf_text
@@ -210,7 +211,11 @@ async def upload_paper(project_id: uuid.UUID,
 def list_uploads(project_id: uuid.UUID,
                  user: User = Depends(current_user),
                  db: Session = Depends(db_session)):
-    _owned_project(db, user, project_id)
+    # Readable, not owned: the chat layout calls this to fill the context panel,
+    # so a super admin opening a student's thread to debug would otherwise get a
+    # 404 here and a half-rendered page. Read-only — uploading and deleting
+    # still require ownership below.
+    _readable_project(db, user, project_id)
     return db.query(PaperUpload).filter_by(project_id=project_id) \
              .order_by(PaperUpload.uploaded_at.desc()).all()
 

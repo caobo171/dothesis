@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..auth_admin import readable_project as _readable_project
 from ..db import db_session, get_session_factory
 from ..deps import current_user
 from ..models import ContextStore, Message, Project, Thread, User
@@ -83,6 +84,15 @@ class ThreadOut(BaseModel):
 # ----------------------------------------------------------------------------
 
 def _owned_project(db: Session, user: User, project_id: uuid.UUID) -> Project:
+    """Strict ownership — the caller must OWN the project. Writes only.
+
+    Read endpoints use `_readable_project` (auth_admin.readable_project), which
+    also admits super admins so they can open a student's thread to debug a bad
+    run. Keep the split: an admin viewing a thread must not be able to send a
+    message into it, which would spend the student's credits and mutate their
+    graph checkpoint. If you add an endpoint here, pick by verb — does it
+    change anything the owner would notice?
+    """
     p = db.get(Project, project_id)
     if not p or p.user_id != user.id:
         raise HTTPException(status_code=404,
@@ -228,7 +238,7 @@ def list_projects(user: User = Depends(current_user),
 def get_project(project_id: uuid.UUID,
                 user: User = Depends(current_user),
                 db: Session = Depends(db_session)):
-    p = _owned_project(db, user, project_id)
+    p = _readable_project(db, user, project_id)
     return _serialize_project(db, p)
 
 
@@ -243,7 +253,7 @@ def get_artifacts(project_id: uuid.UUID,
     unmet prerequisites. Computed from the artifact dependency DAG
     (orchestrator/artifacts.py) over the project's persisted context_store.
     """
-    _owned_project(db, user, project_id)
+    _readable_project(db, user, project_id)
     from orchestrator.artifacts import readiness
     return readiness(_orch_context_store(db, project_id))
 
@@ -261,7 +271,7 @@ def get_impact(project_id: uuid.UUID, artifact: str,
     422 for unknown artifact keys keeps the error shape consistent with
     /reconstruct/{artifact}.
     """
-    _owned_project(db, user, project_id)
+    _readable_project(db, user, project_id)
     from orchestrator.artifacts import (
         _ARTIFACT_BY_KEY, dependents_closure, stale_after_change,
     )
@@ -371,7 +381,7 @@ def reconstruct(project_id: uuid.UUID, artifact: str,
 def list_threads(project_id: uuid.UUID,
                  user: User = Depends(current_user),
                  db: Session = Depends(db_session)):
-    _owned_project(db, user, project_id)
+    _readable_project(db, user, project_id)
     return db.query(Thread).filter_by(project_id=project_id).order_by(Thread.created_at).all()
 
 
@@ -419,7 +429,7 @@ def get_thread(thread_id: uuid.UUID,
     t = db.get(Thread, thread_id)
     if not t:
         raise HTTPException(404, detail={"error": {"code": "not_found"}})
-    _owned_project(db, user, t.project_id)
+    _readable_project(db, user, t.project_id)
     return t
 
 
@@ -435,7 +445,7 @@ def thread_credits(thread_id: uuid.UUID,
     t = db.get(Thread, thread_id)
     if not t:
         raise HTTPException(404, detail={"error": {"code": "not_found"}})
-    _owned_project(db, user, t.project_id)
+    _readable_project(db, user, t.project_id)
     row = db.query(
         func.coalesce(func.sum(Message.cost_credits), 0),
         func.coalesce(func.sum(Message.total_tokens), 0),
@@ -452,7 +462,7 @@ def project_credits(project_id: uuid.UUID,
     Powers the left panel's project cost summary. Joins messages → threads so
     the sum spans every conversation in the project.
     """
-    _owned_project(db, user, project_id)
+    _readable_project(db, user, project_id)
     row = (
         db.query(
             func.coalesce(func.sum(Message.cost_credits), 0),
@@ -482,7 +492,7 @@ def list_messages(thread_id: uuid.UUID, body: ListMessagesBody,
     t = db.get(Thread, thread_id)
     if not t:
         raise HTTPException(404, detail={"error": {"code": "not_found"}})
-    _owned_project(db, user, t.project_id)
+    _readable_project(db, user, t.project_id)
     q = db.query(Message).filter_by(thread_id=thread_id)
     if before_id is not None:
         q = q.filter(Message.id < before_id)
@@ -573,7 +583,7 @@ async def state_stream(thread_id: uuid.UUID,
     t = db.get(Thread, thread_id)
     if not t:
         raise HTTPException(404, detail={"error": {"code": "not_found"}})
-    _owned_project(db, user, t.project_id)
+    _readable_project(db, user, t.project_id)
     project_id = t.project_id
 
     async def gen():
