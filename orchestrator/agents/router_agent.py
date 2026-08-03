@@ -92,6 +92,12 @@ def _router_llm():
         model=os.getenv("ORCHESTRATOR_ROUTER_MODEL"),
         temperature=0.0,
         timeout=int(os.getenv("ORCHESTRATOR_LLM_TIMEOUT", "20")),
+        # This is THE orchestrator call site that binds tools (see the
+        # bind_tools(ALL_TOOLS, tool_choice="any") below), and gpt-5.6-* 400s on
+        # reasoning + function tools over /v1/chat/completions. Declared here
+        # rather than forced on the shared factory so tool-free callers —
+        # humanize above all — keep their reasoning pass.
+        binds_tools=True,
     )
 
 

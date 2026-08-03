@@ -38,7 +38,14 @@ def resolve_orchestrator_model(model: str | None = None) -> str:
     """
     if model:
         return model
-    route = os.getenv("ORCHESTRATOR_LLM_ROUTE", "native")
+    # Default route is `openai` (2026-08-03). It was `native`/gemini-2.5-flash,
+    # which stopped describing reality after the 2026-08-02 cutover: every
+    # deployment sets ORCHESTRATOR_LLM_ROUTE=openai, so the code default was a
+    # fallback nothing used and every reader had to mentally override.
+    # Trade-off, stated: _openai() raises without OPENAI_API_KEY, so a machine
+    # with no env now fails at model construction instead of quietly landing on
+    # Gemini. That is the intended direction — a missing key should be loud.
+    route = os.getenv("ORCHESTRATOR_LLM_ROUTE", "openai")
     # native keeps gemini-2.5-flash: the exact id every `_get_llm()` site used, so
     # the no-new-env back-compat contract in this module's header still holds.
     default_model = "gemini-2.5-flash"
@@ -60,6 +67,7 @@ def get_orchestrator_llm(
     temperature: float | None = None,
     timeout: int | None = None,
     route: str | None = None,
+    binds_tools: bool = False,
 ):
     """Build the engine's chat model for the configured route.
 
@@ -87,7 +95,10 @@ def get_orchestrator_llm(
     report writer stays on qwen. None keeps the env default, so every existing
     caller is byte-for-byte unchanged.
     """
-    route = route or os.getenv("ORCHESTRATOR_LLM_ROUTE", "native")
+    # Same default as resolve_orchestrator_model above — the two MUST agree, or
+    # the route picking the client and the route picking the model id diverge
+    # and you get a native model id sent to OpenAI.
+    route = route or os.getenv("ORCHESTRATOR_LLM_ROUTE", "openai")
     model = resolve_orchestrator_model(model)
     temperature = 0.4 if temperature is None else temperature
     # Metering is attached HERE, at the one place every tool gets its client,
@@ -177,6 +188,18 @@ def get_orchestrator_llm(
         }
         if timeout is not None:
             kwargs["timeout"] = timeout
+        # Reasoning is disabled ONLY for callers that bind tools.
+        #
+        # gpt-5.6-* reasons by default and OpenAI 400s on reasoning + function
+        # tools over /v1/chat/completions, so the fix is required — but it was
+        # first applied to this whole factory, which was too wide. Exactly one
+        # orchestrator caller binds tools (router_agent's
+        # bind_tools(ALL_TOOLS, tool_choice="any")); everything else here is
+        # tool-free prose generation, and humanize is the most quality-sensitive
+        # of them. Turning reasoning off for all of them bought nothing and cost
+        # output quality on the passes that care most about it.
+        if binds_tools:
+            kwargs["reasoning_effort"] = "none"
         return ChatOpenAI(**kwargs)
 
     raise ValueError(f"unknown orchestrator LLM route: {route!r}")

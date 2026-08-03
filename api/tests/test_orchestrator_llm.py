@@ -13,7 +13,7 @@ from orchestrator.llm import get_orchestrator_llm
 
 
 def test_native_default_builds_gemini(monkeypatch):
-    monkeypatch.delenv("ORCHESTRATOR_LLM_ROUTE", raising=False)
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "native")  # explicit: openai is the default now
     monkeypatch.delenv("ORCHESTRATOR_LLM_MODEL", raising=False)
     # ChatGoogleGenerativeAI validates a key at construction (no network); a
     # dummy key keeps this offline while proving the native route is unchanged.
@@ -27,7 +27,7 @@ def test_native_default_builds_gemini(monkeypatch):
 def test_native_passes_through_per_site_temperature(monkeypatch):
     # Sites call get_orchestrator_llm(temperature=0.2) etc.; that must reach the
     # Gemini client so per-tool temperatures survive the refactor.
-    monkeypatch.delenv("ORCHESTRATOR_LLM_ROUTE", raising=False)
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "native")  # explicit: openai is the default now
     monkeypatch.setenv("GOOGLE_API_KEY", "test")
     m = get_orchestrator_llm(temperature=0.2)
     assert m.temperature == 0.2
@@ -38,7 +38,7 @@ def test_native_passes_through_timeout(monkeypatch):
     # m2/intent) built Gemini with timeout=ORCHESTRATOR_LLM_TIMEOUT so a stalled
     # request can't wedge the whole turn. Routing them through the factory MUST
     # preserve that per-request timeout — otherwise the native route regresses.
-    monkeypatch.delenv("ORCHESTRATOR_LLM_ROUTE", raising=False)
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "native")  # explicit: openai is the default now
     monkeypatch.setenv("GOOGLE_API_KEY", "test")
     m = get_orchestrator_llm(temperature=0.0, timeout=20)
     assert m.timeout == 20
@@ -47,7 +47,7 @@ def test_native_passes_through_timeout(monkeypatch):
 def test_native_default_omits_timeout(monkeypatch):
     # Sites that never set a timeout (phase2/phase4) must stay byte-for-byte:
     # no timeout kwarg reaches the client (its own default stands).
-    monkeypatch.delenv("ORCHESTRATOR_LLM_ROUTE", raising=False)
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "native")  # explicit: openai is the default now
     monkeypatch.setenv("GOOGLE_API_KEY", "test")
     m = get_orchestrator_llm(temperature=0.5)
     assert m.timeout is None
@@ -174,9 +174,11 @@ def test_explicit_model_arg_wins_over_route_default(monkeypatch):
 
 
 def test_native_route_default_model_unchanged(monkeypatch):
-    # Back-compat contract: route=native must still resolve gemini-2.5-flash.
+    # route=native must STILL resolve gemini-2.5-flash. Native stopped being the
+    # fallback on 2026-08-03, but it did not change what it resolves to — that
+    # separation is the point of this test.
     from orchestrator.llm import resolve_orchestrator_model
-    monkeypatch.delenv("ORCHESTRATOR_LLM_ROUTE", raising=False)
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "native")  # explicit: openai is the default now
     monkeypatch.delenv("ORCHESTRATOR_LLM_MODEL", raising=False)
     assert resolve_orchestrator_model() == "gemini-2.5-flash"
 
@@ -205,3 +207,49 @@ def test_token_meter_ledger_label_is_route_aware(monkeypatch):
 
     tm.metered_invoke(LlmWithoutModelAttr(), "hi", action_kind="probe")
     assert rows[0].model == "bailian/qwen-plus"
+
+
+def test_no_env_defaults_to_openai_luna(monkeypatch):
+    """The bare default is openai/gpt-5.6-luna (2026-08-03).
+
+    It used to be native/gemini-2.5-flash. Every deployment has set
+    ORCHESTRATOR_LLM_ROUTE=openai since the cutover, so the code default was a
+    path nobody ran while reading as the blessed one. Accepted consequence: an
+    unkeyed machine now fails loudly in _openai() instead of quietly building a
+    Gemini the rest of the config does not expect.
+    """
+    from orchestrator.llm import resolve_orchestrator_model
+    monkeypatch.delenv("ORCHESTRATOR_LLM_ROUTE", raising=False)
+    monkeypatch.delenv("ORCHESTRATOR_LLM_MODEL", raising=False)
+    assert resolve_orchestrator_model() == "gpt-5.6-luna"
+
+
+def test_reasoning_is_disabled_only_for_tool_binding_callers(monkeypatch):
+    """gpt-5.6-* 400s on reasoning + function tools over /v1/chat/completions,
+    so the fix is required — but applying it to the whole factory was too wide.
+
+    Exactly one orchestrator caller binds tools (router_agent's
+    bind_tools(ALL_TOOLS, tool_choice="any")). Everything else here is tool-free
+    prose generation, and humanize is the most quality-sensitive of them, so it
+    must keep its reasoning pass.
+    """
+    from orchestrator.llm import get_orchestrator_llm
+
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+
+    tool_free = get_orchestrator_llm()
+    assert tool_free.reasoning_effort is None       # reasoning ON
+
+    tool_binding = get_orchestrator_llm(binds_tools=True)
+    assert tool_binding.reasoning_effort == "none"  # required, or 400
+
+
+def test_the_router_declares_that_it_binds_tools(monkeypatch):
+    """The declaration lives at the call site, so adding a second tool-binding
+    caller is a visible one-line change rather than a silent 400 in production."""
+    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+    from orchestrator.agents.router_agent import _router_llm
+
+    assert _router_llm().reasoning_effort == "none"

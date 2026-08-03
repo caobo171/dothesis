@@ -87,11 +87,20 @@ def spec_from_env() -> ModelSpec:
     ANTHROPIC_API_KEY is configured on the native route, else gemini-3.5-flash.
     DOTHESIS_AGENT_MODEL still overrides, exactly as before.
     """
-    # DEPLOY CONSTRAINT — the route stays `native` in code, deliberately.
-    # _ofox() raises RuntimeError without OFOX_API_KEY, so defaulting to ofox here
-    # would break every dev machine and any deploy lacking the key. Moving production
-    # onto ofox is a DEPLOYMENT change (DOTHESIS_MODEL_ROUTE=ofox in env); this file
-    # only decides WHICH model you get once you are already on ofox.
+    # DEPLOY CONSTRAINT, REVISED 2026-08-03 — the default route is now `openai`.
+    #
+    # It was `native`, on the reasoning that _ofox() raises without OFOX_API_KEY
+    # so an unkeyed machine must land somewhere that works. That still holds for
+    # ofox, and it is why ofox is not the default. It no longer holds as an
+    # argument for `native`: since the 2026-08-02 cutover every deployment sets
+    # DOTHESIS_MODEL_ROUTE=openai, so `native` was a default nobody ran, which
+    # makes it the least-tested path while looking like the blessed one.
+    #
+    # Accepted consequence: _openai() raises without OPENAI_API_KEY, so a machine
+    # with neither env nor key now fails loudly at construction rather than
+    # silently running a Gemini the rest of the config does not expect. Moving
+    # production BETWEEN routes stays a deployment change (env), exactly as
+    # before — this only changes where "no env at all" points.
     #
     # ⚠️ SHIP-TOGETHER: the credit_multiplier correction (f64bf79) must NOT reach
     # production while the live default is still gemini-3.5-flash. Table-derived
@@ -99,7 +108,7 @@ def spec_from_env() -> ModelSpec:
     # so a Starter pack would buy ~1/13 of a run and students hit a wall immediately.
     # The env flip to ofox + qwen-plus (~0.62x) and that multiplier change are one
     # deployment, not two.
-    route = os.getenv("DOTHESIS_MODEL_ROUTE", "native")
+    route = os.getenv("DOTHESIS_MODEL_ROUTE", "openai")
     # Claude is the architecture's preferred model and takes over automatically
     # once a key lands; until then Gemini is the working default.
     default_model = "gemini-3.5-flash"
@@ -289,6 +298,30 @@ def _openai(spec: ModelSpec):
         api_key=key,
         # NOT max_tokens, and NO temperature — see docstring.
         max_completion_tokens=spec.max_tokens,
+        # THIRD hard incompatibility, and the one that breaks everything: this
+        # model reasons by default, and OpenAI rejects reasoning + function
+        # tools on /v1/chat/completions outright —
+        #   400 "Function tools with reasoning_effort are not supported for
+        #        gpt-5.6-luna in /v1/chat/completions. To use function tools,
+        #        use /v1/responses or set reasoning_effort to 'none'."
+        # Note we never SENT reasoning_effort; langchain omits it when None. The
+        # rejected value is the model's own server-side default, which is why
+        # this only shows up once tools are bound — every agent turn, and
+        # router_agent's bind_tools(tool_choice="any"). Text-only calls are fine,
+        # which is exactly why it survived the 2026-08-02 cutover from Ofox
+        # unnoticed.
+        #
+        # Probed both fixes against the live endpoint. reasoning_effort="none"
+        # works and keeps `content` a plain string. use_responses_api=True also
+        # works AND keeps reasoning, but returns content BLOCKS
+        # ([{"type": "text", ...}]) instead of a string, which every consumer of
+        # msg.content would have to learn. Taking the safe one: this route is
+        # currently 400ing on every tool-using turn.
+        #
+        # The cost is real — no reasoning on the agent, the most
+        # reasoning-hungry surface we have. Moving to the responses API is the
+        # way to get it back, and it is a deliberate migration, not a flag flip.
+        reasoning_effort="none",
         # `stream_usage=True`, NOT model_kwargs={"stream_options": …} the way the
         # gateway routes do. Both ask for the same token counts the credit ledger
         # reads via extract_usage, but a raw stream_options is sent on EVERY
