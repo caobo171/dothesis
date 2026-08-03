@@ -58,3 +58,40 @@ def test_roadmap_rejects_non_owner(monkeypatch):
 
     c = _client(monkeypatch, {"focus": None, "status": {}, "contextStore": {}}, authorize=_deny)
     assert c.post("/api/v1/projects/abc/roadmap").status_code == 403
+
+
+def test_completed_substep_reads_done_even_when_an_earlier_one_is_current(monkeypatch):
+    """Mid-journey import produces out-of-order artifacts, and the spine has to
+    survive it.
+
+    reconstruct_upstream can name the research gaps a finished thesis addresses
+    but must never invent its source list, so a reconstructed M2 legitimately
+    holds research_gaps with NO literature_sources. Completion used to be purely
+    positional (`done if i < idx`), so the cursor sat on `familiarize` (index 0)
+    and NOTHING was marked done — the roadmap rendered "Find research gaps" as
+    pending while the M2 card beside it listed G1 and G2.
+    """
+    state = {
+        "focus": "M1",
+        "status": {m: "in_progress" for m in ("M1", "M2", "M3", "M4")} | {"M5": "locked"},
+        "contextStore": {
+            "research_title": "T",
+            "research_questions": ["RQ1"],
+            "research_gaps": [{"id": "G1"}, {"id": "G2"}],  # no literature_sources
+        },
+    }
+    body = _client(monkeypatch, state).post("/api/v1/projects/abc/roadmap").json()
+    m2 = next(m for m in body["modules"] if m["id"] == "M2")
+    steps = {s["id"]: s["state"] for s in m2["substeps"]}
+
+    assert steps["find_gaps"] == "done"          # evidenced — the actual fix
+    assert steps["familiarize"] == "current"     # genuinely missing, still the cursor
+    assert steps["confirm_refs"] == "upcoming"   # unbacked and not reached
+
+    # M1 has both of its backed artifacts, so neither may render as unfinished
+    # and there is no current step left — the next action is "confirm it".
+    m1 = next(m for m in body["modules"] if m["id"] == "M1")
+    m1_steps = {s["id"]: s["state"] for s in m1["substeps"]}
+    assert m1_steps["frame_topic"] == "done"
+    assert m1_steps["derive_questions"] == "done"
+    assert m1["current"] is None

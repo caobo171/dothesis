@@ -17,7 +17,13 @@ from sqlalchemy.orm import Session
 
 from ..deps import current_user, db_session
 from ..models import Project, User
-from agent.roadmap import ROADMAP, SUBSTEP_LABELS, derive_substep, next_action
+from agent.roadmap import (
+    ROADMAP,
+    SUBSTEP_LABELS,
+    derive_substep,
+    next_action,
+    satisfied_substeps,
+)
 from agent.state import MODULES
 from agent.timeline import timeline_status  # F11: you-are-here-vs-plan card
 
@@ -67,14 +73,37 @@ def _store_for(project_id: str):
     return DbProjectStateStore(get_engine(), pid, _workspace_dir(pid))
 
 
-def _substep_states(module: str, current: str | None, module_status: str) -> list[dict]:
+def _substep_states(module: str, current: str | None, module_status: str,
+                    satisfied: set[str] | None = None) -> list[dict]:
+    """Render one module's spine as done / current / upcoming.
+
+    Completion used to be purely positional (`done if i < idx`), which is only
+    correct while the spine is walked in order. Mid-journey import breaks that:
+    reconstruct_upstream can produce research_gaps with no literature_sources,
+    so M2's current step is `familiarize` (index 0) while `find_gaps` (index 2)
+    is genuinely finished. Positionally, nothing was marked done — the roadmap
+    said "Find research gaps" was pending while the M2 card beside it listed
+    G1 and G2.
+
+    So an artifact-backed step that HAS its artifact is done regardless of where
+    the cursor sits. Unbacked steps keep the positional rule, because position
+    is the only evidence they will ever have.
+    """
     spine = ROADMAP[module]
+    satisfied = satisfied or set()
     idx = spine.index(current) if current in spine else (len(spine) if module_status == "done" else 0)
     out = []
     for i, sid in enumerate(spine):
-        state = "done" if i < idx else ("current" if i == idx else "upcoming")
         if module_status == "done":
             state = "done"
+        elif sid in satisfied:
+            state = "done"  # evidence beats position
+        elif i < idx:
+            state = "done"
+        elif i == idx:
+            state = "current"
+        else:
+            state = "upcoming"
         out.append({"id": sid, "label": SUBSTEP_LABELS.get(sid, sid), "state": state})
     return out
 
@@ -94,7 +123,8 @@ async def get_roadmap(project_id: str, user: User = Depends(current_user),
     for m in MODULES:
         cur = derive_substep(m, state)
         modules.append({"id": m, "status": status.get(m, "locked"), "current": cur,
-                        "substeps": _substep_states(m, cur, status.get(m, "locked"))})
+                        "substeps": _substep_states(m, cur, status.get(m, "locked"),
+                                                    satisfied_substeps(m, state))})
     na = next_action(state) or {}
     # F5: emit only when the next action changed since the last poll (see above).
     _maybe_emit_next_action(project_id, na, getattr(user, "id", None))

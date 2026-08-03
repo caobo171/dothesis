@@ -39,40 +39,54 @@ SUBSTEP_LABELS: dict[str, str] = {
 }
 
 
+# Which spine sub-steps have a PERSISTED artifact backing them, and which
+# contextStore key proves it. Listed in spine order per module.
+#
+# The rest of the spine (propose_titles, confirm_title, map_research_state,
+# confirm_refs, define_constructs, detect_data, …) is unbacked: real work with
+# nothing durable to check, so its completion can only ever be inferred from
+# position. Keeping the split explicit here is the point — it used to be
+# implicit in derive_substep's if-chain, which meant nothing else could ask
+# "is this step actually evidenced?" without restating the mapping.
+SUBSTEP_ARTIFACT: dict[str, dict[str, str]] = {
+    "M1": {"frame_topic": "research_title", "derive_questions": "research_questions"},
+    "M2": {"familiarize": "literature_sources", "find_gaps": "research_gaps"},
+    "M3": {"build_model": "conceptual_model", "state_hypotheses": "hypotheses",
+           "choose_method": "methodology"},
+    "M4": {"outline_analysis": "analysis_outline", "run_per_step": "analysis_results"},
+    "M5": {"synthesize_sections": "final_sections"},
+}
+
+
+def satisfied_substeps(module: str, state: dict) -> set[str]:
+    """Backed sub-steps whose artifact is actually present.
+
+    Separate from derive_substep because "where are you working" and "what have
+    you finished" stopped being the same question once mid-journey import
+    landed: reconstruct_upstream can infer a LATER artifact without an earlier
+    one (research_gaps with no literature_sources — it can name the gaps a
+    finished thesis addresses, but it must never invent the source list). A
+    strictly linear spine can't express that, so completion is read from the
+    artifacts rather than from how far along the current step is.
+    """
+    cs = state.get("contextStore") or {}
+    return {sid for sid, key in SUBSTEP_ARTIFACT.get(module, {}).items() if cs.get(key)}
+
+
 def derive_substep(module: str, state: dict) -> str | None:
     """First spine sub-step whose persisted artifact is missing; None when the
-    module's tracked artifacts are all present (ready to confirm done / done)."""
-    cs = state.get("contextStore") or {}
-    if module == "M1":
-        if not cs.get("research_title"):
-            return "frame_topic"
-        if not cs.get("research_questions"):
-            return "derive_questions"
+    module's tracked artifacts are all present (ready to confirm done / done).
+
+    Order comes from ROADMAP, so this and SUBSTEP_ARTIFACT cannot drift out of
+    step the way two hand-maintained if-chains would.
+    """
+    backed = SUBSTEP_ARTIFACT.get(module, {})
+    if not backed:
         return None
-    if module == "M2":
-        if not cs.get("literature_sources"):
-            return "familiarize"
-        if not cs.get("research_gaps"):
-            return "find_gaps"
-        return None
-    if module == "M3":
-        if not cs.get("conceptual_model"):
-            return "build_model"
-        if not cs.get("hypotheses"):
-            return "state_hypotheses"
-        if not cs.get("methodology"):
-            return "choose_method"
-        return None
-    if module == "M4":
-        if not cs.get("analysis_outline"):
-            return "outline_analysis"
-        if not cs.get("analysis_results"):
-            return "run_per_step"
-        return None
-    if module == "M5":
-        if not cs.get("final_sections"):
-            return "synthesize_sections"
-        return None
+    have = satisfied_substeps(module, state)
+    for sid in ROADMAP[module]:
+        if sid in backed and sid not in have:
+            return sid
     return None
 
 
