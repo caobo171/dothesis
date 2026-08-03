@@ -4,6 +4,7 @@ import { ArrowUp, FileText, Paperclip, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useT } from "../../lib/i18n/LocaleProvider";
+import type { AnalyzeKind } from "../../lib/bootstrap-payload";
 import type { MessageKey } from "../../lib/i18n/messages/en";
 
 /**
@@ -26,12 +27,22 @@ export type StarterChip = {
   labelKey: MessageKey;
   /** Text written into the composer when the chip is clicked. */
   textKey: MessageKey;
+  /**
+   * What the first turn should DO. Omitted means the default assessment.
+   *
+   * The other chips are pure prefill — they describe a situation and the
+   * bootstrap turn treats them all the same way. "Bài bị chê giống AI" is not
+   * a situation, it's a different job, so this chip also selects the intent
+   * the /new page hands to the chat surface.
+   */
+  kind?: AnalyzeKind;
 };
 
 export const STARTER_CHIPS: StarterChip[] = [
   { labelKey: "new.chip.draft", textKey: "new.chip.draft.text" },
   { labelKey: "new.chip.data", textKey: "new.chip.data.text" },
   { labelKey: "new.chip.papers", textKey: "new.chip.papers.text" },
+  { labelKey: "new.chip.humanize", textKey: "new.chip.humanize.text", kind: "humanize" },
   { labelKey: "new.chip.fresh", textKey: "new.chip.fresh.text" },
 ];
 
@@ -45,6 +56,7 @@ export function ThesisComposer({
   canSubmit,
   busy = false,
   accept,
+  onKindChange,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -57,6 +69,9 @@ export function ThesisComposer({
   canSubmit: boolean;
   busy?: boolean;
   accept?: string;
+  /** Fired when a chip selects a non-default first-turn intent. Optional so
+   *  existing renders (and the component test) don't have to care. */
+  onKindChange?: (kind: AnalyzeKind) => void;
 }) {
   const t = useT();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,8 +88,12 @@ export function ThesisComposer({
     el.style.height = `${Math.min(el.scrollHeight, 260)}px`;
   }, [value]);
 
-  const applyChip = (textKey: MessageKey) => {
-    onChange(t(textKey));
+  const applyChip = (chip: StarterChip) => {
+    onChange(t(chip.textKey));
+    // Every chip reasserts the intent, including back to the default — clicking
+    // "Mình có dữ liệu" after "Bài bị chê giống AI" must not leave the humanize
+    // intent armed behind text that no longer asks for a rewrite.
+    onKindChange?.(chip.kind ?? "assess");
     // Focus with the caret at the end: the chip is a STARTING point the student
     // is meant to edit, so land them ready to type rather than with the text
     // selected (which one keystroke would wipe).
@@ -200,7 +219,7 @@ export function ThesisComposer({
           <button
             key={chip.labelKey}
             type="button"
-            onClick={() => applyChip(chip.textKey)}
+            onClick={() => applyChip(chip)}
             disabled={busy}
             className="rounded-full border border-ink-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-ink-700 hover:border-primary-400 hover:text-primary-700 hover:bg-primary-50/40 disabled:opacity-50"
           >

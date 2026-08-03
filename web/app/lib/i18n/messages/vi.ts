@@ -39,6 +39,10 @@ export const vi: Record<MessageKey, string> = {
   "new.chip.papers": "Mình có tài liệu",
   "new.chip.papers.text":
     "Mình đã thu thập tài liệu cho phần tổng quan nhưng chưa tổng hợp lại.",
+  "new.chip.humanize": "Bài bị chê giống AI",
+  "new.chip.humanize.text":
+    "Mình viết xong rồi nhưng giáo viên nói đọc giống ChatGPT — " +
+    "mình muốn viết lại tự nhiên hơn, giữ nguyên số liệu và trích dẫn.",
   "new.chip.fresh": "Mới bắt đầu",
   "new.chip.fresh.text":
     "Mình mới bắt đầu — có ý tưởng đề tài nhưng chưa viết gì cả.",

@@ -14,7 +14,11 @@ import { AutoDraftModal } from "./AutoDraftModal";
 import { AutoDraftDrawer } from "./AutoDraftDrawer";
 import { synthesizeWidgetSelection } from "./widgets/synthesize";
 import type { WidgetSelectHandler } from "./widgets/types";
-import { formatAnalyzeMessage, readAnalyzeIntent } from "@/app/lib/bootstrap-payload";
+import {
+  formatAnalyzeMessage,
+  readAnalyzeIntent,
+  type AnalyzeKind,
+} from "@/app/lib/bootstrap-payload";
 import { AnalysisOverlay } from "./AnalysisOverlay";
 import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
@@ -191,7 +195,13 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     roadmap?.next_action && "title" in roadmap.next_action
       ? (roadmap.next_action as { title: string; cta_options?: string[] })
       : null;
-  const { data: thread } = useSWR<{ name: string }>(`/threads/${threadId}`, fetcher);
+  // threadError matters on its own: the project can load fine while the thread
+  // itself is gone (stale bookmark, deleted thread). Without it the pane
+  // rendered a normal-looking chat with a live composer pointed at a thread id
+  // the API 404s on — every send would fail with nothing on screen to explain it.
+  const { data: thread, error: threadError } = useSWR<{ name: string }>(
+    `/threads/${threadId}`, fetcher,
+  );
   const { data: latestRun, mutate: mutateRun } = useSWR<{ run: { id: string; status: RunStatus } | null }>(
     `/projects/${projectId}/runs/list?latest=true`, fetcher,
   );
@@ -208,19 +218,37 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   const [analyzePhase, setAnalyzePhase] = useState<"running" | "done" | "failed">("running");
   const analyzeFiredRef = useRef(false);
   // Kept so "Try again" can re-run the same turn after the stash is consumed.
-  const analyzeIntentRef = useRef<{ note: string; attachments: any[] } | null>(null);
+  // `kind` rides along so "Try again" re-runs the SAME job — re-firing a
+  // humanize request as a plain assessment would silently change what the
+  // retry does.
+  const analyzeIntentRef = useRef<
+    { note: string; attachments: any[]; kind?: AnalyzeKind } | null
+  >(null);
 
   const runAnalyze = useCallback(async () => {
     const intent = analyzeIntentRef.current;
     if (!intent) return;
-    setAnalyzing(true);
-    setAnalyzePhase("running");
-    const msg = formatAnalyzeMessage(intent.note, intent.attachments.length > 0);
+    // AnalysisOverlay is the assessment screen — module dots, "here's where you
+    // stand". A humanize turn seeds no module state on purpose, so it must not
+    // be judged by that screen: the success check below reads module_status,
+    // which would be empty, and every successful rewrite would render as
+    // "failed". The chat transcript IS the result for a rewrite, so let it
+    // stream normally instead of covering it with an overlay about something
+    // else.
+    const isHumanize = (intent.kind ?? "assess") === "humanize";
+    if (!isHumanize) {
+      setAnalyzing(true);
+      setAnalyzePhase("running");
+    }
+    const msg = formatAnalyzeMessage(
+      intent.note, intent.attachments.length > 0, intent.kind ?? "assess",
+    );
     // send resolves when the turn's SSE stream closes. await the project
     // refetch (not fire-and-forget) so the result phase reads the freshly-
     // committed module_status rather than the stale pre-turn snapshot.
     await send(msg, undefined, intent.attachments);
     const fresh = await mutateProject();
+    if (isHumanize) return;  // no overlay to resolve
     // A turn that was killed/aborted before commit_slice (e.g. server restart,
     // disconnect) leaves every module "locked"/absent. Don't present that as a
     // finished analysis — surface a retry instead of a misleading "all not
@@ -361,6 +389,30 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     }));
     return results;
   };
+
+  // Placed after every hook so the early return can't change hook order.
+  if (threadError) {
+    const status = (threadError as { status?: number })?.status;
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-12">
+        <p className="text-lg font-semibold text-ink-800 m-0">
+          {status === 404 ? "This thread no longer exists" : "Couldn’t load this thread"}
+        </p>
+        <p className="mt-1.5 text-sm text-ink-500 max-w-md">
+          {status === 404
+            ? "It was deleted, or the link is out of date. Pick another thread from the left rail."
+            : (threadError as Error)?.message || "Try again in a moment."}
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-5 inline-flex items-center px-4 py-2 rounded-full text-[13.5px] font-semibold border border-ink-200 text-ink-700 hover:bg-ink-50 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>

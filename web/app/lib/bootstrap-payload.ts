@@ -16,7 +16,23 @@ export type AnalyzeAttachment = {
   mime_type?: string;
 };
 
+/**
+ * What the student came here to do.
+ *
+ * "assess" is the original (and default) behaviour: classify the uploads into
+ * M1–M5 and report where the thesis stands. "humanize" exists because arriving
+ * with a finished draft that a supervisor called AI-written is its own entry
+ * point, not a variation on the assessment — the student wants a rewrite, and
+ * a chip that merely prefills text would have produced an assessment and no
+ * rewrite at all.
+ *
+ * Absent on stashes written before this field existed, so readers must treat
+ * `undefined` as "assess".
+ */
+export type AnalyzeKind = "assess" | "humanize";
+
 export type AnalyzeIntent = {
+  kind?: AnalyzeKind;
   /** Optional free-text the user typed in the "or describe it" box. */
   note: string;
   /** Files the user dropped, already uploaded to the project. */
@@ -60,7 +76,47 @@ export function readAnalyzeIntent(projectId: string): AnalyzeIntent | null {
  * question). With the drop-first flow there are no labeled sections any more —
  * the agent has to read the attached files itself and classify them.
  */
-export function formatAnalyzeMessage(note: string, hasFiles: boolean): string {
+export function formatAnalyzeMessage(
+  note: string,
+  hasFiles: boolean,
+  kind: AnalyzeKind = "assess",
+): string {
+  if (kind === "humanize") {
+    // Deliberately NOT "/bootstrap". That prefix triggers dothesis-bootstrap,
+    // whose whole job is to classify uploads into M1–M5 and report where the
+    // thesis stands — an assessment this student did not ask for. Load the
+    // humanize skill directly instead (same directive shape the chat skill
+    // picker uses, see lib/skills.ts applySkillDirective).
+    //
+    // Nothing in humanize_prose reads module state — only the language and the
+    // saved writing anchor — so seeding a thesis graph here buys the rewrite
+    // nothing and bills the student for an inferred one they never requested.
+    //
+    // The anchor instruction is not optional politeness: dothesis-humanize
+    // refuses to run unanchored ("asking a model to write more naturally
+    // produces text from the same distribution detectors are trained on"), and
+    // the shipped anchor library is empty by design. Without this line the turn
+    // dead-ends on `no_anchor` with nothing telling the student why.
+    const lines: string[] = [
+      "[Use the `dothesis-humanize` skill for this turn — read " +
+        "/skills/dothesis-humanize/SKILL.md and follow it.]",
+      "",
+      hasFiles
+        ? "I've uploaded a draft I already finished, but it reads as AI-written. " +
+            "Read the files and run the humanize pass on the drafted prose. Don't " +
+            "set up thesis modules or assess my research design — I'm here for the " +
+            "rewrite, not an assessment. If you don't already have my writing " +
+            "anchor, ask me for ~150 words I wrote myself BEFORE rewriting " +
+            "anything — do not rewrite from an unanchored pass. Keep every number, " +
+            "statistic and citation exactly as it is."
+        : "I have a draft that reads as AI-written and I want it rewritten in a more " +
+            "human voice. Ask me to paste the passage, and ask for ~150 words I wrote " +
+            "myself as the style anchor before rewriting anything.",
+    ];
+    const trimmedNote = note.trim();
+    if (trimmedNote) lines.push(`My own notes:\n${trimmedNote}`);
+    return lines.join("\n\n");
+  }
   const lines: string[] = ["/bootstrap", ""];
   if (hasFiles) {
     lines.push(

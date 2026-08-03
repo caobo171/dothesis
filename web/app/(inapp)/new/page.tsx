@@ -7,7 +7,11 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 
 import { apiFetch } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
-import { stashAnalyzeIntent, type AnalyzeAttachment } from "@/app/lib/bootstrap-payload";
+import {
+  stashAnalyzeIntent,
+  type AnalyzeAttachment,
+  type AnalyzeKind,
+} from "@/app/lib/bootstrap-payload";
 import { Button } from "@/app/components/ui/button";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
 import { ImportSummary } from "@/app/components/chat/ImportSummary";
@@ -56,6 +60,9 @@ export default function NewThesisPage() {
   const t = useT();
   const [files, setFiles] = useState<File[]>([]);
   const [note, setNote] = useState("");
+  // Which job the first turn does. Only the humanize chip moves this off the
+  // default; see StarterChip.kind in ThesisComposer.
+  const [kind, setKind] = useState<AnalyzeKind>("assess");
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -182,7 +189,22 @@ export default function NewThesisPage() {
       // note-only "describe it" path has nothing to import, so it keeps the
       // original bootstrap-turn analysis flow (and is what the onboarding E2E
       // exercises).
-      if (files.length > 0) {
+      //
+      // A humanize job skips the import even WITH files, because it is a
+      // utility job rather than a thesis journey:
+      // mid-journey-import classifies the upload into M1–M5 and then
+      // reconstruct_upstream INFERS the modules it couldn't find. None of that
+      // feeds the rewrite — humanize_prose reads only the language and the
+      // saved anchor — so for a student who came to fix their prose it is
+      // billed work nobody asked for, and it ends with them owning a
+      // half-fabricated thesis project (M1–M4 all in_progress, research_gaps
+      // with no literature_sources) as their first impression of the product.
+      //
+      // The project row is still created above: uploads, threads and billing
+      // all hang off it. It just stays EMPTY rather than populated with
+      // inferred state. Mapping into modules is offered afterwards, once the
+      // student has the thing they actually came for.
+      if (files.length > 0 && kind !== "humanize") {
         setStatus("Reading your work…");
         const res = (await apiFetch(`/projects/${newId}/mid-journey-import`, {
           method: "POST",
@@ -207,7 +229,7 @@ export default function NewThesisPage() {
         return;
       }
 
-      stashAnalyzeIntent(newId, { note, attachments });
+      stashAnalyzeIntent(newId, { kind, note, attachments });
       router.push(`/chat/projects/${newId}?analyzing=1`);
     } catch (e: any) {
       const code = e?.body?.error?.code;
@@ -289,6 +311,7 @@ export default function NewThesisPage() {
         canSubmit={canSubmit}
         busy={submitting}
         accept={ACCEPT_TYPES}
+        onKindChange={setKind}
       />
 
       {/* Footer — status and the blank-start escape hatch only.

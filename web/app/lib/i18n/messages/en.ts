@@ -34,6 +34,13 @@ export const en = {
   "new.chip.papers": "I have papers",
   "new.chip.papers.text":
     "I've collected papers for my literature review but haven't synthesised them.",
+  // Deliberately phrased as the complaint the student actually receives, not
+  // as the feature name — "humanize" is our word, "my supervisor said it reads
+  // like ChatGPT" is theirs.
+  "new.chip.humanize": "Mine reads like AI",
+  "new.chip.humanize.text":
+    "I've finished writing, but my supervisor says it reads like ChatGPT — " +
+    "I want it rewritten in a more human voice without changing any numbers.",
   "new.chip.fresh": "Starting fresh",
   "new.chip.fresh.text": "I'm just starting — I have a topic idea but nothing written yet.",
 
