@@ -364,6 +364,11 @@ class TokenLedger(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    # Project-less metered calls (humanize over MCP or the web) had nowhere to
+    # record WHO incurred the cost, so they were invisible to forensics even
+    # once metered. Nullable and no FK, matching project_id above: this table is
+    # a historical record that must survive the row it points at being deleted.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
     action_kind: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     model: Mapped[str] = mapped_column(String(64), nullable=False)
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False)

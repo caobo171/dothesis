@@ -156,11 +156,17 @@ pinned-pydantic conflict entirely rather than working around it.
   Admin view at `/admin/connectors`; API is `POST /api/v1/admin/connectors/calls`
   and `/summary`. 10 tests in `api/tests/test_admin_connectors.py`, 5 more in
   `test_mcp_oauth.py`.
-- ⏳ **No per-call token cost yet.** `humanize_prose` calls the LLM directly
-  rather than through `metered_invoke`, so nothing lands in `token_ledger` and
-  no credits are charged — for the web path either. `input_chars` is the only
-  volume signal today. Fixing it means surfacing `usage_metadata` out of
-  `orchestrator/tools/humanize.py`.
+- ✅ **Metered and billed.** `humanize_prose` reports per-call token usage
+  (`usage`), and the endpoint writes a `token_ledger` row per LLM call and
+  debits the caller at each model's own rate (`credit_multiplier`), the same way
+  `job_runner._charge_auto_run` prices auto runs. `token_ledger.user_id` was
+  added so a project-less call is attributable. Metering commits SEPARATELY from
+  billing: an unbillable call must not erase its own cost record.
+  `credits_charged` comes back in the response.
+  **Known trade:** the charge is capped at the balance rather than refused
+  up-front, matching auto runs — a user at zero gets the rewrite and is
+  under-billed (logged, and visible in `token_ledger`). A hard pre-flight gate
+  is a pricing decision, not a metering one; say so if you want it.
 - ✅ **Nine tools** (`tools.py`): `humanize`, `writing_rhythm`, `verify_citation`,
   `check_credits`, `list_projects`, `project_status`, `get_artifacts`,
   `start_thesis`, `check_thesis_run`. Each is a thin forward to an existing

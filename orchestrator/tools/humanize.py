@@ -43,6 +43,8 @@ well.
 """
 from __future__ import annotations
 
+from contextvars import ContextVar
+
 import json
 import logging
 import os
@@ -437,10 +439,33 @@ def _get_llm(temperature: float):
     )
 
 
+# Per-call token accounting. A ContextVar rather than a module global because
+# the API serves humanize concurrently: two students' passages must not add
+# their tokens to each other's bill. `None` (the default) means nobody is
+# collecting, which is the case for every existing caller — the export path,
+# evals, tests — so metering is opt-in and changes nothing for them.
+_USAGE: ContextVar[list | None] = ContextVar("humanize_usage", default=None)
+
+
 def _invoke(llm, prompt: str) -> str:
+    """The single LLM chokepoint for the whole pass — all three call sites (the
+    anchor router, the rewrite, the frozen-repair) go through here, which is why
+    metering only has to be attached in one place."""
     from orchestrator.message_utils import text_of  # noqa: PLC0415
 
-    return text_of(llm.invoke(prompt))
+    resp = llm.invoke(prompt)
+    bucket = _USAGE.get()
+    if bucket is not None:
+        try:
+            from orchestrator.token_meter import _usage_from_response  # noqa: PLC0415
+            p_tok, c_tok = _usage_from_response(resp)
+            bucket.append({"model": str(getattr(llm, "model", "unknown")),
+                           "prompt_tokens": p_tok, "completion_tokens": c_tok})
+        except Exception:  # noqa: BLE001
+            # Accounting must never cost a student their rewrite. A provider
+            # that doesn't surface usage_metadata is under-billed, not failed.
+            logger.exception("humanize: token accounting failed")
+    return text_of(resp)
 
 
 def pick_anchor(text: str, anchors: list[dict], llm=None) -> dict:
@@ -548,6 +573,41 @@ def _rewrite_once(
 
 
 def humanize_prose(
+    text: str,
+    *,
+    language: str = "vi",
+    user_anchor: str | None = None,
+    anchor_id: str | None = None,
+    llm=None,
+    scorer=None,
+) -> dict:
+    """Run the anchored rewrite over one passage, reporting what it cost.
+
+    Thin wrapper over `_humanize_prose` that collects per-call token usage and
+    attaches it to whatever the pass returns, on EVERY path including failures:
+    a rewrite that burned three rounds and then failed the frozen gate cost real
+    money, and a caller that only bills successes would silently eat it.
+
+    `usage` is a list of {model, prompt_tokens, completion_tokens}, one entry per
+    LLM call — a list, not a total, because a pass can legitimately span models
+    (the anchor router and the rewrite are separately configurable) and they are
+    priced at different rates. api/app/routers/humanize.py bills each at its own
+    rate, exactly as job_runner._charge_auto_run does for token_ledger rows.
+    """
+    bucket: list = []
+    token = _USAGE.set(bucket)
+    try:
+        out = _humanize_prose(
+            text, language=language, user_anchor=user_anchor,
+            anchor_id=anchor_id, llm=llm, scorer=scorer)
+    finally:
+        _USAGE.reset(token)
+    if isinstance(out, dict):
+        out["usage"] = bucket
+    return out
+
+
+def _humanize_prose(
     text: str,
     *,
     language: str = "vi",

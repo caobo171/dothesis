@@ -421,3 +421,74 @@ def test_humanize_sections_skips_references_and_keeps_failures(tmp_path,
     assert out[1]["prose"] == sections[1]["prose"]
     assert [r["title"] for r in report] == ["Chương 4"]   # References not touched
     assert report[0]["ok"] is False
+
+
+# --- token accounting (added with per-call metering) ------------------------
+
+def test_humanize_prose_reports_token_usage_per_llm_call():
+    """The API bills off this list, so it must be populated on the success path
+    and one entry must appear per LLM call (anchor router + rewrite)."""
+    from orchestrator.tools import humanize as h
+
+    class _Resp:
+        usage_metadata = {"input_tokens": 120, "output_tokens": 45}
+        content = "Câu văn đã được viết lại hoàn toàn khác so với bản gốc ban đầu."
+
+    class _LLM:
+        model = "gemini-2.5-flash"
+
+        def invoke(self, prompt):
+            return _Resp()
+
+    out = h.humanize_prose("Một câu. Hai câu ở đây. Ba câu dài hơn một chút nữa.",
+                           language="vi", user_anchor="x " * 60, llm=_LLM())
+    assert isinstance(out.get("usage"), list)
+    assert out["usage"], "no usage captured — the API would bill nothing"
+    assert out["usage"][0]["model"] == "gemini-2.5-flash"
+    assert out["usage"][0]["prompt_tokens"] == 120
+
+
+def test_usage_does_not_leak_between_concurrent_passes():
+    """A ContextVar, not a module global: two students' passages must not add
+    their tokens to each other's bill."""
+    import threading
+
+    from orchestrator.tools import humanize as h
+
+    class _Resp:
+        content = "Một bản viết lại hoàn toàn mới và khác biệt rõ ràng."
+
+        def __init__(self, tok):
+            self.usage_metadata = {"input_tokens": tok, "output_tokens": 0}
+
+    class _LLM:
+        model = "m"
+
+        def __init__(self, tok):
+            self.tok = tok
+
+        def invoke(self, prompt):
+            return _Resp(self.tok)
+
+    results = {}
+
+    def run(name, tok):
+        results[name] = h.humanize_prose(
+            "Một câu. Hai câu ở đây. Ba câu dài hơn một chút nữa.",
+            language="vi", user_anchor="x " * 60, llm=_LLM(tok))
+
+    ts = [threading.Thread(target=run, args=("a", 111)),
+          threading.Thread(target=run, args=("b", 222))]
+    for t in ts: t.start()
+    for t in ts: t.join()
+
+    for name, tok in (("a", 111), ("b", 222)):
+        toks = {u["prompt_tokens"] for u in results[name]["usage"]}
+        assert toks == {tok}, f"{name} was billed for another pass: {toks}"
+
+
+def test_callers_without_a_collector_are_unaffected():
+    """Export/eval paths call the inner function; metering is opt-in and must
+    not change their return shape."""
+    from orchestrator.tools import humanize as h
+    assert h._USAGE.get() is None
