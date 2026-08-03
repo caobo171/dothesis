@@ -191,8 +191,30 @@ fi
 #   REQUIRE_LIBREOFFICE=0 ./dev.sh
 bash scripts/check-export-deps.sh --require-libreoffice
 
-echo "==> running alembic migrations"
-(cd api && venv_run "../$VENV_BIN/alembic" upgrade head)
+# Alembic runs on every dev boot, which is fine against a throwaway local
+# database and catastrophic against a remote one — pointing .env at production
+# for a debugging session would silently migrate production on the next
+# ./dev.sh. So the migration step is gated on the DB actually being local.
+#
+# The check is on the host in DATABASE_URL, not on a "is this prod" flag,
+# because the failure we're guarding against is exactly the case where someone
+# forgot to set such a flag. Override deliberately when you really do mean to
+# migrate a remote database:
+#   ALLOW_REMOTE_MIGRATIONS=1 ./dev.sh
+_db_host=$(printf '%s' "${DATABASE_URL:-}" | sed -E 's#^[^:]+://([^/@]*@)?([^:/?]+).*#\2#')
+case "${_db_host}" in
+  localhost|127.0.0.1|::1|"") _db_is_local=1 ;;
+  *)                          _db_is_local=0 ;;
+esac
+
+if [ "${_db_is_local}" = "1" ] || [ "${ALLOW_REMOTE_MIGRATIONS:-0}" = "1" ]; then
+  echo "==> running alembic migrations"
+  (cd api && venv_run "../$VENV_BIN/alembic" upgrade head)
+else
+  echo "==> SKIPPING alembic migrations — DATABASE_URL points at a remote host (${_db_host})"
+  echo "    Schema drift will surface as runtime errors, not a failed boot."
+  echo "    Re-run with ALLOW_REMOTE_MIGRATIONS=1 if you really mean to migrate it."
+fi
 
 echo "==> starting api on port ${API_PORT:-7100}"
 # Watch api/, engine/, orchestrator/, and the v3 deep agent runtime (agent/) —
