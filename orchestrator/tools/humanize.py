@@ -49,6 +49,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 from collections import Counter
 from pathlib import Path
 
@@ -262,6 +263,43 @@ def verify_frozen(original: str, rewritten: str) -> dict:
     return {"ok": not missing and not added, "missing": missing, "added": added}
 
 
+def _script_counts(text: str) -> Counter:
+    """Letters per Unicode script, keyed by the first word of the char's name.
+
+    `unicodedata` exposes no script property, but the character NAME starts with
+    it — "LATIN SMALL LETTER A WITH ACUTE" -> LATIN, "DEVANAGARI LETTER TA" ->
+    DEVANAGARI. Vietnamese is Latin either way: precomposed chars name as LATIN,
+    and decomposed tone marks are category Mn, which the letter filter skips.
+    """
+    c: Counter = Counter()
+    for ch in text or "":
+        if not unicodedata.category(ch).startswith("L"):
+            continue
+        try:
+            c[unicodedata.name(ch).split(" ", 1)[0]] += 1
+        except ValueError:  # unnamed codepoint
+            continue
+    return c
+
+
+def verify_script(original: str, rewritten: str, min_letters: int = 2) -> list[str]:
+    """Scripts the rewrite introduced that the source never used.
+
+    A re-voicing pass has no business changing writing system, but the model
+    does it anyway: a Vietnamese passage came back with "đánh giá तथा mua sắm" —
+    `तथा` is Devanagari for "and", swapped in for "và". Every existing gate
+    passed it, because the frozen-token check only diffs numbers, table refs and
+    citations, and a cross-script synonym touches none of those.
+
+    `min_letters` keeps single symbols out of it: Greek letters are ordinary
+    notation in a stats thesis (β, α), so one stray glyph is not evidence of a
+    language slip, while a 3-letter Devanagari word is.
+    """
+    before = set(_script_counts(original))
+    after = _script_counts(rewritten)
+    return sorted(s for s, n in after.items() if s not in before and n >= min_letters)
+
+
 # --- Anchor library ------------------------------------------------------
 
 
@@ -337,6 +375,18 @@ way to reword a clause is a clunkier one, leave that clause as it was. In
 Vietnamese specifically, keep natural prepositions/collocations (e.g. "khảo sát
 được gửi đến / thu thập từ" rather than a stilted "phát … tới"); do not swap a
 natural word for a rarer stiff synonym just to look different.
+
+SENTENCE LENGTH — a hard floor, independent of the anchor:
+- Vary sentence length deliberately. A paragraph where every sentence is a
+  similar length reads as machine-written no matter how good the vocabulary is.
+- Break comma-chains. If a sentence runs past ~40 words by stringing clauses
+  together with commas, split it into two or three sentences. Vietnamese
+  academic prose does this; a 79-word single sentence is not more formal, it is
+  harder to read.
+- Put a short declarative next to a long one at least once per paragraph.
+- This applies EVEN IF the anchor itself is one long sentence after another.
+  The anchor supplies word choice and clause texture; it does not license
+  reproducing a run-on.
 
 REGISTER — this is critical:
 - Match the formality of the ORIGINAL, not the anchor. If the original is a formal
@@ -494,6 +544,75 @@ def pick_anchor(text: str, anchors: list[dict], llm=None) -> dict:
     return anchors[0]
 
 
+def _restore_leading_case(sent: str, rewritten: str) -> str:
+    """Re-capitalise a paragraph the rewrite started with a lowercase letter.
+
+    Observed in a shipped document: a chapter opener came back as "chương 4
+    trình bày kết quả…". Nothing deterministic did that — strip_ai_tells and
+    _clean_output both preserve (and _strip_start_connectors actively restores)
+    sentence case. The model produced it, treating the paragraph as a
+    continuation of the passage it was handed.
+
+    Repaired rather than rejected: throwing away an otherwise good rewrite over
+    one character would be a worse trade than fixing the character, and unlike a
+    changed number this cannot alter meaning.
+
+    Conservative on purpose — it only acts when the SOURCE paragraph started
+    with an uppercase letter and the rewrite starts with a lowercase one. A
+    paragraph that legitimately opens on a symbol or a lowercase variable name
+    ("p-value…", "β đạt 0.42") is left alone, because the evidence comes from
+    the original rather than from a guess about Vietnamese orthography.
+    """
+    def _is_latin_lower(ch: str) -> bool:
+        """A lowercase letter in the LATIN script specifically.
+
+        `"β".islower()` is True and `"β".upper()` is "Β", so a naive islower()
+        check turns "β = 0,412 và p = 0,003" into "Β = 0,412…" — silently
+        corrupting a coefficient symbol, which the frozen-token gate does not
+        cover because β is neither a number nor a citation. Vietnamese (and
+        English) are Latin, so requiring the script is both correct here and
+        the reason this can't touch a Greek or CJK opener.
+        """
+        if not ch.islower():
+            return False
+        try:
+            return unicodedata.name(ch).startswith("LATIN")
+        except ValueError:  # unnamed codepoint
+            return False
+
+    def fix(src: str, out: str) -> str:
+        src_s, out_s = src.lstrip(), out.lstrip()
+        if not src_s or not out_s:
+            return out
+        if src_s[0].isupper() and _is_latin_lower(out_s[0]):
+            lead = out[: len(out) - len(out_s)]  # keep any original indentation
+            return lead + out_s[0].upper() + out_s[1:]
+        return out
+
+    # Batched callers (humanize_docx) send several paragraphs joined by blank
+    # lines, so fix each one against its own source rather than only the first —
+    # otherwise paragraphs 2..n keep the slip.
+    src_parts, out_parts = sent.split("\n\n"), rewritten.split("\n\n")
+    if len(src_parts) == len(out_parts) and len(src_parts) > 1:
+        return "\n\n".join(fix(s, o) for s, o in zip(src_parts, out_parts))
+    return fix(sent, rewritten)
+
+
+def _verify(original: str, rewritten: str) -> dict:
+    """Every gate a rewrite must clear, in one dict.
+
+    Kept additive over verify_frozen's {"ok", "missing", "added"} shape — the
+    result travels out as `frozen` in the tool payload and the API reads
+    `frozen.ok` — so a script slip rejects the rewrite through the exact path a
+    lost citation already does: one repair attempt, then keep the original.
+    """
+    check = verify_frozen(original, rewritten)
+    check["foreign_scripts"] = verify_script(original, rewritten)
+    if check["foreign_scripts"]:
+        check["ok"] = False
+    return check
+
+
 def _rewrite_once(
     llm,
     *,
@@ -535,7 +654,11 @@ def _rewrite_once(
                 "text": None, "check": None, "repairs": 0}
 
     out = strip_ai_tells(out, language)
-    check = verify_frozen(original_text, out)
+    # Aligned against input_text, not original_text: in the v4 loop input_text
+    # is the previous round's output, and it is what the model was actually
+    # handed — so its paragraph boundaries are the ones that line up.
+    out = _restore_leading_case(input_text, out)
+    check = _verify(original_text, out)
     repairs = 0
 
     if not check["ok"]:
@@ -553,6 +676,13 @@ def _rewrite_once(
                 "These appear in your rewrite but NOT in the original — you "
                 "invented them. Remove them:\n"
                 + "\n".join(f"  {a.split(':', 1)[1]}" for a in check["added"]))
+        if check["foreign_scripts"]:
+            problem_lines.append(
+                "You wrote words in a different writing system than the "
+                "original ("
+                + ", ".join(check["foreign_scripts"]).lower()
+                + "). Rewrite those words in the SAME language and script as "
+                  "the original text.")
         try:
             repaired = _clean_output(_invoke(
                 llm,
@@ -561,7 +691,8 @@ def _rewrite_once(
             repairs = 1
             if repaired:
                 repaired = strip_ai_tells(repaired, language)
-                recheck = verify_frozen(original_text, repaired)
+                repaired = _restore_leading_case(input_text, repaired)
+                recheck = _verify(original_text, repaired)
                 if recheck["ok"]:
                     out, check = repaired, recheck
                 else:
@@ -760,6 +891,23 @@ def _humanize_prose(
         return {"ok": False, "error": "frozen_violation", "text": text,
                 "changed": False, "anchor": anchor["id"], "hint": _FROZEN_HINT}
 
+    # Log the score even though it also rides out in the return value. The
+    # measure-only config (HUMANIZE_MAX_ROUNDS=1) exists to learn the real
+    # distribution on Vietnamese academic prose before paying for iteration, and
+    # the callers that could aggregate it don't: the API hands `score` to one
+    # client and forgets it, the agent tool serialises it into a tool result,
+    # and the export path files it in a per-section report nobody totals. One
+    # greppable line per rewrite is what turns "we return a number" into data
+    # you can actually pull a distribution from.
+    #
+    # logger, not analytics.emit: this module is engine-layer and importing the
+    # app's analytics here would invert the dependency. Wire the PostHog event
+    # in api/app/routers/humanize.py if per-user aggregation is wanted.
+    logger.info(
+        "humanize scored: score=%.4f threshold=%.2f rounds=%d chars=%d lang=%s anchor=%s",
+        best["score"] if best["score"] is not None else -1.0,
+        threshold, best["round"] + 1, len(text or ""), language, anchor["id"],
+    )
     return {"ok": True, "text": best["text"], "anchor": anchor["id"],
             "changed": best["text"].strip() != text.strip(),
             "frozen": best["check"], "repairs": best["repairs"],

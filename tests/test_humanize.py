@@ -313,6 +313,13 @@ def test_scorer_iterates_and_keeps_the_lowest_scoring_candidate(tmp_path,
                                                                 monkeypatch,
                                                                 user_anchor):
     monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    # Pin the round budget instead of inheriting the default. test_live_crafter
+    # does load_dotenv(".env", override=True) at IMPORT time, so collecting the
+    # full suite pushes the real deployment config into os.environ — and the
+    # measure-only setting there is HUMANIZE_MAX_ROUNDS=1, which caps this loop
+    # at one round and fails an assertion about three. Passing in isolation and
+    # failing in the suite is exactly the shape that wastes an afternoon.
+    monkeypatch.setenv("HUMANIZE_MAX_ROUNDS", "4")
     # 0.9 and 0.7 stay above the 0.5 threshold, so the loop escalates; 0.3 wins.
     r = H.humanize_prose(SRC, language="vi", user_anchor=user_anchor,
                          llm=FakeLLM(_G1, _G2, _G3),
@@ -492,3 +499,107 @@ def test_callers_without_a_collector_are_unaffected():
     not change their return shape."""
     from orchestrator.tools import humanize as h
     assert h._USAGE.get() is None
+
+
+# --- cross-script slips -----------------------------------------------------
+# Observed in production: a Vietnamese passage came back reading
+# "đánh giá तथा mua sắm sản phẩm" — तथा is Devanagari for "and", substituted for
+# "và". Every gate passed it, because the frozen-token check only diffs numbers,
+# table refs and citations, and a cross-script synonym touches none of those.
+
+def test_devanagari_substitution_is_a_violation():
+    from orchestrator.tools.humanize import verify_script, _verify
+    orig = "khách hàng và cách người tiêu dùng tìm kiếm, đánh giá và mua sắm sản phẩm."
+    bad = "khách hàng và cách người tiêu dùng tìm kiếm, đánh giá तथा mua sắm sản phẩm."
+    assert verify_script(orig, bad) == ["DEVANAGARI"]
+    assert _verify(orig, bad)["ok"] is False
+
+
+def test_a_clean_vietnamese_rewrite_passes_the_script_gate():
+    from orchestrator.tools.humanize import _verify
+    orig = "khách hàng và cách người tiêu dùng tìm kiếm, đánh giá và mua sắm sản phẩm."
+    good = "khách hàng cùng cách người tiêu dùng tìm kiếm, đánh giá và mua sắm sản phẩm."
+    check = _verify(orig, good)
+    assert check["ok"] is True
+    assert check["foreign_scripts"] == []
+
+
+def test_a_stray_greek_symbol_is_not_a_script_slip():
+    """β and α are ordinary notation in a stats thesis. One glyph is not a
+    language slip, so the gate needs 2+ letters before it calls foul —
+    otherwise every rewrite that mentions a coefficient gets discarded."""
+    from orchestrator.tools.humanize import verify_script
+    assert verify_script("Kết quả cho thấy tác động.", "Kết quả β cho thấy tác động.") == []
+    assert verify_script("Hệ số β = 0.42", "Hệ số β đạt 0.42") == []
+
+
+def test_an_injected_cjk_word_is_a_violation():
+    from orchestrator.tools.humanize import verify_script
+    assert verify_script("Kết quả cho thấy", "Kết quả 结果 cho thấy") == ["CJK"]
+
+
+def test_vietnamese_tone_marks_are_not_a_foreign_script():
+    """Decomposed Vietnamese (NFD) carries combining marks; those are category
+    Mn and must never register as another writing system."""
+    import unicodedata
+    from orchestrator.tools.humanize import verify_script
+    nfc = "đánh giá hiệu quả"
+    assert verify_script(nfc, unicodedata.normalize("NFD", nfc)) == []
+
+
+# --- sentence case ----------------------------------------------------------
+# Observed in a shipped .docx: a chapter opener came back "chương 4 trình bày
+# kết quả…". Nothing deterministic lowercased it — strip_ai_tells and
+# _clean_output preserve case, and _strip_start_connectors actively restores it.
+# The model produced it, reading the paragraph as a continuation.
+
+def test_lowercased_paragraph_opener_is_repaired():
+    from orchestrator.tools.humanize import _restore_leading_case
+    assert _restore_leading_case(
+        "Chương 4 trình bày kết quả.", "chương 4 trình bày kết quả.",
+    ) == "Chương 4 trình bày kết quả."
+
+
+def test_every_paragraph_in_a_batch_is_repaired_not_just_the_first():
+    """humanize_docx joins paragraphs with blank lines, so fixing only the
+    leading character would leave paragraphs 2..n lowercased."""
+    from orchestrator.tools.humanize import _restore_leading_case
+    out = _restore_leading_case("Aaa bbb.\n\nCcc ddd.", "aaa xxx.\n\nccc yyy.")
+    assert out == "Aaa xxx.\n\nCcc yyy."
+
+
+def test_a_legitimately_lowercase_opener_is_left_alone():
+    """Evidence comes from the SOURCE, not from a guess about orthography: a
+    paragraph that really does open on a symbol or lowercase term keeps it."""
+    from orchestrator.tools.humanize import _restore_leading_case
+    assert _restore_leading_case("p-value nhỏ hơn 0.05.", "p-value dưới 0.05.") \
+        == "p-value dưới 0.05."
+    assert _restore_leading_case("β đạt 0.42.", "β là 0.42.") == "β là 0.42."
+
+
+def test_case_repair_runs_inside_the_rewrite_path():
+    """Not just the helper — the pass itself must emit repaired text."""
+    from orchestrator.tools import humanize as H
+
+    class FakeLLM:
+        def invoke(self, prompt):
+            class M:
+                content = "chương 4 trình bày kết quả nghiên cứu của luận văn."
+            return M()
+
+    r = H.humanize_prose(
+        "Chương 4 trình bày kết quả nghiên cứu.",
+        language="vi", user_anchor="x " * 160, llm=FakeLLM())
+    assert r["ok"] is True
+    assert r["text"].startswith("Chương 4")
+
+
+def test_case_repair_never_touches_a_greek_or_cjk_opener():
+    """Regression: `"β".islower()` is True and `"β".upper()` is "Β", so a naive
+    islower() check turned "β = 0,412…" into "Β = 0,412…" — corrupting a
+    coefficient symbol the frozen-token gate does not cover (β is neither a
+    number nor a citation). Caught by the v4 loop's own fixtures."""
+    from orchestrator.tools.humanize import _restore_leading_case
+    assert _restore_leading_case("Kết quả tại Bảng 4.3.", "β = 0,412 và p = 0,003.") \
+        == "β = 0,412 và p = 0,003."
+    assert _restore_leading_case("Kết quả cho thấy.", "结果 cho thấy.") == "结果 cho thấy."
