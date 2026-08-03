@@ -414,3 +414,105 @@ class ContextStore(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+# ---------------------------------------------------------------------------
+# MCP connector OAuth (mcp/oauth.py)
+# ---------------------------------------------------------------------------
+# These three tables are WRITTEN by the MCP process, not by the API. That
+# process (mcp/server_lite.py) never imports app.* — it reaches the same
+# database with plain psycopg and hand-written SQL, so the boundary between it
+# and DoThesis stays "no shared Python objects" while the DATA lives where all
+# the other data lives.
+#
+# The models below exist so that (a) the schema has ONE definition that
+# `Base.metadata.create_all` gives the test suite for free, and (b) the API can
+# READ these rows — which is the whole reason they aren't in a separate SQLite
+# file any more. Without them there is no way to show a student their connected
+# apps, no way to revoke one from DoThesis's own UI, and no way to count
+# connector installs for the campaign without SSH-ing to the box.
+#
+# If you change a column here, change the SQL in mcp/oauth.py to match. That
+# coupling is the deliberate cost of keeping the MCP process import-free.
+
+
+class McpOAuthClient(Base):
+    """An AI client (Claude, ChatGPT…) that registered itself via RFC 7591 DCR.
+
+    Not per user — one row per client INSTALLATION. Claude registers once per
+    workspace and every user of it consents against the same client_id.
+    """
+    __tablename__ = "mcp_oauth_clients"
+
+    client_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    # NULL for public clients (PKCE-only, token_endpoint_auth_method="none"),
+    # which is what Claude registers as. SHA-256 digest when present — never
+    # the secret itself.
+    secret_hash: Mapped[str | None] = mapped_column(Text)
+    client_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    redirect_uris: Mapped[list] = mapped_column(JSONB, nullable=False)
+    auth_method: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class McpOAuthCode(Base):
+    """A 60-second authorization code, between consent and token exchange.
+
+    Stored as a SHA-256 digest: the code travels in a URL and therefore lands in
+    browser history and proxy logs, so the copy at rest must not be usable.
+    `used` is kept rather than deleting the row, because a SECOND presentation
+    of a spent code means it leaked — mcp/oauth.py reacts by revoking the whole
+    grant, which it can only do if it can tell "already used" from "unknown".
+    """
+    __tablename__ = "mcp_oauth_codes"
+
+    code_hash: Mapped[str] = mapped_column(Text, primary_key=True)
+    client_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("mcp_oauth_clients.client_id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    redirect_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    code_challenge: Mapped[str] = mapped_column(Text, nullable=False)
+    scope: Mapped[str] = mapped_column(Text, nullable=False)
+    resource: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    used: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default="false"
+    )
+
+
+class McpOAuthRefreshToken(Base):
+    """A 30-day refresh token — the durable half of a user's grant to a client.
+
+    Rotated on every use (the presented one is revoked as its replacement is
+    minted), so a stolen token stops working the moment the legitimate client
+    refreshes. Revoking every live row for (user, client) IS "disconnect this
+    app": the 1-hour access token expires on its own and cannot be renewed.
+    """
+    __tablename__ = "mcp_oauth_refresh_tokens"
+
+    token_hash: Mapped[str] = mapped_column(Text, primary_key=True)
+    client_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("mcp_oauth_clients.client_id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    scope: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    revoked: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default="false"
+    )

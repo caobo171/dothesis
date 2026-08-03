@@ -10,6 +10,7 @@ from .routers import admin_orders as admin_orders_router
 from .routers import admin_papers as admin_papers_router
 from .routers import admin_users as admin_users_router
 from .routers import announcements as announcements_router
+from .routers import connectors as connectors_router
 from .routers import auth as auth_router
 from .routers import credit as credit_router
 from .routers import jobs as jobs_router
@@ -128,6 +129,10 @@ def create_app() -> FastAPI:
     app.include_router(admin_orders_router.router, prefix="/api/v1")
     app.include_router(admin_announcements_router.router, prefix="/api/v1")
     app.include_router(announcements_router.router, prefix="/api/v1")
+    # Connected AI apps (MCP connectors). Unconditional, not behind the
+    # orchestrator flag: a user must be able to see and revoke a grant even
+    # on a deploy where the tool surface itself is switched off.
+    app.include_router(connectors_router.router, prefix="/api/v1")
 
     # E2E test seams — mounted ONLY under DOTHESIS_TEST_SUPPORT=1 (defaults
     # off; see routers/test_support.py for the threat-model notes). Placed

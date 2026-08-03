@@ -3,7 +3,7 @@
 The exact steps to bring the whole stack up so the MCP is reachable at
 `https://dothesislocal.webkaze.com/mcp`. All commands run from the repo root
 (`.../learning_app/dothesis`) unless noted. This is the DEV setup (Mac +
-Cloudflare tunnel); production hosting is a later step.
+Cloudflare tunnel). Production (app.dothesis.com, nginx + systemd) is §5b.
 
 Ports / hosts:
 
@@ -12,7 +12,7 @@ Ports / hosts:
 | Postgres (docker) | `:5432` | — |
 | API (FastAPI) | `:7100` | `dothesislocal-api.webkaze.com` |
 | Frontend (Next.js) | `:3006` | `dothesislocal.webkaze.com` |
-| **MCP server** | `:9000` | **`dothesislocal.webkaze.com/mcp`** (path-routed on the WEB host) |
+| **MCP server + OAuth** | `:9000` | **`/mcp`, `/oauth/*`, `/.well-known/oauth-*`** (path-routed on the WEB host) |
 | cloudflared tunnel | — | routes all of the above (`webkaze-local`) |
 
 ## 0. Prereqs (one-time)
@@ -53,41 +53,49 @@ NEXT_PUBLIC_API_BASE=https://dothesislocal-api.webkaze.com/api/v1 \
   ./node_modules/.bin/next start -p 3006
 ```
 
-## 4. MCP server (:9000)
+## 4. MCP server + OAuth façade (:9000)
 
-Phase-1 uses a static access token (one real user). Mint one:
-
-```bash
-TOK=$(cd . && PYTHONPATH="$(pwd)/api" ORCHESTRATOR_ENABLED=true ./.venv/bin/python - <<'PY'
-from app.settings import get_settings
-from app.db import db_session
-from app.models import User
-from app.jwt_auth import sign_access_token
-s=get_settings(); u=next(db_session()).query(User).first()
-print(sign_access_token(str(u.id), secret=s.session_secret)[0])
-PY
-)
-```
-
-Run the SDK-free server (uses DoThesis's venv — Starlette only, no fastmcp):
+No token to mint any more — the façade signs users in with the DoThesis session
+their browser already has. It needs `SESSION_SECRET`, because the tokens it
+issues must be the same shape the API verifies:
 
 ```bash
 cd mcp
-DOTHESIS_API_URL=http://localhost:7100 DOTHESIS_ACCESS_TOKEN="$TOK" DOTHESIS_MCP_PORT=9000 \
-  ../.venv/bin/python server_lite.py
+set -a; . ../.env; set +a          # SESSION_SECRET + DATABASE_URL
+DOTHESIS_API_URL=http://localhost:7100 DOTHESIS_MCP_PORT=9000 \
+  ../api/.venv/bin/python server_lite.py
 ```
 
-(Production later: `server.py` + `fastmcp` in `mcp/.venv`, and OAuth instead of the static token.)
+Grants are stored in DoThesis's Postgres, so step 1 must be up and
+`alembic upgrade head` must have run (`20260803_mcpoauth01` creates the tables).
+
+Verify it is up and refusing anonymous callers *correctly* — the
+`WWW-Authenticate` header is what sends a client into the OAuth flow, so its
+absence is a silent failure:
+
+```bash
+curl -si -XPOST localhost:9000/mcp -d '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
+  | grep -i www-authenticate
+# -> Bearer realm="DoThesis", resource_metadata=".../.well-known/oauth-protected-resource/mcp"
+```
+
+The old static `DOTHESIS_ACCESS_TOKEN` still works behind
+`DOTHESIS_MCP_REQUIRE_AUTH=0`, for poking at the tool with curl without a
+browser. It acts as one real user and has no auth in front of it — never set it
+on a public host.
 
 ## 5. Cloudflare tunnel
 
 MCP is PATH-ROUTED onto the existing API host rather than given its own
 subdomain. What MCP actually requires is a publicly reachable HTTPS URL (Claude
 cannot reach localhost) — not a hostname of its own. Sharing the host means one
-DNS record and one certificate, and it keeps the process isolation that matters:
-the MCP server still runs in its own venv and still talks to DoThesis over HTTP,
-so the conflicting `fastmcp` / pinned-pydantic dependency trees never meet
-(see `README.md`). Separate PROCESS, same ORIGIN.
+DNS record and one certificate, and it keeps the isolation that matters: the MCP
+server is a separate PROCESS that talks to DoThesis over HTTP and never imports
+it. Separate PROCESS, same ORIGIN.
+
+Sharing the origin is not merely tolerable here, it is what makes per-user login
+work: the DoThesis session cookie is same-origin, so `/oauth/authorize` can read
+it and skip a second sign-in entirely (see `README.md` → Auth).
 
 Ingress rules in `~/.cloudflared/config.yml` — ORDER MATTERS, cloudflared takes
 the first match, so the `/mcp` and `.well-known` rules must come BEFORE the
@@ -98,10 +106,14 @@ catch-all for the same hostname:
     path: ^/mcp
     service: http://localhost:9000
   # OAuth discovery is fetched near the ORIGIN ROOT, not under /mcp, so these
-  # must reach the MCP process too once the OAuth façade lands
-  # (MCP_OAUTH_PLAN.md). Until then they 404 harmlessly.
+  # must reach the MCP process too. The façade is built now, so these rules are
+  # load-bearing rather than placeholders: without them the client gets the web
+  # app's HTML and fails dynamic client registration.
   - hostname: dothesislocal.webkaze.com
     path: ^/.well-known/oauth-
+    service: http://localhost:9000
+  - hostname: dothesislocal.webkaze.com
+    path: ^/oauth/
     service: http://localhost:9000
   - hostname: dothesislocal.webkaze.com
     service: http://localhost:3006
@@ -121,22 +133,55 @@ Run / reload the tunnel (a config change needs a RESTART — SIGHUP does not rel
 cloudflared tunnel run webkaze-local
 ```
 
-## 6. Verify end-to-end (public)
+## 5b. Production (app.dothesis.com) — nginx, not cloudflared
+
+`scripts/deploy.sh` installs `dothesis-mcp.service` and starts it on :9000.
+nginx then has to route the same four paths, which `deploy/nginx/dothesis.conf`
+now does:
 
 ```bash
-curl -s -XPOST https://dothesislocal.webkaze.com/mcp \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Should list the `humanize` tool. A `tools/call` runs the real humanize (Gemini, ~20-30s).
+⚠️ Do NOT copy the template over the installed vhost. The file on the server is
+the certbot-modified copy that owns the 443 listener and the certificate paths;
+overwriting it drops TLS for the whole site. Paste just the new
+`location ~ ^/(mcp$|mcp/|oauth/|\.well-known/oauth-)` block into the existing
+443 server block, ABOVE `location /`.
 
-⚠️ The path-routed URL above is NOT yet verified end-to-end — the ingress rules
-in §5 changed from a dedicated `dothesis-mcp.webkaze.com` hostname to a `/mcp`
-path on the API host, and cloudflared needs a RESTART (SIGHUP does not reload
-ingress) before this curl can pass. Run it after restarting; if it returns the
-API's 404 instead of a JSON-RPC result, the catch-all rule is matching first —
-the `/mcp` rule must be listed BEFORE it.
+## 6. Verify end-to-end (public)
+
+Three checks, in order. Each fails differently, and the first one that fails
+tells you which layer is wrong:
+
+```bash
+BASE=https://app.dothesis.com          # or the tunnel host in dev
+
+# 1. ROUTING — does /mcp reach the MCP process at all?
+curl -si -XPOST $BASE/mcp -d '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | head -1
+# 401 = correct, it wants a token. 404 + HTML = the proxy is still sending this
+# to Next.js, which is the entire "couldn't register" bug.
+
+# 2. DISCOVERY — can a client find the authorization server?
+curl -s $BASE/.well-known/oauth-protected-resource/mcp
+curl -s $BASE/.well-known/oauth-authorization-server
+# Both must be JSON, and every URL inside must start with https://app.dothesis.com.
+# http:// or 127.0.0.1 means nginx isn't passing Host / X-Forwarded-Proto.
+
+# 3. REGISTRATION — the exact step Claude reported failing.
+curl -s -XPOST $BASE/oauth/register -H 'Content-Type: application/json' \
+  -d '{"client_name":"probe","redirect_uris":["https://claude.ai/api/mcp/auth_callback"]}'
+# -> 201 with a client_id. Anything else and the connector cannot be added.
+```
+
+Then add the connector in Claude by URL. It registers itself, bounces you
+through DoThesis login + consent, and `humanize` appears. A `tools/call` runs
+the real humanize (Gemini, ~20-30s) against YOUR credits.
+
+⚠️ Verified locally against a real uvicorn process (register → login bounce →
+consent → PKCE exchange → authenticated `tools/list`) and by 27 tests in
+`tests/test_mcp_oauth.py`. NOT yet verified on app.dothesis.com — that needs the
+deploy + nginx reload above.
 
 ## Notes / gotchas
 
@@ -146,6 +191,16 @@ the `/mcp` rule must be listed BEFORE it.
   blips ALL webkaze sites (~seconds), then restores.
 - **Persistence:** everything above is foreground/nohup today → dies on reboot.
   For the campaign, wrap steps 2/4/5 in `launchd` (macOS) or `pm2` so they auto-start.
-- **Claude connector needs OAuth** — the static-token setup works with MCP
-  Inspector / curl, but claude.ai's custom connector requires the OAuth façade
-  (see `MCP_OAUTH_PLAN.md`) before it can be added there.
+- **Claude connector needs OAuth** — built (`mcp/oauth.py`). The failure mode to
+  recognise: "Couldn't register with dothesis's sign-in service" is dynamic
+  client registration failing, and it is almost always a PROXY ROUTING problem
+  (one of the four paths falling through to Next.js), not a code one. §6 check 3
+  isolates it in one curl.
+- **`SESSION_SECRET` must match the API's.** The façade signs the tokens the API
+  verifies. A mismatch produces a connector that completes the whole OAuth
+  handshake and then 401s on every tool call.
+- **Connector grants are in Postgres**, not a file — `mcp_oauth_clients`,
+  `mcp_oauth_codes`, `mcp_oauth_refresh_tokens`. They are covered by the normal
+  database backup. Truncating `mcp_oauth_clients` de-registers every connector
+  and users must re-add DoThesis in their client. A leftover `mcp/oauth.db` from
+  before the move is dead weight — delete it.

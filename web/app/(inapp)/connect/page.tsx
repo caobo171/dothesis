@@ -14,10 +14,12 @@ import { Check, Copy, ExternalLink } from "lucide-react";
  * connector URL; ChatGPT gates MCP behind developer mode) and a confidently
  * wrong instruction here costs a student more time than no instruction at all.
  *
- * The OAuth caveat is deliberately loud. mcp/MCP_OAUTH_PLAN.md is a PLAN — the
- * façade is not built, so there is no per-user login yet and the server still
- * authenticates with a single shared token. Shipping a "connect your account"
- * page that implies otherwise would be the dishonest version of this feature.
+ * This page used to carry a loud caveat that per-user sign-in did not exist and
+ * the server ran on one shared token. mcp/oauth.py now implements the OAuth 2.1
+ * façade, so that caveat has been removed rather than softened — it described a
+ * real state of the world that is no longer the state of the world. What
+ * replaced it is a statement of what the user grants by approving, which is the
+ * thing they still can't see from inside their AI client.
  */
 
 /**
@@ -99,17 +101,18 @@ export default function McpSetupPage() {
         </p>
       </div>
 
-      {/* Status is stated up front rather than buried. The OAuth façade in
-          mcp/MCP_OAUTH_PLAN.md is not built, so there is no per-user sign-in
-          and the server runs on one shared token behind a dev tunnel. */}
-      <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
-        <div className="text-[13px] font-bold text-amber-900">Preview — not open to students yet</div>
-        <p className="mt-1 text-[12.5px] text-amber-900/90 m-0 leading-relaxed">
-          The connector runs on a development tunnel and authenticates with a
-          single shared token, because per-user sign-in (OAuth 2.1) is still a
-          plan, not a build. Until that lands, treat this as an internal setup
-          guide: anyone who adds the connector shares one identity, so don&apos;t
-          hand the URL to students.
+      {/* The shared-token warning that used to live here is gone because the
+          thing it warned about is gone: mcp/oauth.py is built, so the connector
+          signs each person in as themselves. What remains worth saying is what
+          the user is agreeing to when they click Allow. */}
+      <div className="rounded-xl border border-ink-200 bg-ink-50 px-4 py-3">
+        <div className="text-[13px] font-bold text-ink-900">You sign in as yourself</div>
+        <p className="mt-1 text-[12.5px] text-ink-600 m-0 leading-relaxed">
+          Adding the connector opens a DoThesis consent screen. Approving it lets
+          your AI client call <strong>humanize</strong> on your behalf and spend
+          credits from <strong>your</strong> account — nobody else&apos;s. Access
+          expires hourly and renews silently; remove the connector in your AI
+          client to end it.
         </p>
       </div>
 
@@ -150,11 +153,16 @@ export default function McpSetupPage() {
             above.
           </Step>
           <Step n={3}>
+            Claude opens a DoThesis sign-in and consent screen. Approve it — if
+            you aren&apos;t signed in yet, you&apos;ll log in first and come
+            straight back.
+          </Step>
+          <Step n={4}>
             Save, then start a new chat. DoThesis appears in the tool menu and{" "}
             <code className="text-[12px] bg-ink-100 rounded px-1 py-0.5">humanize</code>{" "}
             becomes callable.
           </Step>
-          <Step n={4}>
+          <Step n={5}>
             Ask it to re-voice a passage. The first run asks for ~150 words you
             wrote yourself — that&apos;s the style anchor, and it&apos;s only
             asked once.
@@ -174,8 +182,9 @@ export default function McpSetupPage() {
           </Step>
           <Step n={3}>
             Paste the Server URL above and choose the{" "}
-            <strong>Streamable HTTP</strong> transport. Authentication is{" "}
-            <strong>none</strong> until the OAuth façade ships.
+            <strong>Streamable HTTP</strong> transport with{" "}
+            <strong>OAuth</strong> authentication. ChatGPT registers itself and
+            sends you to the same DoThesis consent screen.
           </Step>
           <Step n={4}>
             Enable the connector in a chat&apos;s tools list, then ask it to

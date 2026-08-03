@@ -6,7 +6,8 @@
 #   1. System deps — pandoc + libreoffice-writer (M5 export toolchain)
 #   2. API     — (re)build api/.venv, install api + engine deps, run alembic
 #   3. Web     — npm ci + `next build` (NEXT_PUBLIC_* baked in here)
-#   4. systemd — install/refresh dothesis-api + dothesis-web units, restart, verify
+#   4. systemd — install/refresh dothesis-api + dothesis-mcp + dothesis-web units,
+#                restart, verify
 #
 # The orchestrator (LangGraph auto-run) is NOT a separate service: the API spawns
 # it as a subprocess per run (ORCHESTRATOR_ENABLED), so there is nothing to
@@ -25,6 +26,7 @@
 #   API_PORT       uvicorn port                             (default: 7100)
 #   API_WORKERS    uvicorn worker processes                 (default: nproc, capped 4)
 #   WEB_PORT       next start port                          (default: 3006)
+#   MCP_PORT       MCP server + OAuth facade port           (default: 9000)
 #   NEXT_PUBLIC_API_BASE  baked into the web bundle          (default: /api/v1)
 #   SKIP_APT=1     skip system-package install (CI / locked-down hosts)
 #   SKIP_WEB=1     skip the web build (api-only deploy)
@@ -65,6 +67,7 @@ source .env; set +a
 API_HOST="${API_HOST:-127.0.0.1}"
 API_PORT="${API_PORT:-7100}"
 WEB_PORT="${WEB_PORT:-3006}"
+MCP_PORT="${MCP_PORT:-9000}"
 API_WORKERS="${API_WORKERS:-$(( $(nproc) < 4 ? $(nproc) : 4 ))}"
 NEXT_PUBLIC_API_BASE="${NEXT_PUBLIC_API_BASE:-/api/v1}"
 
@@ -286,10 +289,46 @@ WantedBy=multi-user.target
 UNIT
 fi
 
+log "installing systemd unit: dothesis-mcp.service"
+$SUDO tee /etc/systemd/system/dothesis-mcp.service >/dev/null <<UNIT
+[Unit]
+Description=DoThesis MCP server + OAuth 2.1 facade (Claude/ChatGPT connectors)
+After=network-online.target dothesis-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${APP_USER}
+WorkingDirectory=${REPO_DIR}/mcp
+# Needs two things from .env:
+#   SESSION_SECRET -- the facade signs the tokens it issues with the SAME secret
+#     as the API, which is what lets the MCP server forward a caller's bearer
+#     straight to /api/v1/humanize and have it accepted.
+#   DATABASE_URL   -- connector grants live in DoThesis's own Postgres
+#     (migration 20260803_mcpoauth01), reached with plain psycopg. The MCP
+#     process still imports nothing from app/.
+EnvironmentFile=${REPO_DIR}/.env
+Environment=DOTHESIS_API_URL=http://${API_HOST}:${API_PORT}
+Environment=DOTHESIS_MCP_HOST=127.0.0.1
+Environment=DOTHESIS_MCP_PORT=${MCP_PORT}
+# Reuses the API venv (starlette/uvicorn/httpx/PyJWT/psycopg are already there).
+# The isolation that matters is the PROCESS boundary -- the MCP server never
+# imports DoThesis, it calls the API over HTTP -- not a separate venv. That
+# only becomes necessary for server.py, which pulls fastmcp's pydantic.
+ExecStart=${REPO_DIR}/${VENV_BIN}/python server_lite.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 log "reloading systemd + (re)starting services"
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable --now dothesis-api.service
 $SUDO systemctl restart dothesis-api.service
+$SUDO systemctl enable --now dothesis-mcp.service
+$SUDO systemctl restart dothesis-mcp.service
 if [ "${SKIP_WEB:-0}" != "1" ]; then
   $SUDO systemctl enable --now dothesis-web.service
   $SUDO systemctl restart dothesis-web.service
@@ -315,17 +354,21 @@ cat <<DONE
 Deploy complete.
 
   API   : http://${API_HOST}:${API_PORT}   (workers=${API_WORKERS})
+  MCP   : http://127.0.0.1:${MCP_PORT}     (+ OAuth facade)
   Web   : http://0.0.0.0:${WEB_PORT}
   user  : ${APP_USER}
 
 Manage:
-  systemctl status  dothesis-api dothesis-web
+  systemctl status  dothesis-api dothesis-mcp dothesis-web
   journalctl -u dothesis-api -f
   journalctl -u dothesis-web -f
-  systemctl restart dothesis-api dothesis-web
+  systemctl restart dothesis-api dothesis-mcp dothesis-web
 
 Reverse proxy (nginx/Caddy) note:
   Route /api/v1/  -> http://${API_HOST}:${API_PORT}   (DIRECT — do NOT buffer; SSE/streaming)
+  Route /mcp, /oauth/, /.well-known/oauth-*  -> http://127.0.0.1:${MCP_PORT}
+                  (MUST come before the / catch-all, or Claude's connector gets
+                   Next.js HTML and fails dynamic client registration)
   Route /         -> http://127.0.0.1:${WEB_PORT}      (Next.js)
   For SSE, disable proxy buffering on /api/v1/ (nginx: proxy_buffering off;).
 DONE

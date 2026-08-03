@@ -1,11 +1,12 @@
 "use client";
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
 import { AuthBrand } from "../components/layout/Brand";
 import { apiFetch } from "../lib/api";
+import { goToNext } from "../lib/nextPath";
 import { useAuth } from "../lib/auth-context";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -15,9 +16,8 @@ import { Label } from "../components/ui/label";
 
 function LoginForm() {
   const { login } = useAuth();
-  const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/";
+  const next = params.get("next");
   const resetOk = params.get("reset") === "success";
 
   const [email, setEmail] = useState("");
@@ -35,7 +35,7 @@ function LoginForm() {
     setBusy(true);
     try {
       await login(email, password);
-      router.push(next);
+      goToNext(next);
     } catch (err) {
       const code = err?.body?.detail?.error?.code;
       if (code === "unverified") {

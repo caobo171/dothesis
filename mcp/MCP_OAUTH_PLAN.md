@@ -1,5 +1,25 @@
 # DoThesis MCP server + OAuth — build plan (for the "connect DoThesis in Claude" campaign)
 
+> **STATUS (2026-08-03): BUILT.** Checklist items 1-5 are implemented in
+> `mcp/server_lite.py` + `mcp/oauth.py`, with `dothesis-mcp.service` and the
+> nginx routing in `scripts/deploy.sh` / `deploy/nginx/dothesis.conf`. What
+> actually got built differs from this plan in three ways worth recording:
+>
+> 1. **No Google round-trip of our own.** The plan assumed `/authorize` would
+>    bounce to the DoThesis Google login. It doesn't need to: MCP shares the web
+>    app's origin, so the session cookie `tokenStore.ts` already writes is
+>    readable at `/oauth/authorize`. Identity was solved; only the AS handshake
+>    was missing, and that is all the façade adds.
+> 2. **Endpoints live under `/oauth/`, not at the origin root.** The root paths
+>    belong to Next.js — squatting there is how the setup guide once shadowed
+>    the `/mcp` endpoint. Discovery advertises the real URLs, so clients follow.
+> 3. **`server_lite.py`, not `server.py`.** fastmcp was never needed for one
+>    synchronous tool, and avoiding it removes the pinned-pydantic conflict
+>    rather than working around it with a second venv.
+>
+> This file is kept as the record of the reasoning. `README.md` describes what
+> exists; `RUNBOOK.md` §6 is how to verify it.
+
 Goal: end users add a **"DoThesis" connector** in Claude (claude.ai / Claude Desktop),
 log in once, and get DoThesis tools — first `humanize`, later `generate` — usable
 straight from their Claude chat. Powers the giveaway/marketing campaign.
@@ -58,6 +78,10 @@ MCP access token bound to the DoThesis user.
 
 ## Two things only the owner can provide (everything else I can build)
 
+*(Both since resolved: the endpoint is `https://app.dothesis.com` path-routed,
+and the auth approach is "reuse the existing DoThesis session", which turned out
+to need no Google round-trip at all.)*
+
 - **A public HTTPS endpoint** for the MCP server. A dedicated subdomain works,
   but so does path-routing (`dothesis.xyz/mcp`) on the existing host — MCP needs
   reachability, not a hostname. If path-routed, the proxy must ALSO send
@@ -73,5 +97,7 @@ MCP access token bound to the DoThesis user.
 
 This is a multi-step build (server + OAuth façade + deploy), not a one-shot. The
 `humanize` MCP tool + local run is the fast first milestone; the OAuth façade + public
-deploy is the longer pole and depends on the domain above. Campaign claims must match
+deploy is the longer pole and depends on the domain above. *(Both are now done in
+code and verified locally; the remaining step is running the deploy on the
+production host — see README.md → Status.)* Campaign claims must match
 `mcp/SKILL.md` — "giảm mùi AI, giữ số liệu", never "pass đạo văn / guaranteed detector".

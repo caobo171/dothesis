@@ -5,14 +5,24 @@ pull the SDK's pydantic>=2.12.
 Implements the minimum of the Streamable-HTTP MCP protocol needed to expose the
 `humanize` tool: `initialize`, `notifications/initialized`, `tools/list`,
 `tools/call`, `ping`. Responses are plain JSON (the spec permits a JSON response
-when the server doesn't stream). Good enough to validate the tunnel + tool over
-a public URL; the fastmcp-based `server.py` + OAuth façade is the production path
-for Claude's connector.
+when the server doesn't stream). This — not the fastmcp `server.py` — is what
+runs in production: one synchronous tool needs no more protocol than this, and
+staying inside the API's venv removes the fastmcp/pinned-pydantic conflict
+outright instead of isolating around it.
 
-Run (DoThesis venv has starlette+uvicorn+httpx):
+Auth: every /mcp request must carry `Authorization: Bearer <token>` issued by
+oauth.py. An unauthenticated request gets 401 plus the `WWW-Authenticate:
+Bearer resource_metadata=...` header — that header is how an MCP client
+discovers the authorization server and starts the login flow, so it is load-
+bearing, not decoration. The token is a DoThesis access token for the user who
+consented, and it is FORWARDED verbatim to /api/v1/humanize: the call then runs
+as that user, against their credits, through the API's normal auth path. This
+server does not need to know anything about accounts.
+
+Run (the API's venv already has starlette+uvicorn+httpx+PyJWT):
     export DOTHESIS_API_URL=http://localhost:7100
-    export DOTHESIS_ACCESS_TOKEN=<dev user token>   # phase-1 only
-    ../.venv/bin/python server_lite.py              # 127.0.0.1:9000/mcp
+    export SESSION_SECRET=<same secret as the API>
+    ../api/.venv/bin/python server_lite.py          # 127.0.0.1:9000/mcp
 """
 from __future__ import annotations
 
@@ -25,9 +35,18 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+import oauth
+
 API_URL = os.getenv("DOTHESIS_API_URL", "http://localhost:7100").rstrip("/")
-DEV_TOKEN = os.getenv("DOTHESIS_ACCESS_TOKEN", "")
 DEFAULT_PROTOCOL = "2025-06-18"
+
+# The pre-OAuth escape hatch: one static token acting as one real user. It is
+# now OFF unless explicitly asked for, and it was never safe to expose — see the
+# "DEV ONLY, NOT SECURE YET" note this replaces in README.md. Setting
+# DOTHESIS_MCP_REQUIRE_AUTH=0 on a public host hands that user's account to
+# anyone who finds the URL.
+REQUIRE_AUTH = os.getenv("DOTHESIS_MCP_REQUIRE_AUTH", "1") != "0"
+DEV_TOKEN = os.getenv("DOTHESIS_ACCESS_TOKEN", "")
 
 TOOLS = [{
     "name": "humanize",
@@ -51,16 +70,23 @@ TOOLS = [{
 }]
 
 
-def _call_humanize(args: dict) -> dict:
-    headers = {"Authorization": f"Bearer {DEV_TOKEN}"} if DEV_TOKEN else {}
-    r = httpx.post(
-        f"{API_URL}/api/v1/humanize",
-        headers=headers,
-        json={"text": args.get("text", ""),
-              "user_anchor": args.get("user_anchor"),
-              "language": args.get("language", "vi")},
-        timeout=float(os.getenv("DOTHESIS_MCP_TIMEOUT", "180")),
-    )
+async def _call_humanize(args: dict, token: str) -> dict:
+    """Forward the caller's own token so the humanize runs as the caller.
+
+    Async because a humanize is a 20-30s Gemini round-trip. The previous
+    blocking `httpx.post` inside an `async def` handler pinned the event loop
+    for its whole duration, so a second user's `tools/list` would sit behind a
+    stranger's rewrite. Harmless with one shared dev token; not harmless once
+    the endpoint is public and per-user.
+    """
+    async with httpx.AsyncClient(
+            timeout=float(os.getenv("DOTHESIS_MCP_TIMEOUT", "180"))) as client:
+        r = await client.post(
+            f"{API_URL}/api/v1/humanize",
+            headers={"Authorization": f"Bearer {token}"} if token else {},
+            json={"text": args.get("text", ""),
+                  "user_anchor": args.get("user_anchor"),
+                  "language": args.get("language", "vi")})
     r.raise_for_status()
     return r.json()
 
@@ -74,10 +100,43 @@ def _rpc_error(mid, code, message):
                          "error": {"code": code, "message": message}})
 
 
+def _unauthorized(request: Request, detail: str) -> Response:
+    """401 carrying the pointer to our resource metadata.
+
+    Without this header an MCP client has no way to learn WHERE to authenticate
+    and falls back to probing the origin root — which is how Claude ended up
+    POSTing dynamic client registration at the Next.js app and reporting
+    "Couldn't register with dothesis's sign-in service".
+    """
+    base = oauth.base_url(request)
+    return JSONResponse(
+        {"error": "invalid_token", "error_description": detail},
+        status_code=401,
+        headers={"WWW-Authenticate":
+                 f'Bearer realm="DoThesis", '
+                 f'resource_metadata="{base}/.well-known/oauth-protected-resource/mcp"'})
+
+
+def _caller_token(request: Request) -> tuple[str | None, Response | None]:
+    """(token to forward, error response). Exactly one is non-None."""
+    if not REQUIRE_AUTH:
+        return DEV_TOKEN, None
+    auth = request.headers.get("authorization", "")
+    if not auth.lower().startswith("bearer "):
+        return None, _unauthorized(request, "missing Bearer token")
+    token = auth.split(" ", 1)[1].strip()
+    if not token or oauth.verify_bearer(token) is None:
+        return None, _unauthorized(request, "token is invalid or expired")
+    return token, None
+
+
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
         # No server-initiated stream in this minimal build.
         return Response(status_code=405)
+    token, err = _caller_token(request)
+    if err:
+        return err
     msg = await request.json()
     method, mid = msg.get("method"), msg.get("id")
 
@@ -98,7 +157,7 @@ async def mcp_endpoint(request: Request):
         if params.get("name") != "humanize":
             return _rpc_error(mid, -32602, f"unknown tool: {params.get('name')}")
         try:
-            out = _call_humanize(params.get("arguments") or {})
+            out = await _call_humanize(params.get("arguments") or {}, token)
         except Exception as e:  # noqa: BLE001 — surface upstream failure to the client
             return _rpc_result(mid, {
                 "content": [{"type": "text", "text": f"humanize call failed: {e}"}],
@@ -111,7 +170,14 @@ async def mcp_endpoint(request: Request):
     return _rpc_error(mid, -32601, f"method not found: {method}")
 
 
-app = Starlette(routes=[Route("/mcp", mcp_endpoint, methods=["GET", "POST"])])
+app = Starlette(routes=[
+    Route("/mcp", mcp_endpoint, methods=["GET", "POST"]),
+    # Discovery + the OAuth endpoints. These live at the ORIGIN ROOT, not under
+    # /mcp, because that is where clients look for them — which is why the proxy
+    # has to route `/.well-known/oauth-*` and `/oauth/*` here too and not to the
+    # web app (deploy/nginx/dothesis.conf, RUNBOOK §5).
+    *oauth.routes(),
+])
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import { apiFetch } from "@/app/lib/api";
 import { useAuth } from "@/app/lib/auth-context";
+import { goToNext } from "@/app/lib/nextPath";
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
@@ -23,7 +24,11 @@ type Status = "off" | "pending" | "on";
 
 export function GoogleSignInButton({ onError }: { onError?: (msg: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  const router = useRouter();
+  // Honour ?next= exactly as the email form does. It used to hard-push "/",
+  // which silently dropped the destination — a user who signed in with Google
+  // partway through the MCP connector flow landed on the dashboard and the
+  // OAuth handshake they were in the middle of just vanished.
+  const params = useSearchParams();
   // /auth/google now returns TokenOut — pipe it through the auth context
   // so the access_token gets persisted to tokenStore before we navigate.
   const { acceptTokenPayload } = useAuth();
@@ -74,7 +79,7 @@ export function GoogleSignInButton({ onError }: { onError?: (msg: string) => voi
               auth: false,
             });
             acceptTokenPayload(payload);
-            router.push("/");
+            goToNext(params.get("next"));
           } catch (e: any) {
             onError?.(e?.body?.detail?.error?.message || e?.message || "Google sign-in failed");
           }
@@ -103,7 +108,7 @@ export function GoogleSignInButton({ onError }: { onError?: (msg: string) => voi
       ro?.disconnect();
       if (added) { /* no-op: keep script for other consumers */ }
     };
-  }, [router, onError]);
+  }, [params, onError]);
 
   if (status === "off") return null;
 

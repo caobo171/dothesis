@@ -13,70 +13,152 @@ freezing all numbers/tables/terms/citations. It is **not** a plagiarism
 
 | File | What |
 |---|---|
-| `server.py` | The MCP server (phase 1: `humanize` tool). Thin adapter → DoThesis API. |
+| `server_lite.py` | The MCP server in production: `humanize` tool + bearer auth. Thin adapter → DoThesis API. |
+| `oauth.py` | OAuth 2.1 façade — discovery, dynamic client registration, `/authorize`, `/token`, `/revoke`. Stores grants in DoThesis's Postgres. |
+| `server.py` | fastmcp variant, unused in production. Kept for the day the protocol surface outgrows `server_lite.py`. |
 | `requirements.txt` | Isolated deps (`fastmcp`, `httpx`). **Own venv, not DoThesis's.** |
 | `SKILL.md` | End-user Claude skill packaging the humanize workflow. |
-| `MCP_OAUTH_PLAN.md` | Build plan for the OAuth 2.1 façade + public deploy (phase 2). |
+| `MCP_OAUTH_PLAN.md` | The original build plan. Historical now — items 1-5 are built. |
 
 ## Architecture
 
 ```
-Claude  ──MCP (Streamable-HTTP)──▶  mcp/server.py  ──HTTP──▶  DoThesis API /api/v1/humanize
-                                    (tiny adapter)            (does the real work: anchor,
-                                                               frozen-token verify, model)
+Claude ──MCP (Streamable-HTTP)──▶ mcp/server_lite.py ──HTTP──▶ DoThesis API /api/v1/humanize
+          + OAuth 2.1              (tiny adapter,               (does the real work: anchor,
+            handshake               forwards the caller's        frozen-token verify, model)
+                                    own bearer)
+                          ▲
+                          └── mcp/oauth.py issues that bearer, reusing the
+                              DoThesis browser session as the identity source
 ```
 
 The server never imports DoThesis in-process — it calls the API — so its deps
 stay isolated and DoThesis's pinned pydantic is safe.
 
-## Run locally (phase 1, no OAuth yet)
+## Auth
+
+Per-user OAuth 2.1, implemented in `oauth.py`. The short version of how it
+works, because the shape is unusual:
+
+- **No new identity provider.** DoThesis already knows who the user is.
+  `web/app/lib/tokenStore.ts` mirrors the session JWT into a non-HTTPOnly
+  `dothesis_access_token` cookie so the Next middleware can gate routes. MCP is
+  path-routed onto the SAME origin, so that cookie reaches `/oauth/authorize` on
+  top-level navigation — which is exactly the navigation Claude performs.
+  "Log the user in" therefore means "read the session the browser already has",
+  and only a browser without one gets bounced to `/login`.
+- **The access token we issue IS a DoThesis access token** — same HS256 secret,
+  same `sub` claim, plus `typ: "mcp"`. `api/app/deps.py` already accepts
+  `Authorization: Bearer`, so `server_lite.py` forwards the caller's token
+  straight to `/api/v1/humanize` and the call runs as that user with that
+  user's credits. No metering or ownership logic is duplicated.
+- **The honest cost:** an MCP token carries full account authority, not a
+  humanize-only capability. It is contained by TIME (1 hour, vs 7 days for a web
+  session) behind a rotating, revocable 30-day refresh token. Narrowing it
+  further means teaching `verify_access_token` about `typ="mcp"` — a change to
+  the API's auth core, which is a bigger blast radius than this needs today.
+
+### Where the grants live
+
+DoThesis's own Postgres — `mcp_oauth_clients`, `mcp_oauth_codes`,
+`mcp_oauth_refresh_tokens` (migration `20260803_mcpoauth01`, models in
+`api/app/models.py`). The MCP process reaches them with plain psycopg and
+hand-written SQL; it still imports nothing from `app.*`.
+
+They started in a process-local SQLite file. Moving them was worth it because
+the data is not private to that process:
+
+- connector installs are a campaign metric (`MCP_OAUTH_PLAN.md` item 6), so
+  they should be a query rather than an SSH session;
+- `POST /api/v1/connectors/list` + `/revoke` let a student see and disconnect a
+  connected app from DoThesis itself — impossible while the API couldn't see
+  the grants;
+- a foreign key to `users` means deleting an account takes its grants with it.
+
+⚠️ **Two couplings to keep in sync by hand**, both the deliberate price of an
+import-free MCP process:
+
+1. **Token format.** `oauth.py` re-implements JWT sign/verify with PyJWT rather
+   than importing `api/app/jwt_auth.py`. Same secret (`SESSION_SECRET`), same
+   algorithm (HS256), same `sub` claim.
+2. **Schema.** The SQL in `oauth.py` is written against `api/app/models.py`.
+   Change a column there and change it here.
+
+## Run locally
 
 ```bash
 cd mcp
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-export DOTHESIS_API_URL=http://localhost:7100          # DoThesis API (orchestrator_enabled)
-export DOTHESIS_ACCESS_TOKEN=<a dev user's access token>   # temporary, phase-1 only
-.venv/bin/python server.py                              # http://127.0.0.1:9000
+export DOTHESIS_API_URL=http://localhost:7100   # DoThesis API (orchestrator_enabled)
+export SESSION_SECRET=<the same secret the API uses>
+export DATABASE_URL=<the same Postgres the API uses>
+../api/.venv/bin/python server_lite.py          # http://127.0.0.1:9000
 ```
 
-Then point an MCP client at `http://127.0.0.1:9000` and call `humanize`.
+Uses the API's venv: `server_lite.py` needs only
+starlette/uvicorn/httpx/PyJWT/psycopg, all already there. The separate `mcp/.venv` exists for `server.py`, whose
+`fastmcp` dependency wants a pydantic DoThesis pins away from.
 
-## Go public (phase 2) — what's needed
+Then point an MCP client at `http://127.0.0.1:9000/mcp`. It will 401 and follow
+the `WWW-Authenticate` header into the OAuth flow.
 
-1. **A public HTTPS endpoint** — the ONE external thing the owner must provide.
-   Claude connects over the internet; localhost won't work. This does NOT have
-   to be its own subdomain: path-routing `dothesis.xyz/mcp` at the proxy works
-   and costs one less DNS record + certificate. The isolation that matters is
-   the PROCESS (own venv, talks to DoThesis over HTTP), not the hostname — see
-   the architecture note above. A subdomain is only simpler in one respect: it
-   owns its whole origin, so the `.well-known/oauth-*` discovery paths can't
-   collide with the web app's routes.
-2. The **OAuth 2.1 façade** (`MCP_OAUTH_PLAN.md`): `.well-known` metadata, dynamic
-   client registration, `/authorize` → DoThesis Google login, `/token` (PKCE),
-   minting a per-user token (drops the static `DOTHESIS_ACCESS_TOKEN`).
-3. Add the connector in Claude by URL → OAuth handshake → `humanize` appears.
+## What the proxy must route
+
+Four paths have to reach this process, not the Next.js app. Three of them sit at
+the ORIGIN ROOT rather than under `/mcp`, because that is where OAuth clients
+look for them — the one genuine cost of sharing an origin with the web app:
+
+| Path | Why |
+|---|---|
+| `/mcp` | the protocol endpoint |
+| `/.well-known/oauth-protected-resource*` | RFC 9728 — tells the client an authorization server exists |
+| `/.well-known/oauth-authorization-server*` | RFC 8414 — the endpoint directory |
+| `/oauth/*` | register / authorize / token / revoke |
+
+`deploy/nginx/dothesis.conf` does this in production; RUNBOOK §5 has the
+cloudflared equivalent for dev. If any of them falls through to Next.js, the
+client gets an HTML 404 where it expected JSON and reports **"Couldn't register
+with dothesis's sign-in service"** — that message is dynamic client
+registration failing, and it is almost always a routing problem, not a code one.
+
+Two smaller traps, both already paid for:
+
+- `web/proxy.js` must exclude these paths from page middleware, or they 307 to
+  `/login` and produce the same error (fixed in a0c01d3).
+- Nothing else may claim `/mcp`. The setup guide originally lived there and
+  shadowed the endpoint; it now lives at `/connect`.
 
 ## Two server variants
 
 | File | Deps | Use |
 |---|---|---|
-| `server.py` | `fastmcp` | Production path (proper protocol/SSE/sessions). Needs the SDK. |
-| `server_lite.py` | `starlette` only (already in DoThesis's venv) | SDK-free minimal Streamable-HTTP MCP for hosts where `fastmcp` can't be installed. What's running on the live dev tunnel now. |
+| `server_lite.py` | `starlette` only (already in the API's venv) | **What runs in production.** Minimal Streamable-HTTP MCP: `initialize`, `tools/list`, `tools/call`, `ping`, plus bearer auth and the OAuth routes. |
+| `server.py` | `fastmcp`, needs `mcp/.venv` | Unused. The fuller protocol surface (server-initiated SSE, sessions) if `humanize` ever needs it. It has NO auth — do not expose it as-is. |
 
-## Status (2026-08-02)
+`server_lite.py` won because the protocol surface a single synchronous tool
+needs is small, and keeping it in the API's venv removes the `fastmcp` /
+pinned-pydantic conflict entirely rather than working around it.
+
+## Status (2026-08-03)
 
 - ✅ DoThesis API `POST /api/v1/humanize` (existing Bearer/JWT auth) — built, mapping
   unit-tested, verified end-to-end (real Gemini rewrite, frozen tokens preserved).
-- ✅ `server_lite.py` — running on `127.0.0.1:9000`, tunneled via Cloudflare
-  (`webkaze-local`). `initialize` / `tools/list` / `tools/call humanize` were all
-  verified over the public URL **on the old `dothesis-mcp.webkaze.com` subdomain**.
-- ⚠️ The tunnel is being moved to path-routing on the API host
-  (**`https://dothesislocal.webkaze.com/mcp`**, RUNBOOK §5) so MCP stops
-  needing its own DNS record + certificate. That reroute is NOT re-verified yet:
-  it needs a cloudflared restart, then the §6 curl.
-- ⚠️ **DEV ONLY, NOT SECURE YET:** the tunnel uses a single static `DOTHESIS_ACCESS_TOKEN`
-  (acts as one real user) and has no auth in front — do not publish the URL. Claude's
-  connector also *requires* OAuth for remote MCP, so it can't be added to claude.ai
-  until the OAuth façade lands.
-- ⏳ Next: OAuth 2.1 façade (reuse Google login) → per-user tokens → add to Claude.
-  Then run all three (API, MCP, tunnel) under a process manager for persistence.
+- ✅ `oauth.py` — OAuth 2.1 façade: discovery (both bare and path-aware forms),
+  dynamic client registration, PKCE-only `/authorize` + `/token`, rotating
+  refresh tokens, `/revoke`. Grants in Postgres. 27 tests in
+  `api/tests/test_mcp_oauth.py`.
+- ✅ `POST /api/v1/connectors/list` + `/revoke` — see and disconnect a connected
+  AI app from DoThesis itself. 8 tests in `api/tests/test_connectors.py`.
+- ✅ `server_lite.py` — bearer-protected; 401s carry the `resource_metadata`
+  hint that starts the OAuth flow. The static `DOTHESIS_ACCESS_TOKEN` path is
+  now off by default (`DOTHESIS_MCP_REQUIRE_AUTH=0` to restore it, dev only).
+- ✅ Full handshake verified locally against a real uvicorn process: register →
+  login bounce → consent → code → PKCE token exchange → authenticated
+  `tools/list`.
+- ✅ `dothesis-mcp.service` + nginx routing land via `scripts/deploy.sh` and
+  `deploy/nginx/dothesis.conf`.
+- ⏳ **Not yet verified in production.** The deploy has to actually run on the
+  app.dothesis.com host — nginx needs the new locations and a reload — before
+  `https://app.dothesis.com/mcp` answers anything but a Next.js 404. RUNBOOK §6
+  is the check.
+- ⏳ Later: `tools/call humanize` over the public URL end-to-end; phase-2 tools
+  (`generate_outline`, `export_docx`).
