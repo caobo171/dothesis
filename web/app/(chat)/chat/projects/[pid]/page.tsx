@@ -4,11 +4,13 @@ import { useEffect } from "react";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
 import { swrFetcher as fetcher } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 
 
 export default function ProjectIndex() {
   const router = useRouter();
   const params = useParams<{ pid: string }>();
+  const t = useT();
   const { data: threads, error } = useSWR<Array<{ id: string }>>(
     `/projects/${params.pid}/threads/list`, fetcher,
   );
@@ -25,13 +27,13 @@ export default function ProjectIndex() {
   if (error) {
     return (
       <div className="p-6 text-sm text-[#6E5121]">
-        Couldn’t load this project’s threads.{" "}
+        {t("ws.projectThreadsFailed")}{" "}
         <button
           type="button"
           onClick={() => window.location.reload()}
           className="underline font-semibold hover:no-underline"
         >
-          Retry
+          {t("ws.retry")}
         </button>
       </div>
     );
@@ -40,10 +42,10 @@ export default function ProjectIndex() {
   if (threads && threads.length === 0) {
     return (
       <div className="p-6 text-sm text-ink-500">
-        No threads in this thesis yet — start one from the left rail.
+        {t("ws.threadsEmpty")}
       </div>
     );
   }
 
-  return <div className="p-6 text-sm text-ink-500">Loading thread…</div>;
+  return <div className="p-6 text-sm text-ink-500">{t("ws.loadingThread")}</div>;
 }

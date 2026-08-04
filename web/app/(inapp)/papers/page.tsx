@@ -9,6 +9,7 @@ import useSWR from "swr";
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, Plus } from "lucide-react";
 
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 import {
   MODULES,
   SEGMENT_STYLE,
@@ -133,6 +134,7 @@ function Th({ children, className = "" }: { children?: React.ReactNode; classNam
 // Compact version of the dashboard card's module bar — same colors, same
 // status derivation, sized for a table row.
 function ModuleMiniBar({ p }: { p: Project }) {
+  const t = useT();
   return (
     <div className="flex gap-1 max-w-[160px]">
       {MODULES.map(m => {
@@ -140,7 +142,7 @@ function ModuleMiniBar({ p }: { p: Project }) {
         return (
           <span
             key={m.id}
-            title={`${m.id} · ${m.label} · ${s.replace("_", " ")}`}
+            title={`${m.id} · ${t(m.labelKey)} · ${s.replace("_", " ")}`}
             className={`flex-1 px-0.5 py-1 rounded-md text-center text-[10px] font-bold font-serif inline-flex items-center justify-center ${SEGMENT_STYLE[s]}`}
           >
             {m.id}
@@ -164,6 +166,7 @@ function StatusTag({ p }: { p: Project }) {
 
 
 function DraftRow({ p, index }: { p: Project; index: number }) {
+  const t = useT();
   return (
     <tr className="border-b border-ink-100 last:border-b-0 hover:bg-ink-50/60 transition-colors">
       <td className="py-4 pl-6 pr-3 whitespace-nowrap text-sm text-ink-400 tabular-nums">
@@ -180,7 +183,7 @@ function DraftRow({ p, index }: { p: Project; index: number }) {
       <td className="py-4 pr-3"><ModuleMiniBar p={p} /></td>
       <td className="py-4 pr-3"><StatusTag p={p} /></td>
       <td className="py-4 pr-3 whitespace-nowrap text-sm text-ink-500">
-        {p.updated_at ? relativeTime(p.updated_at) : "—"}
+        {p.updated_at ? relativeTime(p.updated_at, t) : "—"}
       </td>
       <td className="py-4 pr-6 whitespace-nowrap text-right">
         <Link
@@ -196,6 +199,7 @@ function DraftRow({ p, index }: { p: Project; index: number }) {
 
 
 function DraftMobileRow({ p }: { p: Project }) {
+  const t = useT();
   return (
     <Link
       href={`/chat/projects/${p.id}`}
@@ -210,7 +214,7 @@ function DraftMobileRow({ p }: { p: Project }) {
       <div className="mt-2 flex items-center justify-between gap-3">
         <ModuleMiniBar p={p} />
         <span className="text-[11px] text-ink-400 shrink-0">
-          {p.updated_at ? relativeTime(p.updated_at) : "—"}
+          {p.updated_at ? relativeTime(p.updated_at, t) : "—"}
         </span>
       </div>
     </Link>

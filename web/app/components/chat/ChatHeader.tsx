@@ -3,6 +3,7 @@ import { ReactNode, useContext, useState } from "react";
 import { ArrowLeft, Bell, ChevronDown, Download, FileDown, History, Loader2, Menu, PanelRight, PenSquare, Sparkles } from "lucide-react";
 
 import { useMe } from "@/app/lib/use-me";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 import { triggerExportDownload } from "@/app/lib/api";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
 
@@ -149,7 +150,9 @@ export function ChatHeader({
    *  use it to ask the agent to export a module (export_docx scope). */
   onQuickPrompt?: (text: string) => void;
 }) {
-  const focusLabel = MODULES.find(m => m.id === focusModule)?.label;
+  const t = useT();
+  const focusKey = MODULES.find(m => m.id === focusModule)?.labelKey;
+  const focusLabel = focusKey ? t(focusKey) : undefined;
   const phase = focusModule ? PHASE_LABEL[focusModule] : undefined;
   const tag = focusStatus ? STATUS_TAG[focusStatus] ?? STATUS_TAG.in_progress : null;
   const me = useMe();

@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { ChatShellLayout } from "@/app/components/chat/ChatShellLayout";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 import type { Thread } from "@/app/components/chat/ThreadsSidebar";
 import { WorkflowSidebar } from "@/app/components/chat/WorkflowSidebar";
 import {
@@ -37,6 +38,7 @@ function errStatus(e: unknown): number | undefined {
  * The console filled with 403/404s while the UI claimed everything was fine.
  */
 function ProjectLoadError({ status, message }: { status?: number; message?: string }) {
+  const t = useT();
   // The API is inconsistent here: chat.py answers 404 for a project that is
   // missing OR not yours, roadmap.py answers 403 for the same two cases. Treat
   // both as "you can't open this" and only differentiate the copy.
@@ -51,24 +53,24 @@ function ProjectLoadError({ status, message }: { status?: number; message?: stri
         </div>
         <h1 className="mt-4 mb-2 text-xl font-extrabold tracking-tight font-serif text-ink-900">
           {notFound
-            ? "This thesis no longer exists"
+            ? t("ws.gone.title")
             : forbidden
-              ? "You don’t have access to this thesis"
-              : "Couldn’t load this thesis"}
+              ? t("ws.forbidden.title")
+              : t("ws.failed.title")}
         </h1>
         <p className="text-sm text-ink-500 leading-relaxed m-0">
           {notFound
-            ? "It was deleted, or this link points at a project from another workspace."
+            ? t("ws.gone.body")
             : forbidden
-              ? "It belongs to a different account. Check which account you’re signed in as."
-              : message || "The server didn’t respond as expected. Try again in a moment."}
+              ? t("ws.forbidden.body")
+              : message || t("ws.failed.body")}
         </p>
         <div className="flex items-center justify-center gap-2 mt-6">
           <Link
             href="/"
             className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-full text-[13.5px] font-semibold no-underline hover:bg-primary-700 transition-colors"
           >
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to your theses
+            <ArrowLeft className="w-3.5 h-3.5" /> {t("ws.back")}
           </Link>
           {!notFound && !forbidden && (
             <button
@@ -76,7 +78,7 @@ function ProjectLoadError({ status, message }: { status?: number; message?: stri
               onClick={() => window.location.reload()}
               className="inline-flex items-center px-4 py-2 rounded-full text-[13.5px] font-semibold border border-ink-200 text-ink-700 hover:bg-ink-50 transition-colors"
             >
-              Retry
+              {t("ws.retry")}
             </button>
           )}
         </div>

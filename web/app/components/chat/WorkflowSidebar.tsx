@@ -76,7 +76,7 @@ export function WorkflowSidebar({
       {projectName && (
         <div className="mx-[14px] mb-2.5 px-3 py-2.5 bg-ink-50 border border-ink-200 rounded-xl">
           <div className="text-[11px] uppercase tracking-[0.05em] text-ink-500 font-semibold">
-            Project
+            {t("sidebar.project")}
           </div>
           <div
             className="text-[13px] font-semibold text-ink-900 mt-1 leading-[1.35] line-clamp-2"
@@ -95,7 +95,7 @@ export function WorkflowSidebar({
       {/* Threads header */}
       <div className="px-[18px] mt-1 mb-2 flex items-center justify-between">
         <div className="text-[10.5px] uppercase tracking-[0.1em] text-ink-500 font-semibold">
-          Threads
+          {t("sidebar.threads")}
         </div>
         {threads && (
           <div className="text-[10.5px] tabular-nums text-ink-400 font-semibold">
@@ -116,17 +116,17 @@ export function WorkflowSidebar({
           />
         ) : threadsFailed ? (
           <div className="text-[12px] text-[#6E5121] px-5 py-3 leading-relaxed">
-            Couldn’t load threads.{" "}
+            {t("ws.threadsFailed")}{" "}
             <button
               type="button"
               onClick={() => window.location.reload()}
               className="underline font-semibold hover:no-underline"
             >
-              Retry
+              {t("ws.retry")}
             </button>
           </div>
         ) : (
-          <div className="text-[12px] text-ink-500 px-5 py-3">Loading…</div>
+          <div className="text-[12px] text-ink-500 px-5 py-3">{t("sidebar.loading")}</div>
         )}
       </div>
 
@@ -160,6 +160,7 @@ function ThreadList({
   onSelect?: (tid: string) => void;
   onNew?: () => void;
 }) {
+  const tr = useT();
   const active = threads.filter(t => t.status !== "archived");
   const archived = threads.filter(t => t.status === "archived");
 
@@ -172,7 +173,7 @@ function ThreadList({
           className="w-full mb-2 px-3 py-2 rounded-full bg-primary-600 text-white inline-flex items-center justify-start gap-2 text-[13px] font-semibold hover:bg-primary-700 transition-colors"
         >
           <Plus className="w-4 h-4" />
-          <span>New thread</span>
+          <span>{tr("sidebar.newThread")}</span>
           <span className="flex-1" />
           <span className="opacity-75 text-[10.5px] px-1.5 py-px bg-white/15 rounded">⌘N</span>
         </button>
@@ -192,7 +193,7 @@ function ThreadList({
       {archived.length > 0 && (
         <>
           <div className="text-[10.5px] uppercase tracking-[0.06em] text-ink-400 font-semibold px-2 pt-3 pb-1">
-            Archived
+            {tr("sidebar.archived")}
           </div>
           <div className="flex flex-col gap-0.5 opacity-70">
             {archived.map(t => (
@@ -209,7 +210,7 @@ function ThreadList({
 
       {active.length === 0 && archived.length === 0 && (
         <div className="text-[12px] text-ink-500 px-2 py-3">
-          No threads yet — start one.
+          {tr("sidebar.noThreads")}
         </div>
       )}
     </div>

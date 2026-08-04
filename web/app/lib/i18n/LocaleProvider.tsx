@@ -17,13 +17,18 @@ import {
   localeFromTimeZone,
   readLocaleCookie,
   translate,
+  translatePlural,
   writeLocaleCookie,
   type Locale,
+  type TParams,
 } from "./locale";
 
 type LocaleContextValue = {
   locale: Locale;
-  t: (key: MessageKey) => string;
+  /** `t("key")`, or `t("key", { name })` to fill `{name}` placeholders. */
+  t: (key: MessageKey, params?: TParams) => string;
+  /** Plural-aware: `tn("x_one", "x_other", count)`. `{count}` is pre-filled. */
+  tn: (one: MessageKey, other: MessageKey, count: number, params?: TParams) => string;
   setLocale: (next: Locale) => void;
 };
 
@@ -78,7 +83,13 @@ export function LocaleProvider({
   }, [locale]);
 
   const value = useMemo<LocaleContextValue>(
-    () => ({ locale, setLocale, t: (key: MessageKey) => translate(locale, key) }),
+    () => ({
+      locale,
+      setLocale,
+      t: (key: MessageKey, params?: TParams) => translate(locale, key, params),
+      tn: (one: MessageKey, other: MessageKey, count: number, params?: TParams) =>
+        translatePlural(locale, one, other, count, params),
+    }),
     [locale, setLocale],
   );
 
@@ -94,6 +105,13 @@ export function useLocale(): LocaleContextValue {
 }
 
 /** Shorthand for the common case: `const t = useT();` */
-export function useT(): (key: MessageKey) => string {
+export function useT(): (key: MessageKey, params?: TParams) => string {
   return useLocale().t;
+}
+
+/** Plural-aware shorthand: `const tn = useTn();` */
+export function useTn(): (
+  one: MessageKey, other: MessageKey, count: number, params?: TParams,
+) => string {
+  return useLocale().tn;
 }

@@ -18,6 +18,8 @@ import {
 import { useMe } from "@/app/lib/use-me";
 import { swrFetcher as fetcher } from "@/app/lib/api";
 import { Card } from "@/app/components/ui/card";
+import { useT, useTn } from "@/app/lib/i18n/LocaleProvider";
+import type { MessageKey } from "@/app/lib/i18n/messages/en";
 import { Skeleton } from "@/app/components/ui/skeleton";
 
 
@@ -45,12 +47,16 @@ type ModuleId = "M1" | "M2" | "M3" | "M4" | "M5";
 type SliceKey = "m1_topic" | "m2_literature" | "m3_design" | "m4_analysis" | "m5_writing";
 export type ModuleDisplayStatus = "done" | "in_progress" | "needs_review" | "locked";
 
-export const MODULES: Array<{ id: ModuleId; slice: SliceKey; label: string }> = [
-  { id: "M1", slice: "m1_topic",      label: "Topic Discovery" },
-  { id: "M2", slice: "m2_literature", label: "Literature Review" },
-  { id: "M3", slice: "m3_design",     label: "Research Design" },
-  { id: "M4", slice: "m4_analysis",   label: "Data Analysis" },
-  { id: "M5", slice: "m5_writing",    label: "Writing" },
+// `labelKey`, not `label`: these names are shared vocabulary (dashboard, chat
+// header, theses list), so they must resolve through the active locale at the
+// point of RENDER rather than being frozen into this module-level array, which
+// is evaluated once at import and has no locale.
+export const MODULES: Array<{ id: ModuleId; slice: SliceKey; labelKey: MessageKey }> = [
+  { id: "M1", slice: "m1_topic",      labelKey: "module.M1" },
+  { id: "M2", slice: "m2_literature", labelKey: "module.M2" },
+  { id: "M3", slice: "m3_design",     labelKey: "module.M3" },
+  { id: "M4", slice: "m4_analysis",   labelKey: "module.M4" },
+  { id: "M5", slice: "m5_writing",    labelKey: "module.M5" },
 ];
 
 // Same precedence as ContextPanel.statusFor so the home cards and the
@@ -81,31 +87,37 @@ export function needsReview(p: Project): boolean {
   return MODULES.some(m => moduleStatus(p, m) === "needs_review");
 }
 
-export function relativeTime(iso: string): string {
+// Takes `t` rather than calling a hook, so it stays a pure function usable from
+// /papers and from a test without a provider around it.
+export function relativeTime(iso: string, t: (k: MessageKey, p?: Record<string, string | number>) => string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
+  if (min < 1) return t("time.justNow");
+  if (min < 60) return t("time.minutes", { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return t("time.hours", { n: h });
   const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d ago`;
+  if (d < 7) return t("time.days", { n: d });
   const w = Math.floor(d / 7);
-  return w < 5 ? `${w}w ago` : new Date(iso).toLocaleDateString();
+  return w < 5 ? t("time.weeks", { n: w }) : new Date(iso).toLocaleDateString();
 }
 
-function dayPartGreeting(): string {
-  const now = new Date();
-  const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
-  const h = now.getHours();
-  const part = h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
-  return `${weekday} ${part}`;
+// Returns a KEY, not a sentence. The old version concatenated an English
+// weekday with an English day-part ("Monday afternoon"); that pattern has no
+// good Vietnamese equivalent, and gluing two translated fragments together is
+// exactly the word-order trap interpolation exists to avoid.
+function greetingKey(): MessageKey {
+  const h = new Date().getHours();
+  if (h < 12) return "home.greeting.morning";
+  return h < 18 ? "home.greeting.afternoon" : "home.greeting.evening";
 }
 
 
 export function HomeDashboard() {
   const { data: projects, isLoading } = useSWR<Project[]>("/projects/list", fetcher, { dedupingInterval: 0 });
   const me = useMe();
+  const t = useT();
+  const tn = useTn();
 
   // Two independent fetches feed this page, so they get two loading flags —
   // the hero's name/credit come from /auth/me while everything else waits on
@@ -136,13 +148,21 @@ export function HomeDashboard() {
       <div className="flex items-end justify-between mt-7 mb-4 px-0.5">
         <div>
           <h2 className="m-0 text-[22px] font-extrabold tracking-tight font-serif text-ink-900">
-            Your theses
+            {t("home.theses")}
           </h2>
           <div className="text-[12.5px] text-ink-500 mt-1">
             {isLoading ? (
               <Skeleton className="h-3.5 w-28 my-[1px]" />
             ) : (
-              `${projects?.length ?? 0} active${reviewCount ? ` · ${reviewCount} need${reviewCount === 1 ? "s" : ""} review` : ""}`
+              // Two counted nouns, so two tn() calls joined by a separator —
+              // not one sentence built with a ternary on "s", which only ever
+              // produced English plurals.
+              [
+                tn("home.thesesCount_one", "home.thesesCount_other", projects?.length ?? 0),
+                reviewCount
+                  ? tn("home.reviewCount_one", "home.reviewCount_other", reviewCount)
+                  : null,
+              ].filter(Boolean).join(" · ")
             )}
           </div>
         </div>
@@ -150,13 +170,13 @@ export function HomeDashboard() {
           href="/new"
           className="inline-flex items-center gap-1.5 bg-primary-600 text-white pl-3 pr-4 py-2 rounded-full text-[13.5px] font-semibold hover:bg-primary-700 transition-colors no-underline"
         >
-          <Plus className="w-4 h-4" /> New thesis
+          <Plus className="w-4 h-4" /> {t("home.newThesis")}
         </Link>
       </div>
 
       {projects && projects.length === 0 && (
         <div className="text-center py-12 text-ink-500 bg-white border border-ink-200 rounded-2xl">
-          No projects yet. Click the New thesis button to get started.
+          {t("home.empty")}
         </div>
       )}
 
@@ -191,8 +211,16 @@ function Hero({
   loading: boolean;
   meLoading: boolean;
 }) {
+  const t = useT();
+  // The name sits INSIDE the greeting and is a skeleton while /auth/me is in
+  // flight, so it can't be a plain substitution. Splitting the translated
+  // string on its placeholder keeps each locale's word order while still
+  // letting a React node occupy the slot — "Hello, {name} —" and
+  // "Chào {name} —" both work, and a locale that puts the name first would too.
+  const [helloBefore, helloAfter] = t("home.hello").split("{name}");
   const focusModule = current ? (current.focus ?? current.current_module) : null;
-  const focusLabel = MODULES.find(m => m.id === focusModule)?.label;
+  const focusKey = MODULES.find(m => m.id === focusModule)?.labelKey;
+  const focusLabel = focusKey ? t(focusKey) : undefined;
 
   return (
     <section
@@ -214,26 +242,26 @@ function Hero({
       <div className="relative flex flex-col lg:flex-row lg:items-end gap-8">
         <div className="flex-1 min-w-0">
           <div className="text-xs uppercase tracking-[0.18em] text-white/60 font-bold">
-            {dayPartGreeting()}
+            {t(greetingKey())}
           </div>
           {/* Everything below the greeting swings on whether the user already
               has a thesis, so it stays skeletoned until /projects/list lands —
               otherwise the hero asserts "ready to start your thesis?" to
               someone mid-M3 and then rewrites itself a moment later. */}
           <h1 className="mt-2 mb-1.5 text-[34px] font-extrabold tracking-tight font-serif leading-[1.1]">
-            Hello,{" "}
+            {helloBefore}
             {meLoading ? (
               <Skeleton tone="dark" className="inline-block align-baseline h-[26px] w-32 translate-y-[3px] rounded-lg" />
             ) : (
               firstName
-            )}{" "}
-            —
+            )}
+            {helloAfter}
             <br />
             {loading ? (
               <Skeleton tone="dark" className="inline-block h-[30px] w-[340px] max-w-full mt-1.5 rounded-lg" />
             ) : (
               <span className="text-white/75 font-semibold">
-                {current ? "pick up where you left off?" : "ready to start your thesis?"}
+                {current ? t("home.resumePrompt") : t("home.startPrompt")}
               </span>
             )}
           </h1>
@@ -244,12 +272,13 @@ function Hero({
                 <Skeleton tone="dark" className="h-3 w-2/3 max-w-[320px]" />
               </div>
             ) : current ? (
-              <>
-                You&apos;re in <span className="font-semibold text-white">{focusModule}</span>
-                {focusLabel ? ` · ${focusLabel}` : ""} on “{current.name}” — resume to keep going.
-              </>
+              t("home.inModule", {
+                module: focusModule ?? "",
+                label: focusLabel ?? "",
+                name: current.name,
+              })
             ) : (
-              "Five modules from topic to final draft — one chat thread, your sources, page-cited."
+              t("home.blurb")
             )}
           </div>
           <div className="flex flex-wrap gap-2.5 mt-4">
@@ -265,7 +294,7 @@ function Hero({
                     href={`/chat/projects/${current.id}`}
                     className="inline-flex items-center gap-2 bg-white text-ink-900 px-5 py-[11px] rounded-full text-sm font-semibold no-underline hover:bg-ink-100 transition-colors"
                   >
-                    <Play className="w-3.5 h-3.5" /> Resume current thesis
+                    <Play className="w-3.5 h-3.5" /> {t("home.resume")}
                   </Link>
                 )}
                 <Link
@@ -276,7 +305,7 @@ function Hero({
                       : "inline-flex items-center gap-2 bg-white text-ink-900 px-5 py-[11px] rounded-full text-sm font-semibold hover:bg-ink-100 transition-colors no-underline"
                   }
                 >
-                  <Plus className="w-4 h-4" /> Start a new thesis
+                  <Plus className="w-4 h-4" /> {t("home.startNew")}
                 </Link>
               </>
             )}
@@ -289,7 +318,7 @@ function Hero({
         <div className="w-full lg:w-[260px] shrink-0 rounded-2xl border border-white/[0.18] bg-white/[0.08] px-[18px] py-4 backdrop-blur">
           <div className="flex items-center gap-1.5 text-[11px] text-white/70 font-bold uppercase tracking-[0.08em]">
             <Zap className="w-3 h-3" />
-            <span>Credit balance</span>
+            <span>{t("home.credits")}</span>
           </div>
           <div className="flex items-baseline gap-1.5 mt-1 tabular-nums">
             {meLoading ? (
@@ -299,14 +328,14 @@ function Hero({
                 {credit !== undefined ? credit.toLocaleString() : "—"}
               </span>
             )}
-            <span className="text-xs text-white/60">credits</span>
+            <span className="text-xs text-white/60">{t("home.creditsUnit")}</span>
           </div>
           <div className="flex gap-1.5 mt-3">
             <Link
               href="/credit"
               className="flex-1 text-center px-2.5 py-[7px] rounded-full bg-white text-ink-900 text-[12.5px] font-bold no-underline hover:bg-ink-100 transition-colors"
             >
-              + Top up
+              {t("home.topUp")}
             </Link>
           </div>
         </div>
@@ -326,6 +355,7 @@ function StatsRow({
   reviewCount: number;
   loading: boolean;
 }) {
+  const t = useT();
   const modulesDone =
     projects?.reduce((acc, p) => acc + MODULES.filter(m => moduleStatus(p, m) === "done").length, 0) ?? 0;
   const modulesActive =
@@ -336,10 +366,11 @@ function StatsRow({
   // progress" and bright emerald/amber/red — the academic palette only
   // permits primary + ink + a single muted ochre/moss for status.
   const cells = [
-    { icon: Clock3,        v: projects?.length ?? "—", l: "Active theses",     sub: "across your account",                              chip: "bg-ink-100 text-ink-700" },
-    { icon: CheckCircle2,  v: modulesDone,             l: "Modules completed", sub: "of 5 per thesis",                                  chip: "bg-[#EEF4EE] text-[#3A5740]" },
-    { icon: Loader2,       v: modulesActive,           l: "In progress",       sub: "modules being worked",                             chip: "bg-primary-50 text-primary-700" },
-    { icon: AlertTriangle, v: reviewCount,             l: "Needs review",      sub: reviewCount ? "open ⚠ flags" : "all clear",         chip: "bg-[#F5EFE2] text-[#6E5121]" },
+    { icon: Clock3,        v: projects?.length ?? "—", l: t("home.stat.active"),   sub: t("home.stat.activeSub"),   chip: "bg-ink-100 text-ink-700" },
+    { icon: CheckCircle2,  v: modulesDone,             l: t("home.stat.done"),     sub: t("home.stat.doneSub"),     chip: "bg-[#EEF4EE] text-[#3A5740]" },
+    { icon: Loader2,       v: modulesActive,           l: t("home.stat.progress"), sub: t("home.stat.progressSub"), chip: "bg-primary-50 text-primary-700" },
+    { icon: AlertTriangle, v: reviewCount,             l: t("home.stat.review"),
+      sub: reviewCount ? t("home.stat.reviewOpen") : t("home.stat.reviewClear"),   chip: "bg-[#F5EFE2] text-[#6E5121]" },
   ];
 
   return (
@@ -383,10 +414,12 @@ export const SEGMENT_STYLE: Record<ModuleDisplayStatus, string> = {
 };
 
 function ProjectCard({ p }: { p: Project }) {
+  const t = useT();
   const review = needsReview(p);
   const pct = progressPct(p);
   const focusModule = p.focus ?? p.current_module;
-  const focusLabel = MODULES.find(m => m.id === focusModule)?.label;
+  const focusKey = MODULES.find(m => m.id === focusModule)?.labelKey;
+  const focusLabel = focusKey ? t(focusKey) : undefined;
 
   return (
     <Link
@@ -395,12 +428,12 @@ function ProjectCard({ p }: { p: Project }) {
     >
       <div className="flex items-center gap-2 mb-2.5">
         <span className="text-[11px] text-ink-500 font-bold tracking-[0.06em] uppercase truncate max-w-[60%]">
-          {p.field ?? "No field set"}
+          {p.field ?? t("home.noField")}
         </span>
         <span className="flex-1" />
         {review && (
           <span className="inline-flex items-center gap-1 px-2.5 py-[3px] rounded-full text-[11.5px] font-semibold bg-[var(--pause-bg)] text-[var(--pause-fg)] whitespace-nowrap shrink-0">
-            <AlertTriangle className="w-3 h-3" /> Needs review
+            <AlertTriangle className="w-3 h-3" /> {t("home.needsReview")}
           </span>
         )}
         <span className="text-xs text-ink-500 font-semibold tabular-nums shrink-0">{pct}%</span>
@@ -420,7 +453,7 @@ function ProjectCard({ p }: { p: Project }) {
           return (
             <span
               key={m.id}
-              title={`${m.id} · ${m.label} · ${s.replace("_", " ")}`}
+              title={`${m.id} · ${t(m.labelKey)} · ${s.replace("_", " ")}`}
               className={`flex-1 px-1 py-1.5 rounded-lg text-center text-[11px] font-bold font-serif inline-flex items-center justify-center gap-1 ${SEGMENT_STYLE[s]}`}
             >
               {m.id}
@@ -432,14 +465,14 @@ function ProjectCard({ p }: { p: Project }) {
       </div>
 
       <div className="mt-3.5 pt-3.5 border-t border-dashed border-ink-200 flex items-center gap-2">
-        <span className="text-[11.5px] text-ink-500 font-semibold uppercase tracking-[0.04em]">Next</span>
+        <span className="text-[11.5px] text-ink-500 font-semibold uppercase tracking-[0.04em]">{t("home.next")}</span>
         <span className="text-[13px] text-ink-800 font-medium flex-1 truncate">
-          Continue {focusModule}{focusLabel ? ` · ${focusLabel}` : ""}
+          {t("home.continue", { module: focusModule })}{focusLabel ? ` · ${focusLabel}` : ""}
         </span>
         <ArrowRight className="w-3.5 h-3.5 text-primary-600 shrink-0" />
       </div>
       <div className="text-[11px] text-ink-400 mt-1.5">
-        last touched {relativeTime(p.updated_at)} · {focusModule}
+        {t("home.lastTouched", { when: relativeTime(p.updated_at, t) })} · {focusModule}
       </div>
     </Link>
   );
@@ -484,17 +517,19 @@ function ProjectCardSkeleton() {
 // There's no activity-event API yet, so the timeline shows each project's
 // latest state (most recently touched first) rather than invented events.
 function RecentActivity({ projects }: { projects: Project[] }) {
+  const t = useT();
   const items = projects.slice(0, 5);
   return (
     <div className="bg-white rounded-[18px] border border-ink-200 px-[22px] py-5">
       <div className="flex items-center gap-2 mb-4">
-        <h3 className="m-0 text-base font-extrabold tracking-tight text-ink-900">Recent activity</h3>
+        <h3 className="m-0 text-base font-extrabold tracking-tight text-ink-900">{t("home.recent")}</h3>
       </div>
       <ol className="m-0 p-0 list-none relative">
         <span className="absolute left-[13px] top-3 bottom-3 w-0.5 bg-ink-100" aria-hidden />
         {items.map((p, i) => {
           const focusModule = p.focus ?? p.current_module;
-          const focusLabel = MODULES.find(m => m.id === focusModule)?.label;
+          const focusKey = MODULES.find(m => m.id === focusModule)?.labelKey;
+          const focusLabel = focusKey ? t(focusKey) : undefined;
           const review = needsReview(p);
           return (
             <li key={p.id} className={`relative flex gap-3 ${i === items.length - 1 ? "" : "pb-3.5"}`}>
@@ -507,7 +542,7 @@ function RecentActivity({ projects }: { projects: Project[] }) {
               </span>
               <div className="flex-1 min-w-0">
                 <div className="text-[13.5px] text-ink-900 leading-relaxed truncate">
-                  {review ? "Flagged for review in " : "Working in "}
+                  {review ? t("home.flaggedIn") : t("home.workingIn")}{" "}
                   <span className="font-semibold">{focusModule}{focusLabel ? ` · ${focusLabel}` : ""}</span>
                 </div>
                 <div className="text-[11.5px] text-ink-500 mt-0.5 flex items-center gap-1.5 min-w-0">
@@ -515,7 +550,7 @@ function RecentActivity({ projects }: { projects: Project[] }) {
                   <span aria-hidden>·</span>
                   <span className="font-medium text-ink-700 truncate">{p.name}</span>
                   <span aria-hidden>·</span>
-                  <span className="shrink-0">{relativeTime(p.updated_at)}</span>
+                  <span className="shrink-0">{relativeTime(p.updated_at, t)}</span>
                 </div>
               </div>
             </li>
@@ -529,13 +564,14 @@ function RecentActivity({ projects }: { projects: Project[] }) {
 
 /* ---------- Pro tip — teaches the read-vs-mutate focus rule ---------- */
 function ProTip() {
+  const t = useT();
   return (
     <div className="rounded-[18px] px-5 py-[18px] border border-primary-100 bg-primary-50 self-start">
       <div className="flex items-center gap-1.5 text-[11px] text-primary-700 font-bold tracking-[0.08em] uppercase">
-        <Sparkles className="w-3 h-3" /> Pro tip
+        <Sparkles className="w-3 h-3" /> {t("home.proTip")}
       </div>
       <div className="text-sm font-semibold mt-1 leading-relaxed text-ink-900 font-serif">
-        You can ask about any module from any other — focus only shifts on an edit, not a read.
+        {t("home.proTipBody")}
       </div>
       <div className="flex gap-2 mt-3 flex-wrap">
         <span className="inline-flex items-center px-3 py-1.5 rounded-full text-[13px] font-medium bg-white text-ink-700 border border-ink-200">

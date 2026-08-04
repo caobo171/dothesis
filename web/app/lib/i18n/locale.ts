@@ -11,7 +11,12 @@ import { vi } from "./messages/vi";
 export const LOCALES = ["en", "vi"] as const;
 export type Locale = (typeof LOCALES)[number];
 
-export const DEFAULT_LOCALE: Locale = "en";
+// Vietnamese, not English (2026-08-04). The product is Vietnamese-primary: a
+// student on a VPN, a travelling laptop, or a locked-down browser where Intl
+// throws used to land on an English UI for a Vietnamese-language thesis tool.
+// The default is what you get when we know nothing, so it should be the
+// likeliest reader — English is now an explicit signal, not the fallback.
+export const DEFAULT_LOCALE: Locale = "vi";
 
 /** Cookie name. Read server-side on every request; written once client-side. */
 export const LOCALE_COOKIE = "dothesis_lang";
@@ -44,6 +49,11 @@ const VI_TIMEZONES = new Set(["Asia/Ho_Chi_Minh", "Asia/Saigon"]);
 
 export function localeFromTimeZone(tz: string | undefined | null): Locale {
   if (tz && VI_TIMEZONES.has(tz)) return "vi";
+  // A timezone we can read and that isn't Vietnam is real evidence of a reader
+  // elsewhere, so it selects English. NO timezone is not evidence of anything —
+  // that falls through to the default, which is why the two cases are separate
+  // rather than one `return tz ? "en" : "vi"`.
+  if (tz) return "en";
   return DEFAULT_LOCALE;
 }
 
@@ -77,7 +87,61 @@ export function writeLocaleCookie(locale: Locale): void {
   document.cookie = `${LOCALE_COOKIE}=${locale}; path=/; max-age=${COOKIE_MAX_AGE}; samesite=lax`;
 }
 
+/** Values a message can interpolate. Numbers are stringified by the caller's
+ *  locale rules only where a component formats them — `t` does not guess. */
+export type TParams = Record<string, string | number>;
+
+const _PLACEHOLDER = /\{(\w+)\}/g;
+
+/**
+ * Substitute `{name}` placeholders.
+ *
+ * Interpolation rather than concatenation at the call site is the whole reason
+ * this exists: `count + " paragraphs"` hard-codes English word order, and the
+ * moment a language puts its number elsewhere the sentence is wrong with no
+ * compiler to catch it. Keeping the variable INSIDE the translated string lets
+ * each locale place it wherever its grammar wants.
+ *
+ * An unknown placeholder is left visible rather than blanked. A stray
+ * "{count}" on screen is a loud bug someone reports in a minute; a silently
+ * empty gap reads as intentional and can ship for months.
+ */
+function interpolate(raw: string, params?: TParams): string {
+  if (!params) return raw;
+  return raw.replace(_PLACEHOLDER, (whole, name: string) =>
+    name in params ? String(params[name]) : whole);
+}
+
 /** Look up one string. Falls back to English, then to the key itself. */
-export function translate(locale: Locale, key: MessageKey): string {
-  return CATALOGUES[locale]?.[key] ?? CATALOGUES.en[key] ?? key;
+export function translate(locale: Locale, key: MessageKey, params?: TParams): string {
+  const raw = CATALOGUES[locale]?.[key] ?? CATALOGUES.en[key] ?? key;
+  return interpolate(raw, params);
+}
+
+/**
+ * Pick between a singular and a plural key.
+ *
+ * Vietnamese does not inflect nouns for number — "3 chương" and "1 chương" use
+ * the same word — so it always takes the `other` form, and its catalogue
+ * entries for the pair are identical by design rather than by oversight.
+ * English needs the split. Both keys are real MessageKeys, so a missing
+ * translation is a BUILD error; deriving "key_one"/"key_other" by string
+ * concatenation would have moved that failure to runtime.
+ */
+export function pluralKey(
+  locale: Locale, count: number, one: MessageKey, other: MessageKey,
+): MessageKey {
+  if (locale === "vi") return other;
+  return Math.abs(count) === 1 ? one : other;
+}
+
+/** Plural-aware lookup. `count` is always available to the message as {count}. */
+export function translatePlural(
+  locale: Locale,
+  one: MessageKey,
+  other: MessageKey,
+  count: number,
+  params?: TParams,
+): string {
+  return translate(locale, pluralKey(locale, count, one, other), { count, ...params });
 }
