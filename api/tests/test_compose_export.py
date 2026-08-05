@@ -142,5 +142,9 @@ def test_merge_conclusion_relabels_discussion(monkeypatch):
         "vi", merge_conclusion=True,
     )
     assert "conclusion" not in seen            # dropped, not composed twice
-    assert seen[-1] == "discussion"
+    # `seen` is append order across a ThreadPoolExecutor, so it says WHICH
+    # chapters were composed, never in what order they finished. Ordering is
+    # asserted below, on the returned sections, which compose_sections does
+    # guarantee.
+    assert "discussion" in seen
     assert sections[-1]["title"] == "Chương 5 — Kết luận"

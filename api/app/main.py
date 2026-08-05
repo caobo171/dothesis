@@ -114,6 +114,23 @@ def create_app() -> FastAPI:
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
+        # The document tools answer with a FILE, so their counts have nowhere to
+        # ride but headers. A cross-origin response hides every header not named
+        # here — allow_headers governs the REQUEST — so without this the web app
+        # downloads a .docx and can say nothing about what changed in it.
+        expose_headers=[
+            "Content-Disposition",
+            "X-Credits-Charged",
+            "X-Paragraphs-Rewritten",
+            "X-Citations-Resolved",
+            "X-Citations-Unresolved",
+            "X-Citations-Weak",
+            "X-References-Uncited",
+            "X-Citations-Added",
+            "X-Citations-Linked",
+            "X-Claims-Marked",
+            "X-References",
+        ],
     )
 
     @app.get("/api/v1/health")

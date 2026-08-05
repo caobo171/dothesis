@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { FileText, Loader2, Download } from "lucide-react";
 
+import { useT, useTn } from "@/app/lib/i18n/LocaleProvider";
+
 import { scanDocument, humanizeDocument, type DocScan } from "./use-tool";
 import { RunButton, ToolError, ToolCaveat } from "./shell";
 
@@ -27,6 +29,8 @@ export function HumanizeDocument() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ filename: string; credits: number | null; rewritten: number | null } | null>(null);
+  const t = useT();
+  const tn = useTn();
 
   const pick = async (f: File | undefined | null) => {
     if (!f) return;
@@ -36,9 +40,9 @@ export function HumanizeDocument() {
     setFile(f);
     setBusy(true);
     try {
-      setScan(await scanDocument(f));
+      setScan(await scanDocument(f, t));
     } catch (e) {
-      setError((e as Error)?.message || "Could not read that document.");
+      setError((e as Error)?.message || t("tools.doc.readFailed"));
       setFile(null);
     } finally {
       setBusy(false);
@@ -50,7 +54,7 @@ export function HumanizeDocument() {
     setRunning(true);
     setError(null);
     try {
-      const r = await humanizeDocument(file);
+      const r = await humanizeDocument(file, t);
       // Hand the file to the browser via an object URL. No navigation, so the
       // summary below stays on screen while the download saves.
       const url = URL.createObjectURL(r.blob);
@@ -63,7 +67,7 @@ export function HumanizeDocument() {
       URL.revokeObjectURL(url);
       setDone({ filename: r.filename, credits: r.credits, rewritten: r.rewritten });
     } catch (e) {
-      setError((e as Error)?.message || "The rewrite did not complete.");
+      setError((e as Error)?.message || t("tools.humanize.errFailed"));
     } finally {
       setRunning(false);
     }
@@ -87,10 +91,10 @@ export function HumanizeDocument() {
         >
           {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
                 : <FileText className="w-3.5 h-3.5" aria-hidden />}
-          {busy ? "Reading…" : "Choose a .docx"}
+          {busy ? t("tools.file.reading") : t("tools.doc.choose")}
         </button>
         <span className="text-[11.5px] text-ink-400 truncate min-w-0">
-          {file ? file.name : "Word only — a PDF has no editable paragraphs"}
+          {file ? file.name : t("tools.doc.wordOnly")}
         </span>
       </div>
 
@@ -99,54 +103,65 @@ export function HumanizeDocument() {
       {scan?.ok && !done && (
         <div className="rounded-xl border border-ink-200 bg-ink-50 p-4">
           <div className="text-[13px] font-bold text-ink-900 mb-2">
-            {scan.body_paragraphs} paragraphs will be rewritten
+            {tn("tools.doc.willRewrite_one", "tools.doc.willRewrite_other", scan.body_paragraphs)}
           </div>
           <ul className="m-0 p-0 list-none text-[12.5px] text-ink-600 space-y-1">
-            <li>· {scan.headings} headings left untouched — they're structure, not prose</li>
-            <li>· {scan.tables} tables left untouched — they're data</li>
-            <li>· {scan.short_or_captions} captions and short lines skipped</li>
+            <li>· {t("tools.doc.headings", { count: scan.headings })}</li>
+            <li>· {t("tools.doc.tables", { count: scan.tables })}</li>
+            <li>· {t("tools.doc.captions", { count: scan.short_or_captions })}</li>
           </ul>
+          {/* The batch count was bolded via a nested <span>, which forced the
+              sentence to be assembled in English word order. It is one string
+              now so each locale can put the number where its grammar wants. */}
           <div className="mt-3 pt-3 border-t border-ink-200 text-[12.5px] text-ink-700">
-            Runs as <span className="font-semibold">{scan.passages}</span>{" "}
-            {scan.passages === 1 ? "rewrite" : "rewrites"} (paragraphs are batched
-            by section). You're charged for the tokens actually used — the exact
-            amount lands in Transactions.
+            {tn("tools.doc.runsAs_one", "tools.doc.runsAs_other", scan.passages)}
           </div>
           <div className="mt-3.5">
             <RunButton
               busy={running}
               disabled={scan.body_paragraphs === 0}
               onClick={() => void run()}
-              idleLabel="Humanize document"
-              busyLabel="Rewriting…"
+              idleLabel={t("tools.doc.run")}
+              busyLabel={t("tools.humanize.running")}
             />
           </div>
         </div>
       )}
 
       {scan?.ok && scan.body_paragraphs === 0 && (
-        <ToolError message="Nothing to rewrite — this document is headings, tables and captions only." />
+        <ToolError message={t("tools.doc.errEmpty")} />
       )}
 
       {done && (
         <div className="rounded-xl border border-[#CFE0D2] bg-[#EEF4EE] p-4">
           <div className="flex items-center gap-2 text-[13.5px] font-bold text-[#3A5740]">
             <Download className="w-4 h-4" aria-hidden />
-            {done.filename} downloaded
+            {t("tools.doc.downloaded", { name: done.filename })}
           </div>
+          {/* Built from whole translated clauses joined by " · ", not by
+              concatenating an English fragment onto a number — the old version
+              ended with a bare "." that belonged to the previous sentence. */}
           <div className="mt-1.5 text-[12.5px] text-[#3A5740]">
-            {done.rewritten !== null && `${done.rewritten} paragraphs rewritten`}
-            {done.credits !== null && done.credits > 0 && ` · ${done.credits} credits`}
-            . Headings, tables and numbering are unchanged.
+            {[
+              done.rewritten !== null
+                ? tn("tools.doc.rewritten_one", "tools.doc.rewritten_other", done.rewritten)
+                : null,
+              done.credits !== null && done.credits > 0
+                ? t("tools.credits", { count: done.credits })
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            {". "}
+            {t("tools.doc.unchanged")}
           </div>
         </div>
       )}
 
       <ToolCaveat>
-        Tables and headings are never rewritten, and any batch whose rewrite would
-        have altered a number or citation keeps its original text. One real loss:
-        bold or italic <em>inside</em> a sentence isn't preserved — paragraph
-        styles, heading levels, tables and numbering are.
+        {t("tools.doc.caveatBefore")}
+        <em>{t("tools.doc.caveatEm")}</em>
+        {t("tools.doc.caveatAfter")}
       </ToolCaveat>
     </div>
   );

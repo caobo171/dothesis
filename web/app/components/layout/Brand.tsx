@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 
 // The mark is the shared quill-and-book icon from the Survify brand family
 // (copied out of .design-spec/project/assets/survify-logo-short.png), not the
@@ -34,6 +38,10 @@ type BrandProps = {
 };
 
 export function Brand({ collapsed = false }: BrandProps) {
+  // The wordmark "DoThesis" is a name and never translates; the tagline under it
+  // is ordinary product copy and does — it was the one English line sitting above
+  // an otherwise Vietnamese nav.
+  const t = useT();
   return (
     <Link href="/" className="flex items-center gap-3 no-underline">
       <BrandMark size={38} />
@@ -42,7 +50,7 @@ export function Brand({ collapsed = false }: BrandProps) {
           <span className="text-base font-extrabold tracking-tight text-ink-900">
             Do<span className="text-primary-600">Thesis</span>
           </span>
-          <span className="text-[11px] font-medium text-ink-500">Draft with conviction</span>
+          <span className="text-[11px] font-medium text-ink-500">{t("shell.tagline")}</span>
         </div>
       )}
     </Link>

@@ -147,6 +147,122 @@ def test_a_network_failure_is_never_reported_as_not_found(user, monkeypatch):
     assert "no conclusion" in b["detail"].lower()
 
 
+# --- citation verification, whole list --------------------------------------
+# This is the flow a student actually has: attach the finished thesis, ask which
+# of its sources are real. The risks are the mirror image of the single check —
+# checking things that are NOT references (noise the student learns to ignore)
+# and silently checking only some of them (a clean bill of health for a list
+# that was never fully read).
+
+REF_DOC = """CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU
+
+Chương 4 trình bày kết quả xử lý dữ liệu khảo sát năm 2023 từ những du khách
+đã trực tiếp trải nghiệm sản phẩm City Tour Phố Cổ.
+
+TÀI LIỆU THAM KHẢO
+
+[1] Nguyen, T. (2021). Service quality in heritage tourism. Tourism Review.
+[2] Vaswani, A. (2017). Attention is all you need. NeurIPS.
+[3] Hair, J. F. (2019). Multivariate data analysis. Cengage.
+"""
+
+
+def test_a_reference_list_is_split_into_its_entries():
+    from app.routers.tools import extract_references
+
+    refs = extract_references(REF_DOC)
+    assert len(refs) == 3
+    # The numbering is stripped — "[1] " is formatting, not part of the citation.
+    assert refs[0].startswith("Nguyen, T. (2021)")
+
+
+def test_body_prose_before_the_heading_is_not_checked():
+    """The chapter text above carries a year ("dữ liệu khảo sát năm 2023"), so
+    without the heading cut it would be looked up as if it were a citation."""
+    from app.routers.tools import extract_references
+
+    refs = extract_references(REF_DOC)
+    assert not any("City Tour" in r for r in refs)
+
+
+def test_a_reference_wrapped_across_lines_is_rejoined():
+    """PDF extraction breaks one reference over several lines. Checking each
+    fragment separately would report three failures for one real source."""
+    from app.routers.tools import extract_references
+
+    refs = extract_references(
+        "References\n\nNguyen, T., & Tran, H.\nService quality in heritage\n"
+        "tourism contexts. Tourism Review, 2021.\n")
+    assert len(refs) == 1
+    assert "Tourism Review, 2021" in refs[0]
+
+
+def test_lines_without_a_year_or_doi_are_left_alone():
+    from app.routers.tools import extract_references
+
+    assert extract_references("References\n\nSee the appendix.\nAcknowledgements\n") == []
+
+
+def test_every_entry_gets_the_same_verdict_the_single_check_would_give(user, monkeypatch):
+    import app.routers.tools as t
+    monkeypatch.setattr(t, "_crossref_by_text", lambda q: {
+        "DOI": "10.1/x", "title": ["Something Vaguely Similar"],
+        "author": [], "issued": {"date-parts": [[2020]]}})
+
+    b = _as(user).post("/api/v1/tools/verify-citations",
+                       json={"access_token": "x", "text": REF_DOC}).json()
+    assert b["ok"] is True
+    assert b["detected"] == 3
+    assert b["checked"] == 3
+    assert b["truncated"] is False
+    # Fuzzy stays fuzzy in bulk. A batch result that quietly upgraded these to
+    # "confirmed" would be the whole danger of this endpoint.
+    assert all(i["matched_by"] == "search" for i in b["items"])
+    assert all("Fuzzy" in i["warning"] for i in b["items"])
+    # Each verdict is attributable to the line it came from.
+    assert b["items"][0]["reference"].startswith("Nguyen, T. (2021)")
+
+
+def test_a_long_list_reports_that_it_was_truncated(user, monkeypatch):
+    import app.routers.tools as t
+    monkeypatch.setattr(t, "_crossref_by_text", lambda q: None)
+
+    doc = "References\n\n" + "".join(
+        f"Author{i}, A. (20{i:02d}). A paper about widgets number {i}. Journal.\n"
+        for i in range(60))
+    b = _as(user).post("/api/v1/tools/verify-citations",
+                       json={"access_token": "x", "text": doc}).json()
+    assert b["detected"] == 60
+    assert b["checked"] == 50
+    assert b["truncated"] is True
+
+
+def test_a_full_length_thesis_is_accepted(user, monkeypatch):
+    """The mode exists to take a whole thesis, and a 100-page Vietnamese one
+    extracts to ~200k characters. The first cap was 40k, which 422'd the exact
+    input the attach button produces."""
+    import app.routers.tools as t
+    monkeypatch.setattr(t, "_crossref_by_text", lambda q: None)
+
+    filler = "Chương 4 trình bày kết quả xử lý dữ liệu khảo sát.\n" * 4000
+    doc = filler + "\nTÀI LIỆU THAM KHẢO\n\nNguyen, T. (2021). Heritage tourism. Review.\n"
+    assert len(doc) > 40000
+    r = _as(user).post("/api/v1/tools/verify-citations",
+                       json={"access_token": "x", "text": doc})
+    assert r.status_code == 200, r.text
+    assert r.json()["detected"] == 1
+
+
+def test_a_document_with_no_reference_list_says_so(user):
+    b = _as(user).post("/api/v1/tools/verify-citations",
+                       json={"access_token": "x",
+                             "text": "Chương 4 trình bày kết quả xử lý dữ liệu."}).json()
+    assert b["ok"] is True
+    assert b["detected"] == 0
+    assert b["items"] == []
+    assert "No references found" in b["detail"]
+
+
 # --- transport ---------------------------------------------------------------
 
 @pytest.mark.parametrize("path,body", [

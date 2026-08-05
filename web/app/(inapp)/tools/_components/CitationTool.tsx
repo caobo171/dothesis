@@ -3,9 +3,13 @@
 import { useState } from "react";
 import { CheckCircle2, HelpCircle, XCircle } from "lucide-react";
 
+import { useT } from "@/app/lib/i18n/LocaleProvider";
+
+import { CitationList } from "./CitationList";
+import { CiteDocument } from "./CiteDocument";
 import { useTool } from "./use-tool";
 import {
-  ToolPanel, ToolTextarea, RunButton, ToolError, ToolCaveat, FileDrop,
+  ToolPanel, ToolTextarea, RunButton, ToolError, ToolCaveat,
 } from "./shell";
 
 type CitationOut = {
@@ -23,10 +27,18 @@ type CitationOut = {
 };
 
 export function CitationTool() {
+  // Three ways in, and the .docx one leads because it is the job students
+  // actually arrive with — the finished thesis, wanting its citations sorted.
+  //
+  // History: this was one box that checked one reference, and students attached
+  // whole theses to it. That could never work (the server caps the field at 2000
+  // characters, and only the first 400 reach CrossRef anyway, so a chapter came
+  // back "probably fine" against an unrelated paper). Documents now go to the
+  // .docx mode, which resolves what is cited and cites what is not.
+  const [mode, setMode] = useState<"docx" | "list" | "one">("docx");
   const [reference, setReference] = useState("");
-  const [fileBusy, setFileBusy] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
   const { result, error, busy, run } = useTool<CitationOut>("/tools/verify-citation");
+  const t = useT();
 
   // Three outcomes, not two. A DOI lookup is exact; a bibliographic search is
   // fuzzy — CrossRef returns its best match for ANY query, so a hit means
@@ -36,50 +48,64 @@ export function CitationTool() {
 
   return (
     <ToolPanel
-      title="Citation check"
-      blurb="Check a reference against CrossRef — does this source actually exist? Paste a DOI, a URL, or the whole formatted reference; it works out which it is."
+      title={t("tools.citation.name")}
+      blurb={t("tools.citation.blurb")}
     >
       <div className="flex flex-col gap-4">
-        {/* A reference list usually arrives as part of a document, so the same
-            attach control applies — extract, then trim to the one entry. */}
-        <FileDrop
-          onText={setReference}
-          busy={fileBusy}
-          setBusy={setFileBusy}
-          onError={setFileError}
-          hint="PDF, Word or text"
-        />
-        <ToolError message={fileError} />
+        <div className="inline-flex self-start rounded-full border border-ink-200 p-0.5 bg-white">
+          {(["docx", "list", "one"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              aria-pressed={mode === m}
+              className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold transition-colors ${
+                mode === m ? "bg-primary-600 text-white" : "text-ink-600 hover:text-ink-900"
+              }`}
+            >
+              {m === "docx"
+                ? t("tools.citation.modeDocx")
+                : m === "list"
+                  ? t("tools.citation.modeList")
+                  : t("tools.citation.modeOne")}
+            </button>
+          ))}
+        </div>
+
+        {mode === "docx" && <CiteDocument />}
+        {mode === "list" && <CitationList />}
+
+        {/* No attach control in single mode: a file is never one reference, and
+            offering the button here is what sent whole theses at this box. */}
+        {mode === "one" && (
         <ToolTextarea
-          label="Reference"
+          label={t("tools.citation.refLabel")}
           value={reference}
           onChange={setReference}
           rows={3}
-          placeholder="10.1016/j.chb.2021.106789  ·  or  ·  Nguyen, T. (2021). Title of the paper. Journal Name."
+          placeholder={t("tools.citation.placeholder")}
         />
+        )}
 
+        {mode === "one" && (
         <div>
           <RunButton
             busy={busy}
-            disabled={reference.trim().length < 3 || fileBusy}
+            disabled={reference.trim().length < 3}
             onClick={() => void run({ reference })}
-            idleLabel="Check"
-            busyLabel="Checking…"
+            idleLabel={t("tools.citation.run")}
+            busyLabel={t("tools.citation.running")}
           />
         </div>
-
-        <ToolError message={error} />
-
-        {result && !result.ok && (
-          <ToolError
-            message={
-              result.detail ||
-              "CrossRef could not be reached, so this reference was NOT checked — that is not the same as it being fake."
-            }
-          />
         )}
 
-        {result?.ok && (
+        {mode === "one" && <ToolError message={error} />}
+
+        {mode === "one" && result && !result.ok && (
+          <ToolError message={result.detail || t("tools.citation.errUnreachable")} />
+        )}
+
+        {mode === "one" && result?.ok && (
           <div className="rounded-xl border border-ink-200 bg-ink-50 p-4">
             <div className="flex items-start gap-2.5">
               {!result.found ? (
@@ -92,10 +118,10 @@ export function CitationTool() {
               <div className="min-w-0">
                 <div className="text-[14px] font-bold text-ink-900">
                   {!result.found
-                    ? "No match found"
+                    ? t("tools.citation.none")
                     : exact
-                      ? "Confirmed — exact DOI match"
-                      : "Probable match (fuzzy search, not proof)"}
+                      ? t("tools.citation.exact")
+                      : t("tools.citation.probable")}
                 </div>
                 {result.found && (
                   <div className="mt-1.5 text-[13px] text-ink-800 leading-relaxed">
@@ -125,13 +151,10 @@ export function CitationTool() {
           </div>
         )}
 
-        <ToolCaveat>
-          A DOI is an exact lookup and the answer is definitive. Without one this
-          falls back to a bibliographic search, which is fuzzy — CrossRef returns
-          its best match for any query, so a hit is evidence something similar
-          exists, not proof this reference is real. Check the title and authors
-          against what you cited.
-        </ToolCaveat>
+        {/* The .docx mode carries its own caveat (what it will and will not
+            insert); this one is about CrossRef lookups, which is what the two
+            checking modes do. */}
+        {mode !== "docx" && <ToolCaveat>{t("tools.citation.caveat")}</ToolCaveat>}
       </div>
     </ToolPanel>
   );

@@ -23,7 +23,9 @@ import clsx from "clsx";
 import Link from "next/link";
 import { Fragment, type PropsWithChildren, useEffect, useState } from "react";
 
+import { LocaleSwitcher } from "@/app/components/LocaleSwitcher";
 import { apiFetch } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 import { tokenStore } from "@/app/lib/tokenStore";
 import { useMe } from "@/app/lib/use-me";
 
@@ -57,6 +59,10 @@ export function SidebarLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const me = useMe();
+  // Section/item labels arrive already translated from useSidebarSections; `t`
+  // here is only for the chrome this component owns (collapse, sign out, and the
+  // sr-only labels), so the two never translate the same string twice.
+  const t = useT();
 
   useEffect(() => {
     setSelectedHref(window.location.pathname + window.location.search);
@@ -262,7 +268,7 @@ export function SidebarLayout({
                 >
                   <div className="absolute left-full top-0 flex w-16 justify-center pt-5">
                     <button type="button" className="-m-2.5 p-2.5" onClick={() => setSidebarOpen(false)}>
-                      <span className="sr-only">Close sidebar</span>
+                      <span className="sr-only">{t("shell.closeSidebar")}</span>
                       <XMarkIcon className="h-6 w-6 text-white" aria-hidden="true" />
                     </button>
                   </div>
@@ -316,7 +322,7 @@ export function SidebarLayout({
                 ) : (
                   <>
                     <ChevronDoubleLeftIcon className="h-5 w-5" />
-                    <span>Collapse</span>
+                    <span>{t("shell.collapse")}</span>
                   </>
                 )}
               </button>
@@ -334,7 +340,7 @@ export function SidebarLayout({
               onClick={() => setSidebarOpen(true)}
               className="-m-2.5 p-2.5 text-ink-500 hover:text-ink-900 lg:hidden"
             >
-              <span className="sr-only">Open sidebar</span>
+              <span className="sr-only">{t("shell.openSidebar")}</span>
               <Bars3Icon className="h-6 w-6" aria-hidden="true" />
             </button>
 
@@ -343,10 +349,17 @@ export function SidebarLayout({
             <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
               <div className="flex flex-1" />
               <div className="flex items-center gap-x-4 lg:gap-x-6">
+                {/* The chat rail has had this since i18n shipped; the app shell
+                    had nothing, so a student whose language was auto-detected
+                    wrong on the dashboard had no way out without opening a
+                    thesis first. The topbar is on every shell page, mobile
+                    included. */}
+                <LocaleSwitcher />
+
                 <button
                   type="button"
                   className="-m-2.5 p-2.5 text-ink-500 hover:text-ink-900"
-                  aria-label="View notifications"
+                  aria-label={t("shell.notifications")}
                 >
                   <BellIcon className="h-6 w-6" aria-hidden="true" />
                 </button>
@@ -355,7 +368,7 @@ export function SidebarLayout({
 
                 <Menu as="div" className="relative">
                   <MenuButton className="relative flex items-center gap-3">
-                    <span className="sr-only">Open user menu</span>
+                    <span className="sr-only">{t("shell.userMenu")}</span>
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-50 text-primary-600 font-semibold border border-ink-100">
                       {userInitial}
                     </div>
@@ -373,7 +386,7 @@ export function SidebarLayout({
                         onClick={logout}
                         className="block w-full px-3 py-1 text-left text-sm text-ink-900 data-[focus]:bg-ink-50"
                       >
-                        Sign out
+                        {t("shell.signOut")}
                       </button>
                     </MenuItem>
                   </MenuItems>

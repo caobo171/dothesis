@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 
+import { useT } from "@/app/lib/i18n/LocaleProvider";
+import type { MessageKey } from "@/app/lib/i18n/messages/en";
+
 import { useTool } from "./use-tool";
 import {
   ToolPanel, ToolTextarea, RunButton, ToolError, ToolCaveat, FileDrop,
@@ -18,11 +21,12 @@ type RhythmOut = {
 // Deliberately NOT a red/green scale. Colouring "0.8" red would read as a
 // verdict — "you failed" — which is precisely the claim this tool cannot make.
 // A neutral ink ramp says "here is a measurement" instead.
-function bandLabel(score: number): string {
-  if (score >= 0.7) return "Very even — sentences land at near-identical lengths";
-  if (score >= 0.45) return "Fairly even";
-  if (score >= 0.25) return "Some variation";
-  return "Bursty — reads like natural human rhythm";
+// Returns a key rather than a string so the band is translated at render.
+function bandKey(score: number): MessageKey {
+  if (score >= 0.7) return "tools.rhythm.band.veryEven";
+  if (score >= 0.45) return "tools.rhythm.band.fairlyEven";
+  if (score >= 0.25) return "tools.rhythm.band.someVariation";
+  return "tools.rhythm.band.bursty";
 }
 
 export function RhythmTool() {
@@ -30,11 +34,12 @@ export function RhythmTool() {
   const [fileBusy, setFileBusy] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const { result, error, busy, run } = useTool<RhythmOut>("/tools/writing-rhythm");
+  const t = useT();
 
   return (
     <ToolPanel
-      title="Writing rhythm"
-      blurb="Measures how mechanical your sentence rhythm is — variation in sentence length, and how often paragraphs open with the same connectors. Concrete writing feedback, the kind a supervisor gives."
+      title={t("tools.rhythm.name")}
+      blurb={t("tools.rhythm.blurb")}
     >
       <div className="flex flex-col gap-4">
         <FileDrop
@@ -45,11 +50,11 @@ export function RhythmTool() {
         />
         <ToolError message={fileError} />
         <ToolTextarea
-          label="Passage (3+ sentences)"
+          label={t("tools.rhythm.passageLabel")}
           value={text}
           onChange={setText}
           rows={8}
-          placeholder="Dán một đoạn — cần ít nhất 3 câu để đo được nhịp văn."
+          placeholder={t("tools.rhythm.placeholder")}
         />
 
         <div>
@@ -57,15 +62,15 @@ export function RhythmTool() {
             busy={busy}
             disabled={!text.trim() || fileBusy}
             onClick={() => void run({ text })}
-            idleLabel="Measure"
-            busyLabel="Measuring…"
+            idleLabel={t("tools.rhythm.run")}
+            busyLabel={t("tools.rhythm.running")}
           />
         </div>
 
         <ToolError message={error} />
 
         {result && !result.ok && (
-          <ToolError message={result.detail || "Not enough text to measure a rhythm."} />
+          <ToolError message={result.detail || t("tools.rhythm.errShort")} />
         )}
 
         {result?.ok && typeof result.score === "number" && (
@@ -74,7 +79,7 @@ export function RhythmTool() {
               <span className="text-[34px] font-extrabold tracking-tight tabular-nums text-ink-900">
                 {result.score.toFixed(2)}
               </span>
-              <span className="text-[13px] text-ink-600">{bandLabel(result.score)}</span>
+              <span className="text-[13px] text-ink-600">{t(bandKey(result.score))}</span>
             </div>
             {/* 0 = bursty/human-like, 1 = machine-even. Labelled at both ends so
                 the number is never read as "percent AI". */}
@@ -85,8 +90,8 @@ export function RhythmTool() {
               />
             </div>
             <div className="flex justify-between mt-1 text-[11px] text-ink-400">
-              <span>0 · varied</span>
-              <span>1 · metronome</span>
+              <span>{t("tools.rhythm.scaleLow")}</span>
+              <span>{t("tools.rhythm.scaleHigh")}</span>
             </div>
             {result.detail && (
               <p className="mt-3 mb-0 text-[12.5px] text-ink-700 leading-relaxed">{result.detail}</p>
@@ -95,12 +100,8 @@ export function RhythmTool() {
         )}
 
         <ToolCaveat>
-          <strong>This is not an AI detector.</strong> It measures sentence-length
-          variation and connector density — it cannot see perplexity, which is
-          roughly half of what real detectors use. It does not predict Turnitin,
-          GPTZero or any commercial tool, and a low number is not a pass. Use it
-          as writing feedback: if your sentences are all the same length, vary
-          them.
+          <strong>{t("tools.rhythm.caveatLead")}</strong>
+          {t("tools.rhythm.caveatBody")}
         </ToolCaveat>
       </div>
     </ToolPanel>

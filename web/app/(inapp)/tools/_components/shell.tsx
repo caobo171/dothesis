@@ -3,6 +3,8 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Loader2, Paperclip } from "lucide-react";
 
+import { useT } from "@/app/lib/i18n/LocaleProvider";
+
 /** Shared chrome for a tool panel: title, one-line purpose, body, action row. */
 export function ToolPanel({
   title,
@@ -120,17 +122,20 @@ export function FileDrop({
   busy,
   setBusy,
   onError,
-  hint = "PDF, Word or text",
+  hint,
 }: {
   onText: (text: string) => void;
   busy: boolean;
   setBusy: (b: boolean) => void;
   onError: (msg: string | null) => void;
+  /** Already-translated override. Defaults to the standard file-type list. */
   hint?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [filename, setFilename] = useState<string | null>(null);
+  const t = useT();
+  const hintText = hint ?? t("tools.file.types");
 
   const take = async (file: File | undefined | null) => {
     if (!file) return;
@@ -138,10 +143,12 @@ export function FileDrop({
     setBusy(true);
     setFilename(file.name);
     try {
+      // extractFileText lives at module scope and so cannot call a hook — it
+      // takes `t` instead, which keeps its thrown messages translated.
       const { extractFileText } = await import("./use-tool");
-      onText(await extractFileText(file));
+      onText(await extractFileText(file, t));
     } catch (e) {
-      onError((e as Error)?.message || "Could not read that file.");
+      onError((e as Error)?.message || t("tools.file.readFailed"));
       setFilename(null);
     } finally {
       setBusy(false);
@@ -182,10 +189,12 @@ export function FileDrop({
         ) : (
           <Paperclip className="w-3.5 h-3.5" aria-hidden />
         )}
-        {busy ? "Reading…" : "Attach a file"}
+        {busy ? t("tools.file.reading") : t("tools.file.attach")}
       </button>
       <span className="text-[11.5px] text-ink-400 truncate min-w-0">
-        {filename ? `${filename} — text loaded below, edit it freely` : `${hint} · or drop one here`}
+        {filename
+          ? t("tools.file.loaded", { name: filename })
+          : t("tools.file.orDrop", { hint: hintText })}
       </span>
     </div>
   );

@@ -3,6 +3,19 @@
 import { useCallback, useRef, useState } from "react";
 
 import { apiFetch } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
+import type { MessageKey } from "@/app/lib/i18n/messages/en";
+import type { TParams } from "@/app/lib/i18n/locale";
+
+/**
+ * A translator, passed in.
+ *
+ * The helpers below run at module scope — they cannot call useT(), and their
+ * failures are the ones a student actually sees ("that file is too large"), so
+ * leaving them in English would put English error text inside a Vietnamese
+ * form. Every caller is a client component that already holds `t`.
+ */
+export type Translate = (key: MessageKey, params?: TParams) => string;
 
 /**
  * One request/response cycle against a stateless tool endpoint.
@@ -25,6 +38,7 @@ export function useTool<TOut>(path: string) {
   // who edits and re-submits while the first call is still open would otherwise
   // see the stale answer land on top of the fresh one.
   const seq = useRef(0);
+  const t = useT();
 
   const run = useCallback(
     async (body: Record<string, unknown>) => {
@@ -37,7 +51,7 @@ export function useTool<TOut>(path: string) {
         return data;
       } catch (e) {
         if (mine === seq.current) {
-          setError((e as Error)?.message || "Request failed.");
+          setError((e as Error)?.message || t("tools.err.request"));
           setResult(null);
         }
         return null;
@@ -45,7 +59,7 @@ export function useTool<TOut>(path: string) {
         if (mine === seq.current) setBusy(false);
       }
     },
-    [path],
+    [path, t],
   );
 
   const reset = useCallback(() => {
@@ -68,7 +82,7 @@ export function useTool<TOut>(path: string) {
  *
  * Nothing is stored server-side — the file is a transport for one passage.
  */
-export async function extractFileText(file: File): Promise<string> {
+export async function extractFileText(file: File, t: Translate): Promise<string> {
   const { tokenStore } = await import("@/app/lib/tokenStore");
   const token = tokenStore.get();
   const base = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
@@ -84,13 +98,13 @@ export async function extractFileText(file: File): Promise<string> {
     throw new Error(
       body?.detail?.error?.message ||
         (res.status === 415
-          ? "That file type isn't supported — use PDF, Word or a text file."
+          ? t("tools.err.unsupported")
           : res.status === 413
-            ? "That file is too large."
-            : `Could not read the file (${res.status}).`),
+            ? t("tools.err.tooLarge")
+            : t("tools.err.readFile", { status: res.status })),
     );
   }
-  if (!body?.ok) throw new Error(body?.detail || "No text could be read from this file.");
+  if (!body?.ok) throw new Error(body?.detail || t("tools.err.noText"));
   return body.text as string;
 }
 
@@ -119,18 +133,89 @@ export type DocScan = {
 };
 
 /** What a rewrite would touch. No LLM, no charge — this is the confirm step. */
-export async function scanDocument(file: File): Promise<DocScan> {
+export async function scanDocument(file: File, t: Translate): Promise<DocScan> {
   const res = await postFile("/tools/document/scan", file);
   const body = await res.json().catch(() => null);
   if (!res.ok) {
     throw new Error(
       body?.detail?.error?.message ||
         (res.status === 415
-          ? "Document rewriting needs a .docx — a PDF has no editable paragraphs."
-          : `Could not read the document (${res.status}).`),
+          ? t("tools.err.needDocx")
+          : t("tools.err.readDoc", { status: res.status })),
     );
   }
   return body as DocScan;
+}
+
+export type CiteScan = {
+  ok: boolean;
+  intext_citations: number;
+  distinct_sources: number;
+  existing_references: number;
+  has_reference_section: boolean;
+  body_paragraphs: number;
+  passages: number;
+  headings: number;
+  tables: number;
+};
+
+/** What citing would touch. Free — no model runs. */
+export async function scanCiteDocument(file: File, t: Translate): Promise<CiteScan> {
+  const res = await postFile("/tools/document/cite/scan", file);
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(
+      body?.detail?.error?.message ||
+        (res.status === 415
+          ? t("tools.err.needDocx")
+          : t("tools.err.readDoc", { status: res.status })),
+    );
+  }
+  return body as CiteScan;
+}
+
+/**
+ * Run the citer and hand back the .docx.
+ *
+ * `addMissing` rides in the query string because the body is multipart — this
+ * is the one place in the app where a flag can't travel in JSON. The counts
+ * come back in headers for the same reason the humanize route uses them: a
+ * streamed file cannot also carry a JSON body.
+ */
+export async function citeDocument(
+  file: File,
+  addMissing: boolean,
+  t: Translate,
+): Promise<{
+  blob: Blob; filename: string; credits: number | null;
+  resolved: number | null; unresolved: number | null; weak: number | null;
+  uncited: number | null;
+  added: number | null; marked: number | null; linked: number | null;
+}> {
+  const res = await postFile(`/tools/document/cite?add_missing=${addMissing}`, file);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(
+      body?.detail?.error?.message || t("tools.cite.errFailed"),
+    );
+  }
+  const num = (h: string) => {
+    const v = res.headers.get(h);
+    return v === null ? null : Number(v);
+  };
+  const stem = file.name.replace(/\.docx$/i, "");
+  return {
+    blob: await res.blob(),
+    filename: `${stem}-cited.docx`,
+    credits: num("X-Credits-Charged"),
+    resolved: num("X-Citations-Resolved"),
+    unresolved: num("X-Citations-Unresolved"),
+    weak: num("X-Citations-Weak"),
+    uncited: num("X-References-Uncited"),
+    added: num("X-Citations-Added"),
+    marked: num("X-Claims-Marked"),
+    linked: num("X-Citations-Linked"),
+  };
 }
 
 /**
@@ -144,12 +229,13 @@ export async function scanDocument(file: File): Promise<DocScan> {
  */
 export async function humanizeDocument(
   file: File,
+  t: Translate,
 ): Promise<{ blob: Blob; filename: string; credits: number | null; rewritten: number | null }> {
   const res = await postFile("/tools/document/humanize", file);
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(
-      body?.detail?.error?.message || `The rewrite did not complete (${res.status}).`,
+      body?.detail?.error?.message || t("tools.err.rewriteFailed", { status: res.status }),
     );
   }
   const num = (h: string) => {

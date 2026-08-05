@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 
 import { apiFetch } from "@/app/lib/api";
+import { useT, useTn } from "@/app/lib/i18n/LocaleProvider";
+
 import { useTool } from "./use-tool";
 import { HumanizeDocument } from "./HumanizeDocument";
 import {
@@ -42,6 +44,8 @@ export function HumanizeTool() {
   const [fileBusy, setFileBusy] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const { result, error, busy, run } = useTool<HumanizeOut>("/humanize");
+  const t = useT();
+  const tn = useTn();
 
   // Saved-anchor state. Loaded on mount so a student who supplied their sample
   // weeks ago isn't asked for ~150 words again — the pass falls back to the
@@ -79,12 +83,12 @@ export function HumanizeTool() {
       })) as AnchorOut;
       if (r.ok) {
         setSaved(r);
-        setAnchorMsg(`Saved — ${r.words} words. Future rewrites will use this automatically.`);
+        setAnchorMsg(t("tools.humanize.anchorSavedMsg", { count: r.words }));
       } else {
-        setAnchorErr(r.detail || "Could not save that sample.");
+        setAnchorErr(r.detail || t("tools.humanize.anchorSaveFailed"));
       }
     } catch (e) {
-      setAnchorErr((e as Error)?.message || "Could not save that sample.");
+      setAnchorErr((e as Error)?.message || t("tools.humanize.anchorSaveFailed"));
     } finally {
       setSavingAnchor(false);
     }
@@ -92,8 +96,8 @@ export function HumanizeTool() {
 
   return (
     <ToolPanel
-      title="Humanize"
-      blurb="Re-voice prose you already wrote so it stops reading as AI-generated. It changes how the text sounds, never what it says — every number, statistic and citation is frozen and verified afterwards."
+      title={t("tools.humanize.name")}
+      blurb={t("tools.humanize.blurb")}
     >
       <div className="flex flex-col gap-4">
         <div className="inline-flex self-start rounded-full border border-ink-200 p-0.5 bg-white">
@@ -107,7 +111,9 @@ export function HumanizeTool() {
                 mode === m ? "bg-primary-600 text-white" : "text-ink-600 hover:text-ink-900"
               }`}
             >
-              {m === "passage" ? "A passage" : "Whole document (.docx)"}
+              {m === "passage"
+                ? t("tools.humanize.modePassage")
+                : t("tools.humanize.modeDocument")}
             </button>
           ))}
         </div>
@@ -123,11 +129,11 @@ export function HumanizeTool() {
             onError={setFileError}
           />
           <ToolTextarea
-            label="Your passage"
+            label={t("tools.humanize.passageLabel")}
             value={text}
             onChange={setText}
             rows={9}
-            placeholder="Dán đoạn văn bạn muốn viết lại — hoặc đính kèm tệp ở trên."
+            placeholder={t("tools.humanize.placeholder")}
           />
           <ToolError message={fileError} />
         </div>
@@ -137,12 +143,16 @@ export function HumanizeTool() {
         <div className="rounded-xl border border-ink-200 p-3.5">
           <div className="flex items-center justify-between gap-3 mb-1.5">
             <span className="text-[12px] font-semibold text-ink-700">
-              Your own writing (style anchor)
+              {t("tools.humanize.anchorLabel")}
             </span>
             {saved?.has_anchor && (
               <span className="inline-flex items-center gap-1 text-[11.5px] text-[#3A5740] font-semibold shrink-0">
                 <Check className="w-3 h-3" aria-hidden />
-                {saved.words} words saved
+                {tn(
+                  "tools.humanize.anchorSaved_one",
+                  "tools.humanize.anchorSaved_other",
+                  saved.words,
+                )}
               </span>
             )}
           </div>
@@ -152,8 +162,8 @@ export function HumanizeTool() {
             rows={4}
             placeholder={
               saved?.has_anchor
-                ? "Using your saved sample. Paste new writing here only if you want to replace it."
-                : "~150 words you wrote yourself, before using AI — an old essay, a report, anything."
+                ? t("tools.humanize.anchorPlaceholderSaved")
+                : t("tools.humanize.anchorPlaceholder")
             }
           />
           <div className="mt-2 flex flex-wrap items-center gap-2.5">
@@ -161,17 +171,26 @@ export function HumanizeTool() {
               type="button"
               onClick={() => void saveAnchor()}
               disabled={savingAnchor || anchorWords < 50}
-              title={anchorWords < 50 ? "Needs ~150 words to carry any rhythm" : undefined}
+              title={anchorWords < 50 ? t("tools.humanize.anchorTooShort") : undefined}
               className="inline-flex items-center gap-1.5 rounded-full border border-ink-200 px-3.5 py-1.5 text-[12.5px] font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {savingAnchor ? "Saving…" : saved?.has_anchor ? "Replace saved sample" : "Save style anchor"}
+              {savingAnchor
+                ? t("tools.humanize.anchorSaving")
+                : saved?.has_anchor
+                  ? t("tools.humanize.anchorReplace")
+                  : t("tools.humanize.anchorSave")}
             </button>
             <span className="text-[11.5px] text-ink-500">
               {anchorWords === 0
                 ? saved?.has_anchor
-                  ? "Saved sample will be used."
-                  : "Required — the rewrite is anchored on real human writing."
-                : `${anchorWords} words${anchorWords < 100 ? " — aim for ~150." : " — that's enough."}`}
+                  ? t("tools.humanize.anchorWillUse")
+                  : t("tools.humanize.anchorRequired")
+                : t(
+                    anchorWords < 100
+                      ? "tools.humanize.anchorCountShort"
+                      : "tools.humanize.anchorCountEnough",
+                    { count: anchorWords },
+                  )}
             </span>
           </div>
           {anchorMsg && (
@@ -187,8 +206,8 @@ export function HumanizeTool() {
             busy={busy}
             disabled={!text.trim() || fileBusy}
             onClick={() => void run({ text, user_anchor: anchor.trim() || null, language: "vi" })}
-            idleLabel="Humanize"
-            busyLabel="Rewriting…"
+            idleLabel={t("tools.humanize.name")}
+            busyLabel={t("tools.humanize.running")}
           />
         </div>
         )}
@@ -199,10 +218,10 @@ export function HumanizeTool() {
           <ToolError
             message={
               result.error === "no_anchor"
-                ? result.hint || "Add ~150 words of your own writing above, then run it again."
+                ? result.hint || t("tools.humanize.errNoAnchor")
                 : result.error === "frozen_violation"
-                  ? "The rewrite would have altered a number or citation, so your original was kept unchanged."
-                  : result.hint || result.error || "The rewrite did not complete."
+                  ? t("tools.humanize.errFrozen")
+                  : result.hint || result.error || t("tools.humanize.errFailed")
             }
           />
         )}
@@ -211,16 +230,18 @@ export function HumanizeTool() {
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-2 text-[11.5px]">
               <span className="px-2 py-0.5 rounded-full bg-[#EEF4EE] text-[#3A5740] font-semibold">
-                {result.changed ? "Rewritten" : "No change needed"}
+                {result.changed
+                  ? t("tools.humanize.badgeRewritten")
+                  : t("tools.humanize.badgeNoChange")}
               </span>
               {result.frozen_ok && (
                 <span className="px-2 py-0.5 rounded-full bg-ink-100 text-ink-700">
-                  numbers &amp; citations verified
+                  {t("tools.humanize.badgeVerified")}
                 </span>
               )}
               {result.credits_charged > 0 && (
                 <span className="text-ink-500 tabular-nums">
-                  {result.credits_charged} credits
+                  {t("tools.credits", { count: result.credits_charged })}
                 </span>
               )}
             </div>
@@ -231,11 +252,7 @@ export function HumanizeTool() {
         )}
 
         {mode === "passage" && (
-        <ToolCaveat>
-          A rewrite that would have changed any number, statistic or citation is
-          discarded and your original returned — this can never quietly alter a
-          finding. It also makes no claim about what an AI detector will say.
-        </ToolCaveat>
+        <ToolCaveat>{t("tools.humanize.caveat")}</ToolCaveat>
         )}
       </div>
     </ToolPanel>
