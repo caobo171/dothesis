@@ -1,0 +1,157 @@
+"use client";
+
+import { useState } from "react";
+import { Wrench } from "lucide-react";
+import useSWR from "swr";
+
+import { apiFetch } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
+import type { MessageKey } from "@/app/lib/i18n/messages/en";
+
+/**
+ * The caller's own tool history.
+ *
+ * Sits next to the transaction list rather than inside it because it is NOT the
+ * same list. A run that charged nothing writes no credit transaction at all —
+ * the free tools, a failed run, and the one that actually matters: a run whose
+ * cost the balance could not cover. Those rows are invisible in a debit ledger,
+ * and they are precisely what a student is looking for when they ask why their
+ * credits moved, or why they didn't.
+ */
+
+type Run = {
+  id: string;
+  tool: string;
+  ok: boolean;
+  error: string | null;
+  units: number;
+  credits_charged: number;
+  credits_cost: number;
+  created_at: string;
+};
+
+type RunsResp = { items: Run[]; total: number; page: number; page_size: number };
+
+// Tool slug → label key. Server-side slugs are stable identifiers, not copy, so
+// the mapping lives here where the rest of the UI's wording does.
+const TOOL_KEY: Record<string, MessageKey> = {
+  "humanize": "txn.tool.humanize",
+  "humanize-docx": "txn.tool.humanizeDocx",
+  "cite-docx": "txn.tool.citeDocx",
+  "verify-citation": "txn.tool.verifyCitation",
+  "verify-citations": "txn.tool.verifyCitations",
+  "writing-rhythm": "txn.tool.rhythm",
+  "plagiarism-check": "txn.tool.plagiarism",
+  "extract-text": "txn.tool.extractText",
+  "scan-docx": "txn.tool.scanDocx",
+  "scan-cite-docx": "txn.tool.scanCiteDocx",
+};
+
+const PAGE_SIZE = 20;
+
+export default function ToolRuns() {
+  const [page, setPage] = useState(1);
+  const t = useT();
+
+  const body = { page, page_size: PAGE_SIZE };
+  const { data, isLoading } = useSWR<RunsResp>(
+    ["/tools/runs", page],
+    () => apiFetch("/tools/runs", { method: "POST", body }) as Promise<RunsResp>,
+  );
+
+  const pages = data ? Math.ceil(data.total / data.page_size) : 1;
+
+  return (
+    <div className="mt-10">
+      <div className="flex items-center gap-2 mb-3 py-3 border-b border-ink-100">
+        <Wrench className="w-5 h-5 text-ink-500" />
+        <h2 className="m-0 text-base font-semibold text-ink-900">{t("txn.tools.title")}</h2>
+      </div>
+      <p className="mt-0 mb-4 text-[13px] text-ink-500">{t("txn.tools.blurb")}</p>
+
+      {data && data.items.length > 0 ? (
+        <>
+          <div className="overflow-x-auto rounded-xl border border-ink-100">
+            <table className="w-full text-sm">
+              <thead className="bg-ink-50 text-ink-500 text-xs uppercase tracking-wide">
+                <tr>
+                  <th className="text-left font-medium px-4 py-2">{t("txn.col.date")}</th>
+                  <th className="text-left font-medium px-4 py-2">{t("txn.col.tool")}</th>
+                  <th className="text-left font-medium px-4 py-2">{t("txn.col.result")}</th>
+                  <th className="text-right font-medium px-4 py-2">{t("txn.col.credits")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {data.items.map((r) => {
+                  const key = TOOL_KEY[r.tool];
+                  const shortfall = r.credits_cost - r.credits_charged;
+                  return (
+                    <tr key={r.id} className="hover:bg-ink-50/50">
+                      <td className="px-4 py-2 text-ink-500 whitespace-nowrap">
+                        {new Date(r.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2 text-ink-900">
+                        {key ? t(key) : r.tool}
+                        {r.units > 0 && (
+                          <span className="ml-1.5 text-xs text-ink-400">
+                            {t("txn.tools.units", { count: r.units })}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2">
+                        {r.ok
+                          ? <span className="text-[#3A5740]">{t("txn.tools.ok")}</span>
+                          : <span className="text-[#8E6B2A]">{t("txn.tools.failed")}</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums">
+                        {r.credits_charged > 0
+                          ? <span className="font-semibold text-red-600">
+                              −{r.credits_charged.toLocaleString()}
+                            </span>
+                          : <span className="text-ink-400">{t("txn.tools.free")}</span>}
+                        {/* Only when the balance couldn't cover it. A student
+                            whose credits ran out mid-document should learn it
+                            here, not as a surprise on the next run. */}
+                        {shortfall > 0 && (
+                          <div className="text-[11px] text-[#8E6B2A]">
+                            {t("txn.tools.shortfall", { count: shortfall })}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {pages > 1 && (
+            <div className="mt-3 flex items-center justify-end gap-2 text-[13px]">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="rounded-lg border border-ink-200 px-3 py-1.5 font-semibold text-ink-600 disabled:opacity-40 hover:bg-ink-50"
+              >
+                {t("txn.prev")}
+              </button>
+              <span className="text-ink-500 tabular-nums">{page} / {pages}</span>
+              <button
+                type="button"
+                disabled={page >= pages}
+                onClick={() => setPage((p) => p + 1)}
+                className="rounded-lg border border-ink-200 px-3 py-1.5 font-semibold text-ink-600 disabled:opacity-40 hover:bg-ink-50"
+              >
+                {t("txn.next")}
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-ink-500">
+          {isLoading ? t("txn.loading") : t("txn.tools.empty")}
+        </p>
+      )}
+    </div>
+  );
+}

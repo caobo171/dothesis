@@ -399,6 +399,50 @@ export const en = {
   "tools.err.readDoc": "Could not read the document ({status}).",
   "tools.err.rewriteFailed": "The rewrite did not complete ({status}).",
 
+  // --- /transactions — where a student goes to ask what happened to their credits ---
+  "txn.title": "Transactions",
+  "txn.balance": "{count} Credit",
+  "txn.col.date": "Date",
+  "txn.col.activity": "Activity",
+  "txn.col.amount": "Amount",
+  "txn.col.tool": "Tool",
+  "txn.col.result": "Result",
+  "txn.col.credits": "Credits",
+  "txn.loading": "Loading…",
+  "txn.empty": "No credit usage yet.",
+  "txn.prev": "Previous",
+  "txn.next": "Next",
+
+  "txn.reason.chatTurn": "Chat / writing run",
+  "txn.reason.autoRun": "Auto-approve run",
+  "txn.reason.paperRun": "Thesis run",
+  "txn.reason.purchase": "Top-up",
+  "txn.reason.refund": "Refund",
+
+  // Tool names as a STUDENT knows them, not the server's slugs — which is what
+  // this list showed until the tools started billing under their own names.
+  "txn.tool.humanize": "Humanize a passage",
+  "txn.tool.humanizeDocx": "Humanize a document",
+  "txn.tool.citeDocx": "Cite a document",
+  "txn.tool.verifyCitation": "Check one reference",
+  "txn.tool.verifyCitations": "Check a reference list",
+  "txn.tool.rhythm": "Writing rhythm",
+  "txn.tool.plagiarism": "Similarity check",
+  "txn.tool.extractText": "Read a file",
+  "txn.tool.scanDocx": "Scan a document",
+  "txn.tool.scanCiteDocx": "Scan citations",
+
+  "txn.tools.title": "Tool runs",
+  "txn.tools.blurb":
+    "Everything you ran outside a thesis project. Runs that cost nothing are " +
+    "listed too, so this answers why your credits moved as well as why they didn't.",
+  "txn.tools.empty": "You haven't run any tools yet.",
+  "txn.tools.ok": "Done",
+  "txn.tools.failed": "Didn't finish",
+  "txn.tools.free": "Free",
+  "txn.tools.units": "· {count} sources",
+  "txn.tools.shortfall": "{count} not charged — your balance was short",
+
   // --- language switcher ---
   "lang.label": "Language",
   "lang.en": "English",

@@ -258,6 +258,56 @@ def test_an_unknown_surface_is_not_stored(user):
     assert _runs(user.id)[0].surface == "web"
 
 
+# --- the caller's own history ------------------------------------------------
+
+def test_a_user_sees_their_own_runs(user):
+    s, u = _session_user(user)
+    try:
+        record_tool_run(s, u, tool="verify-citations", units=7)
+        record_tool_run(s, u, tool="scan-docx", units=100)
+    finally:
+        s.close()
+    body = _as(user).post("/api/v1/tools/runs",
+                          json={"access_token": "x"}).json()
+    assert body["total"] == 2
+    # Newest first, and the FREE run is listed too — a student asking why their
+    # credits did not move needs to see the run that did not charge.
+    assert [i["tool"] for i in body["items"]] == ["scan-docx", "verify-citations"]
+    assert body["items"][0]["credits_charged"] == 0
+
+
+def test_a_user_never_sees_another_users_runs(user):
+    """Scoped to the caller with no override. A filter parameter here is how a
+    user-facing history turns into the admin view by accident."""
+    Session = get_session_factory()
+    with Session() as s:
+        other = make_user(s, email="someone-else@e.com", credit=100)
+        s.flush()
+        record_tool_run(s, other, tool="cite-docx", units=5)
+        s.commit()
+
+    body = _as(user).post("/api/v1/tools/runs", json={"access_token": "x"}).json()
+    assert body["total"] == 0
+
+
+def test_the_shortfall_is_visible_to_the_user_who_incurred_it(user):
+    """A student whose balance ran out mid-document should learn it here, not as
+    a surprise on the next run."""
+    Session = get_session_factory()
+    with Session() as s:
+        from app.models import User
+        s.get(User, user.id).credit = 3
+        s.commit()
+    s, u = _session_user(user)
+    try:
+        record_tool_run(s, u, tool="verify-citations", units=40)
+    finally:
+        s.close()
+    item = _as(user).post("/api/v1/tools/runs",
+                          json={"access_token": "x"}).json()["items"][0]
+    assert (item["credits_cost"], item["credits_charged"]) == (40, 3)
+
+
 def test_an_unconfigured_similarity_provider_bills_nothing(user, monkeypatch):
     """Charging for a check the deployment cannot perform is the clearest
     possible way to lose a customer's trust in the meter."""

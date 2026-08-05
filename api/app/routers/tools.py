@@ -16,6 +16,7 @@ import re
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db import db_session
@@ -671,6 +672,73 @@ def get_writing_anchor(_body: AuthedBody, user: User = Depends(current_user),
         return AnchorOut(ok=True, has_anchor=False)
     return AnchorOut(ok=True, has_anchor=True, words=_anchor_words(anchor),
                      preview=anchor[:160])
+
+
+# ---------------------------------------------------------------------------
+# My tool runs — the caller's own history
+# ---------------------------------------------------------------------------
+
+class MyRunsBody(AuthedBody):
+    page: int = 1
+    page_size: int = 20
+
+
+class MyRun(BaseModel):
+    id: str
+    tool: str
+    ok: bool
+    error: str | None = None
+    units: int = 0
+    credits_charged: int = 0
+    # What it SHOULD have cost. Shown only when it differs — a student whose
+    # balance ran out mid-document is entitled to know the run was worth more
+    # than it took, rather than discovering the shortfall as a surprise later.
+    credits_cost: int = 0
+    created_at: str
+
+
+class MyRunsOut(BaseModel):
+    items: list[MyRun] = []
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+
+
+@router.post("/runs", response_model=MyRunsOut)
+def my_tool_runs(body: MyRunsBody, user: User = Depends(current_user),
+                 db: Session = Depends(db_session)) -> MyRunsOut:
+    """The caller's own tool history — what they ran and what it cost them.
+
+    /transactions already lists the DEBITS, but that is not the same list and it
+    is the wrong shape for this question. A run that charged nothing writes no
+    credit transaction at all: the free tools, a failed run, and — the one that
+    matters — a run whose cost the balance could not cover. Those are exactly
+    the rows a student needs when they ask why their credits moved, or why they
+    did not.
+
+    Scoped to `user.id` with no override. The admin view is a separate router
+    behind require_admin; a filter parameter here is how one becomes the other
+    by accident.
+    """
+    from ..models import ToolRun  # noqa: PLC0415
+
+    page = max(1, body.page)
+    size = min(max(1, body.page_size), 100)
+    where = ToolRun.user_id == user.id
+    total = db.scalar(
+        select(func.count()).select_from(ToolRun).where(where)) or 0
+    rows = db.scalars(
+        select(ToolRun).where(where)
+        .order_by(ToolRun.created_at.desc(), ToolRun.id.desc())
+        .offset((page - 1) * size).limit(size)
+    ).all()
+    return MyRunsOut(
+        items=[MyRun(
+            id=str(r.id), tool=r.tool, ok=r.ok, error=r.error, units=r.units,
+            credits_charged=r.credits_charged, credits_cost=r.credits_cost,
+            created_at=r.created_at.isoformat(),
+        ) for r in rows],
+        total=total, page=page, page_size=size)
 
 
 # ---------------------------------------------------------------------------

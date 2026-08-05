@@ -382,6 +382,50 @@ export const vi: Record<MessageKey, string> = {
   "tools.err.readDoc": "Không đọc được tài liệu ({status}).",
   "tools.err.rewriteFailed": "Việc viết lại không hoàn tất ({status}).",
 
+  // --- /transactions — nơi sinh viên vào xem credit đã đi đâu ---
+  "txn.title": "Giao dịch",
+  "txn.balance": "{count} Credit",
+  "txn.col.date": "Thời gian",
+  "txn.col.activity": "Hoạt động",
+  "txn.col.amount": "Số credit",
+  "txn.col.tool": "Công cụ",
+  "txn.col.result": "Kết quả",
+  "txn.col.credits": "Credit",
+  "txn.loading": "Đang tải…",
+  "txn.empty": "Chưa có giao dịch nào.",
+  "txn.prev": "Trước",
+  "txn.next": "Sau",
+
+  "txn.reason.chatTurn": "Lượt chat / viết",
+  "txn.reason.autoRun": "Chạy tự động",
+  "txn.reason.paperRun": "Chạy luận văn",
+  "txn.reason.purchase": "Nạp credit",
+  "txn.reason.refund": "Hoàn credit",
+
+  // Tên công cụ theo cách sinh viên gọi, không phải slug của máy chủ — thứ mà
+  // danh sách này vẫn hiện cho tới khi các công cụ bắt đầu tính tiền theo tên riêng.
+  "txn.tool.humanize": "Humanize một đoạn",
+  "txn.tool.humanizeDocx": "Humanize cả tài liệu",
+  "txn.tool.citeDocx": "Chèn trích dẫn cho tài liệu",
+  "txn.tool.verifyCitation": "Kiểm tra một trích dẫn",
+  "txn.tool.verifyCitations": "Kiểm tra cả danh mục",
+  "txn.tool.rhythm": "Nhịp văn",
+  "txn.tool.plagiarism": "Kiểm tra trùng lặp",
+  "txn.tool.extractText": "Đọc tệp",
+  "txn.tool.scanDocx": "Quét tài liệu",
+  "txn.tool.scanCiteDocx": "Quét trích dẫn",
+
+  "txn.tools.title": "Lượt dùng công cụ",
+  "txn.tools.blurb":
+    "Tất cả những gì bạn chạy ngoài dự án luận văn. Cả những lượt không mất credit " +
+    "cũng được liệt kê, để bạn biết vì sao credit trừ — và vì sao không trừ.",
+  "txn.tools.empty": "Bạn chưa dùng công cụ nào.",
+  "txn.tools.ok": "Xong",
+  "txn.tools.failed": "Chưa xong",
+  "txn.tools.free": "Miễn phí",
+  "txn.tools.units": "· {count} nguồn",
+  "txn.tools.shortfall": "{count} chưa trừ — số dư không đủ",
+
   // --- chuyển ngôn ngữ ---
   "lang.label": "Ngôn ngữ",
   "lang.en": "English",
