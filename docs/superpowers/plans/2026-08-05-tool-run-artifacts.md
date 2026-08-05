@@ -59,6 +59,9 @@ def test_tool_run_carries_artifact_columns():
 Run: `cd api && ./run.sh pytest tests/test_tool_run_artifacts.py -q`
 Expected: FAIL — `TypeError: 'input_s3_uri' is an invalid keyword argument for ToolRun`.
 
+Progress columns ride in the SAME migration — a second one to add three
+integers to a table we are already altering is pure churn.
+
 - [ ] **Step 3: Add the columns to the model**
 
 ```python
@@ -74,7 +77,20 @@ Expected: FAIL — `TypeError: 'input_s3_uri' is an invalid keyword argument for
         BigInteger, ForeignKey("tool_runs.id", ondelete="SET NULL"))
     # {"rewritten": int, "skipped": int} — counts, never prose.
     metrics: Mapped[dict | None] = mapped_column(JSONB)
+    # --- live progress. The row is now written BEFORE the work starts, so a
+    # second request can answer "how far along is it" while the first is still
+    # open. It also makes a killed run visible: it stays "running" forever
+    # instead of disappearing, which is what a reload-during-rewrite used to do.
+    status: Mapped[str] = mapped_column(String(16), nullable=False,
+                                        default="done", server_default="done")
+    progress_done: Mapped[int] = mapped_column(Integer, nullable=False, default=0,
+                                                server_default="0")
+    progress_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0,
+                                                 server_default="0")
 ```
+
+`status` defaults to `"done"` so every row written before this migration reads
+as a finished run rather than a stuck one.
 
 Add `JSONB` to the `sqlalchemy.dialects.postgresql` import if absent.
 

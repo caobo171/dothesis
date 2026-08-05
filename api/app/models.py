@@ -620,3 +620,41 @@ class ToolRun(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
+
+    # --- artifacts -------------------------------------------------------
+    # The "sizes and counts, never prose" line above is crossed HERE, on
+    # purpose and only here: a document tool takes a file in and gives a file
+    # back, and a history that cannot hand either one back cannot answer "what
+    # did I pay for". Retention is 30 days (tool_artifacts.FILE_RETENTION_DAYS),
+    # enforced by scripts/purge_tool_run_files.py.
+    #
+    # Nullable in both directions: a run may predate this, and a purged run
+    # keeps its ROW and loses its FILES. The row is the billing record; it must
+    # outlive what it points at.
+    input_s3_uri: Mapped[str | None] = mapped_column(Text)
+    output_s3_uri: Mapped[str | None] = mapped_column(Text)
+    input_filename: Mapped[str | None] = mapped_column(String(255))
+    files_expire_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True)
+    # Set when this run was started from another run's stored input.
+    parent_run_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("tool_runs.id", ondelete="SET NULL"))
+    # {"rewritten": 80, "skipped": 52} — what the run DID, which the response
+    # headers carried and the history threw away. Still counts, never prose.
+    metrics: Mapped[dict | None] = mapped_column(JSONB)
+
+    # --- live progress ---------------------------------------------------
+    # The row is written BEFORE the work starts so a second request can answer
+    # "how far along is it" while the first is still open — a 70-batch rewrite
+    # is minutes of spinner otherwise. It also makes a killed run visible: it
+    # stays "running" rather than never existing, which is exactly what a
+    # dev-reload mid-rewrite used to do.
+    #
+    # "done" as the default, not "running": every row written before this
+    # column existed is a finished run, and must not read as a stuck one.
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="done", server_default="done")
+    progress_done: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0")
+    progress_total: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0")
