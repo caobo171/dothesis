@@ -16,6 +16,7 @@ type RhythmOut = {
   verdict: string;
   basis: string;
   detail: string | null;
+  credits_charged: number;
 };
 
 // Deliberately NOT a red/green scale. Colouring "0.8" red would read as a
@@ -80,6 +81,11 @@ export function RhythmTool() {
                 {result.score.toFixed(2)}
               </span>
               <span className="text-[13px] text-ink-600">{t(bandKey(result.score))}</span>
+              {result.credits_charged > 0 && (
+                <span className="ml-auto text-[12px] text-ink-500 tabular-nums">
+                  {t("tools.credits", { count: result.credits_charged })}
+                </span>
+              )}
             </div>
             {/* 0 = bursty/human-like, 1 = machine-even. Labelled at both ends so
                 the number is never read as "percent AI". */}

@@ -149,6 +149,8 @@ export async function scanDocument(file: File, t: Translate): Promise<DocScan> {
 
 export type CiteScan = {
   ok: boolean;
+  /** Phase A's price in credits, quoted before it runs. Phase B is token-billed. */
+  resolve_cost: number;
   intext_citations: number;
   distinct_sources: number;
   existing_references: number;

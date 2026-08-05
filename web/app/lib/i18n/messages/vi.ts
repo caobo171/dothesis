@@ -152,6 +152,7 @@ export const vi: Record<MessageKey, string> = {
   "nav.announcements": "Thông báo",
   "nav.orders": "Đơn hàng",
   "nav.connectors": "Kết nối",
+  "nav.toolUsage": "Lượt dùng công cụ",
 
   // Slogan. "Draft" trong bản tiếng Anh là ĐỘNG TỪ (viết), không phải "bản
   // nháp" — dịch thành danh từ khiến sản phẩm nghe như chỉ lo khâu nháp, trong
@@ -295,6 +296,7 @@ export const vi: Record<MessageKey, string> = {
   "tools.cite.found_one": "Luận văn đang trích {count} nguồn",
   "tools.cite.found_other": "Luận văn đang trích {count} nguồn",
   "tools.cite.willResolve": "từng nguồn được tra trên CrossRef và định dạng theo APA 7",
+  "tools.cite.willCost": "{count} credit — tính theo số nguồn mình đi tra",
   "tools.cite.willLink":
     "mỗi trích dẫn thành một liên kết — bấm vào là nhảy xuống đúng mục trong danh mục",
   "tools.cite.willReplaceList":
@@ -307,7 +309,8 @@ export const vi: Record<MessageKey, string> = {
     "Quét {count} đoạn thân bài để tìm những câu mà người đọc sẽ đòi nguồn, tìm trên " +
     "CrossRef, và chỉ chèn trích dẫn khi xác nhận được có bài thật sự nói về nội dung " +
     "đó. Chỗ nào không xác nhận được thì đánh dấu [cần nguồn] chứ không đoán. Phần " +
-    "này có tính credit.",
+    "này có chạy model nên tính thêm credit ngoài số ở trên — tính theo lượng thực " +
+    "dùng, bước quét không đoán trước được.",
   "tools.cite.run": "Chèn trích dẫn",
   "tools.cite.running": "Đang xử lý…",
   "tools.cite.errFailed": "Không xử lý được tài liệu này.",

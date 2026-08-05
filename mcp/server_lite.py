@@ -69,10 +69,14 @@ async def _call_tool(tool: toolreg.Tool, args: dict, token: str) -> dict:
     path, body = tool.request(args)
     async with httpx.AsyncClient(
             timeout=float(os.getenv("DOTHESIS_MCP_TIMEOUT", "180"))) as client:
-        r = await client.post(
-            f"{API_URL}{path}",
-            headers={"Authorization": f"Bearer {token}"} if token else {},
-            json=body)
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        # Tell the API which door this came through. Without it every connector
+        # call is filed as a web run in `tool_runs`, and the admin view's whole
+        # point — who is actually using each surface — reports one number for
+        # two very different populations. Advisory only: the API defaults to
+        # "web" and never trusts this for anything but labelling.
+        headers["X-DoThesis-Surface"] = "mcp"
+        r = await client.post(f"{API_URL}{path}", headers=headers, json=body)
     if r.status_code >= 400:
         # Surface the API's own structured error instead of an httpx traceback:
         # "insufficient_credit" or "already_running" is something the student

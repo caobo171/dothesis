@@ -12,13 +12,14 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..db import db_session
 from ..deps import current_user
 from ..models import User
+from ..tool_billing import Timer, record_tool_run, surface_of
 from ..user_memory import load_user_prefs, write_user_prefs
 
 logger = logging.getLogger(__name__)
@@ -50,96 +51,9 @@ class HumanizeOut(BaseModel):
     rounds: int | None = None
 
 
-def _meter_and_charge(db: Session, user: User, usage: list[dict]) -> int:
-    """Record the LLM cost in `token_ledger` and debit the caller.
-
-    Until now humanize called the model directly, so it wrote no ledger row and
-    charged nothing — a blind spot on the WEB path as much as over MCP. The
-    tokens are real either way; only the accounting was missing.
-
-    Billing follows job_runner._charge_auto_run exactly rather than inventing a
-    second scheme: bill each ledger row at ITS OWN model's rate via
-    `credit_multiplier`, because a pass can span models (the anchor router and
-    the rewrite are separately configurable) and one scalar cannot price that.
-
-    Charged AFTER the work and capped at the balance, again matching auto runs.
-    That means a user at zero is under-billed rather than refused. The trade is
-    deliberate: refusing here would fail a rewrite the student already waited
-    30s for, and the under-charge is visible (logged, and in token_ledger)
-    instead of silent. A hard pre-flight gate is a pricing decision, not a
-    metering one.
-
-    Never raises. A billing failure must not lose a rewrite that succeeded.
-    """
-    if not usage:
-        return 0
-
-    from ..credit_ledger import InsufficientCredit, debit  # noqa: PLC0415
-    from ..models import TokenLedger  # noqa: PLC0415
-    from ..pricing import credit_multiplier  # noqa: PLC0415
-
-    # --- 1. METER. Always, and committed on its own. -----------------------
-    # The tokens were spent whether or not we can bill for them, so the ledger
-    # write must not share a transaction with the debit: an unbillable call
-    # rolling back its own cost record is how a blind spot comes back.
-    by_model: dict[str, int] = {}
-    try:
-        for u in usage:
-            model = str(u.get("model") or "unknown")
-            p_tok = int(u.get("prompt_tokens") or 0)
-            c_tok = int(u.get("completion_tokens") or 0)
-            db.add(TokenLedger(
-                project_id=None, user_id=user.id, action_kind="humanize",
-                model=model, prompt_tokens=p_tok, completion_tokens=c_tok,
-                reserved=0, duration_ms=0))
-            by_model[model] = by_model.get(model, 0) + p_tok + c_tok
-        db.commit()
-    except Exception:  # noqa: BLE001
-        logger.exception("humanize metering failed for user %s", user.id)
-        db.rollback()
-        return 0
-
-    total = sum(by_model.values())
-    if total <= 0:
-        # The provider surfaced no usage metadata. The rows above still record
-        # that the calls happened — "did we attempt N calls at $0 because the
-        # provider stopped reporting?" is a question worth being able to answer.
-        return 0
-
-    # --- 2. BILL. Best-effort, never fatal. --------------------------------
-    cost = max(1, round(sum(t / 1000 * credit_multiplier(m)
-                            for m, t in by_model.items())))
-    try:
-        # Re-read the balance from the DB rather than trusting `user.credit`.
-        # The User handed over by `current_user` was loaded at request start and
-        # a 30s humanize is long enough for a concurrent charge to have moved it
-        # — capping against the stale value made debit() raise
-        # InsufficientCredit and (before the split above) took the ledger row
-        # down with it.
-        fresh = db.get(User, user.id)
-        charge = min(cost, (fresh.credit if fresh else 0) or 0)
-        if charge > 0:
-            debit(db, fresh, delta=charge, reason="humanize",
-                  ref_type="humanize", ref_id=None)
-            db.commit()
-        if charge < cost:
-            logger.warning(
-                "humanize under-billed user=%s: cost=%s charged=%s", user.id, cost, charge)
-        return charge
-    except InsufficientCredit:
-        # Lost a race with another charge between the read and the lock. The
-        # cost is already recorded; do not fail a rewrite over the invoice.
-        logger.warning("humanize: balance raced to zero for user %s", user.id)
-        db.rollback()
-        return 0
-    except Exception:  # noqa: BLE001
-        logger.exception("humanize charge failed for user %s", user.id)
-        db.rollback()
-        return 0
-
-
 @router.post("/humanize", response_model=HumanizeOut)
 def humanize_endpoint(
+    request: Request,
     body: HumanizeIn,
     user: User = Depends(current_user),
     db: Session = Depends(db_session),
@@ -161,7 +75,8 @@ def humanize_endpoint(
     if not anchor:
         anchor = ((load_user_prefs(db, user.id) or {}).get("writing_anchor") or "").strip()
 
-    r = humanize_prose(body.text, language=body.language, user_anchor=anchor or None)
+    with Timer() as timer:
+        r = humanize_prose(body.text, language=body.language, user_anchor=anchor or None)
 
     # Persist only a caller-supplied anchor, and only once it worked — saving a
     # sample that produced no_anchor would pin the user to a bad anchor.
@@ -171,7 +86,10 @@ def humanize_endpoint(
             db.commit()
         except Exception:  # noqa: BLE001
             logger.exception("humanize: anchor save failed for user %s", user.id)
-    charged = _meter_and_charge(db, user, r.get("usage") or [])
+    charged = record_tool_run(
+        db, user, surface=surface_of(request), tool="humanize", ok=bool(r.get("ok")),
+        error=r.get("error"), usage=r.get("usage") or [],
+        duration_ms=timer.ms).charged
 
     frozen = r.get("frozen") or {}
     return HumanizeOut(

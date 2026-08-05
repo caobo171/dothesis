@@ -29,6 +29,7 @@ type CitationListOut = {
   truncated: boolean;
   items: CitationItem[];
   detail: string | null;
+  credits_charged: number;
 };
 
 /**
@@ -114,6 +115,11 @@ export function CitationList() {
             {missing > 0 && (
               <span className="text-[#8E6B2A] font-semibold">
                 {t("tools.citation.countMissing", { count: missing })}
+              </span>
+            )}
+            {result!.credits_charged > 0 && (
+              <span className="ml-auto text-ink-500 tabular-nums">
+                {t("tools.credits", { count: result!.credits_charged })}
               </span>
             )}
           </div>

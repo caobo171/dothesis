@@ -569,3 +569,54 @@ class McpToolCall(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
+
+
+class ToolRun(Base):
+    """One standalone tool invocation — humanize, cite a .docx, check a list.
+
+    WHY IT EXISTS: the tools had no record of their own. An LLM-backed run left
+    `token_ledger` rows, but every one of them said action_kind="humanize"
+    whatever the tool actually was, and the tools that call no model — CrossRef
+    lookups, stylometry — left nothing at all and charged nothing. So "how much
+    is the citation tool being used, by whom, is it working, and what is it
+    costing us" had no answer anywhere.
+
+    SEPARATE FROM token_ledger on purpose: that table is one row per metered LLM
+    CALL (several per run, one per model), this is one row per RUN. Joining them
+    is what answers "what did this document cost the student".
+
+    BOTH credit numbers are stored. Charging is capped at the balance — a
+    student at zero is under-billed rather than refused, matching auto runs — so
+    a table recording only what was collected would hide precisely how much is
+    being given away. `credits_cost` is what it should have cost.
+
+    Rows are kept when the run FAILS and when it charges zero. A tool being
+    hammered for free is exactly what this exists to surface.
+
+    Sizes and counts, never prose — the same line McpToolCall draws, for the
+    same reason.
+    """
+    __tablename__ = "tool_runs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    # The same tool is reachable from the web app, the partner API and the MCP
+    # connector, and "who is actually using this" is a different answer per door.
+    surface: Mapped[str] = mapped_column(String(16), nullable=False, default="web")
+    tool: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    ok: Mapped[bool] = mapped_column(nullable=False, index=True)
+    error: Mapped[str | None] = mapped_column(Text)
+    # What was billed BY COUNT — references checked, sources looked up. Zero for
+    # token-billed tools, which is how the two schemes are told apart later.
+    units: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    credits_cost: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    credits_charged: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )

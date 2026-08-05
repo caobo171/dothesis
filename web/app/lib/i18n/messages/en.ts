@@ -162,6 +162,7 @@ export const en = {
   "nav.announcements": "Announcements",
   "nav.orders": "Orders",
   "nav.connectors": "Connectors",
+  "nav.toolUsage": "Tool usage",
 
   "shell.tagline": "Draft with conviction",
   "shell.collapse": "Collapse",
@@ -313,6 +314,7 @@ export const en = {
   "tools.cite.found_one": "{count} source cited in this thesis",
   "tools.cite.found_other": "{count} sources cited in this thesis",
   "tools.cite.willResolve": "each one looked up in CrossRef and formatted in APA 7",
+  "tools.cite.willCost": "{count} credits — you pay per source we go and check",
   "tools.cite.willLink":
     "every citation becomes a link — click it to jump to its entry in the list",
   "tools.cite.willReplaceList":
@@ -325,7 +327,8 @@ export const en = {
     "Scans {count} body paragraphs for claims a reader would expect a source for, " +
     "searches CrossRef, and inserts a citation only when a real paper is confirmed " +
     "to support it. Anything unconfirmed is marked [citation needed] instead of " +
-    "guessed. This part costs credits.",
+    "guessed. This part runs a model, so it costs extra on top of the price " +
+    "above — billed on what it actually uses, which a scan cannot predict.",
   "tools.cite.run": "Cite the document",
   "tools.cite.running": "Citing…",
   "tools.cite.errFailed": "The document could not be cited.",

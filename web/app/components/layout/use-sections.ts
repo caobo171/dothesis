@@ -99,6 +99,9 @@ export function useSidebarSections(): SidebarSection[] {
           { name: t("nav.announcements"), href: "/admin/announcements", icon: SpeakerWaveIcon },
           { name: t("nav.orders"), href: "/admin/orders", icon: CreditCardIcon },
           { name: t("nav.connectors"), href: "/admin/connectors", icon: LinkIcon },
+          // Tool runs happen outside any project, so neither the jobs nor the
+          // papers view has ever shown them.
+          { name: t("nav.toolUsage"), href: "/admin/tools", icon: PuzzlePieceIcon },
         ],
       });
     }

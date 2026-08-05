@@ -14,7 +14,7 @@ import io
 import logging
 import re
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,7 @@ from ..db import db_session
 from ..deps import current_user
 from ..jwt_auth import AuthedBody
 from ..models import User
+from ..tool_billing import Timer, record_tool_run, surface_of
 from ..user_memory import load_user_prefs, write_user_prefs
 
 logger = logging.getLogger(__name__)
@@ -49,10 +50,13 @@ class RhythmOut(BaseModel):
     verdict: str
     basis: str
     detail: str | None = None
+    credits_charged: int = 0
 
 
 @router.post("/writing-rhythm", response_model=RhythmOut)
-def writing_rhythm(body: RhythmBody, user: User = Depends(current_user)) -> RhythmOut:
+def writing_rhythm(request: Request, body: RhythmBody,
+                   user: User = Depends(current_user),
+                   db: Session = Depends(db_session)) -> RhythmOut:
     """Score how MECHANICAL the sentence rhythm of a passage is, 0-1.
 
     NOT an AI detector, and named so it cannot be mistaken for one. It runs the
@@ -71,11 +75,19 @@ def writing_rhythm(body: RhythmBody, user: User = Depends(current_user)) -> Rhyt
     """
     from orchestrator.tools.detector import StylometricScorer  # noqa: PLC0415
 
-    score = StylometricScorer().score(body.text)
+    with Timer() as t:
+        score = StylometricScorer().score(body.text)
     if score is None:
+        # Too short to judge is not a run: nothing was scored, so nothing is
+        # billed, but the attempt is still recorded — "how often does this
+        # bounce people?" is worth being able to answer.
+        record_tool_run(db, user, surface=surface_of(request), tool="writing-rhythm", ok=False,
+                        error="too_short", duration_ms=t.ms)
         return RhythmOut(
             ok=False, verdict="too_short", basis="sentence-length burstiness",
             detail="Needs at least 3 sentences to judge rhythm.")
+
+    charge = record_tool_run(db, user, surface=surface_of(request), tool="writing-rhythm", duration_ms=t.ms)
 
     if score >= 0.7:
         verdict = "very_even"
@@ -85,6 +97,7 @@ def writing_rhythm(body: RhythmBody, user: User = Depends(current_user)) -> Rhyt
         verdict = "varied"
     return RhythmOut(
         ok=True, score=score, verdict=verdict,
+        credits_charged=charge.charged,
         basis="sentence-length burstiness + formulaic connector density",
         detail={
             "very_even": "Sentences are close to uniform length — the pattern LLM "
@@ -122,6 +135,9 @@ class CitationOut(BaseModel):
     matched_by: str | None = None
     warning: str | None = None
     detail: str | None = None
+    # Charged per RUN, so this is 0 on the per-item rows inside a list check —
+    # the list's own total is on CitationListOut.
+    credits_charged: int = 0
 
 
 # Thin wrappers over orchestrator.tools.crossref, which is where the HTTP calls
@@ -193,7 +209,9 @@ def _verify_one(ref: str) -> CitationOut:
 
 
 @router.post("/verify-citation", response_model=CitationOut)
-def verify_citation(body: CitationBody, user: User = Depends(current_user)) -> CitationOut:
+def verify_citation(request: Request, body: CitationBody,
+                    user: User = Depends(current_user),
+                    db: Session = Depends(db_session)) -> CitationOut:
     """Check ONE reference against CrossRef — does this actually exist?
 
     The single most common way an LLM-assisted thesis fails: a reference that
@@ -214,7 +232,15 @@ def verify_citation(body: CitationBody, user: User = Depends(current_user)) -> C
     characters, so a chapter would be matched on its opening sentence and come
     back "probably fine" against an unrelated paper.
     """
-    return _verify_one(body.reference)
+    with Timer() as t:
+        out = _verify_one(body.reference)
+    # One lookup, one unit. `ok=False` here means CrossRef was unreachable —
+    # our failure, so it bills nothing.
+    charge = record_tool_run(db, user, surface=surface_of(request), tool="verify-citation", ok=out.ok,
+                             error=None if out.ok else "unreachable",
+                             units=1, duration_ms=t.ms)
+    out.credits_charged = charge.charged
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -350,11 +376,14 @@ class CitationListOut(BaseModel):
     truncated: bool = False
     items: list[CitationItem] = []
     detail: str | None = None
+    credits_charged: int = 0
 
 
 @router.post("/verify-citations", response_model=CitationListOut)
 def verify_citations(
-    body: CitationListBody, user: User = Depends(current_user),
+    request: Request, body: CitationListBody,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
 ) -> CitationListOut:
     """Check every reference in a pasted document or reference list.
 
@@ -370,6 +399,11 @@ def verify_citations(
     """
     refs = extract_references(body.text)
     if not refs:
+        # Nothing was looked up, so nothing is billed. Still recorded: "students
+        # paste something we cannot find references in" is a product problem,
+        # and it is invisible unless the attempt leaves a row.
+        record_tool_run(db, user, surface=surface_of(request), tool="verify-citations", ok=False,
+                        error="no_references_found")
         return CitationListOut(
             ok=True, detected=0, checked=0,
             detail="No references found. This looks for lines carrying a year or "
@@ -379,16 +413,29 @@ def verify_citations(
     capped = refs[:_MAX_REFS]
     from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with Timer() as t, ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(_verify_one, capped))
 
     items = [
         CitationItem(reference=ref, **res.model_dump())
         for ref, res in zip(capped, results, strict=True)
     ]
+    # Billed per reference ACTUALLY looked up, not per reference detected: a
+    # truncated run charges for the 50 it checked, never for the 200 it found.
+    # References CrossRef could not be reached for are excluded for the same
+    # reason the single check bills nothing on a transport failure.
+    reached = sum(1 for r in results if r.ok)
+    # A run where CrossRef answered nothing at all is a FAILED run, not a
+    # successful one that happened to check zero references — otherwise an
+    # outage looks like normal traffic in the admin view.
+    charge = record_tool_run(db, user, surface=surface_of(request), tool="verify-citations",
+                             ok=reached > 0,
+                             error=None if reached else "crossref_unreachable",
+                             units=reached, duration_ms=t.ms)
     return CitationListOut(
         ok=True, detected=len(refs), checked=len(items),
-        truncated=len(refs) > len(capped), items=items)
+        truncated=len(refs) > len(capped), items=items,
+        credits_charged=charge.charged)
 
 
 # ---------------------------------------------------------------------------
@@ -418,10 +465,13 @@ class SimilarityOut(BaseModel):
     provider: str | None = None
     error: str | None = None
     detail: str | None = None
+    credits_charged: int = 0
 
 
 @router.post("/plagiarism-check", response_model=SimilarityOut)
-def plagiarism_check(body: SimilarityBody, user: User = Depends(current_user)) -> SimilarityOut:
+def plagiarism_check(request: Request, body: SimilarityBody,
+                     user: User = Depends(current_user),
+                     db: Session = Depends(db_session)) -> SimilarityOut:
     """Check a passage against a similarity provider, if one is configured.
 
     There is no local fallback and there must never be one. A similarity check
@@ -438,6 +488,11 @@ def plagiarism_check(body: SimilarityBody, user: User = Depends(current_user)) -
 
     provider = get_provider()
     if provider is None:
+        # Not billed, on purpose: nothing was checked. Charging for a check the
+        # deployment cannot perform is the clearest possible way to lose a
+        # customer's trust in the meter.
+        record_tool_run(db, user, surface=surface_of(request), tool="plagiarism-check", ok=False,
+                        error="provider_not_configured")
         return SimilarityOut(
             ok=False,
             error="provider_not_configured",
@@ -446,9 +501,12 @@ def plagiarism_check(body: SimilarityBody, user: User = Depends(current_user)) -
                    "'no matches found'.",
         )
     try:
-        raw = provider.check(body.text, language=body.language)
+        with Timer() as t:
+            raw = provider.check(body.text, language=body.language)
     except Exception:  # noqa: BLE001
         logger.exception("plagiarism-check failed for user %s", user.id)
+        record_tool_run(db, user, surface=surface_of(request), tool="plagiarism-check", ok=False,
+                        error="provider_error", duration_ms=t.ms)
         # Never degrade a transport failure into "clean" — same rule as
         # verify_citation's network-failure branch.
         return SimilarityOut(
@@ -456,11 +514,13 @@ def plagiarism_check(body: SimilarityBody, user: User = Depends(current_user)) -
             detail="The similarity provider could not be reached, so this "
                    "passage was NOT checked.",
         )
+    charge = record_tool_run(db, user, surface=surface_of(request), tool="plagiarism-check", duration_ms=t.ms)
     return SimilarityOut(
         ok=True,
         score=raw.get("score"),
         matches=[SimilarityMatch(**m) for m in (raw.get("matches") or [])],
         provider=raw.get("provider") or getattr(provider, "name", None),
+        credits_charged=charge.charged,
     )
 
 
@@ -479,8 +539,9 @@ class ExtractOut(BaseModel):
 
 
 @router.post("/extract-text", response_model=ExtractOut)
-async def extract_text(file: UploadFile = File(...),
-                       user: User = Depends(current_user)) -> ExtractOut:
+async def extract_text(request: Request, file: UploadFile = File(...),
+                       user: User = Depends(current_user),
+                       db: Session = Depends(db_session)) -> ExtractOut:
     """Pull plain text out of a PDF / .docx / .txt. Nothing is stored.
 
     The existing upload route (uploads.upload_paper) is project-scoped and puts
@@ -520,7 +581,12 @@ async def extract_text(file: UploadFile = File(...),
         text = body.decode("utf-8", errors="replace")
 
     text = (text or "").strip()
+    # Free (pricing.TOOL_FREE) but recorded: this is the INPUT step for the paid
+    # tools, so billing it charges a student twice for one file — while "how
+    # many people upload a document and never run anything on it" is a funnel
+    # number that only exists if the attempt leaves a row.
     if not text:
+        record_tool_run(db, user, surface=surface_of(request), tool="extract-text", ok=False, error="no_text")
         # A scanned PDF is images, not text. Say which problem it is — "no text"
         # sends the student looking for a bug in our parser instead of exporting
         # a text-based copy.
@@ -529,6 +595,7 @@ async def extract_text(file: UploadFile = File(...),
             detail="No text could be read from this file. If it's a scan or "
                    "photo, the pages are images — export a text-based PDF or "
                    "paste the passage instead.")
+    record_tool_run(db, user, surface=surface_of(request), tool="extract-text")
     return ExtractOut(ok=True, text=text, chars=len(text),
                       page_count=page_count, filename=file.filename)
 
@@ -644,26 +711,32 @@ async def _read_docx(file: UploadFile) -> bytes:
 
 
 @router.post("/document/scan", response_model=DocScanOut)
-async def scan_document(file: UploadFile = File(...),
-                        user: User = Depends(current_user)) -> DocScanOut:
+async def scan_document(request: Request, file: UploadFile = File(...),
+                        user: User = Depends(current_user),
+                        db: Session = Depends(db_session)) -> DocScanOut:
     """Report what a rewrite would touch. No LLM, no charge.
 
     The confirm-before-you-spend half of the flow: a thesis is hundreds of
     paragraphs, and letting one click bill an unknown amount of a student's
-    credits is not a defensible default.
+    credits is not a defensible default. Charging for the ESTIMATE would defeat
+    the point of showing it, so this stays in pricing.TOOL_FREE — but it is
+    recorded, because scan-then-abandon is the drop-off worth watching.
     """
     from orchestrator.tools.humanize_docx import scan_docx  # noqa: PLC0415
 
     body = await _read_docx(file)
     out = scan_docx(body)
     if not out.get("ok"):
+        record_tool_run(db, user, surface=surface_of(request), tool="scan-docx", ok=False,
+                        error=out.get("error") or "unreadable")
         return DocScanOut(ok=False, error=out.get("error"),
                           detail="This file could not be opened as a Word document.")
+    record_tool_run(db, user, surface=surface_of(request), tool="scan-docx", units=out.get("body_paragraphs") or 0)
     return DocScanOut(**out)
 
 
 @router.post("/document/humanize")
-async def humanize_document(file: UploadFile = File(...),
+async def humanize_document(request: Request, file: UploadFile = File(...),
                             language: str = "vi",
                             user: User = Depends(current_user),
                             db: Session = Depends(db_session)):
@@ -673,14 +746,13 @@ async def humanize_document(file: UploadFile = File(...),
     a one-shot artifact of a tool call, so an S3 object and a DB row would be
     litter attached to a project the student does not have.
 
-    Billing reuses humanize's `_meter_and_charge` — every passage's usage is
-    accumulated by the walk and charged once here, at each model's own rate.
-    The count lands in the X-Credits-Charged header because a streamed file
-    cannot also carry a JSON body; it is in token_ledger either way.
+    Billed on TOKENS — every passage's usage is accumulated by the walk and
+    charged once here, at each model's own rate. The count lands in the
+    X-Credits-Charged header because a streamed file cannot also carry a JSON
+    body; it is in token_ledger and tool_runs either way.
     """
     from fastapi.responses import StreamingResponse  # noqa: PLC0415
     from orchestrator.tools.humanize_docx import humanize_docx  # noqa: PLC0415
-    from .humanize import _meter_and_charge  # noqa: PLC0415
     from .uploads import _DOCX_MIME  # noqa: PLC0415
     from ..user_memory import load_user_prefs as _prefs  # noqa: PLC0415
 
@@ -689,10 +761,15 @@ async def humanize_document(file: UploadFile = File(...),
     # sample once must not be asked for it again per document.
     anchor = ((_prefs(db, user.id) or {}).get("writing_anchor") or "").strip()
 
-    out, report = humanize_docx(body, language=language, user_anchor=anchor or None)
-    charged = _meter_and_charge(db, user, report.get("usage") or [])
+    with Timer() as t:
+        out, report = humanize_docx(body, language=language, user_anchor=anchor or None)
+    ok = out is not None and bool(report.get("ok"))
+    charged = record_tool_run(
+        db, user, surface=surface_of(request), tool="humanize-docx", ok=ok,
+        error=None if ok else (report.get("error") or "rewrite_failed"),
+        usage=report.get("usage") or [], duration_ms=t.ms).charged
 
-    if out is None or not report.get("ok"):
+    if not ok:
         raise HTTPException(422, detail={"error": {
             "code": report.get("error") or "rewrite_failed",
             "message": report.get("detail")
@@ -724,31 +801,43 @@ class CiteScanOut(BaseModel):
     passages: int = 0
     headings: int = 0
     tables: int = 0
+    # What phase A will cost, quoted before it runs. Phase B is billed on tokens
+    # and cannot be quoted from a scan, so it is deliberately not in here.
+    resolve_cost: int = 0
     error: str | None = None
     detail: str | None = None
 
 
 @router.post("/document/cite/scan", response_model=CiteScanOut)
-async def scan_document_citations(file: UploadFile = File(...),
-                                  user: User = Depends(current_user)) -> CiteScanOut:
-    """Report what citing would touch. No LLM, no charge.
+async def scan_document_citations(request: Request, file: UploadFile = File(...),
+                                  user: User = Depends(current_user),
+                                  db: Session = Depends(db_session)) -> CiteScanOut:
+    """Report what citing would touch, and what it will cost. No LLM, no charge.
 
-    Phase A (resolving the citations already in the document) is free either
-    way; this exists for phase B, which spends tokens per claim. "Add sources to
-    my thesis" is exactly the operation nobody should agree to blind.
+    The estimate stays free (pricing.TOOL_FREE) for the same reason the humanize
+    scan does: charging for the number a student needs in order to decide
+    whether to pay defeats the point of showing it. "Add sources to my thesis"
+    is exactly the operation nobody should agree to blind.
     """
     from orchestrator.tools.cite_docx import scan_cite_docx  # noqa: PLC0415
+    from ..tool_billing import tool_cost  # noqa: PLC0415
 
     body = await _read_docx(file)
     out = scan_cite_docx(body)
     if not out.get("ok"):
+        record_tool_run(db, user, surface=surface_of(request), tool="scan-cite-docx", ok=False,
+                        error=out.get("error") or "unreadable")
         return CiteScanOut(ok=False, error=out.get("error"),
                            detail="This file could not be opened as a Word document.")
-    return CiteScanOut(**out)
+    sources = out.get("distinct_sources") or 0
+    record_tool_run(db, user, surface=surface_of(request), tool="scan-cite-docx", units=sources)
+    # Phase A's price, quoted before it is spent. Phase B is token-billed and
+    # cannot be quoted from a scan — the UI says so rather than guessing.
+    return CiteScanOut(**out, resolve_cost=tool_cost("cite-docx", units=sources))
 
 
 @router.post("/document/cite")
-async def cite_document(file: UploadFile = File(...),
+async def cite_document(request: Request, file: UploadFile = File(...),
                         add_missing: bool = True,
                         user: User = Depends(current_user),
                         db: Session = Depends(db_session)):
@@ -758,20 +847,31 @@ async def cite_document(file: UploadFile = File(...),
     because a streamed document cannot also carry a JSON body.
 
     `add_missing=false` runs phase A only — resolve the existing citations and
-    rebuild the reference list from CrossRef records. That path calls no model
-    at all and therefore charges nothing, which is worth keeping available: it
-    is the half of this feature that cannot go wrong.
+    rebuild the reference list from CrossRef records. It calls no model, so it
+    is billed per SOURCE looked up rather than on tokens, and stays available as
+    the half of this feature that cannot go wrong.
+
+    Both halves are billed on one run: units for the CrossRef lookups phase A
+    made, tokens for the model calls phase B made, added together.
     """
     from fastapi.responses import StreamingResponse  # noqa: PLC0415
     from orchestrator.tools.cite_docx import cite_docx  # noqa: PLC0415
-    from .humanize import _meter_and_charge  # noqa: PLC0415
     from .uploads import _DOCX_MIME  # noqa: PLC0415
 
     body = await _read_docx(file)
-    out, report = cite_docx(body, add_missing=add_missing)
-    charged = _meter_and_charge(db, user, report.get("usage") or [])
+    with Timer() as t:
+        out, report = cite_docx(body, add_missing=add_missing)
+    ok = out is not None and bool(report.get("ok"))
+    # Billed per source ACTUALLY looked up — resolved plus unresolved, since a
+    # CrossRef query was spent either way, but not the entries carried through
+    # from the student's own list untouched.
+    sources = int(report.get("resolved") or 0) + int(report.get("unresolved") or 0)
+    charged = record_tool_run(
+        db, user, surface=surface_of(request), tool="cite-docx", ok=ok,
+        error=None if ok else (report.get("error") or "cite_failed"),
+        units=sources, usage=report.get("usage") or [], duration_ms=t.ms).charged
 
-    if out is None or not report.get("ok"):
+    if not ok:
         raise HTTPException(422, detail={"error": {
             "code": report.get("error") or "cite_failed",
             "message": report.get("detail")

@@ -118,6 +118,12 @@ export function CiteDocument() {
                   : t("tools.cite.willCreateList")}
             </li>
             <li>· {t("tools.cite.willKeepFormat", { count: scan.headings })}</li>
+            {/* The price, quoted before it is spent. Phase A is billed per
+                source looked up, so the scan can name the exact number; phase B
+                is billed on tokens and cannot be quoted from a scan. */}
+            <li className="font-semibold text-ink-800">
+              · {t("tools.cite.willCost", { count: scan.resolve_cost })}
+            </li>
           </ul>
 
           <label className="mt-3 pt-3 border-t border-ink-200 flex items-start gap-2.5 cursor-pointer">

@@ -79,6 +79,61 @@ PAPER_COST: dict[tuple[str, str], int] = {
 }
 
 
+# --- standalone tools -------------------------------------------------------
+#
+# Tools that call a model are billed on TOKENS (credit_multiplier, below) — the
+# cost is real and varies with the document, so a flat fee would be wrong in
+# both directions.
+#
+# Tools that call NO model still cost something: a CrossRef round trip, a
+# vendor's similarity check, CPU. They were charging nothing at all, which is
+# not a decision anyone made — it fell out of billing being wired to token usage
+# and those tools having none. These are the flat rates.
+#
+# THE UNIT IS A LOOKUP. One CrossRef query = 1 credit (~$0.0025 at Starter pack
+# rates), so checking a 40-entry reference list costs 40 credits (~$0.10) and
+# checking one reference costs 1. That keeps the price proportional to the work
+# without needing a second pricing concept, and it is explainable to a student:
+# you pay per source we go and check.
+#
+# ⚠️ These are a first pass, chosen for shape not for margin. Nobody has costed a
+# CrossRef call against a support ticket. Change the numbers here — every route
+# reads this table, nothing hardcodes a price.
+TOOL_COST_PER_UNIT: dict[str, int] = {
+    # per CrossRef lookup
+    "verify-citation":  1,
+    "verify-citations": 1,
+    # per distinct source resolved out of the document (phase A). Phase B's
+    # model calls are billed on tokens on top of this.
+    "cite-docx":        1,
+}
+
+TOOL_COST_FLAT: dict[str, int] = {
+    # Local stylometry, no network, no model. Priced as a token gesture rather
+    # than free, so the run appears in the ledger like every other one.
+    "writing-rhythm":   1,
+    # A vendor similarity check is the one tool with a real per-call invoice
+    # attached. Charged only on a successful check — an unconfigured deployment
+    # returns provider_not_configured and must not bill for a check it did not
+    # perform.
+    "plagiarism-check": 5,
+}
+
+# Charged at zero, deliberately, and listed so it is a decision rather than an
+# omission:
+#
+#   extract-text          the INPUT step for the paid tools. Billing it means a
+#                         student pays twice for the same file — once to read
+#                         it, once to humanize it.
+#   document/scan         the confirm-before-you-spend step. Both exist so a
+#   document/cite/scan    student can see the size of the job BEFORE agreeing to
+#                         pay for it; charging for the estimate defeats the
+#                         entire point of showing it.
+TOOL_FREE: frozenset[str] = frozenset({
+    "extract-text", "scan-docx", "scan-cite-docx",
+})
+
+
 TIER_TO_MODEL: dict[str, str] = {
     "standard": "gemini-flash",
     "premium":  "gpt-5",
