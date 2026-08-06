@@ -199,3 +199,45 @@ export function FileDrop({
     </div>
   );
 }
+
+/**
+ * How far a document walk has got, while it is still walking.
+ *
+ * The spinner alone was the single worst thing about this screen: a 70-batch
+ * thesis is minutes of a rotating circle with no way to tell a working run from
+ * a dead one. The bar is driven by counts the server already records per batch,
+ * so it reflects real work finishing rather than a timer pretending to.
+ *
+ * Renders nothing until the walk reports its first tick — a 0/0 bar would be a
+ * worse lie than no bar.
+ */
+export function RunProgressBar({
+  progress,
+  label,
+}: {
+  progress: { done: number; total: number } | null;
+  label: string;
+}) {
+  if (!progress || progress.total <= 0) return null;
+  const pct = Math.min(100, Math.round((progress.done / progress.total) * 100));
+  return (
+    <div className="mt-3">
+      <div className="mb-1.5 flex items-baseline justify-between text-[12px] text-ink-600">
+        <span>{label}</span>
+        <span className="tabular-nums text-ink-500">{pct}%</span>
+      </div>
+      <div
+        className="h-1.5 w-full overflow-hidden rounded-full bg-ink-100"
+        role="progressbar"
+        aria-valuenow={progress.done}
+        aria-valuemin={0}
+        aria-valuemax={progress.total}
+      >
+        <div
+          className="h-full rounded-full bg-primary-600 transition-[width] duration-500 ease-out"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}

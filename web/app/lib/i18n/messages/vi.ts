@@ -349,6 +349,9 @@ export const vi: Record<MessageKey, string> = {
     "Sẽ chạy thành {count} lượt viết lại (các đoạn được gom theo mục). Bạn chỉ trả " +
     "cho số token thực dùng — số chính xác hiện trong mục Giao dịch.",
   "tools.doc.run": "Humanize cả tài liệu",
+  "tools.doc.runningCount": "Đang viết lại… {done}/{total}",
+  "tools.doc.runningBatches": "Đã viết lại {done}/{total} lô",
+  "tools.doc.runningSteps": "Bước {done}/{total}",
   "tools.doc.errEmpty":
     "Không có gì để viết lại — tài liệu này chỉ gồm tiêu đề, bảng và chú thích.",
   "tools.doc.downloaded": "Đã tải về {name}",

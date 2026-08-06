@@ -366,6 +366,9 @@ export const en = {
     "Runs as {count} rewrites (paragraphs are batched by section). You’re charged " +
     "for the tokens actually used — the exact amount lands in Transactions.",
   "tools.doc.run": "Humanize document",
+  "tools.doc.runningCount": "Rewriting… {done}/{total}",
+  "tools.doc.runningBatches": "Batch {done} of {total} rewritten",
+  "tools.doc.runningSteps": "Step {done} of {total}",
   "tools.doc.errEmpty":
     "Nothing to rewrite — this document is headings, tables and captions only.",
   "tools.doc.downloaded": "{name} downloaded",

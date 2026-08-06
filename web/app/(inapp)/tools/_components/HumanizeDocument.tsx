@@ -5,8 +5,10 @@ import { FileText, Loader2, Download } from "lucide-react";
 
 import { useT, useTn } from "@/app/lib/i18n/LocaleProvider";
 
-import { scanDocument, humanizeDocument, type DocScan } from "./use-tool";
-import { RunButton, ToolError, ToolCaveat } from "./shell";
+import {
+  scanDocument, humanizeDocument, useRunProgress, type DocScan,
+} from "./use-tool";
+import { RunButton, ToolError, ToolCaveat, RunProgressBar } from "./shell";
 
 /**
  * Whole-document rewrite: .docx in, .docx out, formatting intact.
@@ -34,6 +36,10 @@ export function HumanizeDocument() {
   } | null>(null);
   const t = useT();
   const tn = useTn();
+  // Polls the server for the run this page is currently holding open. Null
+  // until the walk counts its batches, so the button falls back to a plain
+  // "working…" rather than showing 0/0.
+  const progress = useRunProgress(running);
 
   const pick = async (f: File | undefined | null) => {
     if (!f) return;
@@ -129,7 +135,17 @@ export function HumanizeDocument() {
               disabled={scan.body_paragraphs === 0}
               onClick={() => void run()}
               idleLabel={t("tools.doc.run")}
-              busyLabel={t("tools.humanize.running")}
+              busyLabel={
+                progress
+                  ? t("tools.doc.runningCount", {
+                      done: progress.done, total: progress.total })
+                  : t("tools.humanize.running")
+              }
+            />
+            <RunProgressBar
+              progress={progress}
+              label={t("tools.doc.runningBatches", {
+                done: progress?.done ?? 0, total: progress?.total ?? 0 })}
             />
           </div>
         </div>

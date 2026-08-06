@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiFetch } from "@/app/lib/api";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
@@ -189,6 +189,25 @@ export async function deleteRunFiles(runId: string): Promise<number> {
   return r?.deleted ?? 0;
 }
 
+export type ActiveRun = { id: string | null; tool: string | null; done: number; total: number };
+
+/**
+ * "What am I running right now, and how far along is it?"
+ *
+ * The page showing the spinner is the one holding the POST open, so it cannot
+ * know the run id until that POST returns — the very thing it is waiting for.
+ * Asking by identity instead of by id is what lets a document walk report
+ * "batch 12 of 70" while its own request is still in flight.
+ */
+export async function fetchActiveRun(): Promise<ActiveRun | null> {
+  try {
+    return (await apiFetch("/tools/runs/active", { method: "POST", body: {} })) as ActiveRun;
+  } catch {
+    // A failed poll is not a failed run. Keep the spinner, drop the number.
+    return null;
+  }
+}
+
 export type RunProgress = { status: string; done: number; total: number };
 
 /** Where a run has got to. Polled while a document walk is open. */
@@ -248,6 +267,41 @@ export async function rerunToolRun(
     filename,
     credits: v === null ? null : Number(v),
   };
+}
+
+/**
+ * Poll the caller's in-flight run while `running` is true.
+ *
+ * Two seconds: a batch is a model call taking tens of seconds, so this is
+ * comfortably faster than the number it reports and still nearly free. Returns
+ * null until the walk reports its first tick, so the caller can fall back to a
+ * plain "working…" rather than showing a misleading 0/0.
+ */
+export function useRunProgress(running: boolean): { done: number; total: number } | null {
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
+  useEffect(() => {
+    if (!running) {
+      setProgress(null);
+      return;
+    }
+    let alive = true;
+    const tick = async () => {
+      const active = await fetchActiveRun();
+      // total === 0 means the walk has not counted its batches yet.
+      if (alive && active && active.total > 0) {
+        setProgress({ done: active.done, total: active.total });
+      }
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), 2000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [running]);
+
+  return progress;
 }
 
 export type DocScan = {

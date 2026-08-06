@@ -773,6 +773,40 @@ class RunProgressOut(BaseModel):
     total: int = 0
 
 
+class ActiveRunOut(BaseModel):
+    id: str | None = None
+    tool: str | None = None
+    done: int = 0
+    total: int = 0
+
+
+@router.post("/runs/active", response_model=ActiveRunOut)
+def active_run(body: AuthedBody, user: User = Depends(current_user),
+               db: Session = Depends(db_session)) -> ActiveRunOut:
+    """The caller's run that is still going, if any.
+
+    Exists because of a chicken-and-egg: the page that most needs to show
+    progress is the one holding the POST open, and it cannot know the run id
+    until that POST returns — which is the very thing it is waiting for. So the
+    client asks "what am I running right now" instead of "how is run 42 doing".
+
+    Scoped to the caller and to the newest running row. Two concurrent document
+    runs from one person would report the later one; that is a strictly better
+    answer than the spinner with no number that this replaces.
+    """
+    from ..models import ToolRun  # noqa: PLC0415
+
+    row = db.scalars(
+        select(ToolRun)
+        .where(ToolRun.user_id == user.id, ToolRun.status == "running")
+        .order_by(ToolRun.id.desc()).limit(1)
+    ).first()
+    if row is None:
+        return ActiveRunOut()
+    return ActiveRunOut(id=str(row.id), tool=row.tool,
+                        done=row.progress_done, total=row.progress_total)
+
+
 @router.post("/runs/{run_id}/progress", response_model=RunProgressOut)
 def run_progress(run_id: int, body: RunIdBody,
                  user: User = Depends(current_user),

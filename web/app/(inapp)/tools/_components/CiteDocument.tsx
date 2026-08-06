@@ -5,8 +5,8 @@ import { FileText, Loader2, Download } from "lucide-react";
 
 import { useT, useTn } from "@/app/lib/i18n/LocaleProvider";
 
-import { scanCiteDocument, citeDocument, type CiteScan } from "./use-tool";
-import { RunButton, ToolError, ToolCaveat } from "./shell";
+import { scanCiteDocument, citeDocument, type CiteScan, useRunProgress } from "./use-tool";
+import { RunButton, ToolError, ToolCaveat, RunProgressBar } from "./shell";
 
 /**
  * Whole-document citing: .docx in, .docx out, formatting intact.
@@ -33,6 +33,10 @@ export function CiteDocument() {
   } | null>(null);
   const t = useT();
   const tn = useTn();
+  // Same live counter as the humanize screen: phase A is a lookup per
+  // source and phase B a model call per batch, so this is minutes of
+  // waiting that used to show nothing but a spinning circle.
+  const progress = useRunProgress(running);
 
   const pick = async (f: File | undefined | null) => {
     if (!f) return;
@@ -148,7 +152,17 @@ export function CiteDocument() {
               disabled={false}
               onClick={() => void run()}
               idleLabel={t("tools.cite.run")}
-              busyLabel={t("tools.cite.running")}
+              busyLabel={
+                progress
+                  ? t("tools.doc.runningCount", {
+                      done: progress.done, total: progress.total })
+                  : t("tools.cite.running")
+              }
+            />
+            <RunProgressBar
+              progress={progress}
+              label={t("tools.doc.runningSteps", {
+                done: progress?.done ?? 0, total: progress?.total ?? 0 })}
             />
           </div>
         </div>
