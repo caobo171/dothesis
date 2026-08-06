@@ -468,6 +468,8 @@ export const vi: Record<MessageKey, string> = {
   "run.back": "Tất cả lượt dùng",
   "run.title": "Lượt chạy công cụ",
   "run.summary": "{changed} đoạn đã đổi · {unchanged} đoạn giữ nguyên · {total} đoạn trong tài liệu",
+  "run.exportHtml": "Xuất HTML",
+  "run.exportPdf": "Xuất PDF",
   "run.showUnchanged": "Hiện cả đoạn không đổi",
   "run.noChanges": "Lượt chạy này không đổi đoạn nào.",
   "run.truncated": "Chỉ hiện những đoạn đầu. Tải tệp về để xem phần còn lại.",

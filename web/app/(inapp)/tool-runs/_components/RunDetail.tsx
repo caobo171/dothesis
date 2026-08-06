@@ -8,7 +8,10 @@ import useSWR from "swr";
 import { apiFetch } from "@/app/lib/api";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
 
-import { triggerRunFileDownload } from "@/app/(inapp)/tools/_components/use-tool";
+import {
+  triggerRunDiffDownload,
+  triggerRunFileDownload,
+} from "@/app/(inapp)/tools/_components/use-tool";
 
 type Segment = { op: "equal" | "del" | "ins"; text: string };
 type ParagraphDiff = { index: number; before: string; after: string; segments: Segment[] };
@@ -120,6 +123,22 @@ export default function RunDetail({ runId }: { runId: string }) {
               >
                 <Download className="mr-1 inline w-3.5 h-3.5" aria-hidden />
                 {t("txn.tools.dlOutput")}
+              </button>
+              {/* Exports carry the WHOLE document, changed and unchanged, because
+                  a file read somewhere else has no "show unchanged" checkbox. */}
+              <button
+                type="button"
+                onClick={() => void triggerRunDiffDownload(runId, "html")}
+                className="rounded-full border border-ink-200 px-3 py-1.5 font-semibold text-ink-600 hover:bg-ink-50"
+              >
+                {t("run.exportHtml")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void triggerRunDiffDownload(runId, "pdf")}
+                className="rounded-full border border-ink-200 px-3 py-1.5 font-semibold text-ink-600 hover:bg-ink-50"
+              >
+                {t("run.exportPdf")}
               </button>
               <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-ink-600">
                 <input

@@ -181,6 +181,22 @@ export async function triggerRunFileDownload(runId: string, which: "input" | "ou
     `${base}/tools/runs/${runId}/file/${which}?st=${encodeURIComponent(st)}`;
 }
 
+/**
+ * Download a run's diff as a self-contained file.
+ *
+ * Same scoped-token shape as the file downloads, but a DIFFERENT scope
+ * (`tool-run-diff:` not `tool-run-file:`) so a link to the comparison never
+ * doubles as a link to the documents themselves.
+ */
+export async function triggerRunDiffDownload(runId: string, fmt: "html" | "pdf") {
+  const { mintStreamToken } = await import("@/app/lib/api");
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
+  const st = await mintStreamToken(`tool-run-diff:${runId}`);
+  const base = apiBase || "/api/v1";
+  window.location.href =
+    `${base}/tools/runs/${runId}/diff.${fmt}?st=${encodeURIComponent(st)}`;
+}
+
 /** Delete a run's stored files now, without waiting out the retention window. */
 export async function deleteRunFiles(runId: string): Promise<number> {
   const r = (await apiFetch(`/tools/runs/${runId}/files/delete`, {

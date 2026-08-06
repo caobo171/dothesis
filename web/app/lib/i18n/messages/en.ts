@@ -485,6 +485,8 @@ export const en = {
   "run.back": "All tool runs",
   "run.title": "Tool run",
   "run.summary": "{changed} paragraphs changed · {unchanged} kept as written · {total} in the document",
+  "run.exportHtml": "Export HTML",
+  "run.exportPdf": "Export PDF",
   "run.showUnchanged": "Show unchanged paragraphs",
   "run.noChanges": "No paragraph was changed in this run.",
   "run.truncated": "Only the first paragraphs are shown. Download the files for the rest.",

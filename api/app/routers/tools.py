@@ -871,29 +871,9 @@ async def run_diff(run_id: int, body: RunDiffIn,
     from starlette.concurrency import run_in_threadpool  # noqa: PLC0415
     from orchestrator.tools.docx_diff import diff_docx  # noqa: PLC0415
     from ..auth_admin import readable_run  # noqa: PLC0415
-    from ..tool_artifacts import FILE_RETENTION_DAYS, uri_parts  # noqa: PLC0415
 
     run = readable_run(db, user, run_id)
-    if not (run.input_s3_uri and run.output_s3_uri):
-        raise HTTPException(410, detail={"error": {
-            "code": "file_expired",
-            "message": f"Both files are needed to show what changed, and they "
-                       f"are kept for {FILE_RETENTION_DAYS} days."}})
-
-    def _fetch() -> tuple[bytes, bytes]:
-        s3 = s3_from_env()
-        out = []
-        for uri in (run.input_s3_uri, run.output_s3_uri):
-            bucket, key = uri_parts(uri)
-            out.append(s3.get_object(Bucket=bucket, Key=key)["Body"].read())
-        return out[0], out[1]
-
-    try:
-        before, after = await run_in_threadpool(_fetch)
-    except Exception:  # noqa: BLE001
-        logger.exception("run_diff: could not read stored files for run %s", run_id)
-        raise HTTPException(410, detail={"error": {
-            "code": "file_expired", "message": "The stored files could not be read."}})
+    before, after = await _run_diff_files(run, run_id)
 
     d = await run_in_threadpool(
         diff_docx, before, after,
@@ -907,6 +887,85 @@ async def run_diff(run_id: int, body: RunDiffIn,
             segments=[DiffSegmentOut(op=s.op, text=s.text) for s in i.segments],
         ) for i in d.items],
     )
+
+
+async def _run_diff_files(run, run_id: int) -> tuple[bytes, bytes]:
+    """Both stored halves of a run, or 410. Shared by the JSON and file views."""
+    from starlette.concurrency import run_in_threadpool  # noqa: PLC0415
+    from ..tool_artifacts import FILE_RETENTION_DAYS, uri_parts  # noqa: PLC0415
+
+    if not (run.input_s3_uri and run.output_s3_uri):
+        raise HTTPException(410, detail={"error": {
+            "code": "file_expired",
+            "message": f"Both files are needed to show what changed, and they "
+                       f"are kept for {FILE_RETENTION_DAYS} days."}})
+
+    def _fetch() -> tuple[bytes, bytes]:
+        s3 = s3_from_env()
+        got = []
+        for uri in (run.input_s3_uri, run.output_s3_uri):
+            bucket, key = uri_parts(uri)
+            got.append(s3.get_object(Bucket=bucket, Key=key)["Body"].read())
+        return got[0], got[1]
+
+    try:
+        return await run_in_threadpool(_fetch)
+    except Exception:  # noqa: BLE001
+        logger.exception("run diff: could not read stored files for run %s", run_id)
+        raise HTTPException(410, detail={"error": {
+            "code": "file_expired", "message": "The stored files could not be read."}})
+
+
+@router.get("/runs/{run_id}/diff.{fmt}")
+async def download_run_diff(
+    run_id: int, fmt: str,
+    # GET-only (browser <a download>), ?st= scoped to this run's diff.
+    user: User = Depends(stream_user_factory(
+        lambda run_id, fmt: f"tool-run-diff:{run_id}")),
+    db: Session = Depends(db_session),
+):
+    """The diff as a self-contained .html or .pdf, for reading somewhere else.
+
+    Exists because the on-screen view cannot leave the app: a supervisor, a
+    second opinion, or a bug report needs a file. HTML is the one that travels —
+    searchable, greppable, diffable — and the PDF is for handing to someone.
+    """
+    from fastapi.responses import Response  # noqa: PLC0415
+    from starlette.concurrency import run_in_threadpool  # noqa: PLC0415
+    from orchestrator.tools.docx_diff import (  # noqa: PLC0415
+        diff_docx, html_to_pdf, render_diff_html)
+    from ..auth_admin import readable_run  # noqa: PLC0415
+
+    if fmt not in ("html", "pdf"):
+        raise HTTPException(404, detail={"error": {"code": "not_found"}})
+    run = readable_run(db, user, run_id)
+    before, after = await _run_diff_files(run, run_id)
+
+    # Everything, not just the changed paragraphs: the file is for reading away
+    # from the app, where "show unchanged" is not a checkbox you can tick.
+    d = await run_in_threadpool(diff_docx, before, after,
+                                limit=5000, changed_only=False)
+    name = (run.input_filename or "document.docx").rsplit(".", 1)[0]
+    html = render_diff_html(
+        d, title=name,
+        meta=f"{d.changed} changed · {d.unchanged} unchanged · {d.total} paragraphs")
+
+    if fmt == "html":
+        return Response(
+            content=html.encode("utf-8"), media_type="text/html; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{name}-diff.html"'})
+
+    pdf = await run_in_threadpool(html_to_pdf, html)
+    if pdf is None:
+        # LibreOffice absent or hung. Say which format still works rather than
+        # failing blank — the HTML carries the same content.
+        raise HTTPException(503, detail={"error": {
+            "code": "pdf_unavailable",
+            "message": "PDF conversion is unavailable on this server. "
+                       "Download the HTML version instead."}})
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{name}-diff.pdf"'})
 
 
 @router.post("/runs/{run_id}/files/delete")

@@ -132,3 +132,101 @@ def diff_docx(before_bytes: bytes, after_bytes: bytes, *,
             continue
         result.items.append(ParagraphDiff(i, b, a, word_segments(b, a)))
     return result
+
+
+# --- export ---------------------------------------------------------------
+#
+# Deliberately plain HTML: inline styles, no flexbox, no CSS variables, <ins>
+# and <del> rather than styled spans. Two readers have to cope with it — a
+# browser, and LibreOffice, which is what turns this into a PDF and supports
+# roughly the CSS of 2005. Anything fancier renders in the browser and comes out
+# of soffice as unstyled text, which is worse than plain.
+
+_HTML_HEAD = """<!DOCTYPE html>
+<html lang="{lang}">
+<head>
+<meta charset="utf-8">
+<title>{title}</title>
+<style>
+  body {{ font-family: Georgia, "Times New Roman", serif; font-size: 11pt;
+          line-height: 1.6; color: #1a1a1a; margin: 2.2cm; }}
+  h1 {{ font-size: 15pt; margin: 0 0 .2em; }}
+  .meta {{ color: #555; font-size: 9.5pt; margin: 0 0 1.4em; }}
+  /* Spacing only, no border: LibreOffice renders a div's border-bottom as an
+     UNDERLINE under the text, which collides with <ins> meaning "added". */
+  .p {{ margin: 0 0 1.3em; padding: 0; }}
+  .n {{ color: #999; font-size: 8.5pt; letter-spacing: .06em; }}
+  del {{ background: #fbe9e9; color: #8a3a3a; }}
+  ins {{ background: #e6f2e8; color: #2f5136; text-decoration: none; }}
+  .legend {{ font-size: 9pt; color: #555; margin: 0 0 1.6em; }}
+  @media print {{ .p {{ page-break-inside: avoid; }} }}
+</style>
+</head>
+<body>
+<h1>{title}</h1>
+<p class="meta">{meta}</p>
+<p class="legend"><del>removed</del> &nbsp; <ins>added</ins></p>
+"""
+
+
+def _esc(s: str) -> str:
+    return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def render_diff_html(diff: RunDiff, *, title: str, meta: str = "",
+                     lang: str = "vi") -> str:
+    """The diff as one self-contained HTML file — no assets, no network."""
+    out = [_HTML_HEAD.format(title=_esc(title), meta=_esc(meta), lang=lang)]
+    if not diff.aligned:
+        out.append("<p><strong>These two files no longer line up paragraph for "
+                   "paragraph, so no comparison is shown.</strong></p>")
+    for item in diff.items:
+        out.append(f'<div class="p"><div class="n">#{item.index + 1}</div><p>')
+        for seg in item.segments:
+            text = _esc(seg.text)
+            # Colour repeated INLINE, not left to the stylesheet: LibreOffice
+            # honours an inline style attribute but drops the background from a
+            # <style> rule, so the PDF came out shape-only (strikethrough vs
+            # underline). Belt and braces keeps both readers in colour.
+            if seg.op == "del":
+                out.append(f'<del style="background:#fbe9e9;color:#8a3a3a">'
+                           f'{text}</del>')
+            elif seg.op == "ins":
+                out.append(f'<ins style="background:#e6f2e8;color:#2f5136">'
+                           f'{text}</ins>')
+            else:
+                out.append(text)
+        out.append("</p></div>")
+    if diff.truncated:
+        out.append("<p class='meta'>Truncated — download the two files for the rest.</p>")
+    out.append("</body></html>")
+    return "".join(out)
+
+
+def html_to_pdf(html: str, *, timeout: int = 120) -> bytes | None:
+    """Render the HTML to PDF with LibreOffice. None when it isn't available.
+
+    soffice rather than a Python renderer because it is ALREADY a hard
+    dependency of this deployment (scripts/check-export-deps.sh installs it for
+    the .docx export path), so this adds a code path rather than a dependency.
+    """
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    if not soffice:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "diff.html"
+        src.write_text(html, encoding="utf-8")
+        try:
+            subprocess.run(
+                [soffice, "--headless", "--convert-to", "pdf",
+                 "--outdir", tmp, str(src)],
+                capture_output=True, timeout=timeout, check=False)
+        except Exception:  # noqa: BLE001 — a missing/hung converter is not fatal
+            return None
+        pdf = Path(tmp) / "diff.pdf"
+        return pdf.read_bytes() if pdf.exists() else None

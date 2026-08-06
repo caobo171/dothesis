@@ -656,3 +656,64 @@ def test_the_diff_of_a_purged_run_is_410(dl_client, monkeypatch):
     r = dl_client.post(f"/api/v1/tools/runs/{run.id}/diff",
                        json={"access_token": token})
     assert r.status_code == 410
+
+
+# --- exporting the diff ---------------------------------------------------
+
+def test_the_diff_exports_as_self_contained_html(dl_client, monkeypatch):
+    before, after = _two_docx(
+        ["Giữ nguyên.", "Kết quả cho thấy rằng mô hình phù hợp."],
+        ["Giữ nguyên.", "Kết quả cho thấy mô hình phù hợp."])
+    _stub_s3_pair(monkeypatch, before, after)
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u)
+    st = _st(dl_client, token, f"tool-run-diff:{run.id}")
+
+    r = dl_client.get(f"/api/v1/tools/runs/{run.id}/diff.html?st={st}")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-disposition"].endswith('-diff.html"')
+    body = r.text
+    assert "<del" in body and "rằng" in body
+    # Self-contained: nothing to fetch, so it opens anywhere.
+    assert "http://" not in body and "<script" not in body
+    # The export carries the WHOLE document, not only what changed.
+    assert "Giữ nguyên." in body
+
+
+def test_the_html_export_escapes_document_text(dl_client, monkeypatch):
+    """A thesis can contain < and &; neither may become markup."""
+    before, after = _two_docx(["Điều kiện a < b và c & d."], ["Điều kiện a < b, c & d."])
+    _stub_s3_pair(monkeypatch, before, after)
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u)
+    st = _st(dl_client, token, f"tool-run-diff:{run.id}")
+    body = dl_client.get(f"/api/v1/tools/runs/{run.id}/diff.html?st={st}").text
+    assert "&lt;" in body and "&amp;" in body
+
+
+def test_a_token_for_the_diff_does_not_open_the_files(dl_client, monkeypatch):
+    from unittest.mock import MagicMock
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: MagicMock())
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u)
+    st = _st(dl_client, token, f"tool-run-diff:{run.id}")
+    assert dl_client.get(
+        f"/api/v1/tools/runs/{run.id}/file/output?st={st}").status_code == 401
+
+
+def test_an_unknown_export_format_is_404(dl_client, monkeypatch):
+    from unittest.mock import MagicMock
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: MagicMock())
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u)
+    st = _st(dl_client, token, f"tool-run-diff:{run.id}")
+    assert dl_client.get(
+        f"/api/v1/tools/runs/{run.id}/diff.docx?st={st}").status_code == 404
