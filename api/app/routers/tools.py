@@ -697,6 +697,19 @@ class MyRun(BaseModel):
     # than it took, rather than discovering the shortfall as a surprise later.
     credits_cost: int = 0
     created_at: str
+    # Booleans, not URIs: the client needs to know a file is THERE, and has no
+    # business seeing the S3 key it lives at.
+    has_input: bool = False
+    has_output: bool = False
+    files_expire_at: str | None = None
+    # What the run did — {"rewritten": 80, "skipped": 52}. The response headers
+    # carried these and the history dropped them, so a run that left half the
+    # document untouched looked identical to a clean one.
+    metrics: dict | None = None
+    parent_run_id: str | None = None
+    status: str = "done"
+    progress_done: int = 0
+    progress_total: int = 0
 
 
 class MyRunsOut(BaseModel):
@@ -739,8 +752,137 @@ def my_tool_runs(body: MyRunsBody, user: User = Depends(current_user),
             id=str(r.id), tool=r.tool, ok=r.ok, error=r.error, units=r.units,
             credits_charged=r.credits_charged, credits_cost=r.credits_cost,
             created_at=r.created_at.isoformat(),
+            has_input=bool(r.input_s3_uri), has_output=bool(r.output_s3_uri),
+            files_expire_at=(r.files_expire_at.isoformat()
+                             if r.files_expire_at else None),
+            metrics=r.metrics, status=r.status,
+            parent_run_id=(str(r.parent_run_id) if r.parent_run_id else None),
+            progress_done=r.progress_done, progress_total=r.progress_total,
         ) for r in rows],
         total=total, page=page, page_size=size)
+
+
+class RunIdBody(AuthedBody):
+    """Nothing but the token — the run is in the path. Still a POST body,
+    because that is where the token rides (CLAUDE.md)."""
+
+
+class RunProgressOut(BaseModel):
+    status: str
+    done: int = 0
+    total: int = 0
+
+
+@router.post("/runs/{run_id}/progress", response_model=RunProgressOut)
+def run_progress(run_id: int, body: RunIdBody,
+                 user: User = Depends(current_user),
+                 db: Session = Depends(db_session)) -> RunProgressOut:
+    """How far along a run is, while it is still running.
+
+    Polled rather than streamed: a document walk is minutes long, so a 2-second
+    poll costs nothing next to it, and SSE would need a second transport for a
+    number that changes ~70 times in total.
+
+    A read, so it takes `readable_run` — an admin watching a student's run is
+    the same access as opening it afterwards.
+    """
+    from ..auth_admin import readable_run  # noqa: PLC0415
+
+    run = readable_run(db, user, run_id)
+    return RunProgressOut(status=run.status, done=run.progress_done,
+                          total=run.progress_total)
+
+
+@router.post("/runs/{run_id}/rerun")
+async def rerun_tool_run(run_id: int, body: RunIdBody, request: Request,
+                         user: User = Depends(current_user),
+                         db: Session = Depends(db_session)):
+    """Run a document tool again on the input it was given the first time.
+
+    Owner-only: this spends credits and appends to their history. Charged like
+    any other run, because it IS one — the model work is done again in full.
+    """
+    from fastapi.responses import StreamingResponse  # noqa: PLC0415
+    from starlette.concurrency import run_in_threadpool  # noqa: PLC0415
+    from ..auth_admin import owned_run  # noqa: PLC0415
+    from ..tool_artifacts import (  # noqa: PLC0415
+        FILE_RETENTION_DAYS, store_run_files, uri_parts)
+    from ..tool_billing import begin_tool_run, bump_progress  # noqa: PLC0415
+    from ..user_memory import load_user_prefs as _prefs  # noqa: PLC0415
+    from .uploads import _DOCX_MIME  # noqa: PLC0415
+
+    run = owned_run(db, user, run_id)
+    if run.tool not in ("humanize-docx", "cite-docx"):
+        raise HTTPException(422, detail={"error": {
+            "code": "not_rerunnable",
+            "message": "Only whole-document tools can be run again."}})
+    if not run.input_s3_uri:
+        raise HTTPException(410, detail={"error": {
+            "code": "file_expired",
+            "message": f"The original file is no longer stored — inputs are "
+                       f"kept for {FILE_RETENTION_DAYS} days."}})
+
+    bucket, key = uri_parts(run.input_s3_uri)
+    try:
+        obj = await run_in_threadpool(
+            lambda: s3_from_env().get_object(Bucket=bucket, Key=key))
+        source = obj["Body"].read()
+    except Exception:  # noqa: BLE001
+        logger.exception("rerun: could not read stored input for run %s", run_id)
+        raise HTTPException(410, detail={"error": {
+            "code": "file_expired",
+            "message": "The stored file could not be read."}})
+
+    filename = run.input_filename or "document.docx"
+    new_id = begin_tool_run(db, user, tool=run.tool, surface=surface_of(request))
+
+    def _progress(done: int, total: int) -> None:
+        bump_progress(new_id, done=done, total=total)
+
+    with Timer() as t:
+        if run.tool == "humanize-docx":
+            from orchestrator.tools.humanize_docx import humanize_docx  # noqa: PLC0415
+            anchor = ((_prefs(db, user.id) or {}).get("writing_anchor") or "").strip()
+            out, report = await run_in_threadpool(
+                humanize_docx, source, user_anchor=anchor or None,
+                on_progress=_progress)
+            metrics = {"rewritten": report.get("rewritten", 0),
+                       "skipped": report.get("skipped", 0)}
+            units, suffix = 0, "humanized"
+        else:
+            from orchestrator.tools.cite_docx import cite_docx  # noqa: PLC0415
+            out, report = await run_in_threadpool(cite_docx, source, add_missing=True)
+            metrics = {"resolved": report.get("resolved", 0),
+                       "unresolved": report.get("unresolved", 0),
+                       "added": report.get("added", 0)}
+            units = int(report.get("resolved") or 0) + int(report.get("unresolved") or 0)
+            suffix = "cited"
+
+    ok = out is not None and bool(report.get("ok"))
+    files = await run_in_threadpool(
+        store_run_files, user_id=user.id, filename=filename,
+        input_bytes=source, output_bytes=out)
+    charged = record_tool_run(
+        db, user, surface=surface_of(request), tool=run.tool, ok=ok,
+        error=None if ok else (report.get("error") or "rerun_failed"),
+        units=units, usage=report.get("usage") or [], duration_ms=t.ms,
+        run_id=new_id, files=files, input_filename=filename, metrics=metrics,
+        parent_run_id=run.id).charged
+
+    if not ok:
+        raise HTTPException(422, detail={"error": {
+            "code": report.get("error") or "rerun_failed",
+            "message": report.get("detail") or "The run did not complete."}})
+
+    stem = filename.rsplit(".", 1)[0]
+    return StreamingResponse(
+        io.BytesIO(out), media_type=_DOCX_MIME,
+        headers={
+            "Content-Disposition": f'attachment; filename="{stem}-{suffix}.docx"',
+            "X-Credits-Charged": str(charged),
+            "X-Tool-Run-Id": str(new_id or ""),
+        },
+    )
 
 
 @router.get("/runs/{run_id}/file/{which}")

@@ -7,6 +7,10 @@ import useSWR from "swr";
 import { apiFetch } from "@/app/lib/api";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
 import type { MessageKey } from "@/app/lib/i18n/messages/en";
+import {
+  rerunToolRun,
+  triggerRunFileDownload,
+} from "@/app/(inapp)/tools/_components/use-tool";
 
 /**
  * The caller's own tool history.
@@ -28,6 +32,14 @@ type Run = {
   credits_charged: number;
   credits_cost: number;
   created_at: string;
+  has_input: boolean;
+  has_output: boolean;
+  files_expire_at: string | null;
+  metrics: { rewritten?: number; skipped?: number } | null;
+  parent_run_id: string | null;
+  status: string;
+  progress_done: number;
+  progress_total: number;
 };
 
 type RunsResp = { items: Run[]; total: number; page: number; page_size: number };
@@ -49,15 +61,52 @@ const TOOL_KEY: Record<string, MessageKey> = {
 
 const PAGE_SIZE = 20;
 
+// Only the tools that take a file in and give a file back can be run again.
+// Mirrors the server's own check, which is the one that actually enforces it.
+const RERUNNABLE = new Set(["humanize-docx", "cite-docx"]);
+
 export default function ToolRuns() {
   const [page, setPage] = useState(1);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const t = useT();
 
   const body = { page, page_size: PAGE_SIZE };
-  const { data, isLoading } = useSWR<RunsResp>(
+  const { data, isLoading, mutate } = useSWR<RunsResp>(
     ["/tools/runs", page],
     () => apiFetch("/tools/runs", { method: "POST", body }) as Promise<RunsResp>,
+    {
+      // While something is running, the list IS the progress display — poll it
+      // so "12/70" advances without the student reloading the page.
+      refreshInterval: (latest) =>
+        latest?.items?.some((r) => r.status === "running") ? 3000 : 0,
+    },
   );
+
+  const rerun = async (r: Run) => {
+    // A re-run costs credits. Saying so before it fires, not after, because the
+    // button sits one click away in a list the student opened to ask about
+    // their credits in the first place.
+    if (!window.confirm(t("txn.tools.rerunConfirm"))) return;
+    setBusy(r.id);
+    setError(null);
+    try {
+      const out = await rerunToolRun(r.id, `rerun-${r.id}.docx`, t, r.progress_total);
+      const url = URL.createObjectURL(out.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = out.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      void mutate();
+    } catch (e) {
+      setError((e as Error)?.message || t("tools.err.request"));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const pages = data ? Math.ceil(data.total / data.page_size) : 1;
 
@@ -68,6 +117,12 @@ export default function ToolRuns() {
         <h2 className="m-0 text-base font-semibold text-ink-900">{t("txn.tools.title")}</h2>
       </div>
       <p className="mt-0 mb-4 text-[13px] text-ink-500">{t("txn.tools.blurb")}</p>
+
+      {error && (
+        <p className="mb-3 rounded-lg border border-[#E6C9C9] bg-[#FBF0F0] px-3 py-2 text-[12.5px] text-[#8A3A3A]">
+          {error}
+        </p>
+      )}
 
       {data && data.items.length > 0 ? (
         <>
@@ -99,9 +154,60 @@ export default function ToolRuns() {
                         )}
                       </td>
                       <td className="px-4 py-2">
-                        {r.ok
-                          ? <span className="text-[#3A5740]">{t("txn.tools.ok")}</span>
-                          : <span className="text-[#8E6B2A]">{t("txn.tools.failed")}</span>}
+                        {r.status === "running"
+                          ? <span className="text-ink-600 tabular-nums">
+                              {r.progress_total > 0
+                                ? t("txn.tools.running", {
+                                    done: r.progress_done, total: r.progress_total })
+                                : t("txn.tools.runningPlain")}
+                            </span>
+                          : r.ok
+                            ? <span className="text-[#3A5740]">{t("txn.tools.ok")}</span>
+                            : <span className="text-[#8E6B2A]">{t("txn.tools.failed")}</span>}
+                        {/* A partial run used to be indistinguishable from a
+                            clean one: the counts rode out in a response header
+                            and were never stored. */}
+                        {typeof r.metrics?.skipped === "number" && r.metrics.skipped > 0 && (
+                          <div className="text-[11px] text-[#8E6B2A]">
+                            {t("txn.tools.partial", {
+                              done: r.metrics.rewritten ?? 0,
+                              skipped: r.metrics.skipped,
+                            })}
+                          </div>
+                        )}
+                        {(r.has_input || r.has_output) && (
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11.5px]">
+                            {r.has_input && (
+                              <button type="button"
+                                onClick={() => void triggerRunFileDownload(r.id, "input")}
+                                className="font-semibold text-primary-700 hover:text-primary-800">
+                                {t("txn.tools.dlInput")}
+                              </button>
+                            )}
+                            {r.has_output && (
+                              <button type="button"
+                                onClick={() => void triggerRunFileDownload(r.id, "output")}
+                                className="font-semibold text-primary-700 hover:text-primary-800">
+                                {t("txn.tools.dlOutput")}
+                              </button>
+                            )}
+                            {r.has_input && RERUNNABLE.has(r.tool) && (
+                              <button type="button"
+                                disabled={busy === r.id}
+                                onClick={() => void rerun(r)}
+                                className="font-semibold text-primary-700 hover:text-primary-800 disabled:opacity-40">
+                                {busy === r.id ? t("txn.tools.rerunning") : t("txn.tools.rerun")}
+                              </button>
+                            )}
+                            {r.files_expire_at && (
+                              <span className="text-ink-400">
+                                {t("txn.tools.keptUntil", {
+                                  date: new Date(r.files_expire_at).toLocaleDateString(),
+                                })}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums">
                         {r.credits_charged > 0

@@ -323,8 +323,44 @@ RestartSec=3
 WantedBy=multi-user.target
 UNIT
 
+# Retention for tool-run files. The web app tells the student their input and
+# output are kept 30 days; NOTHING else deletes them, so without this timer that
+# sentence is false and every thesis run through a document tool stays on S3
+# forever. Installed as a timer rather than a service: it is a nightly sweep,
+# not a daemon.
+log "installing systemd unit: dothesis-purge.service + .timer"
+$SUDO tee /etc/systemd/system/dothesis-purge.service >/dev/null <<UNIT
+[Unit]
+Description=DoThesis — delete tool-run files past their 30-day retention
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=${APP_USER}
+WorkingDirectory=${REPO_DIR}
+EnvironmentFile=${REPO_DIR}/.env
+ExecStart=${REPO_DIR}/${VENV_BIN}/python ${REPO_DIR}/scripts/purge_tool_run_files.py
+UNIT
+
+$SUDO tee /etc/systemd/system/dothesis-purge.timer >/dev/null <<UNIT
+[Unit]
+Description=Nightly purge of expired DoThesis tool-run files
+
+[Timer]
+OnCalendar=daily
+# Survives a box that was off at 00:00 — otherwise a machine rebooted every
+# morning would never purge anything.
+Persistent=true
+RandomizedDelaySec=900
+
+[Install]
+WantedBy=timers.target
+UNIT
+
 log "reloading systemd + (re)starting services"
 $SUDO systemctl daemon-reload
+$SUDO systemctl enable --now dothesis-purge.timer
 $SUDO systemctl enable --now dothesis-api.service
 $SUDO systemctl restart dothesis-api.service
 $SUDO systemctl enable --now dothesis-mcp.service

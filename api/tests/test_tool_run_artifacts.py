@@ -13,6 +13,7 @@ Two lines are load-bearing here and are asserted rather than assumed:
 """
 from __future__ import annotations
 
+import io
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -21,6 +22,16 @@ import pytest
 from app.db import get_session_factory
 from app.models import ToolRun
 from tests.conftest import make_user
+
+
+def _docx_bytes() -> bytes:
+    """A minimal .docx with one body paragraph long enough to be eligible."""
+    from docx import Document
+    d = Document()
+    d.add_paragraph("Kết quả phân tích cho thấy mô hình đề xuất phù hợp với dữ "
+                    "liệu thu thập được từ mẫu khảo sát của nghiên cứu này.")
+    buf = io.BytesIO(); d.save(buf)
+    return buf.getvalue()
 
 
 def _run(db, user, **overrides) -> ToolRun:
@@ -359,3 +370,85 @@ def test_a_token_for_the_input_does_not_open_the_output(dl_client, monkeypatch):
         run = _run(s, u)
     st = _st(dl_client, token, f"tool-run-file:{run.id}/input")
     assert dl_client.get(f"/api/v1/tools/runs/{run.id}/file/output?st={st}").status_code == 401
+
+
+# --- progress endpoint ----------------------------------------------------
+
+def test_progress_endpoint_reports_where_the_run_is(dl_client):
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u, status="running", progress_done=12, progress_total=70)
+    r = dl_client.post(f"/api/v1/tools/runs/{run.id}/progress",
+                       json={"access_token": token})
+    assert r.status_code == 200
+    b = r.json()
+    assert b["status"] == "running" and b["done"] == 12 and b["total"] == 70
+
+
+def test_a_stranger_gets_no_progress(dl_client):
+    owner, _ = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, owner, status="running")
+    _, token2 = _login(dl_client)
+    assert dl_client.post(f"/api/v1/tools/runs/{run.id}/progress",
+                          json={"access_token": token2}).status_code == 404
+
+
+# --- re-run ---------------------------------------------------------------
+
+def test_rerun_starts_a_new_run_that_remembers_its_parent(dl_client, monkeypatch):
+    from unittest.mock import MagicMock
+    fake = MagicMock()
+    fake.get_object.return_value = {"Body": io.BytesIO(_docx_bytes())}
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: fake)
+    monkeypatch.setattr("app.tool_artifacts.s3_from_env", lambda: fake)
+    monkeypatch.setattr(
+        "orchestrator.tools.humanize_docx.humanize_docx",
+        lambda body, **kw: (body, {"ok": True, "rewritten": 1, "skipped": 0,
+                                   "usage": [], "failures": []}))
+
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u)
+    r = dl_client.post(f"/api/v1/tools/runs/{run.id}/rerun",
+                       json={"access_token": token})
+    assert r.status_code == 200, r.text
+
+    with Session() as s:
+        fresh = (s.query(ToolRun).filter(ToolRun.parent_run_id == run.id).one())
+        assert fresh.tool == "humanize-docx"
+        assert fresh.status == "done"
+
+
+def test_an_admin_cannot_rerun_someone_elses_document(dl_client):
+    owner, _ = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, owner)
+    _, admin_token = _login(dl_client, email=ADMIN_EMAIL)
+    assert dl_client.post(f"/api/v1/tools/runs/{run.id}/rerun",
+                          json={"access_token": admin_token}).status_code == 404
+
+
+def test_rerunning_a_purged_run_answers_410(dl_client):
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u, input_s3_uri=None)
+    r = dl_client.post(f"/api/v1/tools/runs/{run.id}/rerun",
+                       json={"access_token": token})
+    assert r.status_code == 410
+
+
+def test_a_non_document_tool_cannot_be_rerun(dl_client):
+    """Only the tools that take a file in and give a file back."""
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u, tool="writing-rhythm")
+    r = dl_client.post(f"/api/v1/tools/runs/{run.id}/rerun",
+                       json={"access_token": token})
+    assert r.status_code == 422
