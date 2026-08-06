@@ -462,7 +462,18 @@ export const vi: Record<MessageKey, string> = {
   "txn.tools.rerunConfirm":
     "Chạy lại tài liệu này? Lượt chạy lại vẫn tốn credit như lần đầu.",
   "txn.tools.keptUntil": "giữ đến {date}",
+  "txn.tools.viewDiff": "Xem đã đổi gì",
   "txn.tools.deleteFiles": "Xoá tệp",
+  // --- chi tiết một lượt chạy ---
+  "run.back": "Tất cả lượt dùng",
+  "run.title": "Lượt chạy công cụ",
+  "run.summary": "{changed} đoạn đã đổi · {unchanged} đoạn giữ nguyên · {total} đoạn trong tài liệu",
+  "run.showUnchanged": "Hiện cả đoạn không đổi",
+  "run.noChanges": "Lượt chạy này không đổi đoạn nào.",
+  "run.truncated": "Chỉ hiện những đoạn đầu. Tải tệp về để xem phần còn lại.",
+  "run.notAligned":
+    "Hai tệp không còn khớp nhau theo từng đoạn, nên nếu ghép lại sẽ gán nhầm chữ "
+    + "của đoạn này sang đoạn khác. Bạn hãy tải cả hai tệp về và so trực tiếp.",
   "txn.tools.deleteConfirm":
     "Xoá các tệp đã lưu của lượt chạy này? Không khôi phục được — lượt chạy vẫn nằm trong lịch sử.",
   "txn.tools.units": "· {count} nguồn",

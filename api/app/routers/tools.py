@@ -827,6 +827,88 @@ def run_progress(run_id: int, body: RunIdBody,
                           total=run.progress_total)
 
 
+class DiffSegmentOut(BaseModel):
+    op: str
+    text: str
+
+
+class DiffParagraphOut(BaseModel):
+    index: int
+    before: str
+    after: str
+    segments: list[DiffSegmentOut] = []
+
+
+class RunDiffOut(BaseModel):
+    ok: bool = True
+    aligned: bool = True
+    tool: str = ""
+    filename: str | None = None
+    total: int = 0
+    changed: int = 0
+    unchanged: int = 0
+    truncated: bool = False
+    items: list[DiffParagraphOut] = []
+
+
+class RunDiffIn(AuthedBody):
+    # Unchanged paragraphs are the bulk of a thesis and the client renders them
+    # from nothing, so they are opt-in rather than shipped by default.
+    changed_only: bool = True
+    limit: int = 200
+
+
+@router.post("/runs/{run_id}/diff", response_model=RunDiffOut)
+async def run_diff(run_id: int, body: RunDiffIn,
+                   user: User = Depends(current_user),
+                   db: Session = Depends(db_session)) -> RunDiffOut:
+    """Paragraph-by-paragraph diff of a run's stored input against its output.
+
+    A read, so it takes the same owner-or-journaled-admin gate as the download.
+    Both files are already kept for 30 days; this derives the comparison from
+    them rather than storing a third artifact.
+    """
+    from starlette.concurrency import run_in_threadpool  # noqa: PLC0415
+    from orchestrator.tools.docx_diff import diff_docx  # noqa: PLC0415
+    from ..auth_admin import readable_run  # noqa: PLC0415
+    from ..tool_artifacts import FILE_RETENTION_DAYS, uri_parts  # noqa: PLC0415
+
+    run = readable_run(db, user, run_id)
+    if not (run.input_s3_uri and run.output_s3_uri):
+        raise HTTPException(410, detail={"error": {
+            "code": "file_expired",
+            "message": f"Both files are needed to show what changed, and they "
+                       f"are kept for {FILE_RETENTION_DAYS} days."}})
+
+    def _fetch() -> tuple[bytes, bytes]:
+        s3 = s3_from_env()
+        out = []
+        for uri in (run.input_s3_uri, run.output_s3_uri):
+            bucket, key = uri_parts(uri)
+            out.append(s3.get_object(Bucket=bucket, Key=key)["Body"].read())
+        return out[0], out[1]
+
+    try:
+        before, after = await run_in_threadpool(_fetch)
+    except Exception:  # noqa: BLE001
+        logger.exception("run_diff: could not read stored files for run %s", run_id)
+        raise HTTPException(410, detail={"error": {
+            "code": "file_expired", "message": "The stored files could not be read."}})
+
+    d = await run_in_threadpool(
+        diff_docx, before, after,
+        limit=max(1, min(body.limit, 500)), changed_only=body.changed_only)
+    return RunDiffOut(
+        aligned=d.aligned, tool=run.tool, filename=run.input_filename,
+        total=d.total, changed=d.changed, unchanged=d.unchanged,
+        truncated=d.truncated,
+        items=[DiffParagraphOut(
+            index=i.index, before=i.before, after=i.after,
+            segments=[DiffSegmentOut(op=s.op, text=s.text) for s in i.segments],
+        ) for i in d.items],
+    )
+
+
 @router.post("/runs/{run_id}/files/delete")
 def delete_run_files(run_id: int, body: RunIdBody,
                      user: User = Depends(current_user),

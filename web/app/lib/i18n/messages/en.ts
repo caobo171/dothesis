@@ -479,7 +479,18 @@ export const en = {
   "txn.tools.rerunConfirm":
     "Run this document through the tool again? It costs credits, the same as the first run.",
   "txn.tools.keptUntil": "kept until {date}",
+  "txn.tools.viewDiff": "What changed",
   "txn.tools.deleteFiles": "Delete files",
+  // --- one run, in detail ---
+  "run.back": "All tool runs",
+  "run.title": "Tool run",
+  "run.summary": "{changed} paragraphs changed · {unchanged} kept as written · {total} in the document",
+  "run.showUnchanged": "Show unchanged paragraphs",
+  "run.noChanges": "No paragraph was changed in this run.",
+  "run.truncated": "Only the first paragraphs are shown. Download the files for the rest.",
+  "run.notAligned":
+    "These two files no longer line up paragraph for paragraph, so a diff would "
+    + "attribute one paragraph\u2019s words to another. Download both and compare them directly.",
   "txn.tools.deleteConfirm":
     "Delete the stored files for this run? This cannot be undone — the run itself stays in your history.",
   "txn.tools.units": "· {count} sources",

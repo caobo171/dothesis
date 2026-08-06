@@ -583,3 +583,76 @@ def test_rerun_round_trips_a_real_document(dl_client, monkeypatch):
         assert fresh.prompt_tokens == 5
         # Its own files were stored, so the re-run is itself re-runnable.
         assert fresh.input_s3_uri and fresh.output_s3_uri
+
+
+# --- the diff view --------------------------------------------------------
+
+def _two_docx(before: list[str], after: list[str]) -> tuple[bytes, bytes]:
+    from docx import Document
+
+    def mk(paras):
+        d = Document()
+        for p in paras:
+            d.add_paragraph(p)
+        buf = io.BytesIO(); d.save(buf)
+        return buf.getvalue()
+    return mk(before), mk(after)
+
+
+def _stub_s3_pair(monkeypatch, before: bytes, after: bytes):
+    from unittest.mock import MagicMock
+    fake = MagicMock()
+    fake.get_object.side_effect = [
+        {"Body": io.BytesIO(before)}, {"Body": io.BytesIO(after)}]
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: fake)
+    return fake
+
+
+def test_the_diff_shows_which_words_moved(dl_client, monkeypatch):
+    before, after = _two_docx(
+        ["Giữ nguyên đoạn này.", "Kết quả cho thấy rằng mô hình phù hợp."],
+        ["Giữ nguyên đoạn này.", "Kết quả cho thấy mô hình phù hợp."])
+    _stub_s3_pair(monkeypatch, before, after)
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u)
+
+    r = dl_client.post(f"/api/v1/tools/runs/{run.id}/diff",
+                       json={"access_token": token})
+    assert r.status_code == 200, r.text
+    b = r.json()
+    assert b["aligned"] and b["total"] == 2 and b["changed"] == 1
+    # Only the changed paragraph is carried, and it names the removed word.
+    assert [i["index"] for i in b["items"]] == [1]
+    dels = [s["text"] for s in b["items"][0]["segments"] if s["op"] == "del"]
+    assert any("rằng" in d for d in dels)
+
+
+def test_an_admin_can_see_the_diff_but_a_stranger_cannot(dl_client, monkeypatch):
+    before, after = _two_docx(["Một đoạn."], ["Một đoạn khác."])
+    owner, _ = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, owner)
+
+    _stub_s3_pair(monkeypatch, before, after)
+    _, admin_token = _login(dl_client, email=ADMIN_EMAIL)
+    assert dl_client.post(f"/api/v1/tools/runs/{run.id}/diff",
+                          json={"access_token": admin_token}).status_code == 200
+
+    _, other = _login(dl_client)
+    assert dl_client.post(f"/api/v1/tools/runs/{run.id}/diff",
+                          json={"access_token": other}).status_code == 404
+
+
+def test_the_diff_of_a_purged_run_is_410(dl_client, monkeypatch):
+    from unittest.mock import MagicMock
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: MagicMock())
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u, output_s3_uri=None)
+    r = dl_client.post(f"/api/v1/tools/runs/{run.id}/diff",
+                       json={"access_token": token})
+    assert r.status_code == 410

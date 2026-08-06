@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Wrench } from "lucide-react";
+import Link from "next/link";
 import useSWR from "swr";
 
 import { apiFetch } from "@/app/lib/api";
@@ -210,6 +211,12 @@ export default function ToolRuns() {
                                 className="font-semibold text-primary-700 hover:text-primary-800">
                                 {t("txn.tools.dlOutput")}
                               </button>
+                            )}
+                            {r.has_input && r.has_output && (
+                              <Link href={`/tool-runs/${r.id}`}
+                                className="font-semibold text-primary-700 hover:text-primary-800">
+                                {t("txn.tools.viewDiff")}
+                              </Link>
                             )}
                             {r.has_input && RERUNNABLE.has(r.tool) && (
                               <button type="button"
