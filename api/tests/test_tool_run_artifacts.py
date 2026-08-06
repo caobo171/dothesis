@@ -151,3 +151,211 @@ def test_purge_is_idempotent(monkeypatch):
         fake = MagicMock()
         assert A.purge_expired(s, s3=fake, now=datetime.now(timezone.utc)) == 1
         assert A.purge_expired(s, s3=fake, now=datetime.now(timezone.utc)) == 0
+
+
+# --- recording ------------------------------------------------------------
+
+def test_the_run_row_points_at_the_stored_files_and_what_it_did():
+    from app.tool_artifacts import RunFiles
+    from app.tool_billing import record_tool_run
+
+    Session = get_session_factory()
+    with Session() as s:
+        u = make_user(s); s.commit()
+        files = RunFiles(input_uri="s3://b/in.docx", output_uri="s3://b/out.docx",
+                         expires_at=datetime.now(timezone.utc) + timedelta(days=30))
+        res = record_tool_run(s, u, tool="humanize-docx", ok=True, files=files,
+                              input_filename="thesis.docx",
+                              metrics={"rewritten": 3, "skipped": 1})
+        row = s.get(ToolRun, res.run_id)
+        assert row.input_s3_uri == "s3://b/in.docx"
+        assert row.output_s3_uri == "s3://b/out.docx"
+        assert row.input_filename == "thesis.docx"
+        assert row.metrics == {"rewritten": 3, "skipped": 1}
+        assert row.status == "done"
+
+
+# --- progress -------------------------------------------------------------
+
+def test_begin_then_finish_updates_one_row_rather_than_writing_two():
+    """The row is created before the work so progress can be polled — but the
+    run must still be ONE row, or the history shows every document twice."""
+    from app.tool_billing import begin_tool_run, record_tool_run
+
+    Session = get_session_factory()
+    with Session() as s:
+        u = make_user(s); s.commit()
+        run_id = begin_tool_run(s, u, tool="humanize-docx", surface="web", total=70)
+        row = s.get(ToolRun, run_id)
+        assert row.status == "running"
+        assert row.progress_total == 70 and row.progress_done == 0
+
+        record_tool_run(s, u, tool="humanize-docx", ok=True, run_id=run_id)
+        s.expire_all()
+        assert s.query(ToolRun).filter_by(user_id=u.id).count() == 1
+        assert s.get(ToolRun, run_id).status == "done"
+
+
+def test_a_failed_run_is_marked_failed_not_left_running():
+    from app.tool_billing import begin_tool_run, record_tool_run
+
+    Session = get_session_factory()
+    with Session() as s:
+        u = make_user(s); s.commit()
+        run_id = begin_tool_run(s, u, tool="humanize-docx", surface="web", total=4)
+        record_tool_run(s, u, tool="humanize-docx", ok=False, error="rewrite_failed",
+                        run_id=run_id)
+        s.expire_all()
+        assert s.get(ToolRun, run_id).status == "failed"
+
+
+def test_progress_is_visible_while_the_run_is_still_open():
+    """bump_progress opens its OWN session on purpose: the request's session is
+    inside a long transaction, so a write on it would not be visible to the
+    poll until the whole document finished — which is the entire point."""
+    from app.tool_billing import begin_tool_run, bump_progress
+
+    Session = get_session_factory()
+    with Session() as s:
+        u = make_user(s); s.commit()
+        run_id = begin_tool_run(s, u, tool="humanize-docx", surface="web", total=70)
+
+    bump_progress(run_id, done=12)
+
+    with Session() as s2:
+        row = s2.get(ToolRun, run_id)
+        assert row.progress_done == 12
+        assert row.status == "running"
+
+
+def test_bump_progress_never_raises_on_a_missing_run():
+    from app.tool_billing import bump_progress
+    bump_progress(10**12, done=1)      # no such row — must be a no-op
+
+
+# --- access gate ----------------------------------------------------------
+# admin_config._SEED — the allowlist is by email.
+ADMIN_EMAIL = "caotest171@gmail.com"
+
+
+def test_readable_run_admits_the_owner_and_an_admin_but_not_a_stranger():
+    from fastapi import HTTPException
+    from app.auth_admin import readable_run, owned_run
+
+    Session = get_session_factory()
+    with Session() as s:
+        student = make_user(s)
+        admin = make_user(s, email=ADMIN_EMAIL)
+        stranger = make_user(s)
+        s.commit()
+        run = _run(s, student)
+
+        assert readable_run(s, student, run.id).id == run.id
+        # Debugging a bad run is a READ — same gate as opening the thread.
+        assert readable_run(s, admin, run.id).id == run.id
+        with pytest.raises(HTTPException) as e:
+            readable_run(s, stranger, run.id)
+        assert e.value.status_code == 404
+        # 404 for a row that does not exist either — never an existence oracle.
+        with pytest.raises(HTTPException) as e2:
+            readable_run(s, student, 10**12)
+        assert e2.value.status_code == 404
+
+
+def test_rerunning_someone_elses_document_is_not_a_read():
+    """The write half of the asymmetry: an admin may look at a student's run,
+    never spend their credits re-running it."""
+    from fastapi import HTTPException
+    from app.auth_admin import owned_run
+
+    Session = get_session_factory()
+    with Session() as s:
+        student = make_user(s)
+        admin = make_user(s, email=ADMIN_EMAIL)
+        s.commit()
+        run = _run(s, student)
+        assert owned_run(s, student, run.id).id == run.id
+        with pytest.raises(HTTPException) as e:
+            owned_run(s, admin, run.id)
+        assert e.value.status_code == 404
+
+
+# --- download -------------------------------------------------------------
+
+@pytest.fixture
+def dl_client(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+    monkeypatch.setenv("ORCHESTRATOR_ENABLED", "true")
+    return TestClient(create_app(), follow_redirects=False)
+
+
+def _login(client, email: str | None = None):
+    from app.security import create_session
+    Session = get_session_factory()
+    with Session() as db:
+        u = make_user(db, **({"email": email} if email else {}))
+        db.commit(); db.refresh(u)
+        token = create_session(db, u)
+        db.expunge(u)
+    client.headers["Authorization"] = f"Bearer {token}"
+    return u, token
+
+
+def _st(client, token: str, scope: str) -> str:
+    return client.post("/api/v1/auth/stream-token",
+                       json={"access_token": token, "scope": scope}).json()["stream_token"]
+
+
+def test_owner_downloads_the_output(dl_client, monkeypatch):
+    from unittest.mock import MagicMock
+    fake = MagicMock()
+    fake.generate_presigned_url.return_value = "https://s3.example/x?sig=y"
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: fake)
+
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u)
+    st = _st(dl_client, token, f"tool-run-file:{run.id}/output")
+    r = dl_client.get(f"/api/v1/tools/runs/{run.id}/file/output?st={st}")
+    assert r.status_code == 302, r.text
+
+
+def test_a_stranger_cannot_download_it(dl_client, monkeypatch):
+    from unittest.mock import MagicMock
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: MagicMock())
+    owner, _ = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, owner)
+    _, token2 = _login(dl_client)           # a different user
+    st = _st(dl_client, token2, f"tool-run-file:{run.id}/output")
+    assert dl_client.get(f"/api/v1/tools/runs/{run.id}/file/output?st={st}").status_code == 404
+
+
+def test_a_purged_run_answers_410_not_404(dl_client, monkeypatch):
+    """"It aged out" is a different fact from "no such run", and the student is
+    entitled to the difference."""
+    from unittest.mock import MagicMock
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: MagicMock())
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u, input_s3_uri=None, output_s3_uri=None)
+    st = _st(dl_client, token, f"tool-run-file:{run.id}/output")
+    r = dl_client.get(f"/api/v1/tools/runs/{run.id}/file/output?st={st}")
+    assert r.status_code == 410
+    assert "30" in r.text          # the retention window is named
+
+
+def test_a_token_for_the_input_does_not_open_the_output(dl_client, monkeypatch):
+    """The scope names the half, so a leaked URL opens one file, not both."""
+    from unittest.mock import MagicMock
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: MagicMock())
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u)
+    st = _st(dl_client, token, f"tool-run-file:{run.id}/input")
+    assert dl_client.get(f"/api/v1/tools/runs/{run.id}/file/output?st={st}").status_code == 401

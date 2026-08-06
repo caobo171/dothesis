@@ -136,9 +136,10 @@ def _set_paragraph_text(p: Any, text: str) -> None:
 def humanize_docx(
     body: bytes,
     *,
-    language: str = "vi",
+    language: str | None = None,
     user_anchor: str | None = None,
     humanize_fn: Callable[..., dict] | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[bytes | None, dict]:
     """Rewrite every eligible body paragraph and return the rebuilt .docx.
 
@@ -174,11 +175,32 @@ def humanize_docx(
     rewritten = skipped = 0
     failures: list[dict] = []
 
-    for batch in _batches(eligible):
+    # Materialised so the caller can be told the total up front: a progress bar
+    # that only learns its denominator on the last batch is not a progress bar.
+    # `on_progress` is best-effort — a reporting failure must not abort a walk
+    # the student is paying for.
+    batches = list(_batches(eligible))
+    total = len(batches)
+    if on_progress:
+        try:
+            on_progress(0, total)
+        except Exception:  # noqa: BLE001
+            logger.exception("humanize_docx: progress callback failed")
+
+    for done, batch in enumerate(batches, start=1):
         source = [by_idx[i] for i in batch]
         joined = "\n\n".join(source)
         r = humanize_fn(joined, language=language, user_anchor=user_anchor)
         usage.extend(r.get("usage") or [])
+        # Reported here, not at the end of the loop body: the model call is the
+        # minute-long part, and the two `continue`s below would otherwise skip
+        # the bump on exactly the batches that failed — leaving a progress bar
+        # that stalls whenever something goes wrong.
+        if on_progress:
+            try:
+                on_progress(done, total)
+            except Exception:  # noqa: BLE001
+                logger.exception("humanize_docx: progress callback failed")
 
         if not r.get("ok"):
             skipped += len(batch)

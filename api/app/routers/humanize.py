@@ -32,7 +32,10 @@ class HumanizeIn(BaseModel):
         default=None,
         description="~150 words the user wrote themselves; required when no "
                     "library anchor is installed for this language.")
-    language: str = "vi"
+    # None = detect it from `text`. A hard "vi" default here translated English
+    # passages instead of re-voicing them (orchestrator.tools.humanize
+    # .detect_language); it survives only as a hint for text too short to read.
+    language: str | None = None
 
 
 class HumanizeOut(BaseModel):

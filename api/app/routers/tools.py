@@ -15,16 +15,18 @@ import logging
 import re
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db import db_session
-from ..deps import current_user
+from ..deps import current_user, stream_user_factory
 from ..jwt_auth import AuthedBody
 from ..models import User
 from ..tool_billing import Timer, record_tool_run, surface_of
 from ..user_memory import load_user_prefs, write_user_prefs
+from .uploads import s3_from_env
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tools", tags=["tools"])
@@ -741,6 +743,49 @@ def my_tool_runs(body: MyRunsBody, user: User = Depends(current_user),
         total=total, page=page, page_size=size)
 
 
+@router.get("/runs/{run_id}/file/{which}")
+def download_run_file(
+    run_id: int, which: str,
+    # GET-only (browser <a download>) — the ?st= token names this exact run AND
+    # half, so a leaked URL opens one file for two minutes rather than both.
+    user: User = Depends(stream_user_factory(
+        lambda run_id, which: f"tool-run-file:{run_id}/{which}")),
+    db: Session = Depends(db_session),
+):
+    """302 to a fresh 5-minute signed URL for a run's input or output .docx."""
+    from ..auth_admin import readable_run  # noqa: PLC0415
+    from ..tool_artifacts import FILE_RETENTION_DAYS, uri_parts  # noqa: PLC0415
+    from .uploads import _DOCX_MIME  # noqa: PLC0415
+
+    if which not in ("input", "output"):
+        raise HTTPException(404, detail={"error": {"code": "not_found"}})
+    run = readable_run(db, user, run_id)
+    uri = run.input_s3_uri if which == "input" else run.output_s3_uri
+    if not uri:
+        # 410, not 404: a run whose files aged out is a different fact from a
+        # run that never existed, and the student is entitled to the difference
+        # rather than being told their document was never there.
+        raise HTTPException(410, detail={"error": {
+            "code": "file_expired",
+            "message": f"Files from a tool run are kept for "
+                       f"{FILE_RETENTION_DAYS} days."}})
+    bucket, key = uri_parts(uri)
+    if not bucket:
+        raise HTTPException(500, detail={"error": {"code": "bad_s3_uri"}})
+    name = run.input_filename or "document.docx"
+    if which == "output":
+        stem = name.rsplit(".", 1)[0]
+        name = f"{stem}-{'cited' if run.tool == 'cite-docx' else 'humanized'}.docx"
+    signed = s3_from_env().generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": key,
+                "ResponseContentType": _DOCX_MIME,
+                "ResponseContentDisposition": f'attachment; filename="{name}"'},
+        ExpiresIn=300,
+    )
+    return RedirectResponse(url=signed, status_code=302)
+
+
 # ---------------------------------------------------------------------------
 # Document humanize — .docx in, .docx out, formatting intact
 # ---------------------------------------------------------------------------
@@ -805,7 +850,11 @@ async def scan_document(request: Request, file: UploadFile = File(...),
 
 @router.post("/document/humanize")
 async def humanize_document(request: Request, file: UploadFile = File(...),
-                            language: str = "vi",
+                            # None = read it off the document. This defaulted to
+                            # "vi", which the rewrite prompt takes as an
+                            # instruction, so an English thesis came back
+                            # translated. A caller may still force a value.
+                            language: str | None = None,
                             user: User = Depends(current_user),
                             db: Session = Depends(db_session)):
     """Rewrite the body prose and stream the .docx back, formatting intact.
@@ -820,8 +869,11 @@ async def humanize_document(request: Request, file: UploadFile = File(...),
     body; it is in token_ledger and tool_runs either way.
     """
     from fastapi.responses import StreamingResponse  # noqa: PLC0415
+    from starlette.concurrency import run_in_threadpool  # noqa: PLC0415
     from orchestrator.tools.humanize_docx import humanize_docx  # noqa: PLC0415
     from .uploads import _DOCX_MIME  # noqa: PLC0415
+    from ..tool_artifacts import store_run_files  # noqa: PLC0415
+    from ..tool_billing import begin_tool_run, bump_progress  # noqa: PLC0415
     from ..user_memory import load_user_prefs as _prefs  # noqa: PLC0415
 
     body = await _read_docx(file)
@@ -829,13 +881,42 @@ async def humanize_document(request: Request, file: UploadFile = File(...),
     # sample once must not be asked for it again per document.
     anchor = ((_prefs(db, user.id) or {}).get("writing_anchor") or "").strip()
 
+    # Open the row before the walk so /tools/runs/{id}/progress has something to
+    # report while this request is still open. A thesis is ~70 sequential model
+    # calls; without this the student watches a spinner for minutes with no way
+    # to tell a working run from a dead one.
+    run_id = begin_tool_run(db, user, tool="humanize-docx",
+                            surface=surface_of(request))
+    def _progress(done: int, total: int) -> None:
+        bump_progress(run_id, done=done, total=total)
+
     with Timer() as t:
-        out, report = humanize_docx(body, language=language, user_anchor=anchor or None)
+        # run_in_threadpool, not a direct call: humanize_docx is SYNCHRONOUS and
+        # walks the whole document — a 132-paragraph thesis is ~70 sequential
+        # model calls, tens of minutes. Called inline from this `async def` it
+        # occupied the event loop for that entire time, so the API served
+        # nothing else (not even /auth/me) and could not shut down cleanly while
+        # a rewrite was in flight. The work is I/O-bound waiting on the
+        # provider, so a worker thread is the right place for it.
+        out, report = await run_in_threadpool(
+            humanize_docx, body, language=language, user_anchor=anchor or None,
+            on_progress=_progress)
     ok = out is not None and bool(report.get("ok"))
+    # Both halves kept, including on failure: the input is what makes a bad run
+    # reproducible and re-runnable without asking the student for the file again.
+    files = await run_in_threadpool(
+        store_run_files, user_id=user.id,
+        filename=file.filename or "document.docx",
+        input_bytes=body, output_bytes=out)
     charged = record_tool_run(
         db, user, surface=surface_of(request), tool="humanize-docx", ok=ok,
         error=None if ok else (report.get("error") or "rewrite_failed"),
-        usage=report.get("usage") or [], duration_ms=t.ms).charged
+        usage=report.get("usage") or [], duration_ms=t.ms,
+        run_id=run_id, files=files, input_filename=file.filename,
+        # The counts the response headers carried and the history threw away:
+        # a run that left half the document untouched now says so afterwards.
+        metrics={"rewritten": report.get("rewritten", 0),
+                 "skipped": report.get("skipped", 0)}).charged
 
     if not ok:
         raise HTTPException(422, detail={"error": {
@@ -923,12 +1004,17 @@ async def cite_document(request: Request, file: UploadFile = File(...),
     made, tokens for the model calls phase B made, added together.
     """
     from fastapi.responses import StreamingResponse  # noqa: PLC0415
+    from starlette.concurrency import run_in_threadpool  # noqa: PLC0415
     from orchestrator.tools.cite_docx import cite_docx  # noqa: PLC0415
     from .uploads import _DOCX_MIME  # noqa: PLC0415
 
     body = await _read_docx(file)
     with Timer() as t:
-        out, report = cite_docx(body, add_missing=add_missing)
+        # Off the event loop for the same reason as /document/humanize above:
+        # phase A is a CrossRef round-trip per source and phase B is model
+        # calls, so this blocks for minutes on a real thesis.
+        out, report = await run_in_threadpool(
+            cite_docx, body, add_missing=add_missing)
     ok = out is not None and bool(report.get("ok"))
     # Billed per source ACTUALLY looked up — resolved plus unresolved, since a
     # CrossRef query was spent either way, but not the entries carried through

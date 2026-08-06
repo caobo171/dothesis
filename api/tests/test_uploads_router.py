@@ -21,10 +21,13 @@ def client(monkeypatch):
     return TestClient(create_app())
 
 
-def _login(client) -> uuid.UUID:
+def _login(client, email: str | None = None) -> uuid.UUID:
+    # `email` is optional so a test can log in AS a specific identity — the
+    # super-admin allowlist is keyed by email (app/admin_config._SEED), so the
+    # admin-read tests below can't use the random address.
     sf = get_session_factory()
     with sf() as db:
-        u = User(email=f"u{uuid.uuid4().hex[:6]}@x",
+        u = User(email=email or f"u{uuid.uuid4().hex[:6]}@x",
                  username=f"u{uuid.uuid4().hex[:6]}",
                  password_hash="x", email_verified=True)
         db.add(u); db.commit()
@@ -140,6 +143,85 @@ def test_get_upload_text_returns_extracted_body(client, monkeypatch):
     r = client.post(f"/api/v1/uploads/{upload_id}/text")
     assert r.status_code == 200
     assert "extracted" in r.text
+
+
+# --- owner-or-admin reads --------------------------------------------------
+# An email on the super-admin seed allowlist (app/admin_config.py).
+ADMIN_EMAIL = "caotest171@gmail.com"
+
+
+def _student_upload(client, monkeypatch) -> str:
+    """A student's project with one uploaded PDF. Returns the upload id.
+
+    Leaves `client` authenticated as the student; the admin tests re-login.
+    """
+    fake_s3 = MagicMock()
+    fake_s3.generate_presigned_url.return_value = "https://s3.example/x?sig=y"
+    fake_s3.get_object.return_value = {"Body": io.BytesIO(b"extracted text body")}
+    monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: fake_s3)
+    _login(client)
+    pid = _project(client)
+    with FIXTURE.open("rb") as f:
+        return client.post(f"/api/v1/projects/{pid}/uploads",
+                           files={"file": ("a.pdf", f, "application/pdf")}).json()["upload_id"]
+
+
+def _stream_token(client, scope: str) -> str:
+    token = client.headers["Authorization"].split(" ", 1)[1]
+    return client.post("/api/v1/auth/stream-token",
+                       json={"access_token": token, "scope": scope}).json()["stream_token"]
+
+
+def test_download_upload_allowed_for_super_admin(client, monkeypatch):
+    """A super admin can download a file from another user's project.
+
+    Regression: uploads/list was widened to owner-or-admin (readable_project)
+    so the chat context panel renders for an admin debugging a student's run —
+    but this download route kept the owner-only check, so the panel listed the
+    file and the download button answered `project not found`. Downloading is a
+    read, so it takes the read gate. Writes below stay owner-only.
+    """
+    upload_id = _student_upload(client, monkeypatch)
+
+    _login(client, email=ADMIN_EMAIL)
+    st = _stream_token(client, f"project-upload:{upload_id}")
+    r = client.get(f"/api/v1/uploads/{upload_id}/download?st={st}",
+                   follow_redirects=False)
+    assert r.status_code == 302, r.text
+
+
+def test_get_upload_text_allowed_for_super_admin(client, monkeypatch):
+    """Same gate for the text sibling — the panel's preview must not 404 either."""
+    upload_id = _student_upload(client, monkeypatch)
+
+    _login(client, email=ADMIN_EMAIL)
+    r = client.post(f"/api/v1/uploads/{upload_id}/text")
+    assert r.status_code == 200, r.text
+    assert "extracted" in r.text
+
+
+def test_download_upload_404_for_unrelated_user(client, monkeypatch):
+    """The gate widened for admins only — a normal stranger still gets 404."""
+    upload_id = _student_upload(client, monkeypatch)
+
+    _login(client)  # random, non-admin email
+    st = _stream_token(client, f"project-upload:{upload_id}")
+    r = client.get(f"/api/v1/uploads/{upload_id}/download?st={st}",
+                   follow_redirects=False)
+    assert r.status_code == 404
+
+
+def test_admin_cannot_delete_someone_elses_upload(client, monkeypatch):
+    """The write half of the asymmetry: reading a student's file is allowed,
+    destroying it is not."""
+    upload_id = _student_upload(client, monkeypatch)
+
+    _login(client, email=ADMIN_EMAIL)
+    assert client.delete(f"/api/v1/uploads/{upload_id}").status_code == 404
+
+    sf = get_session_factory()
+    with sf() as db:
+        assert db.query(PaperUpload).filter_by(id=uuid.UUID(upload_id)).count() == 1
 
 
 def test_upload_with_no_extractable_text_leaves_text_extracted_at_null(client, monkeypatch):

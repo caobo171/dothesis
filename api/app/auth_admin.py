@@ -48,3 +48,50 @@ def readable_project(db: Session, user: User, project_id: uuid.UUID) -> Project:
         return p
     raise HTTPException(status_code=404,
                         detail={"error": {"code": "not_found", "message": "project not found"}})
+
+
+def _run_404() -> HTTPException:
+    return HTTPException(
+        status_code=404,
+        detail={"error": {"code": "not_found", "message": "tool run not found"}})
+
+
+def readable_run(db: Session, user: User, run_id: int):
+    """The tool run, if `user` may READ it: the owner, or a super admin.
+
+    Same shape and same reasoning as `readable_project` above — a tool run now
+    holds the student's actual document, so "who looked at what" has to be
+    answerable from the journal, and a run the caller may not read is a 404
+    rather than a 403 so the route never becomes an existence oracle.
+
+    Reading a run is how a bad one gets diagnosed: the 2026-08-05 translation
+    bug needed both files, and without this the only way to get them is to ask
+    the student.
+    """
+    from .models import ToolRun  # noqa: PLC0415
+
+    run = db.get(ToolRun, run_id)
+    if not run:
+        raise _run_404()
+    if run.user_id == user.id:
+        return run
+    if is_super_admin(user):
+        log.info("admin_read tool_run=%s owner_id=%s admin=%s",
+                 run_id, run.user_id, user.email)
+        return run
+    raise _run_404()
+
+
+def owned_run(db: Session, user: User, run_id: int):
+    """The tool run, if `user` OWNS it. For anything that writes.
+
+    Re-running spends the owner's credits and appends to their history, so it
+    takes this gate and not `readable_run` — the same split `_owned_project`
+    keeps for every write on a project an admin may read.
+    """
+    from .models import ToolRun  # noqa: PLC0415
+
+    run = db.get(ToolRun, run_id)
+    if not run or run.user_id != user.id:
+        raise _run_404()
+    return run

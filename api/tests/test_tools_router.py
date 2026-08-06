@@ -494,3 +494,39 @@ def test_a_batch_that_changes_paragraph_count_keeps_the_originals():
     assert report["skipped"] == 2
     assert report["failures"][0]["error"] == "paragraph_count_changed"
     assert "Đoạn văn số 0" in [p.text for p in Document(_io.BytesIO(out)).paragraphs][0]
+
+
+def test_an_english_document_is_not_translated(monkeypatch):
+    """Regression, from a real run: an English dissertation went through
+    /tools/document/humanize and came back in Vietnamese.
+
+    The route defaulted `language` to "vi" and the rewrite prompt reads that as
+    "Rewrite the user's text in Vietnamese", so the model translated 69
+    paragraphs. Numbers and citations survived, so every existing gate passed.
+    The walk must hand the paragraph's OWN language down, and a translated
+    rewrite must be refused even if it does not.
+    """
+    import io as _io
+    from docx import Document
+    from orchestrator.tools.humanize_docx import humanize_docx
+    from orchestrator.tools.humanize import detect_language
+
+    english = ("Prior research has confirmed that leadership matters in the "
+               "hospitality sector, but three limitations restrict what it can "
+               "tell a hotel manager about daily practice.")
+    d = Document()
+    d.add_paragraph(english)
+    buf = _io.BytesIO(); d.save(buf)
+
+    seen = {}
+
+    def fake_humanize(text, **kw):
+        # What the real pass resolves the language to, without the model call.
+        seen["language"] = detect_language(text) or kw.get("language") or "vi"
+        return {"ok": True, "text": text.replace("Prior research", "Earlier work")}
+
+    out, report = humanize_docx(buf.getvalue(), humanize_fn=fake_humanize)
+    assert seen["language"] == "en"
+    assert report["ok"]
+    body = [p.text for p in Document(_io.BytesIO(out)).paragraphs][0]
+    assert detect_language(body) == "en"

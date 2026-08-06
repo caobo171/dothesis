@@ -51,6 +51,9 @@ class ToolCharge:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     usage: list[dict] = field(default_factory=list)
+    # The tool_runs row this call wrote. A re-run reads it to record what it
+    # descended from; None means the audit write itself failed.
+    run_id: int | None = None
 
     @property
     def under_billed(self) -> bool:
@@ -105,6 +108,69 @@ def tool_cost(tool: str, *, units: int = 0, usage: list[dict] | None = None,
     return cost
 
 
+def begin_tool_run(db: Session, user: User, *, tool: str, surface: str = "web",
+                   total: int = 0) -> int | None:
+    """Open a run row BEFORE the work, so its progress can be polled.
+
+    This is the one place the ordering in this module's docstring bends. RECORD
+    still happens before CHARGE and still commits on its own; what changes is
+    that a long document walk now has a row to report against while it is
+    running, instead of appearing only once it is over. A 70-batch rewrite is
+    several minutes of blank spinner otherwise.
+
+    Returns the row id, or None if the write failed — in which case the caller
+    simply proceeds without progress, exactly as before. Never raises: this
+    runs BEFORE the work, and refusing to start a paid rewrite because an audit
+    insert failed would be the worst possible trade.
+    """
+    from .models import ToolRun  # noqa: PLC0415
+
+    try:
+        row = ToolRun(user_id=user.id, surface=surface, tool=tool, ok=False,
+                      status="running", progress_total=max(0, total),
+                      progress_done=0)
+        db.add(row)
+        db.commit()
+        return row.id
+    except Exception:  # noqa: BLE001
+        logger.exception("tool_runs pre-write failed: tool=%s user=%s", tool, user.id)
+        db.rollback()
+        return None
+
+
+def bump_progress(run_id: int | None, *, done: int, total: int | None = None) -> None:
+    """Publish "batch N finished" from inside a running walk.
+
+    Opens its OWN session deliberately. The request's session is mid-transaction
+    for the whole document, so a write on it stays invisible to the polling
+    endpoint until the run ends — which would defeat the point. A short
+    autonomous transaction per batch is a few dozen tiny writes over several
+    minutes, which is nothing next to the model calls it is reporting on.
+
+    Never raises. Progress is a nicety; the rewrite is not.
+    """
+    if not run_id:
+        return
+    from .db import get_session_factory  # noqa: PLC0415
+    from .models import ToolRun  # noqa: PLC0415
+
+    try:
+        Session = get_session_factory()
+        with Session() as s:
+            row = s.get(ToolRun, run_id)
+            if row is None:
+                return
+            row.progress_done = max(0, done)
+            # The walk reports its own denominator on the first call — the
+            # route cannot know the batch count without parsing the document a
+            # second time.
+            if total is not None:
+                row.progress_total = max(0, total)
+            s.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception("tool run progress update failed: run=%s", run_id)
+
+
 def record_tool_run(
     db: Session,
     user: User,
@@ -116,6 +182,11 @@ def record_tool_run(
     usage: list[dict] | None = None,
     duration_ms: int = 0,
     surface: str = "web",
+    run_id: int | None = None,
+    files=None,
+    input_filename: str | None = None,
+    metrics: dict | None = None,
+    parent_run_id: int | None = None,
 ) -> ToolCharge:
     """Record one tool run, meter its tokens, and debit the caller.
 
@@ -139,7 +210,9 @@ def record_tool_run(
         if result.cost > 0:
             result.charged = _charge(db, user, tool=tool, cost=result.cost)
         _write_run(db, user, tool=tool, ok=ok, error=error, units=units,
-                   duration_ms=duration_ms, surface=surface, result=result)
+                   duration_ms=duration_ms, surface=surface, result=result,
+                   run_id=run_id, files=files, input_filename=input_filename,
+                   metrics=metrics, parent_run_id=parent_run_id)
     except Exception:  # noqa: BLE001
         logger.exception("tool accounting failed outright: tool=%s user=%s",
                          tool, getattr(user, "id", None))
@@ -209,18 +282,43 @@ def _charge(db: Session, user: User, *, tool: str, cost: int) -> int:
 
 def _write_run(db: Session, user: User, *, tool: str, ok: bool, error: str | None,
                units: int, duration_ms: int, surface: str,
-               result: ToolCharge) -> None:
+               result: ToolCharge, run_id: int | None = None, files=None,
+               input_filename: str | None = None, metrics: dict | None = None,
+               parent_run_id: int | None = None) -> None:
     from .models import ToolRun  # noqa: PLC0415
 
     try:
-        db.add(ToolRun(
-            user_id=user.id, surface=surface, tool=tool, ok=ok,
-            error=(error or None), units=max(0, units),
-            credits_cost=result.cost, credits_charged=result.charged,
-            prompt_tokens=result.prompt_tokens,
-            completion_tokens=result.completion_tokens,
-            duration_ms=max(0, duration_ms)))
+        # UPDATE when begin_tool_run already opened a row for this run, INSERT
+        # otherwise. Getting this wrong shows every document twice in the
+        # student's history, so the two paths share one set of assignments.
+        row = db.get(ToolRun, run_id) if run_id else None
+        if row is None:
+            row = ToolRun(user_id=user.id, surface=surface, tool=tool)
+            db.add(row)
+        row.ok = ok
+        row.error = error or None
+        row.units = max(0, units)
+        row.credits_cost = result.cost
+        row.credits_charged = result.charged
+        row.prompt_tokens = result.prompt_tokens
+        row.completion_tokens = result.completion_tokens
+        row.duration_ms = max(0, duration_ms)
+        # Terminal either way — a row left "running" reads as a live job
+        # forever, which is exactly the state a killed request used to leave
+        # behind invisibly.
+        row.status = "done" if ok else "failed"
+        if metrics is not None:
+            row.metrics = metrics
+        if input_filename:
+            row.input_filename = input_filename[:255]
+        if parent_run_id:
+            row.parent_run_id = parent_run_id
+        if files is not None:
+            row.input_s3_uri = files.input_uri
+            row.output_s3_uri = files.output_uri
+            row.files_expire_at = files.expires_at
         db.commit()
+        result.run_id = row.id
     except Exception:  # noqa: BLE001
         logger.exception("tool_runs write failed: tool=%s user=%s", tool, user.id)
         db.rollback()

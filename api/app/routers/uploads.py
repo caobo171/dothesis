@@ -91,6 +91,26 @@ def _owned_upload(db: Session, user: User, upload_id: uuid.UUID) -> PaperUpload:
     return up
 
 
+def _readable_upload(db: Session, user: User, upload_id: uuid.UUID) -> PaperUpload:
+    """The upload, if `user` may READ its project: owner or super admin.
+
+    Split from `_owned_upload` for the same reason exports has the split: the
+    uploads *list* takes the read gate (a super admin debugging a student's run
+    needs the context panel to render), so a read of an individual file must
+    take it too — otherwise the panel lists the file and the download button
+    answers `project not found`. Deleting still goes through `_owned_upload`;
+    an admin may look at a student's file, never destroy it.
+
+    readable_project journals the admin access, which is the point: opening
+    someone's uploaded thesis material is a privacy event.
+    """
+    up = db.get(PaperUpload, upload_id)
+    if not up:
+        raise HTTPException(404, detail={"error": {"code": "not_found"}})
+    _readable_project(db, user, up.project_id)
+    return up
+
+
 class UploadOut(BaseModel):
     upload_id: uuid.UUID
     filename: str
@@ -244,7 +264,9 @@ def download_upload(
     route: S3 presigned URL with ResponseContentDisposition so the browser
     saves the file under its original filename (not the opaque S3 key).
     """
-    up = _owned_upload(db, user, upload_id)
+    # Owner-or-admin: downloading is a read, and uploads/list beside it is
+    # already readable — see _readable_upload.
+    up = _readable_upload(db, user, upload_id)
     # s3_uri format: s3://<bucket>/users/<uid>/projects/<pid>/uploads/<uploadid>/<filename>
     if not (up.s3_uri or "").startswith("s3://"):
         raise HTTPException(404, detail={"error": {"code": "no_s3_uri"}})
@@ -267,7 +289,9 @@ def download_upload(
 def get_upload_text(upload_id: uuid.UUID,
                     user: User = Depends(current_user),
                     db: Session = Depends(db_session)):
-    up = _owned_upload(db, user, upload_id)
+    # Same read gate as the download beside it — the panel's text preview must
+    # not 404 for an admin who can already see the file listed.
+    up = _readable_upload(db, user, upload_id)
     if not up.text_extract_uri:
         raise HTTPException(404, detail={"error": {"code": "no_text",
                                                     "message": "no extracted text for this upload"}})
