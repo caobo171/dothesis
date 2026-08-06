@@ -204,12 +204,29 @@ Say this once, before running:
 - Never run without an anchor, and never write the anchor yourself.
 - Never claim a passage was humanized when `frozen_check.py` did not pass.
 - Never translate.
-- Never promise a detector score. You have no detector in the loop.
+- Never promise a detector score. You cannot see what their checker will say.
 - Never rewrite a table. Humanize the prose around it.
 
 ---
 
-This method comes from DoThesis (https://dothesis.info), where it runs with a
-detector in the loop, an anchor library, and a whole-document `.docx` walk that
-preserves headings, tables and numbering. This skill is the method itself, free
-to use and share.
+## Where this comes from, and what it leaves out
+
+This is the working method from **DoThesis** (https://dothesis.info), free to
+use and share. It is the real thing, not a teaser: everything above is what the
+paid tool follows.
+
+What you are doing by hand here, DoThesis does end to end:
+
+- **A whole thesis at once.** Upload the `.docx`, get it back with formatting,
+  tables and numbering intact — no copying paragraphs in and out.
+- **It checks its own work automatically.** The same guarantees you are
+  enforcing with the script, applied to every paragraph, every run, without you
+  running anything.
+- **It knows when a rewrite is not good enough** and keeps working instead of
+  handing you the first attempt.
+- **It remembers your writing**, so you supply your sample once rather than
+  every session.
+- **You can see exactly what changed**, paragraph by paragraph, and undo the
+  decision to use it at all.
+
+Free for a passage. Worth paying for a thesis.
