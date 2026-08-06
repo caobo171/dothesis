@@ -142,17 +142,90 @@ def test_reconstruct_upstream_respects_explicit_targets():
     assert [e["module"] for e in out] == ["M3"]
 
 
-def test_reconstruct_upstream_skips_modules_with_content():
+def test_reconstruct_upstream_completes_modules_with_partial_content():
+    # A title alone is not a finished M1 — it fails the topic DoD (no research
+    # questions, scope, objectives). Having *some* content used to disqualify a
+    # module from backfill, which left the half-filled modules half-filled
+    # forever and sent the agent back to the student to re-do them by hand.
     from orchestrator.backfill import reconstruct_upstream
-    # M1 already has content → never re-reconstructed; only M2, M3 targeted.
     cs = ContextStore(
         m1_topic={"research_title": "given"},
         m4_analysis={"analysis_results": "x"})
     llm, _ = _routing_llm()
     out = reconstruct_upstream(cs, llm=llm)
-    assert [e["module"] for e in out] == ["M2", "M3"]
+    assert [e["module"] for e in out] == ["M1", "M2", "M3"]
+    m1 = next(e for e in out if e["module"] == "M1")["candidate"]
+    # The student's title survives; the inference only fills what was missing.
+    assert m1["research_title"] == "given"
+    assert m1["research_questions"] == ["RQ1"]
 
 
 def test_reconstruct_upstream_empty_when_nothing_filled():
     from orchestrator.backfill import reconstruct_upstream
     assert reconstruct_upstream(ContextStore(), llm=_fake_llm("{}")) == []
+
+
+# -- completing a PARTIAL module ----------------------------------------------
+# A student who uploads a finished thesis has the whole document classified as
+# analysis-output, so M4 gets `analysis_results` and nothing else — content, but
+# no `analysis_outline` / `data_type_detected` / `results`, so it fails its DoD
+# and the agent asks them to plan an analysis they already ran. Backfill used to
+# skip any module that had *any* content, which made the module carrying the
+# most evidence the one module it refused to finish.
+
+def _partial_m4_cs():
+    return ContextStore(
+        m1_topic={"research_title": "Leadership & job satisfaction",
+                  "research_type": "quantitative"},
+        m4_analysis={"analysis_results": "PLS-SEM. AVE 0.62. HTMT ok. R2 = 0.41."},
+    )
+
+
+def _m4_llm():
+    from unittest.mock import MagicMock
+    llm = MagicMock()
+    llm.invoke.return_value.content = (
+        '{"data_type_detected": "Quantitative", '
+        '"analysis_outline": {"sections": ["measurement model", "structural model"]}, '
+        '"results": {"structural": {"step_name": "structural model"}}, '
+        '"analysis_results": "LLM REWRITE — must not win"}'
+    )
+    return llm
+
+
+def test_partial_module_is_targeted_for_completion():
+    from orchestrator.backfill import reconstruct_upstream
+    out = reconstruct_upstream(_partial_m4_cs(), llm=_m4_llm())
+    assert "M4" in [e["module"] for e in out]
+
+
+def test_completing_a_partial_module_never_overwrites_real_content():
+    """The imported results are the student's actual work. The inference fills
+    the empty fields around them and loses every collision."""
+    from orchestrator.backfill import reconstruct_upstream
+    out = reconstruct_upstream(_partial_m4_cs(), targets=["M4"], llm=_m4_llm())
+    m4 = next(e for e in out if e["module"] == "M4")["candidate"]
+    assert m4["analysis_results"].startswith("PLS-SEM")      # student's text kept
+    assert m4["analysis_outline"]["sections"]                # gap filled in
+    assert m4["data_type_detected"] == "Quantitative"
+
+
+def test_completed_module_is_graded_on_the_merged_slice():
+    """`review` must describe what will be PERSISTED, not the bare candidate —
+    otherwise it reports gaps the student had already filled."""
+    from orchestrator.backfill import reconstruct_upstream
+    out = reconstruct_upstream(_partial_m4_cs(), targets=["M4"], llm=_m4_llm())
+    m4 = next(e for e in out if e["module"] == "M4")
+    assert "missing analysis_outline" not in m4["review"]
+
+
+def test_a_complete_module_is_left_alone():
+    """Only INCOMPLETE modules are targeted — a module that passes its DoD is
+    not re-inferred (that would spend an LLM call to overwrite nothing)."""
+    from orchestrator.backfill import reconstruct_upstream
+    cs = ContextStore(
+        m4_analysis={"data_type_detected": "Quantitative",
+                     "analysis_outline": {"sections": ["structural"]},
+                     "results": {"structural": {"step_name": "structural"}}},
+    )
+    assert "M4" not in [e["module"] for e in reconstruct_upstream(cs, llm=_m4_llm())]

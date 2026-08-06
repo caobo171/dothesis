@@ -180,29 +180,53 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
     explicit user confirm.
 
     `targets` restricts which modules to attempt (e.g. ["M3"] for "just the
-    design"); None ⇒ every M1-M4 module strictly below the highest module that
-    already has content and itself still empty. Returns a list (display order
-    M1→M4) of {module, artifact, candidate, rationale, ready_to_confirm, review}.
+    design"); None ⇒ every M1-M4 module up to the highest one that already has
+    content, that is not yet COMPLETE. Returns a list (display order M1→M4) of
+    {module, artifact, candidate, rationale, ready_to_confirm, review}.
     Never raises — a per-module failure yields `{}` and is skipped.
+
+    "Not complete" rather than "empty": a student who uploads a finished thesis
+    lands their whole document in M4 as `analysis_results`, which is content —
+    but the module still has no `analysis_outline` or `data_type_detected`, so
+    it fails its DoD and the agent asks them to plan an analysis they already
+    ran. Refusing to touch a partially-filled module meant the module with the
+    MOST evidence was the only one we wouldn't finish. Values that are already
+    there always win over the inference (see the merge below), so completing a
+    module can only add.
     """
     from orchestrator.artifacts import (
         MODULE_TO_ARTIFACT, _ARTIFACT_BY_KEY, dod_design_structural,
     )
-    from orchestrator.state import _MODULE_TO_FIELD, _slice_has_content
+    from orchestrator.state import (
+        _MODULE_TO_FIELD, _slice_has_content, get_module_slice,
+    )
+
+    def _gate_for(artifact: str):
+        # design uses the structural gate (dod_design_structural) everywhere in
+        # this module — keep the two selections identical or a module could be
+        # targeted by one rule and graded by the other.
+        return {"design": dod_design_structural}.get(
+            artifact, _ARTIFACT_BY_KEY[artifact].dod)
 
     def _content(module: str) -> bool:
         v = getattr(context_store, _MODULE_TO_FIELD[module], None)
         return bool(v) and _slice_has_content(v)
 
-    # Auto-target: everything strictly below the highest-with-content module that
-    # is itself still empty. With only M4 filled → [M1, M2, M3].
+    def _complete(module: str) -> bool:
+        v = getattr(context_store, _MODULE_TO_FIELD[module], None) or {}
+        if not (v and _slice_has_content(v)):
+            return False
+        return _gate_for(MODULE_TO_ARTIFACT[module])(v).done
+
+    # Auto-target: everything up to the highest-with-content module that isn't
+    # complete yet. Imported M4 holding only raw results → [M1, M2, M3, M4].
     if targets is None:
         filled = [m for m in _MODULE_ORDER + ("M5",) if _content(m)]
         if not filled:
             return []
         top = max(_MODULE_ORDER.index(m) for m in filled if m in _MODULE_ORDER) \
             if any(m in _MODULE_ORDER for m in filled) else len(_MODULE_ORDER)
-        targets = [m for m in _MODULE_ORDER[:top + 1] if not _content(m)]
+        targets = [m for m in _MODULE_ORDER[:top + 1] if not _complete(m)]
     else:
         targets = [m for m in targets if m in MODULE_TO_ARTIFACT]
 
@@ -231,9 +255,17 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
                 candidate["literature_sources"] = real
                 candidate["citation_list"] = real
         rationale = candidate.pop("_rationale", None)
-        gate = {"design": dod_design_structural}.get(
-            artifact, _ARTIFACT_BY_KEY[artifact].dod)
-        result = gate(candidate)
+        # Completing a partial module must never overwrite it. What is already
+        # in the slice is the student's actual work (the imported results, a
+        # questionnaire they wrote); the inference only gets the empty fields.
+        existing = get_module_slice(cs, module)
+        if existing:
+            candidate = {**candidate,
+                         **{k: v for k, v in existing.items()
+                            if v not in (None, "", [], {})}}
+        # Grade the MERGED slice — that's what gets persisted, so grading the
+        # bare candidate would report gaps the student had already filled.
+        result = _gate_for(artifact)(candidate)
         out.append({
             "module": module, "artifact": artifact, "candidate": candidate,
             "rationale": rationale,

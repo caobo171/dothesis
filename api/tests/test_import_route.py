@@ -40,9 +40,12 @@ def test_focus_is_first_not_imported(monkeypatch):
     assert focus_set["f"] == "M2"             # first not-imported
     body = r.json()
     assert body["focus"] == "M2"
-    # to_reconstruct = upstream-of-imported, still locked, reconstructable (M1-M4).
-    # imported M1+M3, M2 is locked and below M3 → suggested for reconstruction.
-    assert body["to_reconstruct"] == ["M2"]
+    # to_reconstruct = every reconstructable module up to the highest imported
+    # one that isn't `done`. M2 is empty; M1 and M3 were imported but landed
+    # `in_progress` (partial slices), and a partial module is exactly the one
+    # worth finishing — under the old "locked only" rule the modules carrying
+    # the student's real content were the ones we refused to complete.
+    assert body["to_reconstruct"] == ["M1", "M2", "M3"]
 
 
 # --- reconstruct + confirm endpoints (real Postgres via conftest) -----------

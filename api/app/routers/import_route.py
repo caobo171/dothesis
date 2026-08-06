@@ -98,18 +98,25 @@ def import_project(project_id: str, user: User = Depends(current_user), db: Sess
     # doesn't get skipped over and leave the student stranded past unfinished work).
     focus = next((m for m in MODULES if m not in imported), MODULES[-1])
     _set_focus(db, project_id, focus)
-    # Hint for the activation card: which UPSTREAM modules are still empty and
-    # could be reconstructed from what we just imported. Only modules strictly
-    # below the highest imported one, still `locked` (no content), and in the
-    # M1-M4 reconstructable set. Cheap (no LLM) — the actual inference is the
-    # separate /reconstruct call so import latency stays unchanged.
+    # Hint for the activation card: which modules the reconstruction should try
+    # to finish from what we just imported — everything up to AND INCLUDING the
+    # highest imported module that isn't `done`, within the M1-M4 reconstructable
+    # set. Cheap (no LLM) — the actual inference is the separate /reconstruct
+    # call so import latency stays unchanged.
+    #
+    # `!= "done"` rather than `== "locked"`, and `top + 1` rather than `top`,
+    # because the imported module is usually the INCOMPLETE one: a finished
+    # thesis lands in M4 as raw `analysis_results` with no `analysis_outline`,
+    # so under the old rule the module carrying the student's actual results
+    # was the one module we refused to finish — and the agent then asked them
+    # to plan an analysis they had already run.
     from orchestrator.artifacts import MODULE_TO_ARTIFACT
     status = store.load()["status"]
     to_reconstruct: list[str] = []
     if imported:
         top = max(MODULES.index(m) for m in imported)
-        to_reconstruct = [m for m in MODULES[:top]
-                          if m in MODULE_TO_ARTIFACT and status.get(m) == "locked"]
+        to_reconstruct = [m for m in MODULES[:top + 1]
+                          if m in MODULE_TO_ARTIFACT and status.get(m) != "done"]
     return {"imported": imported, "ambiguous": res["ambiguous"],
             "unreadable": res["unreadable"], "focus": focus,
             "to_reconstruct": to_reconstruct}
