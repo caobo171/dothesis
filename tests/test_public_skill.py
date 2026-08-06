@@ -135,3 +135,84 @@ def test_greek_notation_is_not_a_foreign_script(fc):
     """β and α are ordinary notation in a statistics chapter."""
     assert fc.check("Hệ số hồi quy đạt 0,412 trong mô hình đề xuất.",
                     "Hệ số β đạt 0,412 trong mô hình đề xuất.")["foreign_scripts"] == []
+
+
+# --- rhythm: the half the first version shipped without --------------------
+#
+# The skill originally carried the frozen gate and none of the burstiness work,
+# so a user could follow it, get PASS, and hand back prose MORE machine-even
+# than they wrote — the exact failure the engine had until it was measured.
+
+def test_burstiness_separates_a_metronome_from_real_rhythm(fc):
+    flat = ("Nghiên cứu khảo sát nhân viên khách sạn ở Hà Nội. "
+            "Dữ liệu được thu thập trong khoảng ba tháng. "
+            "Phân tích thực hiện bằng phần mềm SmartPLS. "
+            "Kết quả cho thấy giả thuyết được chấp nhận.")
+    bursty = ("Nghiên cứu khảo sát nhân viên khách sạn ở Hà Nội, dữ liệu thu "
+              "thập trong khoảng ba tháng và phân tích bằng SmartPLS. "
+              "Giả thuyết được chấp nhận. Không có ngoại lệ.")
+    assert fc.burstiness(flat) < 0.35 < fc.burstiness(bursty)
+
+
+def test_a_flatter_rewrite_fails_even_when_nothing_was_broken(fc, tmp_path):
+    """PASS on content and FAIL overall — the trap the first version had."""
+    bursty = ("Mô hình được kiểm định bằng SmartPLS với 5000 lần lặp, và kết "
+              "quả cho thấy các giả thuyết đều được ủng hộ. Không có ngoại lệ. "
+              "Dữ liệu sạch.")
+    flat = ("Mô hình được kiểm định bằng SmartPLS với 5000 lần lặp. "
+            "Kết quả cho thấy các giả thuyết đều được ủng hộ. "
+            "Dữ liệu thu được là hoàn toàn sạch sẽ.")
+    r = fc.check(bursty, flat)
+    assert r["missing"] == [] and r["added"] == []   # content is intact
+    assert r["flatter_than_original"] is True
+    assert r["ok"] is False                          # and it still fails
+    assert r["rhythm"]["after"] < r["rhythm"]["before"]
+
+    a = tmp_path / "a.txt"; b = tmp_path / "b.txt"
+    a.write_text(bursty, encoding="utf-8"); b.write_text(flat, encoding="utf-8")
+    res = subprocess.run([sys.executable, str(SCRIPT), str(a), str(b)],
+                         capture_output=True, text=True)
+    assert res.returncode == 1
+    assert "machine-even" in res.stdout
+
+
+def test_the_rhythm_verdict_is_relative_not_an_absolute_bar(fc):
+    """A writer whose prose already varies must not have it replaced by a
+    flatter rewrite that still clears a fixed threshold."""
+    already_good = ("Kết quả rất rõ ràng. Mô hình được kiểm định bằng SmartPLS "
+                    "với 5000 lần lặp và toàn bộ giả thuyết đều được ủng hộ ở "
+                    "mức ý nghĩa thông thường. Không có ngoại lệ nào.")
+    assert fc.burstiness(already_good) > fc.CV_TARGET
+    slightly_worse = ("Kết quả rất rõ ràng và đầy đủ. Mô hình được kiểm định "
+                      "bằng SmartPLS với 5000 lần lặp lại. Toàn bộ giả thuyết "
+                      "đều được ủng hộ ở mức ý nghĩa.")
+    assert fc.check(already_good, slightly_worse)["flatter_than_original"] is True
+
+
+def test_scan_names_the_paragraphs_worth_rewriting(fc):
+    flat = ("Một hai ba bốn năm sáu bảy tám. Một hai ba bốn năm sáu bảy chín. "
+            "Một hai ba bốn năm sáu bảy mười.")
+    varied = ("Ngắn thôi. Câu này dài hơn hẳn so với câu trước đó và tiếp tục "
+              "kéo dài thêm một đoạn nữa để tạo nhịp. Rồi lại ngắn.")
+    r = fc.scan(flat + "\n\n" + varied)
+    assert r["measured"] == 2 and r["flat"] == 1
+    assert [p["index"] for p in r["paragraphs"] if p["flat"]] == [1]
+
+
+def test_scan_runs_from_the_command_line(tmp_path):
+    f = tmp_path / "draft.txt"
+    f.write_text("Một hai ba bốn năm sáu bảy tám. Một hai ba bốn năm sáu bảy "
+                 "chín. Một hai ba bốn năm sáu bảy mười.", encoding="utf-8")
+    r = subprocess.run([sys.executable, str(SCRIPT), "--scan", str(f)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0
+    assert "machine-even" in r.stdout
+
+
+def test_the_skill_documents_the_measurement_and_the_ladder():
+    """The numbers are the argument; without them "vary your sentences" is the
+    same advice everyone else gives."""
+    md = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    assert "0.247" in md and "0.473" in md
+    assert "RESTRUCTURE" in md
+    assert "--scan" in md

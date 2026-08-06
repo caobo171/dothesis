@@ -1,25 +1,41 @@
 #!/usr/bin/env python3
-"""Check that a rewrite changed the wording and nothing else.
+"""Did the rewrite change the wording, and only the wording — and did it help?
 
-Standard library only, no install, no network. Run it after every rewrite:
+Standard library only, no install, no network.
 
-    python3 frozen_check.py original.txt rewritten.txt
+    python3 frozen_check.py original.txt rewritten.txt   # judge a rewrite
+    python3 frozen_check.py --scan draft.txt             # find what to rewrite
 
-It answers one question — did anything that must not move, move? Four ways a
-rewrite can be wrong, all of them invisible to a reader who trusts prose that
-reads well:
+TWO questions, because passing the first and failing the second is the trap.
 
-    missing        a number, table reference or citation vanished
-    added          one was invented that the source never had
-    language       the text was TRANSLATED instead of re-voiced
-    foreign_script a word came back in a different writing system
+1. Did anything that must not move, move? Four ways a rewrite goes wrong, all
+   invisible to a reader who trusts prose that reads well:
 
-Exit code is 0 when the rewrite is safe to keep, 1 when it must be discarded
-and the original kept.
+       missing        a number, table reference or citation vanished
+       added          one was invented that the source never had
+       language       the text was TRANSLATED instead of re-voiced
+       foreign_script a word came back in a different writing system
 
-This is a port of the gate DoThesis runs in production, where it exists because
-a humanized results chapter that quietly turns p = 0.032 into p = 0.03 is worse
-than an un-humanized one — nobody re-checks prose that reads well.
+2. Did the rhythm actually improve? A rewrite can preserve every number and
+   still come back MORE machine-even than what the human wrote. Measured against
+   a Turnitin report on a real 10,921-word dissertation, splitting its
+   paragraphs by what the detector flagged:
+
+       flagged paragraphs   median sentence-length CV = 0.247
+       clean paragraphs     median sentence-length CV = 0.473
+
+   Mean sentence LENGTH barely differed between the two groups (24.0 vs 24.9
+   words) and lexical diversity did not differ at all (TTR 0.79 vs 0.81).
+   Uniform sentences are the tell, not long ones — which is why "write shorter"
+   is the wrong instruction. On that same document the tool being tested made 4
+   of 9 rewritten paragraphs flatter than the student's own writing, one going
+   0.583 -> 0.204, because nothing was comparing them.
+
+Exit 0 = safe to keep. Exit 1 = keep the original instead.
+
+Ported from the gate DoThesis runs in production, where it exists because a
+humanized results chapter that quietly turns p = 0.032 into p = 0.03 is worse
+than an un-humanized one: nobody re-checks prose that reads well.
 """
 from __future__ import annotations
 
@@ -161,6 +177,32 @@ def foreign_scripts(original: str, rewritten: str, min_letters: int = 2) -> list
                   if s not in before and n >= min_letters)
 
 
+# --- rhythm ---------------------------------------------------------------
+
+_SENT_SPLIT_RE = re.compile(r"[.!?…]+\s+")
+_BURST_MIN_SENTENCES = 3
+# The clean-paragraph median from the measurement above. Prose that varies this
+# much is prose the detector left alone.
+CV_TARGET = 0.47
+
+
+def burstiness(text: str) -> float | None:
+    """Coefficient of variation of sentence length. None if unmeasurable.
+
+    Below three sentences there is no rhythm to measure and a guess would gate
+    real rewrites on noise.
+    """
+    sents = [s for s in _SENT_SPLIT_RE.split((text or "").strip()) if s.strip()]
+    if len(sents) < _BURST_MIN_SENTENCES:
+        return None
+    lens = [len(s.split()) for s in sents]
+    mean = sum(lens) / len(lens)
+    if mean <= 0:
+        return None
+    var = sum((n - mean) ** 2 for n in lens) / len(lens)
+    return round((var ** 0.5) / mean, 4)
+
+
 # --- the gate -------------------------------------------------------------
 
 def check(original: str, rewritten: str) -> dict:
@@ -170,20 +212,38 @@ def check(original: str, rewritten: str) -> dict:
     scripts = foreign_scripts(original, rewritten)
     src_lang, out_lang = detect_language(original), detect_language(rewritten)
     translated = bool(src_lang and out_lang and src_lang != out_lang)
+
+    # Relative, not an absolute target: a writer whose paragraph already varies
+    # well would otherwise have it replaced by a flatter rewrite that still
+    # cleared a fixed bar. Never handing back something more machine-even than
+    # what you were given is the weakest claim worth making.
+    cv_before, cv_after = burstiness(original), burstiness(rewritten)
+    flatter = bool(cv_before is not None and cv_after is not None
+                   and cv_after < cv_before)
     return {
-        "ok": not (missing or added or scripts or translated),
+        "ok": not (missing or added or scripts or translated or flatter),
         "missing": missing,
         "added": added,
         "foreign_scripts": scripts,
         "language_changed": translated,
         "language": {"original": src_lang, "rewritten": out_lang},
+        "flatter_than_original": flatter,
+        "rhythm": {"before": cv_before, "after": cv_after, "target": CV_TARGET},
     }
 
 
+def _cv(v) -> str:
+    return "—" if v is None else f"{v:.3f}"
+
+
 def _human(result: dict) -> str:
+    r = result["rhythm"]
+    rhythm = f"rhythm {_cv(r['before'])} -> {_cv(r['after'])} (target {r['target']})"
     if result["ok"]:
-        return "PASS — every number, reference and citation survived the rewrite."
-    lines = ["FAIL — keep the original. This rewrite changed more than wording:"]
+        return ("PASS — every number, reference and citation survived, and the "
+                f"rewrite is no flatter than the original.\n  {rhythm}")
+
+    lines = ["FAIL — keep the original. This rewrite:"]
     if result["missing"]:
         lines.append("  lost from the original (put each back, unchanged):")
         lines += [f"    {m.split(':', 1)[1]}" for m in result["missing"]]
@@ -191,23 +251,78 @@ def _human(result: dict) -> str:
         lines.append("  invented, not in the original (remove each):")
         lines += [f"    {a.split(':', 1)[1]}" for a in result["added"]]
     if result["language_changed"]:
-        lines.append("  the text was TRANSLATED, not re-voiced. Rewrite it in "
+        lines.append("  was TRANSLATED, not re-voiced. Rewrite it in "
                      f"{result['language']['original']}.")
     if result["foreign_scripts"]:
-        lines.append("  words appeared in another writing system: "
+        lines.append("  used another writing system: "
                      + ", ".join(result["foreign_scripts"]).lower())
+    if result["flatter_than_original"]:
+        lines.append(f"  reads MORE machine-even than the original — {rhythm}.")
+        lines.append("    Its sentences are closer to uniform length than the "
+                     "text you were given, which is the statistic detectors")
+        lines.append("    separate on. Escalate: see RESTRUCTURE in SKILL.md.")
+    return "\n".join(lines)
+
+
+def _paragraphs(text: str) -> list[str]:
+    return [p.strip() for p in re.split(r"\n\s*\n", text or "") if p.strip()]
+
+
+def scan(text: str) -> dict:
+    """Which paragraphs read as machine-even, before anything is rewritten.
+
+    Rewriting a whole chapter costs money and risks every paragraph it touches.
+    Most drafts do not need it everywhere: on the measured dissertation, 47% of
+    body paragraphs sat below CV 0.35 and the rest were already fine. This says
+    where to spend the effort.
+    """
+    rows = []
+    for i, para in enumerate(_paragraphs(text)):
+        cv = burstiness(para)
+        if cv is None:
+            continue
+        rows.append({"index": i + 1, "cv": cv,
+                     "flat": cv < CV_TARGET,
+                     "preview": re.sub(r"\s+", " ", para)[:70]})
+    flat = [r for r in rows if r["flat"]]
+    return {"measured": len(rows), "flat": len(flat), "target": CV_TARGET,
+            "paragraphs": rows}
+
+
+def _human_scan(result: dict) -> str:
+    if not result["measured"]:
+        return "Nothing long enough to measure — a paragraph needs 3+ sentences."
+    lines = [f"{result['flat']} of {result['measured']} measurable paragraphs "
+             f"read as machine-even (CV below {result['target']}).",
+             "Rewrite these first; the rest already vary the way human prose does.",
+             ""]
+    for r in result["paragraphs"]:
+        if r["flat"]:
+            lines.append(f"  #{r['index']:<4} cv {r['cv']:.3f}  {r['preview']}…")
     return "\n".join(lines)
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 3:
+    args = [a for a in argv[1:] if not a.startswith("--")]
+    flags = {a for a in argv[1:] if a.startswith("--")}
+    as_json = "--json" in flags
+
+    if "--scan" in flags:
+        if not args:
+            print(__doc__)
+            return 2
+        with open(args[0], encoding="utf-8") as f:
+            result = scan(f.read())
+        print(json.dumps(result, ensure_ascii=False, indent=2) if as_json
+              else _human_scan(result))
+        return 0
+
+    if len(args) < 2:
         print(__doc__)
         return 2
-    as_json = "--json" in argv
-    paths = [a for a in argv[1:] if not a.startswith("--")]
-    with open(paths[0], encoding="utf-8") as f:
+    with open(args[0], encoding="utf-8") as f:
         original = f.read()
-    with open(paths[1], encoding="utf-8") as f:
+    with open(args[1], encoding="utf-8") as f:
         rewritten = f.read()
     result = check(original, rewritten)
     print(json.dumps(result, ensure_ascii=False, indent=2) if as_json

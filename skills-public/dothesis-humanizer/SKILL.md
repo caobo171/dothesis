@@ -45,28 +45,89 @@ If they refuse or have nothing, say plainly that the rewrite will be weaker,
 and use a pre-1928 public-domain passage in a comparable register. Never
 invent one.
 
+## What detectors actually measure
+
+Do not skip this. It decides what a good rewrite looks like, and the usual
+advice is wrong.
+
+Measured against a Turnitin report on a real 10,921-word dissertation, splitting
+its body paragraphs by which ones the detector highlighted:
+
+| | flagged | clean |
+|---|---|---|
+| sentence-length CV (**burstiness**) | **0.247** | **0.473** |
+| mean sentence length | 24.0 words | 24.9 words |
+| lexical diversity (TTR) | 0.79 | 0.81 |
+
+Sentence *length* is the same in both groups. Vocabulary richness is the same.
+**Uniformity of sentence length is nearly 2× apart.** So "write shorter
+sentences" and "use richer words" both do nothing; varying length deliberately
+is the whole game.
+
+`scripts/frozen_check.py` measures this, and the target is **CV ≥ 0.47** — the
+level of variation in the prose this detector left alone.
+
 ## The workflow
 
-1. **Read the anchor.** Study its cadence, sentence-length variance, clause
+1. **Find what actually needs rewriting.**
+
+```bash
+python3 scripts/frozen_check.py --scan draft.txt
+```
+
+Lists the paragraphs reading as machine-even, worst first. On the measured
+dissertation only 47% of body paragraphs were flat; rewriting the rest costs
+money and risks their numbers for nothing. Rewrite what this names.
+
+2. **Read the anchor.** Study its cadence, sentence-length variance, clause
    structure, punctuation rhythm. Do NOT copy its phrases, its subject matter,
    or its level of formality.
-2. **Save the original.** You will need it verbatim in step 4.
-3. **Rewrite one section at a time.** A results chapter and a literature review
+3. **Save the original.** You need it verbatim in step 5.
+4. **Rewrite one section at a time.** A results chapter and a literature review
    need different voices, and a shorter passage holds its numbers better.
    Follow the rules below.
-4. **Verify with the script. Every time.**
+5. **Verify. Every time.**
 
 ```bash
 python3 scripts/frozen_check.py original.txt rewritten.txt
 ```
 
-It exits 0 when the rewrite is safe and 1 when it must be thrown away. It
-catches four things a reader will not: a lost number, an invented citation, a
-translation, and a word that came back in another writing system.
+Exit 0 = safe to keep. Exit 1 = keep the original. It catches five things a
+reader will not: a lost number, an invented citation, a translation, a word in
+another writing system, and a rewrite that came back **flatter than the
+original**.
 
-5. **On FAIL, keep the original.** Try one repair with the exact diff the script
-   printed. If that fails too, ship the original and say so. Never report a
-   passage as humanized when the check did not pass.
+That last one is not hypothetical. On the measured document the tool being
+tested made 4 of 9 rewritten paragraphs *more* uniform than the student's own
+writing — one going 0.583 → 0.204 — because nothing was comparing them. A
+rewrite that preserves every number and flattens the rhythm has made things
+worse while looking like progress.
+
+6. **On FAIL, keep the original.** Repair once using the exact diff the script
+   printed. If the failure is `flatter_than_original`, do not repair — escalate,
+   below. If the second attempt fails too, ship the original and say so. Never
+   report a passage as humanized when the check did not pass.
+
+## RESTRUCTURE — what to do when it is still flat
+
+Synonym-swapping moves nothing; burstiness is structural. Escalate one rung at a
+time, re-running the check after each. Every rule under "Never invent" still
+binds at every rung.
+
+**Rung 1 — vary length.** Mix short (6–12 word) sentences with long (25+ word)
+ones. Merge two adjacent short sentences, or split one long sentence, wherever
+meaning allows. Do not let every sentence land at a similar length.
+
+**Rung 2 — vary structure and openings.** Reorder clauses: move a subordinate
+clause to the front or the end; lead some sentences with the finding and others
+with the condition. Ensure no two consecutive sentences open the same way —
+same subject, same connector. Kill any repeating template ("Kết quả cho thấy…"
+three times running).
+
+**Rung 3 — re-express the frames.** Swap active↔passive, verb↔nominalisation,
+and recombine clauses across sentence boundaries. Where meaning is preserved,
+reorder how findings are presented within the paragraph. This is the strongest
+rewrite: change everything about HOW it is said and nothing about what it says.
 
 ## Rewrite rules
 
