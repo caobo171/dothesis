@@ -427,6 +427,8 @@ export const vi: Record<MessageKey, string> = {
   "txn.tool.scanDocx": "Quét tài liệu",
   "txn.tool.scanCiteDocx": "Quét trích dẫn",
 
+  "txn.tab.credits": "Credit",
+  "txn.tab.tools": "Lượt dùng công cụ",
   "txn.tools.title": "Lượt dùng công cụ",
   "txn.tools.blurb":
     "Tất cả những gì bạn chạy ngoài dự án luận văn. Cả những lượt không mất credit " +

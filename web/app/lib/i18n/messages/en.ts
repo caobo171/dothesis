@@ -444,6 +444,8 @@ export const en = {
   "txn.tool.scanDocx": "Scan a document",
   "txn.tool.scanCiteDocx": "Scan citations",
 
+  "txn.tab.credits": "Credits",
+  "txn.tab.tools": "Tool runs",
   "txn.tools.title": "Tool runs",
   "txn.tools.blurb":
     "Everything you ran outside a thesis project. Runs that cost nothing are " +
