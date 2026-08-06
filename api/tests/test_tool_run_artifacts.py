@@ -535,3 +535,51 @@ def test_cite_docx_reports_progress_across_both_phases():
     # Always at least the opening call, so the denominator is known up front.
     assert seen and seen[0][0] == 0
     assert all(d <= tot for d, tot in seen)
+
+
+def test_rerun_round_trips_a_real_document(dl_client, monkeypatch):
+    """The version above stubs humanize_docx wholesale, so it proves the row
+    lineage and nothing about the document. This one replaces only the MODEL —
+    the real walk opens the stored .docx, rewrites its paragraphs and rebuilds
+    the file — so the S3 read → parse → rewrite → rebuild → stream path is
+    actually exercised end to end.
+    """
+    from unittest.mock import MagicMock
+    from docx import Document
+
+    original = _docx_bytes()
+    fake = MagicMock()
+    fake.get_object.return_value = {"Body": io.BytesIO(original)}
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: fake)
+    monkeypatch.setattr("app.tool_artifacts.s3_from_env", lambda: fake)
+    monkeypatch.setenv("S3_BUCKET", "b")
+    # Only the model is faked. humanize_docx itself runs for real.
+    monkeypatch.setattr(
+        "orchestrator.tools.humanize.humanize_prose",
+        lambda text, **kw: {"ok": True, "text": "ĐÃ VIẾT LẠI HOÀN TOÀN.",
+                            "usage": [{"model": "m", "prompt_tokens": 5,
+                                       "completion_tokens": 5}]})
+
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u)
+
+    r = dl_client.post(f"/api/v1/tools/runs/{run.id}/rerun",
+                       json={"access_token": token})
+    assert r.status_code == 200, r.text
+    assert r.headers["content-disposition"].endswith('-humanized.docx"')
+
+    # What came back is a real .docx, and it holds the rewrite.
+    out = Document(io.BytesIO(r.content))
+    assert any("ĐÃ VIẾT LẠI" in p.text for p in out.paragraphs)
+
+    with Session() as s:
+        fresh = s.query(ToolRun).filter(ToolRun.parent_run_id == run.id).one()
+        assert fresh.status == "done" and fresh.ok
+        # The walk reported its own denominator, and the run was billed for the
+        # tokens the (faked) model reported.
+        assert fresh.progress_total >= 1
+        assert fresh.prompt_tokens == 5
+        # Its own files were stored, so the re-run is itself re-runnable.
+        assert fresh.input_s3_uri and fresh.output_s3_uri
