@@ -56,7 +56,9 @@ export function CiteDocument() {
     setRunning(true);
     setError(null);
     try {
-      const r = await citeDocument(file, addMissing, t);
+      // Batch count from the free scan sets the request deadline — see
+      // docTimeoutMs. Without one this spinner can outlive its own connection.
+      const r = await citeDocument(file, addMissing, t, scan?.passages);
       const url = URL.createObjectURL(r.blob);
       const a = document.createElement("a");
       a.href = url;

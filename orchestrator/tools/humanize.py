@@ -94,8 +94,13 @@ _SUBS_EN: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\bsignificant potential\b", re.I), "real promise"),
     (re.compile(r"\bcutting[- ]edge\b", re.I), "recent"),
     (re.compile(r"\bever[- ]evolving\b", re.I), "changing"),
-    (re.compile(r"(^|[.!?]\s+)It is worth noting that\s+"), r"\1"),
-    (re.compile(r"(^|[.!?]\s+)It is important to note that\s+"), r"\1"),
+    # "plays a crucial/vital role" is the same tell as "pivotal role" and at
+    # least as frequent; it survived because only the adjective was listed.
+    (re.compile(r"\b(?:crucial|vital|critical) role\b", re.I), "central role"),
+    # Filler that says nothing: both are pure length, and the shorter form is
+    # what a person writes.
+    (re.compile(r"\bin order to\b", re.I), "to"),
+    (re.compile(r"\bdue to the fact that\b", re.I), "because"),
 ]
 
 # Vietnamese: the padding constructions that show up in every LLM-drafted
@@ -123,7 +128,39 @@ _START_CONNECTORS_EN = [
 _START_CONNECTORS_VI = [
     "Hơn nữa", "Bên cạnh đó", "Đồng thời", "Đáng chú ý",
     "Nhìn chung", "Không những vậy", "Có thể nói",
+    # "Ngoài ra" is the highest-frequency opener in LLM-drafted Vietnamese and
+    # was missing from this list. "Đặc biệt" is the same metronome one rung up
+    # in emphasis; its comma-less form "Đặc biệt là …" is in _OPENERS_VI, since
+    # this list only matches connectors that take a comma.
+    "Ngoài ra", "Đặc biệt",
 ]
+
+# Padding that opens a sentence and can be deleted whole, unlike the
+# substitutions above which swap one word for another. Separate from
+# _START_CONNECTORS_* because these are phrases, not single connectors, and
+# separate from _SUBS_* because deleting a sentence opener has to hand the
+# capital letter to the word that becomes the new opener — which the _SUBS_
+# path did not do: "The data holds. It is worth noting that results are
+# stable." came out as "…holds. results are stable."
+_OPENERS_EN = [
+    r"It is worth noting that",
+    r"It is important to note that",
+    r"In today'?s [\w\s-]{0,24}?(?:world|age|era|landscape|environment),",
+]
+_OPENERS_VI = [
+    r"Không thể phủ nhận rằng",
+    r"Có thể khẳng định rằng",
+    r"Đặc biệt là",
+]
+
+
+def _strip_openers(text: str, phrases: list[str]) -> str:
+    """Delete a padding phrase that opens a sentence, capitalizing what follows."""
+    out = text
+    for phrase in phrases:
+        pat = re.compile(rf"(^|[.!?]\s+){phrase}\s+(\w)", re.IGNORECASE | re.MULTILINE)
+        out = pat.sub(lambda m: m.group(1) + m.group(2).upper(), out)
+    return out
 
 
 def _strip_start_connectors(text: str, connectors: list[str]) -> str:
@@ -142,6 +179,7 @@ def strip_ai_tells(text: str, language: str = "vi") -> str:
     out = text
     for pat, repl in (_SUBS_VI if vi else _SUBS_EN):
         out = pat.sub(repl, out)
+    out = _strip_openers(out, _OPENERS_VI if vi else _OPENERS_EN)
     out = _strip_start_connectors(
         out, _START_CONNECTORS_VI if vi else _START_CONNECTORS_EN)
     # Em/en dashes as parenthetical punctuation are near-absent in human
@@ -376,6 +414,54 @@ Vietnamese specifically, keep natural prepositions/collocations (e.g. "khảo s�
 được gửi đến / thu thập từ" rather than a stilted "phát … tới"); do not swap a
 natural word for a rarer stiff synonym just to look different.
 
+WHAT THIS LOOKS LIKE — each pair says the SAME thing; only the wording moved.
+Nothing was added and nothing was dropped, which is the standard your rewrite
+is held to:
+- Padding, not content:
+  · "Có thể thấy rằng, kết quả phân tích đã chỉ ra rằng nhân tố Chất lượng dịch
+    vụ đóng một vai trò vô cùng quan trọng trong việc nâng cao Sự hài lòng."
+  → "Chất lượng dịch vụ có tác động tích cực tới Sự hài lòng."
+- A comma-chain, split where the meaning already breaks:
+  · "Nghiên cứu tiến hành khảo sát 245 nhân viên tại 12 khách sạn ở Hà Nội,
+    dữ liệu được thu thập trong ba tháng, sau đó được phân tích bằng SmartPLS
+    để kiểm định các giả thuyết đã đề xuất trong mô hình."
+  → "Nghiên cứu khảo sát 245 nhân viên tại 12 khách sạn ở Hà Nội, dữ liệu thu
+    thập trong ba tháng. Các giả thuyết được kiểm định bằng SmartPLS."
+- English, same principle:
+  · "It is important to note that leadership style plays a crucial role in
+    determining employee satisfaction levels."
+  → "Leadership style shapes how satisfied employees are."
+
+OVERUSED WORDING — these are the words a model reaches for and a person does
+not. Prefer a plainer equivalent WHEN it carries the same meaning; keep the word
+whenever it is the accurate one:
+- Vietnamese: "toàn diện", "đột phá", "cách mạng", "tối ưu hóa", "nâng cao hiệu
+  quả", "thúc đẩy", "tận dụng", "giải pháp toàn diện", "vô cùng quan trọng".
+- English: "comprehensive", "robust", "significant potential", "optimize",
+  "leverage", "foster", "landscape", "transformative".
+- CAUTION: "đáng kể" / "significant" often reports STATISTICAL significance. In a
+  results passage that is a technical term — leave it exactly as written.
+
+VARY HOW CLAUSES JOIN — do not run the same connective frame twice in a
+paragraph. "Không chỉ … mà còn …" in particular reads as a template; use it at
+most once, and prefer restating the relation plainly.
+
+SHAPE TELLS — these give a text away even when every word is right. None of
+them licenses adding or cutting content; they are about how what is already
+there gets arranged:
+- Do not stack "-ing" / "việc …" gerund phrases in a row ("Analysing the data,
+  measuring the effect, comparing the groups…"). Turn one into a finite verb.
+- Do not pad a list to three items for symmetry, and do not cut a fourth to get
+  there. Report exactly the number of items the source has.
+- Avoid the "from X to Y" sweep ("from recruitment to retention") unless the
+  source actually names both endpoints.
+- Do not use the inline-heading shape ("Tốc độ: tốc độ được cải thiện đáng kể")
+  — write it as an ordinary sentence.
+- English only: an em dash as parenthetical punctuation is fine once; two or
+  more in a paragraph reads as machine-written. Use a comma or a full stop
+  instead. (In Vietnamese it is stripped outright — it is near-absent in real
+  Vietnamese academic prose.)
+
 SENTENCE LENGTH — a hard floor, independent of the anchor:
 - Vary sentence length deliberately. A paragraph where every sentence is a
   similar length reads as machine-written no matter how good the vocabulary is.
@@ -466,12 +552,86 @@ def _language_name(language: str) -> str:
     return "Vietnamese" if (language or "").lower().startswith("vi") else "English"
 
 
+# Vietnamese letters that exist in no other language this product sees, plus the
+# tone marks. Every Latin letter carrying a diacritic decomposes under NFD;
+# plain ASCII does not, and neither do β/α or CJK — so "letters with marks over
+# letters total" separates the two languages without a word list.
+_VI_ONLY_LETTERS = frozenset("ăâđêôơưĂÂĐÊÔƠƯ")
+# Measured on the document that exposed this bug (286 paragraphs, both
+# versions): every English prose paragraph scored 0.0000, the Vietnamese ones a
+# median 0.31. Anything in between separates them, so 2% sits far from both —
+# high enough that an English paragraph citing Nguyễn (2019) stays English, low
+# enough that no real Vietnamese prose falls under it.
+_VI_MARK_RATIO = 0.02
+# Below this there isn't enough text to be sure. "Bảng 4.3" is Vietnamese and
+# "Table 4.3" is English, but a caption-length fragment either way is a coin
+# flip, and a wrong confident answer is worse than deferring to the caller.
+_LANG_MIN_LETTERS = 24
+
+
+def detect_language(text: str) -> str | None:
+    """"vi", "en", or None when the text is too short to tell.
+
+    Exists because the language was previously an ARGUMENT with a default of
+    "vi", and the rewrite prompt says "Rewrite the user's text in
+    {language_name}". An English dissertation posted to /tools/document/humanize
+    therefore came back translated into Vietnamese — content preserved,
+    citations preserved, numbers preserved, language gone. Nothing caught it:
+    verify_frozen diffs numbers and citations, verify_script only catches a
+    change of writing system, and Vietnamese and English share the Latin one.
+
+    A rewrite pass has no business choosing a language at all, so this reads it
+    off the text instead of trusting the caller.
+
+    Known limit: Vietnamese typed without diacritics reads as "en" here. In a
+    thesis that is vanishingly rare (it would be barely readable), and the
+    caller's own `language` still wins when this returns None.
+    """
+    letters = [c for c in (text or "") if c.isalpha()]
+    if len(letters) < _LANG_MIN_LETTERS:
+        return None
+    marked = sum(1 for c in letters
+                 if c in _VI_ONLY_LETTERS or unicodedata.decomposition(c))
+    return "vi" if marked / len(letters) >= _VI_MARK_RATIO else "en"
+
+
+# The chat-assistant wrapper around an answer: "Here is the rewritten text:" /
+# "Bản viết lại: …" in front, "Hope this helps!" behind. The rewrite prompt
+# already forbids them, but a prompt is a request and this is the only thing
+# between the model's reply and the student's document.
+#
+# Both patterns demand a lead-in AND a word naming the REWRITE, which is what
+# keeps them off ordinary prose: Vietnamese paragraphs open with "Đây là …:"
+# all the time, and an English sentence may well end a clause with a colon.
+# "Đây là kết quả của mô hình:" has the lead-in and no rewrite word, so it
+# survives; "Đây là bản viết lại:" has both, so it goes.
+_PREAMBLE_RE = re.compile(
+    r"^\s*(?:sure|certainly|of course|okay|ok|chắc chắn|được thôi)?[,.!]?\s*"
+    r"(?:here (?:is|are)|below is|the following is|i(?:'ve| have)|"
+    r"dưới đây là|sau đây là|đây là|bản|đoạn)\b"
+    r"[^\n:]{0,60}?\b(?:rewrit\w*|revis\w*|version|humaniz\w*|"
+    r"viết lại|chỉnh sửa|diễn đạt lại)\b[^\n:]{0,40}:\s*",
+    re.IGNORECASE,
+)
+_SIGNOFF_RE = re.compile(
+    r"\n\s*(?:hope (?:this|that) helps|let me know if|feel free to|"
+    r"hy vọng[^\n]{0,40}?(?:giúp ích|hữu ích)|nếu (?:bạn )?cần[^\n]{0,30}?"
+    r"(?:cho tôi biết|hãy nói))[^\n]{0,120}\s*$",
+    re.IGNORECASE,
+)
+
+
 def _clean_output(raw: str) -> str:
-    """Strip code fences / leading chatter a model may wrap the rewrite in."""
+    """Strip code fences and the chat-assistant wrapper around the rewrite."""
     t = (raw or "").strip()
     t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
     t = re.sub(r"\s*```$", "", t)
-    return t.strip()
+    t = t.strip()
+    # Never strip the passage down to nothing: a reply that is ONLY a preamble
+    # means the rewrite failed, and returning "" turns that into a deleted
+    # paragraph. Hand the raw text back and let the gates reject it instead.
+    stripped = _SIGNOFF_RE.sub("", _PREAMBLE_RE.sub("", t, count=1)).strip()
+    return stripped or t
 
 
 def _get_llm(temperature: float):
@@ -610,6 +770,15 @@ def _verify(original: str, rewritten: str) -> dict:
     check["foreign_scripts"] = verify_script(original, rewritten)
     if check["foreign_scripts"]:
         check["ok"] = False
+    # Translation is the failure verify_script cannot see: vi→en keeps the Latin
+    # script, keeps every number and every citation, and changes the one thing a
+    # re-voicing pass must never change. Detection is deliberately allowed to be
+    # unsure (None) — a fragment says nothing, and only a CONFIRMED disagreement
+    # rejects the rewrite.
+    src_lang, out_lang = detect_language(original), detect_language(rewritten)
+    check["language_changed"] = bool(src_lang and out_lang and src_lang != out_lang)
+    if check["language_changed"]:
+        check["ok"] = False
     return check
 
 
@@ -683,6 +852,11 @@ def _rewrite_once(
                 + ", ".join(check["foreign_scripts"]).lower()
                 + "). Rewrite those words in the SAME language and script as "
                   "the original text.")
+        if check.get("language_changed"):
+            problem_lines.append(
+                f"You TRANSLATED the text. Write the rewrite in "
+                f"{_language_name(language)}, the same language as the original. "
+                "This pass changes wording only — never the language.")
         try:
             repaired = _clean_output(_invoke(
                 llm,
@@ -706,7 +880,7 @@ def _rewrite_once(
 def humanize_prose(
     text: str,
     *,
-    language: str = "vi",
+    language: str | None = None,
     user_anchor: str | None = None,
     anchor_id: str | None = None,
     llm=None,
@@ -741,7 +915,7 @@ def humanize_prose(
 def _humanize_prose(
     text: str,
     *,
-    language: str = "vi",
+    language: str | None = None,
     user_anchor: str | None = None,
     anchor_id: str | None = None,
     llm=None,
@@ -772,6 +946,13 @@ def _humanize_prose(
     """
     if not (text or "").strip():
         return {"ok": False, "error": "empty_input", "text": text, "changed": False}
+
+    # The text overrules the caller. `language` used to flow straight into
+    # "Rewrite the user's text in {language_name}" from an API default of "vi",
+    # so an English document was translated on request. It survives only as the
+    # fallback for text too short to read, and it still picks the anchor
+    # library and the AI-tell list below.
+    language = detect_language(text) or language or "vi"
 
     anchors = load_anchors(language)
     if user_anchor and user_anchor.strip():
@@ -918,7 +1099,7 @@ def _humanize_prose(
 def humanize_sections(
     sections: list[dict],
     *,
-    language: str = "vi",
+    language: str | None = None,
     user_anchor: str | None = None,
     llm=None,
     scorer=None,

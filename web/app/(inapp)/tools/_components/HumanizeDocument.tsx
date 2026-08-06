@@ -28,7 +28,10 @@ export function HumanizeDocument() {
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ filename: string; credits: number | null; rewritten: number | null } | null>(null);
+  const [done, setDone] = useState<{
+    filename: string; credits: number | null;
+    rewritten: number | null; skipped: number | null;
+  } | null>(null);
   const t = useT();
   const tn = useTn();
 
@@ -54,7 +57,10 @@ export function HumanizeDocument() {
     setRunning(true);
     setError(null);
     try {
-      const r = await humanizeDocument(file, t);
+      // scan.passages is the batch count the free scan already computed — it
+      // sets how long this request is allowed to take before the client calls
+      // the connection dead. See docTimeoutMs.
+      const r = await humanizeDocument(file, t, scan?.passages);
       // Hand the file to the browser via an object URL. No navigation, so the
       // summary below stays on screen while the download saves.
       const url = URL.createObjectURL(r.blob);
@@ -65,7 +71,8 @@ export function HumanizeDocument() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      setDone({ filename: r.filename, credits: r.credits, rewritten: r.rewritten });
+      setDone({ filename: r.filename, credits: r.credits,
+                rewritten: r.rewritten, skipped: r.skipped });
     } catch (e) {
       setError((e as Error)?.message || t("tools.humanize.errFailed"));
     } finally {
@@ -155,6 +162,15 @@ export function HumanizeDocument() {
             {". "}
             {t("tools.doc.unchanged")}
           </div>
+          {/* A partial run is the case this panel used to hide. Batches whose
+              rewrite failed (provider error, or a rewrite that moved a number)
+              keep their original text and were still billed, so saying only
+              how many succeeded reads as a clean success. */}
+          {done.skipped !== null && done.skipped > 0 && (
+            <div className="mt-1.5 text-[12.5px] text-[#7A5B2E]">
+              {tn("tools.doc.skipped_one", "tools.doc.skipped_other", done.skipped)}
+            </div>
+          )}
         </div>
       )}
 

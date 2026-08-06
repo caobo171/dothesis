@@ -603,3 +603,209 @@ def test_case_repair_never_touches_a_greek_or_cjk_opener():
     assert _restore_leading_case("Kết quả tại Bảng 4.3.", "β = 0,412 và p = 0,003.") \
         == "β = 0,412 và p = 0,003."
     assert _restore_leading_case("Kết quả cho thấy.", "结果 cho thấy.") == "结果 cho thấy."
+
+
+# --- language must never change -------------------------------------------
+#
+# The failure these cover, from a real run: an ENGLISH dissertation was fed to
+# /tools/document/humanize, which defaults `language` to "vi" and never asked
+# the text what language it was in. The rewrite prompt says "Rewrite the user's
+# text in Vietnamese", so the model did exactly that — 69 paragraphs came back
+# translated, citations and numbers intact, and every existing gate passed them:
+# verify_frozen only diffs numbers/refs/citations, and verify_script only
+# catches a change of WRITING SYSTEM, which vi→en is not (both are Latin).
+
+EN_SRC = ("Prior research has confirmed that leadership matters in hospitality, "
+          "but three limitations restrict what it can tell a hotel manager "
+          "(Bass, 1985).")
+EN_OK = ("Earlier work has shown that leadership matters in hospitality, yet "
+         "three limitations restrict what it tells a hotel manager (Bass, 1985).")
+# Same content, same citation, same numbers — only the language changed. This is
+# what actually shipped to the student.
+VI_TRANSLATION = ("Các nghiên cứu trước đây đã khẳng định vai trò quan trọng của "
+                  "lãnh đạo trong lĩnh vực khách sạn, nhưng ba hạn chế khiến kết "
+                  "quả chưa đủ để hướng dẫn nhà quản lý khách sạn (Bass, 1985).")
+
+
+def test_detect_language_reads_the_text():
+    assert H.detect_language(EN_SRC) == "en"
+    assert H.detect_language(VI_TRANSLATION) == "vi"
+
+
+def test_detect_language_is_unsure_rather_than_wrong_on_a_fragment():
+    """Too short to judge → None, so the caller's own value stays in charge."""
+    assert H.detect_language("Bảng 4.3") is None
+    assert H.detect_language("") is None
+
+
+def test_an_english_name_does_not_make_a_paragraph_vietnamese():
+    """An English paragraph citing a Vietnamese author is still English —
+    measured: real English prose scores 0.0 diacritic density, real Vietnamese
+    prose 0.31, so a stray name cannot cross the threshold."""
+    assert H.detect_language(
+        "The sample was drawn from hotels in Hanoi and analysed by "
+        "Nguyễn (2019), whose instrument this study adapts.") == "en"
+
+
+def test_english_source_is_rewritten_in_english_even_when_vi_was_requested(
+        tmp_path, monkeypatch, user_anchor):
+    """The document route defaults language to "vi"; the TEXT overrules it."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    llm = FakeLLM(EN_OK)
+    r = H.humanize_prose(EN_SRC, language="vi", user_anchor=user_anchor, llm=llm)
+    assert "in English" in llm.prompts[0]
+    assert "in Vietnamese" not in llm.prompts[0]
+    assert r["ok"] is True
+
+
+def test_a_translated_rewrite_is_rejected_and_the_original_kept(
+        tmp_path, monkeypatch, user_anchor):
+    """Even if the prompt is ignored, a translation must never ship."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    r = H.humanize_prose(EN_SRC, language="en", user_anchor=user_anchor,
+                         llm=FakeLLM(VI_TRANSLATION, VI_TRANSLATION))
+    assert r["ok"] is False
+    assert r["text"] == EN_SRC
+    assert r["frozen"]["language_changed"] is True
+
+
+def test_the_repair_call_is_told_the_language_changed(
+        tmp_path, monkeypatch, user_anchor):
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    llm = FakeLLM(VI_TRANSLATION, EN_OK)
+    r = H.humanize_prose(EN_SRC, language="en", user_anchor=user_anchor, llm=llm)
+    assert "English" in llm.prompts[-1]
+    assert r["ok"] is True
+    assert r["text"] == EN_OK
+
+
+def test_vietnamese_still_routes_to_vietnamese(tmp_path, monkeypatch, user_anchor):
+    """The VN-first path is unchanged — detection agrees with the old default."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    llm = FakeLLM("Bảng 4.3 cho thấy β = 0,412, p = 0,003 (Nguyễn, 2019).")
+    H.humanize_prose(SRC, language="vi", user_anchor=user_anchor, llm=llm)
+    assert "in Vietnamese" in llm.prompts[0]
+
+
+# --- AI-tell list, second pass --------------------------------------------
+#
+# Additions taken from a competing humanizer prompt, kept to the parts that are
+# safe for a REWRITE: concrete word/phrase tells. Its content rules ("add an
+# example", "give your own view") were rejected — this pass may not invent, and
+# an invented sentence carrying no number or citation passes verify_frozen.
+
+def test_ngoai_ra_and_dac_biet_la_are_stripped_as_openers():
+    """The two highest-frequency LLM-Vietnamese openers missing from the list."""
+    out = H.strip_ai_tells("Mô hình phù hợp. Ngoài ra, hệ số tải đều đạt yêu cầu.", "vi")
+    assert "Ngoài ra" not in out
+    assert "Hệ số tải đều đạt yêu cầu." in out
+    out2 = H.strip_ai_tells("Kết quả ổn định. Đặc biệt là nhân tố EX đạt mức cao.", "vi")
+    assert "Đặc biệt là" not in out2
+
+
+def test_a_connector_mid_sentence_still_survives():
+    """Same guarantee the existing connectors have: the tell is the metronome at
+    the START of a sentence, not the words, which are ordinary Vietnamese."""
+    src = "Thang đo được giữ nguyên ngoài ra không có thay đổi nào khác."
+    assert H.strip_ai_tells(src, "vi") == src
+
+
+def test_removing_a_padding_opener_hands_over_the_capital():
+    """Regression: the phrase removals lived in _SUBS_EN, which deletes without
+    recapitalizing — "The data holds. It is worth noting that results are
+    stable." came out as "…holds. results are stable.", a lowercase sentence."""
+    out = H.strip_ai_tells("The data holds. It is worth noting that results are stable.", "en")
+    assert out == "The data holds. Results are stable."
+
+
+def test_vietnamese_padding_opener_is_removed():
+    out = H.strip_ai_tells(
+        "Mẫu đạt yêu cầu. Không thể phủ nhận rằng lãnh đạo có ảnh hưởng.", "vi")
+    assert "Không thể phủ nhận" not in out
+    assert "Lãnh đạo có ảnh hưởng." in out
+
+
+def test_crucial_role_is_treated_like_pivotal_role():
+    assert "central role" in H.strip_ai_tells(
+        "Leadership plays a crucial role in retention.", "en")
+
+
+def test_in_todays_world_opener_is_removed():
+    out = H.strip_ai_tells(
+        "In today's rapidly changing world, hotels compete on service.", "en")
+    assert out == "Hotels compete on service."
+
+
+def test_the_new_tells_never_touch_a_frozen_token():
+    """Same standard the whole stripper is held to."""
+    src = ("Mô hình phù hợp. Ngoài ra, β = 0,412 với p = 0,003 tại Bảng 4.3 "
+           "(Nguyễn, 2019).")
+    assert H.verify_frozen(src, H.strip_ai_tells(src, "vi"))["ok"]
+
+
+def test_the_prompt_warns_that_dang_ke_can_be_statistical():
+    """The one word from that list which must NOT be auto-replaced: in a results
+    passage "đáng kể"/"significant" reports statistical significance."""
+    assert "đáng kể" not in [p.pattern for p, _ in H._SUBS_VI
+                             if p.pattern == r"\bđáng kể\b"]
+    assert "STATISTICAL significance" in H._REWRITE_PROMPT
+
+
+# --- chatbot artifacts leaking into the document --------------------------
+#
+# From Wikipedia's "Signs of AI writing" group 4, via the cuongmeai handbook:
+# the assistant-isms a chat model wraps around an answer. The rewrite prompt
+# already says "no preamble, no commentary" — nothing ENFORCED it, and
+# _clean_output stripped only code fences. In the .docx walk a preamble on its
+# own line changes the paragraph count, so the batch is skipped (the student
+# pays for a rewrite they don't get); on the SAME line it lands in the thesis.
+
+def test_english_preamble_line_is_removed():
+    assert H._clean_output(
+        "Here is the rewritten text:\n\nLeadership shapes retention."
+    ) == "Leadership shapes retention."
+
+
+def test_vietnamese_inline_preamble_is_removed():
+    """The corrupting shape: no extra paragraph, so the count check can't see it."""
+    assert H._clean_output(
+        "Bản viết lại: Lãnh đạo ảnh hưởng tới sự gắn bó của nhân viên."
+    ) == "Lãnh đạo ảnh hưởng tới sự gắn bó của nhân viên."
+
+
+def test_a_real_sentence_ending_in_a_colon_is_not_touched():
+    """The false positive that matters: "Đây là …:" opens legitimate Vietnamese
+    paragraphs. Only a lead-in that also names the REWRITE is a preamble."""
+    src = "Đây là kết quả của mô hình: ba giả thuyết được chấp nhận."
+    assert H._clean_output(src) == src
+    src2 = "The model produced three results: H1, H2 and H4 were supported."
+    assert H._clean_output(src2) == src2
+
+
+def test_signoff_is_removed():
+    assert H._clean_output(
+        "Leadership shapes retention.\n\nHope this helps!"
+    ) == "Leadership shapes retention."
+    assert H._clean_output(
+        "Lãnh đạo ảnh hưởng tới sự gắn bó.\n\nHy vọng bản viết lại này hữu ích!"
+    ) == "Lãnh đạo ảnh hưởng tới sự gắn bó."
+
+
+def test_stripping_never_empties_the_rewrite():
+    """A reply that is ONLY a preamble must come back untouched, not blank —
+    an empty rewrite is a lost paragraph, which is worse than a stray line."""
+    assert H._clean_output("Here is the rewritten text:") == "Here is the rewritten text:"
+
+
+def test_filler_phrases_are_shortened():
+    out = H.strip_ai_tells(
+        "The survey was sent in order to measure satisfaction, due to the fact "
+        "that response rates vary.", "en")
+    assert "in order to" not in out
+    assert "due to the fact that" not in out
+    assert "to measure satisfaction" in out and "because response rates" in out
+
+
+def test_the_prompt_names_the_shape_tells():
+    for fragment in ("em dash", "three", "-ing"):
+        assert fragment in H._REWRITE_PROMPT

@@ -39,6 +39,8 @@ import json
 import logging
 import os
 import re
+from collections import Counter
+from threading import Lock
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
@@ -554,6 +556,7 @@ def cite_docx(
     llm=None,
     search_fn: Callable[[str, int], list[dict]] | None = None,
     resolve_fn: Callable[[InText, str | None], dict | None] | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[bytes | None, dict]:
     """Resolve the citations a document has, add the ones it needs, return it.
 
@@ -601,11 +604,44 @@ def cite_docx(
     hints = {c.key: match_reference_line(c, old_lines) for c in cits}
     label = "chưa đối chiếu được" if vietnamese else "not verified"
 
+    # Progress spans BOTH phases, because both are slow and a student watching
+    # a bar that sits at 0% through every CrossRef lookup and only then starts
+    # moving has been told the tool is stuck. Phase A is one tick per citation,
+    # phase B one per batch; the denominator is known before either starts.
+    prose_all = [(i, (paragraphs[i].text or "").strip()) for i in body_idx
+                 if _eligible(paragraphs[i])]
+    _total = len(cits) + (len(_batches(prose_all)) if add_missing else 0)
+    _done = Counter()          # phase A resolves from three worker threads
+    _lock = Lock()
+
+    def _tick() -> None:
+        if not on_progress:
+            return
+        try:
+            with _lock:
+                _done["n"] += 1
+                n = _done["n"]
+            on_progress(n, _total)
+        except Exception:  # noqa: BLE001 — reporting must not fail the walk
+            logger.exception("cite_docx: progress callback failed")
+
+    if on_progress:
+        try:
+            on_progress(0, _total)
+        except Exception:  # noqa: BLE001
+            logger.exception("cite_docx: progress callback failed")
+
+    def _resolve_and_tick(c):
+        try:
+            return resolve_fn(c, hints.get(c.key))
+        finally:
+            _tick()
+
     # Three workers, not four: a thesis is fifty-odd lookups fired in a burst,
     # and CrossRef throttles that. Being told a real reference does not exist
     # because we hit a rate limit is worse than taking a few more seconds.
     with ThreadPoolExecutor(max_workers=3) as pool:
-        answers = list(pool.map(lambda c: resolve_fn(c, hints.get(c.key)), cits))
+        answers = list(pool.map(_resolve_and_tick, cits))
 
     # An injected resolve_fn (tests) answers with the record alone; the real one
     # also says how strong the match was.
@@ -665,6 +701,7 @@ def cite_docx(
         for batch in _batches(prose):
             if added >= _MAX_NEW_CITATIONS:
                 break
+            _tick()
             passage = "\n\n".join(by_idx[i] for i in batch)
             try:
                 claims = _json_out(
