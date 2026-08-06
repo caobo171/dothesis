@@ -92,8 +92,14 @@ async def _get_checkpointer():
         from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
         from orchestrator.graph import _get_async_pool
         pool = await _get_async_pool()
-        _checkpointer = AsyncPostgresSaver(pool)
-        await _checkpointer.setup()
+        saver = AsyncPostgresSaver(pool)
+        # Publish only AFTER setup lands. Assigning the global first meant a
+        # transient DB blip during setup() (it runs the checkpoint migrations)
+        # 500'd that request and then left every later request holding a saver
+        # whose migrations never ran — the cache made a one-off network failure
+        # permanent, and silently. Now the next request just retries.
+        await saver.setup()
+        _checkpointer = saver
     return _checkpointer
 
 

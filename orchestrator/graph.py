@@ -279,6 +279,15 @@ async def _get_async_pool():
             min_size=1,
             max_size=int(os.getenv("ORCHESTRATOR_PG_POOL_MAX", "10")),
             kwargs={"autocommit": True},
+            # Validate a connection before handing it out. DATABASE_URL points at
+            # a REMOTE Postgres in dev, and an idle pooled connection over a WAN
+            # gets reaped by NAT/firewall timeouts without either end noticing —
+            # the pool then hands out a corpse and the caller dies mid-query with
+            # "server closed the connection unexpectedly" (a 500 on send-message,
+            # not a retry). check_connection turns that into a discard-and-replace
+            # inside the pool. Costs one round-trip per checkout, which is noise
+            # next to the LLM call it precedes.
+            check=AsyncConnectionPool.check_connection,
             # psycopg_pool 3.2+ refuses to auto-open in async contexts to avoid
             # hidden blocking I/O during import — open() must be awaited explicitly.
             open=False,
