@@ -898,3 +898,49 @@ def test_the_reported_burstiness_travels_out_with_the_result(tmp_path, monkeypat
     r = H.humanize_prose(FLAT, language="vi", user_anchor=user_anchor,
                          llm=FakeLLM(BURSTY))
     assert r["burstiness"]["before"] < r["burstiness"]["after"]
+
+
+# --- the repair prompt must speak prose, not token syntax -----------------
+#
+# Found by the run-diff page on its first real use. A rewrite dropped three
+# citations, the repair prompt listed them as the internal multiset keys
+# ("cite:bass|1994" -> "bass|1994"), told the model to "put each one back,
+# unchanged", and the model did — literally. The student's dissertation shipped
+# reading "(Bass and Avolio, bass|1994)".
+#
+# The frozen gate could not catch it: "(Bass and Avolio, bass|1994)" re-extracts
+# as cite:bass|1994, so the corruption satisfies the check meant to prevent it.
+
+def test_a_citation_token_is_described_in_prose():
+    out = H.describe_token("cite:bass|1994")
+    assert "bass|1994" not in out
+    assert "Bass" in out and "1994" in out
+
+
+def test_numbers_and_refs_are_described_as_written():
+    assert H.describe_token("num:0,412") == "0,412"
+    assert "Bảng 4.3" in H.describe_token("ref:bảng 4.3")
+
+
+def test_the_repair_prompt_never_shows_internal_token_syntax(tmp_path, monkeypatch,
+                                                             user_anchor):
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    src = "Theo lý thuyết nền (Bass và Avolio, 1994), lãnh đạo tác động tới hiệu suất."
+    dropped = "Theo lý thuyết nền, lãnh đạo tác động tới hiệu suất."
+    llm = FakeLLM(dropped, src)
+    H.humanize_prose(src, language="vi", user_anchor=user_anchor, llm=llm)
+    repair = llm.prompts[-1]
+    assert "|1994" not in repair, "internal token syntax leaked into the prompt"
+    assert "Bass" in repair and "1994" in repair
+
+
+def test_a_rewrite_carrying_our_token_syntax_is_rejected(tmp_path, monkeypatch,
+                                                         user_anchor):
+    """Defence in depth: even if a prompt leaks it again, the gate now sees it."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    src = "Theo lý thuyết nền (Bass và Avolio, 1994), lãnh đạo tác động tới hiệu suất."
+    corrupt = "Theo lý thuyết nền (Bass và Avolio, bass|1994), lãnh đạo tác động mạnh."
+    r = H.humanize_prose(src, language="vi", user_anchor=user_anchor,
+                         llm=FakeLLM(corrupt, corrupt))
+    assert r["ok"] is False
+    assert r["text"] == src

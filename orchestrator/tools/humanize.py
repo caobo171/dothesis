@@ -288,6 +288,34 @@ def frozen_tokens(text: str) -> Counter:
     return c
 
 
+# Our own multiset key, as it would look if it escaped into prose:
+# "cite:bass|1994" -> "bass|1994". Nothing a person writes looks like this.
+_TOKEN_SYNTAX_RE = re.compile(r"[^\W\d_][\w'’\-]*\|\d{4}[a-z]?")
+
+
+def describe_token(token: str) -> str:
+    """One frozen token, written the way it appears in the text.
+
+    The repair prompt used to print the raw multiset key — `cite:bass|1994`
+    sliced to `bass|1994` — under the instruction "put each one back,
+    unchanged". A model followed that literally and a student's dissertation
+    shipped reading "(Bass and Avolio, bass|1994)". The frozen gate could not
+    catch it either, because that string re-extracts as the very token it was
+    asked to restore, so the corruption satisfies the check.
+
+    A prompt is read by something that will do what it says. It gets prose.
+    """
+    kind, _, rest = (token or "").partition(":")
+    if kind == "cite":
+        surname, _, year = rest.partition("|")
+        return f"the citation {surname.capitalize()} ({year})" if year else rest
+    if kind == "ref":
+        # Stored lowercased for comparison; title-case the label back.
+        head, _, num = rest.partition(" ")
+        return f"{head.capitalize()} {num}".strip() if num else rest.capitalize()
+    return rest or token
+
+
 def verify_frozen(original: str, rewritten: str) -> dict:
     """Diff the frozen tokens of a rewrite against its source.
 
@@ -831,6 +859,15 @@ def _verify(original: str, rewritten: str) -> dict:
     check["language_changed"] = bool(src_lang and out_lang and src_lang != out_lang)
     if check["language_changed"]:
         check["ok"] = False
+    # Our own multiset key, echoed back into the prose. describe_token() stops
+    # the prompt from ever showing it, and this stops a model that produces it
+    # anyway — the two together, because the frozen check alone is blind to it:
+    # "(Bass and Avolio, bass|1994)" re-extracts as the token it corrupts.
+    leaked = [m for m in _TOKEN_SYNTAX_RE.findall(rewritten or "")
+              if m not in (original or "")]
+    check["token_syntax"] = sorted(set(leaked))
+    if leaked:
+        check["ok"] = False
     return check
 
 
@@ -889,14 +926,15 @@ def _rewrite_once(
         problem_lines = []
         if check["missing"]:
             problem_lines.append(
-                "These tokens are in the ORIGINAL but missing from your rewrite. "
-                "Put each one back, unchanged:\n"
-                + "\n".join(f"  {m.split(':', 1)[1]}" for m in check["missing"]))
+                "These are in the ORIGINAL but missing from your rewrite. "
+                "Put each one back, in the form it appears in the original "
+                "text — NOT as written here:\n"
+                + "\n".join(f"  {describe_token(m)}" for m in check["missing"]))
         if check["added"]:
             problem_lines.append(
                 "These appear in your rewrite but NOT in the original — you "
                 "invented them. Remove them:\n"
-                + "\n".join(f"  {a.split(':', 1)[1]}" for a in check["added"]))
+                + "\n".join(f"  {describe_token(a)}" for a in check["added"]))
         if check["foreign_scripts"]:
             problem_lines.append(
                 "You wrote words in a different writing system than the "
