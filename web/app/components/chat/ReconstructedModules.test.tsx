@@ -1,5 +1,5 @@
-import { describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, expect, test } from "vitest";
+import { render, screen } from "@testing-library/react";
 import { ReconstructedModules, type ReconstructedModule } from "./ReconstructedModules";
 
 const item = (over: Partial<ReconstructedModule> = {}): ReconstructedModule => ({
@@ -11,88 +11,97 @@ const item = (over: Partial<ReconstructedModule> = {}): ReconstructedModule => (
   ...over,
 });
 
+const regionText = () =>
+  screen.getByRole("region", { name: /reconstructed modules/i }).textContent ?? "";
+
 describe("ReconstructedModules", () => {
-  test("renders a card per module with rationale and the not-saved badge", () => {
-    render(<ReconstructedModules items={[item()]} onConfirm={vi.fn()} />);
-    const region = screen.getByRole("region", { name: /reconstructed modules/i });
-    const text = region.textContent ?? "";
+  test("renders a card per module with its rationale, marked saved", () => {
+    render(
+      <ReconstructedModules items={[item()]} saved={[{ module: "M3", status: "done" }]} />,
+    );
+    const text = regionText();
     expect(text).toMatch(/Design/);
     expect(text).toMatch(/inferred from your analysis/);
-    expect(text).toMatch(/not saved yet/i);
+    expect(text).toMatch(/Saved/);
   });
 
-  test("confirm sends the EDITED candidate", async () => {
-    const onConfirm = vi.fn().mockResolvedValue(undefined);
-    render(<ReconstructedModules items={[item()]} onConfirm={onConfirm} />);
-    // Edit the string field.
-    const input = screen.getByDisplayValue("quantitative") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "qualitative" } });
-    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
-    await waitFor(() => expect(onConfirm).toHaveBeenCalled());
-    const [module, edited] = onConfirm.mock.calls[0];
-    expect(module).toBe("M3");
-    expect(edited.paradigm).toBe("qualitative");
-    // Array field is preserved.
-    expect(edited.hypotheses).toEqual(["H1: A->B"]);
+  test("nothing to confirm or skip — the reconstruction is already committed", () => {
+    // The whole point of the change: a student never re-approves a
+    // reconstruction of their own work. Any button here is a regression.
+    render(
+      <ReconstructedModules items={[item()]} saved={[{ module: "M3", status: "done" }]} />,
+    );
+    expect(screen.queryByRole("button", { name: /confirm/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /skip/i })).toBeNull();
+    expect(regionText()).not.toMatch(/not saved yet/i);
   });
 
-  test("skip removes the card without confirming", () => {
-    const onConfirm = vi.fn();
-    const onSkip = vi.fn();
-    render(<ReconstructedModules items={[item()]} onConfirm={onConfirm} onSkip={onSkip} />);
-    fireEvent.click(screen.getByRole("button", { name: /skip/i }));
-    expect(onSkip).toHaveBeenCalledWith("M3");
-    expect(onConfirm).not.toHaveBeenCalled();
+  test("a module too thin to earn a done is not drawn as finished", () => {
+    render(
+      <ReconstructedModules
+        items={[item()]}
+        saved={[{ module: "M3", status: "in_progress" }]}
+      />,
+    );
+    expect(regionText()).toMatch(/still thin/i);
   });
 
   test("shows skeleton while reconstructing and nothing when idle+empty", () => {
-    const { rerender, container } = render(
-      <ReconstructedModules items={[]} reconstructing onConfirm={vi.fn()} />,
-    );
+    const { rerender, container } = render(<ReconstructedModules items={[]} reconstructing />);
     expect(screen.getByText(/reconstructing earlier steps/i)).toBeTruthy();
-    rerender(<ReconstructedModules items={[]} onConfirm={vi.fn()} />);
+    rerender(<ReconstructedModules items={[]} />);
     expect(container.textContent).toBe("");
   });
 
-  test("an array of OBJECTS is never rendered as [object Object]", () => {
-    // research_gaps / hypotheses / constructs / purposive_criteria arrive as
-    // arrays of objects. They used to hit the line-editable textarea branch,
-    // where String({...}) printed "[object Object]" per row — and worse, the
-    // onChange would split("\n") those rows back into plain strings, silently
-    // destroying the reconstruction the moment anyone typed in the field.
+  test("structured fields render as content, never as JSON", () => {
+    // research_gaps / hypotheses / conceptual_model used to be dumped into a
+    // <pre> as raw JSON — unreadable, and it reads to a student like the
+    // product broke. They go through the same renderers the chat context panel
+    // uses now, so the card shows the actual gap text.
     render(
       <ReconstructedModules
         items={[
-          {
+          item({
             module: "M2",
-            fields: {
+            candidate: {
               research_gaps: [
-                { id: "G1", text: "no VN evidence" },
-                { id: "G2", text: "no PLS-SEM" },
+                { description: "no VN evidence" },
+                { description: "no PLS-SEM" },
               ],
             },
-          } as any,
+            review: [],
+          }),
         ]}
-        onConfirm={() => {}}
+        saved={[{ module: "M2", status: "done" }]}
       />,
     );
-    const region = screen.getByRole("region", { name: /reconstructed modules/i });
-    const text = region.textContent ?? "";
-    expect(text).not.toMatch(/\[object Object\]/);
-    // rendered as the read-only structured preview instead
-    expect(text).toMatch(/refine in chat/);
+    const text = regionText();
     expect(text).toMatch(/no VN evidence/);
+    expect(text).not.toMatch(/\[object Object\]/);
+    expect(text).not.toMatch(/"description":/);
   });
 
-  test("an empty / null field says so instead of printing null", () => {
+  test("a module with no dedicated renderer still reads as prose, not JSON", () => {
+    // M4 has no bespoke body — it falls through to the generic renderer, which
+    // must still never print a JSON blob.
     render(
       <ReconstructedModules
-        items={[{ module: "M3", fields: { themes: null } } as any]}
-        onConfirm={() => {}}
+        items={[
+          item({
+            module: "M4",
+            candidate: {
+              data_type_detected: "survey",
+              analysis_outline: { sections: ["measurement", "structural"] },
+            },
+            review: [],
+          }),
+        ]}
+        saved={[{ module: "M4", status: "done" }]}
       />,
     );
-    const text = screen.getByRole("region", { name: /reconstructed modules/i }).textContent ?? "";
-    expect(text).toMatch(/Not reconstructed/);
-    expect(text).not.toMatch(/^null$/m);
+    const text = regionText();
+    expect(text).toMatch(/Data type detected/);
+    expect(text).toMatch(/survey/);
+    expect(text).not.toMatch(/[{}[\]]/);
   });
 });

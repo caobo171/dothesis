@@ -4,50 +4,28 @@
  * ReconstructedModulesWidget — in-chat wrapper around the shared
  * ReconstructedModules card. Emitted by the backfill_upstream_modules tool.
  *
- * Confirm posts the (edited) candidate to the SAME project-scoped endpoint the
- * /new activation card uses (/mid-journey-import/confirm), so the split-write /
- * gating guarantees hold identically. The project id is threaded down from
- * ChatPane (the chat surface is already scoped to one project).
+ * Presentational only. The tool commits each reconstruction through the store
+ * as it produces it, so there is nothing for this widget to post: it reports
+ * what landed. That's deliberate — the headless and partner-API surfaces run
+ * the same tool with no widget mounted, and a save that lived in a click
+ * handler here would simply never happen for them.
  */
-import { useState } from "react";
-
-import { apiFetch } from "@/app/lib/api";
 import {
   ReconstructedModules,
   type ReconstructedModule,
+  type SavedModule,
 } from "../ReconstructedModules";
 import type { ReconstructedModulesHint } from "./types";
 
 export function ReconstructedModulesWidget({
   hint,
-  projectId,
-  disabled,
 }: {
   hint: ReconstructedModulesHint;
-  projectId?: string;
-  disabled?: boolean;
 }) {
-  const [confirmed, setConfirmed] = useState<string[]>([]);
-  const [skipped, setSkipped] = useState<string[]>([]);
-
-  const onConfirm = async (module: string, edited: Record<string, unknown>) => {
-    if (!projectId) return;
-    await apiFetch(`/projects/${projectId}/mid-journey-import/confirm`, {
-      method: "POST",
-      body: { module, slice: edited },
-    });
-    setConfirmed((c) => [...c, module]);
-  };
-
   return (
-    <div className={disabled ? "pointer-events-none opacity-60" : undefined}>
-      <ReconstructedModules
-        items={hint.items as ReconstructedModule[]}
-        confirmedModules={confirmed}
-        skippedModules={skipped}
-        onConfirm={onConfirm}
-        onSkip={(m) => setSkipped((s) => [...s, m])}
-      />
-    </div>
+    <ReconstructedModules
+      items={hint.items as ReconstructedModule[]}
+      saved={(hint.saved ?? []) as SavedModule[]}
+    />
   );
 }

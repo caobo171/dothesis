@@ -111,8 +111,12 @@ def _parse_export_artifacts(content: Any) -> dict | None:
 def _parse_reconstructed(content: Any) -> dict | None:
     """Shape a backfill_upstream_modules tool result into a `reconstructed_modules`
     widget hint. The tool returns {"ok": true, "reconstructed": [{module, candidate,
-    rationale, ready_to_confirm, review}, …]}. Returns None when there are no
-    candidates (nothing to review → no card)."""
+    rationale, ready_to_confirm, review}, …], "saved": [{module, status, focus}, …]}.
+    Returns None when there are no candidates (nothing reconstructed → no card).
+
+    `saved` rides along so the card can report what actually landed per module —
+    the tool commits as it goes, and a module whose backfill was too thin to earn
+    a `done` should not be drawn as one."""
     try:
         data = json.loads(content) if isinstance(content, str) else content
     except (json.JSONDecodeError, TypeError):
@@ -122,7 +126,8 @@ def _parse_reconstructed(content: Any) -> dict | None:
     items = data.get("reconstructed") or []
     if not items:
         return None
-    return {"widget_type": "reconstructed_modules", "items": items}
+    return {"widget_type": "reconstructed_modules", "items": items,
+            "saved": data.get("saved") or []}
 
 
 def _parse_papers_marker(text: str) -> dict | None:
@@ -342,8 +347,12 @@ nothing real, say so plainly and do not invent a panel.
 When a student has later work but is missing the earlier steps behind it (they
 imported an analysis, or ask to "fill in / reconstruct / backfill" the topic,
 literature, or design), call the `backfill_upstream_modules` tool. It infers each
-missing upstream module from what they already have and shows editable cards the
-student confirms or edits — you do NOT commit anything yourself.
+missing upstream module from what they already have, SAVES each one, and shows a
+card of what landed. You do NOT commit anything yourself — the tool already did.
+
+Afterwards, say in one or two lines which modules were filled in and invite them
+to correct anything: they change a backfilled step by telling you, not by
+re-approving it. Never ask them to confirm a reconstruction before you proceed.
 
 CRITICAL: if a later module — ESPECIALLY M4 (Analysis) — ALREADY has content in
 the project, that is sufficient evidence. Call `backfill_upstream_modules` RIGHT

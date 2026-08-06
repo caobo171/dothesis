@@ -28,11 +28,12 @@ export type ImportSummaryProps = {
   ambiguous?: string[]; // filenames we couldn't confidently slot (e.g. raw datasets)
   unreadable?: string[]; // filenames with no extractable text
   onContinue?: () => void;
-  /** Reconstruction still running below. Continuing now would skip past steps
-   *  the student never got to review, so the button waits for it. */
+  /** Reconstruction still running below. It decides which module the student
+   *  lands on, so the button waits for it rather than sending them to a focus
+   *  that's about to change. */
   reconstructing?: boolean;
-  /** Modules the student has confirmed from the reconstruction list. */
-  confirmed?: string[];
+  /** Modules the backfill reconstructed and saved. */
+  reconstructed?: string[];
 };
 
 export function ImportSummary({
@@ -42,7 +43,7 @@ export function ImportSummary({
   unreadable = [],
   onContinue,
   reconstructing = false,
-  confirmed = [],
+  reconstructed = [],
 }: ImportSummaryProps) {
   const importedLabels = imported.map(label).join(", ");
 
@@ -75,21 +76,18 @@ export function ImportSummary({
         </p>
       )}
 
-      {/* Confirming a reconstruction does NOT advance you, and without saying so
-          this card looks frozen: you confirm M1/M2/M3 and it still reads
-          "You're at: M1 · Next: Topic". That is correct — the API commits a
-          confirmed reconstruction as `in_progress`, deliberately "never silently
-          done", because an inferred module is a starting point to review rather
-          than work the student actually did. So the fix is to SAY that, not to
-          move the focus. */}
-      {confirmed.length > 0 && (
+      {/* The reconstructed steps COUNT — they're saved as done and the focus
+          above has already moved past them. Say both, because a student who
+          imported an M4 and is now told they're at M4 needs to know the earlier
+          chapters exist rather than assuming we skipped them. */}
+      {reconstructed.length > 0 && (
         <p className="text-[12.5px] text-ink-600 m-0 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
           <span className="font-semibold text-green-800">
-            Confirmed: {confirmed.map((m) => `${m} (${label(m)})`).join(", ")}
+            Reconstructed: {reconstructed.map((m) => `${m} (${label(m)})`).join(", ")}
           </span>
           {" — "}
-          saved as starting points to review, not finished steps. That&apos;s why
-          you still pick up at {focus} ({label(focus)}).
+          filled in from your own work and saved, which is why you pick up at{" "}
+          {focus} ({label(focus)}). Ask in chat to change any of it.
         </p>
       )}
 

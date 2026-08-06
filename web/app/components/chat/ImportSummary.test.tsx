@@ -62,24 +62,24 @@ describe("ImportSummary", () => {
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
-  test("confirming reconstructions is acknowledged, and explains why focus stays", () => {
-    // The API commits a confirmed reconstruction as `in_progress` on purpose —
-    // "never silently done" — so focus legitimately does NOT advance. Without
-    // saying that, the card reads as frozen: you confirm M1/M2/M3 and it still
-    // shows "You're at: M1 / Next: Topic".
+  test("reconstructed steps are named, and explain the focus they earned", () => {
+    // Reconstructions are saved as done, so focus has already advanced past
+    // them — here to M4, the analysis the student actually imported. Naming
+    // them is what stops "You're at M4" reading as if we skipped M1-M3.
     render(
-      <ImportSummary imported={["M4"]} focus="M1" confirmed={["M1", "M2", "M3"]} />,
+      <ImportSummary imported={["M4"]} focus="M4" reconstructed={["M1", "M2", "M3"]} />,
     );
     const text = screen.getByRole("region", { name: /import summary/i }).textContent ?? "";
-    expect(text).toMatch(/Confirmed:/);
+    expect(text).toMatch(/Reconstructed:/);
     expect(text).toMatch(/M1 \(Topic\)/);
     expect(text).toMatch(/M3 \(Design\)/);
-    expect(text).toMatch(/starting points to review, not finished steps/);
+    expect(text).toMatch(/saved/i);
+    expect(text).toMatch(/pick up at M4 \(Analysis\)/);
   });
 
-  test("says nothing about confirmations when there are none", () => {
+  test("says nothing about reconstructions when there are none", () => {
     render(<ImportSummary imported={["M4"]} focus="M1" />);
     const text = screen.getByRole("region", { name: /import summary/i }).textContent ?? "";
-    expect(text).not.toMatch(/Confirmed:/);
+    expect(text).not.toMatch(/Reconstructed:/);
   });
 });

@@ -29,6 +29,7 @@ from agent.state import (
     NON_CONTENT_KEYS,
     SLICE_OWNERSHIP,
     ProjectStateStore,
+    strip_reconstruction_meta,
 )
 
 from .models import ContextStore as DbContextStore
@@ -100,6 +101,49 @@ class DbProjectStateStore(ProjectStateStore):
                  {"module": module, "downstream": flagged,
                   "project_id": str(self.project_id)})
         return result
+
+    def commit_reconstructed(
+        self,
+        module: str,
+        slice_: dict[str, Any],
+        reason: str = "reconstructed from existing work",
+    ) -> dict[str, Any]:
+        """Same contract as the base store, plus the fields commit_slice can't carry.
+
+        A reconstructed slice is a whole M-output (M2 also infers
+        `research_state_summary` and `theoretical_framework`; M3 infers
+        `paradigm` / `design` / `tool` / `sampling_strategy` /
+        `target_sample_size`), but SLICE_OWNERSHIP is deliberately narrower than
+        the schema — commit_slice would reject those keys as unowned, and
+        load/_save only round-trip owned keys. So they are merged straight into
+        the module's JSONB column here, BEFORE the commit_slice below: _save
+        merges over the existing column rather than rebuilding it, so the
+        commit preserves them (project_db_store_persistence_gap).
+        """
+        clean = strip_reconstruction_meta(slice_)
+        extra = {k: v for k, v in clean.items() if k not in SLICE_OWNERSHIP[module]}
+        column = _MODULE_COLUMN.get(module)
+        if extra and column:
+            with self.engine.connect() as conn:
+                row = conn.execute(
+                    select(DbContextStore.__table__)
+                    .where(DbContextStore.__table__.c.project_id == self.project_id)
+                ).first()
+                # `_source` marks the provenance of this slice for anything that
+                # needs to tell inferred state from state the student authored.
+                merged = {**(getattr(row, column, None) or {}), **extra,
+                          "_source": "reconstructed"}
+                if row is None:
+                    conn.execute(DbContextStore.__table__.insert().values(
+                        project_id=self.project_id, **{column: merged}))
+                else:
+                    conn.execute(
+                        DbContextStore.__table__.update()
+                        .where(DbContextStore.__table__.c.project_id == self.project_id)
+                        .values(**{column: merged})
+                    )
+                conn.commit()
+        return super().commit_reconstructed(module, clean, reason=reason)
 
     def exists(self) -> bool:
         state = self.load()

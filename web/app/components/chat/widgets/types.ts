@@ -149,6 +149,10 @@ export type ReconstructedModuleItem = {
 export type ReconstructedModulesHint = {
   widget_type: "reconstructed_modules";
   items: ReconstructedModuleItem[];
+  /** What the tool actually committed per module. A backfill too thin to earn
+   *  a `done` lands `in_progress`, and the card says so rather than showing
+   *  every module as finished. */
+  saved?: { module: string; status: string }[];
 };
 
 // A single turn can emit several widgets (e.g. an export download card AND a

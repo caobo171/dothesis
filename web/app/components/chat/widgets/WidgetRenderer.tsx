@@ -65,11 +65,10 @@ export function WidgetRenderer({
       // successful export (Claude-artifact style). Read-only — no onSelect.
       return <ExportArtifactsCard hint={hint} />;
     case "reconstructed_modules":
-      // Backfill: editable confirm/skip cards for the reconstructed upstream
-      // modules. Confirm posts to /mid-journey-import/confirm (needs projectId).
-      return (
-        <ReconstructedModulesWidget hint={hint} projectId={projectId} disabled={disabled} />
-      );
+      // Backfill: a report of the upstream modules the tool reconstructed and
+      // saved. Nothing to post, so no projectId and nothing to disable — a
+      // superseded turn's card is still an accurate record of what landed.
+      return <ReconstructedModulesWidget hint={hint} />;
     default:
       return null;
   }

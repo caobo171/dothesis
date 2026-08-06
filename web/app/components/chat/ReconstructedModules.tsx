@@ -1,19 +1,27 @@
 "use client";
 
 /**
- * ReconstructedModules — editable confirm/skip cards for backfilled modules.
+ * ReconstructedModules — what the backfill filled in, already saved.
  *
- * Shared by BOTH surfaces (single source of truth for the "review a
- * reconstructed prerequisite" UX):
+ * Shared by BOTH surfaces (single source of truth for the "we reconstructed an
+ * earlier step" UX):
  *   - the /new activation card (mid-journey import), and
  *   - the in-thread chat widget (agent-triggered backfill).
  *
- * The candidate fields were INFERRED from the student's existing work, so every
- * card is explicitly "Suggested — not saved yet": the student edits and Confirms
- * (persist as in_progress, reviewable) or Skips (discard — nothing persisted).
- * The parent owns the confirm call; this component owns only the edit buffer.
+ * This used to be an editable form gated behind per-module Confirm/Skip: every
+ * card said "Suggested — not saved yet" and nothing counted until the student
+ * approved each one. That gate is gone. The reconstruction is inferred from the
+ * student's OWN work, so making them re-approve it was asking them to sign off
+ * on what they had already done — and the form under it rendered structured
+ * fields (conceptual_model, research_gaps) as raw JSON, which is not something
+ * anyone can meaningfully review anyway.
+ *
+ * So: the server saves, this reports. It renders through ModuleBody — the same
+ * renderers as the chat context panel, mermaid model diagram included — so a
+ * backfilled M3 looks exactly like an M3 the student built step by step. To
+ * change anything, they ask in chat.
  */
-import { useState } from "react";
+import { ModuleBody } from "./ModuleSlices";
 
 const MODULE_LABELS: Record<string, string> = {
   M1: "Topic",
@@ -32,50 +40,29 @@ export type ReconstructedModule = {
   review: string[];
 };
 
+/** What the server actually committed, per module. */
+export type SavedModule = {
+  module: string;
+  status: string; // "done" | "in_progress"
+};
+
 export type ReconstructedModulesProps = {
   items: ReconstructedModule[];
   reconstructing?: boolean; // show skeleton rows while the LLM infers
-  confirmedModules?: string[];
-  skippedModules?: string[];
-  onConfirm: (module: string, edited: Record<string, unknown>) => Promise<void> | void;
-  onSkip?: (module: string) => void;
+  saved?: SavedModule[];
 };
-
-// A field the user can edit inline. Strings and string-arrays are editable;
-// nested objects (e.g. conceptual_model) are shown read-only with a hint to
-// refine them in chat — a form can't sensibly edit an arbitrary graph.
-const isMeta = (k: string) => k.startsWith("_") || k === "confirmed_at";
 
 function ModuleCard({
   item,
-  confirmed,
-  skipped,
-  onConfirm,
-  onSkip,
+  status,
 }: {
   item: ReconstructedModule;
-  confirmed: boolean;
-  skipped: boolean;
-  onConfirm: ReconstructedModulesProps["onConfirm"];
-  onSkip?: (module: string) => void;
+  status?: string;
 }) {
-  const editableKeys = Object.keys(item.candidate).filter((k) => !isMeta(k));
-  const [buf, setBuf] = useState<Record<string, unknown>>(() => ({ ...item.candidate }));
-  const [busy, setBusy] = useState(false);
-
-  if (skipped) return null;
-
-  const setField = (k: string, v: unknown) => setBuf((b) => ({ ...b, [k]: v }));
-
-  const confirm = async () => {
-    setBusy(true);
-    try {
-      await onConfirm(item.module, buf);
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  // A backfill too thin to earn a `done` still saved — say which it was rather
+  // than drawing every card the same green tick. `undefined` means the caller
+  // didn't report per-module results (the /new card before the save lands).
+  const partial = status === "in_progress";
   return (
     <div className="rounded-xl border border-ink-200 bg-white p-4 flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
@@ -84,12 +71,12 @@ function ModuleCard({
         </div>
         <span
           className={
-            confirmed
-              ? "text-[11px] font-bold text-green-700"
-              : "text-[11px] font-semibold text-amber-700 bg-amber-50 rounded px-1.5 py-0.5"
+            partial
+              ? "text-[11px] font-semibold text-amber-700 bg-amber-50 rounded px-1.5 py-0.5"
+              : "text-[11px] font-bold text-green-700"
           }
         >
-          {confirmed ? "✓ Confirmed" : "Suggested — not saved yet"}
+          {partial ? "Saved — still thin" : "✓ Saved"}
         </span>
       </div>
 
@@ -97,104 +84,12 @@ function ModuleCard({
         <p className="text-[12px] text-ink-500 m-0 italic">Why: {item.rationale}</p>
       )}
 
-      {!confirmed && (
-        <div className="flex flex-col gap-2">
-          {editableKeys.map((k) => {
-            const v = buf[k];
-            // Only a list of PRIMITIVES is line-editable. An array of objects
-            // (research_gaps, hypotheses, constructs, purposive_criteria …) used
-            // to land here too, where String({…}) rendered every row as
-            // "[object Object]" — and the onChange was worse than the display:
-            // split("\n") would have replaced each object with the literal
-            // string "[object Object]", silently destroying the reconstruction
-            // the moment anyone touched the field. Structured values fall
-            // through to the read-only "refine in chat" preview below.
-            const isEditableList =
-              Array.isArray(v) &&
-              v.every((x) => typeof x === "string" || typeof x === "number");
-            if (isEditableList) {
-              return (
-                <label key={k} className="flex flex-col gap-1">
-                  <span className="text-[11.5px] font-semibold text-ink-700">{k}</span>
-                  <textarea
-                    className="rounded-lg border border-ink-200 px-2 py-1 text-[12.5px] min-h-[52px]"
-                    value={(v as (string | number)[]).map(String).join("\n")}
-                    onChange={(e) =>
-                      setField(
-                        k,
-                        e.target.value.split("\n").map((s) => s.trim()).filter(Boolean),
-                      )
-                    }
-                  />
-                </label>
-              );
-            }
-            if (typeof v === "string") {
-              return (
-                <label key={k} className="flex flex-col gap-1">
-                  <span className="text-[11.5px] font-semibold text-ink-700">{k}</span>
-                  <input
-                    className="rounded-lg border border-ink-200 px-2 py-1 text-[12.5px]"
-                    value={v}
-                    onChange={(e) => setField(k, e.target.value)}
-                  />
-                </label>
-              );
-            }
-            // Nothing reconstructed for this field. Rendering JSON here printed a
-            // bare `null`, which reads like a bug to a student — say it in words.
-            if (v === null || v === undefined || (Array.isArray(v) && v.length === 0)) {
-              return (
-                <div key={k} className="flex flex-col gap-1">
-                  <span className="text-[11.5px] font-semibold text-ink-700">{k}</span>
-                  <span className="rounded-lg bg-ink-50 px-2 py-1 text-[11.5px] text-ink-400 italic">
-                    Not reconstructed — you can fill this in chat.
-                  </span>
-                </div>
-              );
-            }
-            // Objects / arrays of objects / numbers: read-only preview; refine in chat.
-            return (
-              <div key={k} className="flex flex-col gap-1">
-                <span className="text-[11.5px] font-semibold text-ink-700">
-                  {k} <span className="font-normal text-ink-400">(refine in chat)</span>
-                </span>
-                <pre className="rounded-lg bg-ink-50 px-2 py-1 text-[11px] text-ink-600 overflow-x-auto m-0 max-h-[220px] overflow-y-auto">
-                  {JSON.stringify(v, null, 2)}
-                </pre>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <ModuleBody module={item.module} data={item.candidate as Record<string, any>} />
 
-      {!confirmed && item.review.length > 0 && (
+      {item.review.length > 0 && (
         <p className="text-[11.5px] text-ink-400 m-0">
-          Still thin: {item.review.join(", ")} — you can fill these now or later in chat.
+          Still thin: {item.review.join(", ")} — ask in chat to fill these in.
         </p>
-      )}
-
-      {!confirmed && (
-        <div className="flex gap-2 mt-1">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={confirm}
-            className="rounded-lg bg-primary-600 px-3 py-1.5 text-[12.5px] font-bold text-white hover:bg-primary-700 disabled:opacity-50"
-          >
-            {busy ? "Saving…" : "Confirm"}
-          </button>
-          {onSkip && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onSkip(item.module)}
-              className="rounded-lg border border-ink-200 px-3 py-1.5 text-[12.5px] font-semibold text-ink-600 hover:bg-ink-50"
-            >
-              Skip
-            </button>
-          )}
-        </div>
       )}
     </div>
   );
@@ -203,12 +98,10 @@ function ModuleCard({
 export function ReconstructedModules({
   items,
   reconstructing = false,
-  confirmedModules = [],
-  skippedModules = [],
-  onConfirm,
-  onSkip,
+  saved = [],
 }: ReconstructedModulesProps) {
   if (!reconstructing && items.length === 0) return null;
+  const statusOf = new Map(saved.map((s) => [s.module, s.status]));
 
   return (
     <div
@@ -217,8 +110,11 @@ export function ReconstructedModules({
       className="flex flex-col gap-2"
     >
       <div className="text-[13px] font-bold text-ink-900">
-        Earlier steps we reconstructed — review before we count them
+        Earlier steps we reconstructed — saved and counted
       </div>
+      <p className="text-[12px] text-ink-500 m-0">
+        Built from the work you imported. Want any of it changed? Just say so in chat.
+      </p>
 
       {reconstructing && items.length === 0 && (
         <div className="rounded-xl border border-ink-200 bg-white p-4 text-[12.5px] text-ink-500 flex items-center gap-2.5">
@@ -237,10 +133,7 @@ export function ReconstructedModules({
         <ModuleCard
           key={item.module}
           item={item}
-          confirmed={confirmedModules.includes(item.module)}
-          skipped={skippedModules.includes(item.module)}
-          onConfirm={onConfirm}
-          onSkip={onSkip}
+          status={statusOf.get(item.module)}
         />
       ))}
     </div>

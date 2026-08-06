@@ -213,3 +213,57 @@ def test_set_thesis_timeline_uses_dedicated_path(store):
     after = store.load()
     assert after["contextStore"]["thesis_timeline"]["milestones"][0]["module"] == "M1"
     assert after["status"] == before["status"] and after["focus"] == before["focus"]
+
+
+# -- reconstructed upstream modules -------------------------------------------
+# Backfill used to sit behind a per-module Confirm card. It saves itself now, so
+# these pin what "saving itself" is allowed to do to the student's position.
+
+def test_commit_reconstructed_counts_as_done(store):
+    store.commit_slice("M4", {"analysis_results": "PLS-SEM A->B"}, reason="import")
+    res = store.commit_reconstructed("M1", {"research_title": "T",
+                                            "research_questions": ["RQ1?"]})
+    state = store.load()
+    assert res["status"] == "done" and state["status"]["M1"] == "done"
+    # The already-started M4 keeps its status — filling in a step BELOW it did
+    # not invalidate it.
+    assert state["status"]["M4"] == "in_progress"
+
+
+def test_commit_reconstructed_strips_meta_and_audit_keys(store):
+    store.commit_reconstructed("M1", {
+        "research_title": "T",
+        "_source": "client-junk", "confirmed_at": "2020-01-01",
+        "decisions": [{"choice": "FORGED"}],
+    })
+    cs = store.load()["contextStore"]
+    assert cs["research_title"] == "T"
+    assert "decisions" not in cs and "_source" not in cs
+
+
+def test_commit_reconstructed_falls_back_to_in_progress_when_thin(store):
+    # Nothing the module OWNS → can't earn a done. Keep what there is rather
+    # than losing the backfill entirely.
+    res = store.commit_reconstructed("M3", {"paradigm": "quantitative"})
+    assert res["status"] == "in_progress"
+    assert store.load()["status"]["M3"] == "in_progress"
+
+
+def test_commit_reconstructed_advances_focus_past_finished_steps(store):
+    # The mid-journey import case: M4 imported, student sitting at M1, M1-M3
+    # reconstructed → they should land on M4, not be walked back through M1.
+    store.commit_slice("M4", {"analysis_results": "r"}, reason="import")
+    store.commit_slice("M1", {}, reason="park", status_overrides={"M1": "locked"})
+    for module, slice_ in (("M1", {"research_title": "T"}),
+                           ("M2", {"research_gaps": [{"description": "g"}]}),
+                           ("M3", {"conceptual_model": {"c": ["A"]}})):
+        store.commit_reconstructed(module, slice_)
+    assert store.load()["focus"] == "M4"
+
+
+def test_commit_reconstructed_never_walks_focus_backwards(store):
+    # Only M3 backfilled while M1 is still empty: "first module not done" is M1,
+    # but the student is at M4 and must stay there.
+    store.commit_slice("M4", {"analysis_results": "r"}, reason="import")
+    store.commit_reconstructed("M3", {"conceptual_model": {"c": ["A"]}})
+    assert store.load()["focus"] == "M4"

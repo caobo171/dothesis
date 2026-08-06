@@ -79,7 +79,7 @@ def _seed_m4(project_id):
     return store
 
 
-def test_confirm_splits_owned_and_nonowned_no_confirmed_at(monkeypatch):
+def test_confirm_splits_owned_and_nonowned_and_marks_done(monkeypatch):
     pid = _project()
     _seed_m4(pid)
     monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
@@ -102,13 +102,16 @@ def test_confirm_splits_owned_and_nonowned_no_confirmed_at(monkeypatch):
     # Both owned AND non-owned fields landed in the column.
     assert col["conceptual_model"] == {"constructs": ["A", "B"]}
     assert col["paradigm"] == "quantitative" and col["design"] == "PLS-SEM"
-    # Server-authoritative source tag; client junk stripped; NOT marked done.
+    # Server-authoritative source tag; client junk stripped.
     assert col["_source"] == "reconstructed"
-    assert "confirmed_at" not in col and "bogus" not in col
-    assert state["status"]["M3"] == "in_progress"
+    assert "bogus" not in col
+    # A reconstruction counts: `done`, with the store's OWN confirmed_at — the
+    # client's claimed one was stripped before it ever reached the write path.
+    assert state["status"]["M3"] == "done"
+    assert col["confirmed_at"] and not col["confirmed_at"].startswith("2020")
     # The already-started downstream M4 is preserved, NOT flagged needs_review.
     assert state["status"]["M4"] == "in_progress"
-    # Focus is restored — confirming an upstream backfill doesn't move the student.
+    # Focus does not regress to the still-empty M1 just because it isn't done.
     assert state["focus"] == "M4"
 
 
@@ -158,18 +161,78 @@ def test_confirm_empty_after_sanitize_422(monkeypatch):
     assert r.status_code == 422
 
 
-def test_reconstruct_endpoint_returns_candidates_and_writes_nothing(monkeypatch):
+def test_reconstruct_endpoint_saves_every_candidate(monkeypatch):
+    """The confirm/skip gate is gone: reconstructing IS saving.
+
+    Pins the whole contract in one place because the parts only make sense
+    together — a student who imported an M4 gets M1-M3 filled in, counted, and
+    is put in front of M4 instead of back at the topic screen.
+    """
+    pid = _project()
+    _seed_m4(pid)
+    monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
+    import orchestrator.backfill as bf
+    # Returned out of MODULES order on purpose — the route must commit upstream
+    # first, or M2's commit flags the M3 it just wrote as needs_review.
+    monkeypatch.setattr(bf, "reconstruct_upstream", lambda cs, language=None: [
+        {"module": "M3", "artifact": "design",
+         "candidate": {"conceptual_model": {"constructs": ["A", "B"]},
+                       "paradigm": "quantitative"},
+         "rationale": "from M4", "ready_to_confirm": False, "review": ["missing tool"]},
+        {"module": "M1", "artifact": "topic",
+         "candidate": {"research_title": "T", "research_questions": ["RQ1"],
+                       "scope": "VN hotels"},
+         "rationale": "from M4", "ready_to_confirm": True, "review": []},
+    ])
+    r = _client().post(f"/api/v1/projects/{pid}/mid-journey-import/reconstruct")
+    assert r.status_code == 200
+    body = r.json()
+    assert [s["module"] for s in body["saved"]] == ["M1", "M3"]   # MODULES order
+
+    from app.agent_state import DbProjectStateStore
+    state = DbProjectStateStore(get_engine(), pid, f"/tmp/ws-{pid}").load()
+    assert state["status"]["M1"] == "done" and state["status"]["M3"] == "done"
+    # Imported M4 is untouched by the upstream backfill, not knocked to needs_review.
+    assert state["status"]["M4"] == "in_progress"
+    # Focus advances past the reconstructed steps to the work that's actually left.
+    assert state["focus"] == "M4" and body["focus"] == "M4"
+
+    with Session(get_engine()) as s:
+        row = s.get(DbContextStore, pid)
+    # Owned keys AND the non-owned schema field both persisted.
+    assert row.m3_design["conceptual_model"] == {"constructs": ["A", "B"]}
+    assert row.m3_design["paradigm"] == "quantitative"
+    assert row.m1_topic["research_title"] == "T" and row.m1_topic["scope"] == "VN hotels"
+
+
+def test_reconstruct_survives_one_module_failing_to_commit(monkeypatch):
+    """A module that can't be committed must not cost the student the others."""
     pid = _project()
     _seed_m4(pid)
     monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
     import orchestrator.backfill as bf
     monkeypatch.setattr(bf, "reconstruct_upstream", lambda cs, language=None: [
-        {"module": "M3", "artifact": "design", "candidate": {"paradigm": "quantitative"},
-         "rationale": "from M4", "ready_to_confirm": False, "review": ["missing tool"]}])
+        {"module": "M2", "artifact": "literature",
+         "candidate": {"research_gaps": [{"description": "gap"}]},
+         "rationale": "", "ready_to_confirm": False, "review": []},
+        {"module": "M3", "artifact": "design", "candidate": {"conceptual_model": {"c": ["A"]}},
+         "rationale": "", "ready_to_confirm": False, "review": []},
+    ])
+
+    # M2's write blows up (a bad slice, a DB hiccup — the reason doesn't matter).
+    real_store = ir._store
+    def _flaky(db, project_id):
+        store = real_store(db, project_id)
+        commit = store.commit_reconstructed
+        store.commit_reconstructed = lambda m, s, **kw: (
+            _raise() if m == "M2" else commit(m, s, **kw))
+        return store
+    def _raise():
+        raise RuntimeError("commit exploded")
+    monkeypatch.setattr(ir, "_store", _flaky)
     r = _client().post(f"/api/v1/projects/{pid}/mid-journey-import/reconstruct")
     assert r.status_code == 200
-    assert r.json()["reconstructed"][0]["module"] == "M3"
-    # Dry-run: M3 column stayed empty (nothing persisted by reconstruct).
-    with Session(get_engine()) as s:
-        row = s.get(DbContextStore, pid)
-        assert row is None or not (row.m3_design or {})
+    assert [s["module"] for s in r.json()["saved"]] == ["M3"]
+
+    from app.agent_state import DbProjectStateStore
+    assert DbProjectStateStore(get_engine(), pid, f"/tmp/ws-{pid}").load()["status"]["M3"] == "done"

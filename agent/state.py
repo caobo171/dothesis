@@ -123,6 +123,24 @@ COACHING_KEYS = {"roadmap_tasks", "advisor_feedback", "institution_profile",
                  "thesis_timeline"}
 
 
+def strip_reconstruction_meta(slice_: dict[str, Any] | None) -> dict[str, Any]:
+    """Drop everything a reconstructed candidate carries that is NOT content.
+
+    `_`-markers (`_source`) are the reconstructor's own bookkeeping and are
+    re-applied at the write site; `confirmed_at` is the store's to set, never
+    the caller's to claim; NON_CONTENT_KEYS (`decisions`,
+    `analysis_provenance`) are the audit trail that exists to be trustworthy —
+    a caller that could write them could forge it.
+
+    Shared by the store's write path and the client-facing confirm endpoint so
+    the two can't drift on what counts as content.
+    """
+    return {k: v for k, v in (slice_ or {}).items()
+            if not str(k).startswith("_")
+            and k != "confirmed_at"
+            and k not in NON_CONTENT_KEYS}
+
+
 def _earning_keys(module: str) -> list[str]:
     """The module's owned keys that can actually EARN a `done`.
 
@@ -344,6 +362,93 @@ class ProjectStateStore:
             "flagged": flagged,
             "version": len(state["versionHistory"]),
         }
+
+    # -- reconstructed upstream modules -----------------------------------
+    # Backfill (mid-journey import + the in-chat backfill tool) writes through
+    # HERE rather than each caller assembling its own commit. It used to be a
+    # student-facing confirm/skip card: the candidate sat unsaved until someone
+    # clicked Confirm on every module. That gate is gone — a reconstruction is
+    # saved the moment it exists, and the student changes it by asking, the
+    # same way they change anything else in the thread. One write path also
+    # means the headless/partner surfaces get the persistence the chat widget
+    # used to be solely responsible for triggering.
+    def commit_reconstructed(
+        self,
+        module: str,
+        slice_: dict[str, Any],
+        reason: str = "reconstructed from existing work",
+    ) -> dict[str, Any]:
+        """Commit a reconstructed candidate as EARNED, DONE state.
+
+        `done`, not `in_progress`: the student's own work is what was
+        reconstructed FROM, so treating it as an unfinished step drags them
+        back through milestones they already passed. Downstream modules that
+        had already started keep their status (an upstream backfill did not
+        invalidate them), and focus moves forward to whatever is still unfinished
+        (see _advance_focus).
+
+        A reconstruction too thin to satisfy commit_slice's done-gate lands
+        `in_progress` instead of failing — a partial backfill is still worth
+        keeping, it just hasn't earned the tick.
+
+        Only the module's OWNED keys survive here; the base store has nowhere
+        else to put the rest. DbProjectStateStore overrides this to persist
+        the non-owned schema fields too (project_db_store_persistence_gap).
+        """
+        _validate_module(module)
+        clean = strip_reconstruction_meta(slice_)
+        owned = {k: v for k, v in clean.items() if k in SLICE_OWNERSHIP[module]}
+
+        state = self.load()
+        # Read focus BEFORE committing: commit_slice parks focus on the module
+        # it just wrote, so by the time we advance it the "where the student
+        # was" signal is already gone.
+        prev_focus = state["focus"]
+        # Preserve, don't flag: a module the student already started is not
+        # invalidated by filling in a step BELOW it.
+        overrides = {d: state["status"][d] for d in DOWNSTREAM[module]
+                     if state["status"].get(d) not in (None, "locked")}
+        try:
+            self.commit_slice(module, owned, reason=reason,
+                              confirm_done=True, status_overrides=overrides)
+            status = "done"
+        except ValueError as e:
+            if "cannot mark" not in str(e):
+                raise
+            # Nothing owned to show for it. Keep what we have, at in_progress —
+            # status_overrides carries the commit so an empty `owned` doesn't
+            # trip commit_slice's "nothing to do" guard.
+            self.commit_slice(module, owned, reason=reason,
+                              status_overrides={**overrides, module: "in_progress"})
+            status = "in_progress"
+        return {"module": module, "status": status,
+                "focus": self._advance_focus(prev_focus)}
+
+    def _advance_focus(self, prev_focus: str | None = None) -> str:
+        """Move focus to the first module that isn't done — FORWARDS only.
+
+        commit_slice parks focus on whatever it just wrote, which for a backfill
+        is the wrong place: reconstructing M1 must not send a student who is
+        mid-M4 back to the topic screen. But "first not done" alone has the same
+        failure from the other side — backfilling only M3 while M1 is still
+        empty would point them at M1.
+
+        So the focus never regresses. It advances when a backfill genuinely
+        completed the steps in front of the student (import M4, reconstruct
+        M1-M3 → focus lands on M4 instead of sitting at M1), and otherwise
+        stays where they were.
+        """
+        state = self.load()
+        first_open = next((m for m in MODULES if state["status"].get(m) != "done"),
+                          MODULES[-1])
+        prev = prev_focus if prev_focus in MODULES else state["focus"]
+        if prev not in MODULES:                       # fresh project: no focus yet
+            prev = MODULES[0]
+        focus = max(prev, first_open, key=MODULES.index)
+        if state["focus"] != focus:
+            state["focus"] = focus
+            self._save(state)
+        return focus
 
     # -- roadmap_tasks (coaching blockers) --------------------------------
     # Deliberately NOT commit_slice: blockers are ephemeral coaching aids, so

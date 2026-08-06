@@ -19,6 +19,7 @@ import { ThesisComposer } from "@/app/components/chat/ThesisComposer";
 import {
   ReconstructedModules,
   type ReconstructedModule,
+  type SavedModule,
 } from "@/app/components/chat/ReconstructedModules";
 
 // Shape of POST /projects/{id}/mid-journey-import (F12).
@@ -73,12 +74,15 @@ export default function NewThesisPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importedProjectId, setImportedProjectId] = useState<string | null>(null);
   // Phase 2 of import: reconstruct the upstream modules the import evidences but
-  // didn't fill (e.g. imported M4 → infer M1/M2/M3). Candidates only — the
-  // student confirms/edits each before it's committed.
+  // didn't fill (e.g. imported M4 → infer M1/M2/M3). The server SAVES these as
+  // it infers them — this screen reports what landed, it doesn't gate it.
   const [reconstructed, setReconstructed] = useState<ReconstructedModule[]>([]);
   const [reconstructing, setReconstructing] = useState(false);
-  const [confirmedModules, setConfirmedModules] = useState<string[]>([]);
-  const [skippedModules, setSkippedModules] = useState<string[]>([]);
+  const [savedModules, setSavedModules] = useState<SavedModule[]>([]);
+  // Reconstruction moves focus forward past the steps it completed, so the
+  // "you're at / next" line has to follow it rather than keep quoting the
+  // module the import landed on.
+  const [focus, setFocus] = useState<string | null>(null);
 
   // Setup defaults still come from the user's cross-project memory (/me/prefs)
   // so a returning user's field/language/citation carry over — they're just no
@@ -212,17 +216,24 @@ export default function NewThesisPage() {
         })) as ImportResult;
         setImportResult(res);
         setImportedProjectId(newId);
+        setFocus(res.focus);
         setSubmitting(false);
         setStatus(null);
         // Kick off reconstruction of the upstream modules (non-blocking — the
-        // activation card renders immediately; suggestions stream in after).
+        // activation card renders immediately; the reconstructed steps land
+        // under it as they're saved).
         if (res.imported.length > 0 && res.to_reconstruct.length > 0) {
           setReconstructing(true);
           apiFetch(`/projects/${newId}/mid-journey-import/reconstruct`, {
             method: "POST",
             body: {},
           })
-            .then((r: any) => setReconstructed(r?.reconstructed ?? []))
+            .then((r: any) => {
+              setReconstructed(r?.reconstructed ?? []);
+              setSavedModules(r?.saved ?? []);
+              // Saving M1-M3 moves the student to M4 — the CTA has to point there.
+              if (r?.focus) setFocus(r.focus);
+            })
             .catch(() => setReconstructed([])) // graceful: card just shows none
             .finally(() => setReconstructing(false));
         }
@@ -242,13 +253,6 @@ export default function NewThesisPage() {
   // F12: once the import lands, the page becomes the activation summary — the
   // first-session payoff — with a CTA into chat at the imported focus module.
   if (importResult && importedProjectId) {
-    const confirmModule = async (module: string, edited: Record<string, unknown>) => {
-      await apiFetch(`/projects/${importedProjectId}/mid-journey-import/confirm`, {
-        method: "POST",
-        body: { module, slice: edited },
-      });
-      setConfirmedModules((c) => [...c, module]);
-    };
     return (
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-7">
@@ -259,24 +263,21 @@ export default function NewThesisPage() {
         <div className="flex flex-col gap-4">
           <ImportSummary
             imported={importResult.imported}
-            focus={importResult.focus}
+            focus={focus ?? importResult.focus}
             ambiguous={importResult.ambiguous}
             unreadable={importResult.unreadable}
             onContinue={() => router.push(`/chat/projects/${importedProjectId}`)}
-            // Gate on the SAME state the card below renders from. Continuing
-            // mid-reconstruction navigates away from steps the student has not
-            // reviewed yet — and the confirm/skip choices are made on this
-            // screen, so leaving early silently drops them.
+            // Still gated on the same state the card below renders from, but for
+            // a different reason now that nothing needs confirming: the
+            // reconstruction is what decides which module they land on, so
+            // leaving early would send them to the wrong one.
             reconstructing={reconstructing}
-            confirmed={confirmedModules}
+            reconstructed={savedModules.map((s) => s.module)}
           />
           <ReconstructedModules
             items={reconstructed}
             reconstructing={reconstructing}
-            confirmedModules={confirmedModules}
-            skippedModules={skippedModules}
-            onConfirm={confirmModule}
-            onSkip={(m) => setSkippedModules((s) => [...s, m])}
+            saved={savedModules}
           />
         </div>
       </div>
