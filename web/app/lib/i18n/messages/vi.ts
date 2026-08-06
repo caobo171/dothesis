@@ -348,6 +348,16 @@ export const vi: Record<MessageKey, string> = {
   "tools.doc.runsAs_other":
     "Sẽ chạy thành {count} lượt viết lại (các đoạn được gom theo mục). Bạn chỉ trả " +
     "cho số token thực dùng — số chính xác hiện trong mục Giao dịch.",
+  // --- Claude Skill miễn phí ---
+  "tools.skill.title": "Dùng phương pháp này trong Claude, miễn phí",
+  "tools.skill.blurb":
+    "Vẫn là cách viết lại dựa trên văn mẫu của chính bạn, đóng gói thành một "
+    + "Claude Skill để bạn giữ luôn. Nó viết lại đoạn bạn dán vào và kiểm tra bằng "
+    + "đúng script bên mình dùng — không được đổi số liệu, trích dẫn hay ngôn ngữ. "
+    + "Còn xử lý cả tệp .docx mà vẫn giữ tiêu đề, bảng biểu thì làm ở đây.",
+  "tools.skill.download": "Tải skill (.zip)",
+  "tools.skill.how":
+    "Trong Claude: Settings → Skills → Add → Upload a skill, rồi chọn tệp này.",
   "tools.doc.run": "Humanize cả tài liệu",
   "tools.doc.runningCount": "Đang viết lại… {done}/{total}",
   "tools.doc.runningBatches": "Đã viết lại {done}/{total} lô",

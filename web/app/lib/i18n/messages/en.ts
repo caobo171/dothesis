@@ -365,6 +365,16 @@ export const en = {
   "tools.doc.runsAs_other":
     "Runs as {count} rewrites (paragraphs are batched by section). You’re charged " +
     "for the tokens actually used — the exact amount lands in Transactions.",
+  // --- the free Claude Skill ---
+  "tools.skill.title": "Use this method in Claude, free",
+  "tools.skill.blurb":
+    "The same anchored-rewrite method, packaged as a Claude Skill you can keep. "
+    + "It re-voices text you paste in and checks it with the same script we use — "
+    + "no number, citation or language may change. Whole .docx files, with headings "
+    + "and tables preserved, stay here.",
+  "tools.skill.download": "Download the skill (.zip)",
+  "tools.skill.how":
+    "In Claude: Settings → Skills → Add → Upload a skill, then pick this file.",
   "tools.doc.run": "Humanize document",
   "tools.doc.runningCount": "Rewriting… {done}/{total}",
   "tools.doc.runningBatches": "Batch {done} of {total} rewritten",

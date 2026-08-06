@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Download } from "lucide-react";
 
 import { apiFetch } from "@/app/lib/api";
 import { useT, useTn } from "@/app/lib/i18n/LocaleProvider";
@@ -205,7 +205,12 @@ export function HumanizeTool() {
           <RunButton
             busy={busy}
             disabled={!text.trim() || fileBusy}
-            onClick={() => void run({ text, user_anchor: anchor.trim() || null, language: "vi" })}
+            // No `language` sent: the server reads it off the text. Hardcoding
+            // "vi" here is what turned an English document into a Vietnamese
+            // one on the document route, and this passage route sent the same
+            // literal. The server-side detector now overrides it either way,
+            // but a client asserting a language it cannot know is the bug.
+            onClick={() => void run({ text, user_anchor: anchor.trim() || null })}
             idleLabel={t("tools.humanize.name")}
             busyLabel={t("tools.humanize.running")}
           />
@@ -254,6 +259,32 @@ export function HumanizeTool() {
         {mode === "passage" && (
         <ToolCaveat>{t("tools.humanize.caveat")}</ToolCaveat>
         )}
+
+        {/* The method, free, as a Claude Skill.
+            Given away deliberately: what it cannot do is the product. The skill
+            re-voices text a student pastes in and verifies it with the same
+            frozen-token gate; it cannot walk a .docx keeping headings, tables
+            and numbering intact, and it has no detector in the loop. Someone
+            who tries it and wants their whole thesis handled ends up here. */}
+        <div className="mt-6 rounded-xl border border-ink-200 bg-white p-4">
+          <div className="text-[13px] font-bold text-ink-900">
+            {t("tools.skill.title")}
+          </div>
+          <p className="mt-1 mb-3 text-[12.5px] leading-relaxed text-ink-600">
+            {t("tools.skill.blurb")}
+          </p>
+          <a
+            href="/skills/dothesis-humanizer.zip"
+            download
+            className="inline-flex items-center gap-1.5 rounded-full border border-ink-200 px-3.5 py-2 text-[12.5px] font-semibold text-primary-700 hover:bg-ink-50"
+          >
+            <Download className="w-3.5 h-3.5" aria-hidden />
+            {t("tools.skill.download")}
+          </a>
+          <p className="mt-2 mb-0 text-[11.5px] text-ink-400">
+            {t("tools.skill.how")}
+          </p>
+        </div>
       </div>
     </ToolPanel>
   );
