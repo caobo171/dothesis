@@ -153,6 +153,7 @@ export const vi: Record<MessageKey, string> = {
   "nav.orders": "Đơn hàng",
   "nav.connectors": "Kết nối",
   "nav.toolUsage": "Lượt dùng công cụ",
+  "nav.toolUsageAll": "Toàn bộ lượt dùng",
 
   // Slogan. "Draft" trong bản tiếng Anh là ĐỘNG TỪ (viết), không phải "bản
   // nháp" — dịch thành danh từ khiến sản phẩm nghe như chỉ lo khâu nháp, trong
@@ -427,8 +428,7 @@ export const vi: Record<MessageKey, string> = {
   "txn.tool.scanDocx": "Quét tài liệu",
   "txn.tool.scanCiteDocx": "Quét trích dẫn",
 
-  "txn.tab.credits": "Credit",
-  "txn.tab.tools": "Lượt dùng công cụ",
+  "txn.tools.seeRuns": "Tìm tệp của một lượt chạy công cụ?",
   "txn.tools.title": "Lượt dùng công cụ",
   "txn.tools.blurb":
     "Tất cả những gì bạn chạy ngoài dự án luận văn. Cả những lượt không mất credit " +

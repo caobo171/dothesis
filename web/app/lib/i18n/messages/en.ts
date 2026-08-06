@@ -163,6 +163,7 @@ export const en = {
   "nav.orders": "Orders",
   "nav.connectors": "Connectors",
   "nav.toolUsage": "Tool usage",
+  "nav.toolUsageAll": "All tool usage",
 
   "shell.tagline": "Draft with conviction",
   "shell.collapse": "Collapse",
@@ -444,8 +445,7 @@ export const en = {
   "txn.tool.scanDocx": "Scan a document",
   "txn.tool.scanCiteDocx": "Scan citations",
 
-  "txn.tab.credits": "Credits",
-  "txn.tab.tools": "Tool runs",
+  "txn.tools.seeRuns": "Looking for a file from a tool run?",
   "txn.tools.title": "Tool runs",
   "txn.tools.blurb":
     "Everything you ran outside a thesis project. Runs that cost nothing are " +

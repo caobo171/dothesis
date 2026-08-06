@@ -2,7 +2,6 @@
 
 import { Receipt, Ticket } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 
 import { swrFetcher } from "@/app/lib/api";
@@ -10,7 +9,6 @@ import { useT } from "@/app/lib/i18n/LocaleProvider";
 import type { MessageKey } from "@/app/lib/i18n/messages/en";
 import { useMe } from "@/app/lib/use-me";
 
-import ToolRuns from "./ToolRuns";
 
 // Resolved project + thread for a thread-scoped (chat_turn) row, so the
 // Activity cell can deep-link back to the conversation that spent the credits.
@@ -50,23 +48,10 @@ const REASON_KEY: Record<string, MessageKey> = {
   "plagiarism-check": "txn.tool.plagiarism",
 };
 
-const TABS = ["credits", "tools"] as const;
-type Tab = (typeof TABS)[number];
-
 export default function Transactions() {
   const me = useMe();
   const t = useT();
   const txns = useSWR<Txn[]>("/credit/transactions", swrFetcher);
-  const router = useRouter();
-  const pathname = usePathname();
-  const params = useSearchParams();
-  const tab: Tab = params.get("tab") === "tools" ? "tools" : "credits";
-
-  // replace, not push: flipping a tab is not a navigation a student wants to
-  // walk back through — the back button should leave the page, not cycle tabs.
-  const setTab = (next: Tab) =>
-    router.replace(next === "credits" ? pathname : `${pathname}?tab=tools`,
-                   { scroll: false });
 
   return (
     <section className="px-2 sm:px-4 lg:px-6">
@@ -84,35 +69,7 @@ export default function Transactions() {
           </div>
         </div>
 
-        {/* Two lists, not one, and now two TABS rather than one long scroll.
-            They answer different questions — "where did my credits go" and
-            "what did I run, and can I get the file back" — and the second grew
-            its own controls (download, re-run, delete, live progress), which
-            were buried under the whole ledger.
-
-            The tab lives in the URL so a reload, a back button or a pasted link
-            lands where the student was. */}
-        <div className="mb-5 flex items-center gap-1 border-b border-ink-100">
-          {TABS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              aria-current={tab === id ? "page" : undefined}
-              className={`-mb-px border-b-2 px-3 py-2 text-[13px] font-semibold transition-colors ${
-                tab === id
-                  ? "border-primary-600 text-primary-700"
-                  : "border-transparent text-ink-500 hover:text-ink-800"
-              }`}
-            >
-              {t(id === "credits" ? "txn.tab.credits" : "txn.tab.tools")}
-            </button>
-          ))}
-        </div>
-
-        {tab === "tools" ? (
-          <ToolRuns />
-        ) : txns.data && txns.data.length > 0 ? (
+        {txns.data && txns.data.length > 0 ? (
           <div className="overflow-x-auto rounded-xl border border-ink-100">
             <table className="w-full text-sm">
               <thead className="bg-ink-50 text-ink-500 text-xs uppercase tracking-wide">
@@ -161,6 +118,19 @@ export default function Transactions() {
             {txns.isLoading ? t("txn.loading") : t("txn.empty")}
           </p>
         )}
+
+        {/* The tool history moved to its own page (/tool-runs). It is a
+            different list — a run that charged nothing writes no credit
+            transaction at all — and it grew its own controls (download,
+            re-run, delete, live progress) that do not belong inside a ledger.
+            The pointer stays, because this is where a student comes when they
+            ask where their credits went. */}
+        <p className="mt-6 text-[13px] text-ink-500">
+          {t("txn.tools.seeRuns")}{" "}
+          <Link href="/tool-runs" className="font-semibold text-primary-700 hover:underline">
+            {t("nav.toolUsage")}
+          </Link>
+        </p>
       </div>
     </section>
   );

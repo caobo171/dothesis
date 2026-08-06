@@ -11,6 +11,7 @@ import {
   HomeIcon,
   LinkIcon,
   ShieldCheckIcon,
+  WrenchScrewdriverIcon,
   SparklesIcon,
   SpeakerWaveIcon,
   UserIcon,
@@ -69,6 +70,13 @@ export function useSidebarSections(): SidebarSection[] {
         options: [
           { name: t("tools.humanize.name"), href: "/tools/humanize", icon: SparklesIcon },
           { name: t("tools.citation.name"), href: "/tools/citation", icon: BookOpenIcon },
+          // The student's own runs, alongside the tools that produce them.
+          // /admin/tools has shown operators every run since it shipped; the
+          // person who paid for one could only see it as a footnote under the
+          // credit ledger. It is a destination now because it has to be: the
+          // stored input and output are downloaded here, a document is re-run
+          // here, and a run in flight reports its progress here.
+          { name: t("nav.toolUsage"), href: "/tool-runs", icon: WrenchScrewdriverIcon },
         ],
       },
       {
@@ -101,7 +109,10 @@ export function useSidebarSections(): SidebarSection[] {
           { name: t("nav.connectors"), href: "/admin/connectors", icon: LinkIcon },
           // Tool runs happen outside any project, so neither the jobs nor the
           // papers view has ever shown them.
-          { name: t("nav.toolUsage"), href: "/admin/tools", icon: PuzzlePieceIcon },
+          // Labelled distinctly from the student-facing /tool-runs entry
+          // above: an admin sees both, and two identical menu items pointing
+          // at different scopes is a trap.
+          { name: t("nav.toolUsageAll"), href: "/admin/tools", icon: PuzzlePieceIcon },
         ],
       });
     }

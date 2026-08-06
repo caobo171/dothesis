@@ -128,13 +128,15 @@ export default function ToolRuns() {
   const pages = data ? Math.ceil(data.total / data.page_size) : 1;
 
   return (
-    // No heading of its own any more: the tab above already says what this is,
-    // and repeating it cost a whole screen of vertical space before the first row.
-    <div>
-      <p className="mt-0 mb-4 flex items-start gap-2 text-[13px] text-ink-500">
-        <Wrench className="mt-0.5 w-4 h-4 shrink-0 text-ink-400" aria-hidden />
-        <span>{t("txn.tools.blurb")}</span>
-      </p>
+    <section className="px-2 sm:px-4 lg:px-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="flex items-center gap-2 mb-3 py-3 border-b border-ink-100">
+          <Wrench className="w-5 h-5 text-ink-500" />
+          <h1 className="m-0 text-base font-semibold text-ink-900">
+            {t("nav.toolUsage")}
+          </h1>
+        </div>
+        <p className="mt-0 mb-5 text-[13px] text-ink-500">{t("txn.tools.blurb")}</p>
 
       {error && (
         <p className="mb-3 rounded-lg border border-[#E6C9C9] bg-[#FBF0F0] px-3 py-2 text-[12.5px] text-[#8A3A3A]">
@@ -277,11 +279,12 @@ export default function ToolRuns() {
             </div>
           )}
         </>
-      ) : (
-        <p className="text-sm text-ink-500">
-          {isLoading ? t("txn.loading") : t("txn.tools.empty")}
-        </p>
-      )}
-    </div>
+        ) : (
+          <p className="text-sm text-ink-500">
+            {isLoading ? t("txn.loading") : t("txn.tools.empty")}
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
