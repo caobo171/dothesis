@@ -809,3 +809,92 @@ def test_filler_phrases_are_shortened():
 def test_the_prompt_names_the_shape_tells():
     for fragment in ("em dash", "three", "-ing"):
         assert fragment in H._REWRITE_PROMPT
+
+
+# --- burstiness: never ship a rewrite flatter than the original -----------
+#
+# Measured on a real Turnitin report (23% AI, 45 pages, 10,921 words). Splitting
+# that document's body paragraphs by what the detector flagged:
+#
+#     flagged paragraphs   median sentence-length CV = 0.247
+#     clean paragraphs     median sentence-length CV = 0.473
+#
+# Mean sentence LENGTH was near-identical between the two groups (24.0 vs 24.9
+# words) and so was lexical diversity (TTR 0.79 vs 0.81). The separator is
+# variance — uniform sentences, not long ones.
+#
+# On the same document our own rewrite changed 9 flagged paragraphs and made 4
+# of them FLATTER than the student's original, one going 0.583 -> 0.204. The
+# loop picked the best of its own candidates and never once compared them to the
+# text it was handed.
+
+# Same words, same frozen tokens, different rhythm — so the only thing these two
+# differ on is the statistic under test. (An earlier draft spelled a number out
+# in one and used the numeral in the other; the frozen gate rejected it before
+# the rhythm check was ever reached, which is the gate working correctly.)
+FLAT = ("Nghiên cứu khảo sát nhân viên tại các khách sạn ở Hà Nội. "
+        "Dữ liệu được thu thập trong khoảng thời gian là ba tháng. "
+        "Phân tích được thực hiện bằng phần mềm SmartPLS mới nhất. "
+        "Kết quả cho thấy các giả thuyết đều được chấp nhận.")
+BURSTY = ("Nghiên cứu khảo sát nhân viên tại các khách sạn ở Hà Nội, dữ liệu "
+          "được thu thập trong khoảng thời gian là ba tháng và phân tích bằng "
+          "phần mềm SmartPLS mới nhất để kiểm định các giả thuyết. "
+          "Kết quả cho thấy các giả thuyết đều được chấp nhận. "
+          "Không có giả thuyết nào bị bác bỏ.")
+
+
+def test_burstiness_separates_a_metronome_from_real_rhythm():
+    flat, bursty = H.burstiness(FLAT), H.burstiness(BURSTY)
+    assert flat is not None and bursty is not None
+    assert bursty > flat
+    # The flagged/clean boundary measured above sits between these two.
+    assert flat < 0.35 < bursty
+
+
+def test_burstiness_is_none_when_there_is_not_enough_text_to_judge():
+    """One sentence has no rhythm. Guessing would gate real rewrites on noise."""
+    assert H.burstiness("Kết quả tại Bảng 4.3 cho thấy β = 0,412.") is None
+    assert H.burstiness("") is None
+
+
+def test_a_flatter_rewrite_is_refused_and_the_original_kept(tmp_path, monkeypatch,
+                                                            user_anchor):
+    """The regression this whole check exists for: the rewrite passed every
+    frozen-token gate and still handed back text MORE machine-even than the
+    student wrote."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    r = H.humanize_prose(BURSTY, language="vi", user_anchor=user_anchor,
+                         llm=FakeLLM(FLAT, FLAT))
+    assert r["ok"] is False
+    assert r["error"] == "flatter_than_original"
+    assert r["text"] == BURSTY          # the student's own text, untouched
+    assert r["changed"] is False
+
+
+def test_a_burstier_rewrite_is_accepted(tmp_path, monkeypatch, user_anchor):
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    r = H.humanize_prose(FLAT, language="vi", user_anchor=user_anchor,
+                         llm=FakeLLM(BURSTY))
+    assert r["ok"] is True
+    assert r["text"] == BURSTY
+
+
+def test_the_guard_stays_out_of_the_way_on_short_passages(tmp_path, monkeypatch,
+                                                          user_anchor):
+    """Below the sentence floor there is no rhythm to compare, so the frozen
+    gate remains the only judge — as it was before this check existed."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    good = "Bảng 4.3 cho thấy β = 0,412, p = 0,003, đúng như Nguyễn (2019) đã nêu."
+    r = H.humanize_prose(SRC, language="vi", user_anchor=user_anchor,
+                         llm=FakeLLM(good))
+    assert r["ok"] is True
+    assert r["text"] == good
+
+
+def test_the_reported_burstiness_travels_out_with_the_result(tmp_path, monkeypatch,
+                                                             user_anchor):
+    """The caller can only tune what it can see."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    r = H.humanize_prose(FLAT, language="vi", user_anchor=user_anchor,
+                         llm=FakeLLM(BURSTY))
+    assert r["burstiness"]["before"] < r["burstiness"]["after"]

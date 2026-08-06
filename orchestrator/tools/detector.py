@@ -198,7 +198,22 @@ class StylometricScorer:
 
     # Sentence-length coefficient of variation (stdev/mean) typical of varied
     # human academic prose. Scores at/above this read as "human-bursty" (-> 0).
-    _CV_HUMAN = 0.6
+    #
+    # Was 0.6, guessed. Now measured, against a Turnitin report on a real
+    # 10,921-word dissertation, splitting its body paragraphs by what the
+    # detector actually flagged:
+    #
+    #     flagged   median CV = 0.247
+    #     clean     median CV = 0.473
+    #     whole doc median CV = 0.366
+    #
+    # 0.6 sat above what ANY paragraph in that document reached, so every
+    # passage scored as somewhat machine-even and the gap between flagged and
+    # clean was compressed into the middle of the range — with
+    # HUMANIZE_AI_THRESHOLD=0.5 the ladder then almost never escalated. 0.47 is
+    # the clean-paragraph median: prose that varies like the text this detector
+    # left alone scores 0, and the flagged median lands at a decisive 0.48.
+    _CV_HUMAN = 0.47
     _CONNECTORS = ("hơn nữa", "bên cạnh đó", "đồng thời", "đáng chú ý",
                    "nhìn chung", "không những vậy", "có thể nói", "ngoài ra",
                    "furthermore", "moreover", "additionally", "in conclusion")

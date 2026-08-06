@@ -569,6 +569,58 @@ _VI_MARK_RATIO = 0.02
 _LANG_MIN_LETTERS = 24
 
 
+# Below this many sentences a passage has no rhythm to measure, and a guess
+# would gate real rewrites on noise. Same floor the stylometric scorer uses.
+_BURST_MIN_SENTENCES = 3
+_SENT_SPLIT_RE = re.compile(r"[.!?…]+\s+")
+
+
+def _is_burstier(original: str, rewritten: str) -> bool:
+    """May this rewrite ship, judged only on rhythm?
+
+    True when the rewrite is at least as varied as the original, and true when
+    either text is too short to measure — the frozen gate stays the only judge
+    there, exactly as before this check existed.
+
+    The rule is RELATIVE, not a fixed target, because a fixed one cannot be
+    honest: a student whose own paragraph already varies well would have it
+    replaced by a flatter rewrite that still cleared any absolute bar. Never
+    handing back something more machine-even than what we were given is the
+    weakest claim worth making, and it is the one that was being broken.
+    """
+    before, after = burstiness(original), burstiness(rewritten)
+    if before is None or after is None:
+        return True
+    return after >= before
+
+
+def burstiness(text: str) -> float | None:
+    """Coefficient of variation of sentence length. None when unmeasurable.
+
+    This is the statistic AI detectors actually separate on, and it is worth
+    stating what that claim rests on. Measured against a Turnitin report on a
+    real 10,921-word dissertation, splitting its body paragraphs by what the
+    detector flagged:
+
+        flagged paragraphs   median CV = 0.247
+        clean paragraphs     median CV = 0.473
+
+    Mean sentence LENGTH barely differed (24.0 vs 24.9 words), and neither did
+    lexical diversity (TTR 0.79 vs 0.81). Uniform sentences are the tell, not
+    long ones — which is why "write shorter" is the wrong instruction and "vary
+    deliberately" is the right one.
+    """
+    sents = [s for s in _SENT_SPLIT_RE.split((text or "").strip()) if s.strip()]
+    if len(sents) < _BURST_MIN_SENTENCES:
+        return None
+    lens = [len(s.split()) for s in sents]
+    mean = sum(lens) / len(lens)
+    if mean <= 0:
+        return None
+    var = sum((n - mean) ** 2 for n in lens) / len(lens)
+    return round((var ** 0.5) / mean, 4)
+
+
 def detect_language(text: str) -> str | None:
     """"vi", "en", or None when the text is too short to tell.
 
@@ -1012,6 +1064,17 @@ def _humanize_prose(
     _FROZEN_HINT = ("The rewrite altered numbers or citations, so the original "
                     "was kept. Report this — do not claim the passage was "
                     "humanized.")
+    _FLAT_HINT = ("The rewrite read MORE machine-even than the original — its "
+                  "sentences were more uniform in length, which is the "
+                  "statistic detectors separate on. The original was kept. "
+                  "Report this; do not claim the passage was humanized.")
+
+    def _flatter(original: str, anchor_id: str, r: dict) -> dict:
+        return {"ok": False, "error": "flatter_than_original", "text": original,
+                "changed": False, "anchor": anchor_id, "frozen": r.get("check"),
+                "repairs": r.get("repairs", 0), "hint": _FLAT_HINT,
+                "burstiness": {"before": burstiness(original),
+                               "after": burstiness(r.get("text") or "")}}
 
     # Resolve the detector. None (env unset/`none`) is the switch back to the
     # untouched v2 single-pass path — so an un-configured deployment, and every
@@ -1036,14 +1099,19 @@ def _humanize_prose(
             return {"ok": False, "error": "frozen_violation", "text": text,
                     "changed": False, "anchor": anchor["id"], "frozen": r["check"],
                     "repairs": r["repairs"], "hint": _FROZEN_HINT}
+        if not _is_burstier(text, r["text"]):
+            return _flatter(text, anchor["id"], r)
         return {"ok": True, "text": r["text"], "anchor": anchor["id"],
                 "changed": r["text"].strip() != text.strip(),
-                "frozen": r["check"], "repairs": r["repairs"]}
+                "frozen": r["check"], "repairs": r["repairs"],
+                "burstiness": {"before": burstiness(text),
+                               "after": burstiness(r["text"])}}
 
     # --- v4 detector loop: rewrite -> score -> escalate, keep the best -------
     from orchestrator.tools.detector import ai_threshold, max_rounds  # noqa: PLC0415
     threshold, rounds = ai_threshold(), max_rounds()
     best: dict | None = None       # lowest-scoring candidate that passed frozen
+    last_flat: dict | None = None  # a verified round rejected only for rhythm
     input_text = cleaned
     for i in range(rounds):
         r = _rewrite_once(llm, input_text=input_text, round_idx=i, **rw)
@@ -1051,6 +1119,13 @@ def _humanize_prose(
             break                  # provider down — stop and fall back below
         if not r.get("text") or not r["ok"]:
             continue               # empty or frozen-violating round: escalate
+        if not _is_burstier(text, r["text"]):
+            # Flatter than what the student wrote. Not a candidate at any
+            # score — escalating the restructure ladder is exactly the right
+            # response, and shipping it would be the regression this guard
+            # exists for.
+            last_flat = r
+            continue
         sc = scorer.score(r["text"])
         if sc is None:
             # Backend unavailable — behave like single-pass: take the first
@@ -1067,8 +1142,12 @@ def _humanize_prose(
         input_text = best["text"]
 
     if best is None:
-        # Every round failed the frozen gate (or the provider died) — the one
-        # thing the pass must never do is ship an unverified rewrite.
+        # Nothing survived. Two different failures, and the student is owed the
+        # difference: a rewrite that moved a number is a correctness problem,
+        # one that only ever came back flatter is a quality ceiling on this
+        # passage. Either way the original ships.
+        if last_flat is not None:
+            return _flatter(text, anchor["id"], last_flat)
         return {"ok": False, "error": "frozen_violation", "text": text,
                 "changed": False, "anchor": anchor["id"], "hint": _FROZEN_HINT}
 
@@ -1093,7 +1172,9 @@ def _humanize_prose(
             "changed": best["text"].strip() != text.strip(),
             "frozen": best["check"], "repairs": best["repairs"],
             "score": best["score"], "rounds": best["round"] + 1,
-            "threshold": threshold}
+            "threshold": threshold,
+            "burstiness": {"before": burstiness(text),
+                           "after": burstiness(best["text"])}}
 
 
 def humanize_sections(
