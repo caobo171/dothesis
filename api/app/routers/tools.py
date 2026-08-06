@@ -793,6 +793,46 @@ def run_progress(run_id: int, body: RunIdBody,
                           total=run.progress_total)
 
 
+@router.post("/runs/{run_id}/files/delete")
+def delete_run_files(run_id: int, body: RunIdBody,
+                     user: User = Depends(current_user),
+                     db: Session = Depends(db_session)) -> dict:
+    """Delete a run's stored files now, without waiting for the 30 days.
+
+    Owner-only: this destroys data, and an admin who may READ a student's run
+    must not be able to remove it. Nulls the URIs and keeps the row, exactly as
+    the scheduled purge does — the run is a billing record either way.
+
+    Idempotent: deleting the files of a run that has none is a no-op, not a 404,
+    because the student's intent ("make sure it is gone") is already satisfied.
+    """
+    from ..auth_admin import owned_run  # noqa: PLC0415
+    from ..tool_artifacts import uri_parts  # noqa: PLC0415
+
+    run = owned_run(db, user, run_id)
+    uris = [u for u in (run.input_s3_uri, run.output_s3_uri) if u]
+    if uris:
+        s3 = s3_from_env()
+        for uri in uris:
+            bucket, key = uri_parts(uri)
+            if not (bucket and key):
+                continue
+            try:
+                s3.delete_object(Bucket=bucket, Key=key)
+            except Exception:  # noqa: BLE001
+                # Logged, and the row is NOT cleared — the nightly purge will
+                # find it again. Clearing it here would orphan the object with
+                # nothing left pointing at it to retry.
+                logger.exception("delete_run_files: S3 delete failed for run %s", run_id)
+                raise HTTPException(502, detail={"error": {
+                    "code": "delete_failed",
+                    "message": "The files could not be deleted. Try again shortly."}})
+        run.input_s3_uri = None
+        run.output_s3_uri = None
+        db.commit()
+    return {"ok": True, "deleted": len(uris)}
+
+
 @router.post("/runs/{run_id}/rerun")
 async def rerun_tool_run(run_id: int, body: RunIdBody, request: Request,
                          user: User = Depends(current_user),
@@ -1149,23 +1189,38 @@ async def cite_document(request: Request, file: UploadFile = File(...),
     from starlette.concurrency import run_in_threadpool  # noqa: PLC0415
     from orchestrator.tools.cite_docx import cite_docx  # noqa: PLC0415
     from .uploads import _DOCX_MIME  # noqa: PLC0415
+    from ..tool_artifacts import store_run_files  # noqa: PLC0415
+    from ..tool_billing import begin_tool_run, bump_progress  # noqa: PLC0415
 
     body = await _read_docx(file)
+    run_id = begin_tool_run(db, user, tool="cite-docx", surface=surface_of(request))
+
+    def _progress(done: int, total: int) -> None:
+        bump_progress(run_id, done=done, total=total)
+
     with Timer() as t:
         # Off the event loop for the same reason as /document/humanize above:
         # phase A is a CrossRef round-trip per source and phase B is model
         # calls, so this blocks for minutes on a real thesis.
         out, report = await run_in_threadpool(
-            cite_docx, body, add_missing=add_missing)
+            cite_docx, body, add_missing=add_missing, on_progress=_progress)
     ok = out is not None and bool(report.get("ok"))
     # Billed per source ACTUALLY looked up — resolved plus unresolved, since a
     # CrossRef query was spent either way, but not the entries carried through
     # from the student's own list untouched.
     sources = int(report.get("resolved") or 0) + int(report.get("unresolved") or 0)
+    files = await run_in_threadpool(
+        store_run_files, user_id=user.id,
+        filename=file.filename or "document.docx",
+        input_bytes=body, output_bytes=out)
     charged = record_tool_run(
         db, user, surface=surface_of(request), tool="cite-docx", ok=ok,
         error=None if ok else (report.get("error") or "cite_failed"),
-        units=sources, usage=report.get("usage") or [], duration_ms=t.ms).charged
+        units=sources, usage=report.get("usage") or [], duration_ms=t.ms,
+        run_id=run_id, files=files, input_filename=file.filename,
+        metrics={"resolved": report.get("resolved", 0),
+                 "unresolved": report.get("unresolved", 0),
+                 "added": report.get("added", 0)}).charged
 
     if not ok:
         raise HTTPException(422, detail={"error": {

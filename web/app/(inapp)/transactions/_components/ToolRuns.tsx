@@ -8,6 +8,7 @@ import { apiFetch } from "@/app/lib/api";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
 import type { MessageKey } from "@/app/lib/i18n/messages/en";
 import {
+  deleteRunFiles,
   rerunToolRun,
   triggerRunFileDownload,
 } from "@/app/(inapp)/tools/_components/use-tool";
@@ -82,6 +83,22 @@ export default function ToolRuns() {
         latest?.items?.some((r) => r.status === "running") ? 3000 : 0,
     },
   );
+
+  const removeFiles = async (r: Run) => {
+    // Confirmed because it is irreversible and the row it acts on looks like a
+    // read-only history line.
+    if (!window.confirm(t("txn.tools.deleteConfirm"))) return;
+    setBusy(r.id);
+    setError(null);
+    try {
+      await deleteRunFiles(r.id);
+      void mutate();
+    } catch (e) {
+      setError((e as Error)?.message || t("tools.err.request"));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const rerun = async (r: Run) => {
     // A re-run costs credits. Saying so before it fires, not after, because the
@@ -199,6 +216,12 @@ export default function ToolRuns() {
                                 {busy === r.id ? t("txn.tools.rerunning") : t("txn.tools.rerun")}
                               </button>
                             )}
+                            <button type="button"
+                              disabled={busy === r.id}
+                              onClick={() => void removeFiles(r)}
+                              className="text-ink-400 hover:text-[#8A3A3A] disabled:opacity-40">
+                              {t("txn.tools.deleteFiles")}
+                            </button>
                             {r.files_expire_at && (
                               <span className="text-ink-400">
                                 {t("txn.tools.keptUntil", {

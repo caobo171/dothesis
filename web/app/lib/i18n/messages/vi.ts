@@ -353,6 +353,12 @@ export const vi: Record<MessageKey, string> = {
   "tools.doc.downloaded": "Đã tải về {name}",
   "tools.doc.rewritten_one": "đã viết lại {count} đoạn",
   "tools.doc.rewritten_other": "đã viết lại {count} đoạn",
+  "tools.doc.skipped_one":
+    "{count} đoạn giữ nguyên văn bản gốc — viết lại không thành công hoặc sẽ " +
+    "làm sai lệch số liệu, trích dẫn.",
+  "tools.doc.skipped_other":
+    "{count} đoạn giữ nguyên văn bản gốc — viết lại không thành công hoặc sẽ " +
+    "làm sai lệch số liệu, trích dẫn.",
   "tools.doc.unchanged": "Tiêu đề, bảng và đánh số giữ nguyên.",
   "tools.doc.caveatBefore":
     "Bảng và tiêu đề không bao giờ bị viết lại, và lô nào mà bản viết lại làm sai " +
@@ -381,6 +387,12 @@ export const vi: Record<MessageKey, string> = {
     "Viết lại cả tài liệu cần tệp .docx — PDF không có đoạn văn sửa được.",
   "tools.err.readDoc": "Không đọc được tài liệu ({status}).",
   "tools.err.rewriteFailed": "Việc viết lại không hoàn tất ({status}).",
+  "tools.err.docTimeout":
+    "Quá lâu nên đã dừng chờ. Tài liệu của bạn không bị thay đổi — hãy thử lại, " +
+    "hoặc tách thành nhiều tệp nhỏ hơn.",
+  "tools.err.docConnection":
+    "Mất kết nối tới máy chủ trước khi tài liệu trả về. Tài liệu của bạn không bị " +
+    "thay đổi — hãy thử lại.",
 
   // --- /transactions — nơi sinh viên vào xem credit đã đi đâu ---
   "txn.title": "Giao dịch",
@@ -423,6 +435,21 @@ export const vi: Record<MessageKey, string> = {
   "txn.tools.ok": "Xong",
   "txn.tools.failed": "Chưa xong",
   "txn.tools.free": "Miễn phí",
+  // --- tệp đã lưu + tiến độ ---
+  "txn.tools.running": "Đang chạy — {done}/{total}",
+  "txn.tools.runningPlain": "Đang chạy…",
+  "txn.tools.partial":
+    "{done} đoạn đã viết lại · {skipped} đoạn giữ nguyên văn bản gốc",
+  "txn.tools.dlInput": "Tệp gốc",
+  "txn.tools.dlOutput": "Kết quả",
+  "txn.tools.rerun": "Chạy lại",
+  "txn.tools.rerunning": "Đang chạy…",
+  "txn.tools.rerunConfirm":
+    "Chạy lại tài liệu này? Lượt chạy lại vẫn tốn credit như lần đầu.",
+  "txn.tools.keptUntil": "giữ đến {date}",
+  "txn.tools.deleteFiles": "Xoá tệp",
+  "txn.tools.deleteConfirm":
+    "Xoá các tệp đã lưu của lượt chạy này? Không khôi phục được — lượt chạy vẫn nằm trong lịch sử.",
   "txn.tools.units": "· {count} nguồn",
   "txn.tools.shortfall": "{count} chưa trừ — số dư không đủ",
 

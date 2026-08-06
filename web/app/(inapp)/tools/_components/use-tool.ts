@@ -108,8 +108,18 @@ export async function extractFileText(file: File, t: Translate): Promise<string>
   return body.text as string;
 }
 
-/** Bearer + multipart, shared by the document routes. */
-async function postFile(path: string, file: File): Promise<Response> {
+/**
+ * Bearer + multipart, shared by the document routes.
+ *
+ * `timeoutMs` is not optional decoration: the document routes hold one request
+ * open for the whole walk, and a fetch whose connection dies mid-flight (the
+ * API worker restarting under it — a dev `--reload`, a deploy) can hang
+ * forever instead of rejecting. Without a deadline the caller's spinner has no
+ * exit at all, which is exactly what a student saw: "Đang viết lại…" with a
+ * dead socket behind it. Pass a bound generous enough for the real job; the
+ * point is that one exists.
+ */
+async function postFile(path: string, file: File, timeoutMs?: number): Promise<Response> {
   const { tokenStore } = await import("@/app/lib/tokenStore");
   const token = tokenStore.get();
   const base = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
@@ -119,7 +129,125 @@ async function postFile(path: string, file: File): Promise<Response> {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: fd,
+    signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
   });
+}
+
+/**
+ * How long a document walk may take before we call it dead.
+ *
+ * Scaled by the batch count the free scan already reported, because "too long"
+ * for a 3-passage abstract and for a 70-passage thesis are different numbers by
+ * an order of magnitude. 3 minutes per batch is deliberately loose — a batch is
+ * one reasoning-model call and the provider SDK's own per-call ceiling is 10
+ * minutes — so this fires for a connection that has actually died, not for a
+ * run that is merely slow. Cancelling real work the student is billed for is
+ * the worse failure of the two.
+ */
+function docTimeoutMs(passages: number | null | undefined): number {
+  return 120_000 + Math.max(1, passages || 1) * 180_000;
+}
+
+/**
+ * Turn a failed document fetch into something a student can act on.
+ *
+ * A timeout and a dropped connection both arrive here as exceptions with no
+ * HTTP status, and both used to surface as nothing at all — the spinner simply
+ * never stopped. They mean different things ("still running, we stopped
+ * waiting" vs "the server went away"), so they get different messages.
+ */
+function docRequestError(e: unknown, t: Translate): Error {
+  const name = (e as Error)?.name;
+  if (name === "TimeoutError" || name === "AbortError") {
+    return new Error(t("tools.err.docTimeout"));
+  }
+  if (e instanceof TypeError) return new Error(t("tools.err.docConnection"));
+  return e instanceof Error ? e : new Error(t("tools.err.request"));
+}
+
+/**
+ * Send the browser to a run's stored input or output .docx.
+ *
+ * Same shape as triggerUploadDownload: mint a token scoped to this exact run
+ * AND half, then navigate. The scope names the half so a leaked URL opens one
+ * file rather than both.
+ */
+export async function triggerRunFileDownload(runId: string, which: "input" | "output") {
+  const { mintStreamToken } = await import("@/app/lib/api");
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
+  const st = await mintStreamToken(`tool-run-file:${runId}/${which}`);
+  const base = apiBase || "/api/v1";
+  window.location.href =
+    `${base}/tools/runs/${runId}/file/${which}?st=${encodeURIComponent(st)}`;
+}
+
+/** Delete a run's stored files now, without waiting out the retention window. */
+export async function deleteRunFiles(runId: string): Promise<number> {
+  const r = (await apiFetch(`/tools/runs/${runId}/files/delete`, {
+    method: "POST", body: {},
+  })) as { deleted?: number };
+  return r?.deleted ?? 0;
+}
+
+export type RunProgress = { status: string; done: number; total: number };
+
+/** Where a run has got to. Polled while a document walk is open. */
+export async function fetchRunProgress(runId: string): Promise<RunProgress | null> {
+  try {
+    return (await apiFetch(`/tools/runs/${runId}/progress`, {
+      method: "POST", body: {},
+    })) as RunProgress;
+  } catch {
+    // A progress poll that fails must never surface as a run failure — the
+    // rewrite is still going, we just cannot say how far along it is.
+    return null;
+  }
+}
+
+/**
+ * Run a stored document through its tool again.
+ *
+ * Billed like any other run, because it is one: the model does the work again
+ * in full. The caller is responsible for saying so before it fires.
+ */
+export async function rerunToolRun(
+  runId: string,
+  filename: string,
+  t: Translate,
+  passages?: number | null,
+): Promise<{ blob: Blob; filename: string; credits: number | null }> {
+  const { tokenStore } = await import("@/app/lib/tokenStore");
+  const token = tokenStore.get();
+  const base = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
+  let res: Response;
+  try {
+    res = await fetch(`${base}/tools/runs/${runId}/rerun`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ access_token: token }),
+      // The original run recorded its own batch count, so the deadline is the
+      // same one that run had. Falling back to 60 rather than to 1 for a row
+      // that predates progress tracking: guessing "one batch" would abort a
+      // thesis re-run after five minutes, and a deadline that is too generous
+      // only delays an error message, while one that is too tight destroys
+      // work the student is paying for.
+      signal: AbortSignal.timeout(docTimeoutMs(passages || 60)),
+    });
+  } catch (e) {
+    throw docRequestError(e, t);
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(
+      body?.detail?.error?.message || t("tools.err.rewriteFailed", { status: res.status }),
+    );
+  }
+  const v = res.headers.get("X-Credits-Charged");
+  return {
+    blob: await res.blob(),
+    filename,
+    credits: v === null ? null : Number(v),
+  };
 }
 
 export type DocScan = {
@@ -188,13 +316,22 @@ export async function citeDocument(
   file: File,
   addMissing: boolean,
   t: Translate,
+  passages?: number | null,
 ): Promise<{
   blob: Blob; filename: string; credits: number | null;
   resolved: number | null; unresolved: number | null; weak: number | null;
   uncited: number | null;
   added: number | null; marked: number | null; linked: number | null;
 }> {
-  const res = await postFile(`/tools/document/cite?add_missing=${addMissing}`, file);
+  let res: Response;
+  try {
+    // Same deadline as the rewrite: this route holds one request open across a
+    // CrossRef lookup per source plus phase B's model calls.
+    res = await postFile(
+      `/tools/document/cite?add_missing=${addMissing}`, file, docTimeoutMs(passages));
+  } catch (e) {
+    throw docRequestError(e, t);
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(
@@ -232,8 +369,17 @@ export async function citeDocument(
 export async function humanizeDocument(
   file: File,
   t: Translate,
-): Promise<{ blob: Blob; filename: string; credits: number | null; rewritten: number | null }> {
-  const res = await postFile("/tools/document/humanize", file);
+  passages?: number | null,
+): Promise<{
+  blob: Blob; filename: string; credits: number | null;
+  rewritten: number | null; skipped: number | null;
+}> {
+  let res: Response;
+  try {
+    res = await postFile("/tools/document/humanize", file, docTimeoutMs(passages));
+  } catch (e) {
+    throw docRequestError(e, t);
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(
@@ -250,5 +396,10 @@ export async function humanizeDocument(
     filename: `${stem}-humanized.docx`,
     credits: num("X-Credits-Charged"),
     rewritten: num("X-Paragraphs-Rewritten"),
+    // Read at last: the server has always sent this and the client always
+    // dropped it, so a run where the provider failed on half the batches
+    // reported only its successes and the student had to diff the file to find
+    // out. They paid for those attempts; they get told about them.
+    skipped: num("X-Paragraphs-Skipped"),
   };
 }

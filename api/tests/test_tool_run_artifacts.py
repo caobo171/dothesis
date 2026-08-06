@@ -452,3 +452,86 @@ def test_a_non_document_tool_cannot_be_rerun(dl_client):
     r = dl_client.post(f"/api/v1/tools/runs/{run.id}/rerun",
                        json={"access_token": token})
     assert r.status_code == 422
+
+
+# --- delete now -----------------------------------------------------------
+
+def test_the_owner_can_delete_the_files_before_they_expire(dl_client, monkeypatch):
+    from unittest.mock import MagicMock
+    fake = MagicMock()
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: fake)
+
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u)
+    r = dl_client.post(f"/api/v1/tools/runs/{run.id}/files/delete",
+                       json={"access_token": token})
+    assert r.status_code == 200 and r.json()["deleted"] == 2
+    assert fake.delete_object.call_count == 2
+    with Session() as s:
+        row = s.get(ToolRun, run.id)
+        assert row is not None                      # the billing record stays
+        assert row.input_s3_uri is None and row.output_s3_uri is None
+
+
+def test_deleting_twice_is_not_an_error(dl_client, monkeypatch):
+    from unittest.mock import MagicMock
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: MagicMock())
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u, input_s3_uri=None, output_s3_uri=None)
+    r = dl_client.post(f"/api/v1/tools/runs/{run.id}/files/delete",
+                       json={"access_token": token})
+    assert r.status_code == 200 and r.json()["deleted"] == 0
+
+
+def test_an_admin_cannot_delete_someone_elses_files(dl_client, monkeypatch):
+    """Reading a student's run is allowed; destroying it is not."""
+    from unittest.mock import MagicMock
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: MagicMock())
+    owner, _ = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, owner)
+    _, admin_token = _login(dl_client, email=ADMIN_EMAIL)
+    assert dl_client.post(f"/api/v1/tools/runs/{run.id}/files/delete",
+                          json={"access_token": admin_token}).status_code == 404
+    with Session() as s:
+        assert s.get(ToolRun, run.id).input_s3_uri is not None
+
+
+def test_a_failed_s3_delete_leaves_the_row_pointing_at_the_file(dl_client, monkeypatch):
+    """Clearing the URI on a failed delete would orphan the object with nothing
+    left to retry it — the nightly purge finds it only while the row points."""
+    from unittest.mock import MagicMock
+    fake = MagicMock()
+    fake.delete_object.side_effect = RuntimeError("s3 down")
+    monkeypatch.setattr("app.routers.tools.s3_from_env", lambda: fake)
+    u, token = _login(dl_client)
+    Session = get_session_factory()
+    with Session() as s:
+        run = _run(s, u)
+    r = dl_client.post(f"/api/v1/tools/runs/{run.id}/files/delete",
+                       json={"access_token": token})
+    assert r.status_code == 502
+    with Session() as s:
+        assert s.get(ToolRun, run.id).input_s3_uri is not None
+
+
+# --- cite progress --------------------------------------------------------
+
+def test_cite_docx_reports_progress_across_both_phases():
+    """Phase A is a CrossRef lookup per citation and phase B a model call per
+    batch. A bar that sits at 0% through all of phase A reads as a stuck tool."""
+    from orchestrator.tools.cite_docx import cite_docx
+
+    seen: list[tuple[int, int]] = []
+    body = _docx_bytes()
+    cite_docx(body, add_missing=False,
+              resolve_fn=lambda c, hint: None,
+              on_progress=lambda done, total: seen.append((done, total)))
+    # Always at least the opening call, so the denominator is known up front.
+    assert seen and seen[0][0] == 0
+    assert all(d <= tot for d, tot in seen)

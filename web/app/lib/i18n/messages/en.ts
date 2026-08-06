@@ -370,6 +370,12 @@ export const en = {
   "tools.doc.downloaded": "{name} downloaded",
   "tools.doc.rewritten_one": "{count} paragraph rewritten",
   "tools.doc.rewritten_other": "{count} paragraphs rewritten",
+  "tools.doc.skipped_one":
+    "{count} paragraph kept its original text — its rewrite failed or would " +
+    "have changed a number or citation.",
+  "tools.doc.skipped_other":
+    "{count} paragraphs kept their original text — their rewrite failed or " +
+    "would have changed a number or citation.",
   "tools.doc.unchanged": "Headings, tables and numbering are unchanged.",
   "tools.doc.caveatBefore":
     "Tables and headings are never rewritten, and any batch whose rewrite would " +
@@ -398,6 +404,12 @@ export const en = {
     "Document rewriting needs a .docx — a PDF has no editable paragraphs.",
   "tools.err.readDoc": "Could not read the document ({status}).",
   "tools.err.rewriteFailed": "The rewrite did not complete ({status}).",
+  "tools.err.docTimeout":
+    "This took too long and we stopped waiting. Your document was not changed — " +
+    "try again, or split it into smaller files.",
+  "tools.err.docConnection":
+    "The connection to the server was lost before the document came back. Your " +
+    "document was not changed — try again.",
 
   // --- /transactions — where a student goes to ask what happened to their credits ---
   "txn.title": "Transactions",
@@ -440,6 +452,21 @@ export const en = {
   "txn.tools.ok": "Done",
   "txn.tools.failed": "Didn't finish",
   "txn.tools.free": "Free",
+  // --- artifacts + live progress ---
+  "txn.tools.running": "Running — {done}/{total}",
+  "txn.tools.runningPlain": "Running…",
+  "txn.tools.partial":
+    "{done} rewritten · {skipped} kept their original text",
+  "txn.tools.dlInput": "Original file",
+  "txn.tools.dlOutput": "Result",
+  "txn.tools.rerun": "Run again",
+  "txn.tools.rerunning": "Running…",
+  "txn.tools.rerunConfirm":
+    "Run this document through the tool again? It costs credits, the same as the first run.",
+  "txn.tools.keptUntil": "kept until {date}",
+  "txn.tools.deleteFiles": "Delete files",
+  "txn.tools.deleteConfirm":
+    "Delete the stored files for this run? This cannot be undone — the run itself stays in your history.",
   "txn.tools.units": "· {count} sources",
   "txn.tools.shortfall": "{count} not charged — your balance was short",
 
