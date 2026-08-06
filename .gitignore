@@ -94,3 +94,4 @@ engine/tools/mermaid_cli/node_modules/
 engine/tools/mermaid_cli/package-lock.json
 engine/tools/mermaid_cli/*.png
 engine/tools/mermaid_cli/*.svg
+.gstack/
