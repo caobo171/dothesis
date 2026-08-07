@@ -1,3 +1,58 @@
 {
-  "anchors": []
+  "anchors": [
+    {
+      "id": "vi_ketqua_efa",
+      "language": "vi",
+      "file": "vi_ketqua_efa.txt",
+      "desc": "PICK FOR: quantitative results chapters reporting SPSS/AMOS/SmartPLS output — Cronbach's Alpha, corrected item-total correlation, EFA, KMO and Bartlett, Eigenvalue, factor loadings, total variance extracted — written as running prose that walks the reader table by table. NOT FOR: literature review, methodology, or discussion."
+    },
+    {
+      "id": "vi_banluan_hoiquy",
+      "language": "vi",
+      "file": "vi_banluan_hoiquy.txt",
+      "desc": "PICK FOR: discussion sections that interpret regression or path results — quoting standardised beta coefficients and p-values, ranking predictors by effect size, dropping non-significant variables, and saying which prior studies each finding agrees or disagrees with. NOT FOR: reporting raw statistical output with no interpretation, or methodology."
+    },
+    {
+      "id": "vi_phuongphap_khaosat",
+      "language": "vi",
+      "file": "vi_phuongphap_khaosat.txt",
+      "desc": "PICK FOR: methodology chapters describing survey design — why these sites or organisations were chosen, sample size rules of thumb (Hair et al.), questionnaires sent versus returned versus valid, how enumerators collected responses, fieldwork dates, and the Likert scale used. NOT FOR: results, or theory."
+    },
+    {
+      "id": "vi_tongquan_nghiencuu",
+      "language": "vi",
+      "file": "vi_tongquan_nghiencuu.txt",
+      "desc": "PICK FOR: literature review sections that walk study by study through prior research — naming each author and year, saying what construct they measured, in which country or sector, with what sample, and what they concluded. NOT FOR: reporting the author's own results, or methodology."
+    },
+    {
+      "id": "en_results_sem",
+      "language": "en",
+      "file": "en_results_sem.txt",
+      "desc": "PICK FOR: quantitative results chapters written in English — Cronbach's alpha and KMO thresholds, factor loadings, adjusted R squared and the F test, then standardised beta coefficients ranked predictor by predictor with each hypothesis declared accepted or rejected. NOT FOR: methodology, literature review, or discussion that argues against prior studies."
+    },
+    {
+      "id": "en_methodology_survey",
+      "language": "en",
+      "file": "en_methodology_survey.txt",
+      "desc": "PICK FOR: methodology chapters written in English that narrate how the instrument was built and administered — Likert scale and items per construct, a pilot round and what the pilot respondents complained about, how the questionnaire was fixed afterwards, where and when responses were collected, and the sampling rule. NOT FOR: reporting statistical output, or interpreting findings."
+    },
+    {
+      "id": "en_discussion",
+      "language": "en",
+      "file": "en_discussion.txt",
+      "desc": "PICK FOR: discussion sections in English that take each supported factor in turn, say which prior study the finding agrees with, explain what a negative coefficient means in practice, and draw a management implication from it. NOT FOR: first reporting of raw statistical output, methodology, or the introduction."
+    },
+    {
+      "id": "en_litreview",
+      "language": "en",
+      "file": "en_litreview.txt",
+      "desc": "PICK FOR: literature review sections in English that build on a named theory or model — where it came from, what it explains well, what it fails to capture in this context, and which extra constructs the study therefore adds. NOT FOR: reporting the author's own results, methodology, or a problem statement."
+    },
+    {
+      "id": "en_intro_problem",
+      "language": "en",
+      "file": "en_intro_problem.txt",
+      "desc": "PICK FOR: introductions in English that move from sector context and national statistics, to why the topic matters, to the gap left by prior studies, and finally to the research question and a preview of what the study found. NOT FOR: results, methodology, or discussion."
+    }
+  ]
 }

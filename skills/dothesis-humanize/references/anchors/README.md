@@ -4,10 +4,12 @@ An anchor is ~3 paragraphs (250–400 words) of **real human prose**. The
 humanize pass shows it to the model as a voice to mimic — never as content to
 copy.
 
-**This directory ships empty on purpose.** Anchors are real writing by real
-people; they have to be supplied, not generated. Until one is installed,
-`humanize_text` refuses to run and asks the student for 150 words of their own
-writing instead. That refusal is the correct behaviour — see below.
+**Anchors are real writing by real people; they have to be supplied, not
+generated.** Until one is installed for a language, `humanize_text` refuses to
+run in that language and asks the student for 150 words of their own writing
+instead. That refusal is the correct behaviour — see below. Four Vietnamese and
+five English anchors are now installed; `PROVENANCE.md` says where each came
+from, what was rejected, and why.
 
 ## The rule, and why it isn't negotiable
 
@@ -48,6 +50,29 @@ wants an anchor that is itself a results chapter reporting real numbers.
 Do not use: anything drafted with AI assistance, anything published after ~2022
 unless you know its provenance, machine-translated text, or textbook prose.
 
+## What to install here for English — the rule inverts
+
+English academic prose is the most heavily crawled text there is, so "not in the
+training corpus" is not achievable. Chase register distance instead, and note
+that it points the opposite way from what you'd expect:
+
+> The anchor must **not** be polished native-speaker academic English.
+
+Polished native English is the model's default output register, so an anchor
+written in it teaches the rewrite to move *toward* the thing detectors flag.
+This was measured on a real submission on 2026-08-06/07: on the paragraphs the
+pass rewrote, the Turnitin flag rate went from 16.4% to 36.6%, while
+byte-identical control paragraphs moved 0.1 points. The cause was the rewrite
+sanding a non-native writer's awkward phrasing into canonical collocations.
+
+So the English anchors are competent non-native academic writing — Vietnamese
+researchers writing English — with the unidiomatic collocations, uneven rhythm
+and occasional over-formality left in. Keep every imperfection; do not tidy an
+anchor. Source them from English-language articles by Vietnamese or regional
+authors published before 2022, and reject anything mirrored on ResearchGate,
+academia.edu or a document aggregator. Full procedure:
+`docs/anchor-sourcing-prompt-en.md`.
+
 ## Installing one
 
 1. Drop the text in as `<id>.txt`, UTF-8, no front matter — just the prose.
@@ -79,8 +104,14 @@ the source. With one anchor installed the router is skipped entirely.
 ./api/run.sh python -c "from orchestrator.tools.humanize import load_anchors; print([a['id'] for a in load_anchors('vi')])"
 ```
 
-Tests point `DOTHESIS_ANCHOR_DIR` at a temp directory, so adding real anchors
-here never changes test behaviour.
+`DOTHESIS_ANCHOR_DIR` overrides this directory if you need to point the loader
+somewhere else. The suite does not set it — the tests that exercise the
+`no_anchor` path stub the tool's return value rather than relying on this
+directory being empty, so installing real anchors here does not change test
+behaviour. Verified against the full suite when the first four were added.
+
+What is installed, where it came from, what was rejected and why: see
+`PROVENANCE.md`.
 
 ## Known weak registers
 
