@@ -263,17 +263,19 @@ def compute_status_map(cs: ContextStore) -> ModuleStatusMap:
     # transitively (via ContextStore in readiness()) — a top-level import
     # would create a cycle.
     from orchestrator.artifacts import (
-        dod_analysis, dod_design, dod_literature, dod_topic,
+        dod_analysis, dod_design, dod_literature, dod_topic, dod_writing,
     )
 
-    # M5 splits into per-chapter artifacts (see artifacts.ARTIFACTS), so
-    # there's no module-level DoD validator yet — done fires via confirmed_at
-    # alone. PR #3 (WizardAgent for M5) adds a module-level dod_writing.
+    # M5 also splits into per-chapter artifacts (see artifacts.ARTIFACTS), but
+    # it needs a module-level DoD too: without one `done` fired on confirmed_at
+    # alone, so a thesis with every chapter written reported in_progress and no
+    # amount of work could change that.
     _dod_by_module = {
         "M1": dod_topic,
         "M2": dod_literature,
         "M3": dod_design,
         "M4": dod_analysis,
+        "M5": dod_writing,
     }
 
     out: dict[str, ModuleStatus] = {}

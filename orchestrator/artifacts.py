@@ -186,6 +186,53 @@ def dod_analysis(slice_: dict) -> DoD:
     return DoD(done=not gaps, gaps=gaps)
 
 
+# The chapters a thesis must actually have prose for before M5 can call itself
+# done. Deliberately not all six: Vietnamese theses routinely merge discussion
+# and conclusion into one final chapter ("KẾT LUẬN VÀ KHUYẾN NGHỊ"), so
+# demanding both separately would make a finished thesis report unfinished
+# forever — the failure dod_analysis had.
+_M5_CORE_CHAPTERS = ("intro", "lit_review", "methodology", "results")
+_M5_CLOSING_CHAPTERS = ("discussion", "conclusion")
+
+
+def _m5_chapter_prose(slice_: dict) -> dict[str, str]:
+    """Chapter name -> prose, from EITHER M5 shape.
+
+    `chapters` is the editor's canonical dict, but it is only materialised when
+    the student opens the editor (api/app/routers/m5_editor.py). The
+    conversational, compose and import paths all write the flat `final_sections`
+    list instead. Reading only one shape would make M5 completable only after
+    visiting a particular screen.
+    """
+    slice_ = slice_ or {}
+    chapters = slice_.get("chapters")
+    if isinstance(chapters, dict) and chapters:
+        return {name: (c or {}).get("prose") or ""
+                for name, c in chapters.items() if isinstance(c, dict)}
+    from orchestrator.tools.m5_writing import chapters_from_final_sections
+
+    mapped = chapters_from_final_sections(slice_.get("final_sections") or [])
+    return {name: (c or {}).get("prose") or "" for name, c in mapped.items()}
+
+
+def dod_writing(slice_: dict) -> DoD:
+    """M5 writing: prose for the core chapters, plus a closing chapter.
+
+    M5 had no module-level DoD at all — `done` fired on `confirmed_at` alone —
+    so a thesis with every chapter written still reported `in_progress` and no
+    amount of work could change that. This is the same shape of bug as
+    dod_analysis: module state decided by bookkeeping rather than by whether the
+    work exists.
+    """
+    prose = _m5_chapter_prose(slice_)
+    have = {name for name, text in prose.items() if (text or "").strip()}
+    gaps = [f"chapter '{n}' has no prose yet" for n in _M5_CORE_CHAPTERS
+            if n not in have]
+    if not have & set(_M5_CLOSING_CHAPTERS):
+        gaps.append("no discussion or conclusion chapter yet")
+    return DoD(done=not gaps, gaps=gaps)
+
+
 def dod_chapter(chapter_name: str) -> Callable[[dict], DoD]:
     """Factory: DoD for one M5 chapter — done when m5_writing.chapters[name].prose
     is non-blank. Chapters are separate artifacts so a student stuck on a single

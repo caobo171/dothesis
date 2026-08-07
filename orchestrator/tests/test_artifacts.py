@@ -182,6 +182,59 @@ def test_dod_analysis_structured_path_is_unchanged():
     assert dod_analysis(partial).done is False
 
 
+def _chapter_set(*names) -> dict:
+    return {"chapters": {n: {"name": n, "prose": f"{n} prose."} for n in names}}
+
+
+_CORE = ("intro", "lit_review", "methodology", "results")
+
+
+def test_dod_writing_done_with_the_core_chapters_and_a_conclusion():
+    from orchestrator.artifacts import dod_writing
+    assert dod_writing(_chapter_set(*_CORE, "conclusion")).done is True
+
+
+def test_dod_writing_accepts_a_discussion_instead_of_a_conclusion():
+    """Vietnamese theses routinely merge the two into one final chapter
+    ("KẾT LUẬN VÀ KHUYẾN NGHỊ"). Demanding both separately is how a finished
+    thesis reports unfinished forever."""
+    from orchestrator.artifacts import dod_writing
+    assert dod_writing(_chapter_set(*_CORE, "discussion")).done is True
+
+
+def test_dod_writing_names_the_chapters_that_are_missing():
+    from orchestrator.artifacts import dod_writing
+    result = dod_writing(_chapter_set("intro", "lit_review"))
+    assert result.done is False
+    assert any("methodology" in g for g in result.gaps)
+    assert any("results" in g for g in result.gaps)
+
+
+def test_dod_writing_reads_final_sections_when_the_editor_shape_is_absent():
+    """`chapters` is only materialised when the student opens the editor. The
+    conversational and export paths write `final_sections`, and a module that
+    could only complete after opening an editor would be the dod_analysis bug
+    again."""
+    from orchestrator.artifacts import dod_writing
+    slice_ = {"final_sections": [
+        {"chapter_name": n, "prose": f"{n} prose."}
+        for n in (*_CORE, "conclusion")]}
+    assert dod_writing(slice_).done is True
+
+
+def test_dod_writing_ignores_a_chapter_with_blank_prose():
+    from orchestrator.artifacts import dod_writing
+    slice_ = _chapter_set(*_CORE, "conclusion")
+    slice_["chapters"]["results"]["prose"] = "   "
+    assert dod_writing(slice_).done is False
+
+
+def test_dod_writing_empty_slice_is_not_done():
+    from orchestrator.artifacts import dod_writing
+    assert dod_writing({}).done is False
+    assert dod_writing(None).done is False
+
+
 def test_dod_chapter_done_when_prose_present():
     slice_ = {"chapters": {"methodology": {"prose": "Our design uses..."}}}
     assert dod_chapter("methodology")(slice_).done is True
