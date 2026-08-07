@@ -201,28 +201,27 @@ def test_anchors_filter_by_language(tmp_path, monkeypatch):
 
 # --- the user anchor has to match the document's language ----------------
 #
-# Measured on a live run: an English dissertation was rewritten against the
-# student's stored anchor, 566 characters of casual Vietnamese about AI at work.
-# A Vietnamese anchor carries no usable rhythm for English prose, so the pass
-# degenerated into the unanchored "make this read better" rewrite — the one
+# Measured on run 13 (2026-08-06): an English dissertation was rewritten using
+# this user's stored anchor, 566 characters of casual Vietnamese about AI at
+# work. A Vietnamese anchor carries no usable rhythm for English prose, so the
+# pass degenerated into an unanchored "make this read better" rewrite — the one
 # configuration the anchor research says is worse than doing nothing. Turnitin
 # scored the paragraphs it touched 16.4% -> 36.6%.
 
 MISMATCH_DOC = ("The results in Table 4.3 show that leadership style predicts "
-                "employee performance, with p = 0.003 (Bass, 1994).")
+          "employee performance, with p = 0.003 (Bass, 1994).")
 
-MISMATCH_VI_ANCHOR = ("Mình cảm thấy hiện nay AI đang đóng vai trò càng ngày "
-                      "càng quan trọng, thành một phần không thể thay thế.")
+MISMATCH_VI_ANCHOR = ("Mình cảm thấy hiện nay AI đang đóng vai trò càng ngày càng quan "
+             "trọng, thành một phần không thể thay thế của con người.")
 
 
 def test_a_vietnamese_user_anchor_is_refused_for_an_english_document(
         tmp_path, monkeypatch):
     monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
-    r = H.humanize_prose(MISMATCH_DOC, user_anchor=MISMATCH_VI_ANCHOR,
-                         llm=FakeLLM("rewritten"))
+    r = H.humanize_prose(MISMATCH_DOC, user_anchor=MISMATCH_VI_ANCHOR, llm=FakeLLM("rewritten"))
     assert r["ok"] is False
     assert r["error"] == "no_anchor"
-    assert r["text"] == MISMATCH_DOC     # the original survives, unrewritten
+    assert r["text"] == MISMATCH_DOC       # the original survives, unrewritten
 
 
 def test_a_mismatched_user_anchor_falls_back_to_the_library(
@@ -232,19 +231,17 @@ def test_a_mismatched_user_anchor_falls_back_to_the_library(
     (tmp_path / "manifest.json").write_text(json.dumps({"anchors": [
         {"id": "en_lib", "language": "en", "file": "en.txt", "desc": "d"},
     ]}), encoding="utf-8")
-    good = ("Table 4.3 shows leadership style predicts performance, "
-            "p = 0.003 (Bass, 1994).")
-    r = H.humanize_prose(MISMATCH_DOC, user_anchor=MISMATCH_VI_ANCHOR,
-                         llm=FakeLLM(good))
+    good = "Table 4.3 shows leadership style predicts performance, p = 0.003 (Bass, 1994)."
+    r = H.humanize_prose(MISMATCH_DOC, user_anchor=MISMATCH_VI_ANCHOR, llm=FakeLLM(good))
     assert r["ok"] is True
-    assert r["anchor"] == "en_lib"       # library anchor, NOT user_supplied
+    assert r["anchor"] == "en_lib"   # library anchor, NOT user_supplied
 
 
 def test_an_unaccented_vietnamese_anchor_still_serves_a_vietnamese_document(
         tmp_path, monkeypatch):
-    """detect_language reads unaccented Vietnamese as "en" — its documented
-    limit. Only a CONFIDENT verdict may veto the student's own anchor, and "en"
-    is the absence of Vietnamese marks, not evidence of English."""
+    """detect_language reads unaccented Vietnamese as "en" — that is the
+    documented limit. Only a CONFIDENT verdict may veto the user's own anchor,
+    and "en" is the absence of Vietnamese marks, not evidence of English."""
     monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
     unaccented = "toi viet cai nay hoi con di hoc, luc do chua biet gi ve AI ca"
     assert H.detect_language(unaccented) == "en"     # the trap
@@ -331,7 +328,12 @@ def test_frozen_tokens_reach_the_rewrite_prompt(tmp_path, monkeypatch, user_anch
     H.humanize_prose(SRC, language="vi", user_anchor=user_anchor, llm=llm)
     prompt = llm.prompts[0]
     assert "0,412" in prompt and "Bảng 4.3" in prompt
-    assert "(nguyễn, 2019)" in prompt.lower()
+    # Cites are described in prose ("the citation Nguyễn (2019)"), never as the
+    # internal multiset key. The prompt may mention "bass|1994" as a FORBIDDEN
+    # example — that is deliberate instruction, not a protected-token listing.
+    assert "the citation" in prompt.lower()
+    assert "nguyễn" in prompt.lower() and "2019" in prompt
+    assert "nguyễn|2019" not in prompt.lower()
 
 
 class FakeScorer:
@@ -742,6 +744,73 @@ def test_vietnamese_still_routes_to_vietnamese(tmp_path, monkeypatch, user_ancho
     assert "in Vietnamese" in llm.prompts[0]
 
 
+# --- naturalness cuts the opposite way in English --------------------------
+#
+# Measured on a real submission, 2026-08-06/07. A UK business dissertation
+# written in English by a Vietnamese student was scored by Turnitin before and
+# after the pass; on the 40 paragraphs the pass actually rewrote the flag rate
+# went 16.4% -> 36.6%, while 226 byte-identical control paragraphs moved 0.1
+# points. The rewrites that did it look like this:
+#
+#   OLD  the mediating role of job satisfaction between each leadership style
+#   NEW  whether job satisfaction mediates the relationship between
+#   OLD  How much of the effect of each leadership style is transmitted
+#   NEW  To what extent is the effect of each leadership style transmitted
+#
+# The originals are a real non-native writer's English and that awkwardness is
+# the human fingerprint; the rewrite sanded it into canonical native-academic
+# collocations, which is exactly what a language model emits. The NATURALNESS
+# block was ASKING for that ("write English the way a native academic writer
+# actually writes it. Idiomatic word choice and collocations only"), so it now
+# has to be language-specific: right for Vietnamese, inverted for English.
+
+def test_the_english_prompt_does_not_ask_for_native_phrasing(
+        tmp_path, monkeypatch, user_anchor):
+    """The instruction that produced the measured regression must be gone."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    llm = FakeLLM(EN_OK)
+    H.humanize_prose(EN_SRC, language="en", user_anchor=user_anchor, llm=llm)
+    prompt = llm.prompts[0]
+    assert "native academic writer" not in prompt
+    assert "Idiomatic word choice and collocations only" not in prompt
+
+
+def test_the_english_prompt_keeps_the_writers_own_l2_phrasing(
+        tmp_path, monkeypatch, user_anchor):
+    """Not merely silent about polishing — it has to forbid it outright."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    llm = FakeLLM(EN_OK)
+    H.humanize_prose(EN_SRC, language="en", user_anchor=user_anchor, llm=llm)
+    prompt = llm.prompts[0]
+    assert "do not upgrade" in prompt.lower()
+    # The two measured rewrites are named, so the model has the shape of the
+    # mistake and not just an abstract rule.
+    assert "To what extent" in prompt
+    assert "mediates the relationship between" in prompt
+
+
+def test_the_english_prompt_still_bars_introducing_errors(
+        tmp_path, monkeypatch, user_anchor):
+    """Keeping awkwardness is not licence to break the student's grammar."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    llm = FakeLLM(EN_OK)
+    H.humanize_prose(EN_SRC, language="en", user_anchor=user_anchor, llm=llm)
+    assert "ungrammatical" in llm.prompts[0].lower()
+
+
+def test_the_vietnamese_prompt_still_asks_for_native_phrasing(
+        tmp_path, monkeypatch, user_anchor):
+    """Vietnamese is unchanged — the anchors there ARE off-distribution, and
+    stilted Vietnamese is a defect, not a fingerprint."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    llm = FakeLLM("Bảng 4.3 cho thấy β = 0,412, p = 0,003 (Nguyễn, 2019).")
+    H.humanize_prose(SRC, language="vi", user_anchor=user_anchor, llm=llm)
+    prompt = llm.prompts[0]
+    assert "native academic writer" in prompt
+    assert "khảo sát" in prompt and "thu thập từ" in prompt
+    assert "do not upgrade" not in prompt.lower()
+
+
 # --- AI-tell list, second pass --------------------------------------------
 #
 # Additions taken from a competing humanizer prompt, kept to the parts that are
@@ -989,13 +1058,167 @@ def test_the_repair_prompt_never_shows_internal_token_syntax(tmp_path, monkeypat
     assert "Bass" in repair and "1994" in repair
 
 
-def test_a_rewrite_carrying_our_token_syntax_is_rejected(tmp_path, monkeypatch,
-                                                         user_anchor):
-    """Defence in depth: even if a prompt leaks it again, the gate now sees it."""
+def test_a_rewrite_carrying_our_token_syntax_is_scrubbed_to_clean_prose(
+        tmp_path, monkeypatch, user_anchor):
+    """The classic ship bug: model pastes bass|1994 next to the author run.
+
+    Deterministic scrub drops the `surname|` prefix and leaves the year, so the
+    student gets a usable citation without burning a repair round — and without
+    rejecting a rewrite that is otherwise fine.
+    """
     monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
-    src = "Theo lý thuyết nền (Bass và Avolio, 1994), lãnh đạo tác động tới hiệu suất."
-    corrupt = "Theo lý thuyết nền (Bass và Avolio, bass|1994), lãnh đạo tác động mạnh."
+    src = ("Theo lý thuyết nền (Bass và Avolio, 1994), lãnh đạo tác động tới "
+           "hiệu suất trong khách sạn.")
+    corrupt = ("Theo lý thuyết nền (Bass và Avolio, bass|1994), lãnh đạo tác "
+               "động tới hiệu suất trong khách sạn.")
     r = H.humanize_prose(src, language="vi", user_anchor=user_anchor,
-                         llm=FakeLLM(corrupt, corrupt))
+                         llm=FakeLLM(corrupt))
+    assert r["ok"] is True
+    assert "bass|1994" not in r["text"]
+    assert "|1994" not in r["text"]
+    assert "1994" in r["text"]
+    assert "Bass" in r["text"]
+
+
+def test_token_syntax_gate_rejects_when_still_present_after_scrub():
+    """Defence in depth: _verify still flags a leaked key the scrub missed."""
+    src = "Theo lý thuyết nền (Bass và Avolio, 1994), lãnh đạo tác động tới hiệu suất."
+    still_leaked = "Theo lý thuyết nền (Bass và Avolio, bass|1994), lãnh đạo."
+    # Call _verify on the UN-scrubbed string to pin the gate itself.
+    check = H._verify(src, still_leaked)
+    assert check["ok"] is False
+    assert "bass|1994" in check["token_syntax"]
+
+
+def test_scrub_token_syntax_leaves_year_only():
+    orig = "(Bass and Avolio, 1994); (Herzberg, 1959); (Blau, 1964)."
+    bad = "(Bass and Avolio, bass|1994); (Herzberg, herzberg|1959); (Blau, blau|1964)."
+    assert H._scrub_token_syntax(bad, orig) == orig
+
+
+def test_scrub_does_not_touch_pipe_forms_that_were_in_the_original():
+    """A student who somehow wrote word|year themselves keeps it."""
+    src = "See code|2020 in the appendix notes for the variable key."
+    assert H._scrub_token_syntax(src, src) == src
+
+
+def test_normalize_ref_labels_title_cases_structural_refs():
+    out = H._normalize_ref_labels(
+        "As shown in table 2.1 and later. table 4.2 presents chapter 5 and figure 1.1."
+    )
+    assert "table 2.1" not in out and "Table 2.1" in out
+    assert "table 4.2" not in out and "Table 4.2" in out
+    assert "Chapter 5" in out
+    assert "Figure 1.1" in out
+    vi = H._normalize_ref_labels("xem bảng 4.3 và hình 2.1 trong chương 3.")
+    assert "Bảng 4.3" in vi and "Hình 2.1" in vi and "Chương 3" in vi
+
+
+def test_restore_sentence_case_capitalises_mid_paragraph_openers():
+    out = H._restore_sentence_case(
+        "The model holds. results are stable. p = 0.03 is fine."
+    )
+    assert "Results are stable" in out
+    # Single-letter stats openers stay lowercase.
+    assert ". p = 0.03" in out
+
+
+def test_restore_sentence_case_spares_initials_and_abbreviations():
+    """Regression from a real re-run: the dot after an author's initial was
+    read as a sentence end, manufacturing "Bass, B.M. And Avolio" through the
+    entire reference list — and "e.g. The model" in body prose. A period whose
+    preceding token is a single letter (an initial, or the tail of e.g./i.e.)
+    or a listed abbreviation is not a sentence boundary."""
+    ref = ("Bass, B.M. and Avolio, B.J. (1994) Improving Organizational "
+           "Effectiveness.")
+    assert H._restore_sentence_case(ref) == ref
+    ed = ("In: Dunnette, M.D. and Hough, L.M. (eds.) Handbook of Industrial "
+          "Psychology.")
+    assert H._restore_sentence_case(ed) == ed
+    eg = "The effect holds in services, e.g. the hotel sector shows it clearly."
+    assert H._restore_sentence_case(eg) == eg
+    cf = "The 2013 sample differs, cf. the earlier cohort in most dimensions."
+    assert H._restore_sentence_case(cf) == cf
+    # A genuine sentence boundary is still repaired.
+    out = H._restore_sentence_case("The model holds. results are stable.")
+    assert "Results are stable" in out
+
+
+def test_content_expansion_is_rejected(tmp_path, monkeypatch, user_anchor):
+    """An abstract must not grow into a results summary under the length gate."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    src = (
+        "This dissertation investigates how leadership behaviour affects employee "
+        "performance in the Vietnamese hotel industry and whether job satisfaction "
+        "transmits part of that effect. Drawing on Full Range Leadership Theory, "
+        "the study specifies transformational, transactional and laissez-faire "
+        "leadership as three separate predictors of job satisfaction and employee "
+        "performance, with job satisfaction as mediator. A quantitative "
+        "cross-sectional survey was employed across hotels in Vietnam."
+    )
+    # Same frozen tokens (none, pure prose) but roughly 2× the words — the
+    # invention shape from the Turnitin-bound leadership-hotel abstract.
+    bloated = src + (
+        " Managerial recommendations are presented in descending order of total "
+        "effect for every supervisor tier. Employees under twenty-five and those "
+        "with less than three years of service reported significantly lower "
+        "satisfaction and performance across every measured dimension. The study "
+        "also compares three parallel leadership styles within one structural "
+        "model so that each path can be ranked against the others for training "
+        "investment decisions at property level and at chain level alike."
+    )
+    r = H.humanize_prose(src, language="en", user_anchor=user_anchor,
+                         llm=FakeLLM(bloated, bloated))
     assert r["ok"] is False
     assert r["text"] == src
+    assert r["error"] == "frozen_violation"
+    assert r.get("frozen", {}).get("length", {}).get("ok") is False
+
+
+def test_verify_length_allows_modest_rewording():
+    src = " ".join(["word"] * 50)
+    # +10 words under the extra-word floor — voice, not invention.
+    mild = src + " " + " ".join(["extra"] * 10)
+    assert H.verify_length(src, mild)["ok"] is True
+    # Ratio alone is not enough without absolute growth past the floor.
+    slightly = src + " " + " ".join(["extra"] * 20)
+    # 20 extra on 50 words is 1.4× but under the 25-word absolute floor → allow.
+    assert H.verify_length(src, slightly)["ok"] is True
+    heavy = src + " " + " ".join(["extra"] * 30)
+    assert H.verify_length(src, heavy)["ok"] is False
+
+
+def test_repair_prompt_names_length_bloat_without_token_keys(
+        tmp_path, monkeypatch, user_anchor):
+    """A bloated rewrite triggers one repair that names the length failure."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    long_src = (
+        "This dissertation investigates how leadership behaviour affects employee "
+        "performance in the Vietnamese hotel industry and whether job satisfaction "
+        "transmits part of that effect. Drawing on Full Range Leadership Theory "
+        "the study specifies three separate predictors of job satisfaction and "
+        "employee performance with job satisfaction as mediator across hotels."
+    )
+    bloated = long_src + (
+        " Managers should rank every training investment by total effect size "
+        "and prioritise transformational development for junior supervisors first "
+        "then cascade transactional routines through frontline teams over the "
+        "following quarter while monitoring laissez-faire incidence weekly."
+    )
+    fixed = (
+        "This dissertation examines how leadership behaviour shapes employee "
+        "performance in Vietnamese hotels and whether job satisfaction carries "
+        "part of that effect. Using Full Range Leadership Theory the study treats "
+        "three leadership styles as separate predictors of satisfaction and "
+        "performance with satisfaction as the mediator across hotel sites."
+    )
+    assert not H.verify_length(long_src, bloated)["ok"]
+    llm = FakeLLM(bloated, fixed)
+    r = H.humanize_prose(long_src, language="en", user_anchor=user_anchor, llm=llm)
+    assert len(llm.prompts) >= 2, "length failure should have triggered a repair call"
+    repair = llm.prompts[-1]
+    assert "longer" in repair.lower() or "scope" in repair.lower()
+    # Never re-introduce the pipe-key form as something to "put back".
+    assert "cite:" not in repair
+    assert r["ok"] is True
+    assert r["text"] == fixed

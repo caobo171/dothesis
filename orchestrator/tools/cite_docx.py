@@ -50,17 +50,15 @@ from .citations import (
     resolve_verbose, uses_vietnamese_convention,
 )
 from .crossref import search as crossref_search
-from .humanize_docx import _batches, _is_heading, _open, _set_paragraph_text
+from .humanize_docx import (
+    _batches, _is_heading, _open, _ref_heading_index, _set_paragraph_text)
 
 logger = logging.getLogger(__name__)
 
-# Where the reference list starts. Same vocabulary as the API's list checker;
-# the last match wins because the table of contents carries the words too.
-_REF_HEADING = re.compile(
-    r"^\s*(?:danh\s+m[ụu]c\s+)?(?:t[àa]i\s+li[ệe]u\s+tham\s+kh[ảa]o"
-    r"|references?|bibliography|works\s+cited)\s*:?\s*$",
-    re.I,
-)
+# The reference-heading vocabulary and its last-match-wins lookup now live in
+# humanize_docx (imported above): the humanizer needed the same boundary to
+# stop re-voicing bibliographies, and two regexes drifting apart is how the two
+# walks would one day disagree about where the reference list begins.
 
 # A paragraph shorter than this is a caption or a label — nothing to cite.
 _MIN_WORDS = 12
@@ -375,15 +373,6 @@ def _link_citations(paragraphs: list[Any], body_idx: range,
 
 
 # --- document structure -----------------------------------------------------
-
-def _ref_heading_index(paragraphs: list[Any]) -> int | None:
-    """Index of the reference-list heading, or None. Last match wins."""
-    found = None
-    for i, p in enumerate(paragraphs):
-        if _REF_HEADING.match((p.text or "").strip()):
-            found = i
-    return found
-
 
 def _body_range(paragraphs: list[Any]) -> range:
     """Paragraph indices that are prose, i.e. everything before the references.

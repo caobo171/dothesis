@@ -1061,8 +1061,7 @@ async def rerun_tool_run(run_id: int, body: RunIdBody, request: Request,
             out, report = await run_in_threadpool(
                 humanize_docx, source, user_anchor=anchor or None,
                 on_progress=_progress)
-            metrics = {"rewritten": report.get("rewritten", 0),
-                       "skipped": report.get("skipped", 0)}
+            metrics = _humanize_metrics(report)
             units, suffix = 0, "humanized"
         else:
             from orchestrator.tools.cite_docx import cite_docx  # noqa: PLC0415
@@ -1146,6 +1145,42 @@ def download_run_file(
 # ---------------------------------------------------------------------------
 # Document humanize — .docx in, .docx out, formatting intact
 # ---------------------------------------------------------------------------
+
+def _humanize_metrics(report: dict) -> dict:
+    """Flatten a humanize_docx report into a ToolRun.metrics dict.
+
+    The walk computes the exact reason each batch kept its original text, and
+    this router used to persist only {"rewritten", "skipped"} — so a real run
+    that left 4,990 words untouched had a row that could not answer "why".
+    Failures are aggregated per error KIND, in PARAGRAPHS (a batch entry
+    carries several) — counts, never prose, the line models.py::ToolRun draws.
+
+    Shared by /document/humanize and /runs/{id}/rerun so the re-run of a bad
+    document cannot be less debuggable than the run that made it bad.
+    """
+    m = {"rewritten": report.get("rewritten", 0),
+         "skipped": report.get("skipped", 0)}
+    if report.get("coverage") is not None:
+        m["coverage"] = report["coverage"]
+    # Skips the tool DECLINED to make (prose already good) recorded apart from
+    # skips where the run broke — without the split, a re-uploaded document
+    # that needed nothing reads identically to a run the provider dropped.
+    if report.get("declined") is not None:
+        m["declined"] = report["declined"]
+    # Whether the student got their own file back. Without this the history
+    # cannot distinguish "we rewrote little" from "we rewrote little AND handed
+    # the original back", and support would have to guess which bytes the
+    # download link holds.
+    if report.get("reverted"):
+        m["reverted"] = True
+    counts: dict[str, int] = {}
+    for f in report.get("failures") or []:
+        kind = str(f.get("error") or "unknown")
+        counts[kind] = counts.get(kind, 0) + int(f.get("paragraphs") or 0)
+    if counts:
+        m["failures"] = counts
+    return m
+
 
 class DocScanOut(BaseModel):
     ok: bool
@@ -1271,9 +1306,9 @@ async def humanize_document(request: Request, file: UploadFile = File(...),
         usage=report.get("usage") or [], duration_ms=t.ms,
         run_id=run_id, files=files, input_filename=file.filename,
         # The counts the response headers carried and the history threw away:
-        # a run that left half the document untouched now says so afterwards.
-        metrics={"rewritten": report.get("rewritten", 0),
-                 "skipped": report.get("skipped", 0)}).charged
+        # a run that left half the document untouched now says so afterwards —
+        # including WHY, per failure kind (see _humanize_metrics).
+        metrics=_humanize_metrics(report)).charged
 
     if not ok:
         raise HTTPException(422, detail={"error": {
@@ -1289,6 +1324,19 @@ async def humanize_document(request: Request, file: UploadFile = File(...),
             "X-Credits-Charged": str(charged),
             "X-Paragraphs-Rewritten": str(report.get("rewritten", 0)),
             "X-Paragraphs-Skipped": str(report.get("skipped", 0)),
+            # The share of eligible prose actually rewritten. The headless
+            # surfaces (auto-mode, partner API) read headers, not run history,
+            # and rewritten/skipped alone made callers do the division that
+            # nobody did — which is how 70% untouched passed unnoticed.
+            "X-Rewrite-Coverage": str(report.get("coverage", "")),
+            # The skip partition, carried the same way: declined = the guard
+            # refusing to make already-good prose worse, which is success. A
+            # 200 with X-Already-Human: 1 is "your writing already reads as
+            # human; nothing to change" — a sentence neither "done" nor
+            # "failed" can carry. "1"/"0" because every header here is a
+            # number, not a word.
+            "X-Paragraphs-Declined": str(report.get("declined", 0)),
+            "X-Already-Human": "1" if report.get("already_human") else "0",
         },
     )
 

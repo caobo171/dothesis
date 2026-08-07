@@ -454,6 +454,88 @@ def test_a_non_document_tool_cannot_be_rerun(dl_client):
     assert r.status_code == 422
 
 
+def test_the_failure_breakdown_survives_into_the_run_metrics(dl_client, monkeypatch):
+    """Regression, from a real run: humanize_docx computed the exact reason each
+    batch kept its original text and the router persisted only
+    {"rewritten", "skipped"} — so a dissertation that came back with 4,990 words
+    untouched had a row that could not answer "why". The per-kind counts (and
+    the coverage ratio) must land in ToolRun.metrics: counts, never prose, the
+    line models.py::ToolRun draws."""
+    from unittest.mock import MagicMock
+    monkeypatch.setattr("app.tool_artifacts.s3_from_env", lambda: MagicMock())
+    monkeypatch.setenv("S3_BUCKET", "b")
+    monkeypatch.setattr(
+        "orchestrator.tools.humanize_docx.humanize_docx",
+        lambda body, **kw: (body, {
+            "ok": True, "rewritten": 5, "skipped": 3, "coverage": 0.625,
+            "failures": [
+                {"paragraphs": 2, "error": "frozen_violation"},
+                {"paragraphs": 1, "error": "llm_failed", "retried": True},
+            ],
+            "usage": []}))
+
+    u, token = _login(dl_client)
+    r = dl_client.post(
+        "/api/v1/tools/document/humanize",
+        files={"file": ("t.docx", _docx_bytes(),
+                        "application/vnd.openxmlformats-officedocument"
+                        ".wordprocessingml.document")})
+    assert r.status_code == 200, r.text
+    # The headless surfaces read headers, not the DB — the ratio rides there too.
+    assert r.headers["X-Rewrite-Coverage"] == "0.625"
+
+    Session = get_session_factory()
+    with Session() as s:
+        row = (s.query(ToolRun)
+               .filter(ToolRun.user_id == u.id, ToolRun.tool == "humanize-docx")
+               .one())
+        assert row.metrics["rewritten"] == 5
+        assert row.metrics["skipped"] == 3
+        assert row.metrics["coverage"] == 0.625
+        # Aggregated by KIND in PARAGRAPHS — 2 lost to a frozen violation, 1 to
+        # a provider failure — so "why did the run skip text" is answerable
+        # from the row alone.
+        assert row.metrics["failures"] == {"frozen_violation": 2, "llm_failed": 1}
+
+
+def test_an_already_human_document_answers_200_not_422(dl_client, monkeypatch):
+    """Owner-measured flaw in the first coverage floor: a re-uploaded, already-
+    humanized document skips everything as flatter_than_original — the guard
+    declining to make good prose worse — and was answered with a 422 plus a
+    token charge. The headless surfaces (auto-mode, partner API) branch on
+    status codes, so this must be a 200 carrying its own distinct signal."""
+    from unittest.mock import MagicMock
+    monkeypatch.setattr("app.tool_artifacts.s3_from_env", lambda: MagicMock())
+    monkeypatch.setenv("S3_BUCKET", "b")
+    monkeypatch.setattr(
+        "orchestrator.tools.humanize_docx.humanize_docx",
+        lambda body, **kw: (body, {
+            "ok": True, "rewritten": 0, "skipped": 5, "declined": 5,
+            "already_human": True, "coverage": 0.0,
+            "failures": [{"paragraphs": 5, "error": "flatter_than_original"}],
+            "usage": []}))
+
+    u, token = _login(dl_client)
+    r = dl_client.post(
+        "/api/v1/tools/document/humanize",
+        files={"file": ("t.docx", _docx_bytes(),
+                        "application/vnd.openxmlformats-officedocument"
+                        ".wordprocessingml.document")})
+    assert r.status_code == 200, r.text
+    assert r.headers["X-Already-Human"] == "1"
+    assert r.headers["X-Paragraphs-Declined"] == "5"
+
+    Session = get_session_factory()
+    with Session() as s:
+        row = (s.query(ToolRun)
+               .filter(ToolRun.user_id == u.id, ToolRun.tool == "humanize-docx")
+               .one())
+        assert row.ok is True
+        assert row.metrics["declined"] == 5
+        # The decline is still counted in the breakdown — visible, not damning.
+        assert row.metrics["failures"] == {"flatter_than_original": 5}
+
+
 # --- delete now -----------------------------------------------------------
 
 def test_the_owner_can_delete_the_files_before_they_expire(dl_client, monkeypatch):

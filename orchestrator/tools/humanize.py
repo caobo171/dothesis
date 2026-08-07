@@ -290,7 +290,9 @@ def frozen_tokens(text: str) -> Counter:
 
 # Our own multiset key, as it would look if it escaped into prose:
 # "cite:bass|1994" -> "bass|1994". Nothing a person writes looks like this.
-_TOKEN_SYNTAX_RE = re.compile(r"[^\W\d_][\w'’\-]*\|\d{4}[a-z]?")
+# Groups: (full match is group 0), surname = 1, year = 2 — used by the scrubber
+# that rewrites "(Bass and Avolio, bass|1994)" back to "(Bass and Avolio, 1994)".
+_TOKEN_SYNTAX_RE = re.compile(r"([^\W\d_][\w'’\-]*)\|(\d{4}[a-z]?)")
 
 
 def describe_token(token: str) -> str:
@@ -314,6 +316,178 @@ def describe_token(token: str) -> str:
         head, _, num = rest.partition(" ")
         return f"{head.capitalize()} {num}".strip() if num else rest.capitalize()
     return rest or token
+
+
+def _scrub_token_syntax(text: str, original: str) -> str:
+    """Drop leaked multiset keys from prose, keeping only the year.
+
+    Observed ship: "(Bass and Avolio, bass|1994)" — the repair path had printed
+    the internal key and the model pasted it next to the already-correct author
+    run. The year is what the citation needs; the `surname|` prefix is ours.
+
+    Only forms that were NOT already in the original are touched, so a bizarre
+    but intentional `code|2020` the student wrote themselves is left alone.
+    """
+    if not text or not _TOKEN_SYNTAX_RE.search(text):
+        return text
+    original = original or ""
+
+    def repl(m: re.Match) -> str:
+        full = m.group(0)
+        if full in original:
+            return full
+        return m.group(2)  # year only
+
+    return _TOKEN_SYNTAX_RE.sub(repl, text)
+
+
+# Structural cross-refs the model likes to lowercase after a full stop
+# ("…reported later. table 4.2 presents…"). Title-casing the label is always
+# correct for the academic register this product rewrites; APA/thesis house
+# style capitalises Table/Figure/Chapter, and Vietnamese Bảng/Hình/Chương.
+_REF_LABEL_RE = re.compile(
+    r"\b("
+    r"[Bb]ảng|[Hh]ình|[Bb]iểu\s+[đĐ]ồ|[Ss]ơ\s+[đĐ]ồ|[Pp]hụ\s+[lL]ục|[Cc]hương|"
+    r"[Tt]able|[Ff]igure|[Ff]ig\.?|[Aa]ppendix|[Cc]hapter"
+    r")(\s*)(\d+(?:[.,]\d+)*)"
+)
+
+
+def _title_ref_label(label: str) -> str:
+    """Title-case a ref label, preserving internal spacing ("Biểu đồ", "Fig.")."""
+    parts = re.split(r"(\s+)", label)
+    out: list[str] = []
+    for p in parts:
+        if not p or p.isspace():
+            out.append(p)
+        else:
+            out.append(p[0].upper() + p[1:])
+    return "".join(out)
+
+
+def _normalize_ref_labels(text: str) -> str:
+    """Force Table/Bảng/Chapter/… labels to title case before a number."""
+    if not text:
+        return text
+
+    def repl(m: re.Match) -> str:
+        return _title_ref_label(m.group(1)) + m.group(2) + m.group(3)
+
+    return _REF_LABEL_RE.sub(repl, text)
+
+
+# Single-letter stats openers a results paragraph may legitimately start a
+# sentence with ("p = 0.03", "n = 218", "β = 0.45"). Capitalising them would
+# be a silent corruption the frozen gate cannot see (β is not a number token
+# when written as a letter, and "P = 0.03" vs "p = 0.03" is the same num).
+_LOWERCASE_SENTENCE_OPENERS = frozenset({
+    "p", "n", "t", "r", "f", "k", "m", "b", "d",
+    "α", "β", "γ", "δ", "λ", "χ", "η", "φ", "ω",
+})
+
+# Tokens whose trailing period is an ABBREVIATION dot, not a sentence end.
+# Multi-letter only: the single-letter case (an author initial in "B.M. and
+# Avolio", or the tail of "e.g."/"i.e.") is handled structurally in
+# _restore_sentence_case, because listing every possible initial is hopeless.
+# "no" is here because citation styles write issue numbers as "No. 4"; a
+# genuine sentence ending in the word "no" followed by a lowercase slip is the
+# rarer event and loses only a fix-up, not correctness.
+_ABBREV_BEFORE_DOT = frozenset({
+    "cf", "edn", "eds", "vs", "fig", "no", "et", "al", "ca", "pp", "vol",
+})
+# After ". " capitalize a latin-lowercase sentence start. Group 4 is the first
+# letter; we inspect the full first word before deciding.
+_MID_SENTENCE_LOWER_RE = re.compile(
+    r"([.!?…])([\"'”’)\]]*)(\s+)([^\W\d_])",
+)
+
+
+def _is_latin_letter(ch: str) -> bool:
+    try:
+        return unicodedata.name(ch).startswith("LATIN")
+    except ValueError:
+        return False
+
+
+def _restore_sentence_case(text: str) -> str:
+    """Capitalise a latin lowercase letter that opens a sentence mid-passage.
+
+    `_restore_leading_case` only fixes the first character of each paragraph.
+    Models also emit ". table 4.2 presents" and ". results show" inside a
+    paragraph; both are orthographic errors, not voice choices. Stats symbols
+    and single-letter openers are left alone — see _LOWERCASE_SENTENCE_OPENERS.
+    """
+    if not text:
+        return text
+
+    def repl(m: re.Match) -> str:
+        first = m.group(4)
+        if not first.islower() or not _is_latin_letter(first):
+            return m.group(0)
+        # A period is only a sentence end if the token BEFORE it could end a
+        # sentence. After a single letter it is an author's initial ("Bass,
+        # B.M. and Avolio" — the real reference list this manufactured "And"
+        # through) or the tail of "e.g."/"i.e."; after a listed abbreviation
+        # ("(eds.) Handbook", "cf. the table") it is a style dot. Conservative
+        # by design: a genuine sentence that ENDS in a one-letter word skips
+        # one fix-up, which is cheaper than corrupting names — the same trade
+        # _LOWERCASE_SENTENCE_OPENERS already makes on the other side.
+        if m.group(1) == ".":
+            prev = re.search(r"([^\W\d_][\w'’\-]*)$", text[:m.start(1)])
+            if prev and (len(prev.group(1)) == 1
+                         or prev.group(1).lower() in _ABBREV_BEFORE_DOT):
+                return m.group(0)
+        # Peek at the rest of the first word for the opener allowlist.
+        tail_start = m.end()
+        rest = text[tail_start:tail_start + 24]
+        word_m = re.match(r"[\w'’\-]*", rest)
+        word = first + (word_m.group(0) if word_m else "")
+        low = word.lower()
+        if low in _LOWERCASE_SENTENCE_OPENERS or low.startswith("p-value"):
+            return m.group(0)
+        if low == "et":  # "et al." after a full stop is rare but leave it
+            return m.group(0)
+        return m.group(1) + m.group(2) + m.group(3) + first.upper()
+
+    return _MID_SENTENCE_LOWER_RE.sub(repl, text)
+
+
+# Content-expansion gate. A re-voice may split sentences and swap synonyms; it
+# must not grow an abstract into a results summary. Measured on the run that
+# shipped the leadership-hotel dissertation: the abstract went from ~154 words
+# to ~250 by pasting chapter-4 findings the source abstract never stated —
+# every number was real elsewhere in the thesis, so a multiset frozen check on
+# a batched passage can miss the invention when the batch is the abstract alone
+# the numbers are simply "added" (and should fail), but pure-prose padding and
+# borderline cases need a length ceiling too.
+#
+# Floor: short captions/labels have noisy ratios. Extra-word floor: a 12-word
+# flourish on a 200-word paragraph is a voice choice, not a new section.
+_LENGTH_MIN_WORDS = 40
+# Both must fire: ratio alone would reject a short caption that grew by three
+# words; absolute extra alone would reject a long chapter that gained one
+# carefully-split sentence. Together they catch the real failure mode — an
+# abstract that swallowed a results paragraph (~+100 words, ~1.6×).
+_LENGTH_MAX_RATIO = 1.25
+_LENGTH_MAX_EXTRA_WORDS = 25
+
+
+def verify_length(original: str, rewritten: str) -> dict:
+    """Reject a rewrite that is substantially longer than its source.
+
+    Returns {"ok", "before", "after", "ratio"}. Compression is allowed — the
+    frozen-token gate already catches dropped numbers/citations, and a tight
+    rewrite is often what "humanize" should produce. Expansion past the
+    thresholds is the invention signal.
+    """
+    before = len((original or "").split())
+    after = len((rewritten or "").split())
+    ratio = round(after / before, 3) if before else 1.0
+    if before < _LENGTH_MIN_WORDS:
+        return {"ok": True, "before": before, "after": after, "ratio": ratio}
+    extra = after - before
+    bloated = extra > _LENGTH_MAX_EXTRA_WORDS and ratio > _LENGTH_MAX_RATIO
+    return {"ok": not bloated, "before": before, "after": after, "ratio": ratio}
 
 
 def verify_frozen(original: str, rewritten: str) -> dict:
@@ -434,13 +608,7 @@ EXAMPLES:
 Rewrite the user's text in {language_name}, borrowing the anchor's RHYTHM but
 keeping the ORIGINAL text's own register.
 
-NATURALNESS — write {language_name} the way a native academic writer actually
-writes it. Idiomatic word choice and collocations only; never stiff, translated,
-or awkward phrasing. Readability must not drop below the original — if your only
-way to reword a clause is a clunkier one, leave that clause as it was. In
-Vietnamese specifically, keep natural prepositions/collocations (e.g. "khảo sát
-được gửi đến / thu thập từ" rather than a stilted "phát … tới"); do not swap a
-natural word for a rarer stiff synonym just to look different.
+{naturalness_section}
 
 WHAT THIS LOOKS LIKE — each pair says the SAME thing; only the wording moved.
 Nothing was added and nothing was dropped, which is the standard your rewrite
@@ -521,8 +689,15 @@ ABSOLUTE CONSTRAINTS — a rewrite that breaks any of these is discarded:
 {protected_section}
 - Invent NOTHING. No new numbers, no new citations, no new claims, and no new
   narrative actions. If the source does not state it, it does not go in.
+- Do NOT lengthen the passage by importing findings, statistics, or
+  recommendations from elsewhere. Rewrite ONLY what this passage already says;
+  a short abstract stays a short abstract.
 - Keep every factual claim and its direction (a positive effect stays positive).
 - Preserve the paragraph and heading structure, and any markdown tables verbatim.
+- Structural cross-references keep a capital letter: "Table 4.2", "Bảng 4.3",
+  "Chapter 5", "Figure 2.1" — never "table 4.2" after a full stop.
+- Citations stay in ordinary academic form: "(Bass and Avolio, 1994)" or
+  "Bass and Avolio (1994)". NEVER write "bass|1994" or any "surname|year" form.
 
 Output the rewritten text ONLY — no preamble, no commentary, no code fences."""
 
@@ -578,6 +753,57 @@ def _restructure_directive(round_idx: int) -> str:
 
 def _language_name(language: str) -> str:
     return "Vietnamese" if (language or "").lower().startswith("vi") else "English"
+
+
+# NATURALNESS points in OPPOSITE directions for the two languages, which is why
+# it can't be one shared paragraph with {language_name} substituted in.
+#
+# Vietnamese: the anchors are pre-2022 Vietnamese academic prose, genuinely off
+# the training distribution, and stilted Vietnamese is a defect — a stiff
+# synonym or a wrong preposition costs the student marks and buys nothing. So
+# "write it the way a native academic writer does" is correct there, and this
+# string is byte-for-byte what the shared block used to render for "vi".
+#
+# English: the same instruction is what caused the measured regression. On a UK
+# business dissertation scored by Turnitin before and after the pass
+# (2026-08-06/07), the 40 paragraphs the pass rewrote went from 16.4% flagged to
+# 36.6%, while 226 byte-identical control paragraphs moved 0.1 points. Reading
+# the diffs, the pass had taken a Vietnamese author's slightly awkward English —
+# "levels of length of service", "How much of the effect" — and sanded it into
+# canonical native-academic phrasing. That phrasing is the model's own default
+# output register, so asking for it aims the rewrite AT the thing being
+# detected. English academic prose is too heavily crawled for an anchor to be
+# off-distribution on its own; register distance from the model's default is the
+# only lever left, and it only works if the prompt stops pulling the other way.
+#
+# The floor stays in both versions: never make the text ungrammatical or harder
+# to read. Keeping the author's awkwardness is not licence to manufacture new
+# errors in work that gets graded.
+_NATURALNESS_VI = """NATURALNESS — write Vietnamese the way a native academic writer actually
+writes it. Idiomatic word choice and collocations only; never stiff, translated,
+or awkward phrasing. Readability must not drop below the original — if your only
+way to reword a clause is a clunkier one, leave that clause as it was. In
+Vietnamese specifically, keep natural prepositions/collocations (e.g. "khảo sát
+được gửi đến / thu thập từ" rather than a stilted "phát … tới"); do not swap a
+natural word for a rarer stiff synonym just to look different."""
+
+_NATURALNESS_EN = """NATURALNESS — the writer is a Vietnamese researcher writing English, and the
+rewrite has to still read that way. Keep the source's own phrasing habits: a
+workmanlike collocation stays workmanlike, and you do not upgrade it to the
+polished native-speaker equivalent. Concretely, "the mediating role of job
+satisfaction between each leadership style" must NOT become "whether job
+satisfaction mediates the relationship between", and "How much of the effect is
+transmitted" must NOT become "To what extent is the effect transmitted" — those
+canonical collocations are the default register of a language model, not of this
+writer. Slightly unidiomatic but correct professional English is the TARGET, not
+a defect to repair. What the source got grammatically right stays right — never
+introduce an error, and if your only way to reword a clause is an ungrammatical
+or harder-to-read one, leave that clause exactly as it was."""
+
+
+def _naturalness_directive(language: str) -> str:
+    return (_NATURALNESS_VI if (language or "").lower().startswith("vi")
+            else _NATURALNESS_EN)
 
 
 # Vietnamese letters that exist in no other language this product sees, plus the
@@ -882,15 +1108,44 @@ def _verify(original: str, rewritten: str) -> dict:
     if check["language_changed"]:
         check["ok"] = False
     # Our own multiset key, echoed back into the prose. describe_token() stops
-    # the prompt from ever showing it, and this stops a model that produces it
-    # anyway — the two together, because the frozen check alone is blind to it:
-    # "(Bass and Avolio, bass|1994)" re-extracts as the token it corrupts.
-    leaked = [m for m in _TOKEN_SYNTAX_RE.findall(rewritten or "")
-              if m not in (original or "")]
+    # the prompt from ever showing it, _scrub_token_syntax strips the common
+    # form, and this rejects whatever still remains — the frozen check alone is
+    # blind: "(Bass and Avolio, bass|1994)" re-extracts as the token it corrupts.
+    # findall returns (surname, year) tuples with the grouped regex; rebuild the
+    # surface form for the report and the "was it in the original?" test.
+    leaked = []
+    for m in _TOKEN_SYNTAX_RE.finditer(rewritten or ""):
+        surface = m.group(0)
+        if surface not in (original or ""):
+            leaked.append(surface)
     check["token_syntax"] = sorted(set(leaked))
     if leaked:
         check["ok"] = False
+    length = verify_length(original, rewritten)
+    check["length"] = length
+    if not length["ok"]:
+        check["ok"] = False
     return check
+
+
+def _polish_rewrite(input_text: str, original_text: str, rewritten: str,
+                    language: str) -> str:
+    """Deterministic post-pass before the gates: strip tells, fix case/refs/keys.
+
+    Order is load-bearing. AI-tell stripping can leave a lowercase sentence
+    start (it recapitalises its own deletions, but not the model's). Leading-
+    case runs next so a paragraph opener is fixed before mid-sentence case
+    looks at the same string. Ref labels are title-cased after sentence case so
+    "table" becoming "Table" is not then re-lowered. Token-syntax scrub is last
+    among the orthographic fixes so a repaired "(…, 1994)" is what the gates
+    see — not the leaked key.
+    """
+    out = strip_ai_tells(rewritten, language)
+    out = _restore_leading_case(input_text, out)
+    out = _restore_sentence_case(out)
+    out = _normalize_ref_labels(out)
+    out = _scrub_token_syntax(out, original_text)
+    return out
 
 
 def _rewrite_once(
@@ -919,6 +1174,7 @@ def _rewrite_once(
     system = _REWRITE_PROMPT.format(
         anchor=anchor["text"],
         language_name=_language_name(language),
+        naturalness_section=_naturalness_directive(language),
         protected_section=protected_section,
         restructure_section=_restructure_directive(round_idx),
     )
@@ -933,11 +1189,10 @@ def _rewrite_once(
         return {"ok": False, "error": "empty_rewrite",
                 "text": None, "check": None, "repairs": 0}
 
-    out = strip_ai_tells(out, language)
     # Aligned against input_text, not original_text: in the v4 loop input_text
     # is the previous round's output, and it is what the model was actually
     # handed — so its paragraph boundaries are the ones that line up.
-    out = _restore_leading_case(input_text, out)
+    out = _polish_rewrite(input_text, original_text, out, language)
     check = _verify(original_text, out)
     repairs = 0
 
@@ -969,22 +1224,45 @@ def _rewrite_once(
                 f"You TRANSLATED the text. Write the rewrite in "
                 f"{_language_name(language)}, the same language as the original. "
                 "This pass changes wording only — never the language.")
-        try:
-            repaired = _clean_output(_invoke(
-                llm,
-                _REPAIR_PROMPT.format(problem="\n\n".join(problem_lines))
-                + f"\n\nORIGINAL:\n{original_text}\n\nYOUR REWRITE:\n{out}"))
-            repairs = 1
-            if repaired:
-                repaired = strip_ai_tells(repaired, language)
-                repaired = _restore_leading_case(input_text, repaired)
-                recheck = _verify(original_text, repaired)
-                if recheck["ok"]:
-                    out, check = repaired, recheck
-                else:
-                    check = recheck
-        except Exception:
-            logger.exception("humanize: repair call failed")
+        # Decision: name the failure mode, never echo the pipe form back as a
+        # token to "restore" — that is how the original bass|1994 corruption
+        # was produced. Tell the model the correct surface form only.
+        if check.get("token_syntax"):
+            problem_lines.append(
+                "You wrote an internal token form into the prose (a "
+                "surname-pipe-year string such as a concatenated key). Never "
+                "do that. Use ordinary academic citations only, e.g. "
+                "(Bass and Avolio, 1994) or Bass and Avolio (1994). Remove "
+                "every pipe character between a name and a year."
+            )
+        length = check.get("length") or {}
+        if length and not length.get("ok", True):
+            problem_lines.append(
+                f"Your rewrite is substantially longer than the original "
+                f"({length.get('after')} words vs {length.get('before')}). "
+                "You added content this passage does not contain. Delete every "
+                "claim, statistic, or sentence that is not already in the "
+                "ORIGINAL — match the original's scope and length."
+            )
+        # Empty problem_lines can still happen if a future gate sets ok=False
+        # without a message; skip the LLM call rather than send a blank repair.
+        if problem_lines:
+            try:
+                repaired = _clean_output(_invoke(
+                    llm,
+                    _REPAIR_PROMPT.format(problem="\n\n".join(problem_lines))
+                    + f"\n\nORIGINAL:\n{original_text}\n\nYOUR REWRITE:\n{out}"))
+                repairs = 1
+                if repaired:
+                    repaired = _polish_rewrite(
+                        input_text, original_text, repaired, language)
+                    recheck = _verify(original_text, repaired)
+                    if recheck["ok"]:
+                        out, check = repaired, recheck
+                    else:
+                        check = recheck
+            except Exception:
+                logger.exception("humanize: repair call failed")
 
     return {"ok": check["ok"], "text": out, "check": check, "repairs": repairs}
 
@@ -1103,23 +1381,23 @@ def _humanize_prose(
         }
 
     frozen = frozen_tokens(text)
+    # Decision: every protected token is rendered via describe_token so the
+    # model never sees our multiset key syntax (bass|1994) or a lowercased ref
+    # label that it then pastes as "table 4.2". Numbers stay as written; cites
+    # become "the citation Bass (1994)"; refs become "Bảng 4.3" / "Table 4.2".
     frozen_lines = [
-        f"  {t.split(':', 1)[1]}" for t in sorted(frozen)
-        if t.startswith(("num:", "ref:"))
+        f"  {describe_token(t)}" for t in sorted(frozen)
+        if t.startswith(("num:", "ref:", "cite:"))
     ]
-    # Citations are listed in their source form so the model sees what to keep,
-    # while verification stays form-insensitive (see _cite_tokens).
-    cites = sorted({t.split(":", 1)[1].replace("|", ", ")
-                    for t in frozen if t.startswith("cite:")})
-    frozen_lines += [f"  ({c})" for c in cites]
     # Only present the "must appear verbatim" list when there ARE protected
     # tokens. Feeding a literal "(none)" under that instruction made the model
     # dutifully echo "(none)" into the prose — protect against that leak.
     if frozen_lines:
         protected_section = (
-            "- Every one of these tokens must appear in your output, character "
-            "for character. Do not round, reformat, translate, or spell them "
-            "out:\n" + "\n".join(frozen_lines)
+            "- Every one of these must appear in your output. Keep numbers "
+            "character-for-character (do not round). Keep citations in ordinary "
+            "academic form — never as surname|year. Keep table/figure/chapter "
+            "labels capitalised:\n" + "\n".join(frozen_lines)
         )
     else:
         protected_section = (

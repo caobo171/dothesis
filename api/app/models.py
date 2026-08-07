@@ -639,8 +639,12 @@ class ToolRun(Base):
     # Set when this run was started from another run's stored input.
     parent_run_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("tool_runs.id", ondelete="SET NULL"))
-    # {"rewritten": 80, "skipped": 52} — what the run DID, which the response
-    # headers carried and the history threw away. Still counts, never prose.
+    # {"rewritten": 80, "skipped": 52, "declined": 40, "coverage": 0.606,
+    #  "failures": {"flatter_than_original": 40, "llm_failed": 12}} — what the
+    # run DID and why the rest was left alone, which the response headers
+    # carried and the history threw away. Failure kinds are counted in
+    # paragraphs; "declined" is the subset of skips where the guard refused to
+    # make already-good prose worse. Still counts, never prose.
     metrics: Mapped[dict | None] = mapped_column(JSONB)
 
     # --- live progress ---------------------------------------------------
