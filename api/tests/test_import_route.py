@@ -164,6 +164,23 @@ def test_confirm_empty_after_sanitize_422(monkeypatch):
     assert r.status_code == 422
 
 
+def _handing_over(entries, explode_after=None):
+    """Stand in for reconstruct_upstream, which hands each module to the caller
+    via on_module as it is produced rather than returning them in a batch.
+
+    `explode_after` raises once that module has been handed over, standing in
+    for a run that dies part-way (cancelled request, LLM timeout, killed worker).
+    """
+    def fake(cs, targets=None, language=None, on_module=None, **kw):
+        for entry in entries:
+            if on_module:
+                on_module(entry)
+            if explode_after and entry["module"] == explode_after:
+                raise RuntimeError("reconstruction died mid-walk")
+        return entries
+    return fake
+
+
 def test_reconstruct_endpoint_saves_every_candidate(monkeypatch):
     """The confirm/skip gate is gone: reconstructing IS saving.
 
@@ -175,9 +192,11 @@ def test_reconstruct_endpoint_saves_every_candidate(monkeypatch):
     _seed_m4(pid)
     monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
     import orchestrator.backfill as bf
-    # Returned out of MODULES order on purpose — the route must commit upstream
-    # first, or M2's commit flags the M3 it just wrote as needs_review.
-    monkeypatch.setattr(bf, "reconstruct_upstream", lambda cs, language=None, **kw: [
+    # Handed over out of MODULES order on purpose — the real walk runs M4→M1,
+    # and the route commits in that order now. It stays correct because
+    # commit_reconstructed preserves the status of downstream modules that had
+    # already started, so M1's commit must not knock the M3 above it back.
+    monkeypatch.setattr(bf, "reconstruct_upstream", _handing_over([
         {"module": "M3", "artifact": "design",
          "candidate": {"conceptual_model": {"constructs": ["A", "B"]},
                        "paradigm": "quantitative"},
@@ -186,7 +205,7 @@ def test_reconstruct_endpoint_saves_every_candidate(monkeypatch):
          "candidate": {"research_title": "T", "research_questions": ["RQ1"],
                        "scope": "VN hotels"},
          "rationale": "from M4", "ready_to_confirm": True, "review": []},
-    ])
+    ]))
     r = _client().post(f"/api/v1/projects/{pid}/mid-journey-import/reconstruct")
     assert r.status_code == 200
     body = r.json()
@@ -214,13 +233,13 @@ def test_reconstruct_survives_one_module_failing_to_commit(monkeypatch):
     _seed_m4(pid)
     monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
     import orchestrator.backfill as bf
-    monkeypatch.setattr(bf, "reconstruct_upstream", lambda cs, language=None, **kw: [
+    monkeypatch.setattr(bf, "reconstruct_upstream", _handing_over([
         {"module": "M2", "artifact": "literature",
          "candidate": {"research_gaps": [{"description": "gap"}]},
          "rationale": "", "ready_to_confirm": False, "review": []},
         {"module": "M3", "artifact": "design", "candidate": {"conceptual_model": {"c": ["A"]}},
          "rationale": "", "ready_to_confirm": False, "review": []},
-    ])
+    ]))
 
     # M2's write blows up (a bad slice, a DB hiccup — the reason doesn't matter).
     real_store = ir._store
@@ -239,6 +258,79 @@ def test_reconstruct_survives_one_module_failing_to_commit(monkeypatch):
 
     from app.agent_state import DbProjectStateStore
     assert DbProjectStateStore(get_engine(), pid, f"/tmp/ws-{pid}").load()["status"]["M3"] == "done"
+
+
+def test_a_reconstruction_that_dies_part_way_keeps_what_it_finished(monkeypatch):
+    """The point of committing per module: a run that breaks off mid-walk must
+    leave the finished modules SAVED.
+
+    Everything used to be collected and committed after the walk returned, so a
+    cancelled or timed-out reconstruction discarded every module it had already
+    paid an LLM for and the student restarted from zero. The /new screen tells
+    them a cancelled analysis can be carried on — this is what makes that true.
+    """
+    pid = _project()
+    _seed_m4(pid)
+    monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
+    import orchestrator.backfill as bf
+    monkeypatch.setattr(bf, "reconstruct_upstream", _handing_over([
+        {"module": "M3", "artifact": "design",
+         "candidate": {"conceptual_model": {"constructs": ["A", "B"]}},
+         "rationale": "", "ready_to_confirm": False, "review": []},
+        {"module": "M2", "artifact": "literature",
+         "candidate": {"research_gaps": [{"description": "gap"}]},
+         "rationale": "", "ready_to_confirm": False, "review": []},
+    ], explode_after="M2"))
+
+    r = _client().post(f"/api/v1/projects/{pid}/mid-journey-import/reconstruct")
+    assert r.status_code == 200                      # a dead walk is not a 500
+    assert [s["module"] for s in r.json()["saved"]] == ["M2", "M3"]
+
+    # And it is really in the DB, not just in the response.
+    with Session(get_engine()) as s:
+        row = s.get(DbContextStore, pid)
+    assert row.m3_design["conceptual_model"] == {"constructs": ["A", "B"]}
+    assert row.m2_literature["research_gaps"]
+
+
+def test_a_resumed_reconstruction_is_not_asked_to_redo_finished_modules(monkeypatch):
+    """Resume, from the other side: what already landed is not targeted again.
+
+    reconstruct_upstream auto-targets only modules that aren't COMPLETE, so the
+    incremental commit above is what turns "run it again" into "carry on" —
+    without it the second run pays for every module a second time.
+    """
+    pid = _project()
+    _seed_m4(pid)
+    monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
+    import orchestrator.backfill as bf
+
+    # First run: M3 lands, then the walk dies.
+    monkeypatch.setattr(bf, "reconstruct_upstream", _handing_over([
+        {"module": "M3", "artifact": "design",
+         "candidate": {"conceptual_model": {"constructs": ["A", "B"]},
+                       "paradigm": "quantitative", "design": "survey",
+                       "tool": "SmartPLS", "sampling_strategy": "purposive",
+                       "target_sample_size": 200},
+         "rationale": "", "ready_to_confirm": True, "review": []},
+    ], explode_after="M3"))
+    _client().post(f"/api/v1/projects/{pid}/mid-journey-import/reconstruct")
+
+    # Second run: record what the REAL auto-targeting picks now.
+    seen = {}
+
+    def fake(cs, targets=None, language=None, on_module=None, **kw):
+        from orchestrator.artifacts import dod_design_structural
+        from orchestrator.state import _MODULE_TO_FIELD
+        seen["m3_complete"] = dod_design_structural(
+            getattr(cs, _MODULE_TO_FIELD["M3"], None) or {}).done
+        return []
+
+    monkeypatch.setattr(bf, "reconstruct_upstream", fake)
+    _client().post(f"/api/v1/projects/{pid}/mid-journey-import/reconstruct")
+    # M3 survived the first run's death, so the second run sees it as complete
+    # and reconstruct_upstream's own auto-target will skip it.
+    assert seen["m3_complete"] is True
 
 
 def _seed_full_thesis(project_id):

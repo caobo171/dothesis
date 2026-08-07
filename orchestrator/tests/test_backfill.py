@@ -1,6 +1,8 @@
 """Tests for prerequisite reconstruction (the Phase 3 backfill spike)."""
 from unittest.mock import MagicMock
 
+import pytest
+
 from orchestrator.backfill import reconstruct_artifact
 from orchestrator.state import ContextStore
 
@@ -387,3 +389,60 @@ def test_a_failing_progress_callback_never_kills_the_work(monkeypatch):
     out = bf.reconstruct_upstream(cs, targets=["M3"], llm=_fake_llm("{}"),
                                   on_progress=_boom)
     assert [i["module"] for i in out] == ["M3"]
+
+
+def test_each_module_is_handed_over_as_soon_as_it_is_produced(monkeypatch):
+    """The caller must be able to PERSIST a module before the walk finishes.
+
+    Everything used to be returned in one batch and committed afterwards, so a
+    run that died on the last module threw away every module before it — the
+    student paid for a minute of LLM work and got nothing. Handing each entry
+    over as it lands is what makes "cancel and carry on" true rather than a
+    label on a button.
+    """
+    import orchestrator.backfill as bf
+    monkeypatch.setenv("DOTHESIS_BACKFILL_GROUND_M2", "0")
+    monkeypatch.setattr(bf, "reconstruct_artifact", lambda *a, **k: {"paradigm": "quant"})
+    seen = []
+    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    out = bf.reconstruct_upstream(cs, targets=["M1", "M3"], llm=_fake_llm("{}"),
+                                  on_module=lambda e: seen.append(e["module"]))
+    # Production order (bottom-up), not the display order the return value uses.
+    assert seen == ["M3", "M1"]
+    assert [e["module"] for e in out] == ["M1", "M3"]
+
+
+def test_a_module_handed_over_before_a_later_one_crashes_is_still_delivered(monkeypatch):
+    """The whole point: work already done survives a failure further along."""
+    import orchestrator.backfill as bf
+    monkeypatch.setenv("DOTHESIS_BACKFILL_GROUND_M2", "0")
+
+    def _explode_on_m1(artifact, *a, **k):
+        if artifact == "topic":
+            raise RuntimeError("LLM died mid-run")
+        return {"paradigm": "quant"}
+
+    monkeypatch.setattr(bf, "reconstruct_artifact", _explode_on_m1)
+    seen = []
+    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    with pytest.raises(RuntimeError):
+        bf.reconstruct_upstream(cs, targets=["M1", "M3"], llm=_fake_llm("{}"),
+                                on_module=lambda e: seen.append(e["module"]))
+    assert seen == ["M3"]          # M3 was handed over before M1 blew up
+
+
+def test_a_failing_module_callback_never_kills_the_work(monkeypatch):
+    """Same trade as the progress callback: it crosses into the API layer and
+    writes to the DB, and losing an expensive walk to a commit bug on one
+    module would cost the student the other modules too."""
+    import orchestrator.backfill as bf
+    monkeypatch.setenv("DOTHESIS_BACKFILL_GROUND_M2", "0")
+    monkeypatch.setattr(bf, "reconstruct_artifact", lambda *a, **k: {"paradigm": "quant"})
+
+    def _boom(_entry):
+        raise RuntimeError("store unreachable")
+
+    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    out = bf.reconstruct_upstream(cs, targets=["M1", "M3"], llm=_fake_llm("{}"),
+                                  on_module=_boom)
+    assert [e["module"] for e in out] == ["M1", "M3"]

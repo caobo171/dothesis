@@ -172,29 +172,52 @@ def reconstruct_upstream_modules(project_id: str, request: Request,
         if run_id is not None:
             bump_progress(run_id, done=done, total=total)
 
+    # Persist each module the MOMENT it is reconstructed, not after the walk.
+    #
+    # This used to collect everything and commit afterwards, so a run that was
+    # cancelled, timed out, or died on the last module discarded every module
+    # before it — a minute-plus of paid LLM work for nothing, and the student
+    # started over from zero. reconstruct_upstream only targets modules that
+    # aren't COMPLETE, so committing as we go is also what makes a re-run
+    # RESUME: whatever landed is skipped instead of being paid for twice.
+    #
+    # Safe to commit out of MODULES order here (the walk runs M4→M1) because
+    # commit_reconstructed preserves the status of downstream modules that had
+    # already started — see agent/state.py's `overrides`. It is commit_slice,
+    # not this, that propagates needs_review.
+    saved: list[dict] = []
+    reconstructed: list[dict] = []
+
+    def _save_now(entry: dict) -> None:
+        module = entry.get("module")
+        if not module:
+            return
+        reconstructed.append(entry)
+        # A commit failure on one module must not take the others down: the
+        # exception is swallowed here so reconstruct_upstream's _hand_over does
+        # not have to be the thing that decides this module is lost.
+        try:
+            saved.append(store.commit_reconstructed(module, entry.get("candidate") or {}))
+        except Exception:
+            logger.exception("import: commit_reconstructed %s failed for %s", module, project_id)
+
     try:
         cs = _orch_context_store(db, project_id)
         # Was hardcoded "vi" on the assumption every student writes Vietnamese.
         # They don't — this is the route the /new screen calls, and an English
         # thesis came back reconstructed into Vietnamese. Read it off their own
         # work instead; the agent tool does the same.
-        reconstructed = reconstruct_upstream(
+        reconstruct_upstream(
             cs, language=_language_of_existing_work(slices) or "vi",
-            on_progress=_progress)
+            on_progress=_progress, on_module=_save_now)
     except Exception:
+        # Whatever _save_now already committed STAYS committed — that is the
+        # point of the incremental commit above. Report what landed.
         logger.exception("import: reconstruct_upstream failed for %s", project_id)
-        reconstructed = []
 
-    saved: list[dict] = []
-    by_module = {item["module"]: item for item in reconstructed if item.get("module")}
-    for module in MODULES:                        # MODULES order → no spurious downstream needs_review
-        item = by_module.get(module)
-        if item is None:
-            continue
-        try:
-            saved.append(store.commit_reconstructed(module, item.get("candidate") or {}))
-        except Exception:
-            logger.exception("import: commit_reconstructed %s failed for %s", module, project_id)
+    # Display order for the response; the commits themselves ran bottom-up.
+    reconstructed.sort(key=lambda e: MODULES.index(e["module"]) if e["module"] in MODULES else 99)
+    saved.sort(key=lambda s: MODULES.index(s["module"]) if s.get("module") in MODULES else 99)
     # A finished thesis arrives as one blob under m4_analysis, chapters 4 AND 5
     # together, so M5 receives nothing and stays locked behind work already
     # done. Declines on anything ambiguous — see chapter_split.

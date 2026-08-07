@@ -200,10 +200,26 @@ def _report_progress(cb, done: int, total: int, module: str | None) -> None:
         logger.exception("backfill: progress callback failed")
 
 
+def _hand_over(cb, entry: dict) -> None:
+    """Hand one finished module to the caller without letting a sink failure
+    kill the rest of the walk.
+
+    Same trade as _report_progress, and for a stronger reason: this callback is
+    what PERSISTS the module, so it writes to the DB from inside an expensive
+    LLM loop. One module failing to commit must cost that module, not the four
+    the student already paid for.
+    """
+    try:
+        cb(entry)
+    except Exception:
+        logger.exception("backfill: module callback failed for %s",
+                         entry.get("module"))
+
+
 def reconstruct_upstream(context_store, targets: list[str] | None = None,
                          llm=None, language: str | None = None,
                          ground_m2: bool | None = None,
-                         on_progress=None) -> list[dict]:
+                         on_progress=None, on_module=None) -> list[dict]:
     """Reconstruct the missing UPSTREAM modules from whatever evidence exists.
 
     Bottom-up (M4→…→M1) so each adjacent inference (the only reliable jump — see
@@ -217,6 +233,14 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
     content, that is not yet COMPLETE. Returns a list (display order M1→M4) of
     {module, artifact, candidate, rationale, ready_to_confirm, review}.
     Never raises — a per-module failure yields `{}` and is skipped.
+
+    `on_module(entry)` is called with each entry the moment it is produced, in
+    PRODUCTION order (M4→M1), i.e. before the walk finishes. Callers that
+    persist should use it rather than the return value: a run that dies on the
+    last module would otherwise throw away every module before it, and the
+    student pays for the whole reconstruction again. Because the auto-target
+    above skips modules that are already COMPLETE, a re-run then resumes from
+    whatever landed instead of redoing it.
 
     "Not complete" rather than "empty": a student who uploads a finished thesis
     lands their whole document in M4 as `analysis_results`, which is content —
@@ -331,11 +355,16 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
         # Grade the MERGED slice — that's what gets persisted, so grading the
         # bare candidate would report gaps the student had already filled.
         result = _gate_for(artifact)(candidate)
-        out.append({
+        entry = {
             "module": module, "artifact": artifact, "candidate": candidate,
             "rationale": rationale,
             "ready_to_confirm": result.done, "review": result.gaps,
-        })
+        }
+        out.append(entry)
+        # Hand it over NOW, not at the end. This is the difference between a
+        # cancelled import keeping its finished modules and losing all of them.
+        if on_module:
+            _hand_over(on_module, entry)
         # Feed forward on a COPY so the next (lower) module can lean on this one.
         cs = cs.model_copy(update={_MODULE_TO_FIELD[module]: candidate})
     out.sort(key=lambda e: _MODULE_ORDER.index(e["module"]))

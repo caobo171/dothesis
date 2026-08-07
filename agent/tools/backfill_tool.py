@@ -136,28 +136,45 @@ def make_backfill_tool(store):
         from orchestrator.backfill import reconstruct_upstream  # noqa: PLC0415 — orchestrator core, agent layer
         from orchestrator.state import ContextStore  # noqa: PLC0415
         from agent.state import MODULES  # noqa: PLC0415
+        # Commit each module the MOMENT it is reconstructed, not after the walk.
+        #
+        # These surfaces (headless auto-mode, the partner API) have no user
+        # sitting there to retry, so a walk that dies on the last module used to
+        # throw away every module before it and the whole reconstruction was
+        # re-paid from zero. reconstruct_upstream only targets modules that
+        # aren't COMPLETE, so committing as we go is also what makes a re-run
+        # resume rather than repeat.
+        #
+        # Out-of-MODULES-order commits are safe here: the walk runs M4→M1 and
+        # commit_reconstructed preserves the status of downstream modules that
+        # had already started (agent/state.py's `overrides`).
+        items: list[dict] = []
+        saved: list[dict] = []
+        slices: dict = {}
+
+        def _save_now(entry: dict) -> None:
+            module = entry.get("module")
+            if not module:
+                return
+            items.append(entry)
+            try:
+                saved.append(store.commit_reconstructed(module, entry.get("candidate") or {}))
+            except Exception:
+                logger.exception("backfill: commit_reconstructed %s failed", module)
+
         try:
             slices = loader()
             cs = ContextStore(**slices)
             # Caller's request first, then the evidence, then the house default.
             lang = language or _language_of_existing_work(slices) or "vi"
-            items = reconstruct_upstream(cs, targets=targets, language=lang)
+            reconstruct_upstream(cs, targets=targets, language=lang,
+                                 on_module=_save_now)
         except Exception:
+            # Whatever _save_now committed STAYS committed — report what landed.
             logger.exception("backfill_upstream_modules failed")
-            items = []
 
-        # MODULES order so an upstream commit never flags a downstream module
-        # it just wrote. One module failing to commit must not lose the others.
-        saved: list[dict] = []
-        by_module = {i["module"]: i for i in items if i.get("module")}
-        for module in MODULES:
-            item = by_module.get(module)
-            if item is None:
-                continue
-            try:
-                saved.append(store.commit_reconstructed(module, item.get("candidate") or {}))
-            except Exception:
-                logger.exception("backfill: commit_reconstructed %s failed", module)
+        items.sort(key=lambda e: MODULES.index(e["module"]) if e["module"] in MODULES else 99)
+        saved.sort(key=lambda s: MODULES.index(s["module"]) if s.get("module") in MODULES else 99)
 
         split = _move_final_chapter_to_m5(store, slices)
         return json.dumps({"ok": True, "reconstructed": items, "saved": saved,

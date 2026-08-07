@@ -18,6 +18,22 @@ class _FileStore:
     """CLI file store — no load_full_context_store (the tool must degrade)."""
 
 
+def _handing_over(entries, explode_after=None):
+    """Stand in for reconstruct_upstream, which hands each module to the caller
+    via on_module as it is produced rather than returning them in a batch.
+
+    `explode_after` raises once that module has been handed over, standing in
+    for a walk that dies part-way."""
+    def fake(cs, targets=None, language=None, on_module=None, **kw):
+        for entry in entries:
+            if on_module:
+                on_module(entry)
+            if explode_after and entry["module"] == explode_after:
+                raise RuntimeError("reconstruction died mid-walk")
+        return entries
+    return fake
+
+
 def test_backfill_tool_degrades_without_db_store():
     tool = make_backfill_tool(_FileStore())
     out = json.loads(tool.invoke({}))
@@ -36,12 +52,12 @@ def test_backfill_tool_saves_each_reconstruction(monkeypatch):
     gate it. This is what makes the headless/partner surfaces work: they run
     this tool with no card for anyone to click."""
     import orchestrator.backfill as bf
-    monkeypatch.setattr(bf, "reconstruct_upstream", lambda cs, targets=None, language=None: [
+    monkeypatch.setattr(bf, "reconstruct_upstream", _handing_over([
         {"module": "M3", "candidate": {"conceptual_model": {"c": ["A"]}},
          "rationale": "", "ready_to_confirm": True, "review": []},
         {"module": "M1", "candidate": {"research_title": "T"},
          "rationale": "", "ready_to_confirm": True, "review": []},
-    ])
+    ]))
     committed = []
 
     class _Store(_DbStore):
@@ -50,20 +66,44 @@ def test_backfill_tool_saves_each_reconstruction(monkeypatch):
             return {"module": module, "status": "done", "focus": "M4"}
 
     out = json.loads(make_backfill_tool(_Store({"m4_analysis": {"analysis_results": "x"}})).invoke({}))
-    # Committed in MODULES order, not the order the reconstructor happened to
-    # return — an M1 commit after M3 would flag the M3 it just wrote.
-    assert [m for m, _ in committed] == ["M1", "M3"]
-    assert [s["module"] for s in out["saved"]] == ["M1", "M3"]
+    # Committed as produced (the real walk runs M4→M1), so the work survives a
+    # run that breaks off. Safe out of MODULES order because
+    # commit_reconstructed preserves a downstream module that already started.
+    assert [m for m, _ in committed] == ["M3", "M1"]
+    assert [s["module"] for s in out["saved"]] == ["M1", "M3"]   # display order
+
+
+def test_backfill_tool_keeps_what_it_finished_when_the_walk_dies(monkeypatch):
+    """A headless run has nobody to click retry, so a walk that dies on the
+    last module must not discard the modules already paid for."""
+    import orchestrator.backfill as bf
+    monkeypatch.setattr(bf, "reconstruct_upstream", _handing_over([
+        {"module": "M3", "candidate": {"conceptual_model": {"c": ["A"]}},
+         "rationale": "", "ready_to_confirm": True, "review": []},
+        {"module": "M2", "candidate": {"research_gaps": [{"description": "g"}]},
+         "rationale": "", "ready_to_confirm": True, "review": []},
+    ], explode_after="M2"))
+    committed = []
+
+    class _Store(_DbStore):
+        def commit_reconstructed(self, module, slice_, **kw):
+            committed.append(module)
+            return {"module": module, "status": "done", "focus": "M4"}
+
+    out = json.loads(make_backfill_tool(_Store({"m4_analysis": {"analysis_results": "x"}})).invoke({}))
+    assert out["ok"] is True                       # a dead walk still reports
+    assert committed == ["M3", "M2"]
+    assert [s["module"] for s in out["saved"]] == ["M2", "M3"]
 
 
 def test_backfill_tool_reports_the_rest_when_one_commit_fails(monkeypatch):
     import orchestrator.backfill as bf
-    monkeypatch.setattr(bf, "reconstruct_upstream", lambda cs, targets=None, language=None: [
+    monkeypatch.setattr(bf, "reconstruct_upstream", _handing_over([
         {"module": "M1", "candidate": {"research_title": "T"},
          "rationale": "", "ready_to_confirm": True, "review": []},
         {"module": "M3", "candidate": {"conceptual_model": {"c": ["A"]}},
          "rationale": "", "ready_to_confirm": True, "review": []},
-    ])
+    ]))
 
     class _Store(_DbStore):
         def commit_reconstructed(self, module, slice_, **kw):
