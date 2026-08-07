@@ -343,3 +343,47 @@ def test_grounding_can_still_be_turned_off(monkeypatch):
     cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
     bf.reconstruct_upstream(cs, targets=["M2"], llm=_fake_llm("{}"))
     assert called["n"] == 0
+
+
+def test_progress_is_reported_per_module_and_closes(monkeypatch):
+    """Grounding turned this from seconds into a minute-plus. An unexplained
+    wait is what makes a student reload and pay for the whole run twice."""
+    import orchestrator.backfill as bf
+    monkeypatch.setenv("DOTHESIS_BACKFILL_GROUND_M2", "0")
+    monkeypatch.setattr(bf, "reconstruct_artifact", lambda *a, **k: {"paradigm": "quant"})
+    seen = []
+    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    bf.reconstruct_upstream(cs, targets=["M1", "M3"], llm=_fake_llm("{}"),
+                            on_progress=lambda d, t, m: seen.append((d, t, m)))
+    assert seen[0] == (0, 2, "M3")        # bottom-up: M3 first
+    assert seen[1] == (1, 2, "M1")
+    assert seen[-1] == (2, 2, None)       # the bar reaches its end
+
+
+def test_a_module_that_yields_nothing_still_advances_the_bar(monkeypatch):
+    """The skip path `continue`s past the body, so a report placed after it
+    would stall the bar on exactly the modules that were skipped."""
+    import orchestrator.backfill as bf
+    monkeypatch.setenv("DOTHESIS_BACKFILL_GROUND_M2", "0")
+    monkeypatch.setattr(bf, "reconstruct_artifact", lambda *a, **k: {})
+    seen = []
+    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    bf.reconstruct_upstream(cs, targets=["M1", "M3"], llm=_fake_llm("{}"),
+                            on_progress=lambda d, t, m: seen.append((d, t, m)))
+    assert [d for d, _, _ in seen] == [0, 1, 2]
+
+
+def test_a_failing_progress_callback_never_kills_the_work(monkeypatch):
+    """The callback writes to the DB from inside an expensive walk. Losing the
+    reconstruction to a reporting bug would be a bad trade."""
+    import orchestrator.backfill as bf
+    monkeypatch.setenv("DOTHESIS_BACKFILL_GROUND_M2", "0")
+    monkeypatch.setattr(bf, "reconstruct_artifact", lambda *a, **k: {"paradigm": "quant"})
+
+    def _boom(*a):
+        raise RuntimeError("progress backend down")
+
+    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    out = bf.reconstruct_upstream(cs, targets=["M3"], llm=_fake_llm("{}"),
+                                  on_progress=_boom)
+    assert [i["module"] for i in out] == ["M3"]

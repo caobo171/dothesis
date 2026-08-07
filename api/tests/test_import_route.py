@@ -177,7 +177,7 @@ def test_reconstruct_endpoint_saves_every_candidate(monkeypatch):
     import orchestrator.backfill as bf
     # Returned out of MODULES order on purpose — the route must commit upstream
     # first, or M2's commit flags the M3 it just wrote as needs_review.
-    monkeypatch.setattr(bf, "reconstruct_upstream", lambda cs, language=None: [
+    monkeypatch.setattr(bf, "reconstruct_upstream", lambda cs, language=None, **kw: [
         {"module": "M3", "artifact": "design",
          "candidate": {"conceptual_model": {"constructs": ["A", "B"]},
                        "paradigm": "quantitative"},
@@ -214,7 +214,7 @@ def test_reconstruct_survives_one_module_failing_to_commit(monkeypatch):
     _seed_m4(pid)
     monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
     import orchestrator.backfill as bf
-    monkeypatch.setattr(bf, "reconstruct_upstream", lambda cs, language=None: [
+    monkeypatch.setattr(bf, "reconstruct_upstream", lambda cs, language=None, **kw: [
         {"module": "M2", "artifact": "literature",
          "candidate": {"research_gaps": [{"description": "gap"}]},
          "rationale": "", "ready_to_confirm": False, "review": []},

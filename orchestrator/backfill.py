@@ -187,9 +187,23 @@ def _m2_real_sources(context_store) -> list[dict]:
     return dedup_sources(sources)
 
 
+def _report_progress(cb, done: int, total: int, module: str | None) -> None:
+    """Publish progress without letting a reporting failure kill the work.
+
+    The callback crosses into the API layer (a DB write on its own session), and
+    reconstruction is expensive enough that losing it to a progress bug would be
+    a genuinely bad trade.
+    """
+    try:
+        cb(done, total, module)
+    except Exception:
+        logger.exception("backfill: progress callback failed")
+
+
 def reconstruct_upstream(context_store, targets: list[str] | None = None,
                          llm=None, language: str | None = None,
-                         ground_m2: bool | None = None) -> list[dict]:
+                         ground_m2: bool | None = None,
+                         on_progress=None) -> list[dict]:
     """Reconstruct the missing UPSTREAM modules from whatever evidence exists.
 
     Bottom-up (M4→…→M1) so each adjacent inference (the only reliable jump — see
@@ -269,7 +283,17 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
     cs = context_store
     out: list[dict] = []
     # Bottom-up: process the highest target first so lower ones see it as evidence.
-    for module in sorted(targets, key=_MODULE_ORDER.index, reverse=True):
+    # Ordered work list, published BEFORE the first module so the caller can show
+    # a real denominator rather than a spinner. Grounding turned this from a few
+    # seconds into a minute-plus, and an unexplained wait is what makes a student
+    # reload the page and pay for the whole thing twice.
+    ordered = sorted(targets, key=_MODULE_ORDER.index, reverse=True)
+    for _idx, module in enumerate(ordered):
+        # Reported at the TOP, not after the body: a module that yields no
+        # candidate hits `continue` below, and a report placed after that would
+        # stall the bar on exactly the modules that were skipped.
+        if on_progress:
+            _report_progress(on_progress, _idx, len(ordered), module)
         artifact = MODULE_TO_ARTIFACT[module]
         candidate = reconstruct_artifact(artifact, cs, llm=llm, language=language)
         if not candidate:
@@ -315,6 +339,10 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
         # Feed forward on a COPY so the next (lower) module can lean on this one.
         cs = cs.model_copy(update={_MODULE_TO_FIELD[module]: candidate})
     out.sort(key=lambda e: _MODULE_ORDER.index(e["module"]))
+    # Close the bar. Without this it stops one short of the total, and a bar
+    # that never reaches its end reads as a hang no matter what happened.
+    if on_progress:
+        _report_progress(on_progress, len(ordered), len(ordered), None)
     return out
 
 

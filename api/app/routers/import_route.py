@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -75,6 +75,12 @@ def _store_and_files(db: Session, project_id):
     return _store(db, project_id), files, lang
 
 
+def _surface_of(request: Request) -> str:
+    """Which client started the run. Mirrors routers/tools.py's helper; kept
+    local so the import route does not pull in the whole tools module."""
+    return (request.headers.get("X-DoThesis-Surface") or "web").strip()[:16] or "web"
+
+
 def _set_focus(db: Session, project_id, focus: str) -> None:
     db.execute(update(Project).where(Project.id == project_id).values(focus=focus))
     db.commit()
@@ -123,7 +129,8 @@ def import_project(project_id: str, user: User = Depends(current_user), db: Sess
 
 
 @router.post("/projects/{project_id}/mid-journey-import/reconstruct")
-def reconstruct_upstream_modules(project_id: str, user: User = Depends(current_user),
+def reconstruct_upstream_modules(project_id: str, request: Request,
+                                 user: User = Depends(current_user),
                                  db: Session = Depends(db_session)):
     """Phase 2 of mid-journey import: infer the missing UPSTREAM modules from the
     imported evidence and SAVE them.
@@ -145,6 +152,26 @@ def reconstruct_upstream_modules(project_id: str, user: User = Depends(current_u
     from orchestrator.backfill import reconstruct_upstream
     store = _store(db, project_id)
     slices = store.load_full_context_store() or {}
+
+    # Open a run row BEFORE the work so the screen can poll it. Grounding turned
+    # this from a few seconds into a minute-plus, and an unexplained wait is
+    # what makes a student reload the page — which pays for the whole
+    # reconstruction a second time. Same mechanism humanize-docx already uses.
+    from ..tool_billing import begin_tool_run, bump_progress  # noqa: PLC0415
+    # Progress is telemetry. Opening the row must never be what fails an import
+    # the student already paid for in wall-clock time, so a failure here costs
+    # the progress bar and nothing else.
+    try:
+        run_id = begin_tool_run(db, user, tool="backfill-modules",
+                                surface=_surface_of(request))
+    except Exception:
+        logger.exception("import: could not open a progress run")
+        run_id = None
+
+    def _progress(done: int, total: int, module: str | None) -> None:
+        if run_id is not None:
+            bump_progress(run_id, done=done, total=total)
+
     try:
         cs = _orch_context_store(db, project_id)
         # Was hardcoded "vi" on the assumption every student writes Vietnamese.
@@ -152,7 +179,8 @@ def reconstruct_upstream_modules(project_id: str, user: User = Depends(current_u
         # thesis came back reconstructed into Vietnamese. Read it off their own
         # work instead; the agent tool does the same.
         reconstructed = reconstruct_upstream(
-            cs, language=_language_of_existing_work(slices) or "vi")
+            cs, language=_language_of_existing_work(slices) or "vi",
+            on_progress=_progress)
     except Exception:
         logger.exception("import: reconstruct_upstream failed for %s", project_id)
         reconstructed = []
@@ -176,6 +204,9 @@ def reconstruct_upstream_modules(project_id: str, user: User = Depends(current_u
     # steps it completed, and the store's own save writes Project.focus.
     return {"reconstructed": reconstructed, "saved": saved,
             "final_chapter_moved": moved,
+            # The client polls /runs/{id}/progress with this while the POST is
+            # still in flight.
+            "run_id": run_id,
             "focus": store.load()["focus"]}
 
 
