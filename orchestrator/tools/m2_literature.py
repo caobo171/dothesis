@@ -339,11 +339,28 @@ def _filter_relevant_citations(citations: list[dict], topic: str) -> list[dict]:
 
 
 @tool
-def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
+def scout_citations(topic: str, min_n: int = 20, deep: bool = True,
+                    min_sources_deep: int = 100,
+                    per_topic_timeout_s: int = 90) -> list[dict]:
     """Discover at least `min_n` academic citations for `topic`.
 
     Returns a list of dicts: {title, authors, year, source, url, doi}.
     Backed by engine/utils/agent_runner.research_citations_via_api.
+
+    Internal knobs — agents should leave these alone; they exist for callers
+    running behind a wall-clock deadline:
+
+    - `deep` picks the planner. True runs the engine's DeepResearchPlanner,
+      which finds materially better sources than the three hand-rolled topic
+      variants below.
+    - `min_sources_deep` is what actually sizes the deep plan. At the default
+      100 the planner emitted 249 queries for one thesis title, batched with
+      rate-limit pauses — many minutes of work.
+    - `per_topic_timeout_s` caps ONE query's fan-out across the citation APIs.
+
+    A deep plan that overruns its caller's deadline is not a slower answer, it
+    is NO answer: the caller times out and every real DOI already found is
+    discarded. So bound the plan rather than turning the good planner off.
     """
     # Test seam: M2_SCOUT_TOPIC_COUNT caps how many topic variants we search.
     # Production default = 3 (broad coverage). The sim sets it to 1 because
@@ -375,9 +392,11 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
             research_topics=research_topics,
             output_path=tmp / "scout_raw.md",
             target_minimum=min_n,
-            use_deep_research=True,
+            use_deep_research=deep,
             topic=topic,
             scope=topic,
+            min_sources_deep=min_sources_deep,
+            per_topic_timeout_seconds=per_topic_timeout_s,
         )
     except ValueError:
         # The engine raises its quality gate (and discards results) when it finds
@@ -390,9 +409,11 @@ def scout_citations(topic: str, min_n: int = 20) -> list[dict]:
             research_topics=research_topics,
             output_path=tmp / "scout_raw.md",
             target_minimum=1,
-            use_deep_research=True,
+            use_deep_research=deep,
             topic=topic,
             scope=topic,
+            min_sources_deep=min_sources_deep,
+            per_topic_timeout_seconds=per_topic_timeout_s,
         )
     citations = result.get("citations", [])
 

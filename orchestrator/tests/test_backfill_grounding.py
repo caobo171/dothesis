@@ -29,8 +29,9 @@ class _CountingScout:
         self.rows = rows or []
         self.raises = raises
 
-    def func(self, topic, min_n=10):
+    def func(self, topic, min_n=10, **kwargs):
         self.calls += 1
+        self.kwargs = kwargs          # what the caller asked the planner for
         if self.raises:
             raise RuntimeError("scout blew up")
         return self.rows
@@ -124,3 +125,19 @@ def test_no_topic_skips_search(monkeypatch):
     cs = ContextStore(m4_analysis={"data_type_detected": "Quantitative", "results": {"n": 1}})
     assert B._m2_real_sources(cs) == []               # no research_title
     assert scout.calls == 0
+
+
+def test_the_backfill_asks_for_a_plan_that_can_finish(monkeypatch):
+    """The grounded search must not use the deep planner from inside a request.
+
+    At the engine's defaults the deep planner emitted 249 queries for one
+    thesis title, each allowed 90s. It could never finish inside
+    _m2_real_sources' deadline, so the future timed out, the except swallowed
+    it, and every real DOI already found was discarded — grounding was on by
+    default, cost two minutes of the student's import, and always returned [].
+    """
+    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
+    _patch_search(monkeypatch, scout)
+    B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm(), ground_m2=True)
+    assert scout.calls == 1
+    assert scout.kwargs.get("deep") is False

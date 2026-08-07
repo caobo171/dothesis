@@ -153,19 +153,49 @@ def _m2_real_sources(context_store) -> list[dict]:
     if not topic:
         return []  # M1 not seeded/reconstructed yet — nothing to search on
     rqs = [str(q) for q in (m1.get("research_questions") or [])]
-    composed = topic
-    if rqs:
-        composed += "\nResearch questions:\n" + "\n".join(f"- {q}" for q in rqs)
 
     import concurrent.futures as _fut
     from orchestrator.tools.domain_sources import (
         classify_domain, dedup_sources, domain_supplement, search_query_en)
 
+    # Search in ENGLISH. Crossref / OpenAlex / Semantic Scholar are English
+    # catalogs and our students write Vietnamese titles, so the raw title
+    # matches next to nothing — search_query_en's own docstring says exactly
+    # this, but it was only ever applied to the domain supplement below while
+    # the main scout kept getting the untranslated title. On a real thesis
+    # ("Ảnh hưởng của ... KOLs trên TikTok ...") that was the difference between
+    # one incidental hit and a usable set.
+    #
+    # Degrades to the raw topic on failure (it is self-bounded and returns the
+    # topic unchanged), so this can only add.
+    query = search_query_en(topic, rqs) or topic
+    composed = query
+    if rqs:
+        composed += "\nResearch questions:\n" + "\n".join(f"- {q}" for q in rqs)
+
     citations = None
     ex = _fut.ThreadPoolExecutor(max_workers=1)
     try:
         from orchestrator.tools.m2_literature import scout_citations
-        citations = ex.submit(scout_citations.func, composed, min_n=10).result(
+        # Grounding here was silently DEAD before this. At the engine's
+        # defaults the deep planner emitted 249 queries for one thesis title,
+        # each allowed 90s, batched with rate-limit pauses — it could never
+        # finish inside the deadline below, so the future timed out, the except
+        # swallowed it, and every real DOI already found was discarded. On by
+        # default, two minutes of the student's import wall-clock, always [].
+        #
+        # deep=False finishes (~35s) and returns real, DOI-bearing sources, but
+        # only a handful: the three hand-rolled variants are a much weaker plan
+        # than the deep one. Measured on a live project, deep found several
+        # relevant papers before being cut off; shallow finds ~1.
+        #
+        # So this is the honest floor, not the ceiling. Bounding the deep plan
+        # was tried and does NOT work — min_sources_deep does not size the
+        # planner's query count, and deep=True still overran at 12. Getting
+        # good M2 grounding needs the search moved OFF the request path into a
+        # background job, where it can take the ten minutes it actually wants.
+        citations = ex.submit(scout_citations.func, composed, min_n=10,
+                              deep=False).result(
             timeout=int(os.getenv("DOTHESIS_SCOUT_TIMEOUT_S", "120")))
     except Exception:
         logger.exception("backfill: M2 deep scout failed/timed out — keeping LLM candidate")
@@ -181,9 +211,10 @@ def _m2_real_sources(context_store) -> list[dict]:
 
     domain = classify_domain(m1.get("field"), topic, rqs)
     if domain != "general":
-        # Europe PMC / ERIC are English indexes — feed the translated query.
+        # Europe PMC / ERIC are English indexes — reuse the query translated
+        # above rather than paying for a second identical LLM call.
         # Base first so a paper found by both keeps its validated deep-scout row.
-        sources = dedup_sources(sources + domain_supplement(search_query_en(topic, rqs), domain))
+        sources = dedup_sources(sources + domain_supplement(query, domain))
     return dedup_sources(sources)
 
 
