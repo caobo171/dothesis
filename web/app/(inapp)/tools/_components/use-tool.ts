@@ -442,7 +442,7 @@ export async function humanizeDocument(
   passages?: number | null,
 ): Promise<{
   blob: Blob; filename: string; credits: number | null;
-  rewritten: number | null; skipped: number | null;
+  rewritten: number | null; skipped: number | null; declined: number | null;
 }> {
   let res: Response;
   try {
@@ -471,5 +471,11 @@ export async function humanizeDocument(
     // reported only its successes and the student had to diff the file to find
     // out. They paid for those attempts; they get told about them.
     skipped: num("X-Paragraphs-Skipped"),
+    // The partition of `skipped`. Dropping this made the panel call every
+    // kept paragraph a failure, so a run where the guard correctly refused to
+    // touch 24 already-human paragraphs was reported to the student as 34
+    // paragraphs failing — the tool working exactly as designed, shown as a
+    // defect. `declined` is the success half; skipped - declined is the rest.
+    declined: num("X-Paragraphs-Declined"),
   };
 }

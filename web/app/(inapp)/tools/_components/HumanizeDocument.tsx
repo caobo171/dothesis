@@ -32,7 +32,7 @@ export function HumanizeDocument() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{
     filename: string; credits: number | null;
-    rewritten: number | null; skipped: number | null;
+    rewritten: number | null; skipped: number | null; declined: number | null;
   } | null>(null);
   const t = useT();
   const tn = useTn();
@@ -78,7 +78,8 @@ export function HumanizeDocument() {
       a.remove();
       URL.revokeObjectURL(url);
       setDone({ filename: r.filename, credits: r.credits,
-                rewritten: r.rewritten, skipped: r.skipped });
+                rewritten: r.rewritten, skipped: r.skipped,
+                declined: r.declined });
     } catch (e) {
       setError((e as Error)?.message || t("tools.humanize.errFailed"));
     } finally {
@@ -178,15 +179,31 @@ export function HumanizeDocument() {
             {". "}
             {t("tools.doc.unchanged")}
           </div>
-          {/* A partial run is the case this panel used to hide. Batches whose
-              rewrite failed (provider error, or a rewrite that moved a number)
-              keep their original text and were still billed, so saying only
-              how many succeeded reads as a clean success. */}
-          {done.skipped !== null && done.skipped > 0 && (
-            <div className="mt-1.5 text-[12.5px] text-[#7A5B2E]">
-              {tn("tools.doc.skipped_one", "tools.doc.skipped_other", done.skipped)}
+          {/* `skipped` is BOTH outcomes at once, and reporting it whole called
+              them all failures: a run that declined 24 already-human paragraphs
+              and lost 10 to the provider told the student 34 had failed — the
+              guard doing its job, shown as a defect. Split it, and say the
+              declines in their own words rather than in the failure sentence. */}
+          {done.declined !== null && done.declined > 0 && (
+            <div className="mt-1.5 text-[12.5px] text-ink-600">
+              {tn("tools.doc.declined_one", "tools.doc.declined_other", done.declined)}
             </div>
           )}
+          {/* What genuinely didn't make it: a provider error, or a rewrite that
+              would have moved a number or citation. Still billed, so it stays
+              on screen — saying only how many succeeded reads as a clean run.
+              Falls back to `skipped` when the header is missing (an older API),
+              which is the previous behaviour rather than a silent zero. */}
+          {(() => {
+            const failed = done.skipped === null ? null
+              : done.declined === null ? done.skipped
+              : Math.max(0, done.skipped - done.declined);
+            return failed !== null && failed > 0 ? (
+              <div className="mt-1.5 text-[12.5px] text-[#7A5B2E]">
+                {tn("tools.doc.skipped_one", "tools.doc.skipped_other", failed)}
+              </div>
+            ) : null;
+          })()}
         </div>
       )}
 

@@ -368,6 +368,10 @@ export const vi: Record<MessageKey, string> = {
   "tools.doc.downloaded": "Đã tải về {name}",
   "tools.doc.rewritten_one": "đã viết lại {count} đoạn",
   "tools.doc.rewritten_other": "đã viết lại {count} đoạn",
+  "tools.doc.declined_one":
+    "{count} đoạn đã đọc như người viết nên được giữ nguyên đúng như bạn viết.",
+  "tools.doc.declined_other":
+    "{count} đoạn đã đọc như người viết nên được giữ nguyên đúng như bạn viết.",
   "tools.doc.skipped_one":
     "{count} đoạn giữ nguyên văn bản gốc — viết lại không thành công hoặc sẽ " +
     "làm sai lệch số liệu, trích dẫn.",

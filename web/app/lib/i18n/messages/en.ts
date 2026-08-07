@@ -385,6 +385,12 @@ export const en = {
   "tools.doc.downloaded": "{name} downloaded",
   "tools.doc.rewritten_one": "{count} paragraph rewritten",
   "tools.doc.rewritten_other": "{count} paragraphs rewritten",
+  "tools.doc.declined_one":
+    "{count} paragraph already read as human, so it was left exactly as you " +
+    "wrote it.",
+  "tools.doc.declined_other":
+    "{count} paragraphs already read as human, so they were left exactly as " +
+    "you wrote them.",
   "tools.doc.skipped_one":
     "{count} paragraph kept its original text — its rewrite failed or would " +
     "have changed a number or citation.",
