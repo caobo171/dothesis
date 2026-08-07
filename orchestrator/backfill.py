@@ -177,9 +177,16 @@ def _m2_real_sources(context_store) -> list[dict]:
     # Degrades to the raw topic on failure (it is self-bounded and returns the
     # topic unchanged), so this can only add.
     query = search_query_en(topic, rqs) or topic
+    # Send the query ALONE. The research questions used to be appended as a
+    # "Research questions:\n- ..." block, which pastes Vietnamese prose onto an
+    # English keyword query and poisons it: measured on a real topic, the clean
+    # query returned 7 sources in 10s and the same query with the block
+    # appended returned 3 in 44s — half the results for four times the wait.
+    #
+    # Nothing is lost by dropping it: search_query_en already takes `rqs` and
+    # folds them into the keywords it produces. The block was giving the search
+    # the questions a second time, in the wrong language, as free text.
     composed = query
-    if rqs:
-        composed += "\nResearch questions:\n" + "\n".join(f"- {q}" for q in rqs)
 
     citations = None
     ex = _fut.ThreadPoolExecutor(max_workers=1)
