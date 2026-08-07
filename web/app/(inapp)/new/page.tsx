@@ -92,6 +92,11 @@ export default function NewThesisPage() {
   // was a <Link href="/">, so a student who mis-typed their prompt lost the
   // file they had attached and the note they had written just to correct it.
   const abortRef = useRef<AbortController | null>(null);
+  // Shown after a cancel that happened mid-run. The work IS resumable — each
+  // module is committed as it finishes and a re-run skips the ones already
+  // complete — but nothing said so, so a student who stopped it assumed they
+  // had thrown the whole thing away and started over, paying twice.
+  const [resumable, setResumable] = useState(false);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -167,6 +172,7 @@ export default function NewThesisPage() {
   const analyze = async () => {
     if (!canSubmit) return;
     setError(null);
+    setResumable(false);
     setSubmitting(true);
     setStatus("Creating project…");
     abortRef.current = new AbortController();
@@ -279,6 +285,7 @@ export default function NewThesisPage() {
     setSubmitting(false);
     setStatus(null);
     setError(null);
+    setResumable(true);
   };
 
   // F12: once the import lands, the page becomes the activation summary — the
@@ -353,6 +360,11 @@ export default function NewThesisPage() {
       <div className="mt-5 flex items-center gap-3">
         {error && (
           <span role="alert" className="text-[12.5px] text-red-700 font-semibold">{error}</span>
+        )}
+        {resumable && !submitting && !error && (
+          <span className="text-[12.5px] text-ink-600 font-medium">
+            {t("new.resumable")}
+          </span>
         )}
         {status && !error && (
           <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-500 font-semibold">

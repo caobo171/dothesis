@@ -25,6 +25,7 @@ export const en = {
   "new.attach": "Attach files",
   "new.analyze": "Analyze",
   "new.analyzing": "Analyzing…",
+  "new.resumable": "Stopped. What finished was saved — analyze again to carry on from there.",
   "new.cancel": "Cancel",
   "new.dropHint": "Drop files to attach",
   "new.fileTypes": "PDF, Word, or text · multiple files OK",

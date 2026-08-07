@@ -25,6 +25,7 @@ export const vi: Record<MessageKey, string> = {
   "new.attach": "Đính kèm tệp",
   "new.analyze": "Phân tích",
   "new.analyzing": "Đang phân tích…",
+  "new.resumable": "Đã dừng. Phần đã xong được lưu lại — bấm phân tích lại để chạy tiếp từ chỗ đó.",
   "new.cancel": "Hủy",
   "new.dropHint": "Thả tệp vào đây để đính kèm",
   "new.fileTypes": "PDF, Word hoặc văn bản · có thể chọn nhiều tệp",
