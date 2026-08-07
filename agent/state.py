@@ -165,6 +165,36 @@ def _empty_state() -> dict[str, Any]:
     }
 
 
+def _dod_satisfied(module: str, context_store: dict) -> bool:
+    """True when `module`'s definition-of-done is met by the content present.
+
+    The context_store here is FLAT (every module's keys in one dict) while the
+    DoD validators take a single module's slice, so the module's own keys are
+    projected out first. Best-effort by construction: a missing validator or any
+    failure means "not done", which is the safe direction — it can only leave a
+    module in_progress, never claim work that was not done.
+    """
+    try:
+        from orchestrator.state import dod_for_module  # noqa: PLC0415
+    except Exception:
+        return False
+    dod = dod_for_module(module)
+    if dod is None:
+        return False
+    keys = SLICE_OWNERSHIP.get(module, [])
+    slice_ = {k: context_store[k] for k in keys if k in context_store}
+    # M5's chapters live under keys the ownership map does not list (they are
+    # written by the editor route, not commit_slice), so pass those through too.
+    if module == "M5":
+        for extra in ("chapters",):
+            if extra in context_store:
+                slice_[extra] = context_store[extra]
+    try:
+        return bool(dod(slice_).done)
+    except Exception:
+        return False
+
+
 class ProjectStateStore:
     def __init__(self, project_dir: str | Path):
         self.project_dir = Path(project_dir)
@@ -327,7 +357,19 @@ class ProjectStateStore:
 
         state["contextStore"].update(writes)
         state["focus"] = module
-        state["status"][module] = "done" if confirm_done else "in_progress"
+        # Status came from the confirm_done FLAG alone, so a module could be
+        # demonstrably finished and still read in_progress forever. An imported
+        # thesis is the case that exposed it: M4 satisfies dod_analysis the
+        # moment the document lands, compute_status_map said "done", this said
+        # "in_progress", and the UI reads THIS one — so the student was asked to
+        # redo work the rest of the system agreed was complete.
+        #
+        # The flag still wins when set (it is the student's own sign-off, and
+        # M1/M2/M3 carry DoDs that a conversational commit may not satisfy yet).
+        # Absent it, the evidence decides.
+        state["status"][module] = (
+            "done" if (confirm_done or _dod_satisfied(module, state["contextStore"]))
+            else "in_progress")
 
         # Flag only modules that have been started (or finished). Flagging an
         # untouched `locked` module is noise — there is nothing to re-review.

@@ -208,3 +208,28 @@ def test_parse_reconstructed_none_when_empty_or_malformed():
     assert _parse_reconstructed(json.dumps({"ok": True, "reconstructed": []})) is None
     assert _parse_reconstructed("not json") is None
     assert _parse_reconstructed(json.dumps([1, 2])) is None
+
+
+def test_moving_the_chapter_does_not_flag_m5_for_review(monkeypatch):
+    """Re-filing content is not an upstream edit.
+
+    _move_final_chapter_to_m5 writes M5 and then trims M4, and commit_slice
+    flags DOWNSTREAM["M4"] == ["M5"] on that second write — so the chapter we
+    had just recovered was immediately marked needs_review. A student who
+    imported a finished thesis saw the modules it was reconstructed FROM asking
+    to be re-reviewed.
+    """
+    _capture_language(monkeypatch)
+    seen = []
+
+    class _Store(_DbStore):
+        def commit_slice(self, module, writes, reason, **kw):
+            seen.append((module, kw.get("status_overrides")))
+            return {"module": module, "status": "done"}
+
+    store = _Store({"m4_analysis": {"analysis_results": _thesis_blob()},
+                    "m5_writing": None})
+    make_backfill_tool(store).invoke({})
+
+    m4_call = next(o for m, o in seen if m == "M4")
+    assert m4_call and m4_call.get("M5") == "in_progress"

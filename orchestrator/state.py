@@ -239,6 +239,37 @@ def propagate_needs_review(cs: ContextStore, *, mutated: ModuleKey) -> ContextSt
     return cs.model_copy(update=patch)
 
 
+def _dod_map():
+    """module id -> its definition-of-done validator.
+
+    Imported lazily because orchestrator.artifacts imports state.py
+    transitively (via ContextStore in readiness()) — a top-level import would
+    create a cycle.
+
+    M5 also splits into per-chapter artifacts (see artifacts.ARTIFACTS) but
+    needs a module-level DoD too: without one `done` fired on confirmed_at
+    alone, so a thesis with every chapter written reported in_progress and no
+    amount of work could change that.
+    """
+    from orchestrator.artifacts import (
+        dod_analysis, dod_design, dod_literature, dod_topic, dod_writing,
+    )
+    return {
+        "M1": dod_topic,
+        "M2": dod_literature,
+        "M3": dod_design,
+        "M4": dod_analysis,
+        "M5": dod_writing,
+    }
+
+
+def dod_for_module(module: str):
+    """One module's DoD validator, or None. Public so the agent's state store
+    can ask the same question compute_status_map asks, instead of tracking its
+    own idea of `done` that drifts from this one."""
+    return _dod_map().get(module)
+
+
 def compute_status_map(cs: ContextStore) -> ModuleStatusMap:
     """Derive the per-module workflow status from a ContextStore (brief §1.4).
 
@@ -262,21 +293,7 @@ def compute_status_map(cs: ContextStore) -> ModuleStatusMap:
     # Imported lazily because orchestrator.artifacts imports state.py
     # transitively (via ContextStore in readiness()) — a top-level import
     # would create a cycle.
-    from orchestrator.artifacts import (
-        dod_analysis, dod_design, dod_literature, dod_topic, dod_writing,
-    )
-
-    # M5 also splits into per-chapter artifacts (see artifacts.ARTIFACTS), but
-    # it needs a module-level DoD too: without one `done` fired on confirmed_at
-    # alone, so a thesis with every chapter written reported in_progress and no
-    # amount of work could change that.
-    _dod_by_module = {
-        "M1": dod_topic,
-        "M2": dod_literature,
-        "M3": dod_design,
-        "M4": dod_analysis,
-        "M5": dod_writing,
-    }
+    _dod_by_module = _dod_map()
 
     out: dict[str, ModuleStatus] = {}
     for m in _MODULES:

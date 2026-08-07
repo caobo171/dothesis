@@ -267,3 +267,32 @@ def test_commit_reconstructed_never_walks_focus_backwards(store):
     store.commit_slice("M4", {"analysis_results": "r"}, reason="import")
     store.commit_reconstructed("M3", {"conceptual_model": {"c": ["A"]}})
     assert store.load()["focus"] == "M4"
+
+
+def test_a_module_whose_dod_is_satisfied_reads_done_without_an_explicit_confirm(store):
+    """Status was set from the confirm_done FLAG alone, never from the evidence.
+
+    So an imported thesis — whose M4 demonstrably satisfies dod_analysis — was
+    written as in_progress on every commit, and stayed there. compute_status_map
+    said done, the stored status said in_progress, and the UI reads the stored
+    one. Two notions of "done" that disagreed, with the student shown the wrong
+    one and asked to redo finished work.
+    """
+    written_up = ("CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU\n"
+                  + ("Kết quả phân tích cho thấy mô hình phù hợp. " * 60))
+    result = store.commit_slice("M4", {"analysis_results": written_up}, reason="import")
+    assert result["status"]["M4"] == "done"
+
+
+def test_a_module_that_does_not_meet_its_dod_stays_in_progress(store):
+    """The DoD decides — it must not turn every commit into a finished module."""
+    result = store.commit_slice("M4", {"analysis_results": "TODO: run it"},
+                                reason="wip")
+    assert result["status"]["M4"] == "in_progress"
+
+
+def test_an_explicit_confirm_still_wins(store):
+    """confirm_done is the student's own sign-off and must keep working even
+    where no module-level DoD can speak."""
+    store.commit_slice("M1", {"research_title": "T"}, reason="r", confirm_done=True)
+    assert store.read_slice("M1")["status"]["M1"] == "done"

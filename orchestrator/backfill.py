@@ -249,11 +249,21 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
     else:
         targets = [m for m in targets if m in MODULE_TO_ARTIFACT]
 
-    # Report-only: ground M2 with a real literature search. Env carrier set by
-    # api/app/headless_entry.py (report subprocess); chat/import backfill never
-    # sets it → stays LLM-fast. Explicit kwarg wins (tests).
+    # Ground M2 in a REAL literature search by default.
+    #
+    # This used to be opt-in, so the import path shipped whatever sources the
+    # model recalled. Those are not citations — they are a language model's
+    # recollection of citations, and a thesis is the last place to guess. The
+    # reconstructed M2 is also what `citation_list` is filled from, so an
+    # ungrounded backfill puts invented references into the bibliography of a
+    # document a student submits under their own name.
+    #
+    # It costs a bounded search (_m2_real_sources: hard timeout, returns [] on
+    # any failure and the LLM candidate stands). Set
+    # DOTHESIS_BACKFILL_GROUND_M2=0 to go back to LLM-only.
     if ground_m2 is None:
-        ground_m2 = os.getenv("DOTHESIS_BACKFILL_GROUND_M2", "").strip().lower() in ("1", "true", "yes")
+        _env = os.getenv("DOTHESIS_BACKFILL_GROUND_M2", "").strip().lower()
+        ground_m2 = _env not in ("0", "false", "no")
 
     llm = llm or _llm()
     cs = context_store
@@ -273,6 +283,18 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
             if real:
                 candidate["literature_sources"] = real
                 candidate["citation_list"] = real
+        if module == "M2":
+            # Mirror sources into the citation list when only one side is
+            # filled. dod_literature counts `citation_list`, but the grounded
+            # search that fills it is env-gated and OFF by default, so the LLM
+            # candidate routinely arrived with real `literature_sources` and an
+            # empty `citation_list`. M2 then sat in_progress behind a key
+            # nothing was ever going to fill, while M3/M4/M5 read done — a
+            # student cannot have a finished analysis and an unfinished
+            # literature step, and the two keys are the same normalized dicts
+            # (see above). Never overwrites a citation list that already exists.
+            if not candidate.get("citation_list") and candidate.get("literature_sources"):
+                candidate["citation_list"] = candidate["literature_sources"]
         rationale = candidate.pop("_rationale", None)
         # Completing a partial module must never overwrite it. What is already
         # in the slice is the student's actual work (the imported results, a

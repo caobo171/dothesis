@@ -92,8 +92,14 @@ def _move_final_chapter_to_m5(store, slices: dict) -> bool:
         # chapter in two places, which is recoverable. The reverse loses it.
         store.commit_slice("M5", {"final_sections": [section]},
                            "import: final chapter recovered from the uploaded document")
+        # Trimming M4 is a RE-FILING of content that was already there, not new
+        # upstream work — but commit_slice flags DOWNSTREAM["M4"] == ["M5"], so
+        # without this it marks needs_review on the very chapter it just
+        # recovered. A student importing a finished thesis was told the work
+        # their import was reconstructed FROM needed re-reviewing.
         store.commit_slice("M4", {"analysis_results": head},
-                           "import: final chapter moved to M5")
+                           "import: final chapter moved to M5",
+                           status_overrides={"M5": "in_progress"})
     except Exception:
         logger.exception("backfill: moving the final chapter to M5 failed")
         return False

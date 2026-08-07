@@ -260,3 +260,86 @@ def test_a_dict_field_that_is_not_an_envelope_survives():
     )
     out = reconstruct_artifact("design", cs, llm=llm)
     assert out["conceptual_model"]["nodes"][0]["label"] == "A"
+
+
+def test_m2_citation_list_mirrors_the_sources_it_already_has(monkeypatch):
+    """M2 could not complete while M3/M4/M5 were done.
+
+    dod_literature counts `citation_list`, but the grounded search that fills it
+    is env-gated (DOTHESIS_BACKFILL_GROUND_M2) and off by default, so the LLM
+    candidate shipped `literature_sources` with real entries and `citation_list`
+    empty. The module was then permanently in_progress behind a key nothing was
+    going to fill — the same shape as M4 requiring keys it could not own.
+
+    backfill.py already documents the two as "the same normalized dicts", so
+    when one is populated and the other is not, mirror it.
+    """
+    import orchestrator.backfill as bf
+    sources = [{"title": "A study", "doi": "10.1/x", "year": 2021},
+               {"title": "Another", "doi": "10.1/y", "year": 2020}]
+    monkeypatch.setattr(bf, "reconstruct_artifact", lambda *a, **k: {
+        "research_state_summary": "s", "theoretical_framework": "t",
+        "literature_review_doc": "d", "research_gaps": [{"gap": "g"}],
+        "literature_sources": sources, "citation_list": [],
+    })
+    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    out = bf.reconstruct_upstream(cs, targets=["M2"], llm=_fake_llm("{}"))
+    cand = next(i["candidate"] for i in out if i["module"] == "M2")
+    assert cand["citation_list"] == sources
+
+
+def test_a_real_citation_list_is_never_overwritten(monkeypatch):
+    import orchestrator.backfill as bf
+    real = [{"title": "Already cited", "doi": "10.9/z"}]
+    monkeypatch.setattr(bf, "reconstruct_artifact", lambda *a, **k: {
+        "research_state_summary": "s", "theoretical_framework": "t",
+        "literature_review_doc": "d", "research_gaps": [{"gap": "g"}],
+        "literature_sources": [{"title": "Scouted", "doi": "10.1/x"}],
+        "citation_list": real,
+    })
+    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    out = bf.reconstruct_upstream(cs, targets=["M2"], llm=_fake_llm("{}"))
+    cand = next(i["candidate"] for i in out if i["module"] == "M2")
+    assert cand["citation_list"] == real
+
+
+def test_m2_is_grounded_in_a_real_search_by_default(monkeypatch):
+    """Scouting used to be opt-in, so an import shipped whatever sources the
+    MODEL recalled — and those same entries become the citation_list, i.e. the
+    bibliography of a document the student submits under their own name."""
+    import orchestrator.backfill as bf
+    monkeypatch.delenv("DOTHESIS_BACKFILL_GROUND_M2", raising=False)
+    real = [{"title": "Real paper", "doi": "10.1000/real", "year": 2021}]
+    monkeypatch.setattr(bf, "_m2_real_sources", lambda cs: real)
+    monkeypatch.setattr(bf, "reconstruct_artifact", lambda *a, **k: {
+        "research_state_summary": "s", "theoretical_framework": "t",
+        "literature_review_doc": "d", "research_gaps": [{"gap": "g"}],
+        "literature_sources": [{"title": "LLM recalled", "doi": "10.0/fake"}],
+        "citation_list": [],
+    })
+    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    out = bf.reconstruct_upstream(cs, targets=["M2"], llm=_fake_llm("{}"))
+    cand = next(i["candidate"] for i in out if i["module"] == "M2")
+    assert cand["literature_sources"] == real     # the recalled ones are replaced
+    assert cand["citation_list"] == real
+
+
+def test_grounding_can_still_be_turned_off(monkeypatch):
+    import orchestrator.backfill as bf
+    monkeypatch.setenv("DOTHESIS_BACKFILL_GROUND_M2", "0")
+    called = {"n": 0}
+
+    def _never(cs):
+        called["n"] += 1
+        return []
+
+    monkeypatch.setattr(bf, "_m2_real_sources", _never)
+    monkeypatch.setattr(bf, "reconstruct_artifact", lambda *a, **k: {
+        "research_state_summary": "s", "theoretical_framework": "t",
+        "literature_review_doc": "d", "research_gaps": [{"gap": "g"}],
+        "literature_sources": [{"title": "LLM", "doi": "10.0/x"}],
+        "citation_list": [],
+    })
+    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    bf.reconstruct_upstream(cs, targets=["M2"], llm=_fake_llm("{}"))
+    assert called["n"] == 0
