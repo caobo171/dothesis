@@ -74,15 +74,24 @@ def test_report_optin_grounds_m2_with_real_dois(monkeypatch):
     assert cand["citation_list"] == cand["literature_sources"]  # both keys carry the real list
 
 
-def test_chat_backfill_stays_llm_only(monkeypatch):
+def test_chat_backfill_is_grounded_too(monkeypatch):
+    """Was `test_chat_backfill_stays_llm_only` — grounding is now the default.
+
+    The old behaviour traded correctness for latency: an ungrounded backfill
+    ships whatever sources the MODEL recalled, and those entries become the
+    citation_list, i.e. the bibliography of a document the student submits under
+    their own name. A model's recollection of citations is not citations, and a
+    thesis is the last place to guess. The search is bounded and degrades to the
+    LLM candidate on failure (see test_search_failure_degrades_to_llm), so the
+    cost of being wrong here is a slower import, not a broken one."""
     scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
     _patch_search(monkeypatch, scout)
     monkeypatch.delenv("DOTHESIS_BACKFILL_GROUND_M2", raising=False)
     out = B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm())  # ground_m2 unset
     cand = _m2_entry(out)["candidate"]
-    assert scout.calls == 0                           # no real search
-    assert "literature_sources" not in cand           # LLM candidate untouched
-    assert cand["citation_list"][0]["title"] == "LLM recalled"
+    assert scout.calls == 1                           # scouted without being asked
+    assert any(s.get("doi") == "10.1/x" for s in cand["literature_sources"])
+    assert cand["citation_list"] == cand["literature_sources"]
 
 
 def test_env_var_triggers_grounding(monkeypatch):
