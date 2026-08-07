@@ -675,6 +675,28 @@ def detect_language(text: str) -> str | None:
     return "vi" if marked / len(letters) >= _VI_MARK_RATIO else "en"
 
 
+def anchor_language_conflicts(anchor: str, language: str) -> bool:
+    """True when `anchor` is confidently NOT in `language`.
+
+    Measured on a live run: an English dissertation was rewritten against the
+    student's stored anchor — 566 characters of casual Vietnamese about AI at
+    work. A Vietnamese anchor carries no rhythm an English rewrite can borrow,
+    so the pass silently degraded into the unanchored "make this sound human"
+    rewrite that load_anchors() exists to refuse. Turnitin scored the paragraphs
+    it touched 16.4% -> 36.6%; the untouched control moved 0.1 points.
+
+    The test is deliberately ONE-WAY. detect_language returns "vi" on positive
+    evidence (Vietnamese diacritics above a ratio) but returns "en" merely when
+    that evidence is absent — unaccented Vietnamese is indistinguishable from
+    English to it, as its own docstring notes. So a "vi" verdict may veto the
+    user's anchor and an "en" verdict may not; otherwise every student who types
+    without diacritics loses the anchor that works best for them.
+    """
+    if not (anchor or "").strip():
+        return False
+    return detect_language(anchor) == "vi" and language != "vi"
+
+
 # The chat-assistant wrapper around an answer: "Here is the rewritten text:" /
 # "Bản viết lại: …" in front, "Hope this helps!" behind. The rewrite prompt
 # already forbids them, but a prompt is a request and this is the only thing
@@ -1046,8 +1068,18 @@ def _humanize_prose(
 
     anchors = load_anchors(language)
     if user_anchor and user_anchor.strip():
-        anchors = [{"id": "user_supplied", "desc": "The student's own writing.",
-                    "text": user_anchor.strip()}]
+        # A stored anchor outlives the document it was saved for. The student
+        # who saved Vietnamese prose months ago then submits an English chapter,
+        # and the anchor is still attached. Falling through to the library beats
+        # rewriting against a rhythm from the wrong language.
+        if anchor_language_conflicts(user_anchor, language):
+            logger.warning(
+                "humanize: ignoring user_anchor — it reads as Vietnamese but "
+                "the document is %s; falling back to the anchor library", language)
+        else:
+            anchors = [{"id": "user_supplied",
+                        "desc": "The student's own writing.",
+                        "text": user_anchor.strip()}]
     elif anchor_id:
         anchors = [a for a in anchors if a["id"] == anchor_id] or anchors
 

@@ -199,6 +199,61 @@ def test_anchors_filter_by_language(tmp_path, monkeypatch):
     assert [a["id"] for a in H.load_anchors("en")] == ["b"]
 
 
+# --- the user anchor has to match the document's language ----------------
+#
+# Measured on a live run: an English dissertation was rewritten against the
+# student's stored anchor, 566 characters of casual Vietnamese about AI at work.
+# A Vietnamese anchor carries no usable rhythm for English prose, so the pass
+# degenerated into the unanchored "make this read better" rewrite — the one
+# configuration the anchor research says is worse than doing nothing. Turnitin
+# scored the paragraphs it touched 16.4% -> 36.6%.
+
+MISMATCH_DOC = ("The results in Table 4.3 show that leadership style predicts "
+                "employee performance, with p = 0.003 (Bass, 1994).")
+
+MISMATCH_VI_ANCHOR = ("Mình cảm thấy hiện nay AI đang đóng vai trò càng ngày "
+                      "càng quan trọng, thành một phần không thể thay thế.")
+
+
+def test_a_vietnamese_user_anchor_is_refused_for_an_english_document(
+        tmp_path, monkeypatch):
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    r = H.humanize_prose(MISMATCH_DOC, user_anchor=MISMATCH_VI_ANCHOR,
+                         llm=FakeLLM("rewritten"))
+    assert r["ok"] is False
+    assert r["error"] == "no_anchor"
+    assert r["text"] == MISMATCH_DOC     # the original survives, unrewritten
+
+
+def test_a_mismatched_user_anchor_falls_back_to_the_library(
+        tmp_path, monkeypatch):
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    (tmp_path / "en.txt").write_text("Real English prose.", encoding="utf-8")
+    (tmp_path / "manifest.json").write_text(json.dumps({"anchors": [
+        {"id": "en_lib", "language": "en", "file": "en.txt", "desc": "d"},
+    ]}), encoding="utf-8")
+    good = ("Table 4.3 shows leadership style predicts performance, "
+            "p = 0.003 (Bass, 1994).")
+    r = H.humanize_prose(MISMATCH_DOC, user_anchor=MISMATCH_VI_ANCHOR,
+                         llm=FakeLLM(good))
+    assert r["ok"] is True
+    assert r["anchor"] == "en_lib"       # library anchor, NOT user_supplied
+
+
+def test_an_unaccented_vietnamese_anchor_still_serves_a_vietnamese_document(
+        tmp_path, monkeypatch):
+    """detect_language reads unaccented Vietnamese as "en" — its documented
+    limit. Only a CONFIDENT verdict may veto the student's own anchor, and "en"
+    is the absence of Vietnamese marks, not evidence of English."""
+    monkeypatch.setenv("DOTHESIS_ANCHOR_DIR", str(tmp_path))
+    unaccented = "toi viet cai nay hoi con di hoc, luc do chua biet gi ve AI ca"
+    assert H.detect_language(unaccented) == "en"     # the trap
+    good = "Bảng 4.3 cho thấy β = 0,412, p = 0,003, đúng như Nguyễn (2019) đã nêu."
+    r = H.humanize_prose(SRC, user_anchor=unaccented, llm=FakeLLM(good))
+    assert r["ok"] is True
+    assert r["anchor"] == "user_supplied"
+
+
 # --- pipeline control flow (fake LLM) ------------------------------------
 
 class FakeLLM:
