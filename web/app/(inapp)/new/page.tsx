@@ -261,6 +261,20 @@ export default function NewThesisPage() {
             .catch(() => setReconstructed([])) // graceful: card just shows none
             .finally(() => setReconstructing(false));
         }
+        // Carry the sentence the student typed through to the chat.
+        //
+        // This branch used to `return` straight past stashAnalyzeIntent, so
+        // attaching a file silently threw away whatever they had written in the
+        // box next to it — they pressed Continue and landed in an empty thread,
+        // their actual request never asked. The import is not a substitute for
+        // it: it classifies files, it cannot act on "write chapter 5 in
+        // English".
+        //
+        // preseeded: the modules are already committed, so the first turn must
+        // be their request rather than the /bootstrap re-classification (see
+        // formatAnalyzeMessage). Blank note => stashAnalyzeIntent writes
+        // nothing and the thread opens quietly.
+        stashAnalyzeIntent(newId, { kind, note, attachments, preseeded: true });
         return;
       }
 
@@ -313,7 +327,13 @@ export default function NewThesisPage() {
             focus={focus ?? importResult.focus}
             ambiguous={importResult.ambiguous}
             unreadable={importResult.unreadable}
-            onContinue={() => router.push(`/chat/projects/${importedProjectId}`)}
+            // ?analyzing=1 to match the note-only path. ChatPane picks the
+            // stash up by project id either way, but the two entry points
+            // landing on different URLs for the same handoff is how the
+            // dropped-note bug stayed invisible.
+            onContinue={() =>
+              router.push(`/chat/projects/${importedProjectId}?analyzing=1`)
+            }
             // Still gated on the same state the card below renders from, but for
             // a different reason now that nothing needs confirming: the
             // reconstruction is what decides which module they land on, so

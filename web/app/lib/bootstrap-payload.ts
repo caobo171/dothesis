@@ -37,6 +37,18 @@ export type AnalyzeIntent = {
   note: string;
   /** Files the user dropped, already uploaded to the project. */
   attachments: AnalyzeAttachment[];
+  /**
+   * The project's module state was ALREADY seeded server-side, by
+   * mid-journey-import + reconstruct, before this stash was written.
+   *
+   * It changes what the first turn should be. The normal bootstrap turn asks
+   * the agent to read the uploads, classify them into M1–M5 and seed the
+   * state — all of which just happened, deterministically, and paying an LLM
+   * to redo it would hand the student back a worse version of work they can
+   * already see on the import card. So a preseeded first turn carries only
+   * what the import could not: the sentence the student actually typed.
+   */
+  preseeded?: boolean;
 };
 
 const KEY_PREFIX = "dothesis_analyze_v1:";
@@ -46,6 +58,10 @@ export function stashAnalyzeIntent(projectId: string, intent: AnalyzeIntent): vo
   // Nothing to hand off (blank-start) — don't write a stash, so ChatPane
   // falls through to its normal cold-start empty state.
   if (!intent.note.trim() && intent.attachments.length === 0) return;
+  // Preseeded and nothing typed: the import already did the work AND already
+  // reported it on the activation card. Firing a turn here would bill the
+  // student to be told what is on the screen behind it.
+  if (intent.preseeded && !intent.note.trim()) return;
   try {
     window.sessionStorage.setItem(KEY_PREFIX + projectId, JSON.stringify(intent));
   } catch {
@@ -80,7 +96,20 @@ export function formatAnalyzeMessage(
   note: string,
   hasFiles: boolean,
   kind: AnalyzeKind = "assess",
+  preseeded = false,
 ): string {
+  // State already seeded by the server-side import: send what the student
+  // typed, and nothing else.
+  //
+  // Deliberately NOT "/bootstrap". That prefix's entire job is to read the
+  // uploads, classify them into M1–M5 and seed the project — which the import
+  // and the backfill already did, from the same files, without an LLM. Re-
+  // running it would re-derive the state they can see on the card, and could
+  // re-derive it DIFFERENTLY. The student's sentence is the one thing the
+  // import genuinely could not act on, so it is the whole message.
+  if (preseeded && kind !== "humanize") {
+    return note.trim();
+  }
   if (kind === "humanize") {
     // Deliberately NOT "/bootstrap". That prefix triggers dothesis-bootstrap,
     // whose whole job is to classify uploads into M1–M5 and report where the

@@ -1,6 +1,10 @@
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 
-import { formatAnalyzeMessage } from "./bootstrap-payload";
+import {
+  formatAnalyzeMessage,
+  readAnalyzeIntent,
+  stashAnalyzeIntent,
+} from "./bootstrap-payload";
 
 describe("formatAnalyzeMessage", () => {
   test("defaults to the assessment turn", () => {
@@ -45,5 +49,65 @@ describe("formatAnalyzeMessage", () => {
       .toMatch(/My own notes:\nchương 4 thôi/);
     expect(formatAnalyzeMessage("chương 4 thôi", true))
       .toMatch(/My own notes:\nchương 4 thôi/);
+  });
+});
+
+describe("formatAnalyzeMessage — preseeded (server-side import already ran)", () => {
+  test("sends the student's sentence, not a re-classification", () => {
+    // mid-journey-import + reconstruct already read these files, classified
+    // them into M1-M5 and committed the state, deterministically. Re-running
+    // /bootstrap would pay an LLM to re-derive what the import card is already
+    // showing — and could derive it differently.
+    const msg = formatAnalyzeMessage("write chapter 5 in English", true, "assess", true);
+    expect(msg).toBe("write chapter 5 in English");
+    expect(msg.startsWith("/bootstrap")).toBe(false);
+    expect(msg).not.toMatch(/which thesis modules/);
+  });
+
+  test("humanize is unaffected — it never seeded modules to begin with", () => {
+    const msg = formatAnalyzeMessage("", true, "humanize", true);
+    expect(msg).toMatch(/Use the `dothesis-humanize` skill/);
+  });
+
+  test("without preseeded the assessment turn is unchanged", () => {
+    const msg = formatAnalyzeMessage("write chapter 5 in English", true);
+    expect(msg.startsWith("/bootstrap")).toBe(true);
+  });
+});
+
+describe("stashAnalyzeIntent", () => {
+  const KEY = "dothesis_analyze_v1:p1";
+  beforeEach(() => window.sessionStorage.clear());
+
+  test("keeps the note typed alongside an upload", () => {
+    // The /new import branch used to return before stashing, so attaching a
+    // file silently discarded whatever the student had written next to it and
+    // they landed in an empty thread with their request never asked.
+    stashAnalyzeIntent("p1", {
+      kind: "assess", note: "viết chương 5 bằng tiếng Anh",
+      attachments: [], preseeded: true,
+    });
+    const got = readAnalyzeIntent("p1");
+    expect(got?.note).toBe("viết chương 5 bằng tiếng Anh");
+    expect(got?.preseeded).toBe(true);
+  });
+
+  test("writes nothing when preseeded and the student typed nothing", () => {
+    // The import already reported where they stand on the activation card.
+    // A turn here would bill them to be told what is on the screen behind it.
+    stashAnalyzeIntent("p1", {
+      kind: "assess", note: "   ",
+      attachments: [{ upload_id: "u1", filename: "t.docx", size_bytes: 1 }],
+      preseeded: true,
+    });
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  test("a non-preseeded upload with no note still fires the assessment", () => {
+    stashAnalyzeIntent("p1", {
+      kind: "assess", note: "",
+      attachments: [{ upload_id: "u1", filename: "t.docx", size_bytes: 1 }],
+    });
+    expect(readAnalyzeIntent("p1")?.attachments).toHaveLength(1);
   });
 });

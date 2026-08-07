@@ -222,7 +222,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   // humanize request as a plain assessment would silently change what the
   // retry does.
   const analyzeIntentRef = useRef<
-    { note: string; attachments: any[]; kind?: AnalyzeKind } | null
+    { note: string; attachments: any[]; kind?: AnalyzeKind; preseeded?: boolean } | null
   >(null);
 
   const runAnalyze = useCallback(async () => {
@@ -236,19 +236,25 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     // stream normally instead of covering it with an overlay about something
     // else.
     const isHumanize = (intent.kind ?? "assess") === "humanize";
-    if (!isHumanize) {
+    // A preseeded turn is the student's own request against a project whose
+    // modules are already committed — not an assessment. Covering it with the
+    // "here's where you stand" overlay would hide the answer they asked for
+    // behind a screen repeating the import card they just left.
+    const skipOverlay = isHumanize || !!intent.preseeded;
+    if (!skipOverlay) {
       setAnalyzing(true);
       setAnalyzePhase("running");
     }
     const msg = formatAnalyzeMessage(
       intent.note, intent.attachments.length > 0, intent.kind ?? "assess",
+      !!intent.preseeded,
     );
     // send resolves when the turn's SSE stream closes. await the project
     // refetch (not fire-and-forget) so the result phase reads the freshly-
     // committed module_status rather than the stale pre-turn snapshot.
     await send(msg, undefined, intent.attachments);
     const fresh = await mutateProject();
-    if (isHumanize) return;  // no overlay to resolve
+    if (skipOverlay) return;  // no overlay to resolve
     // A turn that was killed/aborted before commit_slice (e.g. server restart,
     // disconnect) leaves every module "locked"/absent. Don't present that as a
     // finished analysis — surface a retry instead of a misleading "all not
