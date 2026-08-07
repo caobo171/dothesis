@@ -14,7 +14,11 @@ from orchestrator.state import ContextStore
 
 # A valid-enough M2 candidate JSON so reconstruct_artifact returns non-empty.
 _M2_LLM_JSON = ('{"citation_list": [{"title": "LLM recalled", "authors": ["X"], '
-                '"year": 2019}], "research_gaps": [{"description": "a gap"}]}')
+                '"year": 2019}], "research_gaps": [{"description": "a gap"}], '
+                # The same blob answers M1 too, and the post-walk grounding needs
+                # a research_title to search on — without it these tests would
+                # pass/fail for the wrong reason.
+                '"research_title": "KOL credibility and purchase intent"}')
 
 
 def _fake_llm(content=_M2_LLM_JSON) -> MagicMock:
@@ -141,3 +145,58 @@ def test_the_backfill_asks_for_a_plan_that_can_finish(monkeypatch):
     B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm(), ground_m2=True)
     assert scout.calls == 1
     assert scout.kwargs.get("deep") is False
+
+
+def test_an_imported_thesis_still_gets_its_citations_searched(monkeypatch):
+    """The case that actually happens, and the one grounding never ran on.
+
+    A finished thesis imports as M4 analysis text and nothing else, so M1 is
+    empty when the walk starts. The walk is BOTTOM-UP (M4->M3->M2->M1), so M2
+    was reconstructed before M1 existed, and _m2_real_sources returns [] on its
+    first line when there is no research_title. Measured on a live import, the
+    scout was called ZERO times: the search wasn't slow or unlucky, it never
+    ran, and every imported thesis landed with citation_list empty.
+
+    M1 is reconstructed by the end of the walk, so M2 is grounded there.
+    """
+    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
+    _patch_search(monkeypatch, scout, eric=False)
+    # No m1_topic — exactly what import_existing_work leaves for a full draft.
+    cs = ContextStore(m4_analysis={"analysis_results": "PLS-SEM A -> B, R2=0.41. " * 60})
+    out = B.reconstruct_upstream(cs, llm=_fake_llm(), ground_m2=True)
+
+    assert scout.calls == 1                          # it ran at all
+    cand = _m2_entry(out)["candidate"]
+    assert any(s.get("doi") == "10.1/x" for s in cand["literature_sources"])
+    assert cand["citation_list"] == cand["literature_sources"]
+
+
+def test_the_late_grounding_is_handed_over_so_it_gets_saved(monkeypatch):
+    """Grounding after the walk is worthless if nobody persists it.
+
+    M2 is committed during the walk, before its sources exist, so the late
+    grounding must hand M2 over a SECOND time — keyed by module, so the caller
+    updates the saved M2 instead of showing two literature modules.
+    """
+    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
+    _patch_search(monkeypatch, scout, eric=False)
+    seen: list[dict] = []
+    cs = ContextStore(m4_analysis={"analysis_results": "PLS-SEM A -> B. " * 60})
+    B.reconstruct_upstream(cs, llm=_fake_llm(), ground_m2=True,
+                           on_module=lambda e: seen.append(
+                               {"module": e["module"],
+                                "n": len(e["candidate"].get("literature_sources") or [])}))
+
+    m2_handovers = [s for s in seen if s["module"] == "M2"]
+    assert len(m2_handovers) == 2                    # once bare, once grounded
+    assert m2_handovers[0]["n"] == 0
+    assert m2_handovers[1]["n"] == 1
+
+
+def test_a_topic_that_already_exists_is_not_searched_twice(monkeypatch):
+    """When M1 is already there the walk grounds M2 inline, and the post-pass
+    must not pay for a second search."""
+    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
+    _patch_search(monkeypatch, scout)
+    B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm(), ground_m2=True)
+    assert scout.calls == 1

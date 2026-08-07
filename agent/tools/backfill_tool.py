@@ -156,6 +156,11 @@ def make_backfill_tool(store):
             module = entry.get("module")
             if not module:
                 return
+            # Keyed by module: M2 is handed over twice (once in the walk, again
+            # after M1 exists so its citations can actually be searched for), and
+            # the second must replace the first rather than duplicate it.
+            items[:] = [e for e in items if e.get("module") != module]
+            saved[:] = [s for s in saved if s.get("module") != module]
             items.append(entry)
             try:
                 saved.append(store.commit_reconstructed(module, entry.get("candidate") or {}))

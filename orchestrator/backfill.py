@@ -141,6 +141,14 @@ def reconstruct_artifact(artifact_key: str, context_store, llm=None,
 _MODULE_ORDER = ("M1", "M2", "M3", "M4")  # M5 is never an upstream target
 
 
+def _search_topic_of(context_store) -> str:
+    """The research title the literature search would run on, or "" if there
+    isn't one yet. Lets the walk tell "no topic" apart from "search found
+    nothing" without paying for the search to discover it."""
+    m1 = getattr(context_store, "m1_topic", None) or {}
+    return str(m1.get("research_title") or "").strip()
+
+
 def _m2_real_sources(context_store) -> list[dict]:
     """A bounded REAL literature search to ground the M2 candidate — the deep
     scout (OpenAlex/Crossref/Semantic Scholar) plus the domain supplement
@@ -343,6 +351,10 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
     # seconds into a minute-plus, and an unexplained wait is what makes a student
     # reload the page and pay for the whole thing twice.
     ordered = sorted(targets, key=_MODULE_ORDER.index, reverse=True)
+    # Whether the search below already ran for M2. The post-walk grounding is a
+    # RETRY for the no-topic case only — a search that ran and legitimately came
+    # back empty (or blew up) must not be paid for a second time.
+    m2_search_attempted = False
     for _idx, module in enumerate(ordered):
         # Reported at the TOP, not after the body: a module that yields no
         # candidate hits `continue` below, and a report placed after that would
@@ -353,11 +365,18 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
         candidate = reconstruct_artifact(artifact, cs, llm=llm, language=language)
         if not candidate:
             continue
-        if module == "M2" and ground_m2:
+        if module == "M2" and ground_m2 and _search_topic_of(cs):
+            m2_search_attempted = True
             # Replace the LLM-recalled sources with real, DOI-bearing ones. Both
             # keys carry the same normalized dicts: literature_sources is what the
             # report reads (agent SLICE_OWNERSHIP["M2"]); citation_list is what
             # dod_literature counts. Empty search → leave the LLM candidate as-is.
+            #
+            # Only when a topic already exists. This walk runs BOTTOM-UP, so on
+            # the dominant real case — a finished thesis that imports as M4
+            # analysis text and nothing else — M1 has not been reconstructed
+            # yet when we get here, and the search has no title to search on.
+            # It is grounded after the walk instead (see below).
             real = _m2_real_sources(cs)
             if real:
                 candidate["literature_sources"] = real
@@ -398,6 +417,44 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
             _hand_over(on_module, entry)
         # Feed forward on a COPY so the next (lower) module can lean on this one.
         cs = cs.model_copy(update={_MODULE_TO_FIELD[module]: candidate})
+
+    # Ground M2 now that M1 exists.
+    #
+    # This is THE reason imported theses arrived with an empty citation_list. The
+    # walk is bottom-up so M2 is reconstructed BEFORE M1, and _m2_real_sources
+    # returns [] on the spot when there is no research_title. On the case that
+    # actually happens — a finished thesis lands as M4 analysis text and nothing
+    # else — that is every time: measured, the scout was called ZERO times. The
+    # search wasn't slow or unlucky, it never ran.
+    #
+    # M1 is reconstructed by the end of the loop, so the title exists here. Only
+    # for an M2 that still has no real sources, so a search that already
+    # succeeded above is never paid for twice.
+    if ground_m2 and not m2_search_attempted:
+        m2_entry = next((e for e in out if e["module"] == "M2"), None)
+        # Deliberately NOT gated on "the candidate has no literature_sources".
+        # The sources it does have at this point are the ones the MODEL
+        # recalled, and replacing exactly those is the entire point of
+        # grounding — gating on them would let a fabricated bibliography block
+        # the real search that was meant to overwrite it.
+        if m2_entry is not None:
+            real = _m2_real_sources(cs)
+            if real:
+                cand = m2_entry["candidate"]
+                cand["literature_sources"] = real
+                cand["citation_list"] = real
+                # Re-grade: the slice changed, so the gaps reported with it must
+                # be recomputed or the widget keeps saying "citation_list is
+                # empty" over a list that is no longer empty.
+                regraded = _gate_for(m2_entry["artifact"])(cand)
+                m2_entry["ready_to_confirm"] = regraded.done
+                m2_entry["review"] = regraded.gaps
+                # Hand it over AGAIN so the caller persists the sources. Callers
+                # key by module (see the route's _save_now), so this updates the
+                # committed M2 rather than adding a second one.
+                if on_module:
+                    _hand_over(on_module, m2_entry)
+
     out.sort(key=lambda e: _MODULE_ORDER.index(e["module"]))
     # Close the bar. Without this it stops one short of the total, and a bar
     # that never reaches its end reads as a hang no matter what happened.

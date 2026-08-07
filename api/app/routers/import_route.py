@@ -192,6 +192,12 @@ def reconstruct_upstream_modules(project_id: str, request: Request,
         module = entry.get("module")
         if not module:
             return
+        # Keyed by module, not appended blindly: M2 is handed over a SECOND time
+        # once M1 exists and its citations can be searched for (see
+        # reconstruct_upstream). That re-emit must UPDATE the saved M2, not show
+        # the student two literature modules.
+        reconstructed[:] = [e for e in reconstructed if e.get("module") != module]
+        saved[:] = [s for s in saved if s.get("module") != module]
         reconstructed.append(entry)
         # A commit failure on one module must not take the others down: the
         # exception is swallowed here so reconstruct_upstream's _hand_over does
