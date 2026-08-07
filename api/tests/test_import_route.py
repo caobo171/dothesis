@@ -239,3 +239,65 @@ def test_reconstruct_survives_one_module_failing_to_commit(monkeypatch):
 
     from app.agent_state import DbProjectStateStore
     assert DbProjectStateStore(get_engine(), pid, f"/tmp/ws-{pid}").load()["status"]["M3"] == "done"
+
+
+def _seed_full_thesis(project_id):
+    """A finished thesis: chapters 4 AND 5 in one blob, which is how a .docx
+    upload actually lands."""
+    from app.agent_state import DbProjectStateStore
+    blob = ("CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU\n"
+            + ("Kết quả phân tích cho thấy mô hình phù hợp. " * 60)
+            + "\nCHƯƠNG 5: KẾT LUẬN VÀ KHUYẾN NGHỊ\n"
+            + ("Nghiên cứu đóng góp vào lý thuyết hiện có. " * 60))
+    store = DbProjectStateStore(get_engine(), project_id, f"/tmp/ws-{project_id}")
+    store.commit_slice("M4", {"analysis_results": blob}, reason="import")
+    return store
+
+
+def test_the_web_import_reconstructs_in_the_students_language(monkeypatch):
+    """language was hardcoded "vi" HERE too — the agent tool was fixed and this
+    route, which is the one the /new screen actually calls, was not."""
+    import app.routers.import_route as ir
+    pid = _project()
+    # Long enough to read: detect_language declines below 24 letters, and the
+    # shared _seed_m4 blob ("PLS-SEM A->B, R2=0.41") is under that — it would
+    # correctly fall back to "vi" and prove nothing.
+    from app.agent_state import DbProjectStateStore
+    DbProjectStateStore(get_engine(), pid, f"/tmp/ws-{pid}").commit_slice(
+        "M4", {"analysis_results": (
+            "The survey instrument was distributed to hotel employees and 218 "
+            "valid responses were retained for analysis using partial least "
+            "squares structural equation modelling.")}, reason="import")
+    monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
+    import orchestrator.backfill as bf
+    seen = {}
+
+    def fake(cs, targets=None, language=None, **kw):
+        seen["language"] = language
+        return []
+
+    monkeypatch.setattr(bf, "reconstruct_upstream", fake)
+    _client().post(f"/api/v1/projects/{pid}/mid-journey-import/reconstruct")
+    # The seeded evidence is English, so mirroring it must not yield "vi".
+    assert seen["language"] == "en"
+
+
+def test_the_web_import_moves_the_final_chapter_into_m5(monkeypatch):
+    """The split lived only in the agent's backfill tool, so a student importing
+    through the web screen kept chapter 5 buried in M4 and M5 locked."""
+    import app.routers.import_route as ir
+    pid = _project()
+    _seed_full_thesis(pid)
+    monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
+    import orchestrator.backfill as bf
+    monkeypatch.setattr(bf, "reconstruct_upstream",
+                        lambda cs, targets=None, language=None, **kw: [])
+
+    r = _client().post(f"/api/v1/projects/{pid}/mid-journey-import/reconstruct")
+    assert r.status_code == 200
+
+    from app.agent_state import DbProjectStateStore
+    state = DbProjectStateStore(get_engine(), pid, f"/tmp/ws-{pid}").load()
+    m5 = state["contextStore"].get("final_sections") or []
+    assert isinstance(m5, list) and m5 and "CHƯƠNG 5" in m5[0]["prose"]
+    assert "CHƯƠNG 5" not in state["contextStore"]["analysis_results"]

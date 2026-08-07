@@ -139,16 +139,24 @@ def reconstruct_upstream_modules(project_id: str, user: User = Depends(current_u
     """
     _authorize(db, user, project_id)
     from .chat import _orch_context_store
+    from agent.tools.backfill_tool import (  # noqa: PLC0415
+        _language_of_existing_work, _move_final_chapter_to_m5,
+    )
     from orchestrator.backfill import reconstruct_upstream
+    store = _store(db, project_id)
+    slices = store.load_full_context_store() or {}
     try:
         cs = _orch_context_store(db, project_id)
-        # DoThesis students write in Vietnamese; localize the inferred candidates.
-        reconstructed = reconstruct_upstream(cs, language="vi")
+        # Was hardcoded "vi" on the assumption every student writes Vietnamese.
+        # They don't — this is the route the /new screen calls, and an English
+        # thesis came back reconstructed into Vietnamese. Read it off their own
+        # work instead; the agent tool does the same.
+        reconstructed = reconstruct_upstream(
+            cs, language=_language_of_existing_work(slices) or "vi")
     except Exception:
         logger.exception("import: reconstruct_upstream failed for %s", project_id)
         reconstructed = []
 
-    store = _store(db, project_id)
     saved: list[dict] = []
     by_module = {item["module"]: item for item in reconstructed if item.get("module")}
     for module in MODULES:                        # MODULES order → no spurious downstream needs_review
@@ -159,9 +167,15 @@ def reconstruct_upstream_modules(project_id: str, user: User = Depends(current_u
             saved.append(store.commit_reconstructed(module, item.get("candidate") or {}))
         except Exception:
             logger.exception("import: commit_reconstructed %s failed for %s", module, project_id)
+    # A finished thesis arrives as one blob under m4_analysis, chapters 4 AND 5
+    # together, so M5 receives nothing and stays locked behind work already
+    # done. Declines on anything ambiguous — see chapter_split.
+    moved = _move_final_chapter_to_m5(store, slices)
+
     # No _set_focus here: commit_reconstructed already advanced focus past the
     # steps it completed, and the store's own save writes Project.focus.
     return {"reconstructed": reconstructed, "saved": saved,
+            "final_chapter_moved": moved,
             "focus": store.load()["focus"]}
 
 
