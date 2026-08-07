@@ -47,6 +47,46 @@ def _language_of_existing_work(slices: dict) -> str | None:
     return detect_language(max(texts, key=len))
 
 
+def _move_final_chapter_to_m5(store, slices: dict) -> bool:
+    """Give M5 the final chapter that arrived buried in M4. True if moved.
+
+    A finished thesis is written into `m4_analysis.analysis_results` as one
+    string, chapters 4 and 5 together, so M5 receives nothing and stays locked
+    behind work the student already did.
+
+    Three ways this declines, all of them "leave the document exactly as it
+    arrived", because misfiling someone's discussion chapter is worse than
+    making them paste it across once:
+      - M5 already has content — their own work outranks anything we carve out
+      - no confident chapter boundary (see chapter_split's gates)
+      - the commit fails, which must not take the rest of the backfill down
+    """
+    m5 = slices.get("m5_writing")
+    if isinstance(m5, dict) and m5.get("final_sections"):
+        return False
+    m4 = slices.get("m4_analysis")
+    if not isinstance(m4, dict):
+        return False
+
+    from orchestrator.chapter_split import split_final_chapter  # noqa: PLC0415
+
+    split = split_final_chapter(m4.get("analysis_results"))
+    if split is None:
+        return False
+    head, tail = split
+    try:
+        # M5 first: if the M4 rewrite failed after M5 landed we would have the
+        # chapter in two places, which is recoverable. The reverse loses it.
+        store.commit_slice("M5", {"final_sections": tail},
+                           "import: final chapter recovered from the uploaded document")
+        store.commit_slice("M4", {"analysis_results": head},
+                           "import: final chapter moved to M5")
+    except Exception:
+        logger.exception("backfill: moving the final chapter to M5 failed")
+        return False
+    return True
+
+
 def make_backfill_tool(store):
     @tool
     def backfill_upstream_modules(targets: list[str] | None = None,
@@ -99,7 +139,9 @@ def make_backfill_tool(store):
                 saved.append(store.commit_reconstructed(module, item.get("candidate") or {}))
             except Exception:
                 logger.exception("backfill: commit_reconstructed %s failed", module)
-        return json.dumps({"ok": True, "reconstructed": items, "saved": saved},
-                          ensure_ascii=False)
+
+        split = _move_final_chapter_to_m5(store, slices)
+        return json.dumps({"ok": True, "reconstructed": items, "saved": saved,
+                           "final_chapter_moved": split}, ensure_ascii=False)
 
     return backfill_upstream_modules

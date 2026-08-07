@@ -127,6 +127,65 @@ def test_language_falls_back_to_vietnamese_when_there_is_nothing_to_read(monkeyp
     assert seen["language"] == "vi"
 
 
+def _thesis_blob() -> str:
+    return ("CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU\n"
+            + ("Kết quả phân tích cho thấy mô hình phù hợp. " * 60)
+            + "\nCHƯƠNG 5: KẾT LUẬN VÀ KHUYẾN NGHỊ\n"
+            + ("Nghiên cứu đóng góp vào lý thuyết hiện có. " * 60))
+
+
+def test_a_finished_thesis_has_its_last_chapter_moved_to_m5(monkeypatch):
+    """Chapters 4 and 5 arrive in one blob under m4_analysis, so M5 stayed null
+    and locked while the student's own conclusions sat in the wrong module."""
+    _capture_language(monkeypatch)
+    committed = {}
+
+    class _Store(_DbStore):
+        def commit_slice(self, module, writes, reason, **kw):
+            committed[module] = writes
+            return {"module": module, "status": "done"}
+
+    store = _Store({"m4_analysis": {"analysis_results": _thesis_blob()},
+                    "m5_writing": None})
+    make_backfill_tool(store).invoke({})
+
+    assert "CHƯƠNG 5" in (committed["M5"]["final_sections"] or "")
+    assert "CHƯƠNG 5" not in committed["M4"]["analysis_results"]
+    assert "CHƯƠNG 4" in committed["M4"]["analysis_results"]
+
+
+def test_an_unsplittable_document_is_left_exactly_as_it_arrived(monkeypatch):
+    """No confident boundary → touch nothing. Misfiling a discussion chapter is
+    worse than leaving the blob whole."""
+    _capture_language(monkeypatch)
+    committed = {}
+
+    class _Store(_DbStore):
+        def commit_slice(self, module, writes, reason, **kw):
+            committed[module] = writes
+            return {"module": module, "status": "done"}
+
+    only_ch4 = "CHƯƠNG 4: KẾT QUẢ\n" + ("Kết quả phân tích. " * 200)
+    make_backfill_tool(_Store({"m4_analysis": {"analysis_results": only_ch4}})).invoke({})
+    assert committed == {}
+
+
+def test_an_already_populated_m5_is_never_overwritten(monkeypatch):
+    """The student's real M5 work outranks anything we could carve out."""
+    _capture_language(monkeypatch)
+    committed = {}
+
+    class _Store(_DbStore):
+        def commit_slice(self, module, writes, reason, **kw):
+            committed[module] = writes
+            return {"module": module, "status": "done"}
+
+    store = _Store({"m4_analysis": {"analysis_results": _thesis_blob()},
+                    "m5_writing": {"final_sections": "Chương 5 tôi đã tự viết."}})
+    make_backfill_tool(store).invoke({})
+    assert committed == {}
+
+
 def test_parse_reconstructed_shapes_widget():
     content = json.dumps({"ok": True, "reconstructed": [
         {"module": "M3", "candidate": {"paradigm": "quant"}, "rationale": "r",

@@ -154,6 +154,34 @@ def test_dod_analysis_qualitative_requires_codes_and_themes():
     assert any("qual_codes" in g for g in result.gaps)
 
 
+def test_dod_analysis_accepts_an_imported_write_up():
+    """A student who uploads a finished thesis has DONE the analysis.
+
+    Their whole document lands as one `analysis_results` string and none of the
+    engine's structured keys exist — the module then sat in_progress forever and
+    the agent asked them to plan an analysis they had already run and written
+    up. `data_type_detected` and `results` are not even M4-owned, so on the
+    imported path there is no way for them to arrive.
+    """
+    imported = ("CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU\n"
+                "4.1. Thống kê mô tả mẫu khảo sát\n" + ("Kết quả cho thấy. " * 200))
+    assert dod_analysis({"analysis_results": imported}).done is True
+
+
+def test_dod_analysis_is_not_satisfied_by_a_stub():
+    """The escape hatch must not turn every scrap into a finished module."""
+    result = dod_analysis({"analysis_results": "TODO: run the analysis"})
+    assert result.done is False
+    assert any("analysis_outline" in g for g in result.gaps)
+
+
+def test_dod_analysis_structured_path_is_unchanged():
+    """The engine writes a dict, not prose — its DoD must still be the strict
+    one, or a half-finished engine run would report done."""
+    partial = {"analysis_results": {"step1": {"step_name": "descriptives"}}}
+    assert dod_analysis(partial).done is False
+
+
 def test_dod_chapter_done_when_prose_present():
     slice_ = {"chapters": {"methodology": {"prose": "Our design uses..."}}}
     assert dod_chapter("methodology")(slice_).done is True

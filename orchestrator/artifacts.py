@@ -148,13 +148,34 @@ def dod_literature(slice_: dict) -> DoD:
     return DoD(done=not gaps, gaps=gaps)
 
 
+# An imported analysis chapter, in characters. A finished thesis lands as one
+# large blob; a stub ("TODO: run the analysis") must not clear the bar. Set well
+# above a note and well below any real chapter — the observed import was 37,916.
+_IMPORTED_WRITEUP_MIN = 1500
+
+
 def dod_analysis(slice_: dict) -> DoD:
     """M4 analysis: a detected data type, an outline, ≥1 result.
 
     Mirrors M4Output._require_artifacts_on_confirm: qualitative additionally
     needs qual_codes + qual_themes.
+
+    EXCEPT for an imported write-up. A student who uploads a finished thesis has
+    demonstrably done the analysis, but their document arrives as one
+    `analysis_results` STRING and none of the structured keys above. Worse,
+    `data_type_detected` and `results` are not M4-owned (agent/state.py), so on
+    the imported path there is no way for them to ever arrive — the module sat
+    in_progress permanently while the agent asked the student to plan an
+    analysis they had already run, and M5 stayed locked behind it.
+
+    The escape is deliberately narrow: a STRING (the engine writes a dict, and
+    that path must keep the strict DoD or a half-finished run would report done)
+    of real length (a stub is not a chapter).
     """
     slice_ = slice_ or {}
+    imported = slice_.get("analysis_results")
+    if isinstance(imported, str) and len(imported.strip()) >= _IMPORTED_WRITEUP_MIN:
+        return DoD(done=True, gaps=[])
     gaps = _missing_strings(slice_, ("data_type_detected",))
     if not slice_.get("analysis_outline"):
         gaps.append("missing analysis_outline")
