@@ -157,7 +157,7 @@ def reconstruct_upstream_modules(project_id: str, request: Request,
     # this from a few seconds into a minute-plus, and an unexplained wait is
     # what makes a student reload the page — which pays for the whole
     # reconstruction a second time. Same mechanism humanize-docx already uses.
-    from ..tool_billing import begin_tool_run, bump_progress  # noqa: PLC0415
+    from ..tool_billing import begin_tool_run, bump_progress, finish_tool_run  # noqa: PLC0415
     # Progress is telemetry. Opening the row must never be what fails an import
     # the student already paid for in wall-clock time, so a failure here costs
     # the progress bar and nothing else.
@@ -214,6 +214,14 @@ def reconstruct_upstream_modules(project_id: str, request: Request,
         # Whatever _save_now already committed STAYS committed — that is the
         # point of the incremental commit above. Report what landed.
         logger.exception("import: reconstruct_upstream failed for %s", project_id)
+    finally:
+        # ALWAYS close the row. /runs/active answers "what is this user running
+        # right now" from the newest row still marked running, so one import
+        # left open would report itself as the live job forever and every later
+        # document walk would poll its stale numbers. `ok` reflects whether any
+        # module survived, not whether the walk finished cleanly — a run that
+        # died after saving three modules did work for the student.
+        finish_tool_run(run_id, ok=bool(saved))
 
     # Display order for the response; the commits themselves ran bottom-up.
     reconstructed.sort(key=lambda e: MODULES.index(e["module"]) if e["module"] in MODULES else 99)

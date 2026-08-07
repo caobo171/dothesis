@@ -15,6 +15,9 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
 import { ImportSummary } from "@/app/components/chat/ImportSummary";
+// Shared with the document tools: the same "poll my in-flight run" hook, because
+// this screen has the same problem they do (see /runs/active).
+import { useRunProgress } from "@/app/(inapp)/tools/_components/use-tool";
 import { ThesisComposer } from "@/app/components/chat/ThesisComposer";
 import {
   ReconstructedModules,
@@ -78,6 +81,12 @@ export default function NewThesisPage() {
   // it infers them — this screen reports what landed, it doesn't gate it.
   const [reconstructed, setReconstructed] = useState<ReconstructedModule[]>([]);
   const [reconstructing, setReconstructing] = useState(false);
+  // The reconstruction's own progress. It cannot come from the POST's response
+  // — that arrives only when the work is already over, which is the very thing
+  // we are waiting on. useRunProgress asks the server "what am I running right
+  // now" instead, which is why /runs/active exists. Null until the walk reports
+  // its first tick, so the button falls back to a plain spinner rather than 0/0.
+  const reconstructProgress = useRunProgress(reconstructing);
   const [savedModules, setSavedModules] = useState<SavedModule[]>([]);
   // Reconstruction moves focus forward past the steps it completed, so the
   // "you're at / next" line has to follow it rather than keep quoting the
@@ -310,6 +319,7 @@ export default function NewThesisPage() {
             // reconstruction is what decides which module they land on, so
             // leaving early would send them to the wrong one.
             reconstructing={reconstructing}
+            progress={reconstructProgress}
             reconstructed={savedModules.map((s) => s.module)}
           />
           <ReconstructedModules

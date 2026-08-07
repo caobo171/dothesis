@@ -32,6 +32,9 @@ export type ImportSummaryProps = {
    *  lands on, so the button waits for it rather than sending them to a focus
    *  that's about to change. */
   reconstructing?: boolean;
+  /** How far the reconstruction has got, once it has counted its modules.
+   *  Null while it hasn't — a bare spinner beats a misleading 0/0. */
+  progress?: { done: number; total: number } | null;
   /** Modules the backfill reconstructed and saved. */
   reconstructed?: string[];
 };
@@ -43,6 +46,7 @@ export function ImportSummary({
   unreadable = [],
   onContinue,
   reconstructing = false,
+  progress = null,
   reconstructed = [],
 }: ImportSummaryProps) {
   const importedLabels = imported.map(label).join(", ");
@@ -117,8 +121,29 @@ export function ImportSummary({
               className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin"
             />
           )}
-          {reconstructing ? "Reconstructing…" : `Continue to ${label(focus)} →`}
+          {reconstructing
+            ? progress && progress.total > 0
+              // Grounding made this a minute-plus of real search, and a spinner
+              // with no number is what makes a student reload the page — which
+              // pays for the whole reconstruction a second time.
+              ? `Reconstructing… ${progress.done}/${progress.total}`
+              : "Reconstructing…"
+            : `Continue to ${label(focus)} →`}
         </button>
+      )}
+      {reconstructing && progress && progress.total > 0 && (
+        <div
+          className="h-1 w-full max-w-[220px] rounded-full bg-ink-100 overflow-hidden"
+          role="progressbar"
+          aria-valuenow={progress.done}
+          aria-valuemin={0}
+          aria-valuemax={progress.total}
+        >
+          <div
+            className="h-full bg-primary-600 transition-[width] duration-500"
+            style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+          />
+        </div>
       )}
 
       {/* aria-hidden marker kept simple: importedLabels available for future summaries */}

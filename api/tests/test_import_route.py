@@ -61,10 +61,35 @@ def _project(owner_id=None):
         return p.id
 
 
-def _client():
+def _project_and_owner():
+    """Same as _project, but hands back the owner too.
+
+    The progress-run tests need a REAL user: begin_tool_run writes a ToolRun
+    keyed on user.id, so the bare object() the other tests pass makes it fail
+    open and return no run id — which is a fine stand-in for "no progress" but
+    cannot test progress itself."""
+    engine = get_engine()
+    with Session(engine) as s:
+        u = User(email=f"t-{uuid.uuid4().hex[:8]}@x.com", username=uuid.uuid4().hex[:8],
+                 password_hash="x", email_verified=True)
+        s.add(u); s.flush()
+        p = Project(user_id=u.id, name="T", current_module="M4", status="draft")
+        s.add(p); s.commit()
+        return p.id, u.id
+
+
+def _client(user_id=None):
     app = FastAPI()
     app.include_router(ir.router, prefix="/api/v1")
-    app.dependency_overrides[ir.current_user] = lambda: object()
+    # object() by default: every test that doesn't care about billing/progress
+    # only needs `user` to be *something* the stubbed _authorize ignores.
+    if user_id is None:
+        app.dependency_overrides[ir.current_user] = lambda: object()
+    else:
+        def _user():
+            with Session(get_engine()) as s:
+                return s.get(User, user_id)
+        app.dependency_overrides[ir.current_user] = _user
 
     def _db():
         with Session(get_engine()) as s:
@@ -331,6 +356,56 @@ def test_a_resumed_reconstruction_is_not_asked_to_redo_finished_modules(monkeypa
     # M3 survived the first run's death, so the second run sees it as complete
     # and reconstruct_upstream's own auto-target will skip it.
     assert seen["m3_complete"] is True
+
+
+def test_the_progress_run_is_opened_and_then_closed(monkeypatch):
+    """The screen polls /runs/active, which answers from the newest row still
+    marked `running`. A row left open would name this import as the caller's
+    live job forever, so every later document walk would poll its stale
+    numbers — and the import's own progress bar would never be seen to finish.
+    """
+    from app.models import ToolRun
+    pid, uid = _project_and_owner()
+    _seed_m4(pid)
+    monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
+    import orchestrator.backfill as bf
+
+    def fake(cs, targets=None, language=None, on_progress=None, on_module=None, **kw):
+        if on_progress:
+            on_progress(0, 2, "M3")          # the screen needs a denominator
+            on_progress(2, 2, None)
+        return []
+
+    monkeypatch.setattr(bf, "reconstruct_upstream", fake)
+    r = _client(uid).post(f"/api/v1/projects/{pid}/mid-journey-import/reconstruct")
+    assert r.status_code == 200
+    run_id = r.json()["run_id"]
+    assert run_id is not None                 # the screen has something to poll
+
+    with Session(get_engine()) as s:
+        row = s.get(ToolRun, run_id)
+    assert row.status != "running"            # closed, not left dangling
+    assert row.progress_total == 2 and row.progress_done == 2
+
+
+def test_the_progress_run_is_closed_even_when_the_walk_dies(monkeypatch):
+    """The dangling-row failure is worst on the path that already went wrong."""
+    from app.models import ToolRun
+    pid, uid = _project_and_owner()
+    _seed_m4(pid)
+    monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: None)
+    import orchestrator.backfill as bf
+    monkeypatch.setattr(bf, "reconstruct_upstream", _handing_over([
+        {"module": "M3", "candidate": {"conceptual_model": {"c": ["A"]}},
+         "rationale": "", "ready_to_confirm": True, "review": []},
+    ], explode_after="M3"))
+
+    r = _client(uid).post(f"/api/v1/projects/{pid}/mid-journey-import/reconstruct")
+    assert r.status_code == 200
+    with Session(get_engine()) as s:
+        row = s.get(ToolRun, r.json()["run_id"])
+    assert row.status != "running"
+    assert row.ok is True                     # M3 landed, so the run did work
 
 
 def _seed_full_thesis(project_id):

@@ -171,6 +171,39 @@ def bump_progress(run_id: int | None, *, done: int, total: int | None = None) ->
         logger.exception("tool run progress update failed: run=%s", run_id)
 
 
+def finish_tool_run(run_id: int | None, *, ok: bool = True) -> None:
+    """Close a run opened by begin_tool_run that has no invoice to write.
+
+    record_tool_run is the normal closer, but it exists to bill: it prices the
+    work, debits the user and writes the audit row. A run opened purely as a
+    PROGRESS channel — the import backfill, whose LLM spend is metered through
+    token_ledger instead — has nothing for it to charge, and leaving the row
+    open is not harmless: /runs/active answers "what is this user running right
+    now" with the newest row still marked running, so one unclosed import would
+    report itself as the live job forever and every later document walk would
+    poll the stale numbers.
+
+    Own session and never raises, for the same reason as bump_progress: this is
+    bookkeeping for work that has already happened.
+    """
+    if not run_id:
+        return
+    from .db import get_session_factory  # noqa: PLC0415
+    from .models import ToolRun  # noqa: PLC0415
+
+    try:
+        Session = get_session_factory()
+        with Session() as s:
+            row = s.get(ToolRun, run_id)
+            if row is None:
+                return
+            row.status = "done" if ok else "failed"
+            row.ok = ok
+            s.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception("tool run close failed: run=%s", run_id)
+
+
 def record_tool_run(
     db: Session,
     user: User,
