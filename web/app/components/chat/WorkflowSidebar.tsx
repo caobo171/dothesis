@@ -165,7 +165,10 @@ function ThreadList({
   const archived = threads.filter(t => t.status === "archived");
 
   return (
-    <div className="px-2 pb-2">
+    // px-[14px] matches the project chip's mx-[14px] directly above. At px-2
+    // this block sat 6px further left than everything else in the rail, so the
+    // New-thread pill and the selected row read as pushed against the border.
+    <div className="px-[14px] pb-2">
       {onNew && (
         <button
           type="button"
@@ -230,8 +233,12 @@ function ThreadRow({
       type="button"
       onClick={onClick}
       className={`w-full px-3 py-2 rounded-xl inline-flex items-center gap-2 text-left transition-colors ${
+        // Selection is a QUIET surface, not a second brand colour. The blue
+        // tint competed with the New-thread pill right above it, so the rail
+        // had two things shouting at once. Weight + a neutral fill carry the
+        // state; hover stays one step lighter so it still reads as reachable.
         active
-          ? "bg-primary-50 text-primary-700 font-semibold"
+          ? "bg-ink-100 text-ink-900 font-semibold"
           : "text-ink-700 hover:bg-ink-50 font-medium"
       }`}
     >
