@@ -296,6 +296,8 @@ export function M2Body({ data }: { data: Record<string, any> | null }) {
     // The committed shape uses `why_it_is_a_gap`; an older path had the typo'd
     // `why_its_a_gap`. Tolerate both.
     why_it_is_a_gap?: string; why_its_a_gap?: string; addressable_as?: string;
+    // What the backfill/reconstruction path commits.
+    gap?: string;
     description?: string; text?: string; title?: string;
     relevance?: string;
     confirmed?: boolean;
@@ -325,9 +327,13 @@ export function M2Body({ data }: { data: Record<string, any> | null }) {
   // ("gap-1 context gap"). Prefer the real content: a one-sentence summary, the
   // rationale (why_it_is_a_gap), or what it's addressable as. `type` is dropped
   // from the chain (it's shown as a separate label in the gap modal).
+  // `gap` is the key the BACKFILL path writes — reconstructed gaps commit as
+  // [{gap: "..."}], and its absence here rendered a real gap as the placeholder
+  // "(research gap)" three times over on an imported thesis. The content was
+  // there the whole time; only this chain could not see it.
   const gapText = (g: Gap) =>
     g.one_sentence || g.why_it_is_a_gap || g.why_its_a_gap || g.addressable_as ||
-    g.description || g.text || g.title || "(research gap)";
+    g.gap || g.description || g.text || g.title || "(research gap)";
   // Chip + modal id: the commit shape stores `gap_id` ("1"), older paths used
   // `id`. Fall back to positional G{n} so a malformed gap still gets a label.
   const gapId = (g: Gap, i: number) =>

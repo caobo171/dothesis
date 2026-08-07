@@ -21,9 +21,36 @@ from langchain_core.tools import tool
 logger = logging.getLogger(__name__)
 
 
+def _language_of_existing_work(slices: dict) -> str | None:
+    """Which language the student's own work is in, or None if unreadable.
+
+    Read off the evidence rather than assumed. This used to be hardcoded "vi",
+    so a student who asked for their thesis in English got every reconstructed
+    field back in Vietnamese — the same defect detect_language() already
+    documents for the humanize path, in a second place.
+
+    Longest slice wins: the imported document lands as one large blob (usually
+    M4 analysis_results) and that is the most reliable sample of how the student
+    actually writes. detect_language returns None below its minimum length, so
+    short stub values can't out-vote it.
+    """
+    from orchestrator.tools.humanize import detect_language  # noqa: PLC0415
+
+    texts: list[str] = []
+    for slice_ in (slices or {}).values():
+        if isinstance(slice_, dict):
+            texts.extend(v for v in slice_.values() if isinstance(v, str))
+        elif isinstance(slice_, str):
+            texts.append(slice_)
+    if not texts:
+        return None
+    return detect_language(max(texts, key=len))
+
+
 def make_backfill_tool(store):
     @tool
-    def backfill_upstream_modules(targets: list[str] | None = None) -> str:
+    def backfill_upstream_modules(targets: list[str] | None = None,
+                                  language: str | None = None) -> str:
         """Reconstruct earlier thesis steps the student SKIPPED, inferring each
         from the work they already have.
 
@@ -31,9 +58,16 @@ def make_backfill_tool(store):
         earlier steps (Topic M1, Literature M2, Design M3, Analysis M4), or wants
         to jump ahead but is missing prerequisites. `targets` optionally limits
         the work to specific module ids (e.g. ["M3"] for just the research
-        design); omit it to reconstruct every missing upstream module. Each
-        reconstructed module is SAVED as done — tell the student what was filled
-        in and that they can ask you to change any of it.
+        design); omit it to reconstruct every missing upstream module.
+
+        `language` is the language to WRITE the reconstruction in — pass "en" or
+        "vi" whenever the student has said which they want ("viết bằng tiếng
+        Anh", "write this in English"). Omit it and the language is read off the
+        student's own uploaded work. Their stated preference wins: a Vietnamese
+        draft plus "write it in English" means English.
+
+        Each reconstructed module is SAVED as done — tell the student what was
+        filled in and that they can ask you to change any of it.
         """
         # store.load_full_context_store is DB-store-only (the api path). The CLI
         # file store can't supply per-module slices, so degrade gracefully.
@@ -44,8 +78,11 @@ def make_backfill_tool(store):
         from orchestrator.state import ContextStore  # noqa: PLC0415
         from agent.state import MODULES  # noqa: PLC0415
         try:
-            cs = ContextStore(**loader())
-            items = reconstruct_upstream(cs, targets=targets, language="vi")
+            slices = loader()
+            cs = ContextStore(**slices)
+            # Caller's request first, then the evidence, then the house default.
+            lang = language or _language_of_existing_work(slices) or "vi"
+            items = reconstruct_upstream(cs, targets=targets, language=lang)
         except Exception:
             logger.exception("backfill_upstream_modules failed")
             items = []

@@ -77,6 +77,56 @@ def test_backfill_tool_reports_the_rest_when_one_commit_fails(monkeypatch):
     assert len(out["reconstructed"]) == 2      # still reported to the student
 
 
+def _capture_language(monkeypatch):
+    """Record the `language` reconstruct_upstream is called with."""
+    import orchestrator.backfill as bf
+    seen = {}
+
+    def fake(cs, targets=None, language=None, **kw):
+        seen["language"] = language
+        return []
+
+    monkeypatch.setattr(bf, "reconstruct_upstream", fake)
+    return seen
+
+
+def test_an_explicit_language_reaches_the_reconstructor(monkeypatch):
+    """The student asked for the thesis in English; the agent passes that on.
+
+    This was hardcoded to "vi", so a student who uploaded a Vietnamese draft and
+    asked for it in English got every reconstructed field back in Vietnamese —
+    the same defect detect_language() already documents for the humanize path.
+    """
+    seen = _capture_language(monkeypatch)
+    store = _DbStore({"m4_analysis": {"analysis_results": "Chapter 4 results."}})
+    make_backfill_tool(store).invoke({"language": "en"})
+    assert seen["language"] == "en"
+
+
+def test_language_defaults_to_the_language_of_the_students_own_work(monkeypatch):
+    """No explicit request → read it off the evidence, never assume."""
+    seen = _capture_language(monkeypatch)
+    english = ("The survey instrument was distributed to employees of hotels "
+               "across the region and 218 valid responses were retained for "
+               "analysis using partial least squares structural equation "
+               "modelling throughout this chapter.")
+    make_backfill_tool(_DbStore({"m4_analysis": {"analysis_results": english}})).invoke({})
+    assert seen["language"] == "en"
+
+    seen2 = _capture_language(monkeypatch)
+    vietnamese = ("Nghiên cứu sử dụng phương pháp chọn mẫu thuận tiện với 303 "
+                  "đáp viên hợp lệ tại Thành phố Hồ Chí Minh, dữ liệu được xử "
+                  "lý bằng phần mềm SPSS.")
+    make_backfill_tool(_DbStore({"m4_analysis": {"analysis_results": vietnamese}})).invoke({})
+    assert seen2["language"] == "vi"
+
+
+def test_language_falls_back_to_vietnamese_when_there_is_nothing_to_read(monkeypatch):
+    seen = _capture_language(monkeypatch)
+    make_backfill_tool(_DbStore({"m4_analysis": {"analysis_results": "x"}})).invoke({})
+    assert seen["language"] == "vi"
+
+
 def test_parse_reconstructed_shapes_widget():
     content = json.dumps({"ok": True, "reconstructed": [
         {"module": "M3", "candidate": {"paradigm": "quant"}, "rationale": "r",
