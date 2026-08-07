@@ -229,3 +229,34 @@ def test_a_complete_module_is_left_alone():
                      "results": {"structural": {"step_name": "structural"}}},
     )
     assert "M4" not in [e["module"] for e in reconstruct_upstream(cs, llm=_m4_llm())]
+
+
+def test_a_field_wrapped_as_value_plus_rationale_is_unwrapped():
+    """The prompt asks for a top-level `_rationale`, and the model sometimes
+    generalises that into a per-field {value, rationale} envelope.
+
+    Unwrapped at the parse boundary rather than at the render: the wrapped shape
+    was committed to the context store, so it corrupted state and only surfaced
+    later as "Objects are not valid as a React child" on a screen that had
+    nothing to do with it.
+    """
+    cs = ContextStore(m4_analysis={"data_type_detected": "SmartPLS"})
+    llm = _fake_llm(
+        '{"paradigm": {"value": "quantitative", "rationale": "the tool is SmartPLS"},'
+        ' "design": "PLS-SEM"}'
+    )
+    out = reconstruct_artifact("design", cs, llm=llm)
+    assert out["paradigm"] == "quantitative"     # not the envelope
+    assert out["design"] == "PLS-SEM"            # plain fields untouched
+
+
+def test_a_dict_field_that_is_not_an_envelope_survives():
+    """conceptual_model is legitimately a dict — unwrapping must key on the
+    envelope's exact shape, not on "it is a dict"."""
+    cs = ContextStore(m4_analysis={"data_type_detected": "SmartPLS"})
+    llm = _fake_llm(
+        '{"paradigm": "quantitative", "conceptual_model": '
+        '{"nodes": [{"id": "n0", "label": "A"}], "edges": []}}'
+    )
+    out = reconstruct_artifact("design", cs, llm=llm)
+    assert out["conceptual_model"]["nodes"][0]["label"] == "A"

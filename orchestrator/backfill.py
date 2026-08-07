@@ -47,6 +47,24 @@ def _llm():
     )
 
 
+# The prompt asks for ONE top-level `_rationale`, and the model sometimes
+# generalises that into a per-field envelope: {"research_title": {"value": "...",
+# "rationale": "..."}}. That shape was committed straight into the context store,
+# where it corrupted state and surfaced much later — and somewhere else entirely
+# — as React refusing to render an object as a child.
+#
+# Keyed on the envelope's EXACT shape, not on "it is a dict": conceptual_model,
+# instrument and methodology are all legitimately dicts and must pass through.
+_ENVELOPE_KEYS = ({"value", "rationale"}, {"value"})
+
+
+def _unwrap_field(v):
+    """Return the field's real value, unwrapping a {value, rationale} envelope."""
+    if isinstance(v, dict) and set(v.keys()) in _ENVELOPE_KEYS:
+        return v.get("value")
+    return v
+
+
 def reconstruct_artifact(artifact_key: str, context_store, llm=None,
                          language: str | None = None) -> dict:
     """Infer a candidate slice for a skipped prerequisite from available evidence.
@@ -108,7 +126,8 @@ def reconstruct_artifact(artifact_key: str, context_store, llm=None,
         if not isinstance(data, dict):
             return {}
         # Keep the schema fields plus the meta rationale; drop everything else.
-        out = {k: v for k, v in data.items() if k in fields or k == "_rationale"}
+        out = {k: _unwrap_field(v) for k, v in data.items()
+               if k in fields or k == "_rationale"}
         # A lone _rationale with no real inferred field is not a candidate.
         if not any(k in fields for k in out):
             return {}
