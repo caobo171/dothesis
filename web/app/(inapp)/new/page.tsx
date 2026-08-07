@@ -88,6 +88,10 @@ export default function NewThesisPage() {
   // so a returning user's field/language/citation carry over — they're just no
   // longer surfaced as form fields. Best-effort; first-timers get built-ins.
   const prefsRef = useRef<{ field?: string; language?: string; citation_style?: string }>({});
+  // Cancel has to ABORT the in-flight run, not navigate away: the footer button
+  // was a <Link href="/">, so a student who mis-typed their prompt lost the
+  // file they had attached and the note they had written just to correct it.
+  const abortRef = useRef<AbortController | null>(null);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -148,6 +152,7 @@ export default function NewThesisPage() {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       body: fd,
+      signal: abortRef.current?.signal,
     });
     if (!res.ok) throw new Error(`upload failed (${res.status}) for ${file.name}`);
     const body = await res.json();
@@ -164,12 +169,14 @@ export default function NewThesisPage() {
     setError(null);
     setSubmitting(true);
     setStatus("Creating project…");
+    abortRef.current = new AbortController();
     try {
       // Name is inferred later (the bootstrap turn renames from the detected
       // topic); start generic so the user never has to fill a name field.
       const prefs = prefsRef.current;
       const project = await apiFetch("/projects", {
         method: "POST",
+        signal: abortRef.current?.signal,
         body: {
           name: "Untitled thesis",
           field: prefs.field?.trim() || null,
@@ -212,6 +219,7 @@ export default function NewThesisPage() {
         setStatus("Reading your work…");
         const res = (await apiFetch(`/projects/${newId}/mid-journey-import`, {
           method: "POST",
+          signal: abortRef.current?.signal,
           body: {},
         })) as ImportResult;
         setImportResult(res);
@@ -226,6 +234,7 @@ export default function NewThesisPage() {
           setReconstructing(true);
           apiFetch(`/projects/${newId}/mid-journey-import/reconstruct`, {
             method: "POST",
+            signal: abortRef.current?.signal,
             body: {},
           })
             .then((r: any) => {
@@ -243,11 +252,33 @@ export default function NewThesisPage() {
       stashAnalyzeIntent(newId, { kind, note, attachments });
       router.push(`/chat/projects/${newId}?analyzing=1`);
     } catch (e: any) {
+      // A cancel is not a failure. Aborting mid-flight rejects whichever fetch
+      // was open, and surfacing that as a red error told the student something
+      // broke when they had just pressed the button asking it to stop.
+      if (e?.name === "AbortError") {
+        setSubmitting(false);
+        setStatus(null);
+        return;
+      }
       const code = e?.body?.error?.code;
       setError(code || e?.message || "Could not start. Please try again.");
       setSubmitting(false);
       setStatus(null);
+    } finally {
+      abortRef.current = null;
     }
+  };
+
+  // Stop the run and hand the form back exactly as it was — same file, same
+  // note — so correcting a typo costs a click, not a re-upload. Any project
+  // already created is left alone: it is empty, it is theirs, and deleting
+  // someone's row on a cancel is a worse failure than an unused project.
+  const cancelRun = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setSubmitting(false);
+    setStatus(null);
+    setError(null);
   };
 
   // F12: once the import lands, the page becomes the activation summary — the
@@ -329,9 +360,17 @@ export default function NewThesisPage() {
           </span>
         )}
         <span className="flex-1" />
-        <Button variant="ghost" asChild>
-          <Link href="/">{t("new.cancel")}</Link>
-        </Button>
+        {/* Two different jobs behind one label. Mid-run it STOPS the run and
+            leaves the form intact; idle it is the way back out. Shipping the
+            link in both states is what made "Cancel" throw away the student's
+            attached file and typed note. */}
+        {submitting ? (
+          <Button variant="ghost" onClick={cancelRun}>{t("new.cancel")}</Button>
+        ) : (
+          <Button variant="ghost" asChild>
+            <Link href="/">{t("new.cancel")}</Link>
+          </Button>
+        )}
       </div>
     </div>
   );
