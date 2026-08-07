@@ -216,6 +216,26 @@ else
   echo "    Re-run with ALLOW_REMOTE_MIGRATIONS=1 if you really mean to migrate it."
 fi
 
+# Refuse to boot on top of a listener that is already there.
+#
+# uvicorn cannot bind a taken port, so it exits — but it exits into the
+# background, the script sails on, and the web app keeps talking to whatever
+# ALREADY owns the port. That failure is completely silent and it cost a full
+# afternoon: an orphaned worker from hours earlier answered every request while
+# fix after fix appeared to change nothing, because nothing new was ever
+# serving. Better to stop here and say so.
+if command -v lsof >/dev/null 2>&1; then
+  _held_by=$(lsof -nP -tiTCP:"${API_PORT:-7100}" -sTCP:LISTEN 2>/dev/null | head -1 || true)
+  if [ -n "${_held_by}" ]; then
+    echo "Port ${API_PORT:-7100} is already in use by pid ${_held_by}:" >&2
+    ps -o pid,lstart,command -p "${_held_by}" 2>/dev/null | tail -n +2 >&2
+    echo >&2
+    echo "That process would keep serving — including code from before your last edit." >&2
+    echo "Stop it first:  kill -9 ${_held_by}" >&2
+    exit 1
+  fi
+fi
+
 echo "==> starting api on port ${API_PORT:-7100}"
 # Watch api/, engine/, orchestrator/, and the v3 deep agent runtime (agent/) —
 # uvicorn's --reload only picks up directories listed via --reload-dir.
@@ -284,11 +304,55 @@ elif [ -z "$LANGGRAPH_BIN" ]; then
   echo "==> skipping langgraph studio (langgraph-cli not installed in api/.venv)"
 fi
 
+# Kill a process and everything under it, deepest first.
+#
+# `kill $API_PID` is not enough and the difference is not academic. Each service
+# is launched in a subshell, which runs `arch -arm64`, which runs uvicorn, whose
+# --reload forks a worker of its own. Signalling only the pid we recorded leaves
+# the real server ORPHANED and still holding the port: a 7-hour-old worker kept
+# serving stale code while every "restart" bound nothing and died quietly, so
+# every code change looked like it did nothing.
+#
+# Walks by PPID rather than signalling the process group: -$$ would be wrong,
+# and dangerous, if this script is ever not its own group leader.
+kill_tree() {
+  local pid="$1" sig="${2:-TERM}" child
+  for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+    kill_tree "$child" "$sig"
+  done
+  kill "-$sig" "$pid" 2>/dev/null || true
+}
+
 cleanup() {
+  # The trap fires for INT and then again for EXIT; without this the second
+  # pass reports pids that are already gone.
+  [ -n "${_DEV_CLEANING_UP:-}" ] && return
+  _DEV_CLEANING_UP=1
   echo
   echo "==> shutting down (api=$API_PID web=$WEB_PID studio=${STUDIO_PID:-none})"
-  kill "$API_PID" "$WEB_PID" ${STUDIO_PID:+"$STUDIO_PID"} 2>/dev/null || true
+  for pid in "$API_PID" "$WEB_PID" ${STUDIO_PID:+"$STUDIO_PID"}; do
+    kill_tree "$pid" TERM
+  done
+
+  # uvicorn's reloader ignores SIGTERM often enough to matter — plain `kill`
+  # left it running every time. Give it a moment, then stop asking.
+  sleep 2
+  for pid in "$API_PID" "$WEB_PID" ${STUDIO_PID:+"$STUDIO_PID"}; do
+    kill_tree "$pid" KILL
+  done
   wait 2>/dev/null || true
+
+  # Last resort: anything still holding the API port is an orphan from this run
+  # or an earlier one. Leaving it is what makes the NEXT boot serve stale code.
+  if command -v lsof >/dev/null 2>&1; then
+    local stale
+    stale=$(lsof -nP -tiTCP:"${API_PORT:-7100}" -sTCP:LISTEN 2>/dev/null || true)
+    if [ -n "$stale" ]; then
+      echo "==> force-killing leftover listener on ${API_PORT:-7100}: $stale"
+      # shellcheck disable=SC2086
+      kill -9 $stale 2>/dev/null || true
+    fi
+  fi
   # Postgres is left running on purpose — it persists across restarts.
   # Stop it explicitly with: docker compose down
 }
