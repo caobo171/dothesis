@@ -237,6 +237,32 @@ def reconstruct_upstream_modules(project_id: str, request: Request,
     # done. Declines on anything ambiguous — see chapter_split.
     moved = _move_final_chapter_to_m5(store, slices)
 
+    # Hand M2's literature search off to a background process.
+    #
+    # The walk above already committed whatever the fast shallow search found —
+    # a handful of real, on-topic, DOI-bearing papers, immediately. That is a
+    # usable literature module, not a literature review. The deep planner is
+    # what produces real coverage and it wants minutes, which is more than a
+    # request has: run inline it timed out at 120s and everything it found was
+    # thrown away.
+    #
+    # So the student gets the fast set now and the deep set when it lands,
+    # instead of being made to choose. Its own run row, so the screen can poll
+    # this search separately from the reconstruction that just finished.
+    cite_run_id = None
+    try:
+        from ..job_runner import spawn_citation_search  # noqa: PLC0415
+        cite_run_id = begin_tool_run(db, user, tool="citation-search",
+                                     surface=_surface_of(request))
+        if not spawn_citation_search(project_id, cite_run_id):
+            # Nothing launched, so nothing will ever close that row — and a row
+            # left running makes /runs/active report a dead job as live.
+            finish_tool_run(cite_run_id, ok=False)
+            cite_run_id = None
+    except Exception:
+        logger.exception("import: could not start the citation search for %s", project_id)
+        cite_run_id = None
+
     # No _set_focus here: commit_reconstructed already advanced focus past the
     # steps it completed, and the store's own save writes Project.focus.
     return {"reconstructed": reconstructed, "saved": saved,
@@ -244,6 +270,9 @@ def reconstruct_upstream_modules(project_id: str, request: Request,
             # The client polls /runs/{id}/progress with this while the POST is
             # still in flight.
             "run_id": run_id,
+            # Still going after this response returns — the deep literature
+            # search. Non-null means M2's citations will improve on their own.
+            "citation_run_id": cite_run_id,
             "focus": store.load()["focus"]}
 
 

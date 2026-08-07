@@ -474,6 +474,52 @@ def spawn_orchestrator_run(db: Session, run: Job, brief: dict,
     start_monitor(run.id)
 
 
+def spawn_citation_search(project_id, run_id: int | None) -> bool:
+    """Detach the M2 deep literature search from the request that triggered it.
+
+    Deliberately lighter than the spawners below: no Job row, no events.jsonl,
+    no monitor task. This job streams nothing — it searches for several minutes
+    and writes one slice at the end — so the events plumbing would be machinery
+    with no reader. Progress rides the ToolRun row the caller already opened,
+    which is what /runs/active and the screen already poll.
+
+    A separate PROCESS rather than a thread so it outlives the request, the
+    worker, and an API restart — the whole point is that it takes longer than
+    anything in the request lifecycle is allowed to.
+
+    Returns whether it started. Never raises: the import that triggers this has
+    already committed the student's modules, and failing to launch a background
+    improvement must not turn a successful import into an error.
+    """
+    settings = get_settings()
+    env = os.environ.copy()
+    env["DATABASE_URL"] = os.environ.get("DATABASE_URL", "")
+    # The scout resolves its planner and API keys from the environment
+    # (m2_literature._engine_model reads OPENAI_API_KEY directly), and a
+    # subprocess does not inherit what pydantic-settings loaded from .env.
+    if settings.openai_api_key:
+        env["OPENAI_API_KEY"] = settings.openai_api_key
+    if settings.gemini_api_key:
+        env["GEMINI_API_KEY"] = settings.gemini_api_key
+        env["GOOGLE_API_KEY"] = settings.gemini_api_key
+
+    cmd = [sys.executable, "-m", "app.citation_job", "--project-id", str(project_id)]
+    if run_id:
+        cmd.extend(["--run-id", str(run_id)])
+    try:
+        subprocess.Popen(
+            cmd,
+            cwd=str(Path(__file__).resolve().parents[1]),   # api/, so `app` imports
+            env=env,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,     # survives the API process going away
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        log.exception("could not spawn the citation search for %s", project_id)
+        return False
+
+
 def spawn_headless_run(db: Session, run: Job, params: dict) -> None:
     """Spawn `python -m app.headless_entry` — the deep-agent twin of
     spawn_orchestrator_run. Reuses the events.jsonl contract so the existing
