@@ -181,8 +181,16 @@ def foreign_scripts(original: str, rewritten: str, min_letters: int = 2) -> list
 
 _SENT_SPLIT_RE = re.compile(r"[.!?…]+\s+")
 _BURST_MIN_SENTENCES = 3
-# The clean-paragraph median from the measurement above. Prose that varies this
-# much is prose the detector left alone.
+# The clean-paragraph median from the measurement above: prose that varies this
+# much is prose the detector left alone in that document.
+#
+# It is a SCREEN, not a goal. A later run rewrote that same dissertation toward
+# this number and the flagged share of the rewritten text went 16.4% -> 36.6%;
+# Turnitin's own docs say the model is "not explicitly programmed to evaluate
+# specific signals such as 'burstiness,' 'perplexity'". Flat prose and flagged
+# prose correlate, which makes this good at FINDING limp paragraphs and bad as a
+# target to optimise. The gate below stays relative to the original for exactly
+# this reason.
 CV_TARGET = 0.47
 
 
@@ -294,7 +302,12 @@ def _human_scan(result: dict) -> str:
         return "Nothing long enough to measure — a paragraph needs 3+ sentences."
     lines = [f"{result['flat']} of {result['measured']} measurable paragraphs "
              f"read as machine-even (CV below {result['target']}).",
-             "Rewrite these first; the rest already vary the way human prose does.",
+             "These read flattest — start here. But rewrite the SECTION they sit "
+             "in, not the single paragraphs:",
+             "a detector scores overlapping stretches of ~5-10 sentences, so the "
+             "seam between a rewritten",
+             "paragraph and an untouched neighbour is where a part-finished "
+             "document goes wrong.",
              ""]
     for r in result["paragraphs"]:
         if r["flat"]:

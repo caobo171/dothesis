@@ -45,10 +45,10 @@ If they refuse or have nothing, say plainly that the rewrite will be weaker,
 and use a pre-1928 public-domain passage in a comparable register. Never
 invent one.
 
-## What detectors actually measure
+## What flagged prose looks like — and the trap in that sentence
 
-Do not skip this. It decides what a good rewrite looks like, and the usual
-advice is wrong.
+Do not skip this section, and read the second half of it before you act on the
+first.
 
 Measured against a Turnitin report on a real 10,921-word dissertation, splitting
 its body paragraphs by which ones the detector highlighted:
@@ -61,11 +61,34 @@ its body paragraphs by which ones the detector highlighted:
 
 Sentence *length* is the same in both groups. Vocabulary richness is the same.
 **Uniformity of sentence length is nearly 2× apart.** So "write shorter
-sentences" and "use richer words" both do nothing; varying length deliberately
-is the whole game.
+sentences" and "use richer words" both do nothing.
 
-`scripts/frozen_check.py` measures this, and the target is **CV ≥ 0.47** — the
-level of variation in the prose this detector left alone.
+### Why that is a description, not a target
+
+An earlier version of this file turned that table into an instruction — get the
+CV above 0.47 and you are clean. **That inference is wrong, and we have the data
+to say so.**
+
+The same dissertation was later rewritten toward exactly that target and
+re-submitted. On the paragraphs the rewrite touched, the share of text Turnitin
+flagged went **16.4% → 36.6%**. Paragraphs left alone barely moved. The whole
+document went 23% → 30%.
+
+Turnitin's own documentation now states it plainly:
+
+> "Our model is **not** explicitly programmed to evaluate specific signals such
+> as 'burstiness,' 'perplexity,' or other individual metrics sometimes
+> referenced in public discussions."
+
+So flat prose and flagged prose travel together — that correlation is real and
+it is useful for **finding** weak writing. But flatness is not the thing being
+detected, and forcing the number up does not carry the flag down. Their own FAQ
+lists "text that has been paraphrased without developing new ideas" as a pattern
+that produces false positives, which is a fair description of any rewrite pass.
+
+**Use the measurement to locate limp writing. Do not treat 0.47 as a score to
+farm.** `scripts/frozen_check.py` reports CV so you can see whether a rewrite
+made rhythm better or worse than the original — a guardrail, not a goal.
 
 ## The workflow
 
@@ -75,9 +98,19 @@ level of variation in the prose this detector left alone.
 python3 scripts/frozen_check.py --scan draft.txt
 ```
 
-Lists the paragraphs reading as machine-even, worst first. On the measured
-dissertation only 47% of body paragraphs were flat; rewriting the rest costs
-money and risks their numbers for nothing. Rewrite what this names.
+Lists the paragraphs reading as machine-even, worst first.
+
+**Then decide at the level of a whole section, not paragraph by paragraph.**
+This matters more than it sounds. Turnitin does not score a paragraph on its
+own — it scores overlapping stretches of roughly five to ten sentences, so a
+stretch spanning the join between a rewritten paragraph and an untouched one is
+judged as a single piece. On the measured dissertation, paragraphs that were
+never edited — byte-for-byte identical before and after — picked up flags purely
+from sitting next to something that had been rewritten.
+
+Patching the worst paragraphs and leaving their neighbours is therefore the one
+approach that can leave a document worse off than doing nothing. Rewrite a
+continuous section, or leave the section alone.
 
 2. **Read the anchor.** Study its cadence, sentence-length variance, clause
    structure, punctuation rhythm. Do NOT copy its phrases, its subject matter,
@@ -110,9 +143,17 @@ worse while looking like progress.
 
 ## RESTRUCTURE — what to do when it is still flat
 
-Synonym-swapping moves nothing; burstiness is structural. Escalate one rung at a
+Synonym-swapping moves nothing; rhythm is structural. Escalate one rung at a
 time, re-running the check after each. Every rule under "Never invent" still
 binds at every rung.
+
+**Escalate reluctantly, and stop early.** Each rung is another full pass of a
+model over text a model already rewrote, and detectors are now trained
+specifically on the signature that leaves — Turnitin shipped a detector aimed at
+"bypasser" output in August 2025. Two passes that produce prose you would defend
+in a viva beat five that chase a number. If a passage still reads flat after
+rung 2, the honest answer is usually that the passage needs the writer's own
+thinking added to it, not a third rewrite.
 
 **Rung 1 — vary length.** Mix short (6–12 word) sentences with long (25+ word)
 ones. Merge two adjacent short sentences, or split one long sentence, wherever
@@ -194,6 +235,11 @@ Say this once, before running:
 - It is not a guarantee against a detector, and anyone promising one is lying.
   Registers saturated in modern web text — argumentative essays, formal memos,
   generic tutorials — hold their AI signal even after a good rewrite.
+- **A rewrite can raise a detector score as easily as lower it.** On the one
+  document where we hold real before-and-after Turnitin reports, it went up. If
+  the writing is already theirs and already varied, the safest rewrite is no
+  rewrite — and a tool that says so is worth more than one that always finds
+  something to change.
 - The supervisor's objection is usually about voice and specificity, not
   detection. The strongest follow-up: ask which paragraphs they flagged, and add
   the user's own reasoning to those, in their words. That fixes the underlying
@@ -212,21 +258,41 @@ Say this once, before running:
 ## Where this comes from, and what it leaves out
 
 This is the working method from **DoThesis** (https://dothesis.info), free to
-use and share. It is the real thing, not a teaser: everything above is what the
-paid tool follows.
+use and share. It is the real thing, not a teaser: every rule above is one the
+paid tool follows, including the corrections — when a measurement contradicted
+us, this file changed.
 
-What you are doing by hand here, DoThesis does end to end:
+### What this skill genuinely cannot do
 
-- **A whole thesis at once.** Upload the `.docx`, get it back with formatting,
-  tables and numbering intact — no copying paragraphs in and out.
-- **It checks its own work automatically.** The same guarantees you are
-  enforcing with the script, applied to every paragraph, every run, without you
-  running anything.
-- **It knows when a rewrite is not good enough** and keeps working instead of
-  handing you the first attempt.
-- **It remembers your writing**, so you supply your sample once rather than
-  every session.
-- **You can see exactly what changed**, paragraph by paragraph, and undo the
-  decision to use it at all.
+Worth knowing before you rely on it, because two of these will decide whether a
+rewrite helps you or hurts you.
+
+- **It cannot give you an anchor.** Everything here rests on one, and the skill
+  has none to offer — you supply your own writing, or you fall back to
+  century-old public-domain prose that does not match a thesis register. That
+  fallback is the weak path and this file says so. Assembling anchors that are
+  register-correct *and* still off-distribution is slow, has to be redone per
+  language, and most candidates that look suitable turn out not to be; the
+  checking is the work, not the finding.
+- **It cannot see the whole document.** You are working passage by passage in a
+  chat window. But the unit that gets scored spans passage boundaries, and the
+  seams between what you rewrote and what you did not are exactly where a
+  part-finished document goes wrong. Reading one passage at a time, you cannot
+  see the seam you are creating.
+- **It cannot tell you when to stop.** The hardest judgement is not how to
+  rewrite — it is deciding a document should be handed back untouched because
+  every available rewrite would make it worse. That call needs the whole
+  document, the measurement, and something willing to return nothing and charge
+  nothing.
+- **It cannot keep your formatting.** Tables, heading levels, numbering,
+  cross-references and citation fields survive a `.docx` round-trip only if
+  something is preserving them. Copying prose in and out of chat is where a
+  thesis loses its structure.
+- **It cannot remember you.** Every session starts cold: your sample, your
+  register, your supervisor's objections, all supplied again.
+
+None of this is withheld from the skill to sell you something. It is what a
+chat window cannot reach — document-wide state, a curated corpus, and the
+willingness to do nothing.
 
 Free for a passage. Worth paying for a thesis.
