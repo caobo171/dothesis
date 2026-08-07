@@ -74,10 +74,23 @@ def _move_final_chapter_to_m5(store, slices: dict) -> bool:
     if split is None:
         return False
     head, tail = split
+    # final_sections is a LIST of {chapter_name, title, prose} — the shape
+    # chapters_from_final_sections and sections_from_m5_slice both iterate.
+    # A bare string is silently dropped: they `for sec in final_sections` and
+    # skip anything that is not a dict, so a string yields characters and the
+    # recovered chapter would vanish at export with nothing logged.
+    #
+    # "conclusion" rather than "discussion": the heading this splits on is the
+    # thesis's FINAL chapter (KẾT LUẬN VÀ KHUYẾN NGHỊ / Conclusion and
+    # Recommendations), and mapping it to discussion would put it under the
+    # wrong canonical name in the editor rail.
+    section = {"chapter_name": "conclusion",
+               "title": tail.splitlines()[0].strip()[:120] or "Conclusion",
+               "prose": tail}
     try:
         # M5 first: if the M4 rewrite failed after M5 landed we would have the
         # chapter in two places, which is recoverable. The reverse loses it.
-        store.commit_slice("M5", {"final_sections": tail},
+        store.commit_slice("M5", {"final_sections": [section]},
                            "import: final chapter recovered from the uploaded document")
         store.commit_slice("M4", {"analysis_results": head},
                            "import: final chapter moved to M5")

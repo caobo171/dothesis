@@ -149,7 +149,12 @@ def test_a_finished_thesis_has_its_last_chapter_moved_to_m5(monkeypatch):
                     "m5_writing": None})
     make_backfill_tool(store).invoke({})
 
-    assert "CHƯƠNG 5" in (committed["M5"]["final_sections"] or "")
+    # A LIST of section dicts — chapters_from_final_sections iterates and skips
+    # non-dicts, so a bare string would be dropped silently at export.
+    sections = committed["M5"]["final_sections"]
+    assert isinstance(sections, list) and len(sections) == 1
+    assert sections[0]["chapter_name"] == "conclusion"
+    assert "CHƯƠNG 5" in sections[0]["prose"]
     assert "CHƯƠNG 5" not in committed["M4"]["analysis_results"]
     assert "CHƯƠNG 4" in committed["M4"]["analysis_results"]
 
@@ -181,7 +186,8 @@ def test_an_already_populated_m5_is_never_overwritten(monkeypatch):
             return {"module": module, "status": "done"}
 
     store = _Store({"m4_analysis": {"analysis_results": _thesis_blob()},
-                    "m5_writing": {"final_sections": "Chương 5 tôi đã tự viết."}})
+                    "m5_writing": {"final_sections": [
+                        {"chapter_name": "conclusion", "prose": "Tôi đã tự viết."}]}})
     make_backfill_tool(store).invoke({})
     assert committed == {}
 
