@@ -86,6 +86,16 @@ DOWNSTREAM: dict[str, list[str]] = {
     "M5": [],
 }
 
+# Owned keys that are OUTPUT PREFERENCES, not research decisions.
+#
+# `language` lives on M1 only because M1 owns the key (agent/tools/writing.py's
+# resolve_output_language reads m1_topic.language). What it actually controls is
+# how M5 renders the document — "write this thesis in English" changes the
+# output language, it does not change the literature, the design or the
+# analysis. Writing one of these must therefore NOT propagate needs_review
+# downstream; see the guard in commit_slice.
+PREFERENCE_KEYS = frozenset({"language"})
+
 # Owned keys that are BOOKKEEPING, not module output. They're in
 # SLICE_OWNERSHIP so commit_slice can write them and both stores persist them,
 # but they must never count as "this module produced something" — otherwise a
@@ -377,10 +387,27 @@ class ProjectStateStore:
         # status_overrides instead.
         overrides = status_overrides or {}
         flagged: list[str] = []
-        for down in DOWNSTREAM[module]:
-            if state["status"][down] != "locked":
-                state["status"][down] = "needs_review"
-                flagged.append(down)
+        # A write of nothing but OUTPUT PREFERENCES invalidates nothing.
+        #
+        # `language` is stored on M1 because M1 owns the key, but it is not a
+        # research decision — it is how M5 renders the document. Saying "viết
+        # bài này bằng tiếng Anh" was landing as a commit_slice on M1, which
+        # flagged M2/M3/M4/M5 as needs_review and told a student whose thesis
+        # had just been fully reconstructed that all four modules needed
+        # re-reviewing. Nothing about their literature, design or analysis
+        # changed; only the language the draft comes out in.
+        #
+        # Same principle as roadmap_tasks bypassing this path entirely: a
+        # preference must never move the module state machine. Kept as a
+        # key-set test rather than a new write path so it holds no matter which
+        # tool the agent reaches for.
+        if writes and set(writes).issubset(PREFERENCE_KEYS):
+            pass
+        else:
+            for down in DOWNSTREAM[module]:
+                if state["status"][down] != "locked":
+                    state["status"][down] = "needs_review"
+                    flagged.append(down)
 
         for mod, st in overrides.items():
             _validate_module(mod)

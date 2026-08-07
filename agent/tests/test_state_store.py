@@ -296,3 +296,40 @@ def test_an_explicit_confirm_still_wins(store):
     where no module-level DoD can speak."""
     store.commit_slice("M1", {"research_title": "T"}, reason="r", confirm_done=True)
     assert store.read_slice("M1")["status"]["M1"] == "done"
+
+
+def test_setting_the_output_language_invalidates_nothing(store):
+    """"Viết bài này bằng tiếng Anh" must not mark the whole thesis for review.
+
+    `language` is owned by M1, so the agent persisted it with commit_slice —
+    and that flagged M2/M3/M4/M5 as needs_review. A student whose thesis had
+    just been reconstructed end-to-end was told all four modules needed
+    re-reviewing because they picked the language the DRAFT comes out in.
+    Nothing about their literature, design or analysis changed.
+    """
+    store.commit_slice("M1", {"research_title": "T"}, reason="r", confirm_done=True)
+    store.commit_slice("M2", {"research_gaps": [{"id": "gap-1"}]}, reason="r", confirm_done=True)
+    store.commit_slice("M3", {"hypotheses": ["H1"]}, reason="r", confirm_done=True)
+
+    result = store.commit_slice("M1", {"language": "en"}, reason="write it in English")
+    assert result["status"]["M2"] == "done"          # untouched, not flagged
+    assert result["status"]["M3"] == "done"
+    assert result["flagged"] == []
+    # And it actually landed, so M5 renders in English.
+    assert store.load()["contextStore"]["language"] == "en"
+
+
+def test_a_real_m1_edit_still_flags_downstream(store):
+    """The preference carve-out must not disarm the mechanism it sits in.
+
+    Changing the research title genuinely does invalidate the work built on
+    it — that propagation is the point, and a mixed write (title + language)
+    is a real edit that happens to also set a preference.
+    """
+    store.commit_slice("M1", {"research_title": "T"}, reason="r", confirm_done=True)
+    store.commit_slice("M2", {"research_gaps": [{"id": "gap-1"}]}, reason="r", confirm_done=True)
+
+    result = store.commit_slice("M1", {"research_title": "T2", "language": "en"},
+                                reason="pivot + language")
+    assert result["status"]["M2"] == "needs_review"
+    assert result["flagged"] == ["M2"]
