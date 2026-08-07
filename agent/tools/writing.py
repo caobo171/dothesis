@@ -21,6 +21,52 @@ from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
+# The language slice: what we WRITE in, which is not the same question as what
+# language the student's existing draft is in. A student may upload a Vietnamese
+# draft and ask for the thesis in English.
+_LANG_KEY = "language"
+
+
+def resolve_output_language(context_store: dict | None) -> str:
+    """Which language to WRITE generated prose in.
+
+    Precedence, and each rung exists because the one below it got something
+    wrong in production:
+
+    1. `m1_topic.language` — the student's stated choice. M1 owns this key, so
+       the agent persists it with commit_slice when they say which they want.
+       Nothing else may override it: "viết bằng tiếng Anh" on a Vietnamese draft
+       means English, and inferring from the draft would silently overrule them.
+    2. The language of their own work. A blind default is how an English
+       dissertation came back in Vietnamese — the same failure detect_language()
+       documents for the humanize path. If they never said, mirror what they
+       wrote rather than guessing.
+    3. "vi", the house default, only when there is nothing to read.
+
+    Three call sites resolved this independently and disagreed: two defaulted
+    "vi" and one "en", so the same project exported chapters in one language and
+    limitations in the other.
+    """
+    cs = context_store if isinstance(context_store, dict) else {}
+    m1 = cs.get("m1_topic")
+    stated = (m1 or {}).get(_LANG_KEY) if isinstance(m1, dict) else None
+    if isinstance(stated, str) and stated.strip():
+        return stated.strip()
+
+    from orchestrator.tools.humanize import detect_language  # noqa: PLC0415
+
+    texts: list[str] = []
+    for slice_ in cs.values():
+        if isinstance(slice_, dict):
+            texts.extend(v for v in slice_.values() if isinstance(v, str))
+        elif isinstance(slice_, str):
+            texts.append(slice_)
+    if texts:
+        # Longest wins: an imported thesis lands as one large blob and is the
+        # most reliable sample of how this student actually writes.
+        return detect_language(max(texts, key=len)) or "vi"
+    return "vi"
+
 
 def _maybe_humanize(sections: list[dict], enabled: bool,
                     language: str) -> tuple[list[dict], list[dict] | None]:
@@ -98,8 +144,7 @@ def make_writing_tools(store) -> list:
         try:
             loader = getattr(store, "load_full_context_store", None)
             if loader is not None:
-                cs = loader() or {}
-                language = ((cs.get("m1_topic") or {}).get("language") or "vi")
+                language = resolve_output_language(loader() or {})
         except Exception:
             logger.exception("humanize_text: language lookup failed, defaulting to vi")
 
@@ -225,7 +270,7 @@ def make_writing_tools(store) -> list:
             except Exception:
                 logger.exception("export_docx: load_full_context_store failed")
         references = ((full_cs or {}).get("m2_literature") or {}).get("literature_sources") or []
-        language = ((full_cs or {}).get("m1_topic") or {}).get("language") or "vi"
+        language = resolve_output_language(full_cs or {})
 
         # --- Module-scoped export (scope = "M3" or a set "M1,M3,M4") --------
         # Compose ONE document from the selected module(s) — a standalone
@@ -515,8 +560,7 @@ def make_writing_tools(store) -> list:
             cs = store.load_full_context_store() or {}
             ar = ((cs.get("m4_analysis") or {}).get("analysis_results")
                   if isinstance(cs.get("m4_analysis"), dict) else None)
-            lang = ((cs.get("m1_topic") or {}).get("language") or "en") if isinstance(
-                cs.get("m1_topic"), dict) else "en"
+            lang = resolve_output_language(cs)
             if kind == "results_tables":
                 blocks = render_results_tables(ar, lang)
                 if not blocks:

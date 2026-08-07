@@ -74,6 +74,18 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
                 `in_progress`.
             status_overrides: Bootstrap only — explicit status flags for
                 dependency holes (e.g. {"M2": "needs_review"}).
+
+        LANGUAGE. The moment a student says which language they want the thesis
+        WRITTEN in — "viết full bài này bằng tiếng Anh", "write this in
+        English", "làm bằng tiếng Việt" — commit it immediately as
+        M1 {"language": "en"} (or "vi"). It is the one instruction that decides
+        every chapter we generate later, and a chat message does not survive the
+        session. Left unset, the writer mirrors the language of their uploaded
+        draft — which is wrong precisely when they asked for the other one.
+
+        Do this even mid-conversation, even if you are working in another
+        module: it is one key and it costs the student nothing to be wrong about
+        later, whereas a whole thesis in the wrong language costs them a rewrite.
         """
         # This wrapper is the MODEL-facing edge, so strip NON_CONTENT_KEYS here
         # — the same guard import_route.py applies at the client-facing edge.
