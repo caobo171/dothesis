@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
 import { swrFetcher as fetcher } from "@/app/lib/api";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
+import { ThreadSkeleton } from "@/app/components/chat/ThreadSkeleton";
 
 
 export default function ProjectIndex() {
@@ -47,5 +48,7 @@ export default function ProjectIndex() {
     );
   }
 
-  return <div className="p-6 text-sm text-ink-500">{t("ws.loadingThread")}</div>;
+  // Same placeholder the thread route shows, so resolving the thread and
+  // loading it read as one navigation instead of two screens.
+  return <ThreadSkeleton label={t("ws.loadingThread")} />;
 }

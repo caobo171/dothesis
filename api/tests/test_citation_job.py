@@ -11,7 +11,7 @@ from app.db import get_engine
 from app.models import ContextStore as DbContextStore, Project, User
 
 
-def _project_with_topic(sources=None):
+def _project_with_topic(sources=None, gaps=None):
     """A project mid-import: M1 reconstructed, M2 holding the fast shallow set."""
     from app.agent_state import DbProjectStateStore
     engine = get_engine()
@@ -26,7 +26,7 @@ def _project_with_topic(sources=None):
     store.commit_slice("M1", {"research_title": "KOL credibility and purchase intent",
                               "research_questions": ["RQ1"]},
                        reason="seed", confirm_done=True)
-    store.commit_slice("M2", {"research_gaps": [{"description": "a gap"}],
+    store.commit_slice("M2", {"research_gaps": [{"description": "a gap"}] if gaps is None else gaps,
                               "literature_sources": sources or []},
                        reason="seed")
     store.commit_slice("M3", {"conceptual_model": {"constructs": ["A"]}},
@@ -133,3 +133,65 @@ def test_a_search_that_explodes_leaves_m2_alone(monkeypatch):
 
     assert citation_job.run(str(pid)) == 0
     assert _m2_of(pid)["literature_sources"][0]["doi"] == "10.9/import"
+
+
+def _patch_gaps(monkeypatch, gaps):
+    import orchestrator.tools.m2_literature as M2
+
+    class _Finder:
+        def func(self, citations):
+            self.saw = citations
+            return gaps
+    f = _Finder()
+    monkeypatch.setattr(M2, "find_research_gaps", f)
+    return f
+
+
+def test_gaps_are_derived_from_the_papers_it_just_found(monkeypatch):
+    """The backfill reconstructs M2 before any search runs, so its gaps are
+    model recall — and on an imported thesis they came back EMPTY, leaving the
+    card saying "research_gaps is empty" beside an otherwise complete module.
+    Gaps are the one M2 field that is worthless guessed: they are the argument
+    for the study, and a supervisor asks which paper each one comes from."""
+    from app import citation_job
+    pid = _project_with_topic(gaps=[])          # the imported-thesis shape
+    _patch_search(monkeypatch, [{"title": "Real A", "doi": "10.1/a"}])
+    finder = _patch_gaps(monkeypatch, [
+        {"description": "No TikTok-specific evidence", "relevance": "High",
+         "supporting_papers": [{"title": "Real A", "doi": "10.1/a"}]},
+    ])
+    citation_job.run(str(pid))
+
+    m2 = _m2_of(pid)
+    assert [g["description"] for g in m2["research_gaps"]] == ["No TikTok-specific evidence"]
+    # Derived from the REAL papers, not from thin air.
+    assert finder.saw[0]["doi"] == "10.1/a"
+
+
+def test_gaps_the_student_already_has_are_never_overwritten(monkeypatch):
+    from app import citation_job
+    from app.agent_state import DbProjectStateStore
+    pid = _project_with_topic()
+    DbProjectStateStore(get_engine(), pid, f"/tmp/ws-{pid}").commit_slice(
+        "M2", {"research_gaps": [{"description": "mine"}]}, reason="student")
+    _patch_search(monkeypatch, [{"title": "Real A", "doi": "10.1/a"}])
+    _patch_gaps(monkeypatch, [{"description": "derived"}])
+    citation_job.run(str(pid))
+
+    assert [g["description"] for g in _m2_of(pid)["research_gaps"]] == ["mine"]
+
+
+def test_a_failing_gap_derivation_still_saves_the_citations(monkeypatch):
+    """The citations are the point; gaps ride on top of them."""
+    from app import citation_job
+    import orchestrator.tools.m2_literature as M2
+    pid = _project_with_topic()
+    _patch_search(monkeypatch, [{"title": "Real A", "doi": "10.1/a"}])
+
+    class _Boom:
+        def func(self, _c):
+            raise RuntimeError("llm down")
+    monkeypatch.setattr(M2, "find_research_gaps", _Boom())
+
+    assert citation_job.run(str(pid)) == 1
+    assert _m2_of(pid)["literature_sources"][0]["doi"] == "10.1/a"

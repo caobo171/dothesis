@@ -112,9 +112,35 @@ def run(project_id: str, run_id: int | None = None) -> int:
         # invalidate the design or the analysis built on it — and telling a
         # student their finished M3/M4/M5 need re-review because their
         # bibliography improved is exactly the bug we just fixed elsewhere.
+        writes = {"literature_sources": merged, "citation_list": merged}
+
+        # Derive the research gaps FROM the papers, now that there are papers.
+        #
+        # The backfill reconstructs M2 before any real search has run, so its
+        # gaps are whatever the model recalled — and on a reconstructed import
+        # they routinely came back empty, leaving the card saying "research_gaps
+        # is empty" next to a literature module that looked otherwise complete.
+        # Gaps are the one M2 field that is worthless when guessed: they are the
+        # argument for the whole study, and a supervisor will ask which paper
+        # each one comes from. find_research_gaps answers exactly that — it
+        # cites the supporting papers by DOI from the list it was given.
+        #
+        # Only when empty: a gap the student wrote or approved outranks anything
+        # derived here.
+        m2_now = (row[1] if row else None) or {}
+        if not (m2_now.get("research_gaps") or []):
+            try:
+                from orchestrator.tools.m2_literature import find_research_gaps
+                gaps = find_research_gaps.func(merged)
+                if gaps:
+                    writes["research_gaps"] = gaps
+                    logger.info("derived %d research gaps for %s", len(gaps), project_id)
+            except Exception:
+                # The citations are the point; gaps are a bonus on top of them.
+                logger.exception("gap derivation failed for %s", project_id)
+
         _store(project_id).commit_reconstructed(
-            "M2", {"literature_sources": merged, "citation_list": merged},
-            reason="deep literature search (background)")
+            "M2", writes, reason="deep literature search (background)")
         logger.info("committed %d sources for %s", len(merged), project_id)
         ok = True
         return len(merged)
