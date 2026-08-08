@@ -182,14 +182,11 @@ export async function mintStreamToken(scope) {
  * .docx gets converted for display) fails. /raw streams them inline from our
  * own origin. Auth is the same short-lived, upload-scoped ?st= token.
  */
-export async function uploadViewUrl(uploadId, { asPdf = false } = {}) {
+export async function uploadViewUrl(uploadId) {
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
   const st = await mintStreamToken(`project-upload:${uploadId}`);
   const base = apiBase || "/api/v1";
-  // asPdf: a browser has no .docx renderer, so the server converts it with
-  // LibreOffice and the iframe gets a PDF it CAN show — with the true layout.
-  const pdf = asPdf ? "&as_pdf=true" : "";
-  return `${base}/uploads/${uploadId}/raw?st=${encodeURIComponent(st)}${pdf}`;
+  return `${base}/uploads/${uploadId}/raw?st=${encodeURIComponent(st)}`;
 }
 
 /**

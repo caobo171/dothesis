@@ -295,47 +295,9 @@ def download_upload(
     return RedirectResponse(url=signed_url, status_code=302)
 
 
-def _is_docx(up: PaperUpload) -> bool:
-    return ((up.mime_type or "") == _DOCX_MIME
-            or (up.filename or "").lower().endswith(".docx"))
-
-
-def _docx_to_pdf(body: bytes, filename: str) -> bytes | None:
-    """Render a .docx to PDF with headless LibreOffice. None on any failure.
-
-    Never raises: this feeds a preview. Losing the rendered view is a smaller
-    harm than a 500 on a student opening their own file, and the caller turns
-    None into an explicit "could not render" rather than a broken iframe.
-    """
-    import shutil  # noqa: PLC0415
-    import subprocess  # noqa: PLC0415
-    import tempfile  # noqa: PLC0415
-    from pathlib import Path  # noqa: PLC0415
-
-    soffice = shutil.which("soffice") or shutil.which("libreoffice")
-    if not soffice:
-        logger.warning("upload: no LibreOffice on PATH — cannot render a PDF preview")
-        return None
-    try:
-        with tempfile.TemporaryDirectory() as tmp:
-            src = Path(tmp) / (Path(filename).name or "document.docx")
-            src.write_bytes(body)
-            subprocess.run(
-                [soffice, "--headless", "--convert-to", "pdf", "--outdir", tmp, str(src)],
-                capture_output=True, timeout=90, check=False,
-            )
-            out = Path(tmp) / f"{src.stem}.pdf"
-            return out.read_bytes() if out.exists() else None
-    except Exception:
-        logger.exception("upload: docx→pdf preview conversion failed")
-        return None
-
-
 @router.get("/uploads/{upload_id}/raw")
 def raw_upload(
     upload_id: uuid.UUID,
-    # `?as=pdf` — render a .docx through LibreOffice so an <iframe> can show it.
-    as_pdf: bool = False,
     # Same GET-with-?st= shape as /download beside it: an <iframe> and a
     # fetch() cannot attach a JSON body, so auth rides a short-lived token
     # scoped to this upload rather than the long-lived JWT.
@@ -353,7 +315,7 @@ def raw_upload(
 
     Proxying the bytes costs one hop for a file the student just uploaded —
     these are thesis documents, not media — and buys a PDF that renders in the
-    browser's own viewer and a .docx a client-side converter can actually read.
+    browser's own viewer and a .docx that docx-preview can lay out client-side.
     """
     up = _readable_upload(db, user, upload_id)
     if not (up.s3_uri or "").startswith("s3://"):
@@ -362,41 +324,7 @@ def raw_upload(
     bucket, _, key = rest.partition("/")
     if not (bucket and key):
         raise HTTPException(500, detail={"error": {"code": "bad_s3_uri"}})
-    s3 = s3_from_env()
-
-    # A browser has no .docx renderer — an <iframe> at one downloads it or
-    # shows nothing. PDF it does render, natively, so convert and the iframe
-    # works for Word too, with the TRUE layout: real page breaks, real table
-    # borders, the thing the supervisor will open. LibreOffice is already a
-    # hard dependency of this repo (scripts/check-export-deps.sh), so this
-    # adds no new install.
-    #
-    # Cached beside the upload: conversion is a couple of seconds, and a
-    # student flicking between tabs must not pay it every time.
-    if as_pdf and _is_docx(up):
-        pdf_key = f"{key.rsplit('/', 1)[0]}/preview.pdf"
-        try:
-            body = s3.get_object(Bucket=bucket, Key=pdf_key)["Body"].read()
-        except Exception:
-            src = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
-            body = _docx_to_pdf(src, up.filename)
-            if body is None:
-                # No conversion → say so, rather than handing the iframe a
-                # .docx it will silently refuse to display.
-                raise HTTPException(503, detail={"error": {
-                    "code": "no_pdf_preview",
-                    "message": "could not render this document as PDF"}})
-            try:
-                s3.put_object(Bucket=bucket, Key=pdf_key, Body=body,
-                              ContentType="application/pdf")
-            except Exception:  # noqa: BLE001 — caching is an optimisation
-                logger.exception("upload: caching the preview PDF failed")
-        return Response(
-            content=body, media_type="application/pdf",
-            headers={"Content-Disposition": f'inline; filename="{up.filename}.pdf"'},
-        )
-
-    body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+    body = s3_from_env().get_object(Bucket=bucket, Key=key)["Body"].read()
     return Response(
         content=body,
         media_type=up.mime_type or "application/octet-stream",

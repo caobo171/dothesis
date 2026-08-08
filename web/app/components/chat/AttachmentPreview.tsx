@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
 
 import { apiFetchText, triggerUploadDownload, uploadViewUrl } from "@/app/lib/api";
@@ -22,40 +22,54 @@ function _kindOf(meta: AttachmentChipMeta): "pdf" | "docx" | "plain" {
 function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
   const kind = _kindOf(meta);
   const [src, setSrc] = useState<string | null>(null);
-  const [html, setHtml] = useState<string | null>(null);
+  const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const host = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        if (kind === "pdf") {
-          const url = await uploadViewUrl(meta.upload_id);
-          if (alive) setSrc(url);
-          return;
-        }
-        // A .docx has no browser renderer, so the server converts it with
-        // LibreOffice and we iframe the PDF: TRUE layout — real page breaks,
-        // real table borders, the document as the supervisor will open it.
-        const pdfUrl = await uploadViewUrl(meta.upload_id, { asPdf: true });
-        const head = await fetch(pdfUrl, { method: "GET" });
+        const url = await uploadViewUrl(meta.upload_id);
         if (!alive) return;
-        if (head.ok) {
-          setSrc(pdfUrl);
+        if (kind === "pdf") {
+          setSrc(url);
+          setBusy(false);
           return;
         }
-        // Conversion unavailable (no LibreOffice on the box). mammoth is the
-        // fallback: an HTML approximation that still shows the tables, which
-        // beats telling the student their file cannot be displayed.
-        const [{ default: mammoth }, res] = await Promise.all([
-          import("mammoth"),
-          fetch(await uploadViewUrl(meta.upload_id)),
+        // Rendered in the BROWSER, not converted on the server.
+        //
+        // A round trip through LibreOffice gives a marginally truer page
+        // layout, but it costs ~2s on first open and the student is opening
+        // this to answer a quick question — "did my tables come through" —
+        // not to proof-read pagination. docx-preview reads the .docx XML
+        // directly and lays out margins, headings and tables client-side, so
+        // the answer is there as fast as the file downloads.
+        //
+        // It also means the file never leaves our origin — no third-party
+        // viewer fetching an unpublished thesis, which is the trade the
+        // Office/Google embed viewers ask for.
+        const [{ renderAsync }, res] = await Promise.all([
+          import("docx-preview"),
+          fetch(url),
         ]);
         if (!res.ok) throw new Error(String(res.status));
-        const out = await mammoth.convertToHtml({ arrayBuffer: await res.arrayBuffer() });
-        if (alive) setHtml(out.value);
+        const blob = await res.blob();
+        if (!alive || !host.current) return;
+        await renderAsync(blob, host.current, undefined, {
+          className: "docx",
+          inWrapper: true,
+          ignoreWidth: true,      // fit the modal, don't force A4 width
+          ignoreHeight: true,     // continuous scroll beats fixed page boxes here
+          breakPages: false,
+          experimental: true,     // needed for some table/border cases
+        });
+        if (alive) setBusy(false);
       } catch {
-        if (alive) setError("Không hiển thị được tệp này. Thử tab “Văn bản” hoặc tải xuống.");
+        if (alive) {
+          setError("Không hiển thị được tệp này. Thử tab “Văn bản” hoặc tải xuống.");
+          setBusy(false);
+        }
       }
     })();
     return () => { alive = false; };
@@ -67,21 +81,21 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
     return <p className="text-[13px] text-ink-500">Định dạng này không có bản xem tài liệu — xem tab “Văn bản”.</p>;
   }
 
-  // Both PDFs and converted .docx land here: one native viewer, page layout
-  // intact, no approximation.
-  if (src) {
-    return (
+  if (kind === "pdf") {
+    return src ? (
       <iframe src={src} title={meta.filename} className="w-full h-[70vh] rounded-lg border border-ink-200" />
+    ) : (
+      <Loading />
     );
   }
 
-  return html === null ? (
-    <Loading />
-  ) : (
-    // `docx-body` styles live in globals.css: mammoth emits bare <table>,
-    // <h1>, <p> with no classes, so unstyled they render as a wall of text
-    // with borderless tables — which is exactly what the student came to check.
-    <div className="docx-body" dangerouslySetInnerHTML={{ __html: html }} />
+  return (
+    <>
+      {busy && <Loading />}
+      {/* docx-preview writes into this node directly. `docx-body` scopes the
+          styles in globals.css so they can't leak into the agent's markdown. */}
+      <div ref={host} className="docx-body" />
+    </>
   );
 }
 

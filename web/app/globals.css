@@ -886,19 +886,13 @@ button { font: inherit; cursor: pointer; }
   .thesis-meta-grid { grid-template-columns: 1fr; }
 }
 
-/* ============ Word preview (mammoth output) ============ */
-/* mammoth emits bare <h1>/<p>/<table> with no classes. Unstyled that renders
-   as a wall of text with invisible table grids — which is precisely what a
-   student opens the preview to check. Scoped to .docx-body so it cannot leak
-   into the agent's own markdown. */
-.docx-body { font-size: 13.5px; line-height: 1.7; color: var(--ink-800, #27272a); }
-.docx-body h1, .docx-body h2, .docx-body h3 { font-weight: 700; margin: 1.1em 0 .45em; }
-.docx-body h1 { font-size: 17px; }
-.docx-body h2 { font-size: 15.5px; }
-.docx-body h3 { font-size: 14px; }
-.docx-body p { margin: 0 0 .7em; }
-.docx-body ul, .docx-body ol { margin: 0 0 .7em 1.25em; list-style: revert; }
-.docx-body table { border-collapse: collapse; width: 100%; margin: .8em 0; font-size: 12.5px; }
-.docx-body th, .docx-body td { border: 1px solid #e4e4e7; padding: 5px 8px; text-align: left; vertical-align: top; }
-.docx-body th { background: #fafafa; font-weight: 600; }
+/* ============ Word preview (docx-preview) ============ */
+/* docx-preview emits its own layout CSS from the file's own styles, so this
+   only frames it: fit the modal instead of forcing A4 width, and keep table
+   borders visible when the source relies on Word defaults we don't inherit. */
+.docx-body { font-size: 13.5px; }
+.docx-body .docx-wrapper { background: transparent; padding: 0; }
+.docx-body .docx { width: 100% !important; min-height: 0 !important; padding: 0 !important; box-shadow: none !important; }
+.docx-body table { border-collapse: collapse; }
+.docx-body td, .docx-body th { border: 1px solid #e4e4e7; padding: 4px 7px; }
 .docx-body img { max-width: 100%; height: auto; }
