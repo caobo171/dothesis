@@ -8,6 +8,7 @@ import { Mermaid } from "./Mermaid";
 import { CitationChip } from "./CitationChip";
 import { triggerExportDownload } from "@/app/lib/api";
 import { WidgetRenderer } from "./widgets/WidgetRenderer";
+import { AttachmentPreview } from "./AttachmentPreview";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
 import type {
   AttachmentChipMeta,
@@ -20,19 +21,29 @@ import type {
 // attached. Read-only display — no remove / re-upload affordance here
 // (that lives in the composer chip row).
 function UserAttachmentChip({ meta }: { meta: AttachmentChipMeta }) {
+  const [open, setOpen] = useState(false);
   const size =
     typeof meta.size_bytes === "number"
       ? _formatBytes(meta.size_bytes)
       : null;
   return (
-    <span
-      className="inline-flex items-center gap-1.5 max-w-[260px] rounded-lg border border-ink-200 bg-white px-2 py-1 text-[11.5px] text-ink-700 shadow-[0_1px_0_rgba(11,13,26,.04)]"
-      title={meta.filename}
-    >
-      <FileText className="w-3.5 h-3.5 text-ink-500 shrink-0" aria-hidden />
-      <span className="truncate">{meta.filename}</span>
-      {size && <span className="text-ink-400 shrink-0">· {size}</span>}
-    </span>
+    <>
+      {/* Clickable: the chip names a file the student can no longer see. Opening
+          it shows the EXTRACTED text — what the agent actually read — so "did my
+          result tables survive?" is answerable here instead of by downloading
+          the file and opening Word. */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 max-w-[260px] rounded-lg border border-ink-200 bg-white px-2 py-1 text-[11.5px] text-ink-700 hover:border-ink-300 hover:bg-ink-50 transition-colors"
+        title={`${meta.filename} — bấm để xem nội dung`}
+      >
+        <FileText className="w-3.5 h-3.5 text-ink-500 shrink-0" aria-hidden />
+        <span className="truncate">{meta.filename}</span>
+        {size && <span className="text-ink-400 shrink-0">· {size}</span>}
+      </button>
+      {open && <AttachmentPreview meta={meta} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 

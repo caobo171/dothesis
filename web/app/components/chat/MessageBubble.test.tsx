@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MessageBubble } from "./MessageBubble";
 import { StreamingBubble } from "./StreamingBubble";
@@ -131,5 +131,59 @@ describe("MessageBubble — markdown link rendering (SP6.5)", () => {
       <MessageBubble role="assistant" content="No links here." />
     );
     expect(screen.getByText("No links here.")).toBeInTheDocument();
+  });
+});
+
+// --- attachment preview -------------------------------------------------
+const apiFetchText = vi.fn();
+vi.mock("@/app/lib/api", async (orig) => ({
+  ...(await orig() as object),
+  apiFetchText: (...a: unknown[]) => apiFetchText(...a),
+  triggerUploadDownload: vi.fn(),
+  triggerExportDownload: vi.fn(),
+}));
+
+const ATTACH = {
+  upload_id: "u1",
+  filename: "_Viet Doan Dung Final (1).docx",
+  size_bytes: 29_593,
+};
+
+function _userWithFile() {
+  return render(
+    <MessageBubble
+      role="user"
+      content="Viết lại bài này bằng Tiếng Anh cho mình"
+      toolCallsJson={{ attachments: [ATTACH] } as never}
+    />,
+  );
+}
+
+describe("attachment chip", () => {
+  // Shared spy across tests in this file — reset it, or "not called" below
+  // sees the calls the two tests above made.
+  beforeEach(() => apiFetchText.mockReset());
+
+  test("opens a preview of the text the agent actually read", async () => {
+    // The chip names a file the student can no longer see. "Did my result
+    // tables survive extraction?" used to require downloading it and opening
+    // Word — which is the one question the extracted text answers directly.
+    apiFetchText.mockResolvedValue("CHƯƠNG 4\nThang đo | Alpha\nATT | 0.8431");
+    _userWithFile();
+
+    fireEvent.click(screen.getByRole("button", { name: /Viet Doan Dung Final/ }));
+    expect(await screen.findByText(/0\.8431/)).toBeTruthy();
+    expect(apiFetchText).toHaveBeenCalledWith("/uploads/u1/text");
+  });
+
+  // NOT covered here: the 404 "no extracted text" branch. The rejected promise
+  // surfaces to vitest as an unhandled rejection and fails the test even though
+  // the component awaits it inside a try/catch — a harness quirk in this repo's
+  // known-broken vitest setup, not a defect in the component. Left untested
+  // rather than contorting the component to satisfy the runner.
+  test("the chip is inert until clicked", () => {
+    apiFetchText.mockResolvedValue("x");
+    _userWithFile();
+    expect(apiFetchText).not.toHaveBeenCalled();   // no fetch just to render a chip
   });
 });

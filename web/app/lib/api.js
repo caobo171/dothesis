@@ -134,6 +134,29 @@ export async function apiFetch(path, opts = {}) {
   return parsed;
 }
 
+/**
+ * POST that returns PLAIN TEXT rather than JSON.
+ *
+ * apiFetch always does res.json(), so a text/plain route (the upload preview,
+ * POST /uploads/{id}/text) came back as null through it. Same POST-only auth
+ * rule — token in the body, never in the URL.
+ */
+export async function apiFetchText(path) {
+  const token = tokenStore.get();
+  const res = await fetch(BASE + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ access_token: token }),
+  });
+  if (!res.ok) {
+    let parsed = null;
+    try { parsed = await res.json(); } catch { /* text routes may not send JSON */ }
+    throw new ApiError(res.status, parsed);
+  }
+  return res.text();
+}
+
+
 /** SWR fetcher. Reads are POST now (POST-only API): the token rides in the body
  * and any `?query` baked into the SWR key is folded into the body by apiFetch. */
 export function swrFetcher(path) {
