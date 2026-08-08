@@ -29,21 +29,30 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
     let alive = true;
     (async () => {
       try {
-        const url = await uploadViewUrl(meta.upload_id);
-        if (!alive) return;
         if (kind === "pdf") {
-          setSrc(url);
+          const url = await uploadViewUrl(meta.upload_id);
+          if (alive) setSrc(url);
           return;
         }
-        // mammoth is ~200KB and only needed once someone opens a Word file,
-        // so it is imported here rather than in the app bundle.
+        // A .docx has no browser renderer, so the server converts it with
+        // LibreOffice and we iframe the PDF: TRUE layout — real page breaks,
+        // real table borders, the document as the supervisor will open it.
+        const pdfUrl = await uploadViewUrl(meta.upload_id, { asPdf: true });
+        const head = await fetch(pdfUrl, { method: "GET" });
+        if (!alive) return;
+        if (head.ok) {
+          setSrc(pdfUrl);
+          return;
+        }
+        // Conversion unavailable (no LibreOffice on the box). mammoth is the
+        // fallback: an HTML approximation that still shows the tables, which
+        // beats telling the student their file cannot be displayed.
         const [{ default: mammoth }, res] = await Promise.all([
           import("mammoth"),
-          fetch(url),
+          fetch(await uploadViewUrl(meta.upload_id)),
         ]);
         if (!res.ok) throw new Error(String(res.status));
-        const buf = await res.arrayBuffer();
-        const out = await mammoth.convertToHtml({ arrayBuffer: buf });
+        const out = await mammoth.convertToHtml({ arrayBuffer: await res.arrayBuffer() });
         if (alive) setHtml(out.value);
       } catch {
         if (alive) setError("Không hiển thị được tệp này. Thử tab “Văn bản” hoặc tải xuống.");
@@ -54,16 +63,16 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
 
   if (error) return <p className="text-[13px] text-[#7A5B2E]">{error}</p>;
 
-  if (kind === "pdf") {
-    return src ? (
-      <iframe src={src} title={meta.filename} className="w-full h-[70vh] rounded-lg border border-ink-200" />
-    ) : (
-      <Loading />
-    );
-  }
-
   if (kind === "plain") {
     return <p className="text-[13px] text-ink-500">Định dạng này không có bản xem tài liệu — xem tab “Văn bản”.</p>;
+  }
+
+  // Both PDFs and converted .docx land here: one native viewer, page layout
+  // intact, no approximation.
+  if (src) {
+    return (
+      <iframe src={src} title={meta.filename} className="w-full h-[70vh] rounded-lg border border-ink-200" />
+    );
   }
 
   return html === null ? (
