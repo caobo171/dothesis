@@ -39,6 +39,49 @@ ProgressFn = Callable[[int, str, str, str], None]
 _SOURCE_MARKER_RE = re.compile(r"\s*\[[0-9,\s]+\]")
 
 
+def wants_merged_conclusion(context_store: dict) -> bool:
+    """Should this thesis end in ONE concluding chapter?
+
+    Yes by default: Vietnamese universities set a five-chapter thesis and the
+    discussion is written inside "Kết luận và khuyến nghị". An imported thesis
+    reads "CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU / CHƯƠNG 5: KẾT LUẬN VÀ KHUYẾN NGHỊ",
+    and the interactive export was handing back SIX chapters — pushing the
+    student's conclusion to Chapter 6 and adding a Discussion chapter their
+    supervisor never asked for. The partner pipeline has always merged; only
+    this path did not, so the same product answered the same question two ways.
+
+    No when the project genuinely HAS both chapters written out, which is how a
+    thesis that really follows the six-chapter template keeps it. Follows the
+    project's own evidence rather than a global switch.
+
+    Deliberately NOT keyed on language: writing in English does not make it an
+    Anglo thesis. A Vietnamese student writing in English still submits five
+    chapters, because the university's template governs, not the prose.
+    """
+    m5 = (context_store or {}).get("m5_writing") or {}
+
+    def _prose(v) -> str:
+        if isinstance(v, dict):
+            return str(v.get("prose") or v.get("body") or "")
+        return str(v or "")
+
+    chapters = m5.get("chapters") or {}
+    if isinstance(chapters, dict):
+        if _prose(chapters.get("discussion")).strip() and _prose(chapters.get("conclusion")).strip():
+            return False
+    names = set()
+    for sec in m5.get("final_sections") or []:
+        if not isinstance(sec, dict) or not _prose(sec).strip():
+            continue
+        title = (sec.get("title") or "").lower()
+        name = (sec.get("chapter_name") or "").lower()
+        if name == "discussion" or "discussion" in title or "thảo luận" in title:
+            names.add("discussion")
+        if name == "conclusion" or "conclusion" in title or "kết luận" in title:
+            names.add("conclusion")
+    return not {"discussion", "conclusion"} <= names
+
+
 def merged_chapter_keys(chapters: list[str]) -> list[str]:
     """The chapter keys compose_sections(merge_conclusion=True) will actually
     write — `conclusion` folded into `discussion`.
@@ -188,6 +231,10 @@ def compose_and_export(
     sections = compose_sections(
         context_store, chapters, language,
         references=references, progress=progress, title_overrides=title_overrides,
+        # The five-chapter Vietnamese template, which the partner pipeline has
+        # always used and this path never did — so a student's interactive
+        # export came back with six chapters and their conclusion at Chapter 6.
+        merge_conclusion=wants_merged_conclusion(context_store),
     )
     # Call through the module so a test-time monkeypatch of m5_writing.run_export
     # (or any late rebinding) is honoured — a frozen import-time name would not be.
