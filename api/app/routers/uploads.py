@@ -56,31 +56,13 @@ def _extract_docx_text(body: bytes) -> tuple[str, int]:
       - the writer could not tell which table belonged to which section,
         because the layout said they all belonged at the end.
 
-    python-docx exposes `doc.paragraphs` and `doc.tables` as separate flattened
-    lists with no interleaving, so the body XML is walked directly instead.
+    The walk itself lives in agent.docx_extract, shared with the chat
+    attachment path (agent.multimodal._textualize). One implementation, because
+    the two had already drifted: uploads read tables and chat did not, so the
+    same thesis was legible when imported and unreadable when attached.
     """
-    try:
-        from docx import Document  # local import keeps cold-start light
-        from docx.table import Table
-        from docx.text.paragraph import Paragraph
-
-        doc = Document(io.BytesIO(body))
-        parts: list[str] = []
-        for child in doc.element.body.iterchildren():
-            tag = child.tag.split("}")[-1]
-            if tag == "p":
-                text = Paragraph(child, doc).text
-                if text and text.strip():
-                    parts.append(text)
-            elif tag == "tbl":
-                for row in Table(child, doc).rows:
-                    cells = [c.text.strip() for c in row.cells if c.text and c.text.strip()]
-                    if cells:
-                        parts.append(" | ".join(cells))
-        return "\n".join(parts), 0
-    except Exception:
-        logger.exception("upload: docx text extraction failed")
-        return "", 0
+    from agent.docx_extract import extract_docx_text  # noqa: PLC0415
+    return extract_docx_text(body), 0
 _DEFAULT_MAX_BYTES = 50 * 1024 * 1024
 
 

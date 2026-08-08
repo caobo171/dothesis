@@ -215,6 +215,9 @@ def _upload_to_gemini_files(att: Attachment) -> str:
 # silently get nothing (spec Risk 3). The vision sidecar reads scans instead.
 _MIN_PDF_TEXT_CHARS = 200
 
+_DOCX_MIME = ("application/vnd.openxmlformats-officedocument"
+              ".wordprocessingml.document")
+
 
 def _transcribe_via_vision(att: Attachment) -> str:
     """Turn an image / scanned-PDF attachment into text with the vision model.
@@ -252,6 +255,19 @@ def _textualize(att: Attachment) -> tuple[str, str]:
             # rather than proceeding with an empty message (Risk 3).
             return ("scanned-PDF transcription", _transcribe_via_vision(att))
         return ("PDF text", body)
+    if name.endswith(".docx") or att.mime_type == _DOCX_MIME:
+        # Without this a .docx fell through to the decode below, and a .docx is
+        # a ZIP — so the brain was handed the mojibake of a compressed archive
+        # and told the student it had received "compressed Word package data
+        # rather than readable thesis text". Word is the format a thesis
+        # actually arrives in, so this was the one attachment type that mattered
+        # most and the only document type with no branch of its own.
+        from agent.docx_extract import extract_docx_text  # noqa: PLC0415 — lazy
+        body = extract_docx_text(att.bytes)
+        if body.strip():
+            return ("Word text", body)
+        # Empty extraction: fall through rather than hand back a blank
+        # attachment, so the failure is at least visible in the transcript.
     return ("file content", att.bytes.decode("utf-8", errors="replace"))
 
 
