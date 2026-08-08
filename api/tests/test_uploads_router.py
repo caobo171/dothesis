@@ -242,3 +242,55 @@ def test_upload_with_no_extractable_text_leaves_text_extracted_at_null(client, m
         row = db.query(PaperUpload).filter_by(project_id=pid).one()
         assert row.text_extracted_at is None
         assert row.text_extract_uri is None
+
+
+def _docx_with_table_between_chapters():
+    """chapter 4 heading, its result table, then the chapter 5 heading —
+    the shape of a finished quantitative thesis."""
+    import io
+    from docx import Document
+    d = Document()
+    d.add_paragraph("CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU")
+    # Long enough on BOTH sides to clear split_final_chapter's 400-char gates —
+    # a shorter fixture makes the split decline and the test pass for the wrong
+    # reason.
+    d.add_paragraph("Kết quả phân tích độ tin cậy được trình bày dưới đây. " * 12)
+    t = d.add_table(rows=2, cols=2)
+    t.cell(0, 0).text = "Thang đo"; t.cell(0, 1).text = "Cronbach's Alpha"
+    t.cell(1, 0).text = "ATT"; t.cell(1, 1).text = "0.8431"
+    d.add_paragraph("CHƯƠNG 5: KẾT LUẬN VÀ KHUYẾN NGHỊ")
+    d.add_paragraph("Nghiên cứu đóng góp vào lý thuyết hiện có. " * 12)
+    buf = io.BytesIO(); d.save(buf)
+    return buf.getvalue()
+
+
+def test_docx_text_keeps_tables_in_document_order():
+    """A result table must stay where it was written, not be moved to the end.
+
+    Extraction used to emit every paragraph and THEN every table, so a thesis's
+    result tables all landed in one block after the final chapter. The import's
+    chapter split then cut on the last chapter heading and sent every table to
+    the M5 side, leaving M4 — the analysis module — with no numbers; when the
+    writer regenerated chapter 5, the student's tables were overwritten and
+    vanished from the export.
+    """
+    from app.routers.uploads import _extract_docx_text
+    text, _ = _extract_docx_text(_docx_with_table_between_chapters())
+
+    assert "0.8431" in text                       # the table survived at all
+    # and it sits BETWEEN the two chapter headings, where it was written.
+    assert text.index("CHƯƠNG 4") < text.index("0.8431") < text.index("CHƯƠNG 5")
+
+
+def test_the_chapter_split_leaves_result_tables_with_the_analysis():
+    """The property that actually matters to the student: after the import
+    splits chapter 5 off, the numbers are still on the analysis side."""
+    from app.routers.uploads import _extract_docx_text
+    from orchestrator.chapter_split import split_final_chapter
+
+    text, _ = _extract_docx_text(_docx_with_table_between_chapters())
+    split = split_final_chapter(text)
+    assert split is not None
+    head, tail = split
+    assert "0.8431" in head                       # M4 keeps its results
+    assert "0.8431" not in tail

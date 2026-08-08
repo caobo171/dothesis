@@ -38,17 +38,45 @@ _ALLOWED_EXT = (".pdf", ".txt", ".md", ".markdown", ".docx")
 
 
 def _extract_docx_text(body: bytes) -> tuple[str, int]:
-    """Pull paragraph + table text from a .docx. Table rows are flattened into
-    pipe rows so numbers inside result tables survive. Best-effort → ("", 0)."""
+    """Pull paragraph + table text from a .docx, IN DOCUMENT ORDER. Table rows
+    are flattened into pipe rows so numbers inside result tables survive.
+    Best-effort → ("", 0).
+
+    Document order is the whole point. This used to emit every paragraph and
+    then every table, which put a thesis's 17 result tables in one block at the
+    very end, thousands of characters away from the sections that discuss them.
+    Two things broke downstream:
+
+      - the import's chapter split cuts on the final chapter's heading, so
+        EVERY table landed on the chapter-5 side and left M4 — the analysis
+        module — with no numbers at all. When the writer then regenerated
+        chapter 5, the tables it had been handed were overwritten and the
+        student's EFA loadings, item-total correlations and KMO tables were
+        gone from the export.
+      - the writer could not tell which table belonged to which section,
+        because the layout said they all belonged at the end.
+
+    python-docx exposes `doc.paragraphs` and `doc.tables` as separate flattened
+    lists with no interleaving, so the body XML is walked directly instead.
+    """
     try:
         from docx import Document  # local import keeps cold-start light
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
+
         doc = Document(io.BytesIO(body))
-        parts = [p.text for p in doc.paragraphs if p.text and p.text.strip()]
-        for tbl in doc.tables:
-            for row in tbl.rows:
-                cells = [c.text.strip() for c in row.cells if c.text and c.text.strip()]
-                if cells:
-                    parts.append(" | ".join(cells))
+        parts: list[str] = []
+        for child in doc.element.body.iterchildren():
+            tag = child.tag.split("}")[-1]
+            if tag == "p":
+                text = Paragraph(child, doc).text
+                if text and text.strip():
+                    parts.append(text)
+            elif tag == "tbl":
+                for row in Table(child, doc).rows:
+                    cells = [c.text.strip() for c in row.cells if c.text and c.text.strip()]
+                    if cells:
+                        parts.append(" | ".join(cells))
         return "\n".join(parts), 0
     except Exception:
         logger.exception("upload: docx text extraction failed")
