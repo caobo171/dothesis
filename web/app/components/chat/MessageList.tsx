@@ -101,14 +101,14 @@ export function MessageList({
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto overscroll-contain px-6 py-6 bg-ink-50"
+      className="flex-1 overflow-y-auto overscroll-contain px-6 py-8 bg-white"
       // Anchor the scroll container's overflow so newly appended content
       // doesn't shift the existing rows upward when the browser tries to
       // preserve scroll position. Without this, fast token-by-token
       // appends fight scrollTop writes and the page visibly bounces.
       style={{ overflowAnchor: "none" }}
     >
-      <div className="max-w-[880px] mx-auto space-y-5">
+      <div className="max-w-[46rem] mx-auto space-y-8">
         {messages.map((m, idx) => {
           // SP3: widget on a "spent" message (not last, or streaming in progress)
           // is disabled so the user can't fire a stale selection.

@@ -511,34 +511,26 @@ export function AssistantFrame({
   [key: string]: unknown;
 }) {
   return (
-    <div data-role="assistant" className="flex items-start gap-3" {...rest}>
-      <span
-        aria-hidden
-        className="w-[34px] h-[34px] min-w-[34px] rounded-[10px] inline-flex items-center justify-center text-white font-extrabold font-serif text-[15px] mt-[22px] shadow-[0_4px_12px_rgba(28,46,255,.22)]"
-        style={{ background: "linear-gradient(135deg, #2540FF 0%, #1B2FD6 100%)" }}
-      >
-        D
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1.5">
-          <span className="text-[13px] font-bold text-ink-900">DoThesis</span>
-          {moduleTag && (
-            <span className="px-[7px] py-[2px] rounded-md bg-primary-50 text-primary-700 font-serif font-extrabold text-[11px] tracking-[0.03em]">
-              {moduleTag}
-            </span>
-          )}
-          <span className="text-[11.5px] text-ink-400 ml-auto">just now</span>
+    // Claude.ai shape: the assistant does not speak from inside a card. The
+    // reply IS the page — no avatar, no border, no shadow, full measure — so
+    // long analytical answers read as a document rather than as a chat log of
+    // boxed quotes. The only chrome is a quiet label row carrying the module
+    // tag, which is real information the reference design has no equivalent of.
+    <div data-role="assistant" className="flex flex-col" {...rest}>
+      {moduleTag && (
+        <div className="flex items-center gap-2 mb-2">
+          <span className="px-[7px] py-[2px] rounded-md bg-ink-100 text-ink-600 font-serif font-extrabold text-[11px] tracking-[0.03em]">
+            {moduleTag}
+          </span>
         </div>
-        <div className="max-w-[92%] inline-block min-w-0 overflow-hidden bg-white border border-ink-200 rounded-[18px] rounded-tl-[4px] px-[18px] py-3.5 text-[14.5px] leading-relaxed text-ink-800 shadow-[0_1px_3px_rgba(11,16,32,.04),0_2px_8px_rgba(11,16,32,.04)]">
-          {children}
-        </div>
-        {footer && (
-          // Block wrapper forces footer onto a new line — otherwise a small
-          // bubble (`inline-block`) leaves the Copy button sitting next to
-          // it on the same row instead of below.
-          <div className="block">{footer}</div>
-        )}
+      )}
+      {/* Serif body, like the reference: it is what makes multi-paragraph
+          reasoning readable at length, and it distinguishes the assistant's
+          prose from the UI's sans-serif chrome without needing a container. */}
+      <div className="min-w-0 font-serif text-[16.5px] leading-[1.72] text-ink-800">
+        {children}
       </div>
+      {footer && <div className="block">{footer}</div>}
     </div>
   );
 }
@@ -590,8 +582,12 @@ export function MessageBubble({
     return (
       <div data-role={role} className="flex justify-end">
         <div className="max-w-[70%] flex flex-col items-end gap-1.5">
-          <div className="rounded-[18px] rounded-br-[4px] bg-primary-600 text-white px-4 py-[11px] text-[14.5px] leading-normal shadow-[0_1px_0_rgba(11,13,26,.04)]">
-            <div className="prose-tight text-[14.5px]">{_renderMarkdown(_displayUserText(content))}</div>
+          {/* Muted, not saturated. A solid primary-600 block is the loudest
+              thing on the screen, and it is the one message whose content the
+              reader already knows — they wrote it. Grey keeps it findable as a
+              turn boundary without competing with the answer below it. */}
+          <div className="rounded-[18px] bg-ink-100 text-ink-900 px-4 py-[11px] text-[15px] leading-normal">
+            <div className="prose-tight text-[15px]">{_renderMarkdown(_displayUserText(content))}</div>
             {children}
           </div>
           {attachments && attachments.length > 0 && (
@@ -630,7 +626,8 @@ export function MessageBubble({
         </div>
       }
     >
-      <div className="prose-tight text-[14.5px]">{_renderMarkdown(content)}</div>
+      {/* No size override — inherit the frame's serif measure. */}
+      <div className="prose-tight">{_renderMarkdown(content)}</div>
       {toolCallsJson && onWidgetSelect && (
         <WidgetRenderer
           hint={toolCallsJson}
