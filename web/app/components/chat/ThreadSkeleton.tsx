@@ -24,14 +24,19 @@ export function ThreadSkeleton({ label }: { label?: string }) {
       aria-label={label || "Loading conversation"}
     >
       {ROWS.map((row, i) => (
-        <div key={i} className={row.mine ? "self-end max-w-[70%]" : "self-start max-w-[85%]"}>
+        // `w-`, not `max-w-`. A max-width-only row shrinks to fit its content,
+        // and its content is lines sized in PERCENTAGES — which then resolve
+        // against a width that does not exist yet. The bubbles collapsed to
+        // padding-width pills. A definite width gives the percentages
+        // something real to measure.
+        <div key={i} className={row.mine ? "self-end w-[62%]" : "self-start w-[82%]"}>
           <div
-            className={`rounded-2xl px-4 py-3 flex flex-col gap-2 ${
+            className={`rounded-2xl px-4 py-3.5 flex flex-col gap-2.5 ${
               row.mine ? "bg-ink-100/70" : "bg-ink-50 border border-ink-200/70"
             }`}
           >
             {row.lines.map((w, j) => (
-              <span key={j} className={`h-2.5 rounded-full bg-ink-200/80 animate-pulse ${w}`} />
+              <span key={j} className={`block h-2.5 rounded-full bg-ink-200/80 animate-pulse ${w}`} />
             ))}
           </div>
         </div>

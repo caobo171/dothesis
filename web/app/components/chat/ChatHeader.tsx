@@ -52,15 +52,25 @@ function ExportDownloadButton({
   // and a hook after it would change hook order between renders.
   const { busy, error, start } = useArtifactDownload();
   const docx = artifacts?.find(a => a.kind === "docx") ?? artifacts?.[0];
+
+  // Menu ROW, not an icon button. This was built as a round icon for the header
+  // toolbar and later moved inside Quick actions, where every other entry is
+  // "icon + words" — so it rendered as a bare download glyph with no label, and
+  // the only explanation of what it did lived in a title tooltip nobody hovers
+  // inside an open menu.
+  const row = "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left";
+
   if (!docx) {
     return (
       <button
         type="button"
-        title="Export — M5 not done yet"
         disabled
-        className="w-8 h-8 rounded-full text-ink-300 inline-flex items-center justify-center cursor-not-allowed"
+        title="Chưa có bản xuất — hoàn thành M5 trước"
+        className={`${row} text-ink-400 cursor-not-allowed`}
       >
-        <Download className="w-4 h-4" />
+        <Download className="w-4 h-4 text-ink-300 shrink-0" />
+        <span>Tải luận văn (.docx)</span>
+        <span className="ml-auto text-[11px] text-ink-400">chưa có</span>
       </button>
     );
   }
@@ -73,20 +83,21 @@ function ExportDownloadButton({
         e.preventDefault();
         void start(() => triggerExportDownload(docx.download_url));
       }}
-      // Icon-only button, so the title carries the state — there is nowhere to
-      // put a status line, and the error still needs somewhere to go.
-      title={
-        error
-          ? `Download failed: ${error}`
-          : busy
-            ? "Preparing download…"
-            : "Download final thesis (DOCX)"
-      }
-      className={`w-8 h-8 rounded-full inline-flex items-center justify-center transition-colors ${
-        error ? "text-[#8E6B2A] hover:bg-[#F5EFE2]" : "text-primary-600 hover:bg-primary-50"
+      className={`${row} ${
+        error ? "text-[#8E6B2A] hover:bg-[#F5EFE2]" : "text-ink-800 hover:bg-ink-50"
       }`}
     >
-      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+      {busy
+        ? <Loader2 className="w-4 h-4 animate-spin text-ink-500 shrink-0" />
+        : <Download className="w-4 h-4 text-ink-500 shrink-0" />}
+      <span>Tải luận văn (.docx)</span>
+      {/* The state goes on the row itself now that there is room for words —
+          a tooltip is unreachable once a menu has the pointer. */}
+      {(busy || error) && (
+        <span className="ml-auto text-[11px] truncate max-w-[130px]">
+          {error ? `Lỗi: ${error}` : "Đang chuẩn bị…"}
+        </span>
+      )}
     </a>
   );
 }
