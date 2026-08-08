@@ -438,6 +438,11 @@ const _markdownComponents = {
  * recognizes — keep them in sync.
  */
 const _OPTIONS_LINE = /^\s*\[OPTIONS(?:\s*:\s*\w+)?(?:\s+multi)?\]\s*.+$/m;
+// The same marker trailing the END of a sentence rather than owning its line —
+// "…rồi mới đánh dấu M5 done. [OPTIONS] A | B | C". The server parser accepts
+// that shape (agent/runtime.py), so the client has to strip it, or the student
+// reads the raw marker as prose under the buttons it produced.
+const _OPTIONS_INLINE = /\[OPTIONS(?:\s*:\s*\w+)?(?:\s+multi)?\]\s*.+$/;
 // `[PAPERS] {json} [/PAPERS]` — the JSON payload is parsed server-side and
 // surfaces as a PapersPanel widget below the bubble. We strip the marker
 // from the rendered text so the user doesn't see the raw block.
@@ -455,6 +460,12 @@ function _stripOptionsMarker(text: string): string {
     if (!lines[i].trim()) continue;
     if (_OPTIONS_LINE.test(lines[i])) {
       lines.splice(i, 1);
+      return lines.join("\n").trimEnd();
+    }
+    if (_OPTIONS_INLINE.test(lines[i])) {
+      // Keep the sentence, drop the marker that was glued to its tail.
+      lines[i] = lines[i].replace(_OPTIONS_INLINE, "").trimEnd();
+      if (!lines[i].trim()) lines.splice(i, 1);
       return lines.join("\n").trimEnd();
     }
     // First non-empty line from the bottom isn't a marker → leave text alone.

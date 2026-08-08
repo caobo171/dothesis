@@ -191,3 +191,27 @@ describe("attachment chip", () => {
     expect(apiFetchText).not.toHaveBeenCalled();   // no fetch just to render a chip
   });
 });
+
+describe("[OPTIONS] marker stripping", () => {
+  const inline =
+    "Bước tiếp theo là bổ sung đủ các chương, rồi mới đánh dấu M5 done. " +
+    "[OPTIONS] Bổ sung đủ 6 chương | Xem lại nội dung M5 | Xuất bản hiện có";
+
+  test("a marker glued to the end of a sentence is not shown as prose", () => {
+    // The server parses this shape into cards, so leaving it in the text made
+    // the student read the raw marker underneath the buttons it produced.
+    render(<MessageBubble role="assistant" content={inline} />);
+    expect(screen.queryByText(/\[OPTIONS\]/)).toBeNull();
+  });
+
+  test("the sentence the marker was glued to survives", () => {
+    render(<MessageBubble role="assistant" content={inline} />);
+    expect(screen.getByText(/rồi mới đánh dấu M5 done\./)).toBeTruthy();
+  });
+
+  test("a marker on its own line is still stripped whole", () => {
+    render(<MessageBubble role="assistant" content={"Lock it in?\n\n[OPTIONS] Confirm | Refine"} />);
+    expect(screen.queryByText(/\[OPTIONS\]/)).toBeNull();
+    expect(screen.getByText("Lock it in?")).toBeTruthy();
+  });
+});

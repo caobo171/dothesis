@@ -54,8 +54,17 @@ def _parse_options_marker(text: str) -> dict | None:
             continue
         m = _OPTIONS_RE.fullmatch(line)
         if m is None:
-            # First non-empty line from the bottom isn't a marker → done.
-            return None
+            # The marker is supposed to own its line, and the skill says so —
+            # but models routinely trail it onto the end of the closing
+            # sentence ("…rồi mới đánh dấu M5 done. [OPTIONS] A | B | C").
+            # Refusing that printed the raw marker to the student as prose and
+            # cost them the buttons, which is a worse answer to a formatting
+            # slip than just reading it. Accept a marker that STARTS mid-line;
+            # everything before it is normal text and stays in the message.
+            m = _OPTIONS_RE.search(line)
+            if m is None:
+                # First non-empty line from the bottom has no marker → done.
+                return None
         labels = [s.strip() for s in m.group("options").split("|") if s.strip()]
         if not labels:
             return None
