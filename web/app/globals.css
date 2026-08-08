@@ -537,8 +537,16 @@ button { font: inherit; cursor: pointer; }
 .badge.idle   { background: var(--ink-100); color: var(--ink-500); }
 .badge.dark   { background: var(--ink-900); color: white; }
 
-.badge.run .pulse { animation: pulse 1.6s ease-in-out infinite; }
-@keyframes pulse {
+.badge.run .pulse { animation: halo-pulse 1.6s ease-in-out infinite; }
+/* NAME MATTERS: this used to be called `pulse`, which is the exact keyframe
+   name Tailwind's own `animate-pulse` utility animates. Defined here, later in
+   the cascade, it REPLACED Tailwind's opacity fade — so every skeleton in the
+   app (loading threads, project cards, the dashboard hero) stopped fading and
+   instead threw a pulsing blue halo, which read as a glaring blue border on a
+   grey bar. Renamed so the two stop colliding: Tailwind's `animate-pulse` gets
+   its opacity fade back, and the halo stays available to whatever asks for it
+   by name. */
+@keyframes halo-pulse {
   0%   { box-shadow: 0 0 0 0 rgba(28,46,255,0.4); }
   70%  { box-shadow: 0 0 0 8px rgba(28,46,255,0); }
   100% { box-shadow: 0 0 0 0 rgba(28,46,255,0); }
@@ -547,7 +555,7 @@ button { font: inherit; cursor: pointer; }
 /* Ring-glow pulse for the "ready to draft" Auto-draft button. Reuses the
    badge pulse keyframe (a halo, not an opacity fade) so the button text
    stays fully legible while still drawing the eye. */
-.animate-pulse-soft { animation: pulse 1.8s ease-in-out infinite; }
+.animate-pulse-soft { animation: halo-pulse 1.8s ease-in-out infinite; }
 
 /* ============ Table ============ */
 .table { width: 100%; border-collapse: collapse; }

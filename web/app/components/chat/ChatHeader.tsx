@@ -222,7 +222,7 @@ export function ChatHeader({
           // focus chip and no label yet, that rendered a bare "· … · …" —
           // punctuation around nothing, which reads as a broken header rather
           // than one that is still loading.
-          <span className="h-3 w-40 rounded bg-ink-100 animate-pulse shrink-0"
+          <span className="h-3 w-40 rounded-full bg-ink-200/80 animate-pulse shrink-0"
                 aria-label="Loading thesis" />
         ) : (
           <>
