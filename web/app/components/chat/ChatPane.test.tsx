@@ -5,7 +5,7 @@ import { http, HttpResponse } from "msw";
 import { SWRConfig } from "swr";
 import { server } from "../../../tests/setup";
 import { streamResponse } from "../../../tests/helpers/sseResponse";
-import { ChatPane } from "./ChatPane";
+import { ChatPane, _isAutoWritten } from "./ChatPane";
 
 
 // Wrap component with a fresh SWR cache to prevent cross-test cache bleed.
@@ -279,5 +279,59 @@ describe("ChatPane → ChatHeader integration (SP6.5)", () => {
     // Wait for project name to confirm data has loaded, then assert link absent.
     await waitFor(() => screen.getByText("Test Project"));
     expect(screen.queryByRole("link", { name: /open editor/i })).toBeNull();
+  });
+});
+
+// --- "auto-written" must mean auto-written ------------------------------
+describe("auto-written empty state", () => {
+  const base = {
+    name: "T",
+    module_status: { M1: "done", M2: "done", M3: "done", M4: "done", M5: "done" },
+    context_store: {},
+  };
+
+  test("an IMPORTED chapter does not count as us writing the thesis", () => {
+    // The import carves the student's own final chapter into final_sections.
+    // That used to flip the same flag the editor link uses, so a project with
+    // M5 in_progress, no generated chapters and no export was greeted with
+    // "This thesis was auto-written — all modules are complete". Telling
+    // someone their unfinished thesis is done is the worst thing this screen
+    // can do: they stop working on it.
+    const project = {
+      ...base,
+      module_status: { ...base.module_status, M5: "in_progress" },
+      context_store: {
+        m5_writing: {
+          chapters: {},
+          final_sections: [{ chapter_name: "conclusion", prose: "x".repeat(500) }],
+          export_artifacts: [],
+        },
+      },
+    };
+    expect(_isAutoWritten(project)).toBe(false);
+  });
+
+  test("generated chapters with every module done DO count", () => {
+    expect(_isAutoWritten({
+      ...base,
+      context_store: { m5_writing: { chapters: { intro: { prose: "i" } } } },
+    })).toBe(true);
+  });
+
+  test("a docx export with every module done counts too", () => {
+    expect(_isAutoWritten({
+      ...base,
+      context_store: {
+        m5_writing: { chapters: {}, export_artifacts: [{ kind: "docx", download_url: "/x" }] },
+      },
+    })).toBe(true);
+  });
+
+  test("chapters but a module still open is not 'all modules are complete'", () => {
+    expect(_isAutoWritten({
+      ...base,
+      module_status: { ...base.module_status, M2: "needs_review" },
+      context_store: { m5_writing: { chapters: { intro: { prose: "i" } } } },
+    })).toBe(false);
   });
 });

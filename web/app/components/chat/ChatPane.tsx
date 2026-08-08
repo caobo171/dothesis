@@ -72,8 +72,11 @@ function getEmptyStateCopy(project: {
     };
   }
 
-  // 2. The auto-drafted branch is handled above by the caller. We can't
-  //    reach this point with `hasChapters === true`.
+  // 2. The auto-drafted branch is handled above by the caller — but only when
+  //    the thesis was genuinely written (see `autoWritten`). A project holding
+  //    only an IMPORTED chapter reaches here on purpose, and gets the
+  //    "picking up where you left off" copy below rather than being told its
+  //    unfinished thesis is done.
 
   // 3. Welcome back, based on where the user is.
   const m1Done = !!cs.m1_topic?.confirmed_at || !!title;
@@ -123,6 +126,42 @@ const MODULE_HINT: Record<string, string> = {
   M5: "let's turn the project into chapters and export.",
 };
 
+
+
+/**
+ * Did WE write this thesis? Not "is there something in the editor".
+ *
+ * These were the same flag, and they are not the same claim. An import carves
+ * the student's OWN final chapter out of their upload into `final_sections`
+ * (see _move_final_chapter_to_m5), which made the editor gate true — and the
+ * empty state then told a project with M5 still `in_progress`, zero generated
+ * chapters and zero exports that "This thesis was auto-written — all modules
+ * are complete", on the strength of one chapter THEY wrote.
+ *
+ * Telling someone their unfinished thesis is finished is the worst thing this
+ * screen can do: they stop working on it. So check what the sentence actually
+ * asserts — every module done, AND real generated output (drafted chapters or
+ * an export), not merely a non-empty final_sections.
+ */
+export function _isAutoWritten(project?: {
+  module_status?: Record<string, string>;
+  context_store?: {
+    m5_writing?: {
+      chapters?: Record<string, unknown>;
+      export_artifacts?: { kind: string }[];
+    } | null;
+  };
+} | null): boolean {
+  if (!project) return false;
+  const status = project.module_status ?? {};
+  const allDone = ["M1", "M2", "M3", "M4", "M5"].every(m => status[m] === "done");
+  if (!allDone) return false;
+  const m5 = project.context_store?.m5_writing;
+  return (
+    Object.keys(m5?.chapters ?? {}).length > 0 ||
+    (m5?.export_artifacts?.some(a => a.kind === "docx") ?? false)
+  );
+}
 
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
   const { messages, streamingText, streamingProgress, streamingError, inflight, send } = useChat(threadId);
@@ -286,6 +325,8 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     Object.keys(_m5?.chapters ?? {}).length > 0 ||
     (_m5?.final_sections?.length ?? 0) > 0 ||
     (_m5?.export_artifacts?.some(a => a.kind === "docx") ?? false);
+
+  const autoWritten = _isAutoWritten(project);
 
   // "Ready to draft" = the upstream research modules (M1–M4) are all done
   // and no auto-draft run has started yet. This is the moment the user
@@ -470,7 +511,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         // where all the content lives in the editor + progress panel, not in chat.
         // Point the user to the right place instead of showing a blank pane.
         <div className="flex-1 flex flex-col items-center justify-center text-center px-6 text-ink-500">
-          {hasChapters ? (
+          {autoWritten ? (
             <>
               <p className="text-lg font-semibold text-ink-800">This thesis was auto-written</p>
               <p className="mt-1 text-sm max-w-md">
