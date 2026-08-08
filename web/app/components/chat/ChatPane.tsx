@@ -435,8 +435,9 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         />
       )}
       <ChatHeader
-        projectName={project?.name ?? "…"}
-        threadName={thread?.name ?? "…"}
+        projectName={project?.name ?? ""}
+        threadName={thread?.name ?? ""}
+        loading={!project}
         focusModule={project ? (project.focus ?? project.current_module) : undefined}
         focusStatus={
           project
@@ -457,7 +458,21 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         // which files the export under its module scope, not M5.
         onQuickPrompt={(t) => void send(t)}
       />
-      {project && messages.length === 0 && !inflight ? (
+      {!project ? (
+        // Until the project lands this rendered the message list — which is
+        // empty at that point — so opening a thread showed a blank pane under a
+        // header of placeholder punctuation, indistinguishable from a thread
+        // that failed to load. Show that something is coming instead.
+        <div className="flex-1 px-6 py-6 flex flex-col gap-5" aria-busy="true"
+             aria-label="Loading conversation">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className={i % 2 ? "self-end w-1/2" : "w-2/3"}>
+              <div className="h-3 rounded bg-ink-100 animate-pulse" />
+              <div className="h-3 rounded bg-ink-100 animate-pulse mt-2 w-5/6" />
+            </div>
+          ))}
+        </div>
+      ) : messages.length === 0 && !inflight ? (
         // An empty thread is confusing — especially for an auto-drafted project,
         // where all the content lives in the editor + progress panel, not in chat.
         // Point the user to the right place instead of showing a blank pane.

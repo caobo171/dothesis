@@ -134,9 +134,13 @@ export function ChatHeader({
   focusStatus,
   exportArtifacts,
   onQuickPrompt,
+  loading = false,
 }: {
   projectName: string;
   threadName: string;
+  /** The project hasn't arrived yet — show a skeleton instead of placeholder
+   *  punctuation. */
+  loading?: boolean;
   autoDraftButton: ReactNode;
   projectId?: string;
   hasChapters?: boolean;
@@ -213,10 +217,22 @@ export function ChatHeader({
             {tag.label}
           </span>
         )}
-        <span className="text-ink-300 shrink-0">·</span>
-        <span className="text-[12.5px] text-ink-500 truncate" title={`${projectName} · ${threadName}`}>
-          {projectName} · {threadName}
-        </span>
+        {loading ? (
+          // A skeleton, not the literal "…" this used to fall back to. With no
+          // focus chip and no label yet, that rendered a bare "· … · …" —
+          // punctuation around nothing, which reads as a broken header rather
+          // than one that is still loading.
+          <span className="h-3 w-40 rounded bg-ink-100 animate-pulse shrink-0"
+                aria-label="Loading thesis" />
+        ) : (
+          <>
+            <span className="text-ink-300 shrink-0">·</span>
+            <span className="text-[12.5px] text-ink-500 truncate"
+                  title={`${projectName} · ${threadName}`}>
+              {projectName} · {threadName}
+            </span>
+          </>
+        )}
       </div>
 
       {/* Right cluster */}
