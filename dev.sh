@@ -258,14 +258,40 @@ if [ ! -d web/node_modules ]; then
 fi
 
 echo "==> starting web on port ${WEB_PORT:-3000}"
-# Clear Next.js's incremental build cache before every boot. The api side
-# (uvicorn + langgraph CLI watchfiles) emits "N changes detected" repeatedly
-# during development, which trips Next.js dev's route-map regenerator and
-# sometimes leaves it serving a 404 for legitimate routes (e.g.
-# /chat/projects/[pid]/threads/[tid]). Wiping .next costs ~100ms and the
-# first compile after restart pays for itself within seconds.
+# Wiping .next is cheap insurance against a corrupt incremental build; it is
+# NOT what fixes the 404s below. That was the previous theory here and it is
+# wrong: this rm has always run, and the 404 still happened on a completely
+# fresh boot.
 (cd web && rm -rf .next && npm run dev) &
 WEB_PID=$!
+
+# Register every route with the dev server by touching its page file.
+#
+# Next 16 dev (Turbopack) starts with a route table that does not include
+# routes nested under a dynamic segment. Requesting one returns a hard 404 —
+# and the giveaway is that the dev log shows NO "Compiling" line and NO error
+# for it: the router never matched the request at all, so there was nothing
+# to fail. /chat/projects/[pid] served fine while
+# /chat/projects/[pid]/threads/[tid] and /chat/projects/[pid]/editor both
+# 404'd, on a boot that had just deleted .next.
+#
+# A filesystem event is what registers them, so give it one. Not a request —
+# requesting is the path that is broken. Touch is enough; the content is
+# unchanged, so this costs one compile of pages the developer was going to
+# open anyway.
+#
+# Remove this when the upstream dev-server route scan covers nested dynamic
+# routes on startup; the routes themselves have always been correct.
+(
+  for _ in $(seq 1 60); do
+    if lsof -nP -tiTCP:"${WEB_PORT:-3000}" -sTCP:LISTEN >/dev/null 2>&1; then
+      sleep 2                       # let the watcher attach before touching
+      find web/app -name 'page.tsx' -exec touch {} + 2>/dev/null || true
+      break
+    fi
+    sleep 1
+  done
+) &
 
 # --- 3. LangGraph Studio (optional visualizer) ---
 # Boots the local Agent Server that LangSmith Studio talks to so we can see
