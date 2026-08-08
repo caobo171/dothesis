@@ -377,8 +377,24 @@ class ProjectStateStore:
         # The flag still wins when set (it is the student's own sign-off, and
         # M1/M2/M3 carry DoDs that a conversational commit may not satisfy yet).
         # Absent it, the evidence decides.
+        #
+        # `was_done` stops a module FLAPPING BACK. Reading the evidence fixed
+        # the "finished but reads in_progress" half and introduced the other
+        # half: any later write to an already-done module re-ran the DoD, so an
+        # imperfect-but-approved slice was demoted. Real case — the import
+        # moves chapter 5 out of M4, that re-commit re-graded the trimmed M4,
+        # and a done module the student had signed off went back to
+        # in_progress with nothing about their work having changed.
+        #
+        # This mirrors compute_status_map, which has always held confirmed_at
+        # authoritative ON TOP of the DoD "so a user-approved imperfect slice
+        # doesn't flap back to in_progress" — the two disagreed, and the UI
+        # reads this one. Invalidation has its own channel (needs_review); it
+        # must not arrive disguised as in_progress.
+        was_done = state["status"].get(module) == "done"
         state["status"][module] = (
-            "done" if (confirm_done or _dod_satisfied(module, state["contextStore"]))
+            "done" if (confirm_done or was_done
+                       or _dod_satisfied(module, state["contextStore"]))
             else "in_progress")
 
         # Flag only modules that have been started (or finished). Flagging an

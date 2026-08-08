@@ -333,3 +333,37 @@ def test_a_real_m1_edit_still_flags_downstream(store):
                                 reason="pivot + language")
     assert result["status"]["M2"] == "needs_review"
     assert result["flagged"] == ["M2"]
+
+
+def test_a_done_module_does_not_flap_back_on_a_later_write(store):
+    """An approved module must not be demoted by re-grading it.
+
+    Reading the evidence fixed "finished but reads in_progress"; it introduced
+    the mirror image, because ANY later write to a done module re-ran its DoD.
+    The real case: the import moves chapter 5 out of M4, and that re-commit
+    re-graded the now-trimmed M4 and sent a module the student had signed off
+    back to in_progress — with nothing about their work having changed.
+
+    compute_status_map has always held confirmed_at authoritative on top of the
+    DoD for exactly this reason. The two disagreed, and the UI reads this one.
+    """
+    store.commit_slice("M4", {"analysis_results": "x" * 4000},
+                       reason="import", confirm_done=True)
+    assert store.load()["status"]["M4"] == "done"
+
+    # Trim it below whatever the DoD wants — the chapter-split re-commit.
+    result = store.commit_slice("M4", {"analysis_results": "y" * 200},
+                                reason="final chapter moved to M5")
+    assert result["status"]["M4"] == "done"          # still theirs, still done
+
+
+def test_invalidation_still_arrives_as_needs_review(store):
+    """The carve-out must not swallow real invalidation — that has its own
+    channel, and it must still fire on a done module."""
+    store.commit_slice("M1", {"research_title": "T"}, reason="r", confirm_done=True)
+    store.commit_slice("M2", {"research_gaps": [{"id": "g"}]}, reason="r", confirm_done=True)
+    assert store.load()["status"]["M2"] == "done"
+
+    result = store.commit_slice("M1", {"research_title": "A different thesis"},
+                                reason="pivot")
+    assert result["status"]["M2"] == "needs_review"
