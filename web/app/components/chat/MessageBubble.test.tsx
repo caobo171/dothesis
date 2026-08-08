@@ -172,6 +172,10 @@ describe("attachment chip", () => {
     _userWithFile();
 
     fireEvent.click(screen.getByRole("button", { name: /Viet Doan Dung Final/ }));
+    // A .docx opens on the rendered-document tab; the extraction is the second
+    // tab, because "what does my file look like" and "what did the agent read"
+    // are different questions.
+    fireEvent.click(screen.getByRole("button", { name: "Văn bản" }));
     expect(await screen.findByText(/0\.8431/)).toBeTruthy();
     expect(apiFetchText).toHaveBeenCalledWith("/uploads/u1/text");
   });

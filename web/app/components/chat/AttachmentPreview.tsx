@@ -3,41 +3,103 @@
 import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 
-import { apiFetchText, triggerUploadDownload } from "@/app/lib/api";
+import { apiFetchText, triggerUploadDownload, uploadViewUrl } from "@/app/lib/api";
 import type { AttachmentChipMeta } from "./widgets/types";
 
-/**
- * Read what was actually attached, without leaving the thread.
- *
- * The chip used to be inert: a student who attached the wrong draft, or who
- * wanted to check whether their result tables survived extraction, had to
- * download the file and open Word to find out. This shows the EXTRACTED text —
- * deliberately, not a rendered .docx — because the extraction is what the
- * agent read. If a table is missing here, it was missing from the turn, and
- * that is the thing worth being able to see.
- */
-export function AttachmentPreview({
-  meta,
-  onClose,
-}: {
-  meta: AttachmentChipMeta;
-  onClose: () => void;
-}) {
+type Tab = "document" | "text";
+
+function _kindOf(meta: AttachmentChipMeta): "pdf" | "docx" | "plain" {
+  const name = (meta.filename || "").toLowerCase();
+  const mime = (meta.mime_type || "").toLowerCase();
+  if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (name.endsWith(".docx") || mime.includes("wordprocessingml")) return "docx";
+  return "plain";
+}
+
+/** The file as the student wrote it. PDFs go to the browser's own viewer;
+ *  .docx is converted to HTML client-side (mammoth), which keeps headings and
+ *  — the reason this matters here — real tables. */
+function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
+  const kind = _kindOf(meta);
+  const [src, setSrc] = useState<string | null>(null);
+  const [html, setHtml] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const url = await uploadViewUrl(meta.upload_id);
+        if (!alive) return;
+        if (kind === "pdf") {
+          setSrc(url);
+          return;
+        }
+        // mammoth is ~200KB and only needed once someone opens a Word file,
+        // so it is imported here rather than in the app bundle.
+        const [{ default: mammoth }, res] = await Promise.all([
+          import("mammoth"),
+          fetch(url),
+        ]);
+        if (!res.ok) throw new Error(String(res.status));
+        const buf = await res.arrayBuffer();
+        const out = await mammoth.convertToHtml({ arrayBuffer: buf });
+        if (alive) setHtml(out.value);
+      } catch {
+        if (alive) setError("Không hiển thị được tệp này. Thử tab “Văn bản” hoặc tải xuống.");
+      }
+    })();
+    return () => { alive = false; };
+  }, [meta.upload_id, kind]);
+
+  if (error) return <p className="text-[13px] text-[#7A5B2E]">{error}</p>;
+
+  if (kind === "pdf") {
+    return src ? (
+      <iframe src={src} title={meta.filename} className="w-full h-[70vh] rounded-lg border border-ink-200" />
+    ) : (
+      <Loading />
+    );
+  }
+
+  if (kind === "plain") {
+    return <p className="text-[13px] text-ink-500">Định dạng này không có bản xem tài liệu — xem tab “Văn bản”.</p>;
+  }
+
+  return html === null ? (
+    <Loading />
+  ) : (
+    // `docx-body` styles live in globals.css: mammoth emits bare <table>,
+    // <h1>, <p> with no classes, so unstyled they render as a wall of text
+    // with borderless tables — which is exactly what the student came to check.
+    <div className="docx-body" dangerouslySetInnerHTML={{ __html: html }} />
+  );
+}
+
+function Loading() {
+  return (
+    <div className="flex items-center gap-2 text-[13px] text-ink-500">
+      <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+      Đang mở tệp…
+    </div>
+  );
+}
+
+/** The extraction — what the AGENT read. Kept as its own tab because it is a
+ *  different question from "what does my file look like": if a table is
+ *  missing here it was missing from the turn, whatever the document shows. */
+function TextView({ meta }: { meta: AttachmentChipMeta }) {
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    // async/await rather than .then().catch(): the handler is attached in the
-    // same tick as the call, so a synchronously-rejecting fetch cannot surface
-    // as an unhandled rejection before the chain is wired up.
     (async () => {
       try {
         const t = await apiFetchText(`/uploads/${meta.upload_id}/text`);
         if (alive) setText(t);
       } catch (e: unknown) {
         if (!alive) return;
-        // 404 is its own case: the file is stored, the text extraction is not.
         const status = (e as { status?: number })?.status;
         setError(
           status === 404
@@ -49,12 +111,36 @@ export function AttachmentPreview({
     return () => { alive = false; };
   }, [meta.upload_id]);
 
-  // Escape closes, matching every other dismissible layer in the app.
+  if (error) return <p className="text-[13px] text-[#7A5B2E]">{error}</p>;
+  if (text === null) return <Loading />;
+  return (
+    // Monospace + preserved whitespace: extracted tables come through as
+    // `a | b | c` rows, and proportional text would scramble the columns.
+    <pre className="whitespace-pre-wrap break-words font-mono text-[12.5px] leading-[1.65] text-ink-800">
+      {text}
+    </pre>
+  );
+}
+
+export function AttachmentPreview({
+  meta,
+  onClose,
+}: {
+  meta: AttachmentChipMeta;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<Tab>(_kindOf(meta) === "plain" ? "text" : "document");
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  const tabCls = (t: Tab) =>
+    `px-2.5 py-1 rounded-lg text-[12.5px] font-semibold transition-colors ${
+      tab === t ? "bg-ink-100 text-ink-900" : "text-ink-500 hover:text-ink-800"
+    }`;
 
   return (
     <div
@@ -65,16 +151,24 @@ export function AttachmentPreview({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-full flex flex-col overflow-hidden"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-full flex flex-col overflow-hidden"
         // The backdrop closes; the panel must not, or selecting text inside it
         // would dismiss the thing being read.
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center gap-3 px-5 py-3.5 border-b border-ink-200 shrink-0">
-          <span className="text-[13.5px] font-semibold text-ink-900 truncate">
-            {meta.filename}
-          </span>
+        <header className="flex items-center gap-3 px-5 py-3 border-b border-ink-200 shrink-0">
+          <span className="text-[13.5px] font-semibold text-ink-900 truncate">{meta.filename}</span>
           <span className="flex-1" />
+          <div className="flex items-center gap-1 shrink-0">
+            <button type="button" onClick={() => setTab("document")} className={tabCls("document")}>
+              Tài liệu
+            </button>
+            {/* Named for what it is: the text the agent read, not a second copy
+                of the document. */}
+            <button type="button" onClick={() => setTab("text")} className={tabCls("text")}>
+              Văn bản
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => void triggerUploadDownload(meta.upload_id)}
@@ -92,22 +186,8 @@ export function AttachmentPreview({
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 min-h-[200px]">
-          {error ? (
-            <p className="text-[13px] text-[#7A5B2E]">{error}</p>
-          ) : text === null ? (
-            <div className="flex items-center gap-2 text-[13px] text-ink-500">
-              <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
-              Đang đọc tệp…
-            </div>
-          ) : (
-            // Monospace + preserved whitespace: extracted tables come through
-            // as `a | b | c` rows, and proportional text would scramble the
-            // columns the student is checking for.
-            <pre className="whitespace-pre-wrap break-words font-mono text-[12.5px] leading-[1.65] text-ink-800">
-              {text}
-            </pre>
-          )}
+        <div className="flex-1 overflow-y-auto px-5 py-4 min-h-[240px]">
+          {tab === "document" ? <DocumentView meta={meta} /> : <TextView meta={meta} />}
         </div>
       </div>
     </div>

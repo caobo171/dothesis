@@ -174,6 +174,22 @@ export async function mintStreamToken(scope) {
 }
 
 /**
+ * Same-origin URL that SHOWS an upload rather than saving it.
+ *
+ * /download 302s to presigned S3 with `attachment`, which is right for saving
+ * and wrong for viewing — `attachment` makes the browser download, and the
+ * cross-origin hop puts the bytes behind S3's CORS policy so fetch() (how a
+ * .docx gets converted for display) fails. /raw streams them inline from our
+ * own origin. Auth is the same short-lived, upload-scoped ?st= token.
+ */
+export async function uploadViewUrl(uploadId) {
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
+  const st = await mintStreamToken(`project-upload:${uploadId}`);
+  const base = apiBase || "/api/v1";
+  return `${base}/uploads/${uploadId}/raw?st=${encodeURIComponent(st)}`;
+}
+
+/**
  * Download an M5 export (docx/pdf) given its project-scoped export URL.
  *
  * The /exports route is a browser GET that 302s to a signed S3 URL and still

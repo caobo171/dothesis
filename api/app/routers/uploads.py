@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -293,6 +293,44 @@ def download_upload(
         ExpiresIn=300,
     )
     return RedirectResponse(url=signed_url, status_code=302)
+
+
+@router.get("/uploads/{upload_id}/raw")
+def raw_upload(
+    upload_id: uuid.UUID,
+    # Same GET-with-?st= shape as /download beside it: an <iframe> and a
+    # fetch() cannot attach a JSON body, so auth rides a short-lived token
+    # scoped to this upload rather than the long-lived JWT.
+    user: User = Depends(stream_user_factory(
+        lambda upload_id: f"project-upload:{upload_id}")),
+    db: Session = Depends(db_session),
+):
+    """Stream the file itself, INLINE and same-origin — the preview path.
+
+    /download 302s to a presigned S3 URL with `attachment` disposition, which
+    is right for saving a file and wrong for showing one: `attachment` makes
+    the browser download instead of render, and the cross-origin redirect puts
+    the bytes behind S3's CORS policy, so a fetch() (which is how a .docx gets
+    converted for display) fails on a setting we do not control from here.
+
+    Proxying the bytes costs one hop for a file the student just uploaded —
+    these are thesis documents, not media — and buys a PDF that renders in the
+    browser's own viewer and a .docx a client-side converter can actually read.
+    """
+    up = _readable_upload(db, user, upload_id)
+    if not (up.s3_uri or "").startswith("s3://"):
+        raise HTTPException(404, detail={"error": {"code": "no_s3_uri"}})
+    _, _, rest = up.s3_uri.partition("s3://")
+    bucket, _, key = rest.partition("/")
+    if not (bucket and key):
+        raise HTTPException(500, detail={"error": {"code": "bad_s3_uri"}})
+    body = s3_from_env().get_object(Bucket=bucket, Key=key)["Body"].read()
+    return Response(
+        content=body,
+        media_type=up.mime_type or "application/octet-stream",
+        # `inline`, and the filename quoted so a PDF viewer can title its tab.
+        headers={"Content-Disposition": f'inline; filename="{up.filename}"'},
+    )
 
 
 @router.post("/uploads/{upload_id}/text", response_class=PlainTextResponse)
