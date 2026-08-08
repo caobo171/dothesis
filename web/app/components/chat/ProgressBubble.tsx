@@ -1,3 +1,5 @@
+import { Loader2 } from "lucide-react";
+
 /**
  * Live engine-progress indicator.
  *
@@ -15,6 +17,27 @@
 export type ProgressItem = { stage: string; message: string };
 
 
+/**
+ * Collapse runs of the same message.
+ *
+ * The engine narrates per call, not per distinct activity, so a turn that
+ * reads two skills and looks two things up printed "Looking something up… /
+ * Reading the guide for this step… / Looking something up… / Reading the guide
+ * for this step…". Four lines of scroll that say two things — and the repeats
+ * crowd out the earlier lines that WERE different, because only the last few
+ * are shown. Repeats become a ×N on one line instead.
+ */
+export function dedupeProgress(items: ProgressItem[]): (ProgressItem & { times: number })[] {
+  const out: (ProgressItem & { times: number })[] = [];
+  for (const p of items || []) {
+    const prev = out[out.length - 1];
+    if (prev && prev.message === p.message) prev.times += 1;
+    else out.push({ ...p, times: 1 });
+  }
+  return out;
+}
+
+
 export function ProgressBubble({
   progress,
   moduleTag,
@@ -22,9 +45,10 @@ export function ProgressBubble({
   progress: ProgressItem[];
   moduleTag?: string | null;
 }) {
-  // Show the latest 4 entries; latest at the bottom mirrors how the
-  // engine itself prints to stdout, so the user can follow line-by-line.
-  const visible = progress.slice(-4);
+  // Deduped FIRST, then windowed — windowing first would spend the window on
+  // repeats and hide the distinct steps behind them.
+  const all = dedupeProgress(progress);
+  const visible = all.slice(-4);
   const last = visible[visible.length - 1];
 
   return (
@@ -41,34 +65,35 @@ export function ProgressBubble({
           </span>
         </div>
       )}
-      <div className="border-l border-ink-200 pl-3.5 flex flex-col gap-1 text-[13px] min-w-[260px]">
-        {/* Earlier entries — muted so the eye lands on the latest line.
-            Capped at last 4 so the block doesn't grow unbounded; the
-            raw stream stays in useChat.streamingProgress in case a
-            future debug view wants to show them all. */}
-        {visible.slice(0, -1).map((p, i) => (
-          <div
-            key={i}
-            className="text-[12.5px] text-ink-400 truncate"
-            data-testid="progress-line-prev"
-          >
-            {p.message}
-          </div>
-        ))}
-
-        {last && (
-          <div
-            className="flex items-center gap-2 text-ink-600"
-            data-testid="progress-line-current"
-          >
-            <span
-              className="h-1.5 w-1.5 rounded-full bg-ink-400 animate-pulse shrink-0"
-              aria-hidden="true"
-            />
-            <span className="truncate">{last.message}</span>
-          </div>
-        )}
+      {/* Headline + rule, like the reference's thinking block: one line saying
+          what is happening now, with the trail hung off a hairline beneath it.
+          The trail is there to show motion, not to be read, so it fades out
+          upward instead of competing for attention. */}
+      <div
+        className="flex items-center gap-2 text-[13px] text-ink-500 mb-1.5"
+        data-testid="progress-line-current"
+      >
+        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" aria-hidden />
+        <span className="truncate">{last ? last.message : "Đang xử lý…"}</span>
       </div>
+      {visible.length > 1 && (
+        <div
+          className="border-l border-ink-200 pl-3.5 flex flex-col gap-1 text-[12.5px] min-w-[260px]"
+          // Older lines fade toward the top — motion without a second column of
+          // text asking to be read.
+          style={{
+            maskImage: "linear-gradient(to bottom, transparent, black 55%)",
+            WebkitMaskImage: "linear-gradient(to bottom, transparent, black 55%)",
+          }}
+        >
+          {visible.slice(0, -1).map((p, i) => (
+            <div key={i} className="text-ink-400 truncate" data-testid="progress-line-prev">
+              {p.message}
+              {p.times > 1 && <span className="text-ink-300"> ×{p.times}</span>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
