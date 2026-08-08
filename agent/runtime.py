@@ -638,12 +638,23 @@ def _state_header(store: ProjectStateStore | None) -> str:
     return header
 
 
+CLICKED_OPTION_DIRECTIVE = (
+    "[CLICKED OPTION] The student did not type this — they CLICKED an option "
+    "you offered them last turn. Act on it NOW, in this turn. Do NOT reply with "
+    "another set of options asking them to pick the prerequisite; if a "
+    "prerequisite is needed, DO the prerequisite yourself and continue. They "
+    "already chose. Answering a click with another menu spends their turn and "
+    "their credits to tell them no."
+)
+
+
 async def stream_turn(
     agent: Any,
     thread_id: str,
     user_text: str,
     attachments: list | None = None,
     store: ProjectStateStore | None = None,
+    clicked_option: bool = False,
 ) -> AsyncIterator[dict]:
     """Run one user turn, yielding SSE-shaped events.
 
@@ -665,6 +676,11 @@ async def stream_turn(
     # real state. Goes on the user turn (like [ATTACHED]) so it rides through
     # the multimodal path too.
     header = _state_header(store)
+    # The click directive rides in the SAME injected block as [PROJECT STATE] /
+    # [NEXT] — the model already treats that block as ground truth it may not
+    # argue with, which is exactly the standing this needs.
+    if clicked_option:
+        header = f"{header}\n{CLICKED_OPTION_DIRECTIVE}" if header else CLICKED_OPTION_DIRECTIVE
     user_text = f"{header}\n{user_text}" if header else user_text
     if attachments:
         # Lazy import — multimodal.py pulls in google-genai which is heavy

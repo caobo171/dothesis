@@ -63,3 +63,37 @@ def test_header_surfaces_needs_review_drift(tmp_path):
     store.commit_slice("M4", {"analysis_results": {"r": 2}}, reason="rerun", confirm_done=True)
     header = _state_header(store)
     assert "M5:needs_review" in header
+
+
+def test_the_clicked_option_directive_is_injected_with_the_state_block():
+    """A clicked option must reach the model as ground truth, not a suggestion.
+
+    The student clicked a card the agent itself offered; answering that with
+    another menu ("I cannot do that yet, first we must…") spends their turn and
+    their credits to tell them no. The directive rides in the same injected
+    block as [PROJECT STATE] / [NEXT], which the model already treats as
+    something it may not argue with.
+    """
+    import asyncio
+    from agent.runtime import CLICKED_OPTION_DIRECTIVE, stream_turn
+
+    seen = {}
+
+    class _Agent:
+        async def astream(self, payload, *a, **k):
+            # No attachments → the message is a plain dict.
+            seen["text"] = payload["messages"][0]["content"]
+            return
+            yield  # pragma: no cover — makes this an async generator
+
+    async def _run(clicked):
+        async for _ in stream_turn(_Agent(), "t1", "Confirm", store=None,
+                                   clicked_option=clicked):
+            pass
+
+    asyncio.run(_run(True))
+    assert CLICKED_OPTION_DIRECTIVE in seen["text"]
+    assert "Confirm" in seen["text"]          # their choice still rides along
+
+    asyncio.run(_run(False))
+    assert CLICKED_OPTION_DIRECTIVE not in seen["text"]

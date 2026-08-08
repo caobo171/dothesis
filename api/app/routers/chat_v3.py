@@ -17,6 +17,7 @@ import logging
 import uuid
 
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..credit_ledger import debit
@@ -107,6 +108,42 @@ async def _get_checkpointer():
 # working; the definition moved to app.workspace so the HEADLESS entrypoint can
 # resolve a path without importing this chat router (see app/workspace.py).
 _workspace_dir = workspace_dir
+
+
+def _clicked_a_previous_option(db: Session, thread_pk, text: str) -> bool:
+    """Did this message come from clicking a card the last turn offered?
+
+    Inferred server-side rather than flagged by the client, for two reasons:
+    every existing client keeps working without a change, and no client can
+    forget to send it — headless and partner runs pick options too.
+
+    The signal is exact-match against the options actually persisted on the
+    previous assistant message, so a student who happens to TYPE the same
+    sentence gets the same treatment, which is correct: they asked for that
+    thing either way.
+    """
+    if not (text or "").strip():
+        return False
+    row = db.execute(
+        select(Message)
+        .where(Message.thread_id == thread_pk, Message.role == "assistant")
+        .order_by(Message.created_at.desc())
+        .limit(1)
+    ).scalars().first()
+    hint = getattr(row, "tool_calls_json", None)
+    if not isinstance(hint, dict):
+        return False
+    # Two shapes are persisted: a bare widget hint, and {"widgets": [...]} when
+    # one turn emitted several.
+    hints = hint.get("widgets") if isinstance(hint.get("widgets"), list) else [hint]
+    wanted = text.strip().casefold()
+    for h in hints:
+        if not isinstance(h, dict) or h.get("widget_type") != "card_grid":
+            continue
+        for opt in h.get("options") or []:
+            if isinstance(opt, dict) and str(opt.get("value", "")).strip().casefold() == wanted:
+                return True
+    return False
 
 
 def _materialize_attachments(
@@ -214,6 +251,15 @@ async def send_message_v3(
         ]
         if chips:
             user_tool_calls = {"attachments": chips}
+    # BEFORE the insert — it reads the newest assistant row, and the user row
+    # we are about to add would not change that, but the ordering is load-
+    # bearing if the roles ever widen. Cheap, and it must never fail a turn.
+    try:
+        clicked_option = _clicked_a_previous_option(db, t.id, text)
+    except Exception:
+        logger.exception("clicked-option detection failed")
+        clicked_option = False
+
     db.add(Message(thread_id=t.id, role="user", content=text,
                    tool_calls_json=user_tool_calls))
     db.commit()
@@ -312,6 +358,7 @@ async def send_message_v3(
                 async for ev in stream_turn(
                     agent, agent_thread_id, text,
                     attachments=attachments, store=turn_store,
+                    clicked_option=clicked_option,
                 ):
                     await events_q.put(("agent", ev))
             finally:
