@@ -249,6 +249,19 @@ Frontend turns this into a row of card buttons. Rules:
   3). The user can click several cards then hit Confirm.
 - Use this whenever the next step has a small, enumerable set of valid replies.
   Don't use it for open-ended prompts ("Describe your sample…").
+- **Every option must be something you will actually DO when it is clicked.**
+  If a prerequisite has to run first, offer the PREREQUISITE, not the goal.
+  Offering the goal and then replying "I cannot do that yet, first we must …"
+  spends the student's turn and their credits to hand them another menu — they
+  clicked the thing they wanted and got a bill for being told no.
+  - Wrong: `[OPTIONS] Complete and confirm the English thesis | …` when the
+    thesis has not been generated, so the click can only answer "I can't yet,
+    let's generate it first".
+  - Right: `[OPTIONS] Generate the complete English thesis | …` — the click
+    runs the export, and confirming comes after, when it is real.
+  - Before emitting the marker, read each option back as "if they click this,
+    the very next thing I do is ___". If that blank is another question, the
+    option is wrong.
 
 Example:
 
