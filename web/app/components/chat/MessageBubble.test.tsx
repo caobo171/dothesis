@@ -215,3 +215,54 @@ describe("[OPTIONS] marker stripping", () => {
     expect(screen.getByText("Lock it in?")).toBeTruthy();
   });
 });
+
+describe("[OPTIONS] fallback when the message carries no widget", () => {
+  const inline =
+    "Bước tiếp theo là bổ sung đủ các chương, rồi mới đánh dấu M5 done. " +
+    "[OPTIONS] Bổ sung đủ 6 chương | Xem lại nội dung M5 | Xuất bản hiện có";
+
+  test("cards render from the text alone", () => {
+    // Messages written before the server parser accepted this shape carry no
+    // card_grid. Stripping the marker without this made those turns strictly
+    // WORSE: the raw text stopped being readable and no buttons appeared, so
+    // the options vanished entirely.
+    render(<MessageBubble role="assistant" content={inline} onWidgetSelect={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Bổ sung đủ 6 chương" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Xuất bản hiện có" })).toBeTruthy();
+  });
+
+  test("clicking one reports the option value", () => {
+    const onSelect = vi.fn();
+    render(<MessageBubble role="assistant" content={inline} onWidgetSelect={onSelect} />);
+    fireEvent.click(screen.getByRole("button", { name: "Xem lại nội dung M5" }));
+    expect(onSelect).toHaveBeenCalled();
+  });
+
+  test("a persisted widget still wins over the fallback", () => {
+    const hint = {
+      widget_type: "card_grid", field_name: "user_choice", title: "",
+      options: [{ value: "Server option", label: "Server option" }],
+      multi_select: false,
+    };
+    render(
+      <MessageBubble
+        role="assistant"
+        content={inline}
+        toolCallsJson={hint as never}
+        onWidgetSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Server option" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Bổ sung đủ 6 chương" })).toBeNull();
+  });
+
+  test("no marker means no cards", () => {
+    // Every assistant message has a Copy button, so assert on the absence of
+    // an OPTION card rather than of buttons in general.
+    const { container } = render(
+      <MessageBubble role="assistant" content="Just prose." onWidgetSelect={vi.fn()} />,
+    );
+    expect(container.querySelector("[data-widget], [data-testid*='card']")).toBeNull();
+    expect(screen.queryByRole("button", { name: /prose/ })).toBeNull();
+  });
+});

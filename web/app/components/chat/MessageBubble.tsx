@@ -558,6 +558,45 @@ export function AssistantFrame({
 }
 
 
+/**
+ * Parse a trailing `[OPTIONS] …` marker into a card_grid hint, client-side.
+ *
+ * The server does this too (agent/runtime.py) and persists the result on the
+ * message. This is the fallback for every message where it did NOT — most
+ * obviously the ones already in the database from before the parser accepted a
+ * marker glued to the end of a sentence.
+ *
+ * Without it, stripping the marker from the text made those turns strictly
+ * worse: the raw marker stopped being readable AND no cards appeared, so the
+ * options vanished completely. Parsing here means the buttons come back for
+ * old messages too, and the client stops depending on when a message happened
+ * to be written.
+ *
+ * Mirrors _parse_options_marker exactly: last non-empty line only, so a marker
+ * buried mid-reply is still ignored.
+ */
+function _optionsHintFrom(content: string): WidgetHint | null {
+  const lines = (content || "").trimEnd().split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const m = line.match(
+      /\[OPTIONS(?:\s*:\s*(\w+))?(\s+multi)?\]\s*(.+)$/,
+    );
+    if (!m) return null;
+    const labels = m[3].split("|").map(s => s.trim()).filter(Boolean);
+    if (!labels.length) return null;
+    return {
+      widget_type: "card_grid",
+      field_name: m[1] || "user_choice",
+      title: "",
+      options: labels.map(l => ({ value: l, label: l })),
+      multi_select: Boolean(m[2]),
+    } as WidgetHint;
+  }
+  return null;
+}
+
 export type MessageBubbleProps = {
   role: "user" | "assistant" | "system" | "tool";
   content: string;
@@ -650,9 +689,11 @@ export function MessageBubble({
     >
       {/* No size override — inherit the frame's serif measure. */}
       <div className="prose-tight">{_renderMarkdown(content)}</div>
-      {toolCallsJson && onWidgetSelect && (
+      {/* Fall back to parsing the marker out of the text when the message
+          carries no widget — see _optionsHintFrom. */}
+      {(toolCallsJson ?? _optionsHintFrom(content)) && onWidgetSelect && (
         <WidgetRenderer
-          hint={toolCallsJson}
+          hint={(toolCallsJson ?? _optionsHintFrom(content))!}
           onSelect={onWidgetSelect}
           disabled={widgetDisabled}
           projectId={projectId}
