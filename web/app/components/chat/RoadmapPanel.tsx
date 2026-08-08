@@ -3,8 +3,8 @@ import { useEffect, useState, useCallback } from "react";
 
 import { apiFetch } from "@/app/lib/api";
 
-type Sub = { id: string; label: string; state: "done" | "current" | "upcoming" };
-type Mod = { id: string; status: string; current: string | null; substeps: Sub[] };
+export type Sub = { id: string; label: string; state: "done" | "current" | "upcoming" };
+export type Mod = { id: string; status: string; current: string | null; substeps: Sub[] };
 type NextAction = { module: string; substep: string; title: string; why: string; cta_options: string[] };
 // F11: progress-vs-plan. {} (no keys) when the student hasn't set a defense date.
 type Timeline = { this_week?: string; on_track?: boolean; weeks_behind?: number };
@@ -24,12 +24,20 @@ type Roadmap = {
  * actions; otherwise the card is read-only visibility (the agent still leads via
  * the injected [NEXT] line).
  */
-export function RoadmapPanel({
-  projectId, onSendMessage, refreshKey = 0,
-}: { projectId: string; onSendMessage?: (text: string) => void; refreshKey?: number }) {
+/**
+ * The roadmap fetch, shared.
+ *
+ * Lifted out of the panel because the per-module sub-steps now live ON the
+ * module cards (ContextPanel's CtxSection) rather than in a second list under
+ * this one — the panel used to render every module twice, once as a
+ * strikethrough checklist here and once as a card below, which was most of the
+ * scroll height for information the student had already read.
+ */
+export function useRoadmap(projectId: string | undefined, refreshKey = 0) {
   const [data, setData] = useState<Roadmap | null>(null);
 
   const load = useCallback(async () => {
+    if (!projectId) return;
     try {
       const r = (await apiFetch(`/projects/${projectId}/roadmap`, { method: "POST" })) as Roadmap;
       if (r) setData(r);
@@ -39,7 +47,13 @@ export function RoadmapPanel({
   }, [projectId]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
+  return data;
+}
 
+
+export function RoadmapPanel({
+  data, onSendMessage,
+}: { data: Roadmap | null; onSendMessage?: (text: string) => void }) {
   if (!data) return null;
   const na = data.next_action as NextAction;
   const hasNext = na && "title" in na;
@@ -73,21 +87,67 @@ export function RoadmapPanel({
           )}
         </div>
       )}
-      {data.modules.map((m) => (
-        <div key={m.id} className="text-[12.5px]">
-          <div className="font-semibold text-ink-800">{m.id} · {m.status}</div>
-          <ul className="mt-1 ml-2 flex flex-col gap-0.5">
-            {m.substeps.map((s) => (
-              <li key={s.id} className={
-                s.state === "done" ? "text-ink-400 line-through"
-                : s.state === "current" ? "text-primary-700 font-semibold"
-                : "text-ink-500"}>
-                {s.state === "done" ? "✓ " : s.state === "current" ? "▸ " : "· "}{s.label}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
     </div>
+  );
+}
+
+
+/**
+ * A module's sub-steps as one bar plus a count, for the module card header.
+ *
+ * Replaces the strikethrough checklist this panel used to print for all five
+ * modules. On a finished thesis that was 23 struck-through lines the student
+ * had to scroll past to reach the content — the same modules were already
+ * listed below as cards, so the progress was stated twice and the detail was
+ * only ever glanced at.
+ *
+ * The steps are still reachable: the title attribute lists them on hover, and
+ * expanding the card shows them in full (see StepList).
+ */
+export function StepBar({ substeps }: { substeps: Sub[] }) {
+  if (!substeps.length) return null;
+  const done = substeps.filter(s => s.state === "done").length;
+  const pct = Math.round((done / substeps.length) * 100);
+  const current = substeps.find(s => s.state === "current");
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 shrink-0"
+      // Hover detail without spending vertical space on it.
+      title={substeps.map(s =>
+        `${s.state === "done" ? "✓" : s.state === "current" ? "▸" : "·"} ${s.label}`
+      ).join("\n")}
+    >
+      <span className="w-14 h-1 rounded-full bg-ink-100 overflow-hidden" aria-hidden>
+        <span
+          className={`block h-full transition-[width] duration-500 ${
+            done === substeps.length ? "bg-emerald-500" : "bg-primary-600"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </span>
+      <span className="text-[11px] text-ink-500 tabular-nums">
+        {done}/{substeps.length}
+      </span>
+      <span className="sr-only">
+        {current ? `Current step: ${current.label}` : `${done} of ${substeps.length} steps done`}
+      </span>
+    </span>
+  );
+}
+
+
+/** The full sub-step list, shown when the module card is expanded. */
+export function StepList({ substeps }: { substeps: Sub[] }) {
+  if (!substeps.length) return null;
+  return (
+    <ul className="flex flex-col gap-0.5 mb-2.5 pb-2.5 border-b border-ink-100">
+      {substeps.map((s) => (
+        <li key={s.id} className={`text-[12px] ${
+          s.state === "done" ? "text-ink-400"
+          : s.state === "current" ? "text-primary-700 font-semibold"
+          : "text-ink-500"}`}>
+          {s.state === "done" ? "✓ " : s.state === "current" ? "▸ " : "· "}{s.label}
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -21,8 +21,9 @@ test("F2: roadmap panel surfaces the derived next action from real state", async
   const panel = page.getByTestId("roadmap-panel");
   await expect(panel).toBeVisible({ timeout: 20_000 });
   // The single derived Next action is "Derive research questions". exact:true
-  // targets the Next-card title, not the "▸ Derive research questions" sub-step
-  // line (which carries the ▸ prefix) — both rendering is itself correct.
+  // targets the Next-card title. It used to also have to avoid the panel's own
+  // "▸ Derive research questions" sub-step line; that list now lives on the
+  // module card instead of being printed a second time here.
   await expect(panel.getByText("Derive research questions", { exact: true })).toBeVisible();
 });
 

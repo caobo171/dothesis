@@ -9,7 +9,7 @@ import { FileTypeIcon } from "./FileTypeIcon";
 // modules card renders the SAME components, so a backfilled M3 looks exactly
 // like a live M3 (mermaid model included) instead of a second, worse view.
 import { EmptyHint, M1Body, M2Body, M3Body, M5Body } from "./ModuleSlices";
-import { RoadmapPanel } from "./RoadmapPanel";
+import { RoadmapPanel, StepBar, StepList, useRoadmap, type Sub } from "./RoadmapPanel";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
 import {
   triggerExportDownload,
@@ -83,6 +83,12 @@ export function ContextPanel({
   roadmapRefreshKey?: number;
 }) {
   const [showRaw, setShowRaw] = useState(false);
+  // Fetched once here, then split two ways: the Next card stays in
+  // RoadmapPanel, and each module's sub-steps ride on that module's own card
+  // instead of a second list above them.
+  const roadmap = useRoadmap(projectId, roadmapRefreshKey);
+  const substepsOf = (id: string): Sub[] =>
+    roadmap?.modules?.find(m => m.id === id)?.substeps ?? [];
 
   const sectionStatus = (id: keyof ModuleStatusMap, data: Record<string, any> | null): SectionStatus => {
     const raw = moduleStatus?.[id];
@@ -138,16 +144,13 @@ export function ContextPanel({
             {/* F2: the derived coaching roadmap + Next card leads the student
                 from real state. Mounted above the per-module cards. */}
             {projectId && (
-              <RoadmapPanel
-                projectId={projectId}
-                onSendMessage={onSendMessage}
-                refreshKey={roadmapRefreshKey}
-              />
+              <RoadmapPanel data={roadmap} onSendMessage={onSendMessage} />
             )}
             <CtxSection
               label="M1 · Topic & questions"
               moduleId="M1"
               status={sectionStatus("M1", contextStore.m1_topic)}
+              substeps={substepsOf("M1")}
             >
               <M1Body data={contextStore.m1_topic} />
             </CtxSection>
@@ -156,6 +159,7 @@ export function ContextPanel({
               label="M2 · Gaps & hypotheses"
               moduleId="M2"
               status={sectionStatus("M2", contextStore.m2_literature)}
+              substeps={substepsOf("M2")}
             >
               <M2Body data={contextStore.m2_literature} />
             </CtxSection>
@@ -164,6 +168,7 @@ export function ContextPanel({
               label="M3 · Methodology & model"
               moduleId="M3"
               status={sectionStatus("M3", contextStore.m3_design)}
+              substeps={substepsOf("M3")}
             >
               <M3Body data={contextStore.m3_design} />
             </CtxSection>
@@ -172,6 +177,7 @@ export function ContextPanel({
               label="M4 · Analysis"
               moduleId="M4"
               status={sectionStatus("M4", contextStore.m4_analysis)}
+              substeps={substepsOf("M4")}
             >
               <div className="text-[12.5px] text-ink-500 leading-snug">
                 Soft-locked — you can ask or start; the agent will prompt if a dependency is missing.
@@ -182,6 +188,7 @@ export function ContextPanel({
               label="M5 · Writing"
               moduleId="M5"
               status={sectionStatus("M5", contextStore.m5_writing)}
+              substeps={substepsOf("M5")}
             >
               <M5Body data={contextStore.m5_writing} />
             </CtxSection>
@@ -227,10 +234,16 @@ function CtxSection({
   label,
   status,
   moduleId,
+  substeps = [],
   children,
 }: {
   label: string;
   status: SectionStatus;
+  /** This module's roadmap sub-steps. Shown as a bar in the header (with the
+   *  step names on hover) and in full when the card is expanded — replacing
+   *  the separate strikethrough checklist that listed every module a second
+   *  time above these cards. */
+  substeps?: Sub[];
   /** Stable machine-readable hook for E2E assertions ("M1".."M5"). The
    *  status dot is a Tailwind class — style-coupled and unassertable — so
    *  tests read data-status instead (2026-07-08 e2e-testing spec). Only the
@@ -255,6 +268,7 @@ function CtxSection({
         <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
         <span className="text-[12.5px] font-bold text-ink-800">{label}</span>
         <span className="flex-1" />
+        {status !== "needs_review" && <StepBar substeps={substeps} />}
         {status === "needs_review" && (
           // The bare ⚠ icon left users unsure what it meant or what to do.
           // Label it + explain on hover: needs_review = a dependency hole the
@@ -270,7 +284,12 @@ function CtxSection({
         )}
         <span className="text-ink-400 text-[11px]">{collapsed ? "▸" : "▾"}</span>
       </button>
-      {!collapsed && <div className="px-3.5 pb-3.5">{children}</div>}
+      {!collapsed && (
+        <div className="px-3.5 pb-3.5">
+          <StepList substeps={substeps} />
+          {children}
+        </div>
+      )}
     </div>
   );
 }
