@@ -80,8 +80,21 @@ _H1_RE = re.compile(r"^(?:CH[ƯU]ƠNG|CHAPTER|Chương|Chapter)\s+[0-9IVX]+\b", 
 # "4.1 ...", "4.1. ..." → H2;  "4.1.1 ..." → H3. Requires text after the number
 # so a bare "4.1" or a decimal inside prose is not promoted.
 _HN_RE = re.compile(r"^(\d+(?:\.\d+)+)\.?\s+(\S.*)$")
-# A table row: pipe-separated with at least two separators, i.e. 3+ cells.
-_ROW_RE = re.compile(r"^[^|\n]*\|[^|\n]*\|.*$")
+# A table row: pipe-separated, TWO cells or more.
+#
+# This required two separators (3+ cells) and so rejected every two-column
+# table in the document — which in a real thesis is most of them: the KMO /
+# Bartlett block, both EFA factor-loading tables, every "Chỉ số | Giá trị"
+# pair. Each row fell through to the prose branch and became its own
+# one-line paragraph, so the tables the student complained were "missing"
+# were present as a ladder of stray lines. It also dropped the short last
+# rows of a triangular correlation matrix ("EXP | 1"), stranding them just
+# below the table they belong to.
+#
+# One pipe is enough because a lone piped line is not promoted to a table:
+# _flush_table emits a single collected row back as plain text, so a stray
+# "|" inside running prose still renders as prose.
+_ROW_RE = re.compile(r"^[^|\n]*\|.*$")
 
 
 def _flush_table(rows: list[list[str]], out: list[str]) -> None:
@@ -99,8 +112,17 @@ def _flush_table(rows: list[list[str]], out: list[str]) -> None:
     width = max(len(r) for r in rows)
     # Pandoc needs every row to have the header's column count; a short or long
     # row silently breaks the whole table rather than just its own line.
+    #
+    # Pad BODY rows on the right and the HEADER on the left, because a short row
+    # means something different in each place. A short body row has run out of
+    # values — the lower half of a symmetric correlation matrix is left blank on
+    # purpose. A short header row is missing its stub: the cell above the row
+    # labels is empty in the .docx, and an empty leading cell is exactly what the
+    # extractor drops. Padding the header on the right instead shifts every
+    # column heading one place left, which in a correlation matrix reads as
+    # r(PB,PB) = 0.448 — a wrong number rather than a missing one.
     norm = [(r + [""] * (width - len(r)))[:width] for r in rows]
-    head, body = norm[0], norm[1:]
+    head, body = ([""] * (width - len(rows[0])) + rows[0])[:width], norm[1:]
     lines = ["| " + " | ".join(head) + " |",
              "|" + "|".join(["---"] * width) + "|"]
     lines += ["| " + " | ".join(r) + " |" for r in body]

@@ -32,11 +32,54 @@ def test_table_rows_are_one_block_with_no_blank_lines_between_them():
     assert "\n\n|" not in out.split("| A |", 1)[1].split("\n\n")[0]
 
 
-def test_ragged_rows_are_padded_to_the_header_width():
-    """Pandoc drops the entire table if one row has the wrong column count."""
+def test_ragged_rows_are_padded_to_a_single_width():
+    """Pandoc drops the entire table if one row has the wrong column count.
+
+    (This asserted a hardcoded 3 columns and passed vacuously: the short "1 | 2"
+    row was not recognised as a row at all, so the table never formed and the
+    loop had nothing to check.)
+    """
     out = p2md("A | B | C\n1 | 2\n3 | 4 | 5 | 6")
-    for line in (ln for ln in out.splitlines() if ln.startswith("|")):
-        assert line.count("|") == 4             # 3 columns → 4 pipes
+    piped = [ln for ln in out.splitlines() if ln.startswith("|")]
+    assert len(piped) == 4                      # header + separator + 2 rows
+    assert len({ln.count("|") for ln in piped}) == 1
+
+
+def test_two_column_tables_are_tables(monkeypatch):
+    """The row pattern required two separators, so it saw only 3+ column tables.
+
+    Most tables in a real thesis have two columns — the KMO/Bartlett block, both
+    EFA factor-loading tables, every "Chỉ số | Giá trị" pair. Each row fell
+    through to the prose branch and became its own one-line paragraph, so the
+    student reported the tables as missing when they were sitting there as a
+    ladder of stray lines. On one real Chapter 4 this was 5 of 17 tables.
+    """
+    out = p2md("Chỉ số | Giá trị\nHệ số KMO | 0.843\nBartlett Sig. | 0.000")
+    assert "| Chỉ số | Giá trị |" in out
+    assert "|---|---|" in out
+    assert "| Hệ số KMO | 0.843 |" in out
+    assert "\nHệ số KMO | 0.843" not in out       # not left behind as prose
+
+
+def test_the_short_last_row_of_a_triangular_matrix_stays_in_the_table():
+    """A correlation matrix prints only its upper half, so its last row is one
+    cell wide. "EXP | 1" was stranded as a paragraph below the table."""
+    out = p2md("Biến | PB | ATT | TR | EXP\n"
+               "PB | 1 | 0.448 | 0.556 | 0.521\nATT | 1 | 0.015 | 0.146\n"
+               "TR | 1 | -0.001\nEXP | 1")
+    assert out.count("\n\n") == 0                 # one block, nothing spilled
+    assert out.rstrip().endswith("| EXP | 1 |  |  |  |")
+
+
+def test_a_short_header_is_padded_on_the_LEFT():
+    """A matrix's corner cell is blank in the .docx and the extractor drops it,
+    so the header row arrives one cell short. Padding it on the right like a
+    body row shifts every column heading left — in a correlation matrix that
+    reads as r(PB,PB) = 0.448, a wrong number rather than a missing one."""
+    out = p2md("PB | ATT\nPB | 1 | 0.448\nATT | 1")
+    lines = [ln for ln in out.splitlines() if ln.startswith("|")]
+    assert lines[0] == "|  | PB | ATT |"
+    assert lines[2] == "| PB | 1 | 0.448 |"
 
 
 def test_chapter_and_section_headings_are_promoted():
