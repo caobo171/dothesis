@@ -183,5 +183,7 @@ def test_preserved_chapters_do_not_carry_the_guardrail_envelope():
     assert "UNTRUSTED DOCUMENT" not in joined
     assert "BEGIN DOCUMENT" not in joined
     assert "END DOCUMENT" not in joined
-    assert joined.startswith("CHƯƠNG 4")
+    # Reflowed to markdown, so the chapter heading arrives promoted to an H1 —
+    # what matters here is that the envelope is gone and the content is intact.
+    assert joined.startswith("# CHƯƠNG 4")
     assert "EFA" in joined          # the real content still survives

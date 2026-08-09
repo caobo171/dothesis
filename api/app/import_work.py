@@ -251,7 +251,9 @@ def _preserve_chapters(text: str) -> list[dict]:
     alone beats misfiling someone's discussion chapter.
     """
     from agent.guardrails import unframe_document_text  # noqa: PLC0415
-    from orchestrator.chapter_split import split_final_chapter  # noqa: PLC0415
+    from orchestrator.chapter_split import (  # noqa: PLC0415
+        plaintext_to_markdown, split_final_chapter,
+    )
 
     # The route neutralizes every upload before inference, so `text` arrives
     # wrapped in the data-only envelope. That framing is addressed to the model
@@ -267,11 +269,20 @@ def _preserve_chapters(text: str) -> list[dict]:
     # chapter_name drives chapters_from_final_sections' mapping onto the
     # editor's canonical slots; `title` alone would need a title reverse-lookup
     # that a Vietnamese heading will not hit.
+    #
+    # The prose is reflowed to markdown because that is the exporter's contract
+    # (_sections_to_markdown → pandoc; m5_writing states "prose is assumed to
+    # already be markdown"). A composer satisfies it; extracted document text
+    # does not, and shipping it raw collapsed the chapter into one paragraph,
+    # rendered every table inline as running prose, and left Chapter 4 with no
+    # table-of-contents entries.
     return [
         {"chapter_name": "results",
-         "title": head.splitlines()[0].strip()[:120] or "Results", "prose": head},
+         "title": head.splitlines()[0].strip()[:120] or "Results",
+         "prose": plaintext_to_markdown(head)},
         {"chapter_name": "conclusion",
-         "title": tail.splitlines()[0].strip()[:120] or "Conclusion", "prose": tail},
+         "title": tail.splitlines()[0].strip()[:120] or "Conclusion",
+         "prose": plaintext_to_markdown(tail)},
     ]
 
 
