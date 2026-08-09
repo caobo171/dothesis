@@ -780,6 +780,12 @@ class ActiveRunOut(BaseModel):
     total: int = 0
 
 
+# Comfortably past the longest job that opens a run row — the citation search's
+# own ceiling is 900s + a 60s watchdog. Anything older is a row whose process
+# died without reaching its finally.
+_ACTIVE_RUN_MAX_AGE_S = 3600
+
+
 @router.post("/runs/active", response_model=ActiveRunOut)
 def active_run(body: AuthedBody, user: User = Depends(current_user),
                db: Session = Depends(db_session)) -> ActiveRunOut:
@@ -794,11 +800,21 @@ def active_run(body: AuthedBody, user: User = Depends(current_user),
     runs from one person would report the later one; that is a strictly better
     answer than the spinner with no number that this replaces.
     """
+    from datetime import datetime, timedelta, timezone  # noqa: PLC0415
+
     from ..models import ToolRun  # noqa: PLC0415
 
+    # Ignore rows older than the longest job anyone runs. A row only leaves
+    # `running` in its own process's finally block, so a job that hangs or is
+    # killed leaves one behind for good — and this endpoint would then hand the
+    # next screen the user opened a spinner for work that ended hours ago.
+    # Measured: a citation search stuck at step 1 of 3 was still the "active
+    # run" long after the student had moved on.
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=_ACTIVE_RUN_MAX_AGE_S)
     row = db.scalars(
         select(ToolRun)
-        .where(ToolRun.user_id == user.id, ToolRun.status == "running")
+        .where(ToolRun.user_id == user.id, ToolRun.status == "running",
+               ToolRun.created_at >= cutoff)
         .order_by(ToolRun.id.desc()).limit(1)
     ).first()
     if row is None:

@@ -506,18 +506,38 @@ def spawn_citation_search(project_id, run_id: int | None) -> bool:
     cmd = [sys.executable, "-m", "app.citation_job", "--project-id", str(project_id)]
     if run_id:
         cmd.extend(["--run-id", str(run_id)])
+    # Keep the log. This was DEVNULL on both streams, so when the search hung —
+    # and it did, for half an hour, at step 1 of 3 — there was no record of
+    # where. The job logs every outcome deliberately, including "ran fine and
+    # found nothing", and all of it was going to /dev/null. One file per
+    # project, truncated per run: it is a few KB and it is the only account of
+    # why a student's M2 did or did not improve.
+    log_dir = settings.job_workdir_root / "citation_search"
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        sink = open(log_dir / f"{project_id}.log", "w")          # noqa: SIM115
+    except Exception:  # noqa: BLE001
+        log.exception("could not open a citation-search log for %s", project_id)
+        sink = subprocess.DEVNULL
     try:
         subprocess.Popen(
             cmd,
             cwd=str(Path(__file__).resolve().parents[1]),   # api/, so `app` imports
             env=env,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=sink, stderr=subprocess.STDOUT,
             start_new_session=True,     # survives the API process going away
         )
         return True
     except Exception:  # noqa: BLE001
         log.exception("could not spawn the citation search for %s", project_id)
         return False
+    finally:
+        # The child holds its own dup of the fd; ours is just a handle.
+        if sink is not subprocess.DEVNULL:
+            try:
+                sink.close()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def spawn_headless_run(db: Session, run: Job, params: dict) -> None:
