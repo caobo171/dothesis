@@ -220,3 +220,62 @@ def test_percent_vietnamese_phrasing():
 
 def test_percent_no_r2_no_finding():
     assert percent_variance_findings({"results": "explains 56% of the variance in PI"}, {}) == []
+
+
+# --- R² vs its complement ----------------------------------------------------
+
+_R2_STATE = {"structural_model": {"r2": {"PB": 0.716}}}
+
+
+def _pv(prose):
+    from agent.coherence import percent_variance_findings
+    return percent_variance_findings({"results": prose}, _R2_STATE)
+
+
+def test_remaining_percent_is_read_as_the_complement_not_as_r2():
+    """"The remaining 28.4%" states 1 - R², not R².
+
+    Read as R² it contradicts a stored 0.716 by 43 points, so the check
+    reported a HARD blocking error against a correct, conventional sentence —
+    in the student's own imported results chapter. Stating the unexplained
+    remainder is standard practice, so this was the common case.
+    """
+    assert _pv("Phần còn lại 28.4% biến thiên của PB do các yếu tố ngoài mô hình quyết định.") == []
+    assert _pv("The remaining 28.4% of the variance in PB may be associated with other variables.") == []
+    assert _pv("The 28.4% unexplained variance in PB indicates other factors matter.") == []
+
+
+def test_a_correct_explained_percentage_still_passes():
+    assert _pv("Ba biến giải thích được 71.6% biến thiên của PB.") == []
+    assert _pv("The model explained 71.6% of the variance in PB.") == []
+
+
+def test_a_genuinely_wrong_explained_percentage_still_fails():
+    """The complement handling must not become a blanket suppression."""
+    out = _pv("The model explained 28.4% of the variance in PB.")
+    assert len(out) == 1 and out[0]["severity"] == "hard"
+
+
+def test_a_genuinely_wrong_remainder_still_fails():
+    """A remainder of 50% implies R² = 0.50, which contradicts 0.716."""
+    out = _pv("Phần còn lại 50.0% biến thiên của PB chưa được giải thích.")
+    assert len(out) == 1 and out[0]["severity"] == "hard"
+    assert "UNexplained" in out[0]["message"]
+
+
+def test_a_finding_quotes_the_offending_sentence():
+    """Naming a chapter is not enough to act on.
+
+    "A paragraph states that 28.4% ..." left the student searching a chapter of
+    several thousand words with nothing to search FOR. The quote is what makes
+    the report actionable.
+    """
+    out = _pv("The model explained 28.4% of the variance in PB, which is lower than expected.")
+    assert len(out) == 1
+    f = out[0]
+    assert f["location"]["chapter"] == "results"
+    assert "28.4%" in f["location"]["sentence"]
+    assert "results chapter" in f["message"]
+    assert "Sentence:" in f["message"]
+    # the computed value is stated, not just the contradiction
+    assert "0.716" in f["message"] and "71.6%" in f["message"]

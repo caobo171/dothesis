@@ -52,10 +52,19 @@ def _nfc(s: str) -> str:
 
 
 def _finding(check, severity, message, *, hypothesis=None, chapter=None,
-             observed=None, expected=None, tolerance=None, source="prose") -> dict:
+             sentence=None, observed=None, expected=None, tolerance=None,
+             source="prose") -> dict:
+    """`sentence` is the offending text, so the student can FIND it.
+
+    A finding that names only a chapter is not actionable: a results chapter is
+    thousands of words, and "a paragraph states that ..." leaves the reader
+    hunting. Carrying the sentence means the report can quote something
+    searchable.
+    """
     return {"check": check, "severity": severity, "message": message,
             "location": {"table": None, "construct": None, "item": None, "path": None,
-                         "hypothesis": hypothesis, "chapter": chapter},
+                         "hypothesis": hypothesis, "chapter": chapter,
+                         "sentence": sentence},
             "observed": observed, "expected": expected, "tolerance": tolerance, "source": source}
 
 
@@ -634,6 +643,22 @@ def traceability_findings(m2: dict, m3: dict, chapters: dict) -> list[dict]:
     return out
 
 
+# Wording that makes a percentage the COMPLEMENT of R² — the share left over,
+# not the share explained.
+#
+# Without this the check read "Phần còn lại 28.4% biến thiên của PB do các yếu
+# tố ngoài mô hình quyết định" ("the remaining 28.4% ... is determined by
+# factors outside the model") as a claim that 28.4% was explained, and reported
+# a hard, blocking contradiction against a perfectly correct sentence — in the
+# student's OWN imported chapter. Stating the unexplained remainder is standard
+# practice in a results chapter, so this is the common case, not an edge case.
+_COMPLEMENT_RE = re.compile(
+    r"còn\s*lại|chưa\s*được\s*giải\s*thích|không\s*được\s*giải\s*thích|"
+    r"ngoài\s*mô\s*hình|remaining|unexplained|not\s+explained|"
+    r"outside\s+the\s+model|other\s+factors|rest\s+of\s+the",
+    re.IGNORECASE,
+)
+
 _PERCENT_VAR_RE = re.compile(
     r"(\d{1,3}(?:[.,]\d+)?)\s*%[^.]*?(?:variance|variation|phương sai|biến thiên)", re.I)
 
@@ -665,10 +690,27 @@ def percent_variance_findings(chapters: dict, analysis_results) -> list[dict]:
                 if len(named) != 1:
                     continue        # ambiguous → don't guess
                 stored = con_r2[named[0]]
-                if abs(pct / 100.0 - stored) > 0.015:   # ~1.5pt display tolerance
+                # "The remaining 28.4%" states 1 - R², so compare it against the
+                # complement. Checking it as if it were R² turned a correct,
+                # conventional sentence into a hard blocking finding.
+                complement = bool(_COMPLEMENT_RE.search(sent))
+                claimed = (1.0 - pct / 100.0) if complement else (pct / 100.0)
+                if abs(claimed - stored) > 0.015:   # ~1.5pt display tolerance
+                    # Say WHERE and quote the sentence. "A paragraph states
+                    # that 28.4% ..." sent the student hunting through a
+                    # chapter of several thousand words with nothing to search
+                    # for; the quote is the whole difference between a report
+                    # they can act on and one they cannot.
+                    quoted = " ".join(sent.split())[:200]
+                    said = (f"says {m.group(1)}% of the variance in {named[0].upper()} is left "
+                            f"UNexplained, which means R² would be {claimed:.3f}") if complement else (
+                            f"says {m.group(1)}% of the variance in {named[0].upper()} is explained, "
+                            f"i.e. R² = {claimed:.3f}")
                     out.append(_finding("coherence.number_mismatch", "hard",
-                        f"Prose says {m.group(1)}% of the variance in {named[0]} is explained, but the "
-                        f"persisted R² is {stored} ({stored*100:.1f}%).", chapter=chap))
+                        f"In the {chap} chapter, this sentence {said} — but the computed R² for "
+                        f"{named[0].upper()} is {stored} ({stored*100:.1f}% explained). "
+                        f"Sentence: “{quoted}”",
+                        chapter=chap, sentence=quoted))
         return out
     except Exception:
         logger.debug("percent_variance_findings failed", exc_info=True)
