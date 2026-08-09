@@ -1692,7 +1692,13 @@ def chapters_from_final_sections(final_sections: list[dict]) -> dict:
         prose = (sec.get("prose") or sec.get("body") or sec.get("content") or "").strip()
         if not prose:
             continue
+        # `source` rides along: it marks the student's own imported prose, and
+        # dropping it here would strip the mark on the first compose — the same
+        # way dropping `chapter_name` used to strip the canonical name. A
+        # protection that dissolves the first time it is read is not one.
         out[name] = {"name": name, "prose": prose}
+        if sec.get("source"):
+            out[name]["source"] = sec["source"]
     return out
 
 
@@ -1770,7 +1776,7 @@ def assess_export_readiness(context_store: dict, chapters: list[str] | None = No
     checks = [
         (ANY, not str(m1.get("research_title") or "").strip(), "M1 — research title"),
         (ANY, not (m1.get("research_questions") or []), "M1 — research questions"),
-        (ANY, not (m2.get("literature_sources") or []),
+        (ANY, not m2_references(m2),
          "M2 — literature sources (no references to cite)"),
         ("methodology", not (m3.get("methodology") or m3.get("conceptual_model")),
          "M3 — methodology / conceptual model"),
@@ -1785,6 +1791,30 @@ def assess_export_readiness(context_store: dict, chapters: list[str] | None = No
         if req is None or owner is ANY or owner in req:
             missing.append(label)
     return missing
+
+
+def m2_references(m2_slice: dict | None) -> list[dict]:
+    """The M2 reference pool, from whichever of its two keys is filled.
+
+    M2 stores one concept under two names and different readers picked
+    different ones, so a project could be simultaneously "M2 done" and "no
+    references to cite":
+
+      * `dod_literature` (orchestrator/artifacts.py) counts `citation_list`;
+      * this module's export gate and the References builder read
+        `literature_sources`;
+      * `M2Output` — the schema the backfill's LLM reconstruction fills — has
+        only `citation_list`, so an inferred M2 can never populate the other;
+      * `literature_sources` is written by the grounded scout, which runs on a
+        120s budget (orchestrator/backfill.py) and returns [] when it loses.
+
+    Measured on a real project: citation_list held 6 sources, literature_sources
+    did not exist, M2 read `done`, and the export refused for want of
+    references. Preferring the richer key and falling back to the other makes
+    every reader agree, including on state already stored.
+    """
+    m2 = m2_slice or {}
+    return (m2.get("literature_sources") or m2.get("citation_list") or [])
 
 
 def _references_section_body(references: list[dict]) -> str:
@@ -1810,7 +1840,13 @@ def _references_section_body(references: list[dict]) -> str:
         url = (r.get("url") or "").strip()
         link = f"https://doi.org/{doi}" if doi else url
 
-        entry = f"{label} ({year}). {title}.".rstrip(".") + "."
+        # Build the title clause only when there IS a title. The one-line form
+        # rendered "Ohanian (1990). ." for a titleless entry, and titleless is
+        # the normal shape of a `citation_list` record (author + year + what it
+        # was used for) — which m2_references now legitimately falls back to.
+        entry = f"{label} ({year})."
+        if title:
+            entry += f" {title.rstrip('.')}."
         if venue:
             entry += f" *{venue}*."
         if link:
@@ -1879,7 +1915,7 @@ def compose_all_sections(context_store: dict) -> list[dict]:
 
     methodology = m3.get("methodology") if isinstance(m3.get("methodology"), dict) else {}
     paradigm = (methodology or {}).get("paradigm", "") or ""
-    references = m2.get("literature_sources") or []
+    references = m2_references(m2)
     language = m1.get("language") or "vi"
     citation_style = "apa7"
 
@@ -1945,7 +1981,13 @@ def compose_all_sections(context_store: dict) -> list[dict]:
     # in English while the student's untranslated originals sat alongside them
     # as unnamed sections. Preservation that self-destructs on first compose is
     # not preservation.
-    out: list[dict] = [{"chapter_name": name, "title": titles[name], "prose": proses[name]}
+    #
+    # `source` travels with it for the same reason: a preserved chapter that has
+    # only been translated is still the student's work, and the shrink guard at
+    # the commit edge can only protect what is still marked.
+    out: list[dict] = [{"chapter_name": name, "title": titles[name], "prose": proses[name],
+                        **({"source": (preserved.get(name) or {}).get("source")}
+                           if (preserved.get(name) or {}).get("source") else {})}
                        for name in names]
 
     # Append a References section built from the M2 sources, with clickable

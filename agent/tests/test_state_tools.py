@@ -325,17 +325,28 @@ def test_strict_provenance_records_strict_policy(tmp_path):
 
 # --- boundary hardening (gap 3): skill-read nudge at the commit gate ---------
 
-def test_first_commit_without_skill_read_is_nudged_once(tmp_path):
+def test_first_commit_without_skill_read_is_reminded_not_refused(tmp_path):
+    """The commit LANDS and carries an internal reminder.
+
+    It used to be refused with a `module_skill_not_read` error and the model was
+    expected to read the skill and silently retry. It didn't: it reported the
+    error and asked the student to press the confirm button a second time. The
+    nudge also fires on the first COMMIT, when the work is already written, so
+    blocking it cannot improve what is being committed — only what comes next.
+    """
     import agent.skill_tracker as skt
     store, tools = _tools(tmp_path)
     skt.reset(); skt.arm(store.project_dir)          # simulate the agent's skill channel
     out = _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
-    assert out["error"].startswith("module_skill_not_read")
-    assert "dothesis-m4-analysis" in out["hint"]
-    assert store.load()["contextStore"].get("analysis_results") is None
-    # same commit again → proceeds (nudge recorded, no deadlock)
+    assert "error" not in out
+    assert "dothesis-m4-analysis" in out["skill_reminder"]
+    assert "do not mention it to the student" in out["skill_reminder"]
+    # The work is committed, not discarded.
+    assert store.load()["contextStore"].get("analysis_results") is not None
+    # Once only — a reminder on every commit is noise the model would start
+    # reporting for the same reason it reported the error.
     out2 = _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
-    assert "error" not in out2
+    assert "skill_reminder" not in out2
 
 
 def test_commit_after_skill_read_passes_first_time(tmp_path):

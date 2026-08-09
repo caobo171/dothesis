@@ -22,6 +22,66 @@ _CHAPTER_TO_MODULE = {"intro": "M5", "lit_review": "M2", "methodology": "M3",
                       "results": "M4", "discussion": "M5", "conclusion": "M5"}
 
 
+# Below this fraction of the stored length, a replacement for an IMPORTED
+# chapter is a summary of it rather than an edit to it. Deliberately generous:
+# a vi→en translation runs slightly LONGER, a heavy edit might cut a quarter,
+# and the case this exists for cut 28,144 characters to 575 — two percent.
+_IMPORTED_CHAPTER_MIN_RATIO = 0.5
+
+
+def _protect_imported_chapters(incoming: list, stored: list) -> tuple[list, list[str]]:
+    """Keep the student's imported chapter when the model tries to replace it
+    with a much shorter one. Returns (sections, notes).
+
+    An imported thesis lands its real Chapter 4 in `final_sections` — 28,144
+    characters and 17 tables on the project this was written for. Nothing stopped
+    the model from reading that, condensing it to a 575-character paragraph, and
+    committing the condensation over the original. The student's EFA, KMO,
+    correlation and regression tables were gone, and the only trace was a
+    Chapter 4 that had become one paragraph.
+
+    Only IMPORTED prose is protected (`source == "import"`, set by
+    api.app.import_work._preserve_chapters and carried through compose). Prose we
+    generated is ours to rewrite at any length. Matching is by chapter_name, then
+    title, so a section that lost its canonical name is still covered.
+    """
+    if not isinstance(incoming, list) or not isinstance(stored, list):
+        return incoming, []
+
+    def _keys(sec):
+        if not isinstance(sec, dict):
+            return ()
+        return tuple(k for k in ((sec.get("chapter_name") or "").strip().lower(),
+                                 (sec.get("title") or "").strip().lower()) if k)
+
+    guarded: dict[str, dict] = {}
+    for sec in stored:
+        if isinstance(sec, dict) and sec.get("source") == "import" and (sec.get("prose") or ""):
+            for k in _keys(sec):
+                guarded.setdefault(k, sec)
+    if not guarded:
+        return incoming, []
+
+    out, notes = [], []
+    for sec in incoming:
+        if not isinstance(sec, dict):
+            out.append(sec)
+            continue
+        prior = next((guarded[k] for k in _keys(sec) if k in guarded), None)
+        new_len = len(sec.get("prose") or "")
+        if prior is None or new_len >= len(prior["prose"]) * _IMPORTED_CHAPTER_MIN_RATIO:
+            out.append(sec)
+            continue
+        out.append({**sec, "prose": prior["prose"], "source": "import"})
+        notes.append(
+            f"{sec.get('chapter_name') or sec.get('title') or 'a chapter'}: kept the "
+            f"student's imported prose ({len(prior['prose'])} chars) — the version you "
+            f"committed was {new_len} chars, which discards their tables and figures. "
+            f"An imported chapter may be translated or extended, not summarised. If the "
+            f"student explicitly asked you to shorten it, say so and edit it in place.")
+    return out, notes
+
+
 def chapter_to_module(chapter: str | None) -> str:
     """Which module owns a chapter's work. PUBLIC because it has a second caller
     outside this module (app.partner_run.required_modules_for decides what a
@@ -97,19 +157,34 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
         # it's deterministic code, not the model.
         writes = {k: v for k, v in (writes or {}).items()
                   if k not in NON_CONTENT_KEYS}
-        # Skill-adherence nudge (gap 3): the first commit of a module in a session
-        # without a recorded read of that module's skill returns ONE correctable
-        # nudge, then proceeds on retry (never a deadlock). Deterministic; before
-        # the content gates. record_decision bypasses this wrapper, so it's
-        # unaffected — same tool-edge posture as the NON_CONTENT strip above.
+        # Skill-adherence nudge (gap 3): the first commit of a module in a
+        # session without a recorded read of that module's skill.
+        #
+        # This used to REFUSE the commit and ask the model to read the skill and
+        # retry. It was meant to be invisible — nudge once, model re-runs the
+        # same commit, student sees nothing. In practice the model reported it:
+        # the payload was shaped as an `error`, and the nearest instruction
+        # (skills/dothesis/SKILL.md, "What you do NOT do") is followed
+        # immediately by "One message → one module's work → report → stop".
+        # Nothing told it to retry silently. A real thread ended with the
+        # student being asked to press "Xác nhận M5 hoàn tất" a second time to
+        # satisfy a bookkeeping requirement, which is the opposite of the point.
+        #
+        # It also cannot do the job it was designed for. It fires on the first
+        # COMMIT, by which time the module's work is already written — reading
+        # the skill afterwards cannot change what is being committed, only what
+        # comes next. So carry it on the successful result instead: the model
+        # still learns to read the skill for the rest of the module, and no
+        # student pays a round trip for it. Never blocks, never surfaces.
+        _skill_nudge = None
         try:
             from agent.skill_tracker import should_nudge, skill_path  # noqa: PLC0415
             _pk = getattr(store, "project_dir", "")
             if should_nudge(_pk, module):
-                return json.dumps({
-                    "error": "module_skill_not_read — read the module's skill before its first commit",
-                    "hint": f"read_file('{skill_path(module)}') then re-run this commit",
-                }, ensure_ascii=False)
+                _skill_nudge = (
+                    f"You committed {module} without reading {skill_path(module)} this "
+                    f"session. Read it before your next {module} step. Internal note — "
+                    f"do not mention it to the student and do not re-ask them to confirm.")
         except Exception:
             logger.debug("commit_slice: skill nudge skipped", exc_info=True)
         # M3 model guard (deterministic, additive-only): a research model must be
@@ -171,6 +246,20 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
                         "hint": "Retry; if it persists, the analysis results cannot be attested.",
                     }, ensure_ascii=False)
                 _stats_warnings = "unavailable"
+        # Imported-chapter shrink guard. Runs BEFORE coherence so the checked
+        # prose is the prose that will actually be stored. Deterministic, never
+        # blocks: it substitutes the student's own text back in and tells the
+        # model what it did.
+        _kept_imported = None
+        if module == "M5" and isinstance(writes.get("final_sections"), list):
+            try:
+                _stored = (store.load() or {}).get("contextStore", {}).get("final_sections") or []
+                _fixed, _notes = _protect_imported_chapters(writes["final_sections"], _stored)
+                if _notes:
+                    writes = {**writes, "final_sections": _fixed}
+                    _kept_imported = _notes
+            except Exception:
+                logger.debug("commit_slice: imported-chapter guard skipped", exc_info=True)
         # Coherence (M3↔M4↔M5). M4: advisory direction check only (no prose yet).
         # M5: a prose number contradicting the persisted analysis_results HARD-
         # blocks (the single source of truth already passed the M4 gate); soft
@@ -266,6 +355,10 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
         if _coherence_warnings is not None and isinstance(result, dict):
             key = "coherence" if _coherence_warnings == "unavailable" else "coherence_warnings"
             result = {**result, key: _coherence_warnings}
+        if _kept_imported is not None and isinstance(result, dict):
+            result = {**result, "imported_chapters_kept": _kept_imported}
+        if _skill_nudge is not None and isinstance(result, dict):
+            result = {**result, "skill_reminder": _skill_nudge}
         return json.dumps(result, ensure_ascii=False)
 
     @tool

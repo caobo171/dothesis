@@ -384,6 +384,7 @@ class DbProjectStateStore(ProjectStateStore):
             # Lazy import: keep the engine renderer out of the cold-import
             # path of every project that's nowhere near M5.
             from orchestrator.tools.m5_writing import (
+                m2_references,
                 run_export,
                 sections_from_m5_slice,
             )
@@ -396,7 +397,7 @@ class DbProjectStateStore(ProjectStateStore):
                     log.warning("M5 auto-export: no context_store row for %s", self.project_id)
                     return
                 sections = sections_from_m5_slice(cs.m5_writing or {})
-                references = (cs.m2_literature or {}).get("literature_sources") or []
+                references = m2_references(cs.m2_literature)
                 language = (cs.m1_topic or {}).get("language") or "vi"
                 if not sections:
                     # M5 done was claimed without usable chapter prose (neither

@@ -276,11 +276,19 @@ def _preserve_chapters(text: str) -> list[dict]:
     # does not, and shipping it raw collapsed the chapter into one paragraph,
     # rendered every table inline as running prose, and left Chapter 4 with no
     # table-of-contents entries.
+    #
+    # `source: "import"` marks this prose as the STUDENT'S OWN, not ours. It is
+    # what commit_slice's shrink guard keys on (agent/tools/state_tools.py): a
+    # chapter carrying this mark cannot be replaced by a drastically shorter
+    # one. Without it, a real project ended up with 575 characters of
+    # model-written summary where 28,144 characters and 17 tables of the
+    # student's Chapter 4 had been — the model read the preserved sections,
+    # condensed them, and committed the condensation over the original.
     return [
-        {"chapter_name": "results",
+        {"chapter_name": "results", "source": "import",
          "title": head.splitlines()[0].strip()[:120] or "Results",
          "prose": plaintext_to_markdown(head)},
-        {"chapter_name": "conclusion",
+        {"chapter_name": "conclusion", "source": "import",
          "title": tail.splitlines()[0].strip()[:120] or "Conclusion",
          "prose": plaintext_to_markdown(tail)},
     ]

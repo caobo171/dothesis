@@ -270,7 +270,11 @@ def make_writing_tools(store) -> list:
                 full_cs = loader()
             except Exception:
                 logger.exception("export_docx: load_full_context_store failed")
-        references = ((full_cs or {}).get("m2_literature") or {}).get("literature_sources") or []
+        # m2_references, not the raw key: an inferred M2 fills `citation_list`
+        # and leaves `literature_sources` empty, which read here as "this thesis
+        # has no sources" and shipped a document with no bibliography.
+        from orchestrator.tools.m5_writing import m2_references  # noqa: PLC0415
+        references = m2_references((full_cs or {}).get("m2_literature"))
         language = resolve_output_language(full_cs or {})
 
         # --- Module-scoped export (scope = "M3" or a set "M1,M3,M4") --------

@@ -556,6 +556,18 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
             # student cannot have a finished analysis and an unfinished
             # literature step, and the two keys are the same normalized dicts
             # (see above). Never overwrites a citation list that already exists.
+            #
+            # Deliberately ONE direction. Mirroring citations BACK into
+            # literature_sources was tried and reverted: that key means sources
+            # a real search verified, the LLM candidate is unverified recall,
+            # and copying one into the other both launders the distinction and
+            # defeats the ungated late grounding below, which exists precisely
+            # to overwrite recalled sources with real ones.
+            #
+            # The contradiction this was meant to solve — M2 `done` on
+            # citation_list while the export refused for want of
+            # literature_sources — is fixed on the READER side instead, in
+            # m5_writing.m2_references.
             if not candidate.get("citation_list") and candidate.get("literature_sources"):
                 candidate["citation_list"] = candidate["literature_sources"]
         rationale = candidate.pop("_rationale", None)
