@@ -1926,7 +1926,19 @@ def compose_all_sections(context_store: dict) -> list[dict]:
     with _cf.ThreadPoolExecutor(max_workers=max(1, min(len(names), 5))) as ex:
         for name, prose in ex.map(_one, names):
             proses[name] = prose
-    out: list[dict] = [{"title": titles[name], "prose": proses[name]} for name in names]
+    # `chapter_name` travels with each section, not just its title.
+    #
+    # Without it the canonical name is destroyed the first time these sections
+    # are persisted back into final_sections, and chapters_from_final_sections
+    # then has only a title reverse-lookup to work with — which matches its own
+    # EN/VI title maps and nothing else. An imported chapter titled "CHƯƠNG 4:
+    # KẾT QUẢ NGHIÊN CỨU" matched nothing, so `preserved` came back empty on the
+    # next compose: the composer wrote a fresh Chapter 4 AND a fresh Chapter 5
+    # in English while the student's untranslated originals sat alongside them
+    # as unnamed sections. Preservation that self-destructs on first compose is
+    # not preservation.
+    out: list[dict] = [{"chapter_name": name, "title": titles[name], "prose": proses[name]}
+                       for name in names]
 
     # Append a References section built from the M2 sources, with clickable
     # DOI/URL links. Without this the document has inline "(Author, Year)"

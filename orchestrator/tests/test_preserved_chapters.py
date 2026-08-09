@@ -106,3 +106,24 @@ def test_missing_chapters_are_still_composed(monkeypatch):
     joined = "\n".join(s["prose"] for s in out)
     assert "COMPOSED intro" in joined      # missing chapter written
     assert "Bảng 4.5" in joined            # preserved chapter untouched
+
+
+def test_composed_sections_carry_their_canonical_chapter_name(monkeypatch):
+    """chapter_name must survive the round-trip through final_sections.
+
+    Emitting only {title, prose} destroyed the canonical name the first time
+    sections were persisted, leaving chapters_from_final_sections a title
+    reverse-lookup that a Vietnamese heading never matches. `preserved` then
+    came back empty and the composer rewrote chapters it already had — the
+    student's untranslated originals sat alongside fresh English duplicates.
+    """
+    monkeypatch.setattr("agent.run_context.scoped_chapters", lambda order: ["intro", "results"])
+    monkeypatch.setattr(
+        M, "compose_chapter",
+        _Composer(lambda payload: {"prose": f"COMPOSED {payload['chapter_name']}"}))
+    out = M.compose_all_sections(_store())
+    assert [s["chapter_name"] for s in out] == ["intro", "results"]
+
+    # And the round trip closes: feeding the output back in is recognised.
+    again = M.chapters_from_final_sections(out)
+    assert set(again) == {"intro", "results"}
