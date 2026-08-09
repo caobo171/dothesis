@@ -232,6 +232,7 @@ def make_writing_tools(store) -> list:
         try:
             from orchestrator.tools.m5_writing import (
                 M5_CHAPTER_ORDER,
+                M5_CHAPTER_TITLES,
                 assess_export_readiness,
                 compose_all_sections,
                 compose_module_prose,
@@ -386,6 +387,39 @@ def make_writing_tools(store) -> list:
                 "hint": "There isn't enough upstream work (M1–M4) to build the "
                         "thesis yet. Complete the research modules first.",
             })
+
+        # A "full" export must never SILENTLY ship fewer chapters than a thesis
+        # has. The composition branch above is best-effort in several places —
+        # `full_cs` may be unreadable, and composition can return short — and
+        # every one of those paths fell through to rendering whatever `sections`
+        # happened to hold. A real export went out as a 35KB file containing
+        # only the two imported chapters, no introduction / literature review /
+        # methodology, while the reply told the student the thesis was complete.
+        #
+        # Shipping a partial thesis under the name of a full one is the worst
+        # outcome here: the student cannot see what is missing, and the reply
+        # says nothing is. Refuse and NAME the missing chapters instead — the
+        # same contract as the stub check below. `force` still overrides, so an
+        # intentional partial export stays possible.
+        if _scope.lower() == "full":
+            have = {(s.get("chapter_name") or "") for s in sections}
+            titled = {(s.get("title") or "").strip().lower() for s in sections}
+            missing_ch = [
+                n for n in scoped_chapters(list(M5_CHAPTER_ORDER))
+                if n not in have
+                and (M5_CHAPTER_TITLES.get(n, n) or "").strip().lower() not in titled
+            ]
+            if missing_ch and not force:
+                return json.dumps({
+                    "error": "incomplete_export",
+                    "missing_chapters": missing_ch,
+                    "hint": "A full export needs every chapter. These were "
+                            "neither stored nor composed — check the upstream "
+                            "modules they are written from, then export again "
+                            "(or export the partial document with force).",
+                }, ensure_ascii=False)
+            if missing_ch:
+                logger.warning("export_docx: FORCED full export missing chapters %s", missing_ch)
 
         # Never export placeholder/failure stubs. If any chapter came out as a
         # stub (transient LLM failure, or thin source data the readiness check
