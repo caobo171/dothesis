@@ -108,31 +108,72 @@ def _fit_evidence(evidence: dict, budget: int = _EVIDENCE_BUDGET) -> dict:
     return out
 
 
-# Tool and technique names a model reaches for when the evidence is silent.
-# Checked against the evidence so an unevidenced one can be dropped rather than
-# propagated into M3 and, from there, into the methodology chapter.
-_METHOD_TOKENS = ("smartpls", "pls-sem", "pls sem", "plssem", "cb-sem", "cb sem",
-                  "amos", "lavaan", "mplus", "lisrel", "spss", "stata", "eviews")
+# Tool/technique names a model reaches for when the evidence is silent, grouped
+# into FAMILIES of a technique and the packages that implement it.
+#
+# Family-level, not literal-string, because a tool implies its technique: with
+# `data_type_detected: "SmartPLS"` in evidence, inferring design "PLS-SEM" is
+# correct, and an exact-token check rejected it. Matching literally did not just
+# fail tests — it would have stripped valid designs from real reconstructions.
+#
+# The deliberate looseness is within a family: evidence naming lavaan will not
+# flag a claim of AMOS. That is a far smaller error than the one this guards
+# against (inventing an entire estimation approach out of nothing), and gating
+# it would cost more false positives than it prevents.
+_METHOD_FAMILIES = (
+    ("pls-sem", "pls sem", "plssem", "smartpls"),
+    ("cb-sem", "cb sem", "amos", "lavaan", "mplus", "lisrel"),
+    ("spss",),
+    ("stata",),
+    ("eviews",),
+)
+_METHOD_TOKENS = tuple(t for fam in _METHOD_FAMILIES for t in fam)
+
+
+def _family_of(token: str) -> tuple[str, ...]:
+    for fam in _METHOD_FAMILIES:
+        if token in fam:
+            return fam
+    return (token,)
+
+
+# Every field a reconstruction can name a statistical package/technique in.
+#
+# `design` and `tool` are the ones that matter and the ones an earlier version
+# of this guard missed: it checked only `methodology`, which is an agent-side
+# SLICE_OWNERSHIP key and NOT a field on M3Output — schemas/m3.py defines
+# `design` ("e.g. PLS-SEM") and `tool` ("SmartPLS, NVivo, SPSS"). Guarding the
+# key that the reconstruction never emits made the whole check a no-op, and an
+# SPSS regression study was still filed as PLS-SEM/SmartPLS.
+_METHOD_FIELDS = ("methodology", "design", "tool")
 
 
 def _drop_unevidenced_method(out: dict, evidence_text: str) -> dict:
-    """Remove a `methodology` that names software the evidence never mentions.
+    """Remove method/tool fields naming software the evidence never mentions.
 
     A guessed statistical package is not a harmless default: M5 writes the
-    methodology chapter from this field, so "PLS-SEM using SmartPLS" invented
+    methodology chapter from these fields, so "PLS-SEM using SmartPLS" invented
     here becomes a sentence in the student's thesis describing an analysis they
-    never ran. Dropping the field is the honest outcome and matches the prompt's
-    own instruction to omit anything that cannot be inferred.
+    never ran. Dropping is the honest outcome and matches the prompt's own
+    instruction to omit anything that cannot be inferred.
+
+    Only fields that NAME a known package/technique are gated — a `design` of
+    "Thematic Analysis" or "cross-sectional survey" carries no such claim and is
+    a legitimate inference from a questionnaire.
     """
-    value = out.get("methodology")
-    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False) if value else ""
-    if not text:
-        return out
-    low, ev = text.lower(), evidence_text.lower()
-    unevidenced = [t for t in _METHOD_TOKENS if t in low and t not in ev]
-    if unevidenced:
-        logger.warning("backfill: dropped methodology naming unevidenced tool(s) %s", unevidenced)
-        out.pop("methodology", None)
+    ev = (evidence_text or "").lower()
+    for field in _METHOD_FIELDS:
+        value = out.get(field)
+        if not value:
+            continue
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        unevidenced = [t for t in _METHOD_TOKENS
+                       if t in text.lower()
+                       and not any(sib in ev for sib in _family_of(t))]
+        if unevidenced:
+            logger.warning("backfill: dropped %s=%r naming unevidenced tool(s) %s",
+                           field, value, unevidenced)
+            out.pop(field, None)
     return out
 
 

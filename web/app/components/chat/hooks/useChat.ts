@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import useSWR, { mutate as globalMutate } from "swr";
 import { useStream } from "./useStream";
 import type { WidgetHint } from "../widgets/types";
@@ -42,6 +43,32 @@ export function useChat(threadId: string) {
     .filter(e => e.type === "token")
     .map(e => (e as unknown as { text: string }).text)
     .join("");
+
+  // Keep the streamed text on screen across the stream-end → message-arrived
+  // handoff.
+  //
+  // The bubble used to be gated on `inflight` alone, which goes false the
+  // instant the SSE stream closes — but the persisted assistant message only
+  // appears after mutate()'s round-trip to /messages/list. For the length of
+  // that fetch the streamed text was gone and the real message had not landed,
+  // so the finished answer blanked out and then reappeared.
+  //
+  // DERIVED from the message list rather than a flag cleared in send(): the
+  // same render that brings the new message also flips this false, so there is
+  // no in-between frame showing the bubble and the message together. A flag
+  // set after `await mutate()` would land one render late and double-render the
+  // answer instead — trading a blank flash for a duplicate one.
+  const assistantCount = (messages ?? []).filter(m => m.role === "assistant").length;
+  const awaitingAssistantRef = useRef<number | null>(null);
+  const awaitingPersist =
+    awaitingAssistantRef.current !== null && assistantCount <= awaitingAssistantRef.current;
+  if (awaitingAssistantRef.current !== null && !awaitingPersist) {
+    awaitingAssistantRef.current = null;   // reply landed; stop holding it over
+  }
+  // What the bubble should show: live tokens, then the same text held over
+  // until the server's copy of it is in the list.
+  const displayStreamingText =
+    stream.state.inflight || awaitingPersist ? streamingText : "";
 
   // SP3: parse tool_calls SSE events from the in-flight stream. Exposed but
   // not consumed by ChatPane today — MessageBubble renders widgets off
@@ -106,6 +133,9 @@ export function useChat(threadId: string) {
           : null,
     };
     void mutate([...(messages ?? []), optimistic], false);
+    // Remember how many assistant replies existed before this turn, so the
+    // streamed text can be held on screen until reply N+1 actually arrives.
+    awaitingAssistantRef.current = (messages ?? []).filter(m => m.role === "assistant").length;
 
     // Bypass Next.js dev rewrites for the streaming POST. Turbopack's HTTP
     // proxy buffers `text/event-stream` chunked responses — engine progress
@@ -148,7 +178,9 @@ export function useChat(threadId: string) {
 
   return {
     messages: messages ?? [],
-    streamingText,
+    // Already gated for the stream-end handoff — callers must NOT re-gate this
+    // on `inflight`, which is what reintroduced the blank frame.
+    streamingText: displayStreamingText,
     streamingToolCalls,
     streamingProgress,
     streamingError,

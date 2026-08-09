@@ -109,3 +109,86 @@ def test_guard_runs_inside_reconstruct_artifact():
     got = B.reconstruct_artifact("design", cs, llm=llm)
     assert "methodology" not in got
     assert got.get("hypotheses") == ["H1: ATT → PB"]
+
+
+# --- the guard must cover the fields M3Output actually has -------------------
+
+def test_design_and_tool_are_guarded_not_just_methodology():
+    """M3Output has `design`/`tool`; it has no `methodology` field.
+
+    The first version of this guard checked only `methodology` — an agent-side
+    SLICE_OWNERSHIP key the reconstruction never emits — so it was a no-op and
+    an SPSS regression study was still filed as design=PLS-SEM, tool=SmartPLS.
+    """
+    out = B._drop_unevidenced_method(
+        {"design": "PLS-SEM", "tool": "SmartPLS", "paradigm": "quantitative"},
+        "hồi quy tuyến tính đa biến, xử lý bằng phần mềm spss, n=303")
+    assert "design" not in out
+    assert "tool" not in out
+    assert out["paradigm"] == "quantitative"      # untouched
+
+
+def test_evidenced_tool_survives_on_the_design_and_tool_fields():
+    out = B._drop_unevidenced_method(
+        {"design": "Multiple linear regression", "tool": "SPSS"},
+        "nguồn: kết quả xử lý bằng phần mềm SPSS")
+    assert out["design"] == "Multiple linear regression"
+    assert out["tool"] == "SPSS"
+
+
+def test_design_without_a_tool_name_survives():
+    out = B._drop_unevidenced_method({"design": "Thematic Analysis"}, "interview transcripts")
+    assert out["design"] == "Thematic Analysis"
+
+
+# --- dod_analysis must accept a PARSED import --------------------------------
+
+def test_dod_analysis_accepts_a_parsed_import():
+    """The import now stores a dict, not the raw string.
+
+    dod_analysis's imported-writeup escape only tested `isinstance(str)`, so
+    parsing the document — strictly better evidence — put M4 back to sitting
+    in_progress forever, the exact failure that escape exists to prevent.
+    """
+    from orchestrator.artifacts import dod_analysis
+    got = dod_analysis({"analysis_results": {
+        "hypothesis_tests": [{"id": "H1", "numbers": {"beta": 0.371}, "decision": "supported"}]}})
+    assert got.done is True
+
+
+def test_dod_analysis_still_strict_for_a_mid_flight_engine_run():
+    """An engine run in progress has analysis_outline and must NOT read done."""
+    from orchestrator.artifacts import dod_analysis
+    got = dod_analysis({
+        "analysis_outline": {"sections": ["reliability"]},
+        "data_type_detected": "SPSS",
+        "analysis_results": {"hypothesis_tests": [{"id": "H1"}]},
+    })
+    assert got.done is False
+    assert "results is empty" in got.gaps
+
+
+def test_dod_analysis_rejects_a_structured_block_with_no_results():
+    from orchestrator.artifacts import dod_analysis
+    assert dod_analysis({"analysis_results": {"descriptives": {"n": 303}}}).done is False
+
+
+def test_a_tool_in_evidence_evidences_its_technique():
+    """SmartPLS in evidence ⇒ design "PLS-SEM" is a correct inference.
+
+    An exact-token check rejected this, which would have stripped valid designs
+    from real reconstructions, not just failed tests.
+    """
+    out = B._drop_unevidenced_method(
+        {"design": "PLS-SEM", "tool": "SmartPLS"}, '{"data_type_detected": "SmartPLS"}')
+    assert out["design"] == "PLS-SEM"
+    assert out["tool"] == "SmartPLS"
+
+
+def test_a_different_family_is_still_dropped():
+    """The families are what is shared — SPSS evidence does not license PLS."""
+    out = B._drop_unevidenced_method(
+        {"design": "PLS-SEM", "tool": "SmartPLS"},
+        "xử lý bằng phần mềm spss, hồi quy tuyến tính đa biến")
+    assert "design" not in out
+    assert "tool" not in out

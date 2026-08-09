@@ -171,10 +171,24 @@ def dod_analysis(slice_: dict) -> DoD:
     The escape is deliberately narrow: a STRING (the engine writes a dict, and
     that path must keep the strict DoD or a half-finished run would report done)
     of real length (a stub is not a chapter).
+
+    A PARSED import also passes, under a narrower test. The import used to store
+    the document as that raw string; it now extracts the structured
+    analysis_results block, which is strictly BETTER evidence of a finished
+    analysis — but it is a dict, so the string escape above stopped firing and
+    the module went back to sitting in_progress forever, the exact failure this
+    function was written to end. The dict is accepted only when it carries
+    completed hypothesis tests AND the engine's own keys are absent: a
+    mid-flight engine run always has `analysis_outline`, so it still faces the
+    strict gate below and a half-finished run cannot report done.
     """
     slice_ = slice_ or {}
     imported = slice_.get("analysis_results")
     if isinstance(imported, str) and len(imported.strip()) >= _IMPORTED_WRITEUP_MIN:
+        return DoD(done=True, gaps=[])
+    if (isinstance(imported, dict) and imported.get("hypothesis_tests")
+            and not slice_.get("analysis_outline")
+            and not slice_.get("data_type_detected")):
         return DoD(done=True, gaps=[])
     gaps = _missing_strings(slice_, ("data_type_detected",))
     if not slice_.get("analysis_outline"):

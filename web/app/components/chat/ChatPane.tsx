@@ -571,7 +571,11 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
       ) : (
         <MessageList
           messages={messages}
-          streamingText={inflight ? streamingText : ""}
+          // NOT re-gated on `inflight`: useChat already holds the streamed text
+          // until the persisted message arrives, and dropping it the moment the
+          // stream closed is what made a finished answer blank out for the
+          // length of the /messages/list round-trip.
+          streamingText={streamingText}
           streamingModuleTag={null}
           streamingProgress={inflight ? streamingProgress : []}
           streamingError={streamingError}

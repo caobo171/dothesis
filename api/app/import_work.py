@@ -201,12 +201,18 @@ def _infer_analysis_results(analysis_text: str, language: str) -> dict:
         "For each hypothesis give the id as written (H1, H2, ...), the path, the "
         "numbers present, and decision as \"supported\" or \"not supported\" "
         "(map accepted/chấp nhận -> supported, rejected/bác bỏ -> not supported).\n"
+        "Record the software and the estimation technique the document NAMES "
+        "(e.g. tool \"SPSS\", method \"hồi quy tuyến tính đa biến\"). These carry "
+        "the only evidence of how the analysis was actually run: without them a "
+        "later step re-infers the method from the model shape and reports "
+        "PLS-SEM/SmartPLS for a study done in SPSS. Omit them if unnamed — do "
+        "not guess.\n"
         "Schema (include only the keys you have evidence for):\n"
         '{"hypothesis_tests":[{"id":"H1","hypothesis":"H1","path":"X → Y",'
         '"numbers":{"beta":0.0,"t":0.0,"p":"0.000"},"decision":"supported"}],'
         '"measurement_model":[{"construct":"","cronbach_alpha":0.0,'
         '"composite_reliability":0.0,"ave":0.0}],'
-        '"structural_model":{"r2":{"OUTCOME":0.0}},'
+        '"structural_model":{"r2":{"OUTCOME":0.0},"tool":"","method":""},'
         '"descriptives":{"n":0}}\n\n'
         f"ANALYSIS OUTPUT:\n{snippet}"
     )
