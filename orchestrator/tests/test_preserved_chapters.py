@@ -1,0 +1,108 @@
+"""An imported chapter is REUSED (and at most translated), never recomposed.
+
+Regression cover for a real import: a Vietnamese thesis whose Chapter 4 carried
+17 tables came back with the EFA, KMO, correlation and regression tables gone,
+captions stranded above tables that no longer existed, and PLS columns (CR/AVE)
+invented for an SPSS study that never computed them. The cause was structural —
+compose_all_sections read only m1..m4 and wrote all six chapters from scratch,
+so the student's own results chapter was never even consulted.
+
+No LLM: composition and translation are both stubbed.
+"""
+import pytest
+
+import orchestrator.tools.m5_writing as M
+
+
+_VN_RESULTS = (
+    "CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU\n"
+    "Bảng 4.5: Kết quả phân tích EFA — KMO = 0.812, Bartlett Sig. = 0.000\n"
+    + "Kết quả phân tích nhân tố khám phá cho thấy thang đo đạt yêu cầu. " * 30
+)
+
+
+class _Composer:
+    """Stand-in for the compose_chapter StructuredTool (a pydantic model, so its
+    .invoke cannot be monkeypatched in place)."""
+
+    def __init__(self, fn):
+        self.invoke = fn
+
+
+@pytest.fixture
+def no_compose(monkeypatch):
+    """Any call to the composer during these tests is itself the failure."""
+    def _boom(*a, **kw):
+        raise AssertionError("compose_chapter ran for a chapter we already had")
+    monkeypatch.setattr(M, "compose_chapter", _Composer(_boom))
+
+
+def _store(**m5):
+    return {"m1_topic": {"research_title": "T", "language": "vi"},
+            "m2_literature": {}, "m3_design": {}, "m4_analysis": {},
+            "m5_writing": m5}
+
+
+def test_preserved_chapter_is_reused_verbatim(no_compose, monkeypatch):
+    """The student's Chapter 4 — tables and all — must survive to the export."""
+    monkeypatch.setattr("agent.run_context.scoped_chapters", lambda order: ["results"])
+    out = M.compose_all_sections(_store(final_sections=[
+        {"chapter_name": "results", "title": "CHƯƠNG 4", "prose": _VN_RESULTS}]))
+    prose = "".join(s["prose"] for s in out)
+    for marker in ("Bảng 4.5", "EFA", "KMO = 0.812", "Bartlett"):
+        assert marker in prose, f"{marker} lost — the chapter was recomposed"
+
+
+def test_preserved_chapter_is_translated_when_the_language_differs(no_compose, monkeypatch):
+    """"Write it in English" means translate their chapter, not write a new one."""
+    monkeypatch.setattr("agent.run_context.scoped_chapters", lambda order: ["results"])
+    seen = {}
+
+    def _fake_translate(chapter_name, target_lang, context_before, selection, context_after):
+        seen["target"] = target_lang
+        seen["chars"] = len(selection)
+        return "CHAPTER 4: RESULTS\nTable 4.5: EFA — KMO = 0.812, Bartlett Sig. = 0.000"
+
+    import orchestrator.tools.m5_inline as inline
+    monkeypatch.setattr(inline, "translate_selection", _fake_translate)
+
+    cs = _store(final_sections=[
+        {"chapter_name": "results", "title": "CHƯƠNG 4", "prose": _VN_RESULTS}])
+    cs["m1_topic"]["language"] = "en"
+    out = M.compose_all_sections(cs)
+
+    assert seen["target"] == "en"
+    # The WHOLE chapter goes to the translator, not a summary of it.
+    # (chapters_from_final_sections strips the prose, hence .strip() here.)
+    assert seen["chars"] == len(_VN_RESULTS.strip())
+    assert "KMO = 0.812" in out[0]["prose"]        # numbers cross the translation
+
+
+def test_same_language_is_not_sent_to_the_translator(monkeypatch):
+    """No pointless LLM call — and no risk of mangling a chapter for nothing."""
+    import orchestrator.tools.m5_inline as inline
+    monkeypatch.setattr(inline, "translate_selection",
+                        lambda **kw: (_ for _ in ()).throw(AssertionError("translated needlessly")))
+    assert M._match_language(_VN_RESULTS, "results", "vi") == _VN_RESULTS
+
+
+def test_a_failed_translation_keeps_the_original(monkeypatch):
+    """A chapter in the wrong language is visible and askable-about; a chapter
+    replaced by an error is silent data loss."""
+    import orchestrator.tools.m5_inline as inline
+    monkeypatch.setattr(inline, "translate_selection",
+                        lambda **kw: (_ for _ in ()).throw(RuntimeError("provider down")))
+    assert M._match_language(_VN_RESULTS, "results", "en") == _VN_RESULTS
+
+
+def test_missing_chapters_are_still_composed(monkeypatch):
+    """Preservation must not stop the backfill writing chapters 1-3."""
+    monkeypatch.setattr("agent.run_context.scoped_chapters", lambda order: ["intro", "results"])
+    monkeypatch.setattr(
+        M, "compose_chapter",
+        _Composer(lambda payload: {"prose": f"COMPOSED {payload['chapter_name']}"}))
+    out = M.compose_all_sections(_store(final_sections=[
+        {"chapter_name": "results", "title": "CHƯƠNG 4", "prose": _VN_RESULTS}]))
+    joined = "\n".join(s["prose"] for s in out)
+    assert "COMPOSED intro" in joined      # missing chapter written
+    assert "Bảng 4.5" in joined            # preserved chapter untouched

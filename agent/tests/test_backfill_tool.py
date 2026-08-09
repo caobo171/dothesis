@@ -191,10 +191,16 @@ def test_a_finished_thesis_has_its_last_chapter_moved_to_m5(monkeypatch):
 
     # A LIST of section dicts — chapters_from_final_sections iterates and skips
     # non-dicts, so a bare string would be dropped silently at export.
+    #
+    # BOTH chapters, results first. Handing over only chapter 5 left chapter 4
+    # to be regenerated from the summarised analysis_results, and a summary
+    # cannot reproduce a chapter — the imported EFA/KMO/correlation/regression
+    # tables were dropped and captions left stranded above nothing.
     sections = committed["M5"]["final_sections"]
-    assert isinstance(sections, list) and len(sections) == 1
-    assert sections[0]["chapter_name"] == "conclusion"
-    assert "CHƯƠNG 5" in sections[0]["prose"]
+    assert isinstance(sections, list) and len(sections) == 2
+    assert [s["chapter_name"] for s in sections] == ["results", "conclusion"]
+    assert "CHƯƠNG 4" in sections[0]["prose"]
+    assert "CHƯƠNG 5" in sections[1]["prose"]
     assert "CHƯƠNG 5" not in committed["M4"]["analysis_results"]
     assert "CHƯƠNG 4" in committed["M4"]["analysis_results"]
 

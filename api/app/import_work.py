@@ -236,6 +236,37 @@ def _infer_analysis_results(analysis_text: str, language: str) -> dict:
     return {}
 
 
+def _preserve_chapters(text: str) -> list[dict]:
+    """Carve an imported write-up into M5 `final_sections`, verbatim.
+
+    The student's own results chapter is the best version of that chapter that
+    will ever exist — it has the EFA table, the KMO/Bartlett figures, the
+    correlation matrix and the regression output, none of which survive a
+    round-trip through a summarised analysis_results block. Composing a
+    replacement from that summary produced a Chapter 4 with the tables missing,
+    captions stranded above nothing, and PLS metrics invented for an SPSS study.
+    So: keep the prose, and let the composer write only what is genuinely absent.
+
+    Returns [] when the document has no confident chapter boundary — leaving it
+    alone beats misfiling someone's discussion chapter.
+    """
+    from orchestrator.chapter_split import split_final_chapter  # noqa: PLC0415
+
+    split = split_final_chapter(text)
+    if split is None:
+        return []
+    head, tail = split
+    # chapter_name drives chapters_from_final_sections' mapping onto the
+    # editor's canonical slots; `title` alone would need a title reverse-lookup
+    # that a Vietnamese heading will not hit.
+    return [
+        {"chapter_name": "results",
+         "title": head.splitlines()[0].strip()[:120] or "Results", "prose": head},
+        {"chapter_name": "conclusion",
+         "title": tail.splitlines()[0].strip()[:120] or "Conclusion", "prose": tail},
+    ]
+
+
 def import_existing_work(files: list[dict], language: str) -> dict:
     """Classify each uploaded file and infer the module slice it evidences.
 
@@ -272,6 +303,21 @@ def import_existing_work(files: list[dict], language: str) -> dict:
             parsed = _infer_analysis_results(text, language)
             slices.setdefault("M4", {})["analysis_results"] = parsed or text
             evidence["M4"] = fn
+            # PRESERVE the chapters the document actually contains, here, where
+            # the raw text still exists.
+            #
+            # This used to happen later, in backfill_tool._move_final_chapter_to_m5,
+            # which re-read m4["analysis_results"] and split it. That worked only
+            # while the value was the raw string; once it became the parsed dict
+            # above, split_final_chapter's isinstance(str) test failed and the
+            # split silently stopped happening — M5 got nothing, so the composer
+            # REGENERATED chapters 4 and 5 from the extracted summary and the
+            # student's tables vanished. Splitting at the source removes that
+            # coupling entirely: M4 owns the structured numbers, M5 owns the
+            # prose, and neither depends on the other's representation.
+            for section in _preserve_chapters(text):
+                slices.setdefault("M5", {}).setdefault("final_sections", []).append(section)
+                evidence.setdefault("M5", fn)
         elif kind == "chapter":
             slices.setdefault("M5", {}).setdefault("final_sections", []).append(
                 {"title": fn, "prose": text})

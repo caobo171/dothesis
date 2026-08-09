@@ -466,5 +466,11 @@ def test_the_web_import_moves_the_final_chapter_into_m5(monkeypatch):
     from app.agent_state import DbProjectStateStore
     state = DbProjectStateStore(get_engine(), pid, f"/tmp/ws-{pid}").load()
     m5 = state["contextStore"].get("final_sections") or []
-    assert isinstance(m5, list) and m5 and "CHƯƠNG 5" in m5[0]["prose"]
+    # BOTH chapters are preserved now, results first. Chapter 4 used to be left
+    # behind for the composer to regenerate from the summarised results block,
+    # which is how an imported chapter lost its EFA/KMO/correlation tables.
+    assert isinstance(m5, list) and len(m5) == 2
+    assert [s["chapter_name"] for s in m5] == ["results", "conclusion"]
+    assert "CHƯƠNG 4" in m5[0]["prose"]
+    assert "CHƯƠNG 5" in m5[1]["prose"]
     assert "CHƯƠNG 5" not in state["contextStore"]["analysis_results"]

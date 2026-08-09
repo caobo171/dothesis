@@ -48,11 +48,21 @@ def _language_of_existing_work(slices: dict) -> str | None:
 
 
 def _move_final_chapter_to_m5(store, slices: dict) -> bool:
-    """Give M5 the final chapter that arrived buried in M4. True if moved.
+    """Give M5 BOTH chapters that arrived buried in M4. True if moved.
 
     A finished thesis is written into `m4_analysis.analysis_results` as one
     string, chapters 4 and 5 together, so M5 receives nothing and stays locked
     behind work the student already did.
+
+    Both halves are preserved, not just the tail. Handing over only chapter 5
+    left chapter 4 to be REGENERATED from the extracted analysis_results block,
+    and a summary of a chapter cannot reproduce the chapter: an import whose
+    Chapter 4 carried 17 tables came back with the EFA, KMO, correlation and
+    regression tables simply gone, captions stranded above tables that no
+    longer existed, and PLS columns (CR/AVE) invented for an SPSS study that
+    never computed them. The student's own results chapter is the best possible
+    version of that chapter — keep it verbatim and let the composer write only
+    the chapters that are genuinely missing.
 
     Three ways this declines, all of them "leave the document exactly as it
     arrived", because misfiling someone's discussion chapter is worse than
@@ -70,7 +80,16 @@ def _move_final_chapter_to_m5(store, slices: dict) -> bool:
 
     from orchestrator.chapter_split import split_final_chapter  # noqa: PLC0415
 
-    split = split_final_chapter(m4.get("analysis_results"))
+    # Only a RAW-STRING import reaches here now. The import path splits the
+    # document itself (import_work._preserve_chapters) because that is where the
+    # text still exists; this stays as the fallback for older imports whose M4
+    # holds the raw write-up. A parsed dict is not a document and must not be
+    # coerced into one — split_final_chapter returns None for it, which is the
+    # correct answer, not a failure.
+    results = m4.get("analysis_results")
+    if not isinstance(results, str):
+        return False
+    split = split_final_chapter(results)
     if split is None:
         return False
     head, tail = split
@@ -84,14 +103,23 @@ def _move_final_chapter_to_m5(store, slices: dict) -> bool:
     # thesis's FINAL chapter (KẾT LUẬN VÀ KHUYẾN NGHỊ / Conclusion and
     # Recommendations), and mapping it to discussion would put it under the
     # wrong canonical name in the editor rail.
-    section = {"chapter_name": "conclusion",
-               "title": tail.splitlines()[0].strip()[:120] or "Conclusion",
-               "prose": tail}
+    #
+    # The head is the RESULTS chapter, kept verbatim for the same reason: it is
+    # the student's real Chapter 4, tables and all, and anything the composer
+    # writes in its place is strictly worse.
+    sections = [
+        {"chapter_name": "results",
+         "title": head.splitlines()[0].strip()[:120] or "Results",
+         "prose": head},
+        {"chapter_name": "conclusion",
+         "title": tail.splitlines()[0].strip()[:120] or "Conclusion",
+         "prose": tail},
+    ]
     try:
         # M5 first: if the M4 rewrite failed after M5 landed we would have the
         # chapter in two places, which is recoverable. The reverse loses it.
-        store.commit_slice("M5", {"final_sections": [section]},
-                           "import: final chapter recovered from the uploaded document")
+        store.commit_slice("M5", {"final_sections": sections},
+                           "import: results + final chapter recovered from the uploaded document")
         # Trimming M4 is a RE-FILING of content that was already there, not new
         # upstream work — but commit_slice flags DOWNSTREAM["M4"] == ["M5"], so
         # without this it marks needs_review on the very chapter it just

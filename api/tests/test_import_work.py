@@ -118,3 +118,51 @@ def test_prose_containing_ave_is_not_analysis_output(monkeypatch, text):
     English prose skipped classification and was filed as analysis output."""
     _stub_llm(monkeypatch, "proposal")
     assert iw._classify("f.docx", text) == "proposal"
+
+
+# --- an imported write-up is PRESERVED, not regenerated ----------------------
+
+_VN_WRITEUP = (
+    "CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU\n"
+    + "Phân tích EFA, KMO = 0.812, Cronbach's Alpha đạt yêu cầu. " * 40
+    + "\nBảng 4.17: Tổng hợp kết quả kiểm định giả thuyết\nH1 0.371 11.921 0.000\n"
+    + "CHƯƠNG 5: KẾT LUẬN VÀ KHUYẾN NGHỊ\n"
+    + "Nghiên cứu đã xác định ba đặc điểm của KOLs. " * 40
+)
+
+
+def test_import_preserves_results_and_conclusion_chapters(monkeypatch):
+    """Chapter 4 must survive as the student's own prose.
+
+    Only chapter 5 used to be carried over; chapter 4 was left to be composed
+    from the summarised analysis_results, and a summary cannot reproduce a
+    chapter — the EFA/KMO/correlation/regression tables were simply gone from
+    the output.
+    """
+    monkeypatch.setattr(iw, "_classify", lambda fn, text: "analysis-output")
+    monkeypatch.setattr(iw, "_infer_analysis_results", lambda text, language: {
+        "hypothesis_tests": [{"id": "H1", "decision": "supported"}]})
+    out = iw.import_existing_work([{"filename": "thesis.docx", "text": _VN_WRITEUP}], "vi")
+
+    names = [s["chapter_name"] for s in out["slices"]["M5"]["final_sections"]]
+    assert names == ["results", "conclusion"]
+    prose = "".join(s["prose"] for s in out["slices"]["M5"]["final_sections"])
+    for table_marker in ("EFA", "KMO", "Cronbach", "Bảng 4.17"):
+        assert table_marker in prose, f"{table_marker} lost from the preserved chapters"
+    # M4 still gets the structured numbers — the two are independent now.
+    assert out["slices"]["M4"]["analysis_results"]["hypothesis_tests"]
+
+
+def test_import_without_a_chapter_boundary_preserves_nothing(monkeypatch):
+    """A bare results paste is not a chapter — leave it alone."""
+    monkeypatch.setattr(iw, "_classify", lambda fn, text: "analysis-output")
+    monkeypatch.setattr(iw, "_infer_analysis_results", lambda text, language: {})
+    out = iw.import_existing_work(
+        [{"filename": "spss.txt", "text": "Cronbach's Alpha = .84\nKMO = .81"}], "en")
+    assert "M5" not in out["slices"]
+
+
+def test_preserve_chapters_keeps_the_document_whole():
+    """Nothing may be dropped between the two halves."""
+    secs = iw._preserve_chapters(_VN_WRITEUP)
+    assert sum(len(s["prose"]) for s in secs) >= len(_VN_WRITEUP.strip()) - 4

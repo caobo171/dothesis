@@ -1820,6 +1820,37 @@ def _references_section_body(references: list[dict]) -> str:
     return "\n\n".join(entries)
 
 
+def _match_language(prose: str, chapter_name: str, language: str) -> str:
+    """Return a preserved chapter in `language`, translating only if it differs.
+
+    Translating is the ONLY transformation a preserved chapter may undergo. The
+    student asked for their thesis in English, not for a new Chapter 4 — so the
+    tables, the numbers and the argument all have to come through unchanged and
+    only the prose changes language. Recomposing instead is what dropped the
+    imported tables in the first place.
+
+    Fail-open in both directions: an undetectable language or a failed
+    translation returns the original text. A chapter in the wrong language is a
+    problem the student can see and ask about; a chapter silently replaced by an
+    error string is not.
+    """
+    from orchestrator.tools.humanize import detect_language  # noqa: PLC0415
+
+    target = (language or "").strip().lower()[:2]
+    source = detect_language(prose)
+    if not target or not source or source[:2] == target:
+        return prose
+    try:
+        from orchestrator.tools.m5_inline import translate_selection  # noqa: PLC0415
+        out = translate_selection(
+            chapter_name=chapter_name, target_lang=target,
+            context_before="", selection=prose, context_after="")
+        return out if (out or "").strip() else prose
+    except Exception:
+        logger.exception("compose_all_sections: translating preserved %s failed", chapter_name)
+        return prose
+
+
 def compose_all_sections(context_store: dict) -> list[dict]:
     """Compose all 6 chapters from a nested context_store → [{title, prose}].
 
@@ -1858,7 +1889,18 @@ def compose_all_sections(context_store: dict) -> list[dict]:
     from agent.run_context import scoped_chapters  # noqa: PLC0415
     names = scoped_chapters(M5_CHAPTER_ORDER)
 
+    # Chapters the student already wrote (an imported thesis lands its results
+    # and conclusion here verbatim). Composing over them is pure loss: their
+    # Chapter 4 carries the EFA, KMO, correlation and regression tables, and a
+    # rewrite from the summarised analysis_results reproduces none of it. Reuse
+    # the real chapter and spend the LLM only on what is genuinely missing.
+    preserved = chapters_from_final_sections(
+        (context_store.get("m5_writing") or {}).get("final_sections") or [])
+
     def _one(name):
+        kept = preserved.get(name)
+        if kept and kept.get("prose", "").strip():
+            return name, _match_language(kept["prose"], name, language)
         try:
             draft = compose_chapter.invoke({
                 "chapter_name": name,
