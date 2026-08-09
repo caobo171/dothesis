@@ -339,6 +339,36 @@ class DbProjectStateStore(ProjectStateStore):
         ):
             self._auto_export_m5()
 
+    @staticmethod
+    def _missing_chapters(sections: list[dict]) -> list[str]:
+        """Canonical chapters absent from `sections`. Empty ⇒ a whole thesis.
+
+        Matches on chapter_name first and falls back to the title maps, because
+        sections_from_m5_slice emits {title, prose} for the `chapters` shape and
+        preserved imports carry chapter_name. Fail-open: on any import or shape
+        problem this reports nothing missing, so a bug here can only restore the
+        old behaviour, never block a legitimate export.
+        """
+        try:
+            from orchestrator.tools.m5_writing import (  # noqa: PLC0415
+                M5_CHAPTER_ORDER, M5_CHAPTER_TITLES, M5_CHAPTER_TITLES_VI,
+            )
+            have_names = {(s.get("chapter_name") or "") for s in sections if isinstance(s, dict)}
+            have_titles = {(s.get("title") or "").strip().lower()
+                           for s in sections if isinstance(s, dict)}
+            missing = []
+            for name in M5_CHAPTER_ORDER:
+                if name in have_names:
+                    continue
+                titles = {(M5_CHAPTER_TITLES.get(name) or "").strip().lower(),
+                          (M5_CHAPTER_TITLES_VI.get(name) or "").strip().lower()}
+                if titles & have_titles:
+                    continue
+                missing.append(name)
+            return missing
+        except Exception:
+            return []
+
     def _auto_export_m5(self) -> None:
         """Run the engine docx/pdf pipeline and persist artifacts.
 
@@ -376,6 +406,32 @@ class DbProjectStateStore(ProjectStateStore):
                     log.warning(
                         "M5 auto-export skipped for %s — no drafted prose in "
                         "chapters or final_sections.", self.project_id,
+                    )
+                    return
+                # Only export a WHOLE thesis. This hook renders exactly what
+                # final_sections holds — it cannot compose, and must not: it
+                # runs inside a store commit, where an LLM call has no business.
+                #
+                # That was harmless while final_sections was empty until the
+                # composer filled it. Once the import began preserving the
+                # student's chapters 4 and 5, this fired with two chapters in
+                # hand and shipped a 35KB "full thesis" with no introduction,
+                # literature review or methodology — and because the export came
+                # from here rather than the export_docx tool, the chat had no
+                # download card either, so the reply just said the files were
+                # somewhere in the Context store.
+                #
+                # Skipping is the safe half: the `done` flag and the "no export
+                # yet" hint both stand, and export_docx (which CAN compose, and
+                # refuses a partial with incomplete_export) still produces the
+                # real document when the user or the agent asks for it.
+                missing = self._missing_chapters(sections)
+                if missing:
+                    log.warning(
+                        "M5 auto-export skipped for %s — draft has only %d "
+                        "chapter(s), missing %s. Leaving the export to "
+                        "export_docx, which can compose them.",
+                        self.project_id, len(sections), missing,
                     )
                     return
 
