@@ -1841,10 +1841,18 @@ def _match_language(prose: str, chapter_name: str, language: str) -> str:
     if not target or not source or source[:2] == target:
         return prose
     try:
-        from orchestrator.tools.m5_inline import translate_selection  # noqa: PLC0415
-        out = translate_selection(
-            chapter_name=chapter_name, target_lang=target,
-            context_before="", selection=prose, context_after="")
+        # translate_markdown, not the editor's translate_selection. Two reasons,
+        # and the second one shipped: a whole chapter needs batching and
+        # structure checks that the inline tool does not do, and
+        # translate_selection is a @tool — a StructuredTool object, which is not
+        # callable. Calling it like a function raised TypeError on every single
+        # preserved chapter, the except below swallowed it, and the student got
+        # their Vietnamese Chapter 4 back inside an otherwise English thesis.
+        # The unit test missed it by monkeypatching translate_selection with a
+        # plain function, i.e. by asserting the interface the bug assumed.
+        from orchestrator.tools.m5_inline import translate_markdown  # noqa: PLC0415
+        out = translate_markdown(
+            chapter_name=chapter_name, target_lang=target, markdown=prose)
         return out if (out or "").strip() else prose
     except Exception:
         logger.exception("compose_all_sections: translating preserved %s failed", chapter_name)

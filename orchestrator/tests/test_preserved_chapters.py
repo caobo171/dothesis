@@ -8,6 +8,14 @@ compose_all_sections read only m1..m4 and wrote all six chapters from scratch,
 so the student's own results chapter was never even consulted.
 
 No LLM: composition and translation are both stubbed.
+
+Translation is stubbed at `m5_inline._call_llm` — the seam its own docstring
+nominates — and NOT by replacing the translate entry point. Replacing the entry
+point is how this file previously certified a translation path that could never
+run: it swapped in a plain function, while the real `translate_selection` is a
+@tool, i.e. a StructuredTool instance that is not callable. Every preserved
+chapter raised TypeError into a bare `except`, and the student got their
+Vietnamese Chapter 4 back inside an English thesis with the tests green.
 """
 import pytest
 
@@ -53,45 +61,70 @@ def test_preserved_chapter_is_reused_verbatim(no_compose, monkeypatch):
         assert marker in prose, f"{marker} lost — the chapter was recomposed"
 
 
+def _stub_llm(monkeypatch, fn):
+    """Patch the ONE seam the real translate path bottoms out in."""
+    import orchestrator.tools.m5_inline as inline
+    monkeypatch.setattr(inline, "_call_llm", fn)
+    return inline
+
+
 def test_preserved_chapter_is_translated_when_the_language_differs(no_compose, monkeypatch):
     """"Write it in English" means translate their chapter, not write a new one."""
     monkeypatch.setattr("agent.run_context.scoped_chapters", lambda order: ["results"])
-    seen = {}
+    seen = {"chars": 0, "calls": 0}
 
-    def _fake_translate(chapter_name, target_lang, context_before, selection, context_after):
-        seen["target"] = target_lang
-        seen["chars"] = len(selection)
-        return "CHAPTER 4: RESULTS\nTable 4.5: EFA — KMO = 0.812, Bartlett Sig. = 0.000"
+    def _fake_llm(prompt):
+        seen["calls"] += 1
+        # The batch is everything between the prompt's "## Passage" fence and
+        # its "## Output" fence.
+        body = prompt.split("## Passage", 1)[1].split("## Output", 1)[0].strip()
+        seen["chars"] += len(body)
+        assert "english" in prompt.lower() or " en" in prompt
+        return body.replace("KẾT QUẢ NGHIÊN CỨU", "RESULTS").replace("Bảng", "Table")
 
-    import orchestrator.tools.m5_inline as inline
-    monkeypatch.setattr(inline, "translate_selection", _fake_translate)
+    _stub_llm(monkeypatch, _fake_llm)
 
     cs = _store(final_sections=[
         {"chapter_name": "results", "title": "CHƯƠNG 4", "prose": _VN_RESULTS}])
     cs["m1_topic"]["language"] = "en"
     out = M.compose_all_sections(cs)
 
-    assert seen["target"] == "en"
-    # The WHOLE chapter goes to the translator, not a summary of it.
-    # (chapters_from_final_sections strips the prose, hence .strip() here.)
-    assert seen["chars"] == len(_VN_RESULTS.strip())
+    assert seen["calls"] >= 1
+    # The WHOLE chapter goes to the translator, not a summary of it. Batching
+    # splits it across calls, so compare the total (blank-line joins between
+    # batches are re-added on reassembly, hence the small tolerance).
+    assert seen["chars"] >= len(_VN_RESULTS.strip()) - 4 * seen["calls"]
+    assert "Table 4.5" in out[0]["prose"]          # the translation is used
     assert "KMO = 0.812" in out[0]["prose"]        # numbers cross the translation
+
+
+def test_translation_runs_through_the_real_tool_object(monkeypatch):
+    """Guards the exact defect: the translate entry point must be CALLED the way
+    it is actually shaped, not the way a stub in this file made it look."""
+    calls = []
+    src = "Kết quả phân tích nhân tố khám phá cho thấy thang đo đạt yêu cầu. " * 8
+
+    def _translate(prompt):
+        calls.append(prompt)
+        return "TRANSLATED: exploratory factor analysis met the threshold. " * 8
+
+    _stub_llm(monkeypatch, _translate)
+    out = M._match_language(src, "results", "en")
+    assert calls, "nothing reached the LLM — the translate call raised again"
+    assert out.startswith("TRANSLATED")
 
 
 def test_same_language_is_not_sent_to_the_translator(monkeypatch):
     """No pointless LLM call — and no risk of mangling a chapter for nothing."""
-    import orchestrator.tools.m5_inline as inline
-    monkeypatch.setattr(inline, "translate_selection",
-                        lambda **kw: (_ for _ in ()).throw(AssertionError("translated needlessly")))
+    _stub_llm(monkeypatch,
+              lambda prompt: (_ for _ in ()).throw(AssertionError("translated needlessly")))
     assert M._match_language(_VN_RESULTS, "results", "vi") == _VN_RESULTS
 
 
 def test_a_failed_translation_keeps_the_original(monkeypatch):
     """A chapter in the wrong language is visible and askable-about; a chapter
     replaced by an error is silent data loss."""
-    import orchestrator.tools.m5_inline as inline
-    monkeypatch.setattr(inline, "translate_selection",
-                        lambda **kw: (_ for _ in ()).throw(RuntimeError("provider down")))
+    _stub_llm(monkeypatch, lambda prompt: (_ for _ in ()).throw(RuntimeError("provider down")))
     assert M._match_language(_VN_RESULTS, "results", "en") == _VN_RESULTS
 
 
