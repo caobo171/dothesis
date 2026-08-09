@@ -44,12 +44,20 @@ def _grant_order(db: Session, order: Order, *, external_txn_id: str | None = Non
 
 @router.post("/packages")
 def packages():
+    # VND is served alongside USD (not computed in the browser) so the price on
+    # the card is the exact figure /sepay/intent will put in the QR — both come
+    # from usd_cents_to_vnd. A client-side conversion would drift from the
+    # backend on rounding and on any USD_TO_VND change the page hasn't reloaded
+    # for, and a VN student would see one amount and be asked to transfer another.
+    settings = get_settings()
     return [
         {
             "id": p["id"],
             "name": p["name"],
             "price_cents": p["price_cents"],
             "old_price_cents": p["old_price_cents"],
+            "price_vnd": sepay_client.usd_cents_to_vnd(p["price_cents"], settings),
+            "old_price_vnd": sepay_client.usd_cents_to_vnd(p["old_price_cents"], settings),
             "credits": p["credits"],
         }
         for p in PACKAGES
@@ -290,7 +298,34 @@ def sepay_intent(
     }
 
 
-@router.post("/sepay/webhook")
+def sepay_webhook_path(settings=None) -> str:
+    """Leading-slash path for the SePay webhook, below the /api/v1 prefix.
+
+    Read from settings rather than hardcoded so the path can be rotated with an
+    env change instead of a code change, and so the value actually used in prod
+    never lands in the repo. Tests and any ops tooling should call this instead
+    of writing the path out, so a rotation can't leave them behind.
+    """
+    settings = settings or get_settings()
+    return "/" + settings.sepay_webhook_path.strip("/")
+
+
+def mount_sepay_webhook(app, prefix: str = "/api/v1") -> None:
+    """Register the webhook at its configured path.
+
+    Done here, at app construction, rather than with a @router decorator: a
+    decorator binds its path at import time, which would freeze whatever
+    SEPAY_WEBHOOK_PATH happened to be set when the module first loaded.
+    """
+    app.add_api_route(
+        f"{prefix}{sepay_webhook_path()}",
+        sepay_webhook,
+        methods=["POST"],
+        tags=["credit"],
+        include_in_schema=False,  # keep the path out of /docs and openapi.json
+    )
+
+
 async def sepay_webhook(
     request: Request,
     authorization: str | None = Header(default=None),
@@ -298,8 +333,11 @@ async def sepay_webhook(
 ):
     """SePay calls this when a bank transfer is received.
 
-    Auth: `Authorization: Apikey <SEPAY_API_KEY>`. Only inbound transfers whose
-    content carries one of our memos are credited, once, by the exact amount due.
+    Mounted by mount_sepay_webhook() at the unguessable SEPAY_WEBHOOK_PATH, not
+    at a predictable /sepay/webhook. Auth: `Authorization: Apikey <SEPAY_API_KEY>`,
+    checked before the body is read so unauthorized traffic costs nothing. Only
+    inbound transfers whose content carries one of our memos are credited, once,
+    by the exact amount due.
     """
     settings = get_settings()
     if settings.dothesis_payments != "dummy":

@@ -33,15 +33,24 @@ def list_orders(body: ListOrdersBody, db: Session = Depends(db_session)):
     rows = db.execute(
         stmt.order_by(desc(Order.created_at)).offset((page - 1) * page_size).limit(page_size)
     ).all()
+    # This payload used to be Polar-only, which left SePay orders unreadable:
+    # amount_cents holds the USD list price whatever the customer actually paid
+    # in, so without currency + amount_vnd a dong order looked like a $-order,
+    # and without sepay_memo there was no way to match a transfer against the
+    # bank statement when a student reports "I paid but got no credits".
     return {
         "items": [
             {
                 "id": str(o.id), "owner_email": u.email, "owner_id": str(u.id),
                 "package_id": o.package_id, "credits": o.credits,
                 "amount_cents": o.amount_cents, "currency": o.currency,
+                "amount_vnd": o.amount_vnd,
+                "provider": o.provider,
                 "status": o.status,
                 "polar_checkout_id": o.polar_checkout_id,
                 "polar_order_id": o.polar_order_id,
+                "sepay_memo": o.sepay_memo,
+                "external_txn_id": o.external_txn_id,
                 "created_at": o.created_at.isoformat() if o.created_at else None,
                 "paid_at": o.paid_at.isoformat() if o.paid_at else None,
             }

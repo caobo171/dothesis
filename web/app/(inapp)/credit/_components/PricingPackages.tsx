@@ -24,6 +24,11 @@ function isUtcPlus7(): boolean {
   return -new Date().getTimezoneOffset() / 60 === 7;
 }
 
+/** Dong, VN-style: dot thousands separators and a trailing ₫ ("657.237 ₫"). */
+function formatVnd(amount: number): string {
+  return `${amount.toLocaleString("vi-VN")} ₫`;
+}
+
 type Methods = { methods: string[]; sepay_enabled: boolean };
 type SepayIntent = {
   order_id: string;
@@ -130,9 +135,16 @@ export function PricingPackages({ onSuccess }: { onSuccess?: () => void }) {
               </div>
             </div>
 
+            {/* VN users pay by bank transfer in dong, so quote dong — seeing
+                $24.99 on the card and being asked for ₫657.237 in the QR reads
+                like a bait-and-switch. Everyone else still sees USD. */}
             <div className="mt-5 flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-ink-900">${(pkg.price_cents / 100).toFixed(2)}</span>
-              <span className="text-sm text-ink-400 line-through">${(pkg.old_price_cents / 100).toFixed(0)}</span>
+              <span className="text-3xl font-extrabold text-ink-900">
+                {showSepay ? formatVnd(pkg.price_vnd) : `$${(pkg.price_cents / 100).toFixed(2)}`}
+              </span>
+              <span className="text-sm text-ink-400 line-through">
+                {showSepay ? formatVnd(pkg.old_price_vnd) : `$${(pkg.old_price_cents / 100).toFixed(0)}`}
+              </span>
             </div>
 
             <div className="mt-5 flex flex-col gap-2">
@@ -251,7 +263,7 @@ function SepayModal({
             <dl className="mt-4 space-y-1 text-sm">
               <Row label="Ngân hàng" value={intent.bank_code} />
               <Row label="Số tài khoản" value={intent.account_number} />
-              <Row label="Số tiền" value={`${intent.amount_vnd.toLocaleString("vi-VN")} ₫`} />
+              <Row label="Số tiền" value={formatVnd(intent.amount_vnd)} />
               <Row label="Nội dung" value={intent.memo} mono />
             </dl>
             <p className="mt-3 text-center text-xs text-ink-400">Đang chờ thanh toán…</p>

@@ -45,6 +45,16 @@ def client_with_user(buyer):
     app.dependency_overrides.pop(current_user, None)
 
 
+def _webhook_url() -> str:
+    """Resolve the SePay webhook URL the same way the app mounts it.
+
+    Never hardcode the path here: it is env-configurable so it can be rotated,
+    and a literal would make these tests pass against a stale route.
+    """
+    from app.routers.credit import sepay_webhook_path
+    return f"/api/v1{sepay_webhook_path()}"
+
+
 def _grab_order(provider: str) -> Order:
     Session = get_session_factory()
     with Session() as s:
@@ -107,6 +117,24 @@ def test_paypal_webhook_grants_via_custom_id(client_with_user):
 
 # --- SePay -----------------------------------------------------------------
 
+def test_packages_price_vnd_matches_sepay_intent(client_with_user):
+    """The dong price on the pricing card must equal the dong in the QR.
+
+    They are two endpoints, so nothing but this test stops one from being
+    converted differently (or client-side) and quoting a VN student an amount
+    the transfer then contradicts.
+    """
+    client, _ = client_with_user
+    pkgs = client.post("/api/v1/credit/packages").json()
+    starter = next(p for p in pkgs if p["id"] == "starter_package")
+    assert starter["price_vnd"] == round(2499 / 100 * 25000)  # $24.99 → 624,750₫
+    assert starter["old_price_vnd"] == round(3999 / 100 * 25000)
+
+    intent = client.post("/api/v1/credit/sepay/intent",
+                         json={"package_id": "starter_package"}).json()
+    assert intent["amount_vnd"] == starter["price_vnd"]
+
+
 def test_sepay_intent_returns_qr_and_vnd(client_with_user):
     client, _ = client_with_user
     r = client.post("/api/v1/credit/sepay/intent", json={"package_id": "starter_package"})
@@ -131,7 +159,7 @@ def test_sepay_webhook_matches_memo_and_grants_once(client_with_user):
         "referenceCode": "FT123456",
         "content": f"NHANTIEN {memo} GD",
     }).encode()
-    r = client.post("/api/v1/credit/sepay/webhook", content=payload,
+    r = client.post(_webhook_url(), content=payload,
                     headers={"Authorization": "Apikey test-key",
                              "Content-Type": "application/json"})
     assert r.status_code == 200, r.text
@@ -141,12 +169,42 @@ def test_sepay_webhook_matches_memo_and_grants_once(client_with_user):
         assert s.get(User, buyer.id).credit == 10000
 
     # Duplicate delivery (same referenceCode) → no double-credit.
-    r2 = client.post("/api/v1/credit/sepay/webhook", content=payload,
+    r2 = client.post(_webhook_url(), content=payload,
                      headers={"Authorization": "Apikey test-key",
                               "Content-Type": "application/json"})
     assert r2.status_code == 200
     with Session() as s:
         assert s.get(User, buyer.id).credit == 10000
+
+
+def test_sepay_webhook_path_is_obscure_and_configurable(monkeypatch):
+    """The webhook must not sit at a guessable path, and must follow the env.
+
+    Rotating SEPAY_WEBHOOK_PATH has to actually move the route — if it were
+    bound at import time the old path would keep answering after a rotation.
+    """
+    from app.settings import reset_settings
+
+    # The predictable path a scanner would try is gone.
+    assert TestClient(create_app()).post(
+        "/api/v1/credit/sepay/webhook", json={}).status_code == 404
+
+    monkeypatch.setenv("SEPAY_WEBHOOK_PATH", "rotated/9999/xyz")
+    monkeypatch.setenv("SEPAY_API_KEY", "test-key")
+    monkeypatch.setenv("DOTHESIS_PAYMENTS", "polar")  # enforce the apikey check
+    reset_settings()
+    client = TestClient(create_app())
+
+    # 401 (not 404) proves the route moved and is reachable at the new path.
+    assert client.post("/api/v1/rotated/9999/xyz", json={},
+                       headers={"Authorization": "Apikey wrong"}).status_code == 401
+    assert client.post("/api/v1/h00k/71204/cr3d1t", json={}).status_code == 404
+
+
+def test_sepay_webhook_stays_out_of_openapi():
+    """The path must not be published in /docs — that would undo the obscurity."""
+    paths = create_app().openapi()["paths"]
+    assert not [p for p in paths if "cr3d1t" in p or "sepay/webhook" in p]
 
 
 def test_sepay_webhook_rejects_bad_apikey(client_with_user, monkeypatch):
@@ -155,7 +213,7 @@ def test_sepay_webhook_rejects_bad_apikey(client_with_user, monkeypatch):
     from app.settings import reset_settings
     reset_settings()
     client = TestClient(create_app())
-    r = client.post("/api/v1/credit/sepay/webhook",
+    r = client.post(_webhook_url(),
                     content=b'{"transferType":"in"}',
                     headers={"Authorization": "Apikey wrong",
                              "Content-Type": "application/json"})
@@ -172,7 +230,7 @@ def test_sepay_webhook_ignores_underpayment(client_with_user):
         "referenceCode": "FT999",
         "content": intent["memo"],
     }).encode()
-    r = client.post("/api/v1/credit/sepay/webhook", content=payload,
+    r = client.post(_webhook_url(), content=payload,
                     headers={"Authorization": "Apikey test-key",
                              "Content-Type": "application/json"})
     assert r.json().get("ignored") == "underpaid"

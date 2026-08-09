@@ -146,6 +146,9 @@ def create_app() -> FastAPI:
     app.include_router(papers_router.router, prefix="/api/v1")
     app.include_router(jobs_router.router, prefix="/api/v1")
     app.include_router(credit_router.router, prefix="/api/v1")
+    # Separate from the router above: the SePay webhook lives at a configurable,
+    # unguessable path instead of a predictable /credit/... one.
+    credit_router.mount_sepay_webhook(app, prefix="/api/v1")
     app.include_router(admin_users_router.router, prefix="/api/v1")
     app.include_router(admin_papers_router.router, prefix="/api/v1")
     app.include_router(admin_jobs_router.router, prefix="/api/v1")

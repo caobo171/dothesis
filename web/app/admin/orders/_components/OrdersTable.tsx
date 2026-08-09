@@ -9,14 +9,42 @@ import { swrFetcher } from "@/app/lib/api";
 type Row = {
   id: string; owner_email: string; package_id: string;
   credits: number; amount_cents: number; currency: string;
+  amount_vnd: number | null; provider: string;
   status: string;
   polar_checkout_id: string | null; polar_order_id: string | null;
+  sepay_memo: string | null; external_txn_id: string | null;
   created_at: string | null; paid_at: string | null;
 };
 
 type ListResp = { items: Row[]; total: number; page: number; page_size: number };
 
 const STATUSES = ["", "pending", "paid", "refunded", "failed"];
+
+/** What the customer was actually charged.
+ *
+ * `amount_cents` is always the USD list price, whatever currency the order was
+ * billed in; `currency` says which, and `amount_vnd` carries the dong figure
+ * for SePay. Formatting amount_cents with a "$" and appending `currency`
+ * rendered every SePay order as "$24.99 VND" — the wrong number and a unit
+ * that contradicts itself.
+ */
+function formatAmount(r: Row): string {
+  if (r.currency === "VND" && r.amount_vnd != null) {
+    return `${r.amount_vnd.toLocaleString("vi-VN")} ₫`;
+  }
+  return `$${(r.amount_cents / 100).toFixed(2)}`;
+}
+
+/** Whatever identifies this order on the provider's side.
+ *
+ * For SePay that is the transfer memo, which is the one thing that lets you
+ * match a row here against a line on the bank statement — the usual "money
+ * left my account but no credits arrived" ticket is unresolvable without it.
+ */
+function providerRef(r: Row): string {
+  if (r.provider === "sepay") return r.sepay_memo || r.external_txn_id || "—";
+  return r.polar_order_id || r.polar_checkout_id || r.external_txn_id || "—";
+}
 
 export default function OrdersTable() {
   const [page, setPage] = useState(1);
@@ -29,9 +57,12 @@ export default function OrdersTable() {
     { key: "owner", header: "Owner", render: (r) => <span className="font-medium">{r.owner_email}</span> },
     { key: "package", header: "Package", render: (r) => r.package_id },
     { key: "credits", header: "Credits", render: (r) => r.credits.toLocaleString(), className: "tabular-nums" },
-    { key: "amount", header: "Amount", render: (r) => `$${(r.amount_cents / 100).toFixed(2)} ${r.currency}`, className: "tabular-nums" },
+    { key: "amount", header: "Amount", render: formatAmount, className: "tabular-nums" },
     { key: "status", header: "Status", render: (r) => r.status },
-    { key: "polar", header: "Polar ID", render: (r) => r.polar_order_id || r.polar_checkout_id || "—", className: "font-mono text-xs text-ink-500" },
+    { key: "provider", header: "Provider", render: (r) => r.provider, className: "text-xs text-ink-500" },
+    // Was "Polar ID" and only ever rendered Polar's ids, so SePay and PayPal
+    // rows showed "—" and lost their only traceable reference.
+    { key: "ref", header: "Ref", render: providerRef, className: "font-mono text-xs text-ink-500" },
     {
       key: "created",
       header: "Created",

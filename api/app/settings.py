@@ -48,8 +48,20 @@ class Settings(BaseSettings):
     sepay_account_number: str = Field(alias="SEPAY_ACCOUNT_NUMBER", default="")
     sepay_bank_code: str = Field(alias="SEPAY_BANK_CODE", default="")
     sepay_memo_prefix: str = Field(alias="SEPAY_MEMO_PREFIX", default="DT")
-    # Fixed USD→VND rate for SePay package prices. Update when FX drifts.
-    usd_to_vnd: int = Field(alias="USD_TO_VND", default=25000)
+    # Where SePay POSTs transfer notifications, relative to /api/v1. Unguessable
+    # by design (same reasoning as Fillform's /h00k/... path): the route can't
+    # require a session, so a predictable path invites scanner traffic even
+    # though the Apikey check rejects it before any DB work.
+    #
+    # Override this in prod. The default ships in the repo, so it is only
+    # obscure, not secret, and it must not be shared with Fillform's path —
+    # one leaking should not expose the other.
+    sepay_webhook_path: str = Field(alias="SEPAY_WEBHOOK_PATH", default="h00k/71204/cr3d1t")
+    # Fixed USD→VND rate for SePay package prices. The old 25000 default was
+    # ~5% under the real rate, so every VND transfer undercharged; set to the
+    # 2026-08 market rate. This does NOT track FX — re-check it when the dong
+    # moves, because the gap comes straight out of margin on VN sales.
+    usd_to_vnd: int = Field(alias="USD_TO_VND", default=26300)
     mail_from: str = Field(alias="DOTHESIS_MAIL_FROM", default="")
     mail_region: str = Field(alias="DOTHESIS_MAIL_REGION", default="ap-southeast-1")
     dothesis_mail: str = Field(alias="DOTHESIS_MAIL", default="")
