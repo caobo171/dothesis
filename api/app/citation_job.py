@@ -129,12 +129,23 @@ def run(project_id: str, run_id: int | None = None) -> int:
         # derived here.
         m2_now = (row[1] if row else None) or {}
         if not (m2_now.get("research_gaps") or []):
+            # Every outcome is logged, including "ran fine and found nothing".
+            # This used to fail silently in two ways at once — an exception was
+            # swallowed and an empty return logged nothing at all — so a card
+            # reading "research_gaps is empty" next to N found papers was
+            # indistinguishable from the job never having run. That is what made
+            # the gaps look random: the same import produced gaps or not with no
+            # way to tell which path it took.
             try:
                 from orchestrator.tools.m2_literature import find_research_gaps
                 gaps = find_research_gaps.func(merged)
                 if gaps:
                     writes["research_gaps"] = gaps
                     logger.info("derived %d research gaps for %s", len(gaps), project_id)
+                else:
+                    logger.warning(
+                        "gap derivation returned nothing for %s despite %d sources",
+                        project_id, len(merged))
             except Exception:
                 # The citations are the point; gaps are a bonus on top of them.
                 logger.exception("gap derivation failed for %s", project_id)

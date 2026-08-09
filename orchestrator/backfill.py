@@ -23,6 +23,118 @@ logger = logging.getLogger(__name__)
 
 _SLICE_KEYS = ("m1_topic", "m2_literature", "m3_design", "m4_analysis", "m5_writing")
 
+# How much evidence text the reconstruction prompt may carry.
+#
+# This used to be a flat `json.dumps(evidence)[:6000]` — a blind head-slice of
+# the WHOLE payload. An imported thesis lands as one ~37k-char string in
+# m4_analysis.analysis_results, so the model saw the first 16% of the evidence
+# and nothing else: the cut fell inside Chapter 4's descriptives, past the
+# methodology statement and past the hypothesis-results table. It then filled
+# the gap with the shape those constructs usually have in training data and
+# reported PLS-SEM/SmartPLS for a study run in SPSS with linear regression.
+# The prompt's "do not invent facts the evidence contradicts" guard could not
+# fire, because the contradicting facts had been truncated away.
+_EVIDENCE_BUDGET = int(os.getenv("DOTHESIS_BACKFILL_EVIDENCE_CHARS", "30000"))
+# Never shrink a string below this — a 50-char fragment is noise, better to
+# spend the budget on fewer, readable excerpts.
+_MIN_STRING_KEEP = 600
+
+
+def _elide(s: str, keep: int) -> str:
+    """Trim to `keep` chars as head + tail, marking what was dropped.
+
+    Head+tail rather than head-only because the informative parts of a thesis
+    sit at BOTH ends: methods and framing up front, results and conclusions at
+    the back. A head-only slice is exactly what hid the results table.
+    """
+    if len(s) <= keep:
+        return s
+    half = max(_MIN_STRING_KEEP, keep // 2)
+    if 2 * half >= len(s):
+        return s
+    return f"{s[:half]}\n…[{len(s) - 2 * half} characters omitted]…\n{s[-half:]}"
+
+
+def _fit_evidence(evidence: dict, budget: int = _EVIDENCE_BUDGET) -> dict:
+    """Shrink long string values so the whole payload fits `budget`.
+
+    Water-filled: every string gets an equal share, strings under their share
+    keep their full text and release the remainder to the rest. That is what
+    stops one huge slice from starving the others — under the old whole-payload
+    slice, a long M4 blob could push M1/M2/M3 out of the prompt entirely even
+    though they were small enough to include in full.
+    """
+    paths: list[tuple[dict, str, str]] = []
+    for slice_name, slice_val in evidence.items():
+        if isinstance(slice_val, dict):
+            for k, v in slice_val.items():
+                if isinstance(v, str):
+                    paths.append((slice_val, k, v))
+    if not paths:
+        return evidence
+
+    total_text = sum(len(v) for _, _, v in paths)
+    overhead = len(json.dumps(evidence, default=str, ensure_ascii=False)) - total_text
+    available = max(budget - overhead, _MIN_STRING_KEEP * len(paths))
+    if total_text <= available:
+        return evidence
+
+    # Water-fill: repeatedly hand out an equal share, letting short strings
+    # release what they don't use, until the shares stop growing.
+    remaining, unfixed = available, list(paths)
+    keep: dict[int, int] = {}
+    while unfixed:
+        share = remaining // len(unfixed)
+        short = [p for p in unfixed if len(p[2]) <= share]
+        if not short:
+            for p in unfixed:
+                keep[id(p)] = share
+            break
+        for p in short:
+            keep[id(p)] = len(p[2])
+            remaining -= len(p[2])
+        unfixed = [p for p in unfixed if len(p[2]) > share]
+
+    out = {k: (dict(v) if isinstance(v, dict) else v) for k, v in evidence.items()}
+    for slice_name, slice_val in evidence.items():
+        if not isinstance(slice_val, dict):
+            continue
+        for k, v in slice_val.items():
+            if isinstance(v, str):
+                for p in paths:
+                    if p[0] is slice_val and p[1] == k:
+                        out[slice_name][k] = _elide(v, keep.get(id(p), len(v)))
+                        break
+    return out
+
+
+# Tool and technique names a model reaches for when the evidence is silent.
+# Checked against the evidence so an unevidenced one can be dropped rather than
+# propagated into M3 and, from there, into the methodology chapter.
+_METHOD_TOKENS = ("smartpls", "pls-sem", "pls sem", "plssem", "cb-sem", "cb sem",
+                  "amos", "lavaan", "mplus", "lisrel", "spss", "stata", "eviews")
+
+
+def _drop_unevidenced_method(out: dict, evidence_text: str) -> dict:
+    """Remove a `methodology` that names software the evidence never mentions.
+
+    A guessed statistical package is not a harmless default: M5 writes the
+    methodology chapter from this field, so "PLS-SEM using SmartPLS" invented
+    here becomes a sentence in the student's thesis describing an analysis they
+    never ran. Dropping the field is the honest outcome and matches the prompt's
+    own instruction to omit anything that cannot be inferred.
+    """
+    value = out.get("methodology")
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False) if value else ""
+    if not text:
+        return out
+    low, ev = text.lower(), evidence_text.lower()
+    unevidenced = [t for t in _METHOD_TOKENS if t in low and t not in ev]
+    if unevidenced:
+        logger.warning("backfill: dropped methodology naming unevidenced tool(s) %s", unevidenced)
+        out.pop("methodology", None)
+    return out
+
 
 def _schema_for_slice(slice_name: str):
     from orchestrator.schemas.m1 import M1Output
@@ -101,6 +213,10 @@ def reconstruct_artifact(artifact_key: str, context_store, llm=None,
         for name in fields
     )
 
+    # Budgeted per-string rather than head-sliced whole, so a long imported
+    # document cannot push the smaller slices out of the prompt.
+    evidence_text = json.dumps(_fit_evidence(evidence), default=str, ensure_ascii=False)
+
     lang_line = (
         f"Write every field value AND the rationale in {language}.\n"
         if language else ""
@@ -116,7 +232,7 @@ def reconstruct_artifact(artifact_key: str, context_store, llm=None,
         f"Also include a key `_rationale`: ONE short sentence naming which pieces "
         f"of the evidence you inferred this from.\n\n"
         f"Evidence (other completed parts of their thesis):\n"
-        f"{json.dumps(evidence, default=str, ensure_ascii=False)[:6000]}\n\n"
+        f"{evidence_text}\n\n"
         f"Respond with ONLY a JSON object of the inferred fields. "
         f"No prose, no markdown."
     )
@@ -128,6 +244,7 @@ def reconstruct_artifact(artifact_key: str, context_store, llm=None,
         # Keep the schema fields plus the meta rationale; drop everything else.
         out = {k: _unwrap_field(v) for k, v in data.items()
                if k in fields or k == "_rationale"}
+        out = _drop_unevidenced_method(out, evidence_text)
         # A lone _rationale with no real inferred field is not a candidate.
         if not any(k in fields for k in out):
             return {}

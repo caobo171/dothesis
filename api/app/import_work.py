@@ -11,12 +11,19 @@ which is why these did not move into partner_run.
 """
 from __future__ import annotations
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
 # Cheap pre-LLM signal: a doc mentioning these is almost certainly SmartPLS/SPSS output, so we
 # skip the model call and classify it as analysis-output directly.
+#
+# Matched as whole words, not substrings. As bare substrings the short hints are
+# far too greedy: "ave" alone matches "have"/"gave"/"average"/"wave", so any
+# English prose at all took this branch and skipped classification entirely.
 _STAT_HINTS = ("ave", "htmt", "cronbach", "r square", "path coefficient", "outer loading", "vif")
+_STAT_HINT_RE = re.compile(
+    r"(?<![a-z])(" + "|".join(re.escape(h) for h in _STAT_HINTS) + r")(?![a-z])")
 
 _KINDS = {"proposal", "chapter", "questionnaire", "analysis-output", "dataset", "unknown"}
 
@@ -26,7 +33,7 @@ def _classify(filename: str, text: str) -> str:
     low = (text or "").lower()
     if not low.strip():
         return "unknown"
-    if any(k in low for k in _STAT_HINTS):
+    if _STAT_HINT_RE.search(low):
         return "analysis-output"
     from orchestrator.tools.m5_writing import _get_llm  # noqa: PLC0415 — orchestrator LLM, not agent layer
     prompt = ("Classify this thesis document as ONE of: proposal, chapter, questionnaire, "
@@ -154,6 +161,75 @@ def _infer_model(analysis_text: str, language: str) -> dict:
     return {}
 
 
+def _infer_analysis_results(analysis_text: str, language: str) -> dict:
+    """Extract the STRUCTURED analysis_results block from analysis output.
+
+    Why this exists: storing the paste as a raw string made every downstream
+    reader blind to it. `results_render.detect_family` and
+    `render_results_tables` bail on a non-dict, `coherence.coverage_findings`
+    coerces it to {} and then reports EVERY M3 hypothesis as having no result,
+    and `stats_validation` can only say the numbers are unverifiable. A thesis
+    whose Chapter 4 table listed H1-H3 in full still came out the far end as
+    "no structured result entries for H1, H2, H3".
+
+    The orchestrator's m4_parsers are deliberately NOT used here: they return
+    per-step StepResult dicts for the interactive M4 walk, a different shape
+    from the analysis_results block these consumers read, and their regexes
+    target raw SPSS/SmartPLS console dumps rather than the narrative Word
+    tables an imported thesis actually contains.
+
+    Shape follows skills/dothesis-m4-analysis/SKILL.md. Best-effort and
+    non-fabricating: keys with no evidence in the text are omitted, and any
+    failure returns {} so the caller can fall back to the raw text.
+    """
+    import json as _json
+
+    from orchestrator.tools.m5_writing import _get_llm  # noqa: PLC0415
+
+    # Larger window than _infer_topic/_infer_model: those need only the framing,
+    # which sits up front, whereas the results tables are usually deep in
+    # Chapter 4 of an imported thesis and would fall outside a 6k snippet.
+    snippet = (analysis_text or "")[:40000]
+    lang = "Vietnamese" if str(language).lower().startswith("vi") else "English"
+    prompt = (
+        "Extract the statistical results from this thesis analysis output into "
+        "STRICT JSON. Read tables as well as prose — hypothesis results are "
+        f"often in a {lang} summary table (e.g. 'Bảng ... kiểm định giả thuyết').\n\n"
+        "CRITICAL: copy every number EXACTLY as written. Do not compute, round, "
+        "convert or infer any value. Omit any key you cannot evidence in the "
+        "text — an absent key is correct, an invented number is not.\n\n"
+        "For each hypothesis give the id as written (H1, H2, ...), the path, the "
+        "numbers present, and decision as \"supported\" or \"not supported\" "
+        "(map accepted/chấp nhận -> supported, rejected/bác bỏ -> not supported).\n"
+        "Schema (include only the keys you have evidence for):\n"
+        '{"hypothesis_tests":[{"id":"H1","hypothesis":"H1","path":"X → Y",'
+        '"numbers":{"beta":0.0,"t":0.0,"p":"0.000"},"decision":"supported"}],'
+        '"measurement_model":[{"construct":"","cronbach_alpha":0.0,'
+        '"composite_reliability":0.0,"ave":0.0}],'
+        '"structural_model":{"r2":{"OUTCOME":0.0}},'
+        '"descriptives":{"n":0}}\n\n'
+        f"ANALYSIS OUTPUT:\n{snippet}"
+    )
+    try:
+        resp = _get_llm().invoke(prompt)
+        content = getattr(resp, "content", resp)
+        if isinstance(content, list):
+            content = " ".join(str(p.get("text", "") if isinstance(p, dict) else p) for p in content)
+        content = str(content)
+        s, e = content.find("{"), content.rfind("}")
+        if s == -1 or e == -1:
+            return {}
+        data = _json.loads(content[s:e + 1])
+        if not isinstance(data, dict):
+            return {}
+        # Drop empty containers so "extracted nothing" is falsy for the caller
+        # rather than a dict of empty lists that reads as structured-but-blank.
+        return {k: v for k, v in data.items() if v}
+    except Exception:
+        logger.exception("import: analysis-results extraction failed")
+    return {}
+
+
 def import_existing_work(files: list[dict], language: str) -> dict:
     """Classify each uploaded file and infer the module slice it evidences.
 
@@ -181,7 +257,14 @@ def import_existing_work(files: list[dict], language: str) -> dict:
                 slices.setdefault("M3", {})["conceptual_model"] = model
                 evidence.setdefault("M3", fn)
         elif kind == "analysis-output":
-            slices.setdefault("M4", {})["analysis_results"] = text
+            # Structured if we can parse it, raw text if we can't. The fallback
+            # deliberately keeps the string rather than storing {}: a string is
+            # what makes stats_validation raise structure.unstructured ("results
+            # are stored as free text, so the numbers cannot be verified"), and
+            # an empty dict would silence that warning while leaving the results
+            # just as unverified.
+            parsed = _infer_analysis_results(text, language)
+            slices.setdefault("M4", {})["analysis_results"] = parsed or text
             evidence["M4"] = fn
         elif kind == "chapter":
             slices.setdefault("M5", {}).setdefault("final_sections", []).append(
