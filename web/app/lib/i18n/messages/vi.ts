@@ -247,7 +247,7 @@ export const vi: Record<MessageKey, string> = {
     "không có nghĩa là bạn đã qua. Hãy xem đây là nhận xét về cách viết: nếu các câu " +
     "của bạn dài như nhau cả thì nên thay đổi độ dài.",
 
-  "tools.citation.name": "Trích dẫn",
+  "tools.citation.name": "Tạo trích dẫn",
   "tools.similarity.name": "Trùng lặp & trích dẫn",
   "tools.sim.run": "Kiểm tra tài liệu",
   "tools.sim.running": "Đang kiểm tra…",

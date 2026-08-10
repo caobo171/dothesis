@@ -265,7 +265,7 @@ export const en = {
   // Renamed from "Citation check": checking one reference is now the smallest
   // of three modes, and the one students arrive for is the .docx that comes
   // back cited.
-  "tools.citation.name": "Citations",
+  "tools.citation.name": "Citation generator",
   "tools.similarity.name": "Similarity & citations",
   "tools.sim.run": "Check the document",
   "tools.sim.running": "Checking…",
