@@ -29,7 +29,7 @@ from .. import partner_run as prun
 from ..db import db_session
 from ..tool_artifacts import store_run_files
 from ..tool_billing import Timer, record_tool_run
-from .partner_humanize import _presign
+from .partner_docx import presign
 from .partner_report import _require_partner
 
 logger = logging.getLogger(__name__)
@@ -153,7 +153,7 @@ async def partner_similarity(
         corpus_checked=bool(report.get("corpus_checked")),
         corpus_error=report.get("corpus_error"),
         counts=report.get("counts") or {},
-        docx_url=_presign(files.output_uri),
+        docx_url=presign(files.output_uri),
         docx_uri=files.output_uri,
         credits_charged=charged,
     )

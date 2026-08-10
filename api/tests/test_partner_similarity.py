@@ -105,7 +105,7 @@ def test_run_without_provider_says_nobody_looked(client, monkeypatch):
     monkeypatch.setattr(router_mod, "store_run_files", lambda **kw: _run_files(
         input_uri="s3://test-bucket/in/thesis.docx",
         output_uri="s3://test-bucket/out/thesis-similarity.docx"))
-    monkeypatch.setattr(router_mod, "_presign", lambda uri, expires=3600: "https://example.test/signed")
+    monkeypatch.setattr(router_mod, "presign", lambda uri, expires=3600: "https://example.test/signed")
 
     body = _post(client, "", language="vi").json()
     assert body["ok"] is True
@@ -123,7 +123,7 @@ def test_run_charges_the_offline_rate_when_no_provider_ran(client, monkeypatch):
     monkeypatch.setattr(sd, "similarity_docx", lambda body, **kw: (
         b"OUT", {"ok": True, "corpus_checked": False, "counts": COUNTS}))
     monkeypatch.setattr(router_mod, "store_run_files", lambda **kw: _run_files())
-    monkeypatch.setattr(router_mod, "_presign", lambda uri, expires=3600: None)
+    monkeypatch.setattr(router_mod, "presign", lambda uri, expires=3600: None)
 
     _post(client, "")
     with Session(get_engine()) as s:
@@ -145,7 +145,7 @@ def test_run_charges_the_corpus_rate_when_a_provider_ran(client, monkeypatch):
     monkeypatch.setattr(sd, "similarity_docx", lambda body, **kw: (
         b"OUT", {"ok": True, "corpus_checked": True, "counts": COUNTS}))
     monkeypatch.setattr(router_mod, "store_run_files", lambda **kw: _run_files())
-    monkeypatch.setattr(router_mod, "_presign", lambda uri, expires=3600: None)
+    monkeypatch.setattr(router_mod, "presign", lambda uri, expires=3600: None)
 
     assert _post(client, "").json()["corpus_checked"] is True
     with Session(get_engine()) as s:

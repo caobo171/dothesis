@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_engine
 from app.models import ToolRun
-from app.routers import partner_humanize as router_mod
+from app.routers import partner_docx, partner_humanize as router_mod
 
 TOKEN = "test-partner-secret"
 _DOCX_MIME = ("application/vnd.openxmlformats-officedocument"
@@ -141,7 +141,7 @@ def test_run_reaches_done_with_url_and_metrics(client, monkeypatch):
     monkeypatch.setattr(router_mod, "store_run_files", lambda **kw: _run_files(
         input_uri="s3://test-bucket/in/thesis.docx",
         output_uri="s3://test-bucket/out/thesis-humanized.docx"))
-    monkeypatch.setattr(router_mod, "_presign",
+    monkeypatch.setattr(partner_docx, "presign",
                         lambda uri, expires=3600: "https://example.test/signed" if uri else None)
 
     started = _start(client, language="vi")
@@ -149,7 +149,7 @@ def test_run_reaches_done_with_url_and_metrics(client, monkeypatch):
     run_id = started.json()["run_id"]
     assert started.json()["status"] == "processing"
 
-    router_mod._join_workers()
+    partner_docx.join_workers()
 
     body = _status(client, run_id).json()
     assert body["status"] == "done"
@@ -167,7 +167,7 @@ def test_failed_walk_reports_error(client, monkeypatch):
     monkeypatch.setattr(router_mod, "store_run_files", lambda **kw: _run_files())
 
     run_id = _start(client).json()["run_id"]
-    router_mod._join_workers()
+    partner_docx.join_workers()
     body = _status(client, run_id).json()
     assert body["status"] == "error"
     assert body["error"] == "rewrite_failed"
@@ -182,7 +182,7 @@ def test_crashing_walk_reports_error(client, monkeypatch):
 
     monkeypatch.setattr(hd, "humanize_docx", boom)
     run_id = _start(client).json()["run_id"]
-    router_mod._join_workers()
+    partner_docx.join_workers()
     assert _status(client, run_id).json()["status"] == "error"
 
 
@@ -208,7 +208,7 @@ def test_status_needs_the_partner_token(client):
 def test_stale_running_run_is_reported_lost(client, monkeypatch):
     from datetime import datetime, timedelta, timezone
 
-    monkeypatch.setattr(router_mod, "_start_worker", lambda *a, **k: None)
+    monkeypatch.setattr(router_mod, "start_worker", lambda *a, **k: None)
     run_id = _start(client).json()["run_id"]
     with Session(get_engine()) as s:
         row = s.get(ToolRun, run_id)
@@ -221,7 +221,7 @@ def test_stale_running_run_is_reported_lost(client, monkeypatch):
 
 
 def test_running_run_reports_progress(client, monkeypatch):
-    monkeypatch.setattr(router_mod, "_start_worker", lambda *a, **k: None)
+    monkeypatch.setattr(router_mod, "start_worker", lambda *a, **k: None)
     run_id = _start(client).json()["run_id"]
     from app.tool_billing import bump_progress
     bump_progress(run_id, done=12, total=70)
