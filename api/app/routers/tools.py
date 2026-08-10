@@ -1486,3 +1486,128 @@ async def cite_document(request: Request, file: UploadFile = File(...),
             "X-References": str(report.get("references", 0)),
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Document similarity & citation self-check — .docx in, annotated .docx out
+#
+# Same shape as /document/humanize and /document/cite: a free scan so the
+# student can see the job, then a billed run that streams the marked-up file
+# back with the counts in headers.
+#
+# The one thing this pair must never do is let "no provider" read as "clean".
+# X-Corpus-Checked is on every response for exactly that reason, and the
+# annotated document says it in words on its summary page.
+# ---------------------------------------------------------------------------
+
+class SimScanOut(BaseModel):
+    ok: bool
+    paragraphs: int = 0
+    body_paragraphs: int = 0
+    words: int = 0
+    quotations: int = 0
+    in_text_citations: int = 0
+    reference_entries: int = 0
+    # What the run will cost, quoted before it is spent.
+    check_cost: int = 0
+    corpus_available: bool = False
+    error: str | None = None
+    detail: str | None = None
+
+
+@router.post("/document/similarity-scan", response_model=SimScanOut)
+async def similarity_scan(request: Request, file: UploadFile = File(...),
+                          user: User = Depends(current_user),
+                          db: Session = Depends(db_session)) -> SimScanOut:
+    """What the self-check would look at. No charge (pricing.TOOL_FREE)."""
+    from orchestrator.tools.plagiarism import get_provider  # noqa: PLC0415
+    from orchestrator.tools.similarity_docx import scan_docx  # noqa: PLC0415
+    from ..tool_billing import tool_cost  # noqa: PLC0415
+
+    body = await _read_docx(file)
+    out = scan_docx(body)
+    if not out.get("ok"):
+        record_tool_run(db, user, surface=surface_of(request), tool="scan-similarity-docx",
+                        ok=False, error=out.get("error") or "unreadable")
+        return SimScanOut(ok=False, error=out.get("error"),
+                          detail="This file could not be opened as a Word document.")
+    record_tool_run(db, user, surface=surface_of(request), tool="scan-similarity-docx",
+                    units=out.get("body_paragraphs") or 0)
+    has_corpus = get_provider() is not None
+    cost = tool_cost("similarity-docx")
+    if has_corpus:
+        cost += tool_cost("similarity-docx-corpus")
+    return SimScanOut(**out, check_cost=cost, corpus_available=has_corpus)
+
+
+@router.post("/document/similarity")
+async def similarity_document(request: Request, file: UploadFile = File(...),
+                              language: str = "vi",
+                              user: User = Depends(current_user),
+                              db: Session = Depends(db_session)):
+    """Return the .docx with its findings highlighted and summarised.
+
+    Streams the document back like /document/humanize, so the counts ride in
+    headers rather than a JSON body. `X-Corpus-Checked` is the one a caller must
+    read before telling a student anything: false means no external index was
+    searched, which is NOT the same as finding nothing.
+    """
+    from fastapi.responses import StreamingResponse  # noqa: PLC0415
+    from starlette.concurrency import run_in_threadpool  # noqa: PLC0415
+
+    from orchestrator.tools.plagiarism import get_provider  # noqa: PLC0415
+    from orchestrator.tools.similarity_docx import similarity_docx  # noqa: PLC0415
+    from ..tool_artifacts import store_run_files  # noqa: PLC0415
+    from ..tool_billing import begin_tool_run, bump_progress  # noqa: PLC0415
+    from .uploads import _DOCX_MIME  # noqa: PLC0415
+
+    body = await _read_docx(file)
+    provider = get_provider()
+    run_id = begin_tool_run(db, user, tool="similarity-docx", surface=surface_of(request))
+
+    def _progress(done: int, total: int) -> None:
+        bump_progress(run_id, done=done, total=total)
+
+    with Timer() as t:
+        # Off the event loop like the other document routes: the shingle index
+        # over a 300-paragraph thesis is CPU-bound for seconds, and a configured
+        # provider adds a network round trip on top.
+        out, report = await run_in_threadpool(
+            similarity_docx, body, provider=provider, language=language,
+            on_progress=_progress)
+    ok = out is not None and bool(report.get("ok"))
+    files = await run_in_threadpool(
+        store_run_files, user_id=user.id,
+        filename=file.filename or "document.docx",
+        input_bytes=body, output_bytes=out)
+    # The corpus surcharge is charged only when a provider actually RAN. A
+    # configured-but-unreachable vendor bills the offline half and no more.
+    tool = "similarity-docx-corpus" if report.get("corpus_checked") else "similarity-docx"
+    counts = report.get("counts") or {}
+    charged = record_tool_run(
+        db, user, surface=surface_of(request), tool=tool, ok=ok,
+        error=None if ok else (report.get("error") or "similarity_failed"),
+        duration_ms=t.ms, run_id=run_id, files=files,
+        input_filename=file.filename, metrics=counts).charged
+    if not ok:
+        raise HTTPException(422, detail={"error": {
+            "code": report.get("error") or "similarity_failed",
+            "message": "This file could not be checked."}})
+
+    stem = (file.filename or "document.docx").rsplit(".", 1)[0]
+    return StreamingResponse(
+        io.BytesIO(out), media_type=_DOCX_MIME,
+        headers={
+            "Content-Disposition": f'attachment; filename="{stem}-similarity.docx"',
+            "Access-Control-Expose-Headers":
+                "X-Credits-Charged, X-Corpus-Checked, X-Flagged, X-Duplication, "
+                "X-Uncited-Quotes, X-Citation-Gaps",
+            "X-Credits-Charged": str(charged),
+            # Load-bearing: false means nobody searched an external index.
+            "X-Corpus-Checked": "true" if report.get("corpus_checked") else "false",
+            "X-Flagged": str(counts.get("flagged_paragraphs", 0)),
+            "X-Duplication": str(counts.get("internal_duplication", 0)),
+            "X-Uncited-Quotes": str(counts.get("uncited_quotations", 0)),
+            "X-Citation-Gaps": str(counts.get("cited_not_in_references", 0)),
+        },
+    )

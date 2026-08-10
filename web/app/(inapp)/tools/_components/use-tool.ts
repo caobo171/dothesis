@@ -479,3 +479,90 @@ export async function humanizeDocument(
     declined: num("X-Paragraphs-Declined"),
   };
 }
+
+
+// ---------------------------------------------------------------------------
+// Similarity & citation self-check — .docx in, annotated .docx out
+// ---------------------------------------------------------------------------
+
+export type SimilarityScan = {
+  ok: boolean;
+  paragraphs: number;
+  body_paragraphs: number;
+  words: number;
+  quotations: number;
+  in_text_citations: number;
+  reference_entries: number;
+  /** What the run costs, quoted before it is spent. */
+  check_cost: number;
+  /** Whether an external corpus provider is configured for this deployment. */
+  corpus_available: boolean;
+};
+
+/** What the check would look at. Free — no provider is called. */
+export async function scanSimilarityDocument(
+  file: File, t: Translate,
+): Promise<SimilarityScan> {
+  const res = await postFile("/tools/document/similarity-scan", file);
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(
+      body?.detail?.error?.message ||
+        (res.status === 415
+          ? t("tools.err.needDocx")
+          : t("tools.err.readDoc", { status: res.status })),
+    );
+  }
+  return body as SimilarityScan;
+}
+
+/**
+ * Run the check and hand back the annotated .docx.
+ *
+ * `corpusChecked` is the field the caller MUST read before telling the student
+ * anything. False means no external index was searched — which is not the same
+ * as finding nothing, and is the one confusion this whole feature is shaped to
+ * prevent.
+ */
+export async function similarityDocument(
+  file: File,
+  t: Translate,
+  language?: string,
+): Promise<{
+  blob: Blob; filename: string; credits: number | null;
+  corpusChecked: boolean;
+  flagged: number | null; duplication: number | null;
+  uncitedQuotes: number | null; citationGaps: number | null;
+}> {
+  let res: Response;
+  try {
+    // No model call, but the shingle index over a full thesis is CPU-bound for
+    // seconds and a configured provider adds a network round trip.
+    res = await postFile(
+      `/tools/document/similarity?language=${encodeURIComponent(language || "vi")}`,
+      file, 300_000);
+  } catch (e) {
+    throw docRequestError(e, t);
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail?.error?.message || t("tools.sim.errFailed"));
+  }
+  const num = (h: string) => {
+    const v = res.headers.get(h);
+    return v === null ? null : Number(v);
+  };
+  const stem = file.name.replace(/\.docx$/i, "");
+  return {
+    blob: await res.blob(),
+    filename: `${stem}-similarity.docx`,
+    credits: num("X-Credits-Charged"),
+    // Absent header → treat as NOT checked. Defaulting the other way would
+    // turn a missing Access-Control-Expose-Headers into a clean bill of health.
+    corpusChecked: res.headers.get("X-Corpus-Checked") === "true",
+    flagged: num("X-Flagged"),
+    duplication: num("X-Duplication"),
+    uncitedQuotes: num("X-Uncited-Quotes"),
+    citationGaps: num("X-Citation-Gaps"),
+  };
+}

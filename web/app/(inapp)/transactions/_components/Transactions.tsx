@@ -46,6 +46,9 @@ const REASON_KEY: Record<string, MessageKey> = {
   "verify-citations": "txn.tool.verifyCitations",
   "writing-rhythm": "txn.tool.rhythm",
   "plagiarism-check": "txn.tool.plagiarism",
+  "similarity-docx": "txn.tool.similarityDocx",
+  "similarity-docx-corpus": "txn.tool.similarityDocxCorpus",
+  "scan-similarity-docx": "txn.tool.scanSimilarityDocx",
 };
 
 export default function Transactions() {

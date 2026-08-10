@@ -117,6 +117,15 @@ TOOL_COST_FLAT: dict[str, int] = {
     # returns provider_not_configured and must not bill for a check it did not
     # perform.
     "plagiarism-check": 5,
+    # The DOCUMENT self-check: no model, no vendor, pure CPU over the student's
+    # own file. Priced like writing-rhythm — a token amount so the run lands in
+    # the ledger — NOT like plagiarism-check, which carries a real vendor
+    # invoice. When a provider is configured the run also pays that; see
+    # similarity-docx-corpus below.
+    "similarity-docx":  2,
+    # The surcharge when a corpus provider actually ran. Separate from the base
+    # so an unconfigured deployment charges 2, not 7, for the half it performed.
+    "similarity-docx-corpus": 5,
 }
 
 # Charged at zero, deliberately, and listed so it is a decision rather than an
@@ -130,7 +139,7 @@ TOOL_COST_FLAT: dict[str, int] = {
 #                         pay for it; charging for the estimate defeats the
 #                         entire point of showing it.
 TOOL_FREE: frozenset[str] = frozenset({
-    "extract-text", "scan-docx", "scan-cite-docx",
+    "extract-text", "scan-docx", "scan-cite-docx", "scan-similarity-docx",
 })
 
 
