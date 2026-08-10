@@ -49,6 +49,7 @@ _HEADERS = {
 }
 _CAPTIONS = {
     "en": {"measurement_model": "Table 4.1 — Measurement model: reliability and convergent validity",
+           "scale_reliability": "Table 4.1 — Scale reliability",
            "discriminant_validity": "Table 4.2 — Discriminant validity",
            "model_fit": "Table 4.2 — Model fit indices",
            "structural_paths": "Table 4.3 — Structural model: hypothesis tests",
@@ -56,6 +57,7 @@ _CAPTIONS = {
            "r2_q2": "Table 4.4 — Explanatory and predictive power (R² / Q²)",
            "data_cleaning": "Table 3.1 — Data screening summary"},
     "vi": {"measurement_model": "Bảng 4.1 — Mô hình đo lường: độ tin cậy và giá trị hội tụ",
+           "scale_reliability": "Bảng 4.1 — Độ tin cậy thang đo",
            "discriminant_validity": "Bảng 4.2 — Giá trị phân biệt",
            "model_fit": "Bảng 4.2 — Các chỉ số độ phù hợp mô hình",
            "structural_paths": "Bảng 4.3 — Mô hình cấu trúc: kiểm định giả thuyết",
@@ -71,9 +73,12 @@ _FIT_THRESHOLDS = {"cfi": "≥ 0.90", "tli": "≥ 0.90", "rmsea": "≤ 0.08",
 
 # --- formatting -------------------------------------------------------------
 
+_EMPTY = "—"
+
+
 def _fmt(v: Any) -> str:
     if v is None:
-        return "—"
+        return _EMPTY
     if isinstance(v, bool):
         return str(v)
     if isinstance(v, int):
@@ -103,11 +108,47 @@ def _table(headers: List[str], rows: List[List[str]]) -> str:
     return "\n".join([line, sep, body])
 
 
+def _table_pruned(headers: List[str], rows: List[List[str]]) -> str:
+    """`_table`, minus any column that has no value in any row.
+
+    A fixed column list describes the richest study the renderer can handle, and
+    every other study gets the difference as em-dashes. On a real SPSS
+    regression the measurement table came out with four of six columns empty —
+    including CR and AVE, which are PLS metrics the study never computed and a
+    supervisor would ask where they came from. The structural table carried an
+    equally empty f².
+
+    An absent statistic should be an absent column, not a column of dashes
+    claiming the statistic exists and is unknown. The first column is the row
+    label and is always kept.
+    """
+    if not rows:
+        return _table(headers, rows)
+    width = len(headers)
+    keep = [i for i in range(width)
+            if i == 0 or any(str(r[i]).strip() not in ("", _EMPTY)
+                             for r in rows if i < len(r))]
+    if len(keep) == width:
+        return _table(headers, rows)
+    return _table([headers[i] for i in keep],
+                  [[r[i] for i in keep if i < len(r)] for r in rows])
+
+
 def _H(language: str) -> dict:
     return _HEADERS.get(language, _HEADERS["en"])
 
 
 # --- family detection -------------------------------------------------------
+#
+# Matched against the methodology text AND the tool/method recorded on the
+# results. Deliberately software names plus the few method phrases that are
+# unambiguous in both languages — a guess from a construct count is what got
+# an SPSS study labelled PLS-SEM in the first place.
+_CB_MARKERS = ("cb-sem", "cbsem", "amos", "lisrel", "mplus", "covariance")
+_PLS_MARKERS = ("pls-sem", "plssem", "smartpls", "pls sem", "partial least")
+_REGRESSION_MARKERS = ("spss", "stata", "eviews", "jamovi", "jasp",
+                       "regression", "hồi quy", "ols", "anova")
+
 
 def detect_family(analysis_results: Any, methodology: Optional[str] = None) -> Optional[str]:
     try:
@@ -123,12 +164,28 @@ def detect_family(analysis_results: Any, methodology: Optional[str] = None) -> O
         has_hyp = isinstance(ar.get("hypothesis_tests"), list) and ar["hypothesis_tests"]
         has_r2 = isinstance(sm, dict) and isinstance(sm.get("r2"), dict)
 
-        m = (methodology or "").lower()
+        # Read the tool/method off the RESULTS too, not just the caller's
+        # `methodology`. The only caller (render_results_tables) has no
+        # methodology to pass and never passes one, so every branch keyed on it
+        # was dead — and _infer_analysis_results already parks the software the
+        # student actually used in structural_model.tool ("SPSS") and .method
+        # ("hồi quy tuyến tính đa biến…"). The evidence was in the argument the
+        # function already had.
+        sm_text = " ".join(str((sm or {}).get(k) or "") for k in ("tool", "method")) \
+            if isinstance(sm, dict) else ""
+        m = f"{methodology or ''} {sm_text}".lower()
         if has_fit:
             return "cb_sem"
-        if "cb-sem" in m or "cbsem" in m or "amos" in m or "covariance" in m:
-            if has_measure or has_disc:
-                return "cb_sem"
+        if any(k in m for k in _CB_MARKERS) and (has_measure or has_disc):
+            return "cb_sem"
+        if any(k in m for k in _PLS_MARKERS) and (has_measure or has_disc):
+            return "pls_sem"
+        # A named regression package is decisive. Without this, ANY study with a
+        # measurement_model fell through to pls_sem — and an SPSS reliability
+        # table (constructs + Cronbach's α, nothing else) was rendered as a PLS
+        # measurement model with CR and AVE columns the study never computed.
+        if any(k in m for k in _REGRESSION_MARKERS) and not has_disc:
+            return "regression"
         if has_measure or has_disc:
             return "pls_sem"
         if has_hyp or has_r2:
@@ -167,8 +224,15 @@ def _measurement_block(ar, family, language):
             first = False
     if not rows:
         return None
-    caption = _CAPTIONS.get(language, _CAPTIONS["en"])["measurement_model"]
-    body = f"**{caption}**\n\n" + _table(
+    caps = _CAPTIONS.get(language, _CAPTIONS["en"])
+    # "…reliability and convergent validity" is a claim about AVE. With no CR
+    # and no AVE this is a Cronbach's α table and nothing more, and captioning
+    # it as convergent validity asserts a check the study never ran.
+    has_convergent = any(isinstance(c, dict) and (c.get("ave") is not None
+                                                  or c.get("composite_reliability") is not None)
+                         for c in mm)
+    caption = caps["measurement_model"] if has_convergent else caps["scale_reliability"]
+    body = f"**{caption}**\n\n" + _table_pruned(
         [H["construct"], H["item"], loading_hdr, H["alpha"], H["cr"], H["ave"]], rows)
     return _wrap("measurement_model", mm, body, language)
 
@@ -238,7 +302,7 @@ def _structural_block(ar, family, language):
         row.append(_fmt(t.get("decision")))
         rows.append(row)
     caption = _CAPTIONS.get(language, _CAPTIONS["en"])["structural_paths"]
-    body = f"**{caption}**\n\n" + _table(headers, rows)
+    body = f"**{caption}**\n\n" + _table_pruned(headers, rows)
     return _wrap("structural_paths", tests, body, language)
 
 
@@ -254,6 +318,11 @@ def _r2q2_block(ar, family, language):
     headers = [H["construct"], H["r2"]] + ([H["q2"]] if show_q2 else [])
     rows = [[_fmt(c), _fmt(r2.get(c))] + ([_fmt(q2.get(c))] if show_q2 else []) for c in cons]
     caption = _CAPTIONS.get(language, _CAPTIONS["en"])["r2_q2"]
+    # The caption is fixed text promising "(R² / Q²)". On every study without a
+    # Q² — every regression, which is most of them — it announced a predictive
+    # metric that is not in the table and was never computed. Say what is there.
+    if not show_q2:
+        caption = caption.replace(" / Q²", "")
     body = f"**{caption}**\n\n" + _table(headers, rows)
     return _wrap("r2_q2", {"r2": r2, "q2": q2 if show_q2 else {}}, body, language)
 
@@ -536,7 +605,18 @@ def _norm_ws(s: str) -> str:
 
 _TITLE_CHAPTER = [("result", "results"), ("methodolog", "methodology"),
                   ("data collect", "methodology"), ("conclusion", "conclusion"),
-                  ("discussion", "discussion"), ("limitation", "discussion")]
+                  ("discussion", "discussion"), ("limitation", "discussion"),
+                  # Vietnamese. Without these the title map matched nothing on a
+                  # Vietnamese thesis — "CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU" hit no
+                  # needle — so ensure_rendered, the export-time safety net, has
+                  # never once fired for the market this product is built for.
+                  # "kết luận" is listed before "kết quả" only for readability;
+                  # they are distinct strings and cannot both match.
+                  ("kết quả", "results"), ("phương pháp", "methodology"),
+                  ("thu thập dữ liệu", "methodology"), ("kết luận", "conclusion"),
+                  ("thảo luận", "discussion"), ("hạn chế", "discussion")]
+
+_RENDERABLE_CHAPTERS = {"results", "methodology", "conclusion", "discussion"}
 
 
 def _chapter_of(title: str) -> Optional[str]:
@@ -545,6 +625,18 @@ def _chapter_of(title: str) -> Optional[str]:
         if needle in t:
             return chapter
     return None
+
+
+def _section_chapter(sec: dict) -> Optional[str]:
+    """Which chapter a section is, preferring the canonical name over its title.
+
+    `chapter_name` is set by the composer and by the import, is language-neutral,
+    and is exactly the signal a title reverse-lookup keeps missing.
+    """
+    name = sec.get("chapter_name")
+    if name in _RENDERABLE_CHAPTERS:
+        return name
+    return _chapter_of(sec.get("title") or sec.get("name") or "")
 
 
 def ensure_rendered(sections: list, nested_cs: dict, language: str = "en") -> list:
@@ -566,7 +658,15 @@ def ensure_rendered(sections: list, nested_cs: dict, language: str = "en") -> li
             if not isinstance(sec, dict):
                 out.append(sec)
                 continue
-            chapter = _chapter_of(sec.get("title") or sec.get("name") or "")
+            # The student's own imported chapter is left alone. This net exists
+            # for prose WE produced that reached export without composition;
+            # an imported Chapter 4 already carries the student's 17 tables, and
+            # appending our three renderings of the same numbers underneath them
+            # is duplication, not a safety net.
+            if sec.get("source") == "import":
+                out.append(sec)
+                continue
+            chapter = _section_chapter(sec)
             prose = sec.get("prose") or sec.get("content")
             if chapter is None or not isinstance(prose, str):
                 out.append(sec)

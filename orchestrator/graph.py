@@ -253,6 +253,14 @@ def _get_pool():
             # autocommit=True is required by LangGraph's PostgresSaver which
             # manages its own transaction boundaries.
             kwargs={"autocommit": True},
+            # Same reason the async pool below sets this, same database: DATABASE_URL
+            # points at a REMOTE Postgres, an idle pooled connection over a WAN gets
+            # reaped by NAT/firewall timeouts without either end noticing, and the pool
+            # then hands out a corpse that dies mid-query with "server closed the
+            # connection unexpectedly". check_connection turns that into a
+            # discard-and-replace inside the pool. The async twin has had this since
+            # it was written; the sync one it sits twenty lines above never did.
+            check=ConnectionPool.check_connection,
         )
     return _pool
 
