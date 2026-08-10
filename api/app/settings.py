@@ -46,8 +46,16 @@ class Settings(BaseSettings):
     # SePay (Vietnamese VietQR bank transfer). Offered to UTC+7 users only.
     sepay_api_key: str = Field(alias="SEPAY_API_KEY", default="")
     sepay_account_number: str = Field(alias="SEPAY_ACCOUNT_NUMBER", default="")
+    # VietQR bank code (VietinBank | OCB). Drives both the QR and, for the
+    # shared VietinBank rail, the "SEVQR TKP " content prefix — see sepay_client.
     sepay_bank_code: str = Field(alias="SEPAY_BANK_CODE", default="")
-    sepay_memo_prefix: str = Field(alias="SEPAY_MEMO_PREFIX", default="DT")
+    # Human-facing bank name shown next to the account number in the pay modal
+    # ("VTB - Vietinbank"). Falls back to the bank code when unset.
+    sepay_bank_name: str = Field(alias="SEPAY_BANK_NAME", default="")
+    # Transfer-memo prefix. DoThesis codes read DTS1234; it MUST stay distinct
+    # from every other brand sharing this SePay account (Fillform uses FFV), or
+    # a transfer would be attributed to the wrong product's user.
+    sepay_memo_prefix: str = Field(alias="SEPAY_MEMO_PREFIX", default="DTS")
     # Where SePay POSTs transfer notifications, relative to /api/v1. Unguessable
     # by design (same reasoning as Fillform's /h00k/... path): the route can't
     # require a session, so a predictable path invites scanner traffic even

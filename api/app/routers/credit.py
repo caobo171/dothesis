@@ -13,7 +13,7 @@ from .. import paypal_client, sepay_client
 from ..credit_ledger import credit as ledger_credit
 from ..db import db_session
 from ..deps import current_user
-from ..models import CreditTransaction, Order, Project, Thread, User
+from ..models import CreditTransaction, Order, Project, Thread, User, sepay_code_seq
 from ..polar_client import PolarError, create_checkout, verify_webhook
 from ..pricing import PACKAGES, PACKAGES_BY_ID
 from ..settings import get_settings
@@ -285,15 +285,21 @@ def sepay_intent(
     )
     db.add(order)
     db.flush()
-    memo = sepay_client.order_memo(order.id, settings)
+    memo = sepay_client.order_memo(db.scalar(sepay_code_seq), settings)
     order.sepay_memo = memo
     db.commit()
+    # `memo` is the bare code we match webhooks on; `transfer_content` is what
+    # the payer types — the two differ on the shared VietinBank rail, and the QR
+    # has to carry the latter or the money never reaches our sub-account.
+    content = sepay_client.transfer_content(memo, settings)
     return {
         "order_id": str(order.id),
         "memo": memo,
+        "transfer_content": content,
         "amount_vnd": amount_vnd,
-        "qr_url": sepay_client.qr_image_url(memo, amount_vnd, settings),
+        "qr_url": sepay_client.qr_image_url(content, amount_vnd, settings),
         "bank_code": settings.sepay_bank_code,
+        "bank_name": sepay_client.bank_display_name(settings),
         "account_number": settings.sepay_account_number,
     }
 
@@ -357,10 +363,15 @@ async def sepay_webhook(
         return {"ok": True, "already_paid": True}  # duplicate delivery
 
     content = event.get("code") or event.get("content") or event.get("description") or ""
-    memo = sepay_client.memo_matches(content, settings)
-    if not memo:
+    candidates = sepay_client.memo_candidates(content, settings)
+    if not candidates:
+        # Not ours. Expected traffic, not an error: this account is shared with
+        # other brands (Fillform's FFV codes), whose transfers we must ignore.
         return {"ignored": "no_memo"}
-    order = db.scalar(select(Order).where(Order.sepay_memo == memo))
+    order = next(
+        (o for o in (db.scalar(select(Order).where(Order.sepay_memo == c)) for c in candidates) if o),
+        None,
+    )
     if not order:
         return {"ignored": "unknown_order"}
 

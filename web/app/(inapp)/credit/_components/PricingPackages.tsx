@@ -32,10 +32,14 @@ function formatVnd(amount: number): string {
 type Methods = { methods: string[]; sepay_enabled: boolean };
 type SepayIntent = {
   order_id: string;
+  /** Bare payment code (DTS1234) — what the webhook matches on. */
   memo: string;
+  /** What the payer must type: the code, plus the bank's routing prefix if any. */
+  transfer_content: string;
   amount_vnd: number;
   qr_url: string;
   bank_code: string;
+  bank_name: string;
   account_number: string;
 };
 
@@ -261,11 +265,17 @@ function SepayModal({
               <img src={intent.qr_url} alt="SePay QR" className="h-56 w-56 rounded-lg border border-ink-100" />
             </div>
             <dl className="mt-4 space-y-1 text-sm">
-              <Row label="Ngân hàng" value={intent.bank_code} />
+              <Row label="Ngân hàng" value={intent.bank_name || intent.bank_code} />
               <Row label="Số tài khoản" value={intent.account_number} />
               <Row label="Số tiền" value={formatVnd(intent.amount_vnd)} />
-              <Row label="Nội dung" value={intent.memo} mono />
+              {/* transfer_content, not memo: on the shared VietinBank account
+                  the routing prefix is part of what has to be typed. */}
+              <Row label="Nội dung" value={intent.transfer_content} mono />
             </dl>
+            <p className="mt-2 text-xs text-ink-500">
+              Nội dung chuyển khoản phải giữ nguyên mã <span className="font-mono">{intent.memo}</span> để
+              hệ thống cộng tín dụng tự động.
+            </p>
             <p className="mt-3 text-center text-xs text-ink-400">Đang chờ thanh toán…</p>
           </>
         )}

@@ -1,5 +1,6 @@
 """PayPal + SePay checkout/webhook flows (dummy mode — no real provider calls)."""
 import json
+import re
 import uuid
 
 import pytest
@@ -17,7 +18,7 @@ def _dummy_payments(monkeypatch):
     monkeypatch.setenv("DOTHESIS_PAYMENTS", "dummy")
     monkeypatch.setenv("SEPAY_ACCOUNT_NUMBER", "0123456789")
     monkeypatch.setenv("SEPAY_BANK_CODE", "OCB")
-    monkeypatch.setenv("SEPAY_MEMO_PREFIX", "DT")
+    monkeypatch.setenv("SEPAY_MEMO_PREFIX", "DTS")
     monkeypatch.setenv("USD_TO_VND", "25000")
     monkeypatch.setenv("SEPAY_API_KEY", "test-key")
     from app.settings import reset_settings
@@ -141,9 +142,78 @@ def test_sepay_intent_returns_qr_and_vnd(client_with_user):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["amount_vnd"] == round(2499 / 100 * 25000)  # $24.99 → 624,750₫
-    assert body["memo"].startswith("DT")
+    # Short + numeric (DTS1234), because a human retypes this into a bank app.
+    assert re.fullmatch(r"DTS\d{4,}", body["memo"]), body["memo"]
     assert "qr.sepay.vn/img" in body["qr_url"]
     assert body["memo"] in body["qr_url"]
+    # OCB is a per-merchant virtual account: no routing prefix to prepend.
+    assert body["transfer_content"] == body["memo"]
+
+
+def test_sepay_codes_are_unique_per_order(client_with_user):
+    """Two intents must never share a code — one transfer, one order."""
+    client, _ = client_with_user
+    codes = {
+        client.post("/api/v1/credit/sepay/intent",
+                    json={"package_id": "starter_package"}).json()["memo"]
+        for _ in range(3)
+    }
+    assert len(codes) == 3, codes
+
+
+def test_sepay_vietinbank_prepends_routing_prefix(client_with_user, monkeypatch):
+    """VietinBank is SePay's shared account — without "SEVQR TKP " the transfer
+    is never routed to us, so it has to be in both the QR and the shown content.
+    """
+    monkeypatch.setenv("SEPAY_BANK_CODE", "VietinBank")
+    monkeypatch.setenv("SEPAY_ACCOUNT_NUMBER", "107868958175")
+    from app.settings import reset_settings
+    reset_settings()
+    client, _ = client_with_user
+    body = client.post("/api/v1/credit/sepay/intent",
+                       json={"package_id": "starter_package"}).json()
+    assert body["transfer_content"] == f"SEVQR TKP {body['memo']}"
+    assert "SEVQR" in body["qr_url"]
+
+
+def test_sepay_webhook_ignores_another_brands_code(client_with_user):
+    """The bank account is shared with Fillform (FFV codes). Their transfers
+    must fall through untouched rather than land on some DoThesis order.
+    """
+    client, buyer = client_with_user
+    client.post("/api/v1/credit/sepay/intent", json={"package_id": "starter_package"})
+    payload = json.dumps({
+        "transferType": "in", "transferAmount": 999_000,
+        "referenceCode": "FT_OTHER_BRAND", "content": "SEVQR TKP FFV1234",
+    }).encode()
+    r = client.post(_webhook_url(), content=payload,
+                    headers={"Authorization": "Apikey test-key",
+                             "Content-Type": "application/json"})
+    assert r.json().get("ignored") == "no_memo"
+    Session = get_session_factory()
+    with Session() as s:
+        assert s.get(User, buyer.id).credit == 0
+
+
+def test_sepay_webhook_matches_memo_trailed_by_digits(client_with_user):
+    """Banks echo the content undelimited: "DTS1234 20260810" collapses to
+    "DTS123420260810". The longest-first read must still find the order.
+    """
+    client, buyer = client_with_user
+    intent = client.post("/api/v1/credit/sepay/intent",
+                         json={"package_id": "starter_package"}).json()
+    payload = json.dumps({
+        "transferType": "in", "transferAmount": intent["amount_vnd"],
+        "referenceCode": "FT_TRAILING",
+        "content": f"SEVQR TKP {intent['memo']} 20260810",
+    }).encode()
+    r = client.post(_webhook_url(), content=payload,
+                    headers={"Authorization": "Apikey test-key",
+                             "Content-Type": "application/json"})
+    assert r.status_code == 200, r.text
+    Session = get_session_factory()
+    with Session() as s:
+        assert s.get(User, buyer.id).credit == 10000
 
 
 def test_sepay_webhook_matches_memo_and_grants_once(client_with_user):

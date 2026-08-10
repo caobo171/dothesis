@@ -7,6 +7,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Sequence,
     String,
     Text,
     func,
@@ -135,6 +136,13 @@ class JobEvent(Base):
     agent: Mapped[str | None] = mapped_column(String(128))
     text: Mapped[str | None] = mapped_column(Text)
     meta_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+# Serial behind the short SePay payment codes (DTS1000, DTS1001, …). A sequence
+# rather than a column default: only bank-transfer orders take a number, so the
+# Polar/PayPal paths must not burn one. Bound to Base.metadata so create_all()
+# builds it for tests exactly as the migration does for prod.
+sepay_code_seq = Sequence("sepay_code_seq", start=1000, metadata=Base.metadata)
 
 
 class Order(Base):
