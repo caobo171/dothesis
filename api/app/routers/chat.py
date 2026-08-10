@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..auth_admin import readable_project as _readable_project
@@ -123,11 +123,14 @@ def _orch_context_store(db: Session, project_id: uuid.UUID):
 _CS_UNSET: Any = object()
 
 
-def _serialize_project(db: Session, p: Project, cs: Any = _CS_UNSET) -> ProjectOut:
-    # Single-project callers omit `cs` and we look it up here; the list endpoint
-    # passes the row it already batch-loaded so we never query per project.
-    if cs is _CS_UNSET:
-        cs = db.get(ContextStore, p.id)
+_SLICE_COLUMNS = ("m1_topic", "m2_literature", "m3_design",
+                  "m4_analysis", "m5_writing")
+
+
+def _project_out(p: Project, context_store: dict) -> ProjectOut:
+    """Shared column mapping. `context_store` differs by caller: the FULL
+    slices for the single-project read, a status-only summary for the list
+    (see _slice_summaries)."""
     return ProjectOut(
         id=p.id, name=p.name, field=p.field, language=p.language,
         citation_style=p.citation_style, status=p.status,
@@ -138,15 +141,62 @@ def _serialize_project(db: Session, p: Project, cs: Any = _CS_UNSET) -> ProjectO
         # first orchestrator turn populates it.
         focus=p.focus,
         module_status=p.module_status or {},
-        context_store={
-            "m1_topic":      cs.m1_topic      if cs else None,
-            "m2_literature": cs.m2_literature if cs else None,
-            "m3_design":     cs.m3_design     if cs else None,
-            "m4_analysis":   cs.m4_analysis   if cs else None,
-            "m5_writing":    cs.m5_writing    if cs else None,
-        },
+        context_store=context_store,
         created_at=p.created_at, updated_at=p.updated_at,
     )
+
+
+def _serialize_project(db: Session, p: Project, cs: Any = _CS_UNSET) -> ProjectOut:
+    # Single-project callers omit `cs` and we look it up here; the list endpoint
+    # passes the row it already batch-loaded so we never query per project.
+    if cs is _CS_UNSET:
+        cs = db.get(ContextStore, p.id)
+    return _project_out(p, {
+        "m1_topic":      cs.m1_topic      if cs else None,
+        "m2_literature": cs.m2_literature if cs else None,
+        "m3_design":     cs.m3_design     if cs else None,
+        "m4_analysis":   cs.m4_analysis   if cs else None,
+        "m5_writing":    cs.m5_writing    if cs else None,
+    })
+
+
+def _slice_summaries(db: Session,
+                     project_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict]:
+    """Per-project `{slice: {"confirmed_at": ...} | None}` for the LIST read.
+
+    The list only ever renders module badges, and the one field that drives
+    them is `confirmed_at` (see moduleStatus() in HomeDashboard.tsx, shared
+    with /papers). Returning the full slices instead cost a heavy user with 46
+    projects a 3.8 MB response — mostly m5_writing chapter prose — which is
+    ~20s on a normal mobile/residential downlink even though the server built
+    it in 0.2s. So project `confirmed_at` out in SQL with `->>` and leave the
+    bodies in Postgres; nothing reads them here.
+
+    A slice whose column is NULL stays None rather than becoming
+    {"confirmed_at": None}, preserving the has-this-slice-been-started
+    distinction the full serializer expressed. The full slices are still
+    available from the single-project read, which is what the chat UI and
+    ContextPanel actually use.
+    """
+    if not project_ids:
+        return {}
+    cols = [ContextStore.project_id]
+    for name in _SLICE_COLUMNS:
+        col = getattr(ContextStore, name)
+        # `->> 'confirmed_at'` for the value, plus an IS NOT NULL flag so a
+        # started-but-unconfirmed slice is distinguishable from an absent one.
+        cols.append(col["confirmed_at"].astext.label(name))
+        cols.append(col.isnot(None).label(f"{name}__present"))
+    rows = db.execute(select(*cols).where(
+        ContextStore.project_id.in_(project_ids)))
+    out: dict[uuid.UUID, dict] = {}
+    for row in rows:
+        m = row._mapping
+        out[m["project_id"]] = {
+            name: ({"confirmed_at": m[name]} if m[f"{name}__present"] else None)
+            for name in _SLICE_COLUMNS
+        }
+    return out
 
 
 # ----------------------------------------------------------------------------
@@ -223,15 +273,16 @@ def list_projects(user: User = Depends(current_user),
                   .filter_by(user_id=user.id)
                   .order_by(Project.updated_at.desc())
                   .all())
-    # Batch-load every project's ContextStore in ONE query instead of a per-row
-    # db.get (the previous N+1: 1 + len(projects) queries, each pulling full
-    # m1–m5 JSONB). Map by project_id and hand each row to the serializer.
-    cs_by_id: dict[uuid.UUID, ContextStore] = {}
-    if projects:
-        ids = [p.id for p in projects]
-        cs_rows = db.query(ContextStore).filter(ContextStore.project_id.in_(ids)).all()
-        cs_by_id = {cs.project_id: cs for cs in cs_rows}
-    return [_serialize_project(db, p, cs_by_id.get(p.id)) for p in projects]
+    # ONE query for every project's slice status — not the full m1–m5 JSONB.
+    # (Was: a per-row db.get N+1; then a batch load that still pulled whole
+    # slices, which is what actually made this endpoint slow. See
+    # _slice_summaries for why the list only needs confirmed_at.)
+    summaries = _slice_summaries(db, [p.id for p in projects])
+    # Fresh dict per project (not one shared `empty`): Pydantic stores the dict
+    # by reference, so a shared default would alias across every project that
+    # has no context_store row yet.
+    return [_project_out(p, summaries.get(p.id) or dict.fromkeys(_SLICE_COLUMNS))
+            for p in projects]
 
 
 @router.post("/projects/{project_id}", response_model=ProjectOut)

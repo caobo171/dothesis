@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.db import get_session_factory
 from app.main import create_app
-from app.models import Project, Thread, User
+from app.models import ContextStore, Project, Thread, User
 
 
 @pytest.fixture
@@ -91,3 +91,48 @@ def test_disabled_when_flag_off(monkeypatch):
     # flag → 404 intent is unchanged via the same route.
     r = c.post("/api/v1/projects/00000000-0000-0000-0000-000000000000")
     assert r.status_code == 404
+
+
+def test_list_projects_returns_slice_status_not_full_bodies(client):
+    """The list read must stay light: slice STATUS only, never slice content.
+
+    Regression guard. This endpoint has been made slow twice by loading whole
+    m1–m5 JSONB per project — once via a per-row N+1, then via a batch load
+    that still shipped every slice body. In production one account with 46
+    projects produced a 3.8 MB response (~20s on a mobile downlink) to render
+    module badges that read exactly one field per slice. The full slices are
+    still served by the single-project read, which is what the chat UI uses.
+    """
+    u = _login_user(client)
+    pid = client.post("/api/v1/projects", json={"name": "Heavy"}).json()["id"]
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m1_topic = {"confirmed_at": "2026-01-01T00:00:00Z",
+                       "research_title": "T", "objectives": ["a", "b"]}
+        # Started but never confirmed — must stay distinguishable from absent.
+        cs.m2_literature = {"papers": [{"title": "p"} for _ in range(50)]}
+        cs.m5_writing = {"chapters": {"c1": "x" * 100_000}}
+        db.commit()
+
+    body = client.post("/api/v1/projects/list").json()
+    assert len(body) == 1
+    store = body[0]["context_store"]
+
+    # Status survives: confirmed slice reports its timestamp...
+    assert store["m1_topic"] == {"confirmed_at": "2026-01-01T00:00:00Z"}
+    # ...an unconfirmed-but-present slice is an object with a null timestamp...
+    assert store["m2_literature"] == {"confirmed_at": None}
+    # ...and an absent slice stays None (never {} or a stub).
+    assert store["m3_design"] is None
+
+    # Content does NOT: no slice body leaks through, at any depth.
+    assert "research_title" not in store["m1_topic"]
+    assert store["m5_writing"] == {"confirmed_at": None}
+    assert "x" * 1000 not in client.post("/api/v1/projects/list").text
+
+    # The single-project read still carries the full slices.
+    full = client.post(f"/api/v1/projects/{pid}").json()["context_store"]
+    assert full["m1_topic"]["research_title"] == "T"
+    assert len(full["m5_writing"]["chapters"]["c1"]) == 100_000
