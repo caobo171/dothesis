@@ -573,7 +573,8 @@ def reexport(
     sections = sections_from_m5_slice(m5)
     references = (cs.m2_literature or {}).get("literature_sources") or []
     language = (cs.m1_topic or {}).get("language") or "vi"
-    artifacts = run_export(sections, str(project_id), references=references, language=language)
+    artifacts = run_export(sections, str(project_id), references=references, language=language,
+                           title=(cs.m1_topic or {}).get("research_title"))
 
     m5["export_artifacts"] = artifacts
     cs.m5_writing = m5

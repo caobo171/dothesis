@@ -116,13 +116,18 @@ def test_compose_and_export_calls_run_export(monkeypatch):
     called = {}
     # compose_and_export calls run_export THROUGH the m5_writing module (not a
     # name bound at import), so patching m5.run_export intercepts it.
+    # **kw, not a fixed signature: a stub that pins the caller's arguments as
+    # they were fails the moment a real argument is added, and this one hid the
+    # fact that no caller passed the store run_export reads the cover title off.
     monkeypatch.setattr(m5, "run_export",
-                        lambda sections, pid, references=None, language="en":
-                        called.update(pid=pid, n=len(sections)) or
+                        lambda sections, pid, **kw:
+                        called.update(pid=pid, n=len(sections), cs=kw.get("context_store")) or
                         [{"kind": "pdf", "s3_key": f"projects/{pid}/x.pdf", "size_bytes": 1}])
-    arts = ce.compose_and_export({"m1_topic": {}}, "partner-abc",
+    arts = ce.compose_and_export({"m1_topic": {"research_title": "T"}}, "partner-abc",
                                  chapters=["results"], language="en")
-    assert called == {"pid": "partner-abc", "n": 1}
+    assert called["pid"] == "partner-abc" and called["n"] == 1
+    # The store has to reach run_export or the cover page has no title.
+    assert called["cs"] == {"m1_topic": {"research_title": "T"}}
     assert arts[0]["kind"] == "pdf"
 
 

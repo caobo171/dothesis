@@ -327,6 +327,9 @@ def make_writing_tools(store) -> list:
             try:
                 artifacts = run_export(
                     built, str(project_id), references=references, language=language,
+                    # Without this the cover of a module-scoped export is built
+                    # from title=None. `title` is already resolved above.
+                    title=title,
                 )
             except Exception as e:
                 logger.exception("export_docx(scope=%s): run_export failed", scope_tag)

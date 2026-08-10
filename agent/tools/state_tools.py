@@ -146,6 +146,18 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
         Do this even mid-conversation, even if you are working in another
         module: it is one key and it costs the student nothing to be wrong about
         later, whereas a whole thesis in the wrong language costs them a rewrite.
+
+        COVER PAGE. M1 owns a `cover` dict for the title page: author,
+        institution, faculty, department, degree, project_type, advisor,
+        second_examiner, student_id, location. Record whatever the student
+        mentions in passing — their name, their university, their supervisor —
+        as M1 {"cover": {...}}; it merges, so you can add fields one at a time.
+
+        NEVER invent one. A plausible-looking wrong university on a submitted
+        cover page is worse than a missing line, and the exporter simply omits
+        what it does not have. Before the first full export, ask once for the
+        pieces you are missing — name, university, department, degree,
+        supervisor — in a single question, not one at a time.
         """
         # This wrapper is the MODEL-facing edge, so strip NON_CONTENT_KEYS here
         # — the same guard import_route.py applies at the client-facing edge.

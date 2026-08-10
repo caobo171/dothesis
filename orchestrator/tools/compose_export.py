@@ -240,4 +240,8 @@ def compose_and_export(
     # (or any late rebinding) is honoured — a frozen import-time name would not be.
     return m5_writing.run_export(
         sections, str(project_id), references=references or None, language=language,
+        # run_export reads the thesis title off m1_topic when the caller does
+        # not name one. Passing the store is what makes the cover page say
+        # anything other than "None".
+        context_store=context_store,
     )

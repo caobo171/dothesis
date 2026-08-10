@@ -91,7 +91,17 @@ def insert_academic_structure(
 
 
 def _find_title_block(doc: Document):
-    """Find Title and Date paragraph indices."""
+    """Find Title and Date paragraph indices.
+
+    The Date style is not reliable — _center_title_block below says so in its
+    own docstring and works around it, but this returned None and
+    _insert_metadata_after_date gives up on None. So on every export where
+    pandoc emitted the date as Normal (which is what the reference document
+    produces here), the entire lower half of the cover page — degree, project
+    type, supervisor, student id — was silently dropped while the institution
+    block above the title rendered fine. Same fallback as the centring pass: the
+    last non-empty paragraph of the cover, i.e. before the first Heading.
+    """
     title_idx = None
     date_idx = None
 
@@ -102,6 +112,18 @@ def _find_title_block(doc: Document):
         elif style == 'Date':
             date_idx = i
             break
+
+    if date_idx is None and title_idx is not None:
+        last = None
+        for j in range(title_idx + 1, min(len(doc.paragraphs), title_idx + 10)):
+            style = doc.paragraphs[j].style.name if doc.paragraphs[j].style else ""
+            if style.startswith("Heading"):
+                break
+            if doc.paragraphs[j].text.strip():
+                last = j
+        # Only when something actually follows the title — inserting the degree
+        # block directly under a bare title would read as part of the title.
+        date_idx = last
 
     return title_idx, date_idx
 

@@ -2274,13 +2274,20 @@ def run_export(sections: list[dict], project_id: str,
             sections = ensure_rendered(sections, context_store, language)
         except Exception:
             logger.debug("run_export: ensure_rendered skipped", exc_info=True)
+    # Take the title off the store when the caller did not pass one — which is
+    # ALL SEVEN of them. `title` has been an optional parameter that nothing has
+    # ever supplied, so the cover page has been built from None since it was
+    # written. M1 has had the real title the whole time.
+    if not title and isinstance(context_store, dict):
+        title = ((context_store.get("m1_topic") or {}).get("research_title") or None)
     # Localize an English title onto a Vietnamese cover (M1 sometimes stores the
     # title in English despite language=vi). Read-side only; leaves the M1 slice
     # untouched. Done here so both the citeproc and plain paths get the same title.
     title = _localize_title(title, language)
     if references:
         try:
-            return _run_export_citeproc(sections, pid, references, language, title)
+            return _run_export_citeproc(sections, pid, references, language, title,
+                                        cover_fields(context_store, language))
         except Exception:
             logger.exception("citeproc export failed — falling back to plain render")
 
@@ -2342,15 +2349,62 @@ def _style_link_runs(docx_path: str) -> None:
         doc.save(docx_path)
 
 
+# Cover-page fields, in the YAML names engine.utils.export_professional already
+# reads (it builds PDFGenerationOptions from the markdown metadata when no
+# options object is passed, and docx_post_processor turns those into the
+# institution block above the title and the degree/supervisor block below the
+# date). The whole cover machinery was already there; nothing ever fed it.
+#
+# `degree` and `advisor` are the engine's names for course/instructor. Order
+# matters only for readability of the emitted YAML.
+_COVER_FIELDS = ("author", "institution", "faculty", "department", "degree",
+                 "project_type", "advisor", "second_examiner", "student_id",
+                 "location")
+
+# What a thesis is, per M1's research_type, when the student hasn't said. Used
+# only to fill `project_type` — the line a cover page reads as "A Master's
+# Thesis". Never guesses the degree, the university or the supervisor: those are
+# facts about the student, and a plausible-looking wrong university on a cover
+# page is worse than a missing line.
+_PROJECT_TYPE = {
+    "en": {"quantitative": "A Master's Thesis", "qualitative": "A Master's Thesis",
+           "mixed": "A Master's Thesis"},
+    "vi": {"quantitative": "Luận văn Thạc sĩ", "qualitative": "Luận văn Thạc sĩ",
+           "mixed": "Luận văn Thạc sĩ"},
+}
+
+
+def cover_fields(context_store: dict | None, language: str = "en") -> dict:
+    """Title-page facts for this project: whatever M1's `cover` block holds,
+    plus the few we can derive from M1 itself.
+
+    Explicit values always win — this only fills a blank.
+    """
+    m1 = (context_store or {}).get("m1_topic") or {}
+    cover = m1.get("cover") if isinstance(m1.get("cover"), dict) else {}
+    out = {k: v for k, v in cover.items() if k in _COVER_FIELDS and str(v or "").strip()}
+    lang = "vi" if str(language).lower().startswith("vi") else "en"
+    if not out.get("department") and str(m1.get("field") or "").strip():
+        out["department"] = str(m1["field"]).strip()
+    if not out.get("project_type"):
+        rt = str(m1.get("research_type") or "").strip().lower()
+        default = _PROJECT_TYPE[lang].get(rt)
+        if default:
+            out["project_type"] = default
+    return out
+
+
 def _title_block_frontmatter_lines(title: str | None, language: str,
-                                   author: str | None = None,
-                                   institution: str | None = None) -> list[str]:
+                                   cover: dict | None = None) -> list[str]:
     """YAML lines for a Pandoc title block → a real cover page. Emits nothing
     without a title (no title block is better than an empty one). Always pairs
     the title with a date, because docx_post_processor._find_title_block needs
     both a Title and a Date paragraph to build the cover."""
     def esc(s):
-        return str(s).replace("\\", "\\\\").replace('"', '\\"').strip()
+        # `str(None)` is "None" — five characters, truthy, and it went straight
+        # onto the cover page of every export as the thesis title. The guard
+        # below was written to catch exactly this and could never fire.
+        return "" if s is None else str(s).replace("\\", "\\\\").replace('"', '\\"').strip()
 
     t = esc(title)
     if not t:
@@ -2359,15 +2413,16 @@ def _title_block_frontmatter_lines(title: str | None, language: str,
     year = datetime.now().year
     date = f"Năm {year}" if str(language).lower().startswith("vi") else str(year)
     lines = [f'title: "{t}"', f'date: "{date}"']
-    if author and esc(author):
-        lines.append(f'author: "{esc(author)}"')
-    if institution and esc(institution):
-        lines.append(f'institution: "{esc(institution)}"')
+    for key in _COVER_FIELDS:
+        v = esc((cover or {}).get(key))
+        if v:
+            lines.append(f'{key}: "{v}"')
     return lines
 
 
 def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict],
-                         language: str = "en", title: str | None = None) -> list[dict]:
+                         language: str = "en", title: str | None = None,
+                         cover: dict | None = None) -> list[dict]:
     """Render DOCX with pandoc citeproc (clickable citations + auto bibliography),
     then convert that DOCX to PDF via LibreOffice so both formats match."""
     csl_items, ly_to_key = _assign_citation_keys(references)
@@ -2395,7 +2450,7 @@ def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict],
     # regardless of which inline [@key]s matched). populate_toc → filled TOC.
     # toc-title makes the TOC heading match the document language.
     toc_title = "Mục lục" if str(language).lower().startswith("vi") else "Contents"
-    _fm = _title_block_frontmatter_lines(title, language) + \
+    _fm = _title_block_frontmatter_lines(title, language, cover) + \
         ["nocite: |", "  @*", f'toc-title: "{toc_title}"']
     frontmatter = "---\n" + "\n".join(_fm) + "\n---"
     _export_docx_via_engine(body, str(docx_local), bibliography=bib_path,

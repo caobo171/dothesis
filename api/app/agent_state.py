@@ -436,7 +436,9 @@ class DbProjectStateStore(ProjectStateStore):
                     )
                     return
 
-            artifacts = run_export(sections, str(self.project_id), references=references, language=language)
+            artifacts = run_export(sections, str(self.project_id), references=references,
+                                   language=language,
+                                   title=(cs.m1_topic or {}).get("research_title"))
             self.persist_export_artifacts(artifacts)
             # F5: auto surface (headless M5 done-hook) export completed. Emitted
             # here rather than in job_runner because this IS the auto-mode export

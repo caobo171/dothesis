@@ -35,6 +35,13 @@ SLICE_OWNERSHIP: dict[str, list[str]] = {
     "M1": ["research_title", "research_questions", "decisions",
            "language", "field", "research_type", "objectives",
            "target_population", "scope", "user_context",
+           # Title-page facts: author, institution, faculty, department,
+           # degree, advisor, second_examiner, student_id, project_type,
+           # location. Owned by M1 so the agent can record them when the
+           # student says them and both stores round-trip them; the exporter
+           # turns them into the cover page's YAML frontmatter. NON_EARNING —
+           # knowing a student's university is not research progress.
+           "cover",
            # advisory early sample-size/operationalizability estimate (vision
            # §3.1); advertised in the skill slice map, unlike `decisions`.
            "feasibility"],
@@ -114,7 +121,7 @@ NON_CONTENT_KEYS = {"decisions", "analysis_provenance"}
 # make every project M1-done-eligible on a 2-letter locale code, and under
 # headless budget pressure the done-gate is the only thing between a stalling
 # run and five hollow-green modules. Done must be earned, not narrated.
-NON_EARNING_KEYS = {"language", "user_context"}
+NON_EARNING_KEYS = {"language", "user_context", "cover"}
 
 # Keep history bounded — old snapshots beyond this are dropped oldest-first.
 # 50 commits ≈ a full thesis project's worth of confirmed decisions.
