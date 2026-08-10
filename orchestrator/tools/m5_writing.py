@@ -2742,7 +2742,10 @@ def _weave_verified_blocks(chapter_name: str, prose: str, context_slice: dict,
     ar = cs.get("results") or cs.get("analysis_results")
     blocks = []
     if chapter_name == "results":
-        blocks = render_results_tables(ar, language)
+        # host_prose so the rendered captions continue the chapter's own table
+        # numbering instead of restarting at 4.1 inside a chapter that already
+        # has one.
+        blocks = render_results_tables(ar, language, host_prose=prose)
     elif chapter_name == "methodology":
         b = render_cleaning_section(ar, language)
         blocks = [b] if b else []

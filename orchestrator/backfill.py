@@ -456,18 +456,17 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
     module can only add.
     """
     from orchestrator.artifacts import (
-        MODULE_TO_ARTIFACT, _ARTIFACT_BY_KEY, dod_design_structural,
+        MODULE_TO_ARTIFACT, _ARTIFACT_BY_KEY, dod_design_structural, gate_for,
     )
     from orchestrator.state import (
         _MODULE_TO_FIELD, _slice_has_content, get_module_slice,
     )
 
     def _gate_for(artifact: str):
-        # design uses the structural gate (dod_design_structural) everywhere in
-        # this module — keep the two selections identical or a module could be
-        # targeted by one rule and graded by the other.
-        return {"design": dod_design_structural}.get(
-            artifact, _ARTIFACT_BY_KEY[artifact].dod)
+        # One shared selection (orchestrator.artifacts.gate_for) rather than a
+        # local copy: this used to be duplicated here and in the chat router,
+        # each warning the other not to drift.
+        return gate_for(artifact)
 
     def _content(module: str) -> bool:
         v = getattr(context_store, _MODULE_TO_FIELD[module], None)

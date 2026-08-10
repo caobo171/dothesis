@@ -45,18 +45,47 @@ SLICE_OWNERSHIP: dict[str, list[str]] = {
            # advisory early sample-size/operationalizability estimate (vision
            # §3.1); advertised in the skill slice map, unlike `decisions`.
            "feasibility"],
-    "M2": ["literature_sources", "research_gaps", "decisions"],
+    # Everything dod_literature grades on. It requires research_state_summary,
+    # theoretical_framework, literature_review_doc, research_gaps AND
+    # citation_list; M2 owned exactly one of those five, so commit_slice
+    # REJECTED the other four and load() never showed them. The agent could not
+    # bring M2 to done on the DoD's terms no matter what it wrote — only
+    # commit_reconstructed could, through its unowned-key merge. That is why a
+    # literature module only ever completed by import. (dod_analysis's docstring
+    # already describes this same disease in M4 and works around it with an
+    # escape hatch; the cure is for the two maps to agree.)
+    "M2": ["literature_sources", "citation_list", "research_gaps",
+           "research_state_summary", "theoretical_framework",
+           "literature_review_doc", "decisions"],
     # sample_plan / cmb_plan / missing_data_plan added for the F8 methods
     # pre-flight: commit_slice must be able to WRITE them (they're M3 design
     # decisions), and preflight_check reads them to gate M3->M4 readiness.
+    #
+    # paradigm / design / tool / sampling_strategy / target_sample_size /
+    # themes / interview_guide / purposive_criteria / mixed_design_type are the
+    # keys dod_design grades on — TOP-LEVEL, not nested under `methodology`.
+    # None of them were owned, so the same wall as M2: nine graded keys the
+    # agent was forbidden to write.
     "M3": ["conceptual_model", "hypotheses", "methodology", "instrument",
-           "sample_plan", "cmb_plan", "missing_data_plan", "decisions"],
+           "sample_plan", "cmb_plan", "missing_data_plan",
+           "paradigm", "design", "tool", "sampling_strategy",
+           "target_sample_size", "mixed_design_type",
+           "themes", "interview_guide", "purposive_criteria", "decisions"],
     # field_it_* added for F7 results ingestion: fielded survey responses +
     # quality flags land in M4 (where F8's Output Sanity Layer reads). Making
     # them M4-owned is what lets DbProjectStateStore._save persist them into the
     # m4_analysis column automatically — the same mechanism as analysis_results,
     # so there is no Db-specific write path to forget (project_db_store_persistence_gap).
-    "M4": ["analysis_outline", "analysis_results",
+    #
+    # data_type_detected / results / qual_codes / qual_themes complete
+    # dod_analysis. Its docstring names the consequence of their absence
+    # exactly: "there is no way for them to ever arrive — the module sat
+    # in_progress permanently while the agent asked the student to plan an
+    # analysis they had already run". `results` is the engine's key and
+    # `analysis_results` the agent's; both are owned rather than unified,
+    # because renaming a persisted key is a migration, not a bug fix.
+    "M4": ["analysis_outline", "analysis_results", "data_type_detected",
+           "results", "qual_codes", "qual_themes",
            "field_it_collection_id", "field_it_responses", "field_it_quality",
            "analysis_provenance", "decisions"],
     "M5": ["final_sections", "decisions"],
@@ -121,7 +150,15 @@ NON_CONTENT_KEYS = {"decisions", "analysis_provenance"}
 # make every project M1-done-eligible on a 2-letter locale code, and under
 # headless budget pressure the done-gate is the only thing between a stalling
 # run and five hollow-green modules. Done must be earned, not narrated.
-NON_EARNING_KEYS = {"language", "user_context", "cover"}
+NON_EARNING_KEYS = {
+    "language", "user_context", "cover",
+    # Classifications and single scalars, newly owned so their module's DoD can
+    # be satisfied at all — but a one-word answer is not a finished module. Left
+    # earning, `paradigm: "quantitative"` alone would flip M3 green, which is
+    # weaker than the gate was before these keys existed.
+    "paradigm", "design", "tool", "sampling_strategy", "target_sample_size",
+    "mixed_design_type", "data_type_detected",
+}
 
 # Keep history bounded — old snapshots beyond this are dropped oldest-first.
 # 50 commits ≈ a full thesis project's worth of confirmed decisions.

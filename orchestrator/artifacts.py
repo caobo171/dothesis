@@ -280,6 +280,23 @@ ARTIFACTS: tuple[Artifact, ...] = (
 
 _ARTIFACT_BY_KEY = {a.key: a for a in ARTIFACTS}
 
+# Artifacts graded by something other than their registry DoD. `design` is the
+# only one: a RECONSTRUCTED design is judged on its skeleton, because
+# reconstruction correctly declines to fabricate the detail fields.
+_GATE_OVERRIDES = {"design": dod_design_structural}
+
+
+def gate_for(artifact: str):
+    """The DoD that decides whether `artifact` is complete.
+
+    Public because this choice had two identical copies — one in
+    orchestrator/backfill.py, one in api/app/routers/chat.py — each carrying its
+    own comment warning that they must stay identical, which is the surest sign
+    a rule wants one home. A third caller (the commit-time advisory in
+    agent/tools/state_tools.py) would have made three.
+    """
+    return _GATE_OVERRIDES.get(artifact, _ARTIFACT_BY_KEY[artifact].dod)
+
 # Maps each context_store slice to the graph module that owns it. Used to turn
 # an artifact-level planner decision into a module-level routing target.
 _SLICE_TO_MODULE = {

@@ -47,24 +47,65 @@ _HEADERS = {
            "mean": "Trung bình", "sd": "Độ lệch chuẩn", "n": "n", "stage": "Bước",
            "removed": "Loại bỏ"},
 }
+# Caption LABELS, without a number. The number is decided at render time —
+# see _caption / renumber_from.
 _CAPTIONS = {
-    "en": {"measurement_model": "Table 4.1 — Measurement model: reliability and convergent validity",
-           "scale_reliability": "Table 4.1 — Scale reliability",
-           "discriminant_validity": "Table 4.2 — Discriminant validity",
-           "model_fit": "Table 4.2 — Model fit indices",
-           "structural_paths": "Table 4.3 — Structural model: hypothesis tests",
-           "descriptives": "Table 4.0 — Sample descriptives",
-           "r2_q2": "Table 4.4 — Explanatory and predictive power (R² / Q²)",
-           "data_cleaning": "Table 3.1 — Data screening summary"},
-    "vi": {"measurement_model": "Bảng 4.1 — Mô hình đo lường: độ tin cậy và giá trị hội tụ",
-           "scale_reliability": "Bảng 4.1 — Độ tin cậy thang đo",
-           "discriminant_validity": "Bảng 4.2 — Giá trị phân biệt",
-           "model_fit": "Bảng 4.2 — Các chỉ số độ phù hợp mô hình",
-           "structural_paths": "Bảng 4.3 — Mô hình cấu trúc: kiểm định giả thuyết",
-           "descriptives": "Bảng 4.0 — Thống kê mô tả mẫu",
-           "r2_q2": "Bảng 4.4 — Năng lực giải thích và dự báo (R² / Q²)",
-           "data_cleaning": "Bảng 3.1 — Tóm tắt sàng lọc dữ liệu"},
+    "en": {"measurement_model": "Measurement model: reliability and convergent validity",
+           "scale_reliability": "Scale reliability",
+           "discriminant_validity": "Discriminant validity",
+           "model_fit": "Model fit indices",
+           "structural_paths": "Structural model: hypothesis tests",
+           "descriptives": "Sample descriptives",
+           "r2_q2": "Explanatory and predictive power (R² / Q²)",
+           "data_cleaning": "Data screening summary"},
+    "vi": {"measurement_model": "Mô hình đo lường: độ tin cậy và giá trị hội tụ",
+           "scale_reliability": "Độ tin cậy thang đo",
+           "discriminant_validity": "Giá trị phân biệt",
+           "model_fit": "Các chỉ số độ phù hợp mô hình",
+           "structural_paths": "Mô hình cấu trúc: kiểm định giả thuyết",
+           "descriptives": "Thống kê mô tả mẫu",
+           "r2_q2": "Năng lực giải thích và dự báo (R² / Q²)",
+           "data_cleaning": "Tóm tắt sàng lọc dữ liệu"},
 }
+# Fallback numbering, used when nothing tells us what the host chapter already
+# contains — a chapter we composed ourselves starts at 4.0.
+_DEFAULT_NUMBER = {"descriptives": "4.0", "measurement_model": "4.1",
+                   "scale_reliability": "4.1", "discriminant_validity": "4.2",
+                   "model_fit": "4.2", "structural_paths": "4.3", "r2_q2": "4.4",
+                   "data_cleaning": "3.1"}
+_TABLE_WORD = {"en": "Table", "vi": "Bảng"}
+
+# "Bảng 4.14", "Table 4.3:", "Bang 4.2 -" … at the start of a line or after the
+# bold marker a caption uses.
+_TABLE_NUM_RE = re.compile(r"(?:Bảng|Bang|Table)\s+(\d+)\.(\d+)", re.IGNORECASE)
+
+
+def _caption(kind: str, language: str, number: str | None = None) -> str:
+    caps = _CAPTIONS.get(language, _CAPTIONS["en"])
+    word = _TABLE_WORD["vi"] if str(language).lower().startswith("vi") else _TABLE_WORD["en"]
+    return f"{word} {number or _DEFAULT_NUMBER[kind]} — {caps[kind]}"
+
+
+def next_table_number(prose: str, default: str) -> str:
+    """The number the NEXT table in `prose` should carry.
+
+    A rendered table captioned "Bảng 4.1" dropped into a chapter the student
+    wrote — one that already runs to Bảng 4.14 — gives the document two Bảng 4.1
+    and a supervisor a reason to send it back. Continue their sequence instead:
+    read the highest number already in the chapter and take the next one, in the
+    chapter they are numbered under, not ours.
+
+    Falls back to `default` when the prose has no numbered table (a chapter we
+    composed, which is the case the fixed numbers were written for).
+    """
+    found = _TABLE_NUM_RE.findall(prose or "")
+    if not found:
+        return default
+    chapter = max(int(c) for c, _ in found)
+    highest = max(int(i) for c, i in found if int(c) == chapter)
+    return f"{chapter}.{highest + 1}"
+
+
 _SOURCE_LINE = {"en": "*Source: rendered from persisted analysis results (DoThesis).*",
                 "vi": "*Nguồn: kết xuất từ kết quả phân tích đã lưu (DoThesis).*"}
 _FIT_THRESHOLDS = {"cfi": "≥ 0.90", "tli": "≥ 0.90", "rmsea": "≤ 0.08",
@@ -198,7 +239,7 @@ def detect_family(analysis_results: Any, methodology: Optional[str] = None) -> O
 
 # --- results tables ---------------------------------------------------------
 
-def _measurement_block(ar, family, language):
+def _measurement_block(ar, family, language, num=None):
     mm = ar.get("measurement_model")
     if not (isinstance(mm, list) and mm):
         return None
@@ -224,20 +265,20 @@ def _measurement_block(ar, family, language):
             first = False
     if not rows:
         return None
-    caps = _CAPTIONS.get(language, _CAPTIONS["en"])
     # "…reliability and convergent validity" is a claim about AVE. With no CR
     # and no AVE this is a Cronbach's α table and nothing more, and captioning
     # it as convergent validity asserts a check the study never ran.
     has_convergent = any(isinstance(c, dict) and (c.get("ave") is not None
                                                   or c.get("composite_reliability") is not None)
                          for c in mm)
-    caption = caps["measurement_model"] if has_convergent else caps["scale_reliability"]
+    caption = _caption("measurement_model" if has_convergent else "scale_reliability",
+                       language, num)
     body = f"**{caption}**\n\n" + _table_pruned(
         [H["construct"], H["item"], loading_hdr, H["alpha"], H["cr"], H["ave"]], rows)
     return _wrap("measurement_model", mm, body, language)
 
 
-def _discriminant_block(ar, language):
+def _discriminant_block(ar, language, num=None):
     dv = ar.get("discriminant_validity")
     if not (isinstance(dv, dict) and isinstance(dv.get("matrix"), list) and dv["matrix"]):
         return None
@@ -252,13 +293,13 @@ def _discriminant_block(ar, language):
         label = _fmt(labels[i]) if i < len(labels) else "—"
         rows.append([label] + [_fmt(c) for c in r])
     method = dv.get("method", "")
-    caption = _CAPTIONS.get(language, _CAPTIONS["en"])["discriminant_validity"]
+    caption = _caption("discriminant_validity", language, num)
     title = f"**{caption}" + (f" ({method})" if method else "") + "**"
     body = title + "\n\n" + _table([""] + [_fmt(l) for l in labels], rows)
     return _wrap("discriminant_validity", dv, body, language)
 
 
-def _model_fit_block(ar, language):
+def _model_fit_block(ar, language, num=None):
     sm = ar.get("structural_model") if isinstance(ar.get("structural_model"), dict) else {}
     fit = ar.get("fit") if isinstance(ar.get("fit"), dict) else {}
     src = {k: (fit.get(k) if fit.get(k) is not None else sm.get(k)) for k in _FIT_KEYS}
@@ -267,12 +308,12 @@ def _model_fit_block(ar, language):
     H = _H(language)
     rows = [[k.upper() if k != "chi2_df" else "χ²/df", _fmt(src[k]), _FIT_THRESHOLDS[k]]
             for k in _FIT_KEYS if isinstance(src[k], (int, float))]
-    caption = _CAPTIONS.get(language, _CAPTIONS["en"])["model_fit"]
+    caption = _caption("model_fit", language, num)
     body = f"**{caption}**\n\n" + _table([H["index"], H["value"], H["threshold"]], rows)
     return _wrap("model_fit", src, body, language)
 
 
-def _structural_block(ar, family, language):
+def _structural_block(ar, family, language, num=None):
     tests = ar.get("hypothesis_tests")
     if not (isinstance(tests, list) and tests):
         return None
@@ -301,12 +342,12 @@ def _structural_block(ar, family, language):
             row.append(_fmt(nums.get("f2")))
         row.append(_fmt(t.get("decision")))
         rows.append(row)
-    caption = _CAPTIONS.get(language, _CAPTIONS["en"])["structural_paths"]
+    caption = _caption("structural_paths", language, num)
     body = f"**{caption}**\n\n" + _table_pruned(headers, rows)
     return _wrap("structural_paths", tests, body, language)
 
 
-def _r2q2_block(ar, family, language):
+def _r2q2_block(ar, family, language, num=None):
     sm = ar.get("structural_model") if isinstance(ar.get("structural_model"), dict) else {}
     r2 = sm.get("r2") if isinstance(sm.get("r2"), dict) else {}
     q2 = sm.get("q2") if isinstance(sm.get("q2"), dict) else {}
@@ -317,7 +358,7 @@ def _r2q2_block(ar, family, language):
     show_q2 = bool(q2) and family == "pls_sem"
     headers = [H["construct"], H["r2"]] + ([H["q2"]] if show_q2 else [])
     rows = [[_fmt(c), _fmt(r2.get(c))] + ([_fmt(q2.get(c))] if show_q2 else []) for c in cons]
-    caption = _CAPTIONS.get(language, _CAPTIONS["en"])["r2_q2"]
+    caption = _caption("r2_q2", language, num)
     # The caption is fixed text promising "(R² / Q²)". On every study without a
     # Q² — every regression, which is most of them — it announced a predictive
     # metric that is not in the table and was never computed. Say what is there.
@@ -327,7 +368,7 @@ def _r2q2_block(ar, family, language):
     return _wrap("r2_q2", {"r2": r2, "q2": q2 if show_q2 else {}}, body, language)
 
 
-def _descriptives_block(ar, language):
+def _descriptives_block(ar, language, num=None):
     d = ar.get("descriptives")
     if not (isinstance(d, dict) and isinstance(d.get("by_item"), list) and d["by_item"]):
         return None
@@ -336,14 +377,22 @@ def _descriptives_block(ar, language):
             for r in d["by_item"] if isinstance(r, dict)]
     if not rows:
         return None
-    caption = _CAPTIONS.get(language, _CAPTIONS["en"])["descriptives"]
+    caption = _caption("descriptives", language, num)
     n = d.get("n")
     ncap = f" (n = {_fmt(n)})" if isinstance(n, (int, float)) else ""
     body = f"**{caption}{ncap}**\n\n" + _table([H["item"], H["mean"], H["sd"]], rows)
     return _wrap("descriptives", d, body, language)
 
 
-def render_results_tables(analysis_results: Any, language: str = "en") -> List[dict]:
+def render_results_tables(analysis_results: Any, language: str = "en",
+                          host_prose: str | None = None) -> List[dict]:
+    """The Chapter 4 tables.
+
+    `host_prose` is the chapter these blocks are going INTO, when the caller
+    knows it. Its only use is numbering: a chapter the student wrote already
+    numbers its own tables, and dropping a "Bảng 4.1" into one that runs to
+    Bảng 4.14 hands the document two tables with the same number.
+    """
     try:
         ar = analysis_results
         if not isinstance(ar, dict):
@@ -351,15 +400,37 @@ def render_results_tables(analysis_results: Any, language: str = "en") -> List[d
         fam = detect_family(ar)
         if fam is None:
             return []
+        # Sequential numbering continuing the host chapter, or the fixed
+        # defaults when there is no host to continue.
+        seq = None
+        if host_prose:
+            start = next_table_number(host_prose, "")
+            if start:
+                chapter, idx = start.split(".")
+                seq = (int(chapter), int(idx))
+
         blocks = []
-        for b in (_descriptives_block(ar, language),
-                  _measurement_block(ar, fam, language),
-                  _discriminant_block(ar, language) if fam == "pls_sem" else None,
-                  _model_fit_block(ar, language) if fam == "cb_sem" else None,
-                  _structural_block(ar, fam, language),
-                  _r2q2_block(ar, fam, language)):
+
+        def _emit(build):
+            """Number a block only if it turns out to exist — several of these
+            return None for a study that lacks the data, and consuming a number
+            for one of them would leave a hole in the chapter's sequence."""
+            nonlocal seq
+            n = f"{seq[0]}.{seq[1]}" if seq else None
+            b = build(n)
             if b:
                 blocks.append(b)
+                if seq:
+                    seq = (seq[0], seq[1] + 1)
+
+        _emit(lambda n: _descriptives_block(ar, language, n))
+        _emit(lambda n: _measurement_block(ar, fam, language, n))
+        if fam == "pls_sem":
+            _emit(lambda n: _discriminant_block(ar, language, n))
+        if fam == "cb_sem":
+            _emit(lambda n: _model_fit_block(ar, language, n))
+        _emit(lambda n: _structural_block(ar, fam, language, n))
+        _emit(lambda n: _r2q2_block(ar, fam, language, n))
         return blocks
     except Exception:
         logger.debug("render_results_tables failed", exc_info=True)
@@ -368,7 +439,8 @@ def render_results_tables(analysis_results: Any, language: str = "en") -> List[d
 
 # --- cleaning section -------------------------------------------------------
 
-def render_cleaning_section(analysis_results: Any, language: str = "en") -> Optional[dict]:
+def render_cleaning_section(analysis_results: Any, language: str = "en",
+                            num: str | None = None) -> Optional[dict]:
     try:
         ar = analysis_results if isinstance(analysis_results, dict) else {}
         ds = ar.get("data_screening")
@@ -390,7 +462,7 @@ def render_cleaning_section(analysis_results: Any, language: str = "en") -> Opti
         if isinstance(ds.get("n_before"), (int, float)) and isinstance(ds.get("n_after"), (int, float)):
             rows.append(["n retained", f"{_fmt(ds['n_after'])} of {_fmt(ds['n_before'])}"])
         if rows:
-            caption = _CAPTIONS.get(language, _CAPTIONS["en"])["data_cleaning"]
+            caption = _caption("data_cleaning", language, num)
             parts.append(f"**{caption}**\n\n" + _table([H["stage"], H["removed"]], rows))
         if not parts:
             return None
@@ -673,9 +745,11 @@ def ensure_rendered(sections: list, nested_cs: dict, language: str = "en") -> li
                 continue
             have = rendered_kinds(prose)
             if chapter == "results":
-                blocks = [b for b in render_results_tables(ar, language) if b["kind"] not in have]
+                blocks = [b for b in render_results_tables(ar, language, host_prose=prose)
+                          if b["kind"] not in have]
             elif chapter == "methodology":
-                b = render_cleaning_section(ar, language)
+                b = render_cleaning_section(ar, language,
+                                            num=next_table_number(prose, "") or None)
                 blocks = [b] if b and b["kind"] not in have else []
             else:
                 nested = {"m3_design": m3, "m4_analysis": {"analysis_results": ar}}

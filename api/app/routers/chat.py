@@ -355,7 +355,7 @@ def reconstruct(project_id: uuid.UUID, artifact: str,
     their full DoD. Never auto-committed — the student confirms, then /import.
     """
     _owned_project(db, user, project_id)
-    from orchestrator.artifacts import _ARTIFACT_BY_KEY, dod_design_structural
+    from orchestrator.artifacts import _ARTIFACT_BY_KEY, gate_for
     from orchestrator.backfill import reconstruct_artifact
     if artifact not in _ARTIFACT_BY_KEY:
         raise HTTPException(
@@ -364,9 +364,7 @@ def reconstruct(project_id: uuid.UUID, artifact: str,
                               "message": f"unknown artifact: {artifact}"}},
         )
     candidate = reconstruct_artifact(artifact, _orch_context_store(db, project_id))
-    gate = {"design": dod_design_structural}.get(
-        artifact, _ARTIFACT_BY_KEY[artifact].dod)
-    result = gate(candidate)
+    result = gate_for(artifact)(candidate)
     return {"artifact": artifact, "candidate": candidate,
             "ready_to_confirm": result.done, "review": result.gaps}
 

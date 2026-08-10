@@ -129,3 +129,57 @@ def test_a_composed_vietnamese_chapter_is_covered():
         [{"chapter_name": "results", "title": "CHƯƠNG 4: KẾT QUẢ", "prose": "Phân tích."}],
         {"m4_analysis": {"analysis_results": _SPSS}}, "vi")
     assert out[0]["prose"].count("dt-rendered:begin") == 3
+
+
+# --- table numbering ----------------------------------------------------------
+#
+# The captions carried hardcoded numbers ("Bảng 4.1", "Bảng 4.3"). Woven into a
+# chapter the student wrote — one that already runs to Bảng 4.14 — the document
+# ended up with two Bảng 4.1, which is the kind of thing a supervisor sends back
+# over.
+
+from orchestrator.tools.results_render import next_table_number  # noqa: E402
+
+
+_HOST = ("Bảng 4.1: Đặc điểm mẫu khảo sát\n\n| a | b |\n\n"
+         "Bảng 4.9: Kết quả EFA\n\nBảng 4.14: Ma trận tương quan\n")
+
+
+def test_the_next_number_continues_the_chapter():
+    assert next_table_number(_HOST, "4.1") == "4.15"
+
+
+def test_a_chapter_with_no_tables_keeps_the_default():
+    assert next_table_number("Chương này trình bày kết quả.", "4.1") == "4.1"
+    assert next_table_number("", "4.1") == "4.1"
+    assert next_table_number(None, "4.1") == "4.1"
+
+
+def test_english_captions_are_read_too():
+    assert next_table_number("Table 3.2 — Screening\nTable 3.7 — Something", "3.1") == "3.8"
+
+
+def test_the_highest_chapter_wins_over_a_stray_cross_reference():
+    """A results chapter that cites "Bảng 3.2" from the methodology must still
+    number its own tables in chapter 4."""
+    assert next_table_number("as shown in Bảng 3.2\nBảng 4.6: Hồi quy", "4.1") == "4.7"
+
+
+def test_rendered_captions_continue_the_host_chapter():
+    nums = [b["markdown"].split("**")[1].split(" — ")[0] for b in
+            render_results_tables(_SPSS, "vi", host_prose=_HOST)]
+    assert nums == ["Bảng 4.15", "Bảng 4.16", "Bảng 4.17"]
+
+
+def test_a_block_that_renders_nothing_does_not_burn_a_number():
+    """Several builders return None for a study without that data; consuming a
+    number for one would leave a hole in the chapter's sequence."""
+    nums = [b["markdown"].split("**")[1].split(" — ")[0] for b in
+            render_results_tables(_SPSS, "vi", host_prose="Bảng 4.2: X")]
+    assert nums == ["Bảng 4.3", "Bảng 4.4", "Bảng 4.5"]
+
+
+def test_without_a_host_the_fixed_numbers_are_unchanged():
+    """A chapter we composed ourselves has no sequence to continue."""
+    md = _md(_SPSS, "structural_paths", "vi")
+    assert "Bảng 4.3 — " in md

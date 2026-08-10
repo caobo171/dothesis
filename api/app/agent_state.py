@@ -123,7 +123,13 @@ class DbProjectStateStore(ProjectStateStore):
         clean = strip_reconstruction_meta(slice_)
         extra = {k: v for k, v in clean.items() if k not in SLICE_OWNERSHIP[module]}
         column = _MODULE_COLUMN.get(module)
-        if extra and column:
+        # `if extra and column` — the provenance tag rode on there being unowned
+        # keys to merge. It is a fact about the whole slice ("a model inferred
+        # this, the student did not write it"), not about which keys happened to
+        # fall outside SLICE_OWNERSHIP, and widening ownership so M2/M3/M4 could
+        # reach their own DoDs left reconstructions with no extras and therefore
+        # no tag at all. Run whenever there is a column.
+        if column:
             with self.engine.connect() as conn:
                 row = conn.execute(
                     select(DbContextStore.__table__)

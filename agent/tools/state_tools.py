@@ -367,6 +367,31 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
         if _coherence_warnings is not None and isinstance(result, dict):
             key = "coherence" if _coherence_warnings == "unavailable" else "coherence_warnings"
             result = {**result, key: _coherence_warnings}
+        # A module can be `done` by two different definitions and nobody says so.
+        #
+        # commit_slice's own gate is _has_done_content: any one owned earning key
+        # is enough. The DoD in orchestrator/artifacts.py is far stricter — M2
+        # wants a synthesis, a framework, a Chapter 2 draft, a gap and a citation
+        # — and it is the definition the backfill, the roadmap and the export
+        # readiness check all use. So chat could mark M2 done on research_gaps
+        # alone and the student would meet the strict definition later, as a
+        # refusal, with no idea the two ever disagreed.
+        #
+        # Both gates stay as they are: tightening the interactive one would stall
+        # students mid-flow, and loosening the DoD would let a hollow module
+        # through to the export. What was missing is anyone SAYING it. Advisory,
+        # on success only.
+        if confirm_done and isinstance(result, dict):
+            try:
+                from orchestrator.artifacts import MODULE_TO_ARTIFACT, gate_for  # noqa: PLC0415
+                artifact = MODULE_TO_ARTIFACT.get(module)
+                if artifact:
+                    _flat = (store.load() or {}).get("contextStore", {})
+                    _dod = gate_for(artifact)(_flat)
+                    if not _dod.done:
+                        result = {**result, "done_but_incomplete": _dod.gaps}
+            except Exception:
+                logger.debug("commit_slice: DoD advisory skipped", exc_info=True)
         if _kept_imported is not None and isinstance(result, dict):
             result = {**result, "imported_chapters_kept": _kept_imported}
         if _skill_nudge is not None and isinstance(result, dict):
