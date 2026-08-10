@@ -68,10 +68,13 @@ def test_scan_returns_counts_and_charges_nothing(client, monkeypatch):
     monkeypatch.setattr(hd, "scan_docx", lambda b: {
         "ok": True, "body_paragraphs": 132, "headings": 14,
         "short_or_captions": 20, "tables": 6, "passages": 70, "chars": 86_400,
+        "words": 17_000,
     })
     r = _scan(client)
     assert r.status_code == 200
     assert r.json()["chars"] == 86_400
+    # The count partners price on — it must survive the response model.
+    assert r.json()["words"] == 17_000
     assert r.json()["body_paragraphs"] == 132
 
     with Session(get_engine()) as s:

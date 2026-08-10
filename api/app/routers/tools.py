@@ -1206,6 +1206,9 @@ class DocScanOut(BaseModel):
     tables: int = 0
     passages: int = 0
     chars: int = 0
+    # Whitespace-separated tokens in the eligible prose. Partners price on this
+    # — it is the count a student recognises from their own word processor.
+    words: int = 0
     error: str | None = None
     detail: str | None = None
 

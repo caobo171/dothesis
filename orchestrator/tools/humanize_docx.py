@@ -235,6 +235,16 @@ def scan_docx(body: bytes) -> dict:
         "tables": len(doc.tables),
         "passages": len(_batches(eligible)),
         "chars": sum(len(t) for _, t in eligible),
+        # Whitespace-separated tokens across the SAME eligible prose the walk
+        # rewrites — references, headings and captions excluded, so a quote
+        # priced on this counts only work that will actually be done.
+        #
+        # Tokens, not dictionary words, and deliberately: Vietnamese writes one
+        # word as several space-separated syllables ("nghiên cứu"), so this
+        # over-counts a Vietnamese document relative to an English one — which
+        # is right, because the model cost it stands in for scales with
+        # syllables too, not with lexical words.
+        "words": sum(len(t.split()) for _, t in eligible),
     }
 
 

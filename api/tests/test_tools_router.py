@@ -738,6 +738,9 @@ def test_the_reference_list_is_never_rewritten():
     # not be quoted for reference entries that will never be touched.
     scan = scan_docx(buf.getvalue())
     assert scan["body_paragraphs"] == 2      # the body + the appendix, no refs
+    # `words` is what partners charge on, so it has to obey the SAME rule: the
+    # body plus the appendix, and not one token of the bibliography.
+    assert scan["words"] == len(body.split()) + len(appendix.split())
 
     def fake(text, **kw):
         return {"ok": True, "text": "\n\n".join(
