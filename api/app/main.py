@@ -176,6 +176,7 @@ def create_app() -> FastAPI:
         from .routers import m5_editor as m5_editor_router  # SP6.5: editor surface
         from .routers import partner_report as partner_report_router  # partner cross-product report
         from .routers import partner_humanize as partner_humanize_router  # partner .docx humanize
+        from .routers import partner_similarity as partner_similarity_router  # partner .docx similarity
         from .routers import runs as runs_router
         from .routers import uploads as uploads_router
         from .routers import import_route as import_router  # F12: mid-journey state import
@@ -190,6 +191,7 @@ def create_app() -> FastAPI:
         app.include_router(uploads_router.router, prefix="/api/v1")
         app.include_router(partner_report_router.router, prefix="/api/v1")
         app.include_router(partner_humanize_router.router, prefix="/api/v1")
+        app.include_router(partner_similarity_router.router, prefix="/api/v1")
         # F12: reuses uploads' S3 fetch + chat_v3 workspace, so it lives in the orchestrator block.
         app.include_router(import_router.router, prefix="/api/v1")
         # F2: chat-only coaching surface (uses chat_v3 workspace); orchestrator block.
