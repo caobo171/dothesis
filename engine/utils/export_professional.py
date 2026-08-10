@@ -1329,6 +1329,9 @@ def export_docx(
 
         # Build options dict from PDFGenerationOptions for cover page enhancement
         post_options = {}
+        # The cover's fixed words follow the document language, not the app's.
+        if metadata.get('lang'):
+            post_options['language'] = metadata['lang']
         if options:
             if options.institution:
                 post_options['institution'] = options.institution

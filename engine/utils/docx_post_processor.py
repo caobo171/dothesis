@@ -43,7 +43,11 @@ def insert_academic_structure(
             print(f"   ✓ Found title block (Title at {title_idx}, Date at {date_idx})")
 
         # Step 2: Insert institution info BEFORE title
-        if options and options.get('institution'):
+        # ANY of the three, not institution alone: a project that knows only
+        # its department (derived from m1.field, which every project has) had
+        # the whole block dropped and rendered a cover with nothing above the
+        # title.
+        if options and any(options.get(k) for k in ('institution', 'faculty', 'department')):
             _insert_institution_block(doc, title_idx, options, verbose)
             # Recalculate positions after insertion
             title_idx, date_idx = _find_title_block(doc)
@@ -56,6 +60,9 @@ def insert_academic_structure(
             _insert_metadata_after_date(doc, date_idx, options, verbose)
             # Recalculate date position
             _, date_idx = _find_title_block(doc)
+
+        # Step 3b: make the cover look like a cover
+        _polish_cover(doc, options or {}, verbose)
 
         # Step 4: Find end of cover page and insert page break
         cover_end_idx = _find_cover_end(doc)
@@ -146,9 +153,146 @@ def _center_title_block(doc: Document, title_idx, date_idx):
             if doc.paragraphs[j].text.strip():
                 end = j
 
+    defined = {st.style_id for st in doc.styles}
     for i in range(title_idx, end + 1):
         if i < len(doc.paragraphs):
-            doc.paragraphs[i].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _drop_dangling_style(doc.paragraphs[i], defined)
+            _center_hard(doc.paragraphs[i])
+
+
+def _drop_dangling_style(para, defined_ids) -> None:
+    """Remove a `w:pStyle` that names a style the document does not define.
+
+    Pandoc tags the author and the date `Author` and `Date`. The reference
+    document defines neither — grep styles.xml, they are simply absent — so both
+    paragraphs carried a reference to nothing. LibreOffice does not lay those
+    out like the plain centred paragraphs around them: the author and the year
+    sat well left of the title while every line above and below them centred,
+    which is the crooked cover a student sees. Nothing is lost by dropping the
+    reference; it never resolved to any formatting in the first place.
+    """
+    from docx.oxml.ns import qn
+    pPr = para._p.find(qn("w:pPr"))
+    if pPr is None:
+        return
+    for st in pPr.findall(qn("w:pStyle")):
+        if st.get(qn("w:val")) not in defined_ids:
+            pPr.remove(st)
+
+
+def _center_hard(para) -> None:
+    """Centre a paragraph AND clear the indents that decide what it centres in.
+
+    `jc=center` alone is not enough: the paragraph is centred inside whatever box
+    its indents leave, so an inherited indent quietly shifts it off the page's
+    centre line while the XML insists it is centred.
+    """
+    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    pf = para.paragraph_format
+    pf.left_indent = 0
+    pf.right_indent = 0
+    pf.first_line_indent = 0
+
+
+# Blank lines above the cover block. Pandoc starts the title at the top margin,
+# which on a page whose only content is a cover leaves the title jammed against
+# the header and two thirds of the sheet empty underneath.
+_COVER_TOP_BLANKS = 5
+
+
+def _polish_cover(doc: Document, options: Dict, verbose: bool) -> None:
+    """Cosmetic pass over the finished cover. Never raises — a cover that looks
+    plain is a far better outcome than an export that fails."""
+    try:
+        title_idx, _ = _find_title_block(doc)
+        if title_idx is None:
+            return
+        title = doc.paragraphs[title_idx]
+
+        # The reference document's Title style carries a bottom border, so every
+        # cover had a blue rule ruled across it under the title — fine for a
+        # section heading in the body, wrong on a title page. Override it on
+        # this paragraph rather than editing the shared style.
+        _clear_bottom_border(title)
+        # …and single-space it. At the document's 2.0 academic line spacing a
+        # three-line Vietnamese title sprawls down the page.
+        title.paragraph_format.line_spacing = 1.15
+        title.paragraph_format.space_after = Pt(18)
+
+        # "by" / "Học viên thực hiện" above the author, as on a real cover.
+        # The paragraph right after the title, if it is not the date. Looking
+        # for style "Author" found nothing: the style is undefined, so
+        # python-docx reports it as Normal and _drop_dangling_style has by now
+        # removed the reference entirely.
+        author = None
+        for cand in doc.paragraphs[title_idx + 1:title_idx + 3]:
+            txt = cand.text.strip()
+            if txt and not _looks_like_date(txt):
+                author = cand
+                break
+        if author is not None and author.text.strip():
+            lead = author.insert_paragraph_before(_words(options)["by"])
+            _center_hard(lead)
+            for run in lead.runs:
+                run.font.size = Pt(11)
+            title_idx, _ = _find_title_block(doc)
+
+        _move_date_to_foot(doc)
+
+        # Breathing room above everything.
+        first = doc.paragraphs[0]
+        for _ in range(_COVER_TOP_BLANKS):
+            first.insert_paragraph_before("")
+        if verbose:
+            print("   ✓ Polished cover (rule removed, spacing, by-line, date at foot)")
+    except Exception as e:  # noqa: BLE001 — cosmetic only
+        if verbose:
+            print(f"   ⚠️  Cover polish skipped: {e}")
+
+
+def _move_date_to_foot(doc: Document) -> None:
+    """Put the date last on the cover, under the degree and supervisor lines.
+
+    Pandoc emits it directly beneath the author because that is where a title
+    BLOCK puts it, and the degree/supervisor lines are then inserted after it —
+    so the year ended up wedged between the author and "LUẬN VĂN THẠC SĨ". On
+    every thesis cover, the date is the last line.
+    """
+    end = _find_cover_end(doc)
+    if end is None:
+        return
+    paras = doc.paragraphs[:end + 1]
+    date = next((p for p in paras if _looks_like_date(p.text)), None)
+    if date is None or date is paras[-1]:
+        return
+    last = paras[-1]
+    # lxml moves an element that is already in the tree, so this is a move.
+    last._p.addnext(date._p)
+    spacer = date.insert_paragraph_before("")
+    _center_hard(spacer)
+
+
+def _looks_like_date(text: str) -> bool:
+    """A cover date is a bare year, or a year with a word in front of it."""
+    import re as _re
+    return bool(_re.fullmatch(r"(?:Năm\s+)?\d{4}", text.strip(), _re.IGNORECASE))
+
+
+def _clear_bottom_border(para) -> None:
+    """Remove any bottom border the paragraph inherits from its style."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    pPr = para._p.get_or_add_pPr()
+    for existing in pPr.findall(qn("w:pBdr")):
+        pPr.remove(existing)
+    pBdr = OxmlElement("w:pBdr")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "none")
+    bottom.set(qn("w:sz"), "0")
+    bottom.set(qn("w:space"), "0")
+    bottom.set(qn("w:color"), "auto")
+    pBdr.append(bottom)
+    pPr.append(pBdr)
 
 
 def _find_cover_end(doc: Document):
@@ -308,8 +452,33 @@ def _insert_institution_block(doc: Document, title_idx: int, options: Dict, verb
         print(f"   ✓ Added institution block ({insert_count} lines)")
 
 
+# The fixed words on a cover page, per language. These were English literals
+# inside the builder, so a Vietnamese thesis came back with a Vietnamese title,
+# a Vietnamese degree name and "submitted in partial fulfillment of the
+# requirements for the degree of" between them. The Vietnamese wording is the
+# standard on a VN thesis cover ("Người hướng dẫn khoa học" in particular).
+_COVER_WORDS = {
+    "en": {"degree_intro": "submitted in partial fulfillment of the requirements for the degree of",
+           "student_id": "Matriculation No.: {v}",
+           "supervisor": "First Supervisor: {v}",
+           "examiner": "Second Examiner: {v}",
+           "by": "by"},
+    "vi": {"degree_intro": "Nộp để đáp ứng yêu cầu cấp bằng",
+           "student_id": "Mã số học viên: {v}",
+           "supervisor": "Người hướng dẫn khoa học: {v}",
+           "examiner": "Người phản biện: {v}",
+           "by": "Học viên thực hiện"},
+}
+
+
+def _words(options: Dict) -> Dict:
+    lang = str((options or {}).get("language") or "en").lower()
+    return _COVER_WORDS["vi" if lang.startswith("vi") else "en"]
+
+
 def _insert_metadata_after_date(doc: Document, date_idx: int, options: Dict, verbose: bool):
     """Insert supervisor info, student ID, etc. after the date paragraph."""
+    W = _words(options)
     if date_idx is None:
         return
 
@@ -330,7 +499,7 @@ def _insert_metadata_after_date(doc: Document, date_idx: int, options: Dict, ver
     if options.get('course'):
         new_para = _insert_para_after(insert_after, '')
         insert_after = new_para
-        new_para = _insert_para_after(insert_after, 'submitted in partial fulfillment of the requirements for the degree of', size=10)
+        new_para = _insert_para_after(insert_after, W['degree_intro'], size=10)
         insert_after = new_para
         new_para = _insert_para_after(insert_after, options['course'], size=12, bold=True)
         insert_after = new_para
@@ -340,7 +509,7 @@ def _insert_metadata_after_date(doc: Document, date_idx: int, options: Dict, ver
     if options.get('student_id'):
         new_para = _insert_para_after(insert_after, '')
         insert_after = new_para
-        new_para = _insert_para_after(insert_after, f"Matriculation No.: {options['student_id']}", size=10)
+        new_para = _insert_para_after(insert_after, W['student_id'].format(v=options['student_id']), size=10)
         insert_after = new_para
         additions += 2
 
@@ -348,12 +517,12 @@ def _insert_metadata_after_date(doc: Document, date_idx: int, options: Dict, ver
     if options.get('instructor'):
         new_para = _insert_para_after(insert_after, '')
         insert_after = new_para
-        new_para = _insert_para_after(insert_after, f"First Supervisor: {options['instructor']}", size=10)
+        new_para = _insert_para_after(insert_after, W['supervisor'].format(v=options['instructor']), size=10)
         insert_after = new_para
         additions += 2
 
     if options.get('second_examiner'):
-        new_para = _insert_para_after(insert_after, f"Second Examiner: {options['second_examiner']}", size=10)
+        new_para = _insert_para_after(insert_after, W['examiner'].format(v=options['second_examiner']), size=10)
         insert_after = new_para
         additions += 1
 

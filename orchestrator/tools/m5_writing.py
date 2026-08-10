@@ -2412,7 +2412,11 @@ def _title_block_frontmatter_lines(title: str | None, language: str,
     from datetime import datetime  # server-side; real wall clock is fine here
     year = datetime.now().year
     date = f"Năm {year}" if str(language).lower().startswith("vi") else str(year)
-    lines = [f'title: "{t}"', f'date: "{date}"']
+    # `lang` is pandoc's own key AND how the cover post-processor knows which
+    # language its fixed words go in — without it a Vietnamese cover carried
+    # "submitted in partial fulfillment of the requirements for the degree of".
+    lang = "vi" if str(language).lower().startswith("vi") else "en"
+    lines = [f'title: "{t}"', f'date: "{date}"', f'lang: "{lang}"']
     for key in _COVER_FIELDS:
         v = esc((cover or {}).get(key))
         if v:
