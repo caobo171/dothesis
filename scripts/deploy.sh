@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Production deploy for DoThesis on a single Ubuntu server (native, systemd-supervised).
 #
-# What this does, idempotently, against the CURRENT checkout:
+# What this does, idempotently:
 #   0. Preflight — sanity-check the host, .env, and required tooling
+#   0.5 Sync    — fast-forward the checkout to its upstream (SKIP_PULL=1 to skip)
 #   1. System deps — pandoc + libreoffice-writer (M5 export toolchain)
 #   2. API     — (re)build api/.venv, install api + engine deps, run alembic
 #   3. Web     — npm ci + `next build` (NEXT_PUBLIC_* baked in here)
@@ -13,11 +14,14 @@
 # it as a subprocess per run (ORCHESTRATOR_ENABLED), so there is nothing to
 # supervise for it here. LangGraph Studio is dev-only and never deployed.
 #
-# Re-runnable: run it again after `git pull` to ship a new release. Each step is
-# idempotent; systemd restarts the services at the end.
+# Re-runnable: run it again to ship a new release — it pulls first, so there is
+# no separate `git pull` to forget. Each step is idempotent; systemd restarts
+# the services at the end.
 #
 # Usage:
-#   sudo -E ./scripts/deploy.sh             # full deploy (needs root for apt + systemd)
+#   sudo -E ./scripts/deploy.sh             # pull + full deploy (needs root for apt + systemd)
+#   sudo -E SKIP_WEB=1 ./scripts/deploy.sh  # api-only: skips the ~minutes-long next build
+#   sudo -E SKIP_PULL=1 ./scripts/deploy.sh # deploy THIS checkout (rollback to a tag, local test)
 #   APP_USER=deploy ./scripts/deploy.sh     # run services as a non-root user
 #
 # Tunables (env or .env):
@@ -30,6 +34,7 @@
 #   NEXT_PUBLIC_API_BASE  baked into the web bundle          (default: /api/v1)
 #   SKIP_APT=1     skip system-package install (CI / locked-down hosts)
 #   SKIP_WEB=1     skip the web build (api-only deploy)
+#   SKIP_PULL=1    deploy the checkout as-is instead of fast-forwarding it
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -56,6 +61,63 @@ SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
   command -v sudo >/dev/null 2>&1 || die "not root and no sudo available — re-run with sudo -E"
   SUDO="sudo"
+fi
+
+# ---------------------------------------------------------------------------
+# 0.5 Sync the checkout to its remote
+# ---------------------------------------------------------------------------
+# This script used to deploy whatever the checkout happened to hold, and the
+# `git pull` was a step in someone's head. Forget it once and the deploy
+# succeeds, reports "Deploy complete", and ships the OLD code — which is
+# exactly how a shipped feature spent an afternoon 404ing in production while
+# its commits sat on the remote.
+#
+# Fast-forward only, and refuses rather than guesses:
+#   - a dirty tree is someone's uncommitted work; clobbering it is not a
+#     deploy script's call
+#   - a detached HEAD or a branch with no upstream has no "latest" to pull
+#   - a non-fast-forward means the server has commits the remote does not, and
+#     resolving that belongs to a human, not to a restart
+#
+# SKIP_PULL=1 deploys the checkout as-is — for rolling back to a known tag, or
+# testing a build on the box before pushing it.
+if [ "${SKIP_PULL:-0}" = "1" ]; then
+  log "SKIP_PULL=1 — deploying this checkout as-is, not pulling"
+else
+  command -v git >/dev/null 2>&1 || die "git not found, and SKIP_PULL is not set"
+  git rev-parse --git-dir >/dev/null 2>&1 || die "not a git checkout — re-run with SKIP_PULL=1"
+
+  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  [ "$BRANCH" != "HEAD" ] || die "detached HEAD — checkout a branch, or re-run with SKIP_PULL=1"
+
+  UPSTREAM="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+  [ -n "$UPSTREAM" ] || die "branch '${BRANCH}' has no upstream — set one, or re-run with SKIP_PULL=1"
+
+  if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+    git status --short --untracked-files=no >&2
+    die "uncommitted changes above — commit, stash or discard them, or re-run with SKIP_PULL=1"
+  fi
+
+  BEFORE="$(git rev-parse --short HEAD)"
+  # Remote name from the upstream ref ("origin/main" -> "origin") rather than
+  # `git remote`, which prints every remote and would feed several names to one
+  # fetch on any box that has a fork or a mirror configured.
+  REMOTE="${UPSTREAM%%/*}"
+  log "fetching ${UPSTREAM}"
+  git fetch --quiet "$REMOTE" || die "git fetch failed — is the host online / does it have deploy-key access?"
+
+  if git merge-base --is-ancestor HEAD "$UPSTREAM"; then
+    git merge --ff-only "$UPSTREAM" --quiet || die "fast-forward to ${UPSTREAM} failed"
+    AFTER="$(git rev-parse --short HEAD)"
+    if [ "$BEFORE" = "$AFTER" ]; then
+      log "already up to date at ${AFTER} — redeploying it"
+    else
+      log "updated ${BEFORE} -> ${AFTER}"
+      git --no-pager log --oneline "${BEFORE}..${AFTER}" | sed 's/^/    /'
+    fi
+  else
+    die "HEAD has commits ${UPSTREAM} does not — push or reset them by hand, or re-run with SKIP_PULL=1"
+  fi
 fi
 
 [ -f .env ] || die "missing .env at repo root. Copy .env.example and fill in DATABASE_URL, SESSION_SECRET, GOOGLE_API_KEY, AWS_* — see .env.example"
@@ -389,6 +451,7 @@ cat <<DONE
 
 Deploy complete.
 
+  commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') $( [ "${SKIP_PULL:-0}" = "1" ] && echo '(SKIP_PULL — not pulled)' )
   API   : http://${API_HOST}:${API_PORT}   (workers=${API_WORKERS})
   MCP   : http://127.0.0.1:${MCP_PORT}     (+ OAuth facade)
   Web   : http://0.0.0.0:${WEB_PORT}
