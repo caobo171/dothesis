@@ -5,7 +5,7 @@ import { FileText, Loader2, Download } from "lucide-react";
 
 import { useT, useTn } from "@/app/lib/i18n/LocaleProvider";
 
-import { scanCiteDocument, citeDocument, type CiteScan, useRunProgress } from "./use-tool";
+import { scanCiteDocument, citeDocument, type CiteScan, useRunProgress, useSavedFile } from "./use-tool";
 import { RunButton, ToolError, ToolCaveat, RunProgressBar } from "./shell";
 
 /**
@@ -38,11 +38,16 @@ export function CiteDocument() {
   // waiting that used to show nothing but a spinning circle.
   const progress = useRunProgress(running);
 
+  // Keeps the finished file downloadable instead of revoking it one line
+  // after the auto-click. See useSavedFile.
+  const { saved, save, clearSaved } = useSavedFile();
+
   const pick = async (f: File | undefined | null) => {
     if (!f) return;
     setError(null);
     setScan(null);
     setDone(null);
+    clearSaved();
     setFile(f);
     setBusy(true);
     try {
@@ -63,14 +68,7 @@ export function CiteDocument() {
       // Batch count from the free scan sets the request deadline — see
       // docTimeoutMs. Without one this spinner can outlive its own connection.
       const r = await citeDocument(file, addMissing, t, scan?.passages);
-      const url = URL.createObjectURL(r.blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = r.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      save(r.blob, r.filename);
       setDone({
         filename: r.filename, credits: r.credits, resolved: r.resolved,
         unresolved: r.unresolved, weak: r.weak, uncited: r.uncited,
@@ -200,6 +198,19 @@ export function CiteDocument() {
               <li>· {t("tools.credits", { count: done.credits })}</li>
             )}
           </ul>
+          {/* The actual way to get the file. The line above says a download
+              HAPPENED; when the browser blocked it or the student missed it,
+              this is the only thing between them and paying twice. */}
+          {saved && (
+            <a
+              href={saved.url}
+              download={saved.name}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#3A5740] px-3 py-1.5 text-[12.5px] font-semibold text-white hover:opacity-90"
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden />
+              {t("tools.doc.downloadAgain")}
+            </a>
+          )}
         </div>
       )}
 

@@ -383,6 +383,7 @@ export const vi: Record<MessageKey, string> = {
   "tools.doc.runningSteps": "Bước {done}/{total}",
   "tools.doc.errEmpty":
     "Không có gì để viết lại — tài liệu này chỉ gồm tiêu đề, bảng và chú thích.",
+  "tools.doc.downloadAgain": "Tải file về",
   "tools.doc.downloaded": "Đã tải về {name}",
   "tools.doc.rewritten_one": "đã viết lại {count} đoạn",
   "tools.doc.rewritten_other": "đã viết lại {count} đoạn",

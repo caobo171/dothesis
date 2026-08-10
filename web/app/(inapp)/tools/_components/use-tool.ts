@@ -293,6 +293,59 @@ export async function rerunToolRun(
  * null until the walk reports its first tick, so the caller can fall back to a
  * plain "working…" rather than showing a misleading 0/0.
  */
+/**
+ * Hand a finished file to the browser AND keep it downloadable.
+ *
+ * The auto-click used to be the entire download story: the object URL was
+ * revoked on the very next line, so a click the browser blocked — or one the
+ * student simply did not notice — left a green summary saying "Đã tải về …"
+ * with no way to get the file, for a document they had already paid for. The
+ * only recovery was re-running and paying twice.
+ *
+ * The URL now lives exactly as long as the result on screen does: replaced when
+ * a new run finishes, revoked on unmount, so nothing leaks either.
+ */
+export function useSavedFile(): {
+    saved: { url: string; name: string } | null;
+    save: (blob: Blob, name: string) => void;
+    clearSaved: () => void;
+} {
+    const [saved, setSaved] = useState<{ url: string; name: string } | null>(null);
+    const urlRef = useRef<string | null>(null);
+
+    const release = useCallback(() => {
+        if (urlRef.current) {
+            URL.revokeObjectURL(urlRef.current);
+            urlRef.current = null;
+        }
+    }, []);
+
+    const save = useCallback((blob: Blob, name: string) => {
+        release();
+        const url = URL.createObjectURL(blob);
+        urlRef.current = url;
+        // Still offer the save immediately — the button is the fallback for
+        // when this does not land, not a replacement for it.
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setSaved({ url, name });
+    }, [release]);
+
+    const clearSaved = useCallback(() => {
+        release();
+        setSaved(null);
+    }, [release]);
+
+    useEffect(() => release, [release]);
+
+    return { saved, save, clearSaved };
+}
+
+
 export function useRunProgress(running: boolean): { done: number; total: number } | null {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 

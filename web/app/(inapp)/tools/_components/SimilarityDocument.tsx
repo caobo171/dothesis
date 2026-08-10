@@ -6,7 +6,7 @@ import { FileText, Loader2, Download, ShieldAlert } from "lucide-react";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
 
 import {
-  scanSimilarityDocument, similarityDocument, useRunProgress,
+  scanSimilarityDocument, similarityDocument, useRunProgress, useSavedFile,
   type SimilarityScan,
 } from "./use-tool";
 import { RunButton, ToolError, ToolCaveat, RunProgressBar } from "./shell";
@@ -38,11 +38,16 @@ export function SimilarityDocument() {
   const t = useT();
   const progress = useRunProgress(running);
 
+  // Keeps the finished file downloadable instead of revoking it one line
+  // after the auto-click. See useSavedFile.
+  const { saved, save, clearSaved } = useSavedFile();
+
   const pick = async (f: File | undefined | null) => {
     if (!f) return;
     setError(null);
     setScan(null);
     setDone(null);
+    clearSaved();
     setFile(f);
     setBusy(true);
     try {
@@ -61,14 +66,7 @@ export function SimilarityDocument() {
     setError(null);
     try {
       const r = await similarityDocument(file, t);
-      const url = URL.createObjectURL(r.blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = r.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      save(r.blob, r.filename);
       setDone(r);
     } catch (e) {
       setError((e as Error)?.message || t("tools.sim.errFailed"));
@@ -168,6 +166,19 @@ export function SimilarityDocument() {
               <ShieldAlert className="mt-0.5 w-3.5 h-3.5 shrink-0" aria-hidden />
               {t("tools.sim.resultNoCorpus")}
             </p>
+          )}
+          {/* The actual way to get the file. The line above says a download
+              HAPPENED; when the browser blocked it or the student missed it,
+              this is the only thing between them and paying twice. */}
+          {saved && (
+            <a
+              href={saved.url}
+              download={saved.name}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#3A5740] px-3 py-1.5 text-[12.5px] font-semibold text-white hover:opacity-90"
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden />
+              {t("tools.doc.downloadAgain")}
+            </a>
           )}
         </div>
       )}

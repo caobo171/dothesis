@@ -400,6 +400,7 @@ export const en = {
   "tools.doc.runningSteps": "Step {done} of {total}",
   "tools.doc.errEmpty":
     "Nothing to rewrite — this document is headings, tables and captions only.",
+  "tools.doc.downloadAgain": "Download the file",
   "tools.doc.downloaded": "{name} downloaded",
   "tools.doc.rewritten_one": "{count} paragraph rewritten",
   "tools.doc.rewritten_other": "{count} paragraphs rewritten",
