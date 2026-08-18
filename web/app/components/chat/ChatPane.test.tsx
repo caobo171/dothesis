@@ -33,6 +33,30 @@ function setupMocks() {
 
 
 describe("ChatPane integration", () => {
+  test("does not flash empty-thread leading copy while message history loads", async () => {
+    setupMocks();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    server.use(
+      http.post("*/api/v1/threads/t1/messages/list", async () => {
+        await gate;
+        return HttpResponse.json([
+          { id: 1, role: "assistant", content: "Existing guidance",
+            created_at: "2026-05-27T00:00:00Z" },
+        ]);
+      }),
+    );
+
+    renderFresh(<ChatPane projectId="p1" threadId="t1" />);
+    await waitFor(() => expect(screen.getByText("Test Project")).toBeTruthy());
+    expect(screen.queryByText("Start your thesis")).toBeNull();
+    expect(screen.queryByText(/Picking up/)).toBeNull();
+
+    release();
+    await waitFor(() => expect(screen.getByText("Existing guidance")).toBeTruthy());
+    expect(screen.queryByText("Start your thesis")).toBeNull();
+  });
+
   test("send → stream → message persisted", async () => {
     setupMocks();
     let postCount = 0;

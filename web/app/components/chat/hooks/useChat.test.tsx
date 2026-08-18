@@ -23,7 +23,9 @@ describe("useChat", () => {
     );
 
     const { result } = renderHook(() => useChat("t1"), { wrapper });
+    expect(result.current.messagesLoading).toBe(true);
     await waitFor(() => expect(result.current.messages.length).toBe(2));
+    expect(result.current.messagesLoading).toBe(false);
     expect(result.current.messages[0].content).toBe("hello");
   });
 

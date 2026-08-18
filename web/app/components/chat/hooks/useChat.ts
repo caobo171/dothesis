@@ -32,7 +32,7 @@ export type Message = {
 
 export function useChat(threadId: string) {
   const stream = useStream();
-  const { data: messages, mutate } = useSWR<Message[]>(
+  const { data: messages, mutate, isLoading: messagesLoading } = useSWR<Message[]>(
     `/threads/${threadId}/messages/list`,
     fetcher,
   );
@@ -186,6 +186,9 @@ export function useChat(threadId: string) {
 
   return {
     messages: messages ?? [],
+    // An undefined SWR payload is not an empty thread. Consumers use this to
+    // avoid flashing onboarding/next-step copy before history has arrived.
+    messagesLoading,
     // Already gated for the stream-end handoff — callers must NOT re-gate this
     // on `inflight`, which is what reintroduced the blank frame.
     streamingText: displayStreamingText,

@@ -166,7 +166,7 @@ export function _isAutoWritten(project?: {
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
   const {
     messages, streamingText, streamingProgress, streamingError,
-    inflight, error: sendError, send,
+    messagesLoading, inflight, error: sendError, send,
   } = useChat(threadId);
 
   // Credit balance drives the out-of-credits CTA. Default to >0 while loading so
@@ -238,7 +238,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   const { data: roadmap } = useSWR<{
     next_action?: { title?: string; cta_options?: string[] } | Record<string, never>;
   }>(
-    messages.length === 0 ? `/projects/${projectId}/roadmap` : null,
+    !messagesLoading && messages.length === 0 ? `/projects/${projectId}/roadmap` : null,
     (url: string) => apiFetch(url, { method: "POST" }),
   );
   const emptyStateNextAction =
@@ -316,13 +316,13 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
 
   useEffect(() => {
     if (analyzeFiredRef.current) return;
-    if (messages.length > 0 || inflight) return;
+    if (messagesLoading || messages.length > 0 || inflight) return;
     const intent = readAnalyzeIntent(projectId);
     if (!intent) return;
     analyzeFiredRef.current = true;
     analyzeIntentRef.current = intent;
     void runAnalyze();
-  }, [projectId, messages.length, inflight, runAnalyze]);
+  }, [projectId, messagesLoading, messages.length, inflight, runAnalyze]);
 
   // The editor entry point ("Open editor" / "Read your draft") should appear as
   // soon as there's an editable thesis — which is true via ANY of: drafted
@@ -510,11 +510,11 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         // which files the export under its module scope, not M5.
         onQuickPrompt={(t) => void send(t)}
       />
-      {!project ? (
+      {!project || messagesLoading ? (
         // Until the project lands this rendered the message list — which is
-        // empty at that point — so opening a thread showed a blank pane under a
-        // header of placeholder punctuation, indistinguishable from a thread
-        // that failed to load. Show that something is coming instead.
+        // empty at that point — and before message history landed it also
+        // flashed the empty-thread leading copy over populated conversations.
+        // Project + history must both settle before deciding a thread is empty.
         <ThreadSkeleton />
       ) : messages.length === 0 && !inflight ? (
         // An empty thread is confusing — especially for an auto-drafted project,
