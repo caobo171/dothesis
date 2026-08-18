@@ -13,7 +13,6 @@ import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from fastapi.responses import PlainTextResponse, RedirectResponse
@@ -25,6 +24,7 @@ from ..auth_admin import readable_project as _readable_project
 from ..deps import current_user, stream_user_factory
 from ..models import PaperUpload, Project, User
 from ..pdf_extract import extract_pdf_text
+from ..http_headers import content_disposition
 
 router = APIRouter(tags=["uploads"])
 logger = logging.getLogger(__name__)
@@ -75,10 +75,7 @@ def _inline_content_disposition(filename: str) -> str:
     RFC 5987's ``filename*`` keeps the real UTF-8 name while the ASCII fallback
     remains compatible with older clients.
     """
-    safe = filename.replace("\r", "").replace("\n", "")
-    fallback = safe.encode("ascii", "ignore").decode("ascii") or "download"
-    fallback = fallback.replace('"', "'").replace("\\", "_")
-    return f'inline; filename="{fallback}"; filename*=UTF-8\'\'{quote(safe, safe="")}'
+    return content_disposition(filename, "inline")
 
 
 def _max_bytes() -> int:
@@ -304,7 +301,7 @@ def download_upload(
         "get_object",
         Params={"Bucket": bucket, "Key": key,
                 "ResponseContentDisposition":
-                    f'attachment; filename="{up.filename}"'},
+                    content_disposition(up.filename, "attachment")},
         ExpiresIn=300,
     )
     return RedirectResponse(url=signed_url, status_code=302)

@@ -25,6 +25,7 @@ from ..auth_admin import readable_project as _readable_project
 from ..db import db_session
 from ..deps import current_user, stream_user_factory
 from ..models import ContextStore, Export, Project, User
+from ..http_headers import content_disposition
 from ..routers.uploads import s3_from_env
 
 router = APIRouter(tags=["exports"])
@@ -430,7 +431,8 @@ def download_export(
         # signed GET without renaming the stored object.
         Params={"Bucket": os.environ.get("S3_BUCKET") or os.environ["AWS_S3_BUCKET"],
                 "Key": expected_key,
-                "ResponseContentDisposition": f'attachment; filename="{download_name}"'},
+                "ResponseContentDisposition": content_disposition(
+                    download_name, "attachment")},
         ExpiresIn=300,
     )
     return RedirectResponse(url=signed_url, status_code=302)

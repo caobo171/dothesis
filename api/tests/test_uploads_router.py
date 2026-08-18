@@ -212,6 +212,29 @@ def test_download_upload_allowed_for_super_admin(client, monkeypatch):
     assert r.status_code == 302, r.text
 
 
+def test_download_upload_presigns_unicode_filename_with_ascii_header(client, monkeypatch):
+    fake_s3 = MagicMock()
+    fake_s3.generate_presigned_url.return_value = "https://s3.example/signed"
+    monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: fake_s3)
+    _login(client)
+    pid = _project(client)
+    filename = "BẢNG HỎI.docx"
+    upload_id = client.post(
+        f"/api/v1/projects/{pid}/uploads",
+        files={"file": (filename, io.BytesIO(b"not-a-real-docx"),
+                         "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()["upload_id"]
+
+    st = _stream_token(client, f"project-upload:{upload_id}")
+    response = client.get(f"/api/v1/uploads/{upload_id}/download?st={st}",
+                          follow_redirects=False)
+    assert response.status_code == 302
+    disposition = fake_s3.generate_presigned_url.call_args.kwargs["Params"][
+        "ResponseContentDisposition"]
+    assert disposition.isascii()
+    assert "filename*=UTF-8''" in disposition
+
+
 def test_get_upload_text_allowed_for_super_admin(client, monkeypatch):
     """Same gate for the text sibling — the panel's preview must not 404 either."""
     upload_id = _student_upload(client, monkeypatch)
