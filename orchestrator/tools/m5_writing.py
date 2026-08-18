@@ -269,9 +269,9 @@ def _sections_to_markdown(sections: list[dict]) -> str:
         # Defensive last line: strip internal placeholder/QA text so it can
         # never reach the rendered document, even on a forced export, then
         # normalize inline-bullet runs into proper markdown lists.
-        prose = _normalize_prose_markdown(
+        prose = _sanitize_prose(_normalize_prose_markdown(
             _mermaid_to_prose(_split_run_on_hypotheses(_scrub_internal_markers(prose)))
-        )
+        ))
         # Defense-in-depth against the duplicate chapter heading: the prompt
         # tells the LLM not to emit the chapter title, but Gemini sometimes
         # leads with its own "# Chương N: …" / "## <chapter title>" anyway, and
@@ -367,21 +367,22 @@ def _split_run_on_hypotheses(prose: str) -> str:
     """
     if not prose or "H1" not in prose:
         return prose
-    # Match a hypothesis marker that isn't already at line start. Uses a
-    # positive lookahead so the marker text is preserved.
-    # Group: whitespace/dash before "H<n>:" (or "**H<n>:**") in-line.
-    pattern = re.compile(
-        r"(?<!\n)[ \t]*[-–—]?[ \t]*(\*\*)?H\d{1,2}:",
-    )
-
-    def _sub(m: "re.Match[str]") -> str:
-        marker = m.group(0).lstrip(" \t-–—")
-        # Preserve the ** if present.
-        return "\n\n" + marker.lstrip()
-
-    out = pattern.sub(_sub, prose)
-    # First H may end up as "\n\nH1:" at the very start; strip leading blanks.
-    return out.lstrip("\n")
+    out: list[str] = []
+    marker = re.compile(r"[ \t]+[-–—][ \t]+(?=(?:\*\*)?H\d{1,2}:)")
+    for line in prose.split("\n"):
+        # Decision: only split a genuinely inline RUN (H1 and H2 on the same
+        # source line). A normal Markdown list item has one H marker, and the
+        # generated model relationship has one inside parentheses. The old
+        # global regex split both, leaving a dangling '-' that Pandoc interpreted
+        # as malformed list/heading markup and produced giant page gaps.
+        if len(re.findall(r"(?:\*\*)?H\d{1,2}:", line)) < 2:
+            out.append(line)
+            continue
+        parts = marker.split(line)
+        out.append(parts[0].rstrip())
+        for part in parts[1:]:
+            out.extend(["", part.strip()])
+    return "\n".join(out)
 
 
 def _render_mermaid_png(mmd_source: str, out_path: Path) -> bool:
@@ -1333,6 +1334,23 @@ def _ensure_model_diagram(prose: str, conceptual_model: dict | None,
             or "![research model]" in low
             or "conceptmodel-" in low):
         return prose
+    # A prior optional renderer could emit the caption + relationship list but
+    # no image when Chrome was unavailable. Remove that trailing orphan before
+    # inserting the deterministic Pillow image; otherwise exports contain two
+    # Figure 3.1 captions and two relationship lists, with the first appearing
+    # to point at a missing figure.
+    captions = ("**Hình 3.1: Mô hình nghiên cứu đề xuất**",
+                "**Figure 3.1: Proposed research model**")
+    for existing_caption in captions:
+        marker_at = prose.rfind(existing_caption)
+        if marker_at < 0:
+            continue
+        suffix = prose[marker_at:]
+        if "![" not in suffix and (
+                "Mối quan hệ giả thuyết trong mô hình" in suffix
+                or "Hypothesized relationships" in suffix):
+            prose = prose[:marker_at].rstrip()
+            break
     fig = _svg_model_figure(conceptual_model, language) or \
         _pillow_model_figure(conceptual_model, language) or \
         _render_model_figure(conceptual_model, language)

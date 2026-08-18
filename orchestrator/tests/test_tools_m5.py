@@ -383,6 +383,36 @@ def test_export_safety_net_adds_model_to_stored_methodology(monkeypatch):
     assert sections[0]["prose"] == "Phương pháp đã lưu."
 
 
+def test_export_safety_net_replaces_orphan_model_caption(monkeypatch):
+    import orchestrator.tools.m5_writing as M
+
+    orphan = (
+        "Nội dung phương pháp.\n\n"
+        "**Hình 3.1: Mô hình nghiên cứu đề xuất**\n\n"
+        "**Mối quan hệ giả thuyết trong mô hình:**\n\n"
+        "- A → B (H1: tích cực)"
+    )
+    monkeypatch.setattr(M, "_svg_model_figure", lambda *_args: "![Mô hình nghiên cứu](/tmp/model.png)")
+    sections = [{"chapter_name": "methodology", "prose": orphan}]
+    cs = {"m3_design": {"conceptual_model": {"nodes": [], "edges": []}}}
+
+    rendered = M._ensure_export_model_diagrams(sections, cs, "vi")[0]["prose"]
+
+    assert rendered.count("Hình 3.1: Mô hình nghiên cứu đề xuất") == 1
+    assert "![Mô hình nghiên cứu]" in rendered
+
+
+def test_hypothesis_splitter_preserves_lists_and_model_relationships():
+    from orchestrator.tools.m5_writing import _split_run_on_hypotheses
+
+    prose = (
+        "- H1: Giả thuyết thứ nhất.\n"
+        "- H2: Giả thuyết thứ hai.\n"
+        "- Kỹ năng số → Nhận thức (H1: tích cực)"
+    )
+    assert _split_run_on_hypotheses(prose) == prose
+
+
 def test_pillow_model_fallback_creates_real_png():
     import re
     from pathlib import Path
