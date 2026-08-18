@@ -548,8 +548,26 @@ def _mermaid_to_prose(prose: str) -> str:
     return "\n".join(keep).rstrip() + img_line + "\n" + "\n".join(rel) + "\n"
 
 
-def _derive_scale_items(conceptual_model: dict | None,
-                        instrument: dict | None = None) -> list[dict]:
+def _mapping_or_empty(value: object) -> dict:
+    """Return a mapping for structured state, including legacy JSON strings.
+
+    Decision: older interactive M3 rows can contain a prose or JSON-string
+    ``conceptual_model``. Export is a read boundary and must degrade gracefully
+    instead of assuming every historical row already matches today's schema.
+    """
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _derive_scale_items(conceptual_model: dict | str | None,
+                        instrument: dict | str | None = None) -> list[dict]:
     """Return the questionnaire as [{construct, items:[text,...]}, ...] robustly
     across BOTH M3 shapes we see in the wild:
 
@@ -566,7 +584,7 @@ def _derive_scale_items(conceptual_model: dict | None,
     conceptual_model declares one, so the table reads "Định hướng Mục tiêu"
     not "GO".
     """
-    cm = conceptual_model or {}
+    cm = _mapping_or_empty(conceptual_model)
     nodes = cm.get("nodes") or []
     label_by_id = {
         str(n.get("id")): (n.get("label") or n.get("id"))
@@ -585,7 +603,7 @@ def _derive_scale_items(conceptual_model: dict | None,
         return out
 
     # Shape B: group the flat instrument items by construct, preserving order.
-    items = (instrument or {}).get("items") or []
+    items = _mapping_or_empty(instrument).get("items") or []
     grouped: dict[str, list[str]] = {}
     order: list[str] = []
     for it in items:
@@ -603,8 +621,8 @@ def _derive_scale_items(conceptual_model: dict | None,
     return [{"construct": c, "items": grouped[c]} for c in order]
 
 
-def _generate_scale_items(instrument: dict | None, language: str = "en",
-                          conceptual_model: dict | None = None) -> list[dict]:
+def _generate_scale_items(instrument: dict | str | None, language: str = "en",
+                          conceptual_model: dict | str | None = None) -> list[dict]:
     """Generate real Likert items when the instrument is only a SPEC — i.e. it
     lists `constructs` + `items_per_construct` but no actual item texts (a shape
     headless often emits). Without this the questionnaire table is either empty
@@ -619,11 +637,11 @@ def _generate_scale_items(instrument: dict | None, language: str = "en",
     latent construct instead of only describing one in prose (reviewer: "không
     hề có bảng hỏi").
     """
-    inst = instrument or {}
+    inst = _mapping_or_empty(instrument)
     constructs = [str(c).strip() for c in (inst.get("constructs") or []) if str(c).strip()]
     if not constructs:
         # No instrument spec → measure every construct the model declares.
-        nodes = (conceptual_model or {}).get("nodes") or []
+        nodes = _mapping_or_empty(conceptual_model).get("nodes") or []
         constructs = [str(n.get("label") or n.get("id")).strip()
                       for n in nodes if isinstance(n, dict) and (n.get("label") or n.get("id"))]
         constructs = [c for c in constructs if c]
@@ -651,11 +669,12 @@ def _generate_scale_items(instrument: dict | None, language: str = "en",
     return out
 
 
-def _collect_construct_labels(conceptual_model: dict | None, instrument: dict | None,
+def _collect_construct_labels(conceptual_model: dict | str | None,
+                              instrument: dict | str | None,
                               scale_items: list[dict] | None = None) -> list[str]:
     """All construct/variable labels that appear in the model + questionnaire,
     de-duplicated in first-seen order — the set we may need to localize."""
-    cm = conceptual_model or {}
+    cm = _mapping_or_empty(conceptual_model)
     labels: list[str] = []
 
     def add(x):
@@ -674,7 +693,7 @@ def _collect_construct_labels(conceptual_model: dict | None, instrument: dict | 
     for v in cm.get("independent_variables") or []:
         add(v)
     add(cm.get("moderator"))
-    for c in (instrument or {}).get("constructs") or []:
+    for c in _mapping_or_empty(instrument).get("constructs") or []:
         add(c)
     for row in scale_items or []:
         add(row.get("construct"))
@@ -746,12 +765,16 @@ def _localize_title(title: str | None, language: str) -> str | None:
         return title
 
 
-def _apply_label_map_to_cm(conceptual_model: dict | None, m: dict) -> dict | None:
+def _apply_label_map_to_cm(conceptual_model: dict | str | None,
+                           m: dict) -> dict | str | None:
     """Return a copy of the conceptual_model with every label the map covers
     replaced — handles both the nodes/edges and variable-decomposition shapes."""
     if not conceptual_model or not m:
         return conceptual_model
-    cm = json.loads(json.dumps(conceptual_model))  # deep copy
+    normalized = _mapping_or_empty(conceptual_model)
+    if not normalized:
+        return conceptual_model
+    cm = json.loads(json.dumps(normalized))  # deep copy
     for n in cm.get("nodes") or []:
         if isinstance(n, dict) and n.get("label") in m:
             n["label"] = m[n["label"]]
@@ -2812,13 +2835,13 @@ def compose_chapter(
     # Questionnaire recovery: if scale_items arrived empty (headless backfill
     # stores items on the flat `instrument` key, not on conceptual_model nodes)
     # rebuild them so Chapter 3 has a real measurement table instead of a blank.
-    if not safe_kwargs.get("scale_items"):
+    if chapter_name == "methodology" and not safe_kwargs.get("scale_items"):
         safe_kwargs["scale_items"] = _derive_scale_items(
             context_slice.get("conceptual_model"), context_slice.get("instrument"))
         # Instrument is only a spec (constructs + count, no item texts): generate
         # real items so Chapter 3 ships a grounded scale table. Methodology-only
         # to avoid an extra LLM call on chapters that never render {scale_items}.
-        if not safe_kwargs["scale_items"] and chapter_name == "methodology":
+        if not safe_kwargs["scale_items"]:
             safe_kwargs["scale_items"] = _generate_scale_items(
                 context_slice.get("instrument"), language,
                 conceptual_model=context_slice.get("conceptual_model"))

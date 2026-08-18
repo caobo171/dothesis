@@ -338,6 +338,26 @@ def test_generate_scale_items_empty_without_model_or_instrument():
     assert _generate_scale_items(None, "vi", conceptual_model={"nodes": []}) == []
 
 
+def test_scale_item_helpers_tolerate_legacy_string_model():
+    from orchestrator.tools.m5_writing import (
+        _collect_construct_labels,
+        _derive_scale_items,
+    )
+
+    # Historical interactive projects stored this field as free-form prose.
+    assert _derive_scale_items("PU -> BI", None) == []
+    assert _collect_construct_labels("PU -> BI", None) == []
+
+
+def test_scale_item_helpers_parse_legacy_json_string_model():
+    from orchestrator.tools.m5_writing import _derive_scale_items
+
+    model = '{"nodes":[{"id":"PU","label":"Hữu ích","questions":["PU1"]}]}'
+    assert _derive_scale_items(model, None) == [
+        {"construct": "Hữu ích", "items": ["PU1"]}
+    ]
+
+
 def test_validate_citations_empty_prose():
     from orchestrator.tools.m5_writing import validate_citations
     cited, uncited = validate_citations("", [])
