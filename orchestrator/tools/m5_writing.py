@@ -345,6 +345,11 @@ def _scrub_internal_markers(prose: str) -> str:
     # Drop bracketed composition placeholders like "[Composition failed …]"
     # and "[Auto-generated for '…']".
     prose = re.sub(r"\[(?:Composition failed|Auto-generated for)[^\]]*\]", "", prose)
+    # Defense at the last markdown boundary: DT placement tokens are consumed
+    # by results_render.weave. If a chapter bypassed that path or the matching
+    # M4 data does not exist yet, never print the internal token in the thesis.
+    prose = re.sub(r"^[ \t]*\[\[DT:[a-z0-9_]+\]\][ \t]*$", "", prose,
+                   flags=re.MULTILINE | re.IGNORECASE)
     return prose.strip()
 
 
@@ -1175,6 +1180,92 @@ def _svg_model_figure(conceptual_model: dict | None, language: str = "vi") -> st
     return f'\n![Mô hình nghiên cứu]({png})\n' + "\n" + "\n".join(rel) + "\n"
 
 
+def _pillow_model_figure(conceptual_model: dict | str | None,
+                         language: str = "vi") -> str | None:
+    """Dependency-light PNG fallback for a direct-effects research model.
+
+    Dev and slim deploy images may have neither CairoSVG nor Puppeteer's Chrome.
+    Pillow is already required by the document stack, so a missing optional
+    diagram engine must not silently remove the model from the thesis.
+    """
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except Exception:
+        return None
+    cm = _coerce_cm(conceptual_model)
+    nodes = [n for n in (cm.get("nodes") or []) if isinstance(n, dict) and n.get("id")]
+    edges = [e for e in (cm.get("edges") or []) if isinstance(e, dict)]
+    labels = {str(n["id"]): str(n.get("label") or n["id"]) for n in nodes}
+    types = {str(n["id"]): str(n.get("type") or "").lower() for n in nodes}
+
+    solid = []
+    for edge in edges:
+        source = str(edge.get("source") or edge.get("from") or "").strip()
+        target = str(edge.get("target") or edge.get("to") or "").strip()
+        if source not in labels or target not in labels:
+            continue
+        if str(edge.get("effect") or "").lower().startswith("moderat"):
+            continue
+        solid.append((source, target,
+                      str(edge.get("hypothesis") or edge.get("label") or "").strip()))
+    targets = {target for _, target, _ in solid}
+    if not solid or len(targets) != 1:
+        return None
+    outcome = next(iter(targets))
+    predictors = list(dict.fromkeys(source for source, _, _ in solid if source != outcome))
+    if not predictors:
+        return None
+
+    width, box_w, box_h = 1400, 360, 92
+    gap = 52
+    height = max(420, 100 + len(predictors) * (box_h + gap))
+    image = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(image)
+    font_paths = (
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    )
+    font_path = next((path for path in font_paths if Path(path).exists()), None)
+    font = ImageFont.truetype(font_path, 28) if font_path else ImageFont.load_default()
+    small = ImageFont.truetype(font_path, 22) if font_path else ImageFont.load_default()
+
+    left_x, right_x = 90, width - box_w - 90
+    predictor_y = [70 + i * (box_h + gap) for i in range(len(predictors))]
+    outcome_y = int(sum(predictor_y) / len(predictor_y))
+
+    def box(x: int, y: int, text: str, fill: str) -> None:
+        draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=16,
+                               fill=fill, outline="#315a9a", width=3)
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tx = x + max(18, (box_w - (bbox[2] - bbox[0])) / 2)
+        ty = y + (box_h - (bbox[3] - bbox[1])) / 2 - 3
+        draw.text((tx, ty), text, fill="#17233a", font=font)
+
+    box(right_x, outcome_y, labels[outcome], "#EAF1FF")
+    for index, predictor in enumerate(predictors):
+        y = predictor_y[index]
+        box(left_x, y, labels[predictor], "#F5F8FC")
+        start = (left_x + box_w, y + box_h // 2)
+        end = (right_x, outcome_y + box_h // 2)
+        draw.line((start, end), fill="#315a9a", width=4)
+        # Arrowhead at the outcome box.
+        draw.polygon([(end[0], end[1]), (end[0] - 18, end[1] - 10),
+                      (end[0] - 18, end[1] + 10)], fill="#315a9a")
+        hypothesis = next((h for s, _, h in solid if s == predictor), "")
+        if hypothesis:
+            mx, my = (start[0] + end[0]) // 2, (start[1] + end[1]) // 2
+            draw.text((mx - 25, my - 30), hypothesis, fill="#203b67", font=small)
+
+    png = _scratch_dir() / f"conceptmodel-{uuid4().hex[:8]}.png"
+    image.save(png, format="PNG", optimize=True)
+    alt = "Mô hình nghiên cứu" if str(language).lower().startswith("vi") else "Research model"
+    rel = ["", "**Mối quan hệ giả thuyết trong mô hình:**", ""]
+    for source, target, hypothesis in solid:
+        rel.append(f"- {labels[source]} → {labels[target]}" +
+                   (f" ({hypothesis})" if hypothesis else ""))
+    return f"\n![{alt}]({png})\n\n" + "\n".join(rel) + "\n"
+
+
 def _ensure_model_diagram(prose: str, conceptual_model: dict | None,
                           language: str = "vi") -> str:
     """Guarantee the methodology chapter carries the research-model figure.
@@ -1185,9 +1276,14 @@ def _ensure_model_diagram(prose: str, conceptual_model: dict | None,
     builder for shapes the SVG layout can't draw (or if cairosvg is missing).
     """
     low = prose.lower()
-    if "```mermaid" in low or "flowchart" in low or re.search(r"\bgraph\s+\w", low):
+    if ("```mermaid" in low or "flowchart" in low
+            or re.search(r"\bgraph\s+\w", low)
+            or "![mô hình nghiên cứu]" in low
+            or "![research model]" in low
+            or "conceptmodel-" in low):
         return prose
     fig = _svg_model_figure(conceptual_model, language) or \
+        _pillow_model_figure(conceptual_model, language) or \
         _render_model_figure(conceptual_model, language)
     if not fig:
         return prose
@@ -1195,6 +1291,36 @@ def _ensure_model_diagram(prose: str, conceptual_model: dict | None,
                if str(language).lower().startswith("vi")
                else "**Figure 3.1: Proposed research model**")
     return prose.rstrip() + "\n\n" + caption + "\n" + fig
+
+
+def _ensure_export_model_diagrams(sections: list[dict], context_store: dict,
+                                  language: str) -> list[dict]:
+    """Export-time safety net for stored Methodology chapters.
+
+    Chapters composed before the M3 legacy backfill can contain valid prose but
+    no figure. Reusing that prose must not bypass the model-image requirement.
+    """
+    if not isinstance(sections, list) or not isinstance(context_store, dict):
+        return sections
+    m3 = context_store.get("m3_design")
+    cm = m3.get("conceptual_model") if isinstance(m3, dict) else None
+    out = []
+    for section in sections:
+        if not isinstance(section, dict):
+            out.append(section)
+            continue
+        name = (section.get("chapter_name") or "").lower()
+        title = str(section.get("title") or section.get("name") or "").lower()
+        is_methodology = name == "methodology" or "methodolog" in title or "phương pháp" in title
+        key = "prose" if section.get("prose") is not None else "content"
+        prose = section.get(key)
+        if not is_methodology or not isinstance(prose, str):
+            out.append(section)
+            continue
+        updated = dict(section)
+        updated[key] = _ensure_model_diagram(prose, cm, language)
+        out.append(updated)
+    return out
 
 
 def _normalize_prose_markdown(prose: str) -> str:
@@ -2314,8 +2440,9 @@ def run_export(sections: list[dict], project_id: str,
         try:
             from orchestrator.tools.results_render import ensure_rendered  # noqa: PLC0415
             sections = ensure_rendered(sections, context_store, language)
+            sections = _ensure_export_model_diagrams(sections, context_store, language)
         except Exception:
-            logger.debug("run_export: ensure_rendered skipped", exc_info=True)
+            logger.debug("run_export: export safety nets skipped", exc_info=True)
     # Take the title off the store when the caller did not pass one — which is
     # ALL SEVEN of them. `title` has been an optional parameter that nothing has
     # ever supplied, so the cover page has been built from None since it was

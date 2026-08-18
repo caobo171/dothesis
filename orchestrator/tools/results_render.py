@@ -582,7 +582,11 @@ def weave(prose: str, blocks: List[dict], *, drop_llm_tables: bool = False) -> s
             prose = ""
         blocks = [b for b in (blocks or []) if isinstance(b, dict) and b.get("markdown")]
         if not blocks:
-            return prose
+            # A placement token is renderer-internal syntax, never thesis
+            # content. When the requested verified block has no source data
+            # (e.g. Chapter 3 exported before M4), remove the token instead of
+            # leaking ``[[DT:data_cleaning]]`` into Word/PDF.
+            return _TOKEN_RE.sub("", prose)
         already = rendered_kinds(prose)
         by_kind = {}
         for b in blocks:

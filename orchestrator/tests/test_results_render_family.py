@@ -131,6 +131,15 @@ def test_a_composed_vietnamese_chapter_is_covered():
     assert out[0]["prose"].count("dt-rendered:begin") == 3
 
 
+def test_weave_removes_internal_token_when_source_block_is_unavailable():
+    from orchestrator.tools.results_render import weave
+
+    prose = "Giới thiệu.\n\n[[DT:data_cleaning]]\n\nKết thúc."
+    out = weave(prose, [])
+    assert "[[DT:" not in out
+    assert "Giới thiệu" in out and "Kết thúc" in out
+
+
 # --- table numbering ----------------------------------------------------------
 #
 # The captions carried hardcoded numbers ("Bảng 4.1", "Bảng 4.3"). Woven into a

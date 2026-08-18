@@ -358,6 +358,49 @@ def test_scale_item_helpers_parse_legacy_json_string_model():
     ]
 
 
+def test_final_scrubber_removes_unresolved_dt_tokens():
+    from orchestrator.tools.m5_writing import _scrub_internal_markers
+
+    prose = "Trước khi phân tích:\n\n[[DT:data_cleaning]]\n\nNội dung tiếp."
+    cleaned = _scrub_internal_markers(prose)
+    assert "[[DT:" not in cleaned
+    assert "Trước khi phân tích" in cleaned
+    assert "Nội dung tiếp" in cleaned
+
+
+def test_export_safety_net_adds_model_to_stored_methodology(monkeypatch):
+    import orchestrator.tools.m5_writing as M
+
+    monkeypatch.setattr(
+        M, "_ensure_model_diagram",
+        lambda prose, cm, language: prose + f"\n\nMODEL:{len(cm['nodes'])}:{language}",
+    )
+    sections = [{"chapter_name": "methodology", "title": "Chương 3",
+                 "prose": "Phương pháp đã lưu."}]
+    cs = {"m3_design": {"conceptual_model": {"nodes": [{"id": "A"}], "edges": []}}}
+    out = M._ensure_export_model_diagrams(sections, cs, "vi")
+    assert "MODEL:1:vi" in out[0]["prose"]
+    assert sections[0]["prose"] == "Phương pháp đã lưu."
+
+
+def test_pillow_model_fallback_creates_real_png():
+    import re
+    from pathlib import Path
+    from orchestrator.tools.m5_writing import _pillow_model_figure
+
+    cm = {
+        "nodes": [
+            {"id": "PB", "label": "Lợi ích", "type": "independent"},
+            {"id": "BI", "label": "Ý định", "type": "dependent"},
+        ],
+        "edges": [{"source": "PB", "target": "BI", "hypothesis": "H1"}],
+    }
+    markdown = _pillow_model_figure(cm, "vi")
+    match = re.search(r"!\[[^]]+\]\(([^)]+\.png)\)", markdown or "")
+    assert match and Path(match.group(1)).exists()
+    assert Path(match.group(1)).read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
 def test_validate_citations_empty_prose():
     from orchestrator.tools.m5_writing import validate_citations
     cited, uncited = validate_citations("", [])
