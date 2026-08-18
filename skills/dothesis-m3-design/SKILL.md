@@ -22,6 +22,14 @@ and edges and every proposed hypothesis maps to an edge. If the model is absent,
 build the parsimonious model from confirmed M1/M2 inputs first in the same turn;
 do not produce a generic methods chapter and do not mark M3 done.
 
+**Legacy-shape backfill.** If an older project stores `conceptual_model` as
+prose instead of nodes/edges, backfill it from relationships explicitly present
+in that prose (for example, a written regression equation), validate it, and
+save the canonical graph through the normal M3 write path before export. Never
+invent a relationship that is not stated or otherwise confirmed in project
+state; if the prose has no recoverable relationship, keep it as a description
+and rebuild the model from confirmed M1/M2 inputs.
+
 **DoThesis is quantitative-only.** Every thesis here tests a conceptual model /
 hypotheses with statistics (regression, mediation/moderation, or SEM) run in
 **SmartPLS / SPSS**. There is no qualitative or mixed-methods path — never offer

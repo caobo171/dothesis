@@ -159,6 +159,27 @@ def test_import_prose_and_raw_preserved():
     assert out["instrument"]["raw"].startswith("Q1.")
 
 
+def test_legacy_regression_prose_backfills_canonical_graph():
+    prose = (
+        "Quantitative branch. Regression model: Intention = β₀ + β₁·PB "
+        "+ β₂·PD + β₃·PDT + ε."
+    )
+    out = normalize_m3({"conceptual_model": prose})
+    cm = out["conceptual_model"]
+    assert [node["id"] for node in cm["nodes"]] == ["PB", "PD", "PDT", "Intention"]
+    assert [(edge["source"], edge["target"]) for edge in cm["edges"]] == [
+        ("PB", "Intention"), ("PD", "Intention"), ("PDT", "Intention")
+    ]
+    assert cm["description"] == prose
+
+
+def test_unstructured_legacy_prose_is_preserved_without_invented_edges():
+    out = normalize_m3({"conceptual_model": "A broad conceptual discussion."})
+    assert out["conceptual_model"] == {
+        "nodes": [], "edges": [], "description": "A broad conceptual discussion."
+    }
+
+
 def test_unknown_shape_raises():
     with pytest.raises(M3ShapeError):
         normalize_m3({"conceptual_model": 42})

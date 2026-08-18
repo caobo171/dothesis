@@ -31,6 +31,7 @@ prompt, not a 500.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -174,6 +175,42 @@ def _expand_variable_decomposition(cm: dict) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
+def _graph_from_regression_description(description: str) -> dict | None:
+    """Recover a graph only when legacy prose contains an explicit equation.
+
+    This is evidence-preserving backfill, not inference: the dependent and
+    predictor variable tokens must appear in a written beta regression formula.
+    Prose without that deterministic signal remains description-only.
+    """
+    match = re.search(
+        r"(?:regression\s+model\s*:\s*)?([A-Za-z][A-Za-z0-9_]*)\s*=\s*"
+        r"β(?:0|₀)(?P<rhs>[^\n.]*?)(?:\+\s*[εɛ]|$)",
+        description,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    outcome = match.group(1).strip()
+    predictors = re.findall(
+        r"β(?:[1-9]|₁|₂|₃|₄|₅|₆|₇|₈|₉)\s*[.·*] *"
+        r"([A-Za-z][A-Za-z0-9_]*)",
+        match.group("rhs"),
+    )
+    predictors = list(dict.fromkeys(p for p in predictors if p != outcome))
+    if not predictors:
+        return None
+    nodes = [
+        {"id": predictor, "label": predictor, "type": "independent"}
+        for predictor in predictors
+    ]
+    nodes.append({"id": outcome, "label": outcome, "type": "dependent"})
+    edges = [
+        {"source": predictor, "target": outcome, "hypothesis": f"H{i}"}
+        for i, predictor in enumerate(predictors, 1)
+    ]
+    return {"nodes": nodes, "edges": edges, "description": description}
+
+
 # --- public API -------------------------------------------------------------
 
 def normalize_conceptual_model(cm: Any) -> tuple[dict, list[dict]]:
@@ -186,6 +223,9 @@ def normalize_conceptual_model(cm: Any) -> tuple[dict, list[dict]]:
         return {"nodes": [], "edges": []}, []
     if isinstance(cm, str):
         desc = cm.strip()
+        recovered = _graph_from_regression_description(desc) if desc else None
+        if recovered:
+            return recovered, []
         return ({"nodes": [], "edges": [], "description": desc} if desc
                 else {"nodes": [], "edges": []}), []
     if not isinstance(cm, dict):

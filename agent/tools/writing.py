@@ -91,6 +91,39 @@ def _maybe_humanize(sections: list[dict], enabled: bool,
         return sections, [{"ok": False, "error": "humanizer_failed"}]
 
 
+def _backfill_legacy_m3_for_export(store, context_store: dict) -> tuple[dict, dict | None]:
+    """Persist a recoverable prose-only M3 model in today's canonical shape.
+
+    Export used to tolerate a malformed row only in-memory, so every retry paid
+    the same failure again. This performs a one-time, evidence-preserving repair
+    through the sole state write path. Only explicit relationships recoverable
+    by the M3 contract are saved; free prose without a graph is left untouched.
+    """
+    cs = context_store if isinstance(context_store, dict) else {}
+    m3 = cs.get("m3_design")
+    if not isinstance(m3, dict) or not isinstance(m3.get("conceptual_model"), str):
+        return cs, None
+
+    from agent.m3_contract import normalize_conceptual_model  # noqa: PLC0415
+
+    canonical, _ = normalize_conceptual_model(m3.get("conceptual_model"))
+    if not canonical.get("nodes") or not canonical.get("edges"):
+        return cs, None
+    result = store.commit_slice(
+        "M3", {"conceptual_model": canonical},
+        "Backfilled legacy conceptual model schema before document export",
+        confirm_done=False,
+    )
+    updated = dict(cs)
+    updated["m3_design"] = {**m3, "conceptual_model": canonical}
+    return updated, {
+        "module": "M3",
+        "nodes": len(canonical.get("nodes") or []),
+        "edges": len(canonical.get("edges") or []),
+        "commit": result,
+    }
+
+
 def make_writing_tools(store) -> list:
     """Build the writing/export tools bound to one project's state store.
 
@@ -279,6 +312,19 @@ def make_writing_tools(store) -> list:
                 full_cs = loader()
             except Exception:
                 logger.exception("export_docx: load_full_context_store failed")
+        backfilled = None
+        if full_cs:
+            try:
+                full_cs, backfilled = _backfill_legacy_m3_for_export(store, full_cs)
+            except Exception as exc:
+                logger.exception("export_docx: legacy M3 backfill failed")
+                return json.dumps({
+                    "error": "state_backfill_failed",
+                    "module": "M3",
+                    "detail": str(exc),
+                    "hint": "The legacy research model could not be safely saved. "
+                            "Repair M3 before retrying export.",
+                }, ensure_ascii=False)
         # m2_references, not the raw key: an inferred M2 fills `citation_list`
         # and leaves `literature_sources` empty, which read here as "this thesis
         # has no sources" and shipped a document with no bibliography.
@@ -395,6 +441,7 @@ def make_writing_tools(store) -> list:
             return json.dumps({
                 "ok": True, "scope": scope_tag, "artifacts": artifacts,
                 "chapter_titles": [section.get("title") for section in selected],
+                "backfilled": backfilled,
                 "humanized": _hum_report,
                 "instruction": "Chapter export succeeded. Confirm briefly in the "
                                "user's language; download buttons are already shown.",

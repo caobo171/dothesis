@@ -160,3 +160,40 @@ def test_chapter_scope_composes_requested_chapter_from_upstream_state(monkeypatc
     assert out["ok"] is True
     assert out["scope"] == "chapter:discussion"
     assert [section["chapter_name"] for section in captured["sections"]] == ["discussion"]
+
+
+def test_export_backfills_recoverable_legacy_m3_through_commit_slice():
+    from agent.tools.writing import _backfill_legacy_m3_for_export
+
+    class Store:
+        calls = []
+
+        def commit_slice(self, *args, **kwargs):
+            self.calls.append((args, kwargs))
+            return {"module": "M3"}
+
+    store = Store()
+    prose = "Regression model: Intention = β₀ + β₁·PB + β₂·PD + β₃·PDT + ε."
+    updated, report = _backfill_legacy_m3_for_export(
+        store, {"m3_design": {"conceptual_model": prose, "methodology": "survey"}}
+    )
+
+    assert report == {"module": "M3", "nodes": 4, "edges": 3,
+                      "commit": {"module": "M3"}}
+    assert len(store.calls) == 1
+    writes = store.calls[0][0][1]
+    assert writes["conceptual_model"] == updated["m3_design"]["conceptual_model"]
+    assert updated["m3_design"]["methodology"] == "survey"
+
+
+def test_export_does_not_backfill_unstructured_prose_model():
+    from agent.tools.writing import _backfill_legacy_m3_for_export
+
+    class Store:
+        def commit_slice(self, *args, **kwargs):
+            raise AssertionError("unrecoverable prose must not be committed")
+
+    original = {"m3_design": {"conceptual_model": "general discussion"}}
+    updated, report = _backfill_legacy_m3_for_export(Store(), original)
+    assert updated is original
+    assert report is None

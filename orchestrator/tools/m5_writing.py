@@ -868,12 +868,16 @@ def _constructs_relationships_to_graph(cm: dict) -> dict | None:
     return {"nodes": nodes, "edges": edges}
 
 
-def _coerce_cm(cm: dict | None) -> dict:
+def _coerce_cm(cm: dict | str | None) -> dict:
     """Normalize the alternative M3 conceptual_model shapes to nodes/edges so
     every figure renderer sees one grammar. No-op when nodes/edges already exist.
     Handles: variable-decomposition (independent/dependent/moderator) and
     constructs+relationships. Unknown shapes pass through unchanged."""
-    cm = cm or {}
+    # One canonical contract owns legacy-shape recovery. In particular, prose
+    # containing an explicit regression equation becomes a real graph instead
+    # of crashing renderers or silently losing the required model figure.
+    from agent.m3_contract import normalize_conceptual_model  # noqa: PLC0415
+    cm, _ = normalize_conceptual_model(cm)
     if cm.get("nodes") or cm.get("edges"):
         return cm
     if cm.get("dependent_variable"):
