@@ -598,7 +598,32 @@ const _STATE_LABELS: Record<string, { vi: string; en: string }> = {
   mixed_design_type: { vi: "Loại thiết kế", en: "Design type" },
   conceptual_model: { vi: "Mô hình khái niệm", en: "Conceptual model" },
   themes: { vi: "Các chủ đề chính", en: "Key themes" },
+  instrument: { vi: "Bảng hỏi nghiên cứu", en: "Research questionnaire" },
+  theoretical_foundation: { vi: "Cơ sở lý thuyết", en: "Theoretical foundation" },
+  interview_guide: { vi: "Hướng dẫn phỏng vấn", en: "Interview guide" },
+  purposive_criteria: { vi: "Tiêu chí chọn mẫu", en: "Sampling criteria" },
+  done: { vi: "hoàn tất", en: "complete" },
+  needs_review: { vi: "cần xem lại", en: "needs review" },
+  in_progress: { vi: "đang thực hiện", en: "in progress" },
+  locked: { vi: "chưa bắt đầu", en: "not started" },
 };
+
+export function humanizeTechnicalCopy(text: string): string {
+  if (!/[À-ỹĐđ]/.test(text)) return text;
+  return text
+    .replace(/^.*\[PROJECT STATE\].*$/gim, "Trạng thái dự án đã được cập nhật.")
+    .replace(/`?focus=M([1-5])\s*\|\s*M\1:in_progress`?/gi, "đang thực hiện M$1")
+    .replace(/`?M3\/build_model`?/gi, "bước xây dựng mô hình nghiên cứu")
+    .replace(/`?quick_sources`?/gi, "tìm nguồn học thuật")
+    .replace(/\bslice\s+M([1-5])\b/gi, "phần M$1")
+    .replace(/\bcommit(?:ted|ting)?\b/gi, "lưu")
+    .replace(/`(done|needs_review|in_progress|locked)`/gi, (_whole, status: string) =>
+      _STATE_LABELS[status]?.vi ?? status)
+    .replace(/`([a-z][a-z0-9_]+)`/g, (whole, key: string) => {
+      const label = _STATE_LABELS[key]?.vi;
+      return label ? `**${label}**` : whole;
+    });
+}
 
 function _humanizeVisibleStateKeys(text: string): string {
   const locale = /[À-ỹĐđ]/.test(text) ? "vi" : "en";
@@ -637,7 +662,7 @@ function _renderMarkdown(text: string) {
       components={_markdownComponents}
     >
       {_fixMathText(_normalizeLatexDelimiters(
-        _protectCiteUrls(_humanizeVisibleStateKeys(_stripMarkers(text))),
+        _protectCiteUrls(_humanizeVisibleStateKeys(humanizeTechnicalCopy(_stripMarkers(text)))),
       ))}
     </ReactMarkdown>
   );

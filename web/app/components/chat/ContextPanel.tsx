@@ -315,9 +315,27 @@ type ExportRow = {
 };
 
 const _SCOPE_LABEL: Record<string, string> = {
-  full: "Full thesis", M1: "M1 Topic", M2: "M2 Literature",
-  M3: "M3 Design", M4: "M4 Analysis", M5: "M5 Writing",
+  full: "Toàn bộ luận văn", M1: "M1 · Chủ đề", M2: "M2 · Tổng quan",
+  M3: "M3 · Phương pháp", M4: "M4 · Phân tích", M5: "M5 · Bài viết",
 };
+
+const _CHAPTER_SCOPE_LABEL: Record<string, string> = {
+  intro: "Chương 1", lit_review: "Chương 2", methodology: "Chương 3",
+  results: "Chương 4", discussion: "Chương 5", conclusion: "Kết luận",
+};
+
+export function formatExportScope(scope: string): string {
+  const value = (scope || "").trim();
+  if (!value) return "Tài liệu";
+  if (value === "full") return "Toàn bộ luận văn";
+  if (value.toLowerCase().startsWith("chapter:")) {
+    const names = value.slice(8).split("|").map(name => name.trim().toLowerCase()).filter(Boolean);
+    if (names.join("|") === "intro|lit_review|methodology") return "Chương 1–3";
+    return names.map(name => _CHAPTER_SCOPE_LABEL[name] ?? name).join(" + ");
+  }
+  return value.split(",").map(part => part.trim()).filter(Boolean)
+    .map(module => _SCOPE_LABEL[module] ?? module).join(" + ");
+}
 
 function ExportsSection({ projectId }: { projectId: string }) {
   // Fetch the project's exports list (newest first). Revalidates on focus so a
@@ -370,12 +388,8 @@ function ExportRowItem({ row }: { row: ExportRow }) {
       <span className="font-serif text-[12px] font-extrabold text-ink-900 shrink-0">
         {row.kind.toUpperCase()}
       </span>
-      <span className="text-[10.5px] uppercase tracking-[0.04em] font-bold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded shrink-0">
-        {row.scope === "full"
-          ? _SCOPE_LABEL.full
-          : !row.scope.includes(",")
-            ? (_SCOPE_LABEL[row.scope] ?? row.scope)
-            : row.scope.split(",").map(s => s.trim()).join(" + ")}
+      <span className="text-[11.5px] font-semibold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded truncate min-w-0">
+        {formatExportScope(row.scope)}
       </span>
       <span className="text-ink-400 text-[11.5px] ml-auto shrink-0">{size}</span>
       <Download className="w-3.5 h-3.5 text-ink-400 shrink-0" aria-hidden />
@@ -428,4 +442,3 @@ function UploadRow({ upload }: { upload: UploadItem }) {
     </>
   );
 }
-

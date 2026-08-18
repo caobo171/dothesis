@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ContextPanel } from "./ContextPanel";
+import { ContextPanel, formatExportScope } from "./ContextPanel";
 
 
 const _baseCtx = {
@@ -10,6 +10,14 @@ const _baseCtx = {
   m4_analysis: null,
   m5_writing: null,
 };
+
+describe("export scope labels", () => {
+  test("turns chapter protocol scopes into student-facing names", () => {
+    expect(formatExportScope("chapter:intro|lit_review|methodology")).toBe("Chương 1–3");
+    expect(formatExportScope("chapter:methodology")).toBe("Chương 3");
+    expect(formatExportScope("full")).toBe("Toàn bộ luận văn");
+  });
+});
 
 
 describe("ContextPanel", () => {

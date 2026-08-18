@@ -1,10 +1,27 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MessageBubble } from "./MessageBubble";
+import { MessageBubble, humanizeTechnicalCopy } from "./MessageBubble";
 import { StreamingBubble } from "./StreamingBubble";
 
 
 describe("MessageBubble", () => {
+  test("hides agent protocol vocabulary in Vietnamese replies", () => {
+    const raw = "Tôi sẽ chạy `quick_sources`, commit vào slice M3. [PROJECT STATE] focus=M3 | M3:done";
+    const clean = humanizeTechnicalCopy(raw);
+    expect(clean).toContain("tìm nguồn học thuật");
+    expect(clean).toContain("lưu vào phần M3");
+    expect(clean).not.toContain("quick_sources");
+    expect(clean).not.toContain("commit");
+    expect(clean).not.toContain("[PROJECT STATE]");
+  });
+
+  test("humanizes visible M3 schema labels", () => {
+    render(<MessageBubble role="assistant" content="`instrument`, `interview_guide`, `purposive_criteria`" />);
+    expect(screen.getByText("Bảng hỏi nghiên cứu")).toBeTruthy();
+    expect(screen.getByText("Hướng dẫn phỏng vấn")).toBeTruthy();
+    expect(screen.getByText("Tiêu chí chọn mẫu")).toBeTruthy();
+  });
+
   test("renders user role on the right", () => {
     render(<MessageBubble role="user" content="hello" />);
     const el = screen.getByText("hello");
