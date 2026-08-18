@@ -20,13 +20,12 @@ def _get_llm():
 
 
 def _format_references(refs: list[dict]) -> str:
-    """Format verified references, marking unverified page numbers as [page?]."""
+    """Format sources without inventing or demanding page anchors."""
     lines = []
     for r in refs:
         page = r.get("page")
-        # Only show the actual page number if the reference was confirmed by the user
-        page_str = str(page) if r.get("verified") and page is not None else "[page?]"
-        lines.append(f"- {r.get('author')} ({r.get('year')}), p. {page_str}")
+        page_part = f", p. {page}" if r.get("verified") and page is not None else ""
+        lines.append(f"- {r.get('author')} ({r.get('year')}){page_part}")
     return "\n".join(lines)
 
 
@@ -53,7 +52,7 @@ def run(state: M2SubGraphState) -> dict:
         f"Language: {state.get('language')}\n\n"
         f"Phase 2 synthesis:\n{synthesis}\n\n"
         f"Confirmed research gaps:\n{selected_gaps}\n\n"
-        f"Verified references:\n{refs}"
+        f"Grounded references:\n{refs}"
     )
     draft = _get_llm().invoke(user_prompt).content
 

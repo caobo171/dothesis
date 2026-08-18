@@ -86,7 +86,7 @@ def test_completed_substep_reads_done_even_when_an_earlier_one_is_current(monkey
 
     assert steps["find_gaps"] == "done"          # evidenced — the actual fix
     assert steps["familiarize"] == "current"     # genuinely missing, still the cursor
-    assert steps["confirm_refs"] == "upcoming"   # unbacked and not reached
+    assert "confirm_refs" not in steps             # removed student chore
 
     # M1 has both of its backed artifacts, so neither may render as unfinished
     # and there is no current step left — the next action is "confirm it".

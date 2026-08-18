@@ -111,8 +111,8 @@ class WizardAgent(ModuleHandler):
 class PhaseChatAgent(ModuleHandler):
     """M2 (brief §3). The phase machine pattern, formalised.
 
-    M2 walks five phases: familiarization → research_state → gap_analysis
-    → reference_confirm → output_gen. Each phase IS a chat loop with its
+    M2 walks four phases: familiarization → research_state → gap_analysis
+    → output_gen. Each phase IS a chat loop with its
     own prompt; transitions happen on the agent's signal (not user input).
 
     This class is a marker — M2Agent's existing step() (which delegates

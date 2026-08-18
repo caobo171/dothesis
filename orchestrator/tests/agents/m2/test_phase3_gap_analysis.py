@@ -132,7 +132,7 @@ def test_phase3_first_call_proposes_gaps(monkeypatch):
     assert gaps[0]["description"] == "No SME context"
 
 
-def test_phase3_select_advances_to_reference_confirm(monkeypatch):
+def test_phase3_select_advances_directly_to_output(monkeypatch):
     from orchestrator.agents.m2.phases import phase3_gap_analysis
     from orchestrator.agents.m2 import intent as m2_intent
     monkeypatch.setattr(phase3_gap_analysis, "_get_llm", lambda: MagicMock())
@@ -153,7 +153,7 @@ def test_phase3_select_advances_to_reference_confirm(monkeypatch):
     ]
     patch = phase3_gap_analysis.run(s)
     assert patch.get("selected_gap_ids") == ["1", "2"]
-    assert patch.get("current_phase") == "reference_confirm"
+    assert patch.get("current_phase") == "output_gen"
 
 
 def test_phase3_refine_regenerates(monkeypatch):
@@ -189,4 +189,4 @@ def test_phase3_auto_selects_all(monkeypatch):
 
     patch = phase3_gap_analysis.run(_state(mode="auto"))
     assert patch.get("selected_gap_ids") == ["1", "2"]
-    assert patch.get("current_phase") == "reference_confirm"
+    assert patch.get("current_phase") == "output_gen"

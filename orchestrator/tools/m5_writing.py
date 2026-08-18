@@ -878,7 +878,17 @@ def _coerce_cm(cm: dict | str | None) -> dict:
     every figure renderer sees one grammar. No-op when nodes/edges already exist.
     Handles: variable-decomposition (independent/dependent/moderator) and
     constructs+relationships. Unknown shapes pass through unchanged."""
-    # One canonical contract owns legacy-shape recovery. In particular, prose
+    # Preserve already drawable graphs and the older constructs/relationships
+    # shape before normalization. The canonical normalizer intentionally drops
+    # unknown legacy keys, which otherwise erased a drawable model here.
+    if isinstance(cm, dict) and (cm.get("nodes") or cm.get("edges")):
+        return cm
+    if isinstance(cm, dict) and cm.get("constructs") and (
+            cm.get("relationships") or cm.get("paths")):
+        converted = _constructs_relationships_to_graph(cm)
+        if converted:
+            return converted
+    # One canonical contract owns remaining legacy-shape recovery. In particular, prose
     # containing an explicit regression equation becomes a real graph instead
     # of crashing renderers or silently losing the required model figure.
     from agent.m3_contract import normalize_conceptual_model  # noqa: PLC0415
@@ -887,8 +897,6 @@ def _coerce_cm(cm: dict | str | None) -> dict:
         return cm
     if cm.get("dependent_variable"):
         return _variable_decomposition_to_graph(cm) or cm
-    if cm.get("constructs") and (cm.get("relationships") or cm.get("paths")):
-        return _constructs_relationships_to_graph(cm) or cm
     return cm
 
 
@@ -1208,17 +1216,36 @@ def _pillow_model_figure(conceptual_model: dict | str | None,
             continue
         solid.append((source, target,
                       str(edge.get("hypothesis") or edge.get("label") or "").strip()))
-    targets = {target for _, target, _ in solid}
-    if not solid or len(targets) != 1:
-        return None
-    outcome = next(iter(targets))
-    predictors = list(dict.fromkeys(source for source, _, _ in solid if source != outcome))
-    if not predictors:
+    if not solid:
         return None
 
-    width, box_w, box_h = 1400, 360, 92
-    gap = 52
-    height = max(420, 100 + len(predictors) * (box_h + gap))
+    # Decision: use a small layered-DAG layout instead of assuming every model
+    # is a one-outcome star. Real thesis models commonly contain a mediator or
+    # sequential outcome (A/B/C/D -> awareness -> intention); the old fallback
+    # returned None for exactly those models whenever Chrome/Cairo was absent.
+    node_ids = list(labels)
+    depth = {node_id: 0 for node_id in node_ids}
+    for _ in range(len(node_ids)):
+        changed = False
+        for source, target, _hypothesis in solid:
+            candidate = depth[source] + 1
+            if candidate > depth[target] and candidate < len(node_ids):
+                depth[target] = candidate
+                changed = True
+        if not changed:
+            break
+    layers: dict[int, list[str]] = {}
+    for node_id in node_ids:
+        layers.setdefault(depth[node_id], []).append(node_id)
+    ordered_depths = sorted(layers)
+
+    box_w, box_h = 330, 104
+    x_gap, y_gap, margin = 170, 64, 75
+    width = max(1200, margin * 2 + len(ordered_depths) * box_w
+                + max(0, len(ordered_depths) - 1) * x_gap)
+    max_rows = max(len(layer) for layer in layers.values())
+    height = max(420, margin * 2 + max_rows * box_h
+                 + max(0, max_rows - 1) * y_gap)
     image = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(image)
     font_paths = (
@@ -1229,32 +1256,56 @@ def _pillow_model_figure(conceptual_model: dict | str | None,
     font = ImageFont.truetype(font_path, 28) if font_path else ImageFont.load_default()
     small = ImageFont.truetype(font_path, 22) if font_path else ImageFont.load_default()
 
-    left_x, right_x = 90, width - box_w - 90
-    predictor_y = [70 + i * (box_h + gap) for i in range(len(predictors))]
-    outcome_y = int(sum(predictor_y) / len(predictor_y))
+    positions: dict[str, tuple[int, int]] = {}
+    for column, layer_depth in enumerate(ordered_depths):
+        members = layers[layer_depth]
+        layer_height = len(members) * box_h + max(0, len(members) - 1) * y_gap
+        start_y = (height - layer_height) // 2
+        x = margin + column * (box_w + x_gap)
+        for row, node_id in enumerate(members):
+            positions[node_id] = (x, start_y + row * (box_h + y_gap))
 
     def box(x: int, y: int, text: str, fill: str) -> None:
         draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=16,
                                fill=fill, outline="#315a9a", width=3)
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tx = x + max(18, (box_w - (bbox[2] - bbox[0])) / 2)
-        ty = y + (box_h - (bbox[3] - bbox[1])) / 2 - 3
-        draw.text((tx, ty), text, fill="#17233a", font=font)
+        words, lines, current = text.split(), [], ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if draw.textbbox((0, 0), candidate, font=font)[2] <= box_w - 34:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        lines = lines[:3]
+        line_h = 32
+        ty = y + (box_h - len(lines) * line_h) // 2
+        for line in lines:
+            bbox = draw.textbbox((0, 0), line, font=font)
+            tx = x + (box_w - (bbox[2] - bbox[0])) // 2
+            draw.text((tx, ty), line, fill="#17233a", font=font)
+            ty += line_h
 
-    box(right_x, outcome_y, labels[outcome], "#EAF1FF")
-    for index, predictor in enumerate(predictors):
-        y = predictor_y[index]
-        box(left_x, y, labels[predictor], "#F5F8FC")
-        start = (left_x + box_w, y + box_h // 2)
-        end = (right_x, outcome_y + box_h // 2)
+    # Edges go down first so box fills cover their endpoints cleanly.
+    for source, target, hypothesis in solid:
+        sx, sy = positions[source]
+        tx, ty = positions[target]
+        start = (sx + box_w, sy + box_h // 2)
+        end = (tx, ty + box_h // 2)
         draw.line((start, end), fill="#315a9a", width=4)
-        # Arrowhead at the outcome box.
         draw.polygon([(end[0], end[1]), (end[0] - 18, end[1] - 10),
                       (end[0] - 18, end[1] + 10)], fill="#315a9a")
-        hypothesis = next((h for s, _, h in solid if s == predictor), "")
         if hypothesis:
             mx, my = (start[0] + end[0]) // 2, (start[1] + end[1]) // 2
-            draw.text((mx - 25, my - 30), hypothesis, fill="#203b67", font=small)
+            short_hypothesis = hypothesis.split(":", 1)[0].strip() or hypothesis
+            draw.text((mx - 24, my - 30), short_hypothesis,
+                      fill="#203b67", font=small)
+
+    for node_id, (x, y) in positions.items():
+        fill = "#EAF1FF" if types.get(node_id) == "dependent" else "#F5F8FC"
+        box(x, y, labels[node_id], fill)
 
     png = _scratch_dir() / f"conceptmodel-{uuid4().hex[:8]}.png"
     image.save(png, format="PNG", optimize=True)

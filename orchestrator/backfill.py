@@ -291,8 +291,18 @@ def reconstruct_artifact(artifact_key: str, context_store, llm=None,
             return {}
         out["_source"] = "reconstructed"
         return out
-    except Exception:  # noqa: BLE001 - best-effort; gated downstream anyway
-        logger.exception("reconstruct_artifact failed for %s", artifact_key)
+    except Exception as exc:  # noqa: BLE001 - best-effort; gated downstream anyway
+        # Decision: provider timeouts are an expected degraded path during an
+        # import. The walker continues with deterministic/document-derived
+        # artifacts and background literature search, so printing a full ASGI
+        # traceback makes a recoverable miss look like the whole import failed.
+        if type(exc).__name__ in {"APITimeoutError", "ReadTimeout", "TimeoutError"}:
+            logger.warning(
+                "reconstruct_artifact timed out for %s; continuing with available import data",
+                artifact_key,
+            )
+        else:
+            logger.exception("reconstruct_artifact failed for %s", artifact_key)
         return {}
 
 

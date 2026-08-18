@@ -401,6 +401,31 @@ def test_pillow_model_fallback_creates_real_png():
     assert Path(match.group(1)).read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 
+def test_pillow_model_fallback_supports_sequential_outcome_chain():
+    """Four predictors -> awareness -> intention must still produce an image."""
+    import re
+    from pathlib import Path
+    from orchestrator.tools.m5_writing import _pillow_model_figure
+
+    cm = {
+        "nodes": [
+            *[{"id": node_id, "label": node_id, "type": "independent"}
+              for node_id in ("DS", "EX", "IN", "SU")],
+            {"id": "AW", "label": "Nhận thức", "type": "dependent"},
+            {"id": "INT", "label": "Ý định", "type": "dependent"},
+        ],
+        "edges": [
+            *[{"source": node_id, "target": "AW", "hypothesis": f"H{i}"}
+              for i, node_id in enumerate(("DS", "EX", "IN", "SU"), 1)],
+            {"source": "AW", "target": "INT", "hypothesis": "H5"},
+        ],
+    }
+    markdown = _pillow_model_figure(cm, "vi")
+    match = re.search(r"!\[[^]]+\]\(([^)]+\.png)\)", markdown or "")
+    assert match and Path(match.group(1)).exists()
+    assert Path(match.group(1)).read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
 def test_validate_citations_empty_prose():
     from orchestrator.tools.m5_writing import validate_citations
     cited, uncited = validate_citations("", [])

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 ROADMAP: dict[str, list[str]] = {
     "M1": ["frame_topic", "propose_titles", "confirm_title", "derive_questions"],
-    "M2": ["familiarize", "map_research_state", "find_gaps", "confirm_refs", "generate_output"],
+    "M2": ["familiarize", "map_research_state", "find_gaps", "generate_output"],
     "M3": ["define_constructs", "build_model", "state_hypotheses", "choose_method", "design_instrument"],
     "M4": ["detect_data", "outline_analysis", "confirm_plan", "run_per_step", "interpret"],
     # "review" (F3): a committee-readiness grade before export. Advisory, so
@@ -25,7 +25,7 @@ SUBSTEP_LABELS: dict[str, str] = {
     "frame_topic": "Frame the topic", "propose_titles": "Propose titles",
     "confirm_title": "Confirm the title", "derive_questions": "Derive research questions",
     "familiarize": "Familiarize with the field", "map_research_state": "Map the research state",
-    "find_gaps": "Find research gaps", "confirm_refs": "Confirm references",
+    "find_gaps": "Find research gaps",
     "generate_output": "Write the literature review",
     "define_constructs": "Define constructs", "build_model": "Build the conceptual model",
     "state_hypotheses": "State hypotheses", "choose_method": "Choose the method",
@@ -43,7 +43,7 @@ SUBSTEP_LABELS: dict[str, str] = {
 # contextStore key proves it. Listed in spine order per module.
 #
 # The rest of the spine (propose_titles, confirm_title, map_research_state,
-# confirm_refs, define_constructs, detect_data, …) is unbacked: real work with
+# define_constructs, detect_data, …) is unbacked: real work with
 # nothing durable to check, so its completion can only ever be inferred from
 # position. Keeping the split explicit here is the point — it used to be
 # implicit in derive_substep's if-chain, which meant nothing else could ask

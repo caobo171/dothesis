@@ -52,6 +52,31 @@ _STYLE = (_PROMPT_DIR / "_style.md").read_text(encoding="utf-8")
 _PHASE_KEY = "gap_analysis"
 
 
+def _selected_references(gaps: list[dict], selected_ids: list[str]) -> list[dict]:
+    """Carry toolchain verification forward without a student verification loop."""
+    selected = {str(value) for value in selected_ids}
+    refs: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for gap in gaps:
+        if str(gap.get("id")) not in selected:
+            continue
+        for paper in gap.get("supporting_papers") or []:
+            if not _is_real_paper(paper):
+                continue
+            ref = dict(paper)
+            # Decision: a missing page is not an invalid source. Keep the
+            # research toolchain's verification result and omit page-specific
+            # claims later instead of asking the student to audit metadata.
+            ref["verified"] = bool(ref.get("verified", True))
+            key = (str(ref.get("doi") or ref.get("url") or ref.get("title") or ""),
+                   str(ref.get("author") or ""), str(ref.get("year") or ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            refs.append(ref)
+    return refs
+
+
 def _regen_cap() -> int:
     return int(os.getenv("M2_REGEN_CAP", "5"))
 
@@ -152,10 +177,12 @@ def run(state: M2SubGraphState) -> dict:
     # Auto mode: generate all gaps and select them all in one shot
     if mode == "auto":
         gaps = _generate_gaps(state, refinements=[])
+        selected = [g.get("id", str(i)) for i, g in enumerate(gaps)]
         return {
             "candidate_gaps": gaps,
-            "selected_gap_ids": [g.get("id", str(i)) for i, g in enumerate(gaps)],
-            "current_phase": "reference_confirm",
+            "selected_gap_ids": selected,
+            "verified_refs": _selected_references(gaps, selected),
+            "current_phase": "output_gen",
         }
 
     # First call: no gaps proposed yet
@@ -207,7 +234,9 @@ def run(state: M2SubGraphState) -> dict:
     if intent.action == "select":
         return {
             "selected_gap_ids": intent.selected_ids,
-            "current_phase": "reference_confirm",
+            "verified_refs": _selected_references(
+                state.get("candidate_gaps") or [], intent.selected_ids),
+            "current_phase": "output_gen",
         }
 
     if intent.action == "add_custom_gap":

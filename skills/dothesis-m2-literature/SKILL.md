@@ -50,10 +50,10 @@ Every source in the slice comes from one of these two tools or the user's own up
 **never from your training memory**. See `references/search-playbook.md` for when and
 how to scope scout calls.
 
-## The 5 phases of M2
+## The 4 phases of M2
 
 ```
-familiarization → research_state → gap_analysis → reference_confirm → output_gen
+familiarization → research_state → gap_analysis → output_gen
 ```
 
 Track the current phase in your planning notes; resume where you left off.
@@ -97,14 +97,21 @@ Gap #N — [one sentence]
 Quality rubric: `references/gap-quality-rubric.md`. Ask: *"Which of these resonate?
 (I'd keep 2–3 so the thesis has focus.)"*
 
-### Phase 4 — reference_confirm
-The user selects/edits gaps. For each kept gap verify: all cited sources are in
-`literature_sources` (if not → `research_scout` or ask for upload), page refs are
-concrete, the gap connects to ≥1 M1 research question. Then confirm and
-`commit_slice("M2", {research_gaps, literature_sources}, confirm_done=True when the
-gaps are locked)`.
+### Completion at gap selection (no reference-confirmation chore)
+The user selecting/editing gaps is the confirmation for M2. Before committing,
+deterministically check that every kept gap cites sources already present in
+`literature_sources` and connects to at least one M1 research question. Preserve
+the toolchain's `verified` value and any available page anchors; never ask the
+student to confirm references or page numbers one by one. If a source lacks a
+page anchor, cite it without a page rather than blocking progress. Then call
+`commit_slice("M2", {research_gaps, literature_sources}, confirm_done=True)` and
+continue to output generation when prose was requested.
 
-### Phase 5 — output_gen
+For imported/reconstructed projects, M2 is complete as soon as it contains at
+least one verified literature source and at least one grounded research gap.
+Do not surface a separate "Confirm references" task.
+
+### Phase 4 — output_gen
 The user wants lit-review prose (for an advisor now, or for M5 later). Produce a draft:
 one paragraph per major sub-topic, inline citations to slice sources, ending with a
 "gaps and contributions" paragraph anchored on the locked gaps. Return it in the
@@ -134,8 +141,9 @@ If the user rejects an output ("these gaps are too generic"):
 - Every claim cited inline `[Author Year, p.X]`. No uncited assertions.
 - No gap with fewer than 2 supporting papers. No gap unlinked to an RQ.
 - 0 papers in the slice → do not run gap analysis; run Phase 1 first.
-- Sources the toolchain could not verify stay `verified: false` — surface that to the
-  user before they build a gap on one.
+- Sources the toolchain could not verify stay `verified: false`; exclude them from
+  gap support or search for a replacement automatically. Do not turn verification
+  into a manual student workflow.
 
 ## What you do NOT do
 
@@ -143,4 +151,5 @@ If the user rejects an output ("these gaps are too generic"):
   or a tool result, it does not exist. Scout or ask.
 - ❌ Do not write hypotheses (M3) or run statistics (M4).
 - ❌ Do not dump 30 gaps. Cap at 6 candidates per Phase 3 round.
-- ❌ Do not mark M2 done until ≥1 gap is locked in.
+- ❌ Do not mark M2 done until ≥1 grounded gap and ≥1 verified source exist.
+- ❌ Do not ask the student to confirm references or page numbers one by one.

@@ -1,6 +1,6 @@
 """M2Agent — outer-graph wrapper that delegates to the M2 sub-graph.
 
-Decision: M2 uses a dedicated 5-phase sub-graph rather than the generic
+Decision: M2 uses a dedicated 4-phase sub-graph rather than the generic
 ModuleAgent clarification loop.  This wrapper seeds the sub-graph from outer
 state, invokes it, and flattens the result back into a ModuleStepResult so the
 outer graph sees a uniform interface.
@@ -26,9 +26,9 @@ from orchestrator.tools.m2_literature import (
 )
 
 _PROMPT = (
-    "M2 Literature Review wrapper. Routes the user through a 5-phase "
+    "M2 Literature Review wrapper. Routes the user through a 4-phase "
     "chat-first conversation (familiarize → research state → gap analysis "
-    "→ reference confirm → output generation)."
+    "→ output generation)."
 )
 
 
@@ -73,7 +73,7 @@ class M2Agent(PhaseChatAgent, ModuleAgent):
         if emitter is not None:
             sub_state["_progress_emitter"] = emitter
             # Always-fires entry beat. Without this, M2 turns that don't
-            # run scout (gap_analysis / reference_confirm / output_gen
+            # run scout (gap_analysis / output_gen
             # phases — any "do it" after the first research_state confirm)
             # leave the UI on a typing dot for the whole LLM call: those
             # phases have no per-step heartbeats of their own. This single
@@ -136,13 +136,15 @@ class M2Agent(PhaseChatAgent, ModuleAgent):
         """
         from orchestrator.agents.m2.phases import (
             phase1_familiarize, phase2_research_state, phase3_gap_analysis,
-            phase4_reference_confirm, phase5_output_gen,
+            phase5_output_gen,
         )
         phase_modules = {
             "familiarize": phase1_familiarize,
             "research_state": phase2_research_state,
             "gap_analysis": phase3_gap_analysis,
-            "reference_confirm": phase4_reference_confirm,
+            # Backward-compatible resume for checkpoints saved before the
+            # reference-confirmation chore was removed.
+            "reference_confirm": phase5_output_gen,
             "output_gen": phase5_output_gen,
         }
 

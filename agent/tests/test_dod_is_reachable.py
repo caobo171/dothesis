@@ -135,8 +135,7 @@ def test_a_thin_done_says_what_is_still_missing(tmp_path):
     assert "error" not in out
     assert store.load()["status"]["M2"] == "done"
     gaps = " ".join(out["done_but_incomplete"])
-    for still_missing in ("research_state_summary", "theoretical_framework",
-                          "literature_review_doc", "citation_list"):
+    for still_missing in ("verified literature source",):
         assert still_missing in gaps
 
 

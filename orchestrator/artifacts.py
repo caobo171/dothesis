@@ -139,12 +139,21 @@ def dod_design_structural(slice_: dict) -> DoD:
 
 
 def dod_literature(slice_: dict) -> DoD:
-    """M2 literature: synthesis + ≥1 gap + framework + Ch2 draft + ≥1 citation."""
+    """M2 literature: at least one grounded gap and one verified source.
+
+    Decision: synthesis/framework prose belongs to M5 output generation, not to
+    the literature-evidence gate. Requiring it kept fully reconstructed projects
+    in M2 even after the system had already found sources and defensible gaps.
+    """
     slice_ = slice_ or {}
-    gaps = _missing_strings(slice_, (
-        "research_state_summary", "theoretical_framework", "literature_review_doc",
-    ))
-    gaps += _empty_lists(slice_, ("research_gaps", "citation_list"))
+    sources = slice_.get("literature_sources") or slice_.get("citation_list") or []
+    verified = [source for source in sources
+                if isinstance(source, dict) and source.get("verified") is not False]
+    gaps = []
+    if not verified:
+        gaps.append("missing verified literature source")
+    if not (slice_.get("research_gaps") or []):
+        gaps.append("missing research_gaps")
     return DoD(done=not gaps, gaps=gaps)
 
 
