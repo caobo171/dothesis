@@ -887,12 +887,64 @@ button { font: inherit; cursor: pointer; }
 }
 
 /* ============ Word preview (docx-preview) ============ */
-/* docx-preview emits its own layout CSS from the file's own styles, so this
-   only frames it: fit the modal instead of forcing A4 width, and keep table
-   borders visible when the source relies on Word defaults we don't inherit. */
-.docx-body { font-size: 13.5px; }
-.docx-body .docx-wrapper { background: transparent; padding: 0; }
-.docx-body .docx { width: 100% !important; min-height: 0 !important; padding: 0 !important; box-shadow: none !important; }
-.docx-body table { border-collapse: collapse; }
-.docx-body td, .docx-body th { border: 1px solid #e4e4e7; padding: 4px 7px; }
+/* Keep Word's real page geometry. The neutral desk, paper edge and page gaps
+   make pagination legible without modifying the document's own typography. */
+.docx-body {
+  min-width: max-content;
+  font-size: 13.5px;
+}
+.docx-body .docx-wrapper {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  background: #e9edf2;
+  padding: 32px clamp(20px, 4vw, 56px) 56px;
+}
+.docx-body section.docx {
+  flex: none;
+  margin: 0 !important;
+  border: 1px solid rgba(54, 65, 82, 0.12);
+  border-radius: 2px;
+  box-shadow: 0 2px 5px rgba(35, 45, 60, 0.08), 0 16px 38px rgba(35, 45, 60, 0.12) !important;
+}
+/* Some uploaded theses use 0pt paragraph-after throughout, making separate
+   ideas look like one continuous block in a browser. Add only a modest reader
+   gap between top-level paragraphs; table content keeps its compact rhythm. */
+.docx-body section.docx > p + p {
+  margin-top: 0.52em !important;
+}
+.docx-body table {
+  border-collapse: collapse;
+  background: #fff;
+}
+.docx-body td,
+.docx-body th {
+  height: 2.5em;
+  padding: 7px 10px !important;
+  border-color: #8a9099 !important;
+  vertical-align: middle !important;
+  line-height: 1.3 !important;
+}
+.docx-body th,
+.docx-body tr:first-child > td {
+  background: #f4f6f8;
+  font-weight: 600;
+}
+.docx-body .docx-checkbox {
+  display: inline-block;
+  width: 0.82em;
+  height: 0.82em;
+  margin: 0 0.38em 0.08em 0.04em;
+  border: 1.5px solid #555f6d;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+  vertical-align: -0.04em;
+}
 .docx-body img { max-width: 100%; height: auto; }
+
+@media (max-width: 720px) {
+  .docx-body .docx-wrapper { align-items: flex-start; padding: 18px; }
+}

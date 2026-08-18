@@ -199,21 +199,50 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
                     f"do not mention it to the student and do not re-ask them to confirm.")
         except Exception:
             logger.debug("commit_slice: skill nudge skipped", exc_info=True)
-        # M3 model guard (deterministic, additive-only): a research model must be
-        # ONE connected graph converging on the dependent construct. Repair a
-        # disconnected/thin conceptual_model in place — never an LLM call, never a
-        # rejection (an error return here would count as a stalled turn), never a
-        # raise. Valid models pass through untouched.
+        # M3 model guard: a research model must be an explicit graph, not merely
+        # a prose methodology. Valid graphs are repaired deterministically; a
+        # finalize/methodology commit without one is rejected so incomplete M3
+        # state cannot later render as a model-free proposal.
         _repair_note = None
-        if module == "M3" and isinstance(writes.get("conceptual_model"), dict):
+        if module == "M3":
+            _requires_model = confirm_done or any(
+                key in writes for key in ("methodology", "hypotheses"))
             try:
+                from agent.m3_contract import normalize_conceptual_model  # noqa: PLC0415
                 from orchestrator.graph_guard import repair_conceptual_model  # noqa: PLC0415
-                fixed, rep = repair_conceptual_model(writes["conceptual_model"])
-                if rep.get("repaired"):
+
+                # Decision: prose-only methodology is not a complete research
+                # design. Validate the merged slice because a later methodology
+                # edit may legitimately rely on a model committed earlier.
+                _stored_m3 = (store.load() or {}).get("contextStore", {})
+                _raw_model = writes.get(
+                    "conceptual_model", _stored_m3.get("conceptual_model"))
+                _model, _ = normalize_conceptual_model(_raw_model)
+                if _requires_model and (
+                    len(_model.get("nodes") or []) < 2
+                    or not (_model.get("edges") or [])
+                ):
+                    return json.dumps({
+                        "error": "m3_model_required — methodology cannot be finalized "
+                                 "without a structured conceptual model with at least "
+                                 "two constructs and one relationship",
+                        "hint": "Build the parsimonious model now, include explicit nodes "
+                                "and edges, then retry this commit in the same turn.",
+                    }, ensure_ascii=False)
+                if "conceptual_model" in writes:
+                    fixed, rep = repair_conceptual_model(_model)
                     writes = {**writes, "conceptual_model": fixed}
-                    _repair_note = rep
-            except Exception:
+                    if rep.get("repaired"):
+                        _repair_note = rep
+            except Exception as exc:
                 logger.debug("commit_slice: M3 model guard skipped", exc_info=True)
+                if _requires_model:
+                    return json.dumps({
+                        "error": "m3_model_invalid — the conceptual model could not "
+                                 "be normalized into constructs and relationships",
+                        "hint": f"Rebuild the model with explicit nodes and edges, then "
+                                f"retry this commit in the same turn ({type(exc).__name__}).",
+                    }, ensure_ascii=False)
         # M4 stats self-validation gate (deterministic, fail-open). Hard findings
         # — numbers that are mathematically impossible or self-contradictory —
         # block the commit so a wrong number never becomes product state. Soft

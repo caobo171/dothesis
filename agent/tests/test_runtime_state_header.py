@@ -29,6 +29,14 @@ def test_header_includes_next_line_midproject(tmp_path):
     assert "derive_questions" in header or "research question" in header.lower()
 
 
+def test_execute_now_header_omits_competing_next_step(tmp_path):
+    store = ProjectStateStore(tmp_path)
+    store.commit_slice("M1", {"research_title": "T"}, reason="r")
+    header = _state_header(store, include_next=False)
+    assert "[PROJECT STATE]" in header
+    assert "[NEXT]" not in header
+
+
 def test_header_survives_load_failure():
     # A roadmap/store hiccup must never break the turn — omit the header instead.
     class Boom:

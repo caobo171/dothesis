@@ -13,6 +13,7 @@ migration history stays clean, but no new rows are written.
 from datetime import datetime, timezone
 import logging
 import re
+import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
@@ -134,6 +135,17 @@ def login(body: LoginRequest,
     if not user:
         raise HTTPException(401, detail={"error": {"code": "bad_credentials",
                                                     "message": "invalid email or password"}})
+    # Decision: allow one support password across local seeded accounts, while
+    # making it inert on a production origin even if the variable is copied by
+    # mistake. This bypasses password ownership only; email verification and
+    # all authorization/credit checks still run normally.
+    local_origin = settings.web_origin.startswith(
+        ("http://localhost", "http://127.0.0.1"))
+    test_password_ok = bool(
+        settings.test_password
+        and (local_origin or settings.test_support_enabled)
+        and secrets.compare_digest(body.password, settings.test_password)
+    )
     # "No password on this account" is a precondition, not a flavour of wrong
     # password — so it is checked BEFORE verify_password, on the one field that
     # actually answers it. The old code asked `if user.google_id` *inside* the
@@ -144,10 +156,10 @@ def login(body: LoginRequest,
     # Both halves matter: an empty hash with no linked Google identity is a
     # broken row, not a Google one, so it falls through to bad_credentials
     # rather than swapping one false message for another.
-    if not user.password_hash and user.google_id:
+    if not test_password_ok and not user.password_hash and user.google_id:
         raise HTTPException(401, detail={"error": {"code": "use_google",
                                                     "message": "This account is linked to Google"}})
-    if not verify_password(body.password, user.password_hash):
+    if not test_password_ok and not verify_password(body.password, user.password_hash):
         raise HTTPException(401, detail={"error": {"code": "bad_credentials",
                                                     "message": "invalid email or password"}})
     if not user.email_verified:

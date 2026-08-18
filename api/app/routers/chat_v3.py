@@ -14,6 +14,7 @@ and call tools in real time (the PDF session's trust-building beat).
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 
 from fastapi.responses import StreamingResponse
@@ -146,6 +147,104 @@ def _clicked_a_previous_option(db: Session, thread_pk, text: str) -> bool:
     return False
 
 
+_DIRECT_REQUEST_RE = re.compile(
+    r"(?:\b(?:please|write|create|build|update|revise|finalize|finalise|save|"
+    r"export|review|check|generate|give\s+me|i\s+(?:need|want))\b|"
+    r"\b(?:hãy|làm|viết|tạo|xuất|cập\s*nhật|chốt|sửa|đánh\s*giá|kiểm\s*tra|"
+    r"cho\s+tôi|tôi\s+(?:cần|muốn)|đồng\s*ý)\b|"
+    r"\b(?:hay|lam|viet|tao|xuat|cap\s*nhat|chot|sua|danh\s*gia|kiem\s*tra|"
+    r"cho\s+toi|toi\s+(?:can|muon)|dong\s*y)\b)",
+    re.IGNORECASE,
+)
+_DIRECT_QUESTION_RE = re.compile(
+    r"^\s*(?:what|which|who|why|how|when|where|can|could|is|are|do|does|"
+    r"ai|gì|gi|sao|tại\s*sao|tai\s*sao|như\s*thế\s*nào|nhu\s*the\s*nao|"
+    r"đang|dang)\b",
+    re.IGNORECASE,
+)
+_VIETNAMESE_RE = re.compile(
+    r"[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợ"
+    r"úùủũụứừửữựýỳỷỹỵ]",
+    re.IGNORECASE,
+)
+
+
+def _direct_request(text: str) -> bool:
+    """A self-contained request should be answered or executed, not re-menued.
+
+    This is deliberately deterministic: relying on the model to decide whether
+    “OK, chốt và cập nhật” is confirmation produced the repeated-question loop
+    seen in production. A question mark is also a redirect from the roadmap.
+    """
+    value = (text or "").strip()
+    return bool(value and (
+        "?" in value
+        or _DIRECT_REQUEST_RE.search(value)
+        or _DIRECT_QUESTION_RE.search(value)
+    ))
+
+
+def _chapter_export_directive(
+    text: str, recent_user_texts: tuple[str, ...] | list[str] = (),
+) -> str | None:
+    """Route explicit and immediate follow-up requests for Chapters 1–3.
+
+    Decision: short corrections such as ``đủ hết rồi, xuất ra`` inherit the
+    most recent explicit chapter scope. Without this conversational continuity,
+    a checkpoint can preserve an earlier, incorrect chapter mapping.
+    """
+    value = (text or "").casefold()
+
+    def _explicit_scope(candidate: str) -> bool:
+        mentions_chapters = "chương" in candidate or "chapter" in candidate
+        asks_to_write = bool(re.search(
+            r"\b(?:viết|viet|write|draft|soạn|soan|hoàn\s*chỉnh|hoan\s*chinh)\b",
+            candidate,
+        ))
+        numbers = set(re.findall(r"(?<!\d)[123](?!\d)", candidate))
+        return mentions_chapters and asks_to_write and {"1", "2", "3"}.issubset(numbers)
+
+    explicit = _explicit_scope(value)
+    names_a_chapter = "chương" in value or "chapter" in value
+    continuation = bool(re.search(
+        r"\b(?:xuất|xuat|export|làm\s*ngay|lam\s*ngay|hoàn\s*chỉnh|"
+        r"hoan\s*chinh|không\s*đúng|khong\s*dung|đủ\s*hết|du\s*het)\b",
+        value,
+    ))
+    inherited = (
+        not names_a_chapter
+        and continuation
+        and any(_explicit_scope((item or "").casefold()) for item in recent_user_texts)
+    )
+    if explicit or inherited:
+        return (
+            "[REQUESTED OUTPUT] Write the complete first three pre-results chapters "
+            "from the existing M1–M3 state and call export_docx with scope "
+            '"chapter:intro|lit_review|methodology" in this turn. Do not require M4 '
+            "survey/interview results and do not answer with an outline or another question."
+        )
+    return None
+
+
+def _tool_only_reply(user_text: str, tool_results: list[tuple[str, str]]) -> str:
+    """Give a silent tool turn an honest, localized completion message."""
+    successful = [name for name, preview in tool_results
+                  if not re.search(r'(^|["{\s])error["\s:]', preview or "", re.I)]
+    vi = bool(_VIETNAMESE_RE.search(user_text or ""))
+    if "export_docx" in successful:
+        return ("Đã tạo tài liệu. Bạn có thể tải bản DOCX/PDF từ thẻ tải xuống."
+                if vi else
+                "The document is ready. Download the DOCX/PDF from the download card.")
+    if "commit_slice" in successful:
+        return ("Đã cập nhật nội dung vào dự án."
+                if vi else "The project has been updated.")
+    if successful:
+        return "Đã hoàn tất yêu cầu." if vi else "Done."
+    return ("Mình chưa tạo được kết quả cho yêu cầu này. Vui lòng thử lại."
+            if vi else
+            "I couldn't produce a result for that request. Please try again.")
+
+
 def _materialize_attachments(
     db: Session,
     project_id: uuid.UUID,
@@ -259,6 +358,17 @@ async def send_message_v3(
     except Exception:
         logger.exception("clicked-option detection failed")
         clicked_option = False
+    execute_now = clicked_option or _direct_request(text)
+
+    # Read before inserting this turn so terse corrections inherit the user's
+    # last explicit scope, while a newly named chapter always wins.
+    recent_user_texts = tuple(db.scalars(
+        select(Message.content)
+        .where(Message.thread_id == t.id, Message.role == "user")
+        .order_by(Message.id.desc())
+        .limit(6)
+    ).all())
+    chapter_directive = _chapter_export_directive(text, recent_user_texts)
 
     db.add(Message(thread_id=t.id, role="user", content=text,
                    tool_calls_json=user_tool_calls))
@@ -299,6 +409,7 @@ async def send_message_v3(
         # ALL of them, not just the last, so none clobbers another. Persisted
         # onto the Message row so MessageBubble can render them all on reload.
         widget_hints: list[dict] = []
+        tool_results: list[tuple[str, str]] = []
 
         # Engine progress beats (research_scout's 30–90s search) reach the
         # SSE stream through the same registry the graph path used.
@@ -355,10 +466,15 @@ async def send_message_v3(
                 # [PROJECT STATE] status line — keeps the agent's "done" claims
                 # honest against the real module statuses.
                 turn_store = DbProjectStateStore(engine, project_id, _workspace_dir(project_id))
+                from agent.runtime import EXECUTE_NOW_MARKER
+                _runtime_text = "\n".join(part for part in (
+                    EXECUTE_NOW_MARKER if execute_now else None,
+                    chapter_directive,
+                    text,
+                ) if part)
                 async for ev in stream_turn(
-                    agent, agent_thread_id, text,
+                    agent, agent_thread_id, _runtime_text,
                     attachments=attachments, store=turn_store,
-                    clicked_option=clicked_option,
                 ):
                     await events_q.put(("agent", ev))
             finally:
@@ -422,9 +538,7 @@ async def send_message_v3(
             # fallback so every turn yields a visible assistant bubble. Errors
             # are skipped: the error event already told the user what happened.
             if not full and _counts.get("error", 0) == 0:
-                full = ("I didn't have anything to add there. Tell me which part "
-                        "of your thesis you'd like to work on next, or ask me "
-                        "anything about it.")
+                full = _tool_only_reply(text, tool_results)
             # Collapse the turn's widget hints into the single tool_calls_json
             # slot: none → null, one → that hint (back-compat), many → a `multi`
             # wrapper the frontend expands so an export card + papers panel both
@@ -542,10 +656,18 @@ async def send_message_v3(
                     # (another tool or the reply tokens) supersedes it.
                     print(f"[v3] tool_end name={ev.get('name')!r}",
                           file=_sys.stderr, flush=True)
+                    tool_results.append((str(ev.get("name") or ""),
+                                         str(ev.get("preview") or "")))
                 elif kind == "tool_calls":
                     # Interactive widget hint — render as clickable cards
                     # in MessageBubble. Collect every hint this turn emits.
                     _payload = ev.get("payload")
+                    # Decision: after a direct command/question, suppress a
+                    # fresh choice menu. Papers and artifact cards still pass;
+                    # only the autonomy-killing follow-up grid is removed.
+                    if execute_now and isinstance(_payload, dict) \
+                            and _payload.get("widget_type") == "card_grid":
+                        continue
                     if _payload:
                         widget_hints.append(_payload)
                     yield sse_pack({"type": "tool_calls", "payload": _payload})

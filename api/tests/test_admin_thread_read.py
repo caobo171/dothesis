@@ -62,6 +62,25 @@ def test_admin_can_open_someone_elses_thread(world):
     assert r.json()["name"] == "Main"
 
 
+def test_admin_project_read_identifies_owner_and_read_only_state(world):
+    r = _as(world["admin"]).post(
+        f"/api/v1/projects/{world['pid']}", json={"access_token": "x"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["can_write"] is False
+    assert body["owner_email"] == "student@e.com"
+    assert body["owner_username"]
+
+
+def test_owner_project_read_does_not_expose_owner_summary(world):
+    r = _as(world["student"]).post(
+        f"/api/v1/projects/{world['pid']}", json={"access_token": "x"})
+    body = r.json()
+    assert body["can_write"] is True
+    assert body["owner_email"] is None
+    assert body["owner_username"] is None
+
+
 def test_admin_can_read_the_messages(world):
     """The actual debugging payload — without this the page renders empty."""
     r = _as(world["admin"]).post(f"/api/v1/threads/{world['tid']}/messages/list",
@@ -75,6 +94,8 @@ def test_admin_can_read_the_messages(world):
     "/api/v1/projects/{pid}/threads/list",
     "/api/v1/projects/{pid}/credits",
     "/api/v1/projects/{pid}/uploads/list",
+    "/api/v1/projects/{pid}/roadmap",
+    "/api/v1/projects/{pid}/runs/list",
 ])
 def test_admin_can_load_the_rest_of_the_page(world, path):
     """The thread page's layout fans out to all of these. One 404 and the user

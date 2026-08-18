@@ -1,12 +1,39 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { Download, FileText, Loader2, X } from "lucide-react";
 
 import { apiFetchText, triggerUploadDownload, uploadViewUrl } from "@/app/lib/api";
 import type { AttachmentChipMeta } from "./widgets/types";
 
 type Tab = "document" | "text";
+
+function polishDocxPreview(root: HTMLElement) {
+  // Word questionnaires commonly store an empty checkbox as a font glyph.
+  // Its weight and baseline vary wildly across platforms, so replace only the
+  // preview DOM with a stable CSS-drawn control; the uploaded file is untouched.
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
+
+  for (const node of nodes) {
+    if (!/[□☐]/.test(node.data)) continue;
+    const fragment = document.createDocumentFragment();
+    node.data.split(/([□☐])/).forEach((part) => {
+      if (part === "□" || part === "☐") {
+        const box = document.createElement("span");
+        box.className = "docx-checkbox";
+        box.setAttribute("role", "checkbox");
+        box.setAttribute("aria-checked", "false");
+        box.setAttribute("aria-label", "Unchecked option");
+        fragment.appendChild(box);
+      } else if (part) {
+        fragment.appendChild(document.createTextNode(part));
+      }
+    });
+    node.replaceWith(fragment);
+  }
+}
 
 function _kindOf(meta: AttachmentChipMeta): "pdf" | "docx" | "plain" {
   const name = (meta.filename || "").toLowerCase();
@@ -59,11 +86,15 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
         await renderAsync(blob, host.current, undefined, {
           className: "docx",
           inWrapper: true,
-          ignoreWidth: true,      // fit the modal, don't force A4 width
-          ignoreHeight: true,     // continuous scroll beats fixed page boxes here
-          breakPages: false,
+          // Decision: this surface answers "what does my Word file look like?"
+          // Preserve its page geometry instead of stretching every paragraph
+          // and table across the modal like generic HTML.
+          ignoreWidth: false,
+          ignoreHeight: false,
+          breakPages: true,
           experimental: true,     // needed for some table/border cases
         });
+        polishDocxPreview(host.current);
         if (alive) setBusy(false);
       } catch {
         if (alive) {
@@ -94,7 +125,7 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
       {busy && <Loading />}
       {/* docx-preview writes into this node directly. `docx-body` scopes the
           styles in globals.css so they can't leak into the agent's markdown. */}
-      <div ref={host} className="docx-body" />
+      <div ref={host} className="docx-body min-h-full" />
     </>
   );
 }
@@ -153,6 +184,7 @@ export function AttachmentPreview({
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<Tab>(_kindOf(meta) === "plain" ? "text" : "document");
+  const documentCanvas = tab === "document" && _kindOf(meta) !== "plain";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -167,20 +199,26 @@ export function AttachmentPreview({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 px-4 py-8"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/50 p-2 backdrop-blur-[2px] sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={meta.filename}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-full flex flex-col overflow-hidden"
+        className="flex h-[calc(100dvh-1rem)] w-full max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-white/60 bg-white shadow-[0_24px_80px_rgba(24,31,45,0.28)] sm:h-[calc(100dvh-2rem)]"
         // The backdrop closes; the panel must not, or selecting text inside it
         // would dismiss the thing being read.
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center gap-3 px-5 py-3 border-b border-ink-200 shrink-0">
-          <span className="text-[13.5px] font-semibold text-ink-900 truncate">{meta.filename}</span>
+        <header className="flex min-h-16 shrink-0 items-center gap-3 border-b border-ink-200 bg-white px-4 sm:px-5">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
+            <FileText className="h-4.5 w-4.5" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-[13.5px] font-semibold text-ink-900">{meta.filename}</div>
+            <div className="text-[11px] text-ink-400">Word document preview</div>
+          </div>
           <span className="flex-1" />
           <div className="flex items-center gap-1 shrink-0">
             <button type="button" onClick={() => setTab("document")} className={tabCls("document")}>
@@ -195,8 +233,9 @@ export function AttachmentPreview({
           <button
             type="button"
             onClick={() => void triggerUploadDownload(meta.upload_id)}
-            className="text-[12.5px] font-semibold text-primary-600 hover:underline shrink-0"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-[12.5px] font-semibold text-primary-600 transition-colors hover:bg-primary-50 active:translate-y-px"
           >
+            <Download className="h-3.5 w-3.5" aria-hidden />
             Tải xuống
           </button>
           <button
@@ -209,7 +248,9 @@ export function AttachmentPreview({
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 min-h-[240px]">
+        <div className={`min-h-[240px] flex-1 overflow-auto ${
+          documentCanvas ? "bg-[#e9edf2]" : "bg-white px-5 py-4"
+        }`}>
           {tab === "document" ? <DocumentView meta={meta} /> : <TextView meta={meta} />}
         </div>
       </div>

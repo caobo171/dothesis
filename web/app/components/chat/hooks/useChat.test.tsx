@@ -46,6 +46,24 @@ describe("useChat", () => {
     expect(result.current.streamingText).toBe("reply");
   });
 
+  test("rejected send rolls back the optimistic message and exposes the reason", async () => {
+    server.use(
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),
+      http.post("/api/v1/threads/t1/messages", () => HttpResponse.json(
+        { detail: { error: { code: "not_found", message: "project not found" } } },
+        { status: 404 },
+      )),
+    );
+
+    const { result } = renderHook(() => useChat("t1"), { wrapper });
+    await waitFor(() => expect(result.current.messages).toEqual([]));
+    await act(async () => { await result.current.send("must not linger"); });
+
+    expect(result.current.messages).toEqual([]);
+    expect(result.current.error?.message).toBe("project not found");
+    expect((result.current.error as { status?: number })?.status).toBe(404);
+  });
+
   test("collects progress SSE events into streamingProgress", async () => {
     server.use(
       http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),

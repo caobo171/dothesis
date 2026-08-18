@@ -1721,7 +1721,8 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
                 continue
             prose = (ch.get("prose") or ch.get("body") or "").strip() if isinstance(ch, dict) else str(ch)
             if prose:
-                out.append({"title": M5_CHAPTER_TITLES[name], "prose": prose})
+                out.append({"chapter_name": name, "title": M5_CHAPTER_TITLES[name],
+                            "prose": prose})
         if out:
             return out
     final_sections = (m5_slice or {}).get("final_sections") or []
@@ -1732,7 +1733,16 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
         title = (sec.get("title") or sec.get("name") or "").strip()
         prose = (sec.get("prose") or sec.get("body") or sec.get("content") or "").strip()
         if prose:
-            out.append({"title": title or "Section", "prose": prose})
+            # Keep canonical identity and lineage through rendering. Targeted
+            # chapter exports cannot reliably infer "discussion" from a custom
+            # localized title, and dropping it made a successfully saved chapter
+            # look missing one line later.
+            rendered = {"title": title or "Section", "prose": prose}
+            if sec.get("chapter_name"):
+                rendered["chapter_name"] = sec["chapter_name"]
+            if sec.get("lineage"):
+                rendered["lineage"] = sec["lineage"]
+            out.append(rendered)
     return out
 
 
@@ -1895,7 +1905,8 @@ def _match_language(prose: str, chapter_name: str, language: str) -> str:
         return prose
 
 
-def compose_all_sections(context_store: dict) -> list[dict]:
+def compose_all_sections(context_store: dict,
+                         chapters: list[str] | None = None) -> list[dict]:
     """Compose all 6 chapters from a nested context_store → [{title, prose}].
 
     `context_store` is the nested module shape ({m1_topic, m2_literature,
@@ -1931,7 +1942,11 @@ def compose_all_sections(context_store: dict) -> list[dict]:
     # unset → the whole thesis) — skips the fabricated Results/Discussion an
     # analysis-only order never bought.
     from agent.run_context import scoped_chapters  # noqa: PLC0415
-    names = scoped_chapters(M5_CHAPTER_ORDER)
+    # A chat request may need complete Chapters 1–3 without fabricating or
+    # composing Results/Discussion. Explicit chapters win; run-context scope
+    # remains the default for auto/partner runs.
+    names = [n for n in (chapters or scoped_chapters(M5_CHAPTER_ORDER))
+             if n in M5_CHAPTER_ORDER]
 
     # Chapters the student already wrote (an imported thesis lands its results
     # and conclusion here verbatim). Composing over them is pure loss: their

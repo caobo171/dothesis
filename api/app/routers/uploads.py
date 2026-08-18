@@ -13,6 +13,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from fastapi.responses import PlainTextResponse, RedirectResponse
@@ -64,6 +65,20 @@ def _extract_docx_text(body: bytes) -> tuple[str, int]:
     from agent.docx_extract import extract_docx_text  # noqa: PLC0415
     return extract_docx_text(body), 0
 _DEFAULT_MAX_BYTES = 50 * 1024 * 1024
+
+
+def _inline_content_disposition(filename: str) -> str:
+    """Build an HTTP-safe inline filename, including Unicode names.
+
+    Starlette serializes response headers as Latin-1, so putting a Vietnamese
+    filename directly in ``filename="..."`` raises before any bytes are sent.
+    RFC 5987's ``filename*`` keeps the real UTF-8 name while the ASCII fallback
+    remains compatible with older clients.
+    """
+    safe = filename.replace("\r", "").replace("\n", "")
+    fallback = safe.encode("ascii", "ignore").decode("ascii") or "download"
+    fallback = fallback.replace('"', "'").replace("\\", "_")
+    return f'inline; filename="{fallback}"; filename*=UTF-8\'\'{quote(safe, safe="")}'
 
 
 def _max_bytes() -> int:
@@ -328,8 +343,9 @@ def raw_upload(
     return Response(
         content=body,
         media_type=up.mime_type or "application/octet-stream",
-        # `inline`, and the filename quoted so a PDF viewer can title its tab.
-        headers={"Content-Disposition": f'inline; filename="{up.filename}"'},
+        # Decision: filename* preserves Vietnamese names without asking
+        # Starlette to encode non-Latin-1 characters in the response header.
+        headers={"Content-Disposition": _inline_content_disposition(up.filename)},
     )
 
 

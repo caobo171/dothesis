@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..auth_admin import readable_project as _readable_project
+from ..admin_config import is_super_admin
 from ..db import db_session, get_session_factory
 from ..deps import current_user
 from ..models import ContextStore, Message, Project, Thread, User
@@ -49,6 +50,11 @@ class ProjectOut(BaseModel):
     # the computed status back via compute_status_map.
     module_status: dict = Field(default_factory=dict)
     context_store: dict
+    # Populated only for a super-admin inspecting someone else's project. The
+    # workspace uses this minimal identity to explain its read-only boundary.
+    can_write: bool = True
+    owner_email: str | None = None
+    owner_username: str | None = None
     created_at: Any
     updated_at: Any
 
@@ -290,7 +296,14 @@ def get_project(project_id: uuid.UUID,
                 user: User = Depends(current_user),
                 db: Session = Depends(db_session)):
     p = _readable_project(db, user, project_id)
-    return _serialize_project(db, p)
+    out = _serialize_project(db, p)
+    if p.user_id != user.id and is_super_admin(user):
+        owner = db.get(User, p.user_id)
+        out.can_write = False
+        if owner:
+            out.owner_email = owner.email
+            out.owner_username = owner.username
+    return out
 
 
 @router.post("/projects/{project_id}/artifacts")

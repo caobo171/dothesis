@@ -197,6 +197,15 @@ def make_writing_tools(store) -> list:
             M1→M4 order (M1=Introduction, M2=Literature, M3=Design/Methodology,
             M4=Analysis/Results). Use this when the user picks specific modules
             (e.g. "export my methodology + results" → scope "M3,M4").
+            Exact content mapping: introduction/problem statement = M1;
+            literature review/theoretical foundation = M2; conceptual model,
+            research design, or methodology = M3; analysis/results = M4.
+            Thus “problem statement + theoretical foundation + research
+            proposal” MUST use "M1,M2,M3" so the theory chapter is not omitted.
+          - named drafted chapters using "chapter:<names joined by |>", for
+            example "chapter:intro|discussion". Valid canonical names are
+            intro, lit_review, methodology, results, discussion, conclusion.
+            Use this immediately after writing or revising named M5 chapters.
 
         The export is recorded in the project's Exports list tagged with `scope`,
         so a single-module export is labeled correctly (it does NOT get filed
@@ -218,7 +227,7 @@ def make_writing_tools(store) -> list:
         Args:
             citation_style: apa7 (default), vancouver, ieee, …
             force: skip the missing-data check and export anyway (user opt-in).
-            scope: "full" (default) or "M1".."M4" for a single-module export.
+            scope: "full", module set, or "chapter:intro|discussion".
             humanize: re-voice the prose before rendering (opt-in, chat only).
         """
         project_id = getattr(store, "project_id", None)
@@ -277,11 +286,124 @@ def make_writing_tools(store) -> list:
         references = m2_references((full_cs or {}).get("m2_literature"))
         language = resolve_output_language(full_cs or {})
 
+        # --- Chapter-scoped export (newly written/revised M5 sections) -------
+        _scope = (scope or "full").strip()
+        if _scope.lower().startswith("chapter:"):
+            aliases = {
+                "introduction": "intro", "intro": "intro",
+                "literature": "lit_review", "literature_review": "lit_review",
+                "lit_review": "lit_review", "method": "methodology",
+                "methodology": "methodology", "results": "results",
+                "discussion": "discussion", "conclusion": "conclusion",
+            }
+            raw_names = [part.strip().lower() for part in _scope[8:].split("|") if part.strip()]
+            names = [aliases.get(name, name) for name in raw_names]
+            valid = set(M5_CHAPTER_ORDER)
+            unknown = [name for name in names if name not in valid]
+            if unknown or not names:
+                return json.dumps({
+                    "error": "bad_scope",
+                    "hint": "chapter scope must use intro, lit_review, methodology, "
+                            "results, discussion, or conclusion, joined with |.",
+                })
+            by_name = {(section.get("chapter_name") or "").lower(): section
+                       for section in sections or []}
+            by_title = {(section.get("title") or "").strip().lower(): section
+                        for section in sections or []}
+            selected = []
+            missing = []
+            for name in dict.fromkeys(names):
+                title = (M5_CHAPTER_TITLES.get(name, name) or "").strip().lower()
+                section = by_name.get(name) or by_title.get(title)
+                if section and (force or not _is_stub_prose(section.get("prose", ""))):
+                    selected.append(section)
+                else:
+                    missing.append(name)
+            # Decision: a chapter request is itself authorization to compose
+            # from completed upstream state. Requiring a prior M5 chat commit
+            # made “write Chapters 1–3” refuse despite complete M1–M3 inputs.
+            if missing and full_cs:
+                readiness = assess_export_readiness(full_cs, chapters=missing)
+                if not readiness or force:
+                    composed = compose_all_sections(full_cs, chapters=missing)
+                    composed_by_name = {
+                        (section.get("chapter_name") or "").lower(): section
+                        for section in composed
+                        if section.get("chapter_name")
+                    }
+                    still_missing = []
+                    for name in missing:
+                        section = composed_by_name.get(name)
+                        if section and (force or not _is_stub_prose(section.get("prose", ""))):
+                            selected.append(section)
+                        else:
+                            still_missing.append(name)
+                    missing = still_missing
+            if missing and not force:
+                return json.dumps({
+                    "error": "needs_data", "missing_chapters": missing,
+                    "hint": "Write and commit these chapters before exporting them.",
+                }, ensure_ascii=False)
+            if not selected:
+                return json.dumps({"error": "no_content",
+                                   "hint": "None of the selected chapters has exportable prose."})
+            selected_by_name = {
+                (section.get("chapter_name") or "").lower(): section
+                for section in selected
+            }
+            selected = [selected_by_name[name] for name in dict.fromkeys(names)
+                        if name in selected_by_name]
+
+            # Persist chapters composed by this export so the editor and later
+            # exports reuse the exact prose the student downloaded. Merge by
+            # canonical chapter name; never discard unrelated existing chapters.
+            if full_cs and any(name not in by_name for name in selected_by_name):
+                merged = list(sections or [])
+                positions = {
+                    (section.get("chapter_name") or "").lower(): index
+                    for index, section in enumerate(merged)
+                    if section.get("chapter_name")
+                }
+                for name, section in selected_by_name.items():
+                    if name in positions:
+                        merged[positions[name]] = section
+                    else:
+                        merged.append(section)
+                try:
+                    store.commit_slice(
+                        "M5", {"final_sections": merged},
+                        "Composed requested chapters for targeted export",
+                        confirm_done=False,
+                    )
+                except Exception:
+                    logger.exception("export_docx: persisting targeted chapters failed")
+            selected, _hum_report = _maybe_humanize(selected, humanize, language)
+            title = ((full_cs or {}).get("m1_topic") or {}).get("research_title") or "Untitled thesis"
+            scope_tag = "chapter:" + "|".join(dict.fromkeys(names))
+            try:
+                artifacts = run_export(selected, str(project_id), references=references,
+                                       language=language, title=title, context_store=full_cs)
+            except Exception as exc:
+                logger.exception("export_docx(scope=%s): run_export failed", scope_tag)
+                return json.dumps({"error": "export_failed", "detail": str(exc)})
+            persist = getattr(store, "persist_export_artifacts", None)
+            if persist:
+                try:
+                    persist(artifacts, scope=scope_tag)
+                except Exception:
+                    logger.exception("export_docx: persist chapter artifacts failed")
+            return json.dumps({
+                "ok": True, "scope": scope_tag, "artifacts": artifacts,
+                "chapter_titles": [section.get("title") for section in selected],
+                "humanized": _hum_report,
+                "instruction": "Chapter export succeeded. Confirm briefly in the "
+                               "user's language; download buttons are already shown.",
+            }, ensure_ascii=False)
+
         # --- Module-scoped export (scope = "M3" or a set "M1,M3,M4") --------
         # Compose ONE document from the selected module(s) — a standalone
         # academic write-up — and file it tagged with that scope (not M5). The
         # user can pick several modules; they're combined into one doc in M-order.
-        _scope = (scope or "full").strip()
         if _scope.lower() != "full":
             _COLUMN = {"M1": "m1_topic", "M2": "m2_literature",
                        "M3": "m3_design", "M4": "m4_analysis"}

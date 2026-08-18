@@ -145,6 +145,28 @@ def test_get_upload_text_returns_extracted_body(client, monkeypatch):
     assert "extracted" in r.text
 
 
+def test_raw_upload_supports_unicode_filename(client, monkeypatch):
+    """A Vietnamese filename must not crash Starlette's Latin-1 headers."""
+    fake_s3 = MagicMock()
+    fake_s3.get_object.return_value = {"Body": io.BytesIO(b"docx bytes")}
+    monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: fake_s3)
+    _login(client)
+    pid = _project(client)
+    filename = "BẢNG HỎI.docx"  # decomposed marks reproduce the production crash
+    upload_id = client.post(
+        f"/api/v1/projects/{pid}/uploads",
+        files={"file": (filename, io.BytesIO(b"not-a-real-docx"),
+                         "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()["upload_id"]
+
+    st = _stream_token(client, f"project-upload:{upload_id}")
+    r = client.get(f"/api/v1/uploads/{upload_id}/raw?st={st}")
+
+    assert r.status_code == 200, r.text
+    assert "filename*=UTF-8''" in r.headers["content-disposition"]
+    assert r.content == b"docx bytes"
+
+
 # --- owner-or-admin reads --------------------------------------------------
 # An email on the super-admin seed allowlist (app/admin_config.py).
 ADMIN_EMAIL = "caotest171@gmail.com"

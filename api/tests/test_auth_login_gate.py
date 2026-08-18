@@ -7,6 +7,7 @@ from app.db import get_session_factory
 from app.main import create_app
 from app.models import User
 from app.security import hash_password
+from app.settings import reset_settings
 
 
 def _client():
@@ -72,3 +73,31 @@ def test_login_sets_last_login():
         from sqlalchemy import select
         u = s.scalar(select(User).where(User.email == "ll@e.com"))
         assert u.last_login is not None
+
+
+def test_local_test_password_bypasses_password_hash(monkeypatch):
+    _seed_user("support-login@e.com", password="unknown-real-password", verified=True)
+    monkeypatch.setenv("TEST_PASSWORD", "Cao12345678")
+    monkeypatch.setenv("WEB_ORIGIN", "http://localhost:3006")
+    reset_settings()
+    try:
+        r = _client().post("/api/v1/auth/login", json={
+            "email": "support-login@e.com", "password": "Cao12345678"})
+        assert r.status_code == 200
+    finally:
+        reset_settings()
+
+
+def test_test_password_is_ignored_on_production_origin(monkeypatch):
+    _seed_user("production-login@e.com", password="real-password", verified=True)
+    monkeypatch.setenv("TEST_PASSWORD", "Cao12345678")
+    monkeypatch.setenv("WEB_ORIGIN", "https://dothesis.example")
+    monkeypatch.setenv("DOTHESIS_TEST_SUPPORT", "0")
+    reset_settings()
+    try:
+        r = _client().post("/api/v1/auth/login", json={
+            "email": "production-login@e.com", "password": "Cao12345678"})
+        assert r.status_code == 401
+        assert r.json()["detail"]["error"]["code"] == "bad_credentials"
+    finally:
+        reset_settings()

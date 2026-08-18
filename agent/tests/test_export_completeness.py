@@ -120,3 +120,43 @@ def _export_no_force(store=None):
     tools = W.make_writing_tools(store or _Store())
     tool = next(t for t in tools if t.name == "export_docx")
     return json.loads(tool.invoke({}))
+
+
+def test_chapter_scope_exports_only_the_named_committed_chapter(captured):
+    tools = W.make_writing_tools(_Store())
+    tool = next(t for t in tools if t.name == "export_docx")
+    # The compact fixture prose is intentionally below the production
+    # anti-placeholder threshold; force isolates scope selection here.
+    out = json.loads(tool.invoke({"scope": "chapter:results", "force": True}))
+
+    assert out["ok"] is True
+    assert out["scope"] == "chapter:results"
+    assert [section["chapter_name"] for section in captured["sections"]] == ["results"]
+
+
+def test_chapter_scope_refuses_a_chapter_that_was_not_written(captured):
+    tools = W.make_writing_tools(_Store())
+    tool = next(t for t in tools if t.name == "export_docx")
+    out = json.loads(tool.invoke({"scope": "chapter:discussion"}))
+
+    assert out["error"] == "needs_data"
+    assert out["missing_chapters"] == ["discussion"]
+    assert "sections" not in captured
+
+
+def test_chapter_scope_composes_requested_chapter_from_upstream_state(monkeypatch, captured):
+    import orchestrator.tools.m5_writing as M
+    prose = "A complete grounded discussion paragraph. " * 8
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [
+        {"chapter_name": "discussion", "title": "Discussion", "prose": prose}
+    ])
+    monkeypatch.setattr(M, "assess_export_readiness", lambda cs, chapters=None: [])
+    store = _Store()
+    store.commit_slice = lambda *args, **kwargs: {"ok": True}
+    tools = W.make_writing_tools(store)
+    tool = next(t for t in tools if t.name == "export_docx")
+    out = json.loads(tool.invoke({"scope": "chapter:discussion"}))
+
+    assert out["ok"] is True
+    assert out["scope"] == "chapter:discussion"
+    assert [section["chapter_name"] for section in captured["sections"]] == ["discussion"]

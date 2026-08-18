@@ -1,9 +1,17 @@
-import { Fragment, ReactNode, useState } from "react";
+import {
+  Children,
+  cloneElement,
+  Fragment,
+  isValidElement,
+  ReactNode,
+  useEffect,
+  useState,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { Check, Copy, FileText, Loader2 } from "lucide-react";
+import { Check, Copy, Expand, FileText, Loader2, X } from "lucide-react";
 import { Mermaid } from "./Mermaid";
 import { CitationChip } from "./CitationChip";
 import { triggerExportDownload } from "@/app/lib/api";
@@ -51,6 +59,95 @@ function _formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+
+function MarkdownTable({ children }: { children?: ReactNode }) {
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpanded(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [expanded]);
+
+  const table = (extraClass = "") => (
+    <table className={`w-full min-w-[960px] table-fixed border-collapse text-[13.5px] ${extraClass}`}>
+      {children}
+    </table>
+  );
+
+  return (
+    <>
+      <div className="group/table relative my-3.5 max-w-full min-w-0 rounded-lg border border-ink-200 bg-white">
+        <div className="markdown-table-preview max-w-full overflow-x-auto overscroll-x-contain rounded-lg">
+          {table()}
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="absolute right-2 top-2 inline-flex items-center gap-1.5 rounded-md border border-ink-200 bg-white/95 px-2 py-1 text-[11.5px] font-medium text-ink-600 shadow-sm backdrop-blur hover:bg-ink-50 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+          aria-label="View full table"
+        >
+          <Expand className="h-3.5 w-3.5" aria-hidden />
+          <span className="hidden sm:inline">View full</span>
+        </button>
+      </div>
+
+      {expanded && (
+        <div
+          className="fixed inset-0 z-[70] flex flex-col bg-white"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full table view"
+        >
+          <header className="flex h-14 shrink-0 items-center border-b border-ink-200 px-4 sm:px-6">
+            <span className="text-sm font-semibold text-ink-900">Full table</span>
+            <span className="flex-1" />
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              aria-label="Close full table"
+            >
+              <X className="h-4 w-4" aria-hidden />
+              Close
+            </button>
+          </header>
+          <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
+            {table("text-[14px]")}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+
+function _renderLiteralBreaks(children: ReactNode): ReactNode {
+  // ReactMarkdown intentionally treats raw HTML as text. Models nevertheless
+  // commonly put <br> inside GFM cells, where converting it to a Markdown
+  // newline would split the table row. Convert only the literal break token in
+  // the already-parsed cell tree, preserving all other HTML as inert text.
+  return Children.map(children, (child) => {
+    if (typeof child === "string") {
+      const parts = child.split(/<br\s*\/?>/gi);
+      if (parts.length === 1) return child;
+      return parts.map((part, index) => (
+        <Fragment key={index}>
+          {index > 0 && <br />}
+          {part}
+        </Fragment>
+      ));
+    }
+    if (isValidElement<{ children?: ReactNode }>(child) && child.props.children != null) {
+      return cloneElement(child, undefined, _renderLiteralBreaks(child.props.children));
+    }
+    return child;
+  });
 }
 
 
@@ -195,6 +292,23 @@ function _fixMathText(md: string): string {
       .replace(/(?<!\\)#/g, "\\#");
     return `\\text{${fixed}}`;
   });
+}
+
+function _normalizeLatexDelimiters(md: string): string {
+  // remark-math accepts $/$$ delimiters, while research-writing models often
+  // emit the equally standard \(...\) and \[...\] forms. Markdown consumes the
+  // latter backslashes as escapes before KaTeX sees them. Normalize prose
+  // segments only; fenced examples must remain byte-for-byte source code.
+  return md
+    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g)
+    .map((segment) => {
+      if (segment.startsWith("```") || segment.startsWith("~~~")) return segment;
+      return segment
+        .replace(/\\\[([\s\S]*?)\\\]/g, (_whole, body: string) =>
+          `\n$$\n${body.trim()}\n$$\n`)
+        .replace(/\\\((.*?)\\\)/g, (_whole, body: string) => `$${body.trim()}$`);
+    })
+    .join("");
 }
 
 function _splitCites(text: string, keyBase: string): ReactNode {
@@ -395,23 +509,19 @@ const _markdownComponents = {
       </a>
     );
   },
-  // Tables (GFM) — basic styling.
-  table: ({ children }: { children?: ReactNode }) => (
-    <table className="my-3.5 border-collapse text-[13.5px]">{children}</table>
-  ),
+  // Tables (GFM) stay inside the message with their own horizontal scroll;
+  // readers can promote dense tables to a viewport-sized inspection surface.
+  table: MarkdownTable,
   th: ({ children }: { children?: ReactNode }) => (
-    // Header cells get whitespace-nowrap because they're typically labels
-    // like "Phát biểu" / "1" / "2" / … that should never wrap.
-    <th className="border border-ink-200 px-3 py-2 text-left bg-ink-50 font-semibold whitespace-nowrap">{children}</th>
+    // Reserve the final header's right edge for the overlayed expand control.
+    <th className="border border-ink-200 bg-ink-50 px-4 py-3 text-left font-semibold last:pr-32">
+      {_renderLiteralBreaks(children)}
+    </th>
   ),
   td: ({ children }: { children?: ReactNode }) => (
-    // Don't break `[ ]`, `[x]`, or single tokens across lines — they're
-    // common in Likert-scale tables the agent emits and break cell layout.
-    // Statement cells (the leftmost column) wrap normally because they
-    // hold long prose; the `[&:not(:first-child)]:whitespace-nowrap`
-    // selector keeps that column wrappable while clamping the rating
-    // columns.
-    <td className="border border-ink-200 px-3 py-2 align-top [&:not(:first-child)]:whitespace-nowrap [&:not(:first-child)]:text-center">{children}</td>
+    <td className="border border-ink-200 px-4 py-3.5 text-left align-top leading-relaxed">
+      <div className="markdown-table-cell">{_renderLiteralBreaks(children)}</div>
+    </td>
   ),
   // Blockquote — soft left rail.
   blockquote: ({ children }: { children?: ReactNode }) => (
@@ -480,6 +590,24 @@ function _stripMarkers(text: string): string {
   ).trim();
 }
 
+const _STATE_LABELS: Record<string, { vi: string; en: string }> = {
+  methodology: { vi: "Phương pháp nghiên cứu", en: "Research methodology" },
+  design: { vi: "Thiết kế nghiên cứu", en: "Research design" },
+  target_sample_size: { vi: "Cỡ mẫu dự kiến", en: "Target sample size" },
+  sampling_strategy: { vi: "Chiến lược chọn mẫu", en: "Sampling strategy" },
+  mixed_design_type: { vi: "Loại thiết kế", en: "Design type" },
+  conceptual_model: { vi: "Mô hình khái niệm", en: "Conceptual model" },
+  themes: { vi: "Các chủ đề chính", en: "Key themes" },
+};
+
+function _humanizeVisibleStateKeys(text: string): string {
+  const locale = /[À-ỹĐđ]/.test(text) ? "vi" : "en";
+  return text.replace(/`([a-z][a-z0-9_]+)`/g, (whole, key: string) => {
+    const label = _STATE_LABELS[key]?.[locale];
+    return label ? `**${label}**` : whole;
+  });
+}
+
 // The drop-first onboarding sends a `/bootstrap …` message so the agent's
 // bootstrap skill fires + knows what to do — but that text is an instruction
 // for the AGENT, not the human. Shown raw it reads as a technical command. For
@@ -508,7 +636,9 @@ function _renderMarkdown(text: string) {
       rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false, errorColor: "#9ca3af" }]]}
       components={_markdownComponents}
     >
-      {_fixMathText(_protectCiteUrls(_stripMarkers(text)))}
+      {_fixMathText(_normalizeLatexDelimiters(
+        _protectCiteUrls(_humanizeVisibleStateKeys(_stripMarkers(text))),
+      ))}
     </ReactMarkdown>
   );
 }

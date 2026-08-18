@@ -13,6 +13,16 @@ export type StreamState = {
   error: Error | null;
 };
 
+export class StreamRequestError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "StreamRequestError";
+    this.status = status;
+  }
+}
+
 export type UseStreamApi = {
   state: StreamState;
   start: (url: string, init?: RequestInit) => Promise<void>;
@@ -53,7 +63,20 @@ export function useStream(): UseStreamApi {
 
     try {
       const res = await fetch(url, { ...init, signal: ctrl.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        let message = `Request failed (HTTP ${res.status})`;
+        try {
+          const body = await res.json();
+          message = body?.detail?.error?.message
+            || body?.detail?.message
+            || body?.detail
+            || body?.error?.message
+            || message;
+        } catch {
+          // Some proxy errors have an empty/non-JSON response; retain status.
+        }
+        throw new StreamRequestError(res.status, String(message));
+      }
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -90,6 +113,10 @@ export function useStream(): UseStreamApi {
       // AbortError is not an error condition — it's intentional cancellation
       if ((e as Error).name === "AbortError") return;
       dispatch({ type: "error", error: e as Error });
+      // Decision: the chat layer must know delivery failed so it can remove
+      // its optimistic message. Swallowing here made denied sends vanish after
+      // briefly appearing, with the real error visible only in server logs.
+      throw e;
     }
   }, []);
 

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..deps import current_user, db_session
+from ..auth_admin import readable_project
 from ..models import Project, User
 from agent.roadmap import (
     ROADMAP,
@@ -52,15 +53,12 @@ def _maybe_emit_next_action(project_id: str, na: dict, user_id) -> None:
 
 
 def _authorize(db: Session, user: User, project_id: str) -> Project:
-    """403 unless the caller owns the project. Kept thin so tests can stub it."""
+    """Allow the owner or an audited super-admin read of roadmap state."""
     try:
         pid = uuid.UUID(project_id)
     except ValueError:
         raise HTTPException(404, detail={"error": {"code": "not_found", "message": "no such project"}})
-    p = db.get(Project, pid)
-    if p is None or p.user_id != user.id:
-        raise HTTPException(403, detail={"error": {"code": "forbidden", "message": "not your project"}})
-    return p
+    return readable_project(db, user, pid)
 
 
 def _store_for(project_id: str):

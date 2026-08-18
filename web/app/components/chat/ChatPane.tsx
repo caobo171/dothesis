@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Zap } from "lucide-react";
+import { AlertTriangle, Zap } from "lucide-react";
 import useSWR from "swr";
 import { useChat } from "./hooks/useChat";
 import { useMe } from "@/app/lib/use-me";
@@ -164,7 +164,10 @@ export function _isAutoWritten(project?: {
 }
 
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
-  const { messages, streamingText, streamingProgress, streamingError, inflight, send } = useChat(threadId);
+  const {
+    messages, streamingText, streamingProgress, streamingError,
+    inflight, error: sendError, send,
+  } = useChat(threadId);
 
   // Credit balance drives the out-of-credits CTA. Default to >0 while loading so
   // the upgrade banner doesn't flash for paying users on first paint. The
@@ -191,6 +194,9 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   // focus bar: "M2 · Literature Review · In progress").
   const { data: project, mutate: mutateProject } = useSWR<{
     name: string;
+    can_write?: boolean;
+    owner_email?: string | null;
+    owner_username?: string | null;
     focus?: string | null;
     current_module?: string;
     module_status?: Record<string, string>;
@@ -217,6 +223,10 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   }>(
     `/projects/${projectId}`, fetcher,
   );
+  const readOnlyAdminView = project?.can_write === false;
+  const ownerLabel = [project?.owner_username, project?.owner_email]
+    .filter(Boolean)
+    .join(" · ");
 
   // Suggested actions for an EMPTY thread. Same POST /projects/{id}/roadmap the
   // right panel uses, so the chips in both places are always the same advice —
@@ -599,6 +609,22 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
           </Link>
         </div>
       )}
+      {(sendError || readOnlyAdminView) && !outOfCredits && (
+        <div
+          role="alert"
+          className="mx-auto mb-2 flex w-full max-w-3xl items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-snug text-amber-950"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div>
+            <span className="font-semibold">
+              {readOnlyAdminView ? "Read-only admin view." : "Message wasn’t sent."}
+            </span>{" "}
+            {readOnlyAdminView || (sendError as { status?: number } | null)?.status === 404
+              ? `Only the project owner${ownerLabel ? ` (${ownerLabel})` : ""} can post messages or change thesis content.`
+              : sendError?.message || "Please try again."}
+          </div>
+        </div>
+      )}
       <ChatInput
         // ChatInput emits (text, attachments[]) — send's signature is
         // (text, widgetPayload, attachments). Skip the widgetPayload slot
@@ -612,7 +638,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         // Disable the composer when out of credits — the backend would 402 the
         // turn anyway; blocking here avoids an orphaned user message + a confusing
         // no-reply, and points the user at the upgrade CTA above instead.
-        disabled={inflight || outOfCredits}
+        disabled={inflight || outOfCredits || readOnlyAdminView}
         focusModule={project ? (project.focus ?? project.current_module) : undefined}
       />
 

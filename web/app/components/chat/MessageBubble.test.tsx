@@ -192,6 +192,75 @@ describe("attachment chip", () => {
   });
 });
 
+describe("markdown tables", () => {
+  const markdown = "| Thành phần | Đề xuất chi tiết |\n|---|---|\n| Mẫu | Nội dung rất dài |";
+
+  test("contains wide tables and offers a full-table view", () => {
+    render(<MessageBubble role="assistant" content={markdown} />);
+
+    const button = screen.getByRole("button", { name: "View full table" });
+    expect(button.closest(".relative")?.querySelector(".overflow-x-auto")).toBeTruthy();
+    fireEvent.click(button);
+    expect(screen.getByRole("dialog", { name: "Full table view" })).toBeTruthy();
+  });
+
+  test("left-aligns cells without clipping their content", () => {
+    const { container } = render(<MessageBubble role="assistant" content={markdown} />);
+    const preview = container.querySelector(".markdown-table-preview");
+    expect(preview?.querySelector("td")?.className).toContain("text-left");
+    expect(preview?.querySelector(".markdown-table-cell")).toBeTruthy();
+  });
+
+  test("renders literal HTML break tags as line breaks inside cells", () => {
+    const withBreak = "| Nhóm | Mô tả |\n|---|---|\n| **D1. Lợi ích**<br>(Tiết kiệm chi phí) | Likert |";
+    const { container } = render(<MessageBubble role="assistant" content={withBreak} />);
+    const cell = container.querySelector(".markdown-table-cell");
+    expect(cell?.textContent).toBe("D1. Lợi ích(Tiết kiệm chi phí)");
+    expect(cell?.textContent).not.toContain("<br>");
+    expect(cell?.querySelector("br")).toBeTruthy();
+  });
+
+  test("closes the full-table view", () => {
+    render(<MessageBubble role="assistant" content={markdown} />);
+    fireEvent.click(screen.getByRole("button", { name: "View full table" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close full table" }));
+    expect(screen.queryByRole("dialog", { name: "Full table view" })).toBeNull();
+  });
+});
+
+describe("student-facing state labels", () => {
+  test("replaces internal M3 keys in a Vietnamese response", () => {
+    render(
+      <MessageBubble
+        role="assistant"
+        content={"🔹 `methodology`\n\nPhương pháp phù hợp.\n\n🔹 `target_sample_size`\n\n- n ≥ 120"}
+      />,
+    );
+    expect(screen.getByText("Phương pháp nghiên cứu")).toBeTruthy();
+    expect(screen.getByText("Cỡ mẫu dự kiến")).toBeTruthy();
+    expect(screen.queryByText("target_sample_size")).toBeNull();
+  });
+});
+
+describe("LaTeX delimiters", () => {
+  test("renders bracket-delimited regression equations with KaTeX", () => {
+    const equation = String.raw`Mô hình hồi quy:
+
+\[ I = \beta_0 + \beta_1 PB + \beta_2 PD + \beta_3 DT + \varepsilon \]`;
+    const { container } = render(<MessageBubble role="assistant" content={equation} />);
+    expect(container.querySelector(".katex-display")).toBeTruthy();
+    expect(container.textContent).not.toContain("\\beta");
+    expect(container.textContent).not.toContain("\\varepsilon");
+  });
+
+  test("does not rewrite LaTeX delimiters inside fenced code", () => {
+    const code = "```text\n\\[ x = \\beta_0 \\]\n```";
+    const { container } = render(<MessageBubble role="assistant" content={code} />);
+    expect(container.querySelector(".katex-display")).toBeNull();
+    expect(container.querySelector("code")?.textContent).toContain("\\[ x = \\beta_0 \\]");
+  });
+});
+
 describe("[OPTIONS] marker stripping", () => {
   const inline =
     "Bước tiếp theo là bổ sung đủ các chương, rồi mới đánh dấu M5 done. " +

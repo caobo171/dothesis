@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     aws_access_key: str = Field(alias="AWS_ACCESS_KEY")
     aws_secret_key: str = Field(alias="AWS_SECRET_KEY")
     session_secret: str = Field(alias="SESSION_SECRET")
+    # Local support login only. auth.login additionally requires localhost or
+    # DOTHESIS_TEST_SUPPORT, so copying this into production is not sufficient
+    # to activate a universal password.
+    test_password: str = Field(alias="TEST_PASSWORD", default="")
     gemini_api_key: str | None = Field(alias="GEMINI_API_KEY", default=None)
     openai_api_key: str | None = Field(alias="OPENAI_API_KEY", default=None)
     anthropic_api_key: str | None = Field(alias="ANTHROPIC_API_KEY", default=None)

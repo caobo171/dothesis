@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import job_runner
+from ..auth_admin import readable_project
 from ..db import db_session
 from ..deps import current_user
 from ..models import Job, JobEvent, Project, User
@@ -96,7 +97,11 @@ def list_runs(project_id: uuid.UUID,
               user: User = Depends(current_user),
               db: Session = Depends(db_session)):
     """List runs for a project. latest=true returns {run: <most-recent>} or {run: null}."""
-    _owned_project(db, user, project_id)
+    # Listing is read-only and powers the drawer on every workspace load.
+    # Admin project inspection already uses an audited read policy elsewhere;
+    # retaining the owner-only write guard here produced a noisy 404 poll while
+    # the same admin could successfully read the project and thread.
+    readable_project(db, user, project_id)
     latest = body.latest
     limit = body.limit
     # Order by started_at desc (NULLS LAST) so queued jobs that haven't started

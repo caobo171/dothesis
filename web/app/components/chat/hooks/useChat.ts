@@ -150,16 +150,24 @@ export function useChat(threadId: string) {
       ? `${apiBase}/threads/${threadId}/messages`
       : `/api/v1/threads/${threadId}/messages`;
     const accessToken = tokenStore.get();
-    await stream.start(streamUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text,
-        widget_payload: widgetPayload ?? null,
-        upload_ids: (attachments ?? []).map(a => a.upload_id),
-        access_token: accessToken,
-      }),
-    });
+    try {
+      await stream.start(streamUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          widget_payload: widgetPayload ?? null,
+          upload_ids: (attachments ?? []).map(a => a.upload_id),
+          access_token: accessToken,
+        }),
+      });
+    } catch {
+      // Restore server truth: the optimistic bubble represented a message the
+      // API explicitly rejected (read-only admin view, stale thread, etc.).
+      awaitingAssistantRef.current = null;
+      void mutate(messages ?? [], false);
+      return;
+    }
 
     // Revalidate to replace the optimistic message with server truth
     void mutate();

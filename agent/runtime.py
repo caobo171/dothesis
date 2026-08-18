@@ -210,6 +210,12 @@ commit_slice), and which module skill to read when. Mirror the user's
 language (English or Vietnamese). Be warm, concrete, and proactive — propose,
 then let the user decide.
 
+Keep the entire visible reply in the user's language. In Vietnamese replies,
+use Vietnamese headings, labels, and ordinary research terms; when a canonical
+English term is genuinely useful, give it once in parentheses after the
+Vietnamese term. Never expose internal schema keys such as
+`target_sample_size`, tool names, or protocol markers as student-facing prose.
+
 ## Project state — `[PROJECT STATE]` line is authoritative
 
 A user message may be preceded by a line like:
@@ -236,6 +242,26 @@ turn. It overrides anything you remember. Rules:
   redirects, CLOSE every turn by leading toward it: name what to do next and
   why, and offer its options with the `[OPTIONS]` marker. Never invent a
   different "next step" than the one derived. Strip `[NEXT]` from your reply too.
+- A direct question or command overrides `[NEXT]`. Answer or execute it fully in
+  this turn. Do not ask for confirmation already expressed by “OK”, “chốt”,
+  “cập nhật”, “làm ngay”, “use this”, “finalize”, or equivalent wording. After
+  success, stop; do not append an unrelated choice menu.
+- For targeted exports, preserve every requested chapter: problem statement /
+  introduction = M1; literature review / theoretical foundation / “tổng quan” /
+  “cơ sở lý thuyết” = M2; conceptual model / research design / methodology /
+  “mô hình nghiên cứu” / “phương pháp” = M3; analysis / results = M4. A request
+  for problem statement + theory + research proposal therefore uses scope
+  `M1,M2,M3`, never `M1,M3`.
+- When asked to write or revise named thesis chapters, completion means both
+  persisting the prose and exporting it in the same turn. After the successful
+  M5 commit, call `export_docx(scope="chapter:<canonical names joined by |>")`.
+  Never finish a chapter-writing request with prose alone or ask whether the
+  student also wants a file.
+- Interpret an unqualified Vietnamese “Chương 1, 2, 3” as intro/problem
+  statement + literature/theoretical foundation + research design/methodology,
+  using `chapter:intro|lit_review|methodology`. M1–M3 being complete is enough;
+  do not demand M4 data or treat Chapters 2–3 as results chapters unless the
+  persisted institutional outline explicitly defines them that way.
 
 ## Attachments — `[ATTACHED]` prefix
 
@@ -424,10 +450,16 @@ flowchart LR
 
 Supported types: flowchart, sequenceDiagram, classDiagram, stateDiagram,
 erDiagram, gantt, mindmap, pie. Keep labels short — long node text wraps
-awkwardly. When in doubt, draw it.
+awkwardly. In flowcharts, subgraph IDs must be unique and must never reuse a
+node ID; prefix them with `cluster_` or `group_`. When in doubt, draw it.
 
 ## Markdown gotchas to avoid
 
+- Speak in student-facing language, never storage/schema vocabulary. Do not use
+  snake_case state keys as headings or labels (`target_sample_size`,
+  `sampling_strategy`, `final_sections`, etc.). Translate them into natural
+  phrases in the user's language. Internal JSON names may appear only inside a
+  tool call, never in the visible response.
 - NEVER write a line that's just `___` or 3+ underscores/dashes to indicate
   a "fill-in-the-blank" line. Markdown converts that to a horizontal rule
   that overflows the chat bubble. Use `[____]` (with brackets), `(điền…)`,
@@ -613,7 +645,7 @@ def _default_model():
     return make_model()
 
 
-def _state_header(store: ProjectStateStore | None) -> str:
+def _state_header(store: ProjectStateStore | None, *, include_next: bool = True) -> str:
     """One-line authoritative status snapshot prepended to the user turn.
 
     The model routinely confabulates module status (e.g. printing "M1–M5 all
@@ -638,7 +670,7 @@ def _state_header(store: ProjectStateStore | None) -> str:
     try:
         from agent.roadmap import next_action  # local import: avoid load cycle
         from agent.run_context import required_modules  # noqa: PLC0415
-        na = next_action(state, required=required_modules())
+        na = next_action(state, required=required_modules()) if include_next else None
         if na:
             header += (f"\n[NEXT] {na['module']}/{na.get('substep') or '-'} — "
                        f"{na['title']} :: {na['why']}")
@@ -648,13 +680,14 @@ def _state_header(store: ProjectStateStore | None) -> str:
 
 
 CLICKED_OPTION_DIRECTIVE = (
-    "[CLICKED OPTION] The student did not type this — they CLICKED an option "
-    "you offered them last turn. Act on it NOW, in this turn. Do NOT reply with "
-    "another set of options asking them to pick the prerequisite; if a "
+    "[EXECUTE NOW] The student gave a direct question, command, confirmation, "
+    "or clicked an option you offered. Act on it NOW, in this turn. Do NOT "
+    "reply with another set of options asking them to pick the prerequisite; if a "
     "prerequisite is needed, DO the prerequisite yourself and continue. They "
-    "already chose. Answering a click with another menu spends their turn and "
-    "their credits to tell them no."
+    "already chose. Answer the question or complete the requested deliverable, "
+    "then STOP. Do not append an unrelated roadmap menu."
 )
+EXECUTE_NOW_MARKER = "[DOTHESIS_EXECUTE_NOW]"
 
 
 async def stream_turn(
@@ -681,10 +714,16 @@ async def stream_turn(
     API URI for larger files), rather than just a path reference.
     """
     config = {"configurable": {"thread_id": thread_id}}
+    # The API bridge carries this through the pre-existing text argument so
+    # older adapters remain callable. Strip it before constructing the actual
+    # student message; only the plain-language directive below reaches the LLM.
+    if user_text.startswith(f"{EXECUTE_NOW_MARKER}\n"):
+        clicked_option = True
+        user_text = user_text[len(EXECUTE_NOW_MARKER) + 1:]
     # Prepend the authoritative status snapshot so the agent can't drift from
     # real state. Goes on the user turn (like [ATTACHED]) so it rides through
     # the multimodal path too.
-    header = _state_header(store)
+    header = _state_header(store, include_next=not clicked_option)
     # The click directive rides in the SAME injected block as [PROJECT STATE] /
     # [NEXT] — the model already treats that block as ground truth it may not
     # argue with, which is exactly the standing this needs.
