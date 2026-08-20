@@ -27,7 +27,16 @@ def _module_steps(module, writes):
 HAPPY = {"scenario": "headless-happy", "entry": "continue", "steps": [
     *_module_steps("M1", {"research_title": "T", "research_questions": ["RQ1"]}),
     *_module_steps("M2", {"literature_sources": [{"title": "P", "year": 2024}]}),
-    *_module_steps("M3", {"conceptual_model": "CM", "hypotheses": ["H1"],
+    # conceptual_model must be the canonical {nodes, edges} shape from
+    # agent/m3_contract.py:13-18. A prose string is refused by the M3 gate
+    # ("m3_model_required": >=2 constructs, >=1 relationship), which used to
+    # burn the fixture's remaining steps on retries and fail this test.
+    *_module_steps("M3", {"conceptual_model": {
+                              "nodes": [{"id": "PU", "label": "Perceived Usefulness"},
+                                        {"id": "INT", "label": "Intention to Use"}],
+                              "edges": [{"source": "PU", "target": "INT",
+                                         "hypothesis": "H1"}]},
+                          "hypotheses": ["H1: PU -> INT"],
                           "methodology": "PLS-SEM"}),
     *_module_steps("M4", {"analysis_outline": "O", "analysis_results": "R"}),
     *_module_steps("M5", {"final_sections": [{"title": "Intro", "prose": "p"}]}),
