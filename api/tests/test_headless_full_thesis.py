@@ -35,3 +35,30 @@ def test_mode_predicate():
     assert _is_full_thesis({"mode": "full_thesis"}) is True
     assert _is_full_thesis({"depth": "analysis_report"}) is False
     assert _is_full_thesis({}) is False
+
+
+def test_seed_brief_writes_topic_and_language(tmp_path):
+    from agent.state import ProjectStateStore
+    from app.headless_entry import _seed_brief
+
+    store = ProjectStateStore(tmp_path / "proj")
+    wrote = _seed_brief(store, {"mode": "full_thesis", "topic": "AI in SMEs",
+                                "language": "vi", "citation_style": "APA"})
+    assert wrote is True
+    m1 = store.load()["contextStore"]
+    assert m1["research_title"] == "AI in SMEs"
+    assert m1["language"] == "vi"
+    # The raw brief is kept for audit under the seeding-only key.
+    assert m1["user_context"]["citation_style"] == "APA"
+
+
+def test_seed_brief_does_not_overwrite_an_existing_topic(tmp_path):
+    from agent.state import ProjectStateStore
+    from app.headless_entry import _seed_brief
+
+    store = ProjectStateStore(tmp_path / "proj")
+    store.commit_slice("M1", {"research_title": "Student's own title"},
+                       reason="prior work")
+    wrote = _seed_brief(store, {"mode": "full_thesis", "topic": "Something else"})
+    assert wrote is False
+    assert store.load()["contextStore"]["research_title"] == "Student's own title"

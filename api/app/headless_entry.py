@@ -59,6 +59,37 @@ def _is_full_thesis(params: dict) -> bool:
     return (params.get("mode") or "") == "full_thesis"
 
 
+def _seed_brief(store, params: dict) -> bool:
+    """Commit the consumer brief into M1 before the first turn.
+
+    Replaces the orchestrator's `_seed` graph node. Goes into the STORE rather
+    than the kickoff prompt because _state_header re-injects store state on
+    every turn — a prompt-only topic is one the model has to remember for 40
+    turns, and it does not.
+
+    Refuses to overwrite an existing research_title: resume re-runs this path
+    over a project that already has work, and the student's own title outranks
+    the brief that started the run.
+    """
+    topic = (params.get("topic") or "").strip()
+    if not topic:
+        return False
+    existing = (store.load().get("contextStore") or {}).get("research_title")
+    if existing:
+        return False
+    writes = {"research_title": topic,
+              # user_context is the seeding-only key (agent/state.py:30-34):
+              # the agent must not be able to rewrite the brief it is steered by.
+              "user_context": {k: v for k, v in {
+                  "topic": topic,
+                  "citation_style": params.get("citation_style"),
+              }.items() if v}}
+    if params.get("language"):
+        writes["language"] = params["language"]
+    store.commit_slice("M1", writes, reason="auto-draft brief")
+    return True
+
+
 def _build_profile(params: dict):
     """The run's budgets + what "done" means for THIS request, as data.
 
@@ -186,6 +217,11 @@ def main() -> int:
         # Same dir chat would use — a later chat handoff sees the same files.
         workspace = workspace_dir(project_id)
         store = DbProjectStateStore(get_engine(), project_id, workspace)
+        # Seed BEFORE the profile/agent so the first _state_header already
+        # carries the topic (see _seed_brief). No-ops on resume: it refuses to
+        # overwrite an existing research_title, so a project with prior work
+        # keeps the student's own title instead of the brief that started the run.
+        _seed_brief(store, params)
         # InMemorySaver: the conversation only needs to outlive THIS run —
         # durable progress is whatever commit_slice wrote, and a failed run
         # "resumes" by re-running against that state, not by replaying chat.
