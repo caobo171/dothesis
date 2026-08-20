@@ -295,7 +295,9 @@ WEB_PID=$!
 
 # --- 3. LangGraph Studio (optional visualizer) ---
 # Boots the local Agent Server that LangSmith Studio talks to so we can see
-# the orchestrator graph + step through state at
+# the deep agent (agent/studio.py:get_studio_graph — the same model<->tools
+# loop that serves chat and headless auto-draft, just wired to an in-memory
+# checkpointer) + step through state at
 #   https://smith.langchain.com/studio/?baseUrl=http://localhost:${STUDIO_PORT:-8123}
 # Auto-detected: skipped when langgraph-cli isn't installed in the venv.
 # To install: api/.venv/bin/pip install 'langgraph-cli[inmem]'
@@ -314,8 +316,8 @@ if [ -n "$LANGGRAPH_BIN" ] && [ "${STUDIO_ENABLED:-true}" = "true" ]; then
   # checkpoint pickles (.langgraph_api/*.pckl) being written every graph
   # step and watchfiles narrating them at INFO. The checkpoint dir is
   # hardcoded to cwd; a previous attempt to relocate it via cwd-switching
-  # broke graph loading (langgraph.json's `./orchestrator/...` paths
-  # resolve against the process cwd, not the config file). The lever
+  # broke graph loading (langgraph.json's `./agent/...` path resolves
+  # against the process cwd, not the config file). The lever
   # that actually works: langgraph_api/logging.py reads LOG_LEVEL (default
   # INFO) and pins it on the ROOT logger, which is what makes the
   # third-party watchfiles.main INFO logs leak. Setting LOG_LEVEL=WARNING

@@ -54,6 +54,11 @@ Stores: `agent/state.py:ProjectStateStore` (file-backed, CLI/tests) and `api/app
 - The graph runs M1→M5 unattended; module agents auto-fill their slices (M3 constrained to plain linear regression for analysability), M5 composes six chapters and renders DOCX + PDF to S3.
 - The drawer streams progress via `POST /api/v1/runs/{id}/events`; controls are pause/resume (resume re-enters at the LangGraph checkpoint), cancel, and retry.
 
+- Chat AND auto-draft both run the deep agent (`agent/runtime.py`).
+  Auto-draft is the same brain driven headless (`api/app/headless_entry.py`).
+- `langgraph.json` exists only for `langgraph dev` (Studio) via `dev.sh`.
+  It is not read by any deployment.
+
 ---
 
 ## External services

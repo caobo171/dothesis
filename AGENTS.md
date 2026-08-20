@@ -25,6 +25,11 @@ There are **two brains**, both writing the same project state:
 
 Both paths persist to the same Postgres-backed `context_store` slices; checkpoint namespaces are disjoint (`v3:<thread_id>` for the agent, `<run_id>` for auto runs).
 
+- Chat AND auto-draft both run the deep agent (`agent/runtime.py`).
+  Auto-draft is the same brain driven headless (`api/app/headless_entry.py`).
+- `langgraph.json` exists only for `langgraph dev` (Studio) via `dev.sh`.
+  It is not read by any deployment.
+
 ---
 
 ## Surfaces
