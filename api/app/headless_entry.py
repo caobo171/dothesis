@@ -45,6 +45,20 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+# Budgets for a whole thesis, not a 4-chapter report. RunProfile's defaults
+# (40 turns / 1800s) were measured against analysis_report; a full run adds a
+# real literature pass and full-length M5 composition. These numbers are an
+# ESTIMATE pending the first production run — the 30-minute ceiling that
+# shapes the report path is fillform's axios timeout, which the consumer flow
+# (SSE-polled) does not have. Both stay overridable via job params.
+_FULL_THESIS_MAX_TURNS = 120
+_FULL_THESIS_WALL_CLOCK_S = 7200
+
+
+def _is_full_thesis(params: dict) -> bool:
+    return (params.get("mode") or "") == "full_thesis"
+
+
 def _build_profile(params: dict):
     """The run's budgets + what "done" means for THIS request, as data.
 
@@ -55,6 +69,19 @@ def _build_profile(params: dict):
     or the partner got a hard error for work they never asked for.
     """
     from agent.headless import RunProfile  # noqa: PLC0415
+
+    if _is_full_thesis(params):
+        # No chapter scoping: "done" means all five modules. required_modules
+        # stays None, which RunProfile documents as "every module".
+        return RunProfile(
+            interactive=False,
+            max_turns=int(params["max_turns"]) if params.get("max_turns")
+            else _FULL_THESIS_MAX_TURNS,
+            wall_clock_s=int(params["wall_clock_s"]) if params.get("wall_clock_s")
+            else _FULL_THESIS_WALL_CLOCK_S,
+            required_modules=None,
+        )
+
     from app.partner_run import required_modules_for, resolve_chapters  # noqa: PLC0415
 
     chapters = resolve_chapters(params.get("depth") or "analysis_report",
@@ -163,17 +190,23 @@ def main() -> int:
         # durable progress is whatever commit_slice wrote, and a failed run
         # "resumes" by re-running against that state, not by replaying chat.
         profile = _build_profile(params)
-        # Scope the deep agent's M5 writing to the chapters this partner ordered
-        # (the interactive flow leaves this unset → full thesis). Cuts the wasted
-        # composition of unordered/fabricated chapters. Best-effort: if the
-        # ContextVar doesn't propagate, M5 falls back to composing everything.
-        from agent.run_context import set_grounded_backfill, set_report_chapters  # noqa: PLC0415
-        from app.partner_run import resolve_chapters  # noqa: PLC0415
-        set_report_chapters(resolve_chapters(
-            params.get("depth") or "analysis_report", params.get("chapters")))
-        # Report path only: ground M2 with a real literature search (real DOIs +
-        # domain-specialized sources) instead of the backfill's LLM recall.
-        set_grounded_backfill()
+        # Report-only. set_report_chapters scopes M5 to the ordered chapters and
+        # set_grounded_backfill swaps M2's backfill for a real literature search;
+        # a full thesis needs neither scope nor that substitution.
+        if not _is_full_thesis(params):
+            # Scope the deep agent's M5 writing to the chapters this partner
+            # ordered (the interactive flow leaves this unset → full thesis).
+            # Cuts the wasted composition of unordered/fabricated chapters.
+            # Best-effort: if the ContextVar doesn't propagate, M5 falls back
+            # to composing everything.
+            from agent.run_context import set_grounded_backfill, set_report_chapters  # noqa: PLC0415
+            from app.partner_run import resolve_chapters  # noqa: PLC0415
+            set_report_chapters(resolve_chapters(
+                params.get("depth") or "analysis_report", params.get("chapters")))
+            # Report path only: ground M2 with a real literature search (real
+            # DOIs + domain-specialized sources) instead of the backfill's LLM
+            # recall.
+            set_grounded_backfill()
 
         timer = _PhaseTimer()
         progress_hook = _make_progress_hook(appender, store)
