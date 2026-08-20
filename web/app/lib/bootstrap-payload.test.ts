@@ -110,4 +110,43 @@ describe("stashAnalyzeIntent", () => {
     });
     expect(readAnalyzeIntent("p1")?.attachments).toHaveLength(1);
   });
+
+
+// --- Auto Thesis entry from /new -------------------------------------------
+// Picking "Auto Thesis" on the start screen is not a variation on the first
+// chat turn — it means there should be NO first chat turn. The run seeds M1
+// itself (_seed_brief), so firing /bootstrap alongside it would have two
+// things writing the same slice at once.
+
+describe("autoThesis intent", () => {
+  test("rides on the stash so the chat surface can act on it", () => {
+    stashAnalyzeIntent("p-auto", {
+      note: "Leadership in Vietnamese SMEs", attachments: [], autoThesis: true,
+    });
+    expect(readAnalyzeIntent("p-auto")).toMatchObject({
+      note: "Leadership in Vietnamese SMEs", autoThesis: true,
+    });
+  });
+
+  test("is absent on a normal guided start", () => {
+    stashAnalyzeIntent("p-guided", { note: "help me", attachments: [] });
+    expect(readAnalyzeIntent("p-guided")?.autoThesis).toBeUndefined();
+  });
+
+  test("still needs something to run on — a blank start writes no stash", () => {
+    stashAnalyzeIntent("p-blank", { note: "  ", attachments: [], autoThesis: true });
+    expect(readAnalyzeIntent("p-blank")).toBeNull();
+  });
+});
+
+  test("survives the preseeded blank-note guard", () => {
+    // That guard exists to avoid billing a chat turn that would only restate
+    // the import card. Auto Thesis is not a chat turn — dropping the stash
+    // here silently downgraded "write my whole thesis" to a normal chat.
+    stashAnalyzeIntent("p-files-only", {
+      note: "", attachments: [{ upload_id: "u1", filename: "data.xlsx" } as never],
+      preseeded: true, autoThesis: true,
+    });
+    expect(readAnalyzeIntent("p-files-only")).toMatchObject({ autoThesis: true });
+  });
 });

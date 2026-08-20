@@ -18,7 +18,7 @@ import { ImportSummary } from "@/app/components/chat/ImportSummary";
 // Shared with the document tools: the same "poll my in-flight run" hook, because
 // this screen has the same problem they do (see /runs/active).
 import { useRunProgress } from "@/app/(inapp)/tools/_components/use-tool";
-import { ThesisComposer } from "@/app/components/chat/ThesisComposer";
+import { ThesisComposer, type StartMode } from "@/app/components/chat/ThesisComposer";
 import {
   ReconstructedModules,
   type ReconstructedModule,
@@ -67,6 +67,10 @@ export default function NewThesisPage() {
   // Which job the first turn does. Only the humanize chip moves this off the
   // default; see StarterChip.kind in ThesisComposer.
   const [kind, setKind] = useState<AnalyzeKind>("assess");
+  // Guided conversation vs. one unattended run. Chosen BEFORE anything is
+  // typed, because it is the decision about how much of the work the student
+  // wants to do — not a variation on the first message.
+  const [mode, setMode] = useState<StartMode>("guided");
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -274,11 +278,13 @@ export default function NewThesisPage() {
         // be their request rather than the /bootstrap re-classification (see
         // formatAnalyzeMessage). Blank note => stashAnalyzeIntent writes
         // nothing and the thread opens quietly.
-        stashAnalyzeIntent(newId, { kind, note, attachments, preseeded: true });
+        stashAnalyzeIntent(newId, { kind, note, attachments, preseeded: true,
+                                    autoThesis: mode === "auto_thesis" });
         return;
       }
 
-      stashAnalyzeIntent(newId, { kind, note, attachments });
+      stashAnalyzeIntent(newId, { kind, note, attachments,
+                                  autoThesis: mode === "auto_thesis" });
       router.push(`/chat/projects/${newId}?analyzing=1`);
     } catch (e: any) {
       // A cancel is not a failure. Aborting mid-flight rejects whichever fetch
@@ -381,6 +387,8 @@ export default function NewThesisPage() {
         busy={submitting}
         accept={ACCEPT_TYPES}
         onKindChange={setKind}
+        mode={mode}
+        onModeChange={setMode}
       />
 
       {/* Footer — status and the blank-start escape hatch only.

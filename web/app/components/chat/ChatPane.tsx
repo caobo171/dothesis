@@ -321,6 +321,17 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     if (!intent) return;
     analyzeFiredRef.current = true;
     analyzeIntentRef.current = intent;
+    // Auto Thesis chosen on /new: open the run modal instead of firing a
+    // bootstrap turn. Deliberately NOT both — the run seeds M1 itself
+    // (_seed_brief), so a bootstrap turn alongside it would put two writers on
+    // the same slice, and the student would pay for a turn whose work the run
+    // is about to redo. The modal is reused rather than reimplemented on /new
+    // so the token estimate and the credit gate keep living in one place.
+    if (intent.autoThesis) {
+      setAutoThesisTopic(intent.note.trim());
+      setModalOpen(true);
+      return;
+    }
     void runAnalyze();
   }, [projectId, messagesLoading, messages.length, inflight, runAnalyze]);
 
@@ -353,6 +364,10 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   // Bumped on resume to remount the drawer so its SSE stream reconnects to the
   // freshly re-spawned run (the previous stream closed on the terminal event).
   const [runNonce, setRunNonce] = useState(0);
+  // Topic handed over from /new. A project created seconds ago has no
+  // committed m1_topic.research_title for the modal to prefill from, so the
+  // sentence the student typed on the start screen stands in for it.
+  const [autoThesisTopic, setAutoThesisTopic] = useState("");
 
   const onAutoThesisClick = () => {
     const status = latestRun?.run?.status ?? null;
@@ -645,7 +660,9 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
       <AutoThesisModal
         open={modalOpen}
         projectId={projectId}
-        defaultTopic={project?.context_store?.m1_topic?.research_title ?? ""}
+        // A committed title wins: on a project with prior work it is the
+        // student's own, while the /new sentence is just what started this run.
+        defaultTopic={project?.context_store?.m1_topic?.research_title || autoThesisTopic}
         onClose={() => setModalOpen(false)}
         onConfirm={confirmAutoThesis}
       />

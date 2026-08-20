@@ -122,3 +122,49 @@ describe("ThesisComposer", () => {
     expect(input.value).toBe("");
   });
 });
+
+
+// --- Auto Thesis tab --------------------------------------------------------
+// The most expensive thing DoThesis does was reachable only through a dropdown
+// three screens in. Putting the choice on the start screen is the point of this
+// control, so these tests assert it is visible and that it reports the switch.
+
+describe("mode tabs", () => {
+  const base = {
+    value: "", onChange: () => {}, files: [], onAddFiles: () => {},
+    onRemoveFile: () => {}, onSubmit: () => {}, canSubmit: false,
+  };
+  /** The composer reads locale context, so every render needs the provider —
+   *  same reason the Harness above exists. */
+  const renderComposer = (props: Record<string, unknown>) =>
+    render(<LocaleProvider initialLocale="en"><ThesisComposer {...base} {...props} /></LocaleProvider>);
+
+  test("offers both modes, guided selected by default", () => {
+    renderComposer({ mode: "guided", onModeChange: () => {} });
+    expect(screen.getByRole("tab", { name: /guided/i }).getAttribute("aria-selected"))
+      .toBe("true");
+    expect(screen.getByRole("tab", { name: /auto thesis/i }).getAttribute("aria-selected"))
+      .toBe("false");
+  });
+
+  test("clicking Auto Thesis reports the change", () => {
+    const seen: string[] = [];
+    renderComposer({ mode: "guided", onModeChange: (m: string) => seen.push(m) });
+    fireEvent.click(screen.getByRole("tab", { name: /auto thesis/i }));
+    expect(seen).toEqual(["auto_thesis"]);
+  });
+
+  test("reflects the selected mode it is given", () => {
+    renderComposer({ mode: "auto_thesis", onModeChange: () => {} });
+    expect(screen.getByRole("tab", { name: /auto thesis/i }).getAttribute("aria-selected"))
+      .toBe("true");
+  });
+
+  test("starter chips are hidden in Auto Thesis mode", () => {
+    // The chips describe situations for a guided conversation ("I have data",
+    // "Starting fresh"). In Auto Thesis the next thing that happens is a paid
+    // run, so offering conversation openers would misdescribe the button.
+    renderComposer({ mode: "auto_thesis", onModeChange: () => {} });
+    expect(screen.queryByText(/starting fresh|bắt đầu từ đầu/i)).toBeNull();
+  });
+});

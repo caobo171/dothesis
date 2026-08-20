@@ -33,6 +33,20 @@ export type AnalyzeKind = "assess" | "humanize";
 
 export type AnalyzeIntent = {
   kind?: AnalyzeKind;
+  /**
+   * The student chose Auto Thesis on the start screen: write the whole thesis
+   * unattended rather than work through it in chat.
+   *
+   * Deliberately NOT an `AnalyzeKind`. `kind` selects what the first CHAT TURN
+   * does, and Auto Thesis means there should be no first chat turn at all —
+   * the run seeds M1 itself (`_seed_brief`), so firing `/bootstrap` alongside
+   * it would put two writers on the same slice. Modelling it as a kind would
+   * have hidden that in an enum that promises the opposite.
+   *
+   * The chat surface reads this and opens the Auto Thesis modal — the estimate
+   * and credit gate stay in one place rather than being rebuilt on /new.
+   */
+  autoThesis?: boolean;
   /** Optional free-text the user typed in the "or describe it" box. */
   note: string;
   /** Files the user dropped, already uploaded to the project. */
@@ -61,7 +75,12 @@ export function stashAnalyzeIntent(projectId: string, intent: AnalyzeIntent): vo
   // Preseeded and nothing typed: the import already did the work AND already
   // reported it on the activation card. Firing a turn here would bill the
   // student to be told what is on the screen behind it.
-  if (intent.preseeded && !intent.note.trim()) return;
+  //
+  // Auto Thesis is exempt: it is not a chat turn at all, it is the signal to
+  // open the run modal. Dropping the stash here silently downgraded "write my
+  // whole thesis" to an ordinary chat for anyone who dropped files and typed
+  // nothing — the run has the imported modules to work from and needs no note.
+  if (intent.preseeded && !intent.note.trim() && !intent.autoThesis) return;
   try {
     window.sessionStorage.setItem(KEY_PREFIX + projectId, JSON.stringify(intent));
   } catch {

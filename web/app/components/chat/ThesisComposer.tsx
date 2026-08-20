@@ -38,6 +38,20 @@ export type StarterChip = {
   kind?: AnalyzeKind;
 };
 
+/**
+ * How the student wants to work, chosen before they type anything.
+ *
+ * "guided" is what this screen has always done: one bootstrap turn, then a
+ * conversation. "auto_thesis" hands the whole thing to an unattended run.
+ *
+ * These are the only two, and they are a TAB rather than a chip on purpose:
+ * the chips describe a SITUATION the student is in ("I have data"), while this
+ * chooses what the product will DO. Auto Thesis was previously reachable only
+ * through a dropdown inside the workspace — three screens past the point where
+ * a student decides how much of the work they want to do themselves.
+ */
+export type StartMode = "guided" | "auto_thesis";
+
 export const STARTER_CHIPS: StarterChip[] = [
   { labelKey: "new.chip.draft", textKey: "new.chip.draft.text" },
   { labelKey: "new.chip.data", textKey: "new.chip.data.text" },
@@ -57,6 +71,8 @@ export function ThesisComposer({
   busy = false,
   accept,
   onKindChange,
+  mode = "guided",
+  onModeChange,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -72,6 +88,10 @@ export function ThesisComposer({
   /** Fired when a chip selects a non-default first-turn intent. Optional so
    *  existing renders (and the component test) don't have to care. */
   onKindChange?: (kind: AnalyzeKind) => void;
+  /** Which way the student wants to work. Defaults to the guided conversation
+   *  this screen has always started, so existing renders are unaffected. */
+  mode?: StartMode;
+  onModeChange?: (mode: StartMode) => void;
 }) {
   const t = useT();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,8 +125,43 @@ export function ThesisComposer({
     });
   };
 
+  const modes: { id: StartMode; label: string; hint: string }[] = [
+    { id: "guided", label: "Guided", hint: "Work through it together, step by step" },
+    { id: "auto_thesis", label: "Auto Thesis", hint: "Write the whole thesis end-to-end" },
+  ];
+
   return (
     <div className="flex flex-col gap-3">
+      {/* Mode tabs. Rendered only when the parent actually handles the switch,
+          so every existing render of this composer is untouched. */}
+      {onModeChange && (
+        <div role="tablist" aria-label="How you want to work"
+             className="inline-flex self-start rounded-full bg-ink-100 p-1">
+          {modes.map((m) => {
+            const selected = mode === m.id;
+            return (
+              <button
+                key={m.id}
+                role="tab"
+                type="button"
+                aria-selected={selected}
+                title={m.hint}
+                disabled={busy}
+                onClick={() => onModeChange(m.id)}
+                className={
+                  "rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors disabled:opacity-50 " +
+                  (selected
+                    ? "bg-white text-ink-900 shadow-sm"
+                    : "text-ink-500 hover:text-ink-800")
+                }
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -214,8 +269,12 @@ export function ThesisComposer({
           empty textarea gives a student no idea what a useful answer looks
           like, and that — not the styling — was the real failure of the old
           collapsed "describe it instead" link. */}
-      <div className="flex flex-wrap gap-2">
-        {STARTER_CHIPS.map((chip) => (
+      {/* Chips are guided-mode only: they name a SITUATION to open a
+          conversation with ("I have data", "Starting fresh"). In Auto Thesis
+          the next thing that happens is a paid unattended run, so offering
+          conversation openers would describe the button wrongly. */}
+      <div className={"flex flex-wrap gap-2" + (mode === "auto_thesis" ? " hidden" : "")}>
+        {mode === "auto_thesis" ? null : STARTER_CHIPS.map((chip) => (
           <button
             key={chip.labelKey}
             type="button"
