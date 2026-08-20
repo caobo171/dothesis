@@ -162,10 +162,10 @@ def resume_run(run_id: uuid.UUID,
                db: Session = Depends(db_session)):
     run = _owned_run(db, user, run_id)
     # Resume covers paused runs AND terminal-but-recoverable ones (failed /
-    # canceled). The LangGraph checkpoint (keyed by thread_id == run.id) holds
-    # every completed module, so re-spawning with resume_from re-enters at the
-    # last checkpoint — e.g. a run that died in M3 picks up at M3 with M1+M2
-    # intact, instead of restarting from M1.
+    # canceled). There is no checkpoint to re-enter: the deep agent's durable
+    # progress is whatever commit_slice wrote to the project store, so resuming
+    # means running a FRESH agent over that state. Completed modules are intact;
+    # a module that was in flight but never committed is redone.
     if run.status not in {"paused", "failed", "canceled"}:
         raise HTTPException(409,
                             detail={"error": {"code": "not_resumable",
@@ -173,7 +173,7 @@ def resume_run(run_id: uuid.UUID,
     # Clear the previous terminal markers so the resumed run reads as live.
     run.error_text = None
     run.finished_at = None
-    job_runner.spawn_orchestrator_run(db, run, brief={}, resume_from=str(run.id))
+    job_runner.spawn_headless_run(db, run, {"mode": "full_thesis"})
     db.commit()
     return {"status": run.status}
 
