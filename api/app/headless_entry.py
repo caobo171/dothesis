@@ -131,6 +131,30 @@ def _build_profile(params: dict):
     )
 
 
+def _install_pause_handler(appender) -> None:
+    """SIGTERM -> write `paused`, then exit 0.
+
+    Mirrors orchestrator/__main__.py:60,78 (the process this one retires).
+    job_runner.cancel_job pauses a run by sending SIGTERM (job_runner.py:327);
+    the monitor (job_runner.py:298-301,321) turns a `paused` event into a
+    resumable Job status and treats it as terminal for the tail loop. Without
+    this handler the process just dies and the run sits at `running` forever.
+    Progress is whatever commit_slice has already persisted, so exiting here
+    loses nothing that was committed.
+    """
+    import signal  # noqa: PLC0415 — only needed here, mirrors orchestrator's lazy import style
+
+    def _on_term(_signum, _frame):
+        try:
+            appender.write({"type": "paused", "agent": "headless",
+                            "text": "run paused by request"})
+        except Exception:  # noqa: BLE001 — never block the exit path
+            pass
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, _on_term)
+
+
 def _make_progress_hook(appender, store):
     """Per-turn progress beats over the events.jsonl → JobEvent → SSE pipe —
     the durable replacement for the deleted in-memory _PROGRESS dict. Module
@@ -202,6 +226,9 @@ def main() -> int:
     from engine.job_io import JsonlAppender
 
     appender = JsonlAppender(workdir / "events.jsonl")
+    # Installed immediately: cancel_job can SIGTERM at any point after spawn,
+    # including before the try-block below does anything committable.
+    _install_pause_handler(appender)
     try:
         params = json.loads(Path(args.params_json).read_text("utf-8"))
         project_id = UUID(args.project_id)

@@ -62,3 +62,36 @@ def test_seed_brief_does_not_overwrite_an_existing_topic(tmp_path):
     wrote = _seed_brief(store, {"mode": "full_thesis", "topic": "Something else"})
     assert wrote is False
     assert store.load()["contextStore"]["research_title"] == "Student's own title"
+
+
+def test_sigterm_writes_a_paused_event(tmp_path):
+    """The monitor reads `paused` to mark a run resumable (job_runner.py:300).
+    Without it, pausing an auto-draft leaves the Job stuck at `running`."""
+    import signal
+
+    from app.headless_entry import _install_pause_handler
+
+    written = []
+
+    class _Appender:
+        def write(self, ev):
+            written.append(ev)
+
+    raised = []
+    # signal.signal is process-global: leaving the runner's handler installed
+    # would make every later test in this process exit(0) on SIGTERM, and that
+    # failure would surface nowhere near its cause.
+    previous = signal.getsignal(signal.SIGTERM)
+    try:
+        _install_pause_handler(_Appender())
+        handler = signal.getsignal(signal.SIGTERM)
+        assert handler is not previous, "handler was not installed"
+        try:
+            handler(signal.SIGTERM, None)
+        except SystemExit as e:
+            raised.append(e.code)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+    assert written and written[0]["type"] == "paused"
+    assert raised == [0]
