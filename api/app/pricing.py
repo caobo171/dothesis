@@ -222,6 +222,20 @@ def _blended_price(model: str) -> float | None:
     return (1.0 - OUTPUT_TOKEN_SHARE) * p["in"] + OUTPUT_TOKEN_SHARE * p["out"]
 
 
+def is_priced(model: str) -> bool:
+    """Does quality/model_prices.py carry a real rate for this exact id?
+
+    Exists for the one caller that gets to CHOOSE which id a ledger row is
+    labelled with — headless_entry._UsageMeter picks between the model that
+    SERVED a step and the model the run was CONFIGURED with. It has to ask the
+    question with the same lookup `credit_multiplier` will use, or the two
+    disagree and the row it deemed "priced" bills at UNKNOWN_MODEL_MULTIPLIER
+    anyway. False here is exactly the condition for that fallback, by
+    construction — there is no second table and no second predicate.
+    """
+    return _blended_price(model or "") is not None
+
+
 # Single source of truth for how credits scale with the active model: pricier models
 # must scale up or we undercharge. Used by BOTH charge sites — the interactive chat
 # turn (chat_v3._finalize) and the auto-draft run (job_runner._charge_auto_run) — so

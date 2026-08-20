@@ -223,7 +223,8 @@ class _UsageMeter:
     uses. _charge_auto_run then prices each row at ITS OWN model's rate, which
     is why usage is grouped by the model that actually served the step:
     OpenRouter can fail over to a pricier fallback mid-run and runtime.py
-    reports the served model on the event.
+    reports the served model on the event — but ONLY when that served id is one
+    the price table knows (see _billable_model).
 
     Buffered per turn so a long turn emits one event per model, not one per
     LLM step.
@@ -233,14 +234,67 @@ class _UsageMeter:
         self.project_id = project_id
         self._appender = appender
         self._buf: dict[str, list[int]] = {}
+        self._configured: str | None = None
+        self._warned: set[str] = set()
+
+    def _configured_model(self) -> str:
+        """The model this run was CONFIGURED to run on, from the same resolver
+        that actually chose the brain (build_agent -> _default_model ->
+        make_model -> spec_from_env). Resolved once — it cannot change mid-run."""
+        if self._configured is None:
+            try:
+                from agent.model_factory import spec_from_env  # noqa: PLC0415
+                self._configured = spec_from_env().model
+            except Exception:  # noqa: BLE001 — metering must never kill the run
+                logger.exception("could not resolve the configured model for billing")
+                self._configured = os.getenv("DOTHESIS_AGENT_MODEL", "unknown")
+        return self._configured
+
+    def _billable_model(self, served: str | None) -> str:
+        """The id these tokens are LABELLED with — i.e. the id _charge_auto_run
+        will price the resulting ledger row at.
+
+        Keep the SERVED model when quality/model_prices.py actually prices it:
+        an OpenRouter failover to a pricier fallback is real money, and the
+        per-model split is the only place it shows up.
+
+        An id the table does NOT price must never reach the ledger under its own
+        name. credit_multiplier bills an unpriced id at UNKNOWN_MODEL_MULTIPLIER
+        (4.0x), so a dated snapshot id (`gpt-5.6-luna-2026-05-13`) or a missing
+        `model_name` on response_metadata would bill a WHOLE THESIS at 4.0x
+        instead of the configured model's true rate — 7.6x on the openai route
+        (luna blends to 0.53x) and ~21x on ofox/qwen-plus. chat_v3._finalize
+        (chat_v3.py:520-528) rejected per-served-model billing outright for this
+        exact reason, and pricing.py:225-228 requires the two charge sites not to
+        drift. Falling back to the CONFIGURED model keeps the per-model accuracy
+        where it is REAL and bills the id chat bills where it is not.
+        """
+        from app.pricing import UNKNOWN_MODEL_MULTIPLIER, is_priced  # noqa: PLC0415
+
+        served = (served or "").strip()
+        if served and is_priced(served):
+            return served
+        configured = self._configured_model()
+        if served and served not in self._warned:
+            # Once per distinct id: an unpriced served model is either a real
+            # failover we are now mis-splitting, or a missing table row. Both are
+            # operator-fixable and neither should be silent.
+            self._warned.add(served)
+            logger.warning(
+                "usage reported model %r, which quality/model_prices.py does not "
+                "price — billing as the configured %r instead of the %.1fx "
+                "unknown-model fallback. Add the id to the table.",
+                served, configured, UNKNOWN_MODEL_MULTIPLIER,
+            )
+        return configured
 
     def observe(self, ev: dict) -> None:
         if ev.get("type") != "usage":
             return
         # runtime.py:846 only sets `model` when OpenRouter reports the served
-        # model on response_metadata; fall back to the configured model rather
-        # than mislabel it "unknown" and lose the per-model price split.
-        model = ev.get("model") or os.getenv("DOTHESIS_AGENT_MODEL", "unknown")
+        # model on response_metadata, and what it reports is not necessarily an
+        # id the price table carries — _billable_model decides what bills.
+        model = self._billable_model(ev.get("model"))
         slot = self._buf.setdefault(model, [0, 0])
         slot[0] += int(ev.get("input_tokens") or 0)
         slot[1] += int(ev.get("output_tokens") or 0)

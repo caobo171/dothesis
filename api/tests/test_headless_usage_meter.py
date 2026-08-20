@@ -72,6 +72,62 @@ def test_flush_clears_the_buffer_so_turns_are_not_double_billed():
     assert len(appender.events) == 1
 
 
+def _openai_route(monkeypatch):
+    """Pin the CONFIGURED model so the fallback is a known id: route=openai with
+    no override resolves to gpt-5.6-luna (agent/model_factory.spec_from_env)."""
+    monkeypatch.setenv("DOTHESIS_MODEL_ROUTE", "openai")
+    monkeypatch.delenv("DOTHESIS_AGENT_MODEL", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+
+def test_an_unpriced_served_model_never_becomes_the_ledger_label(monkeypatch):
+    """C1: _charge_auto_run prices every ledger row through credit_multiplier,
+    which bills anything missing from quality/model_prices.py at the 4.0x
+    UNKNOWN_MODEL_MULTIPLIER. A dated snapshot id is exactly that — and on the
+    openai route (luna = 0.53x) it would overbill a whole thesis 7.6x. The label
+    must fall back to the configured model instead."""
+    _openai_route(monkeypatch)
+    appender = _Appender()
+    meter = _UsageMeter(uuid.uuid4(), appender)
+    meter.observe({"type": "usage", "input_tokens": 900, "output_tokens": 100,
+                   "model": "gpt-5.6-luna-2026-05-13"})  # a real-shaped snapshot id
+    assert meter.flush() == 1
+
+    (ev,) = appender.events
+    from app.pricing import is_priced
+    assert is_priced(ev["model"]), \
+        f"{ev['model']!r} would bill at the unknown-model fallback"
+    assert ev["model"] == "gpt-5.6-luna"
+    # Tokens are not lost in the relabel — only the label changes.
+    assert ev["prompt_tokens"] == 900 and ev["completion_tokens"] == 100
+
+
+def test_a_missing_served_model_falls_back_to_the_configured_one(monkeypatch):
+    """runtime.py only sets `model` when response_metadata carries it, which most
+    routes do not. "unknown" is unpriced, so it billed at 4.0x too."""
+    _openai_route(monkeypatch)
+    appender = _Appender()
+    meter = _UsageMeter(uuid.uuid4(), appender)
+    meter.observe({"type": "usage", "input_tokens": 10, "output_tokens": 5})
+    meter.flush()
+
+    from app.pricing import is_priced
+    assert appender.events[0]["model"] == "gpt-5.6-luna"
+    assert is_priced(appender.events[0]["model"])
+
+
+def test_a_priced_served_model_is_still_kept(monkeypatch):
+    """The fallback must not flatten a REAL failover: a served id the table
+    prices still bills at its own rate (that is why the split exists)."""
+    _openai_route(monkeypatch)
+    appender = _Appender()
+    meter = _UsageMeter(uuid.uuid4(), appender)
+    meter.observe({"type": "usage", "input_tokens": 10, "output_tokens": 5,
+                   "model": "claude-sonnet-4-6"})
+    meter.flush()
+    assert appender.events[0]["model"] == "claude-sonnet-4-6"
+
+
 def test_non_usage_events_are_ignored():
     appender = _Appender()
     meter = _UsageMeter(uuid.uuid4(), appender)
