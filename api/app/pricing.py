@@ -26,7 +26,7 @@ class Package(TypedDict):
 
 
 # Prices sized for a 60-70% gross margin over the gemini-2.5-flash API cost,
-# given the charge rate of 1 credit = 1000 tokens. One auto-draft run ≈ 10,000
+# given the charge rate of 1 credit = 1000 tokens. One Auto Thesis run ≈ 10,000
 # credits (~10M tokens, ~$6-9 API cost), so the Starter pack covers exactly one
 # run at ~$0.0025/credit (~66% margin at a 25% output mix). Larger packs apply a
 # modest volume discount but stay ≥60% margin. Re-tune once token_ledger meters
@@ -50,7 +50,7 @@ PACKAGES: list[Package] = [
         "name": "Starter package",
         "price_cents": 2499,       # $24.99 → $0.0025/credit, ~66% margin
         "old_price_cents": 3999,
-        "credits": 10000,          # = one auto-draft run
+        "credits": 10000,          # = one Auto Thesis run
     },
     {
         "id": "standard_package",
@@ -238,7 +238,7 @@ def is_priced(model: str) -> bool:
 
 # Single source of truth for how credits scale with the active model: pricier models
 # must scale up or we undercharge. Used by BOTH charge sites — the interactive chat
-# turn (chat_v3._finalize) and the auto-draft run (job_runner._charge_auto_run) — so
+# turn (chat_v3._finalize) and the Auto Thesis run (job_runner._charge_auto_thesis_run) — so
 # they can't drift apart.
 #
 # Prices come from quality/model_prices.py — a dated table whose Ofox rows are live

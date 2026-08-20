@@ -4,7 +4,7 @@
   <b>A commercial, chat-first product that takes a student from a blank topic to a finished, citation-grounded thesis — one conversation, five guided modules, real verified sources.</b>
 </p>
 
-> **Orientation for contributors.** DoThesis is built as a **single deep agent driven by skills** (LangChain `deepagents`). The student chats with one agent that moves freely across five thesis modules (M1–M5); all decisions land in a project-scoped `context_store` with deterministic read/mutate propagation. There is also a one-click **"Auto approve"** mode that writes the whole thesis end-to-end unattended.
+> **Orientation for contributors.** DoThesis is built as a **single deep agent driven by skills** (LangChain `deepagents`). The student chats with one agent that moves freely across five thesis modules (M1–M5); all decisions land in a project-scoped `context_store` with deterministic read/mutate propagation. There is also a one-click **"Auto Thesis"** mode that writes the whole thesis end-to-end unattended.
 >
 > Before changing the agent runtime, skills, state shape, or the API, read **[`AGENTS.md`](AGENTS.md)** (agent contract + invariants) and **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** (system map). The end-to-end method is in **[`docs/PIPELINE.md`](docs/PIPELINE.md)**.
 >
@@ -27,7 +27,7 @@ A thesis is not one prompt. DoThesis breaks the work into **five modules**, each
 Two ways content gets produced:
 
 1. **Guided chat** — the student talks to the agent turn by turn. The agent reads the relevant skill, proposes options (rendered as clickable cards / editable models), and commits each decision to the project state. Soft guidance, never hard walls — the student can jump modules.
-2. **Auto approve** — one button runs the whole M1→M5 pipeline unattended (a detached `orchestrator` subprocess), composes all six chapters, compiles citations, and renders DOCX + PDF. Progress streams live into the run drawer.
+2. **Auto Thesis** — one button runs the whole M1→M5 pipeline unattended (a detached `orchestrator` subprocess), composes all six chapters, compiles citations, and renders DOCX + PDF. Progress streams live into the run drawer.
 
 Core guarantees:
 
@@ -64,11 +64,11 @@ Core guarantees:
             Postgres (context_store slices, threads, messages, jobs, credits)  ·  S3 (uploads, exports)
 ```
 
-- **`web/`** — Next.js 15 chat workspace (project sidebar, module tracker, Context store panel, Auto-approve drawer, credits/transactions).
+- **`web/`** — Next.js 15 chat workspace (project sidebar, module tracker, Context store panel, Auto Thesis drawer, credits/transactions).
 - **`api/`** — FastAPI. **POST-only** (the auth token rides in the JSON body; only `/api/v1/health` is GET). Serves chat SSE (`routers/chat_v3.py`), auto-runs (`routers/runs.py`), projects/threads/uploads/credits.
 - **`agent/`** — the deep-agent runtime: `runtime.py` (`create_deep_agent` factory + `stream_turn` SSE event stream), tools (`research_scout`, `parse_reference`, `run_stats`, `export_docx`, state tools).
 - **`skills/`** — the source of truth for module behavior: `dothesis/` (routing + state protocol, read first), `dothesis-bootstrap/` (entry wizard), and `dothesis-m1-topic` … `dothesis-m5-writing`.
-- **`orchestrator/`** — the **auto-mode brain**. `python -m orchestrator --auto-draft` runs the LangGraph M1→M5 graph for Auto-approve runs, and its M5 composer + `tools/m5_writing.py` render the final document.
+- **`orchestrator/`** — a **library**, no longer a brain. Its LangGraph layer was deleted on 2026-08-20 when Auto Thesis moved onto the headless deep agent; what remains is `tools/` (M5 composition, export, literature), `backfill`, `chapter_split`, `artifacts`, `llm`, `token_meter`, `agents/base` — imported throughout `api/`.
 - **`engine/`** — the research/writing engine (literature APIs, citation cascade, draft pipeline, DOCX/PDF export) behind the agent's tools.
 
 Full map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -115,7 +115,7 @@ cp .env.example .env   # then fill in keys (see below)
 3. Every decision is persisted via `commit_slice`, which updates the project state and flags downstream modules for review.
 4. On completion the assistant message is persisted and the turn is metered (credits). If the student reloads mid-turn, the agent is stopped and the partial reply is saved.
 
-Details and the Auto-approve run flow: [`docs/PIPELINE.md`](docs/PIPELINE.md).
+Details and the Auto Thesis run flow: [`docs/PIPELINE.md`](docs/PIPELINE.md).
 
 ---
 

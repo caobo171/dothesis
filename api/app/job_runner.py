@@ -217,7 +217,7 @@ async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
                     # Auto-approve run finished: charge the LLM tokens it used.
                     # Only successful runs reach job_done, so failures cost nothing.
                     try:
-                        _charge_auto_run(db, job)
+                        _charge_auto_thesis_run(db, job)
                     except Exception:  # noqa: BLE001 — never break the monitor on billing
                         log.exception("auto-run credit charge failed for job %s", job_id)
             if type_ == "error":
@@ -253,7 +253,7 @@ async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
 
             # Auto runs used to persist state only in a LangGraph checkpoint and
             # needed a mirror step here to reach context_store. That checkpoint
-            # is gone — auto-draft now runs on the deep agent, whose
+            # is gone — Auto Thesis now runs on the deep agent, whose
             # DbProjectStateStore.commit_slice writes context_store directly
             # (see app/agent_state.py), so there is nothing left to sync here.
 
@@ -286,7 +286,7 @@ def cancel_job(db: Session, job: Job) -> None:
     db.commit()
 
 
-def _charge_auto_run(db: Session, run: Job) -> None:
+def _charge_auto_thesis_run(db: Session, run: Job) -> None:
     """Charge an auto-approve run for the LLM tokens it actually consumed.
 
     The orchestrator records every metered call in `token_ledger` (per project).
@@ -303,6 +303,12 @@ def _charge_auto_run(db: Session, run: Job) -> None:
     from .credit_ledger import debit
     from .models import CreditTransaction, Project, TokenLedger, User
 
+    # `reason="auto_run"` is DELIBERATELY not renamed with the rest of the
+    # Auto Thesis rename (2026-08-20). It is a value already written to
+    # credit_transactions rows in production: changing the string would make
+    # this idempotency lookup miss every historical charge — re-billing runs
+    # that were already paid for — and orphan the existing rows on the
+    # Transactions page. The user never sees it; only this code does.
     already = db.scalar(
         select(CreditTransaction.id).where(
             CreditTransaction.ref_type == "run",
@@ -424,7 +430,7 @@ def spawn_citation_search(project_id, run_id: int | None) -> bool:
 def spawn_headless_run(db: Session, run: Job, params: dict) -> None:
     """Spawn `python -m app.headless_entry` — the deep agent's headless runner.
 
-    Auto-draft now spawns through here too (the `spawn_orchestrator_run` /
+    Auto Thesis now spawns through here too (the `spawn_orchestrator_run` /
     `python -m orchestrator --auto-draft` path it used to go through is gone),
     so this is the only subprocess brain for both interactive-headless and
     auto-mode runs. Reuses the events.jsonl contract so the existing _monitor

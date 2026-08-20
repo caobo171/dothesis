@@ -23,6 +23,12 @@ router = APIRouter(tags=["runs"])
 
 
 class StartRunBody(BaseModel):
+    # "auto" is NOT renamed with the rest of the Auto Thesis rename
+    # (2026-08-20): it is both the value stored in the jobs.mode column on
+    # existing rows (which the admin screens and the UI read) and the wire
+    # contract the web client already sends. Renaming it is a data migration
+    # for a string no user ever sees. The runner's own vocabulary — the
+    # `full_thesis` params mode — is where the feature name lives.
     mode: str = Field("auto", pattern="^(auto)$")
     topic: str = Field(..., min_length=1)
     language: str | None = None

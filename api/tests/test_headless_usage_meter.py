@@ -1,6 +1,6 @@
 """Headless runs must emit token_usage events or auto-draft is free.
 
-_charge_auto_run sums token_ledger per model, and those rows are written
+_charge_auto_thesis_run sums token_ledger per model, and those rows are written
 API-side by job_runner._ingest_event from `token_usage` events on the
 events.jsonl contract (job_runner.py:215-236). The deep agent never goes
 through orchestrator.token_meter, so the runner has to emit its own.
@@ -43,7 +43,7 @@ def test_usage_events_are_summed_per_model_and_emitted_once_per_flush():
 
 
 def test_each_model_gets_its_own_event():
-    """_charge_auto_run prices each row at its own model's rate, so a turn that
+    """_charge_auto_thesis_run prices each row at its own model's rate, so a turn that
     failed over to a second model must not be collapsed into one."""
     appender = _Appender()
     meter = _UsageMeter(uuid.uuid4(), appender)
@@ -81,7 +81,7 @@ def _openai_route(monkeypatch):
 
 
 def test_an_unpriced_served_model_never_becomes_the_ledger_label(monkeypatch):
-    """C1: _charge_auto_run prices every ledger row through credit_multiplier,
+    """C1: _charge_auto_thesis_run prices every ledger row through credit_multiplier,
     which bills anything missing from quality/model_prices.py at the 4.0x
     UNKNOWN_MODEL_MULTIPLIER. A dated snapshot id is exactly that — and on the
     openai route (luna = 0.53x) it would overbill a whole thesis 7.6x. The label

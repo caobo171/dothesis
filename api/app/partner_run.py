@@ -114,7 +114,7 @@ def ensure_partner_user(db: Session) -> User:
     Partner runs have no end-user relationship (the partner owns billing), but
     Project.user_id is NOT NULL and the whole app authorizes through ownership
     — one well-known system row keeps every query intact, and its permanent
-    0-credit balance makes job_runner._charge_auto_run a guaranteed no-op
+    0-credit balance makes job_runner._charge_auto_thesis_run a guaranteed no-op
     (charge = min(cost, credit or 0) = 0).
 
     password_hash is a bcrypt-shaped impossibility, not a hash of anything: no

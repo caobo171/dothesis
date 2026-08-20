@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { server } from "../../../tests/setup";
 import { streamResponse } from "../../../tests/helpers/sseResponse";
 import { ChatPane } from "./ChatPane";
 
 
-describe("AutoDraft integration", () => {
+describe("AutoThesis integration", () => {
   test("click button → modal → confirm → drawer → done", async () => {
     // runStatus tracks state across handler calls; starts at null (no active run)
     let runStatus: "running" | "done" | null = null;
@@ -39,20 +39,24 @@ describe("AutoDraft integration", () => {
     );
 
     render(<ChatPane projectId="p1" threadId="t1" />);
-    await waitFor(() => screen.getByRole("button", { name: /auto-draft/i }));
+    await waitFor(() => screen.getByRole("button", { name: /^auto thesis$/i }));
 
-    // Click button → opens modal (heading "Start auto-draft" appears)
-    fireEvent.click(screen.getByRole("button", { name: /auto-draft/i }));
+    // Click the trigger → opens the modal, whose confirm button carries the
+    // SAME "Auto Thesis" label. Every query below is scoped to the dialog so
+    // the two can never be confused for each other.
+    fireEvent.click(screen.getByRole("button", { name: /^auto thesis$/i }));
     await waitFor(() => screen.getByRole("dialog"));
 
     // Modal has pre-filled topic + estimate
     await waitFor(() => expect(screen.getByDisplayValue("Leadership")).toBeTruthy());
 
     // Wait for estimate to load so the confirm button is enabled
-    await waitFor(() => expect(screen.getByRole("button", { name: /^start auto-draft$/i })).not.toBeDisabled());
+    const dialog = screen.getByRole("dialog");
+    await waitFor(() => expect(
+      within(dialog).getByRole("button", { name: /^auto thesis$/i })).not.toBeDisabled());
 
     // Confirm
-    fireEvent.click(screen.getByRole("button", { name: /^start auto-draft$/i }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /^auto thesis$/i }));
 
     // Drawer opens; module badge turns green after module_complete event
     // (design-token class from the 2026-06-10 DoThesis.html restyle)

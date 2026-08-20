@@ -18,7 +18,7 @@ state. No invention. You read **all of M1–M4**.
 
 | Path | Use for |
 |---|---|
-| **Auto-draft button** (server-side, deterministic) | Optional UI path for the whole thesis from scratch. Mention it only as an alternative; never redirect a chat request to it. |
+| **Auto Thesis button** (server-side, deterministic) | Optional UI path for the whole thesis from scratch. Mention it only as an alternative; never redirect a chat request to it. |
 | `export_docx(citation_style, scope)` (tool) | Required chat path for full or targeted writing. It renders DOCX + PDF and surfaces download links in the Context store panel. |
 
 You own the wizard: what to write, in what order, and surgical revisions. You do
@@ -40,7 +40,7 @@ you do NOT need `commit_slice` — the tool handles persistence.
 - Do NOT paste chapters into chat.
 - While it runs (~1 min to compose 6 chapters), stay quiet — progress streams.
 - On `ok: true`, confirm: *"Luận văn đã sẵn sàng — bản DOCX và PDF nằm ở panel
-  Context store bên phải."* (The Auto-draft button at the top-right does the
+  Context store bên phải."* (The Auto Thesis button at the top-right does the
   same thing and is fine to mention as an alternative.)
 
 #### When `export_docx` returns `needs_data` — ask, don't ship a weak draft

@@ -75,7 +75,7 @@ def _seed_brief(store, params: dict) -> bool:
     function, which quietly took the LANGUAGE with it — and the export reads
     the language from this very slice (agent_state.py:407 reads
     m1_topic["language"], defaulting to "vi"). So a project that got its title
-    from an import or backfill and then started auto-draft never had a language
+    from an import or backfill and then started Auto Thesis never had a language
     committed, and an English thesis exported with Vietnamese scaffolding. The
     two are separate decisions and are now guarded separately.
     """
@@ -101,7 +101,7 @@ def _seed_brief(store, params: dict) -> bool:
 
     if not writes:
         return False
-    store.commit_slice("M1", writes, reason="auto-draft brief")
+    store.commit_slice("M1", writes, reason="Auto Thesis brief")
     return True
 
 
@@ -264,7 +264,7 @@ class _UsageMeter:
     The API is the single DB writer (module docstring), so this emits on the
     events.jsonl contract and job_runner._ingest_event (job_runner.py:215-236)
     creates the token_ledger row — the same path orchestrator/__main__.py:82-97
-    uses. _charge_auto_run then prices each row at ITS OWN model's rate, which
+    uses. _charge_auto_thesis_run then prices each row at ITS OWN model's rate, which
     is why usage is grouped by the model that actually served the step:
     OpenRouter can fail over to a pricier fallback mid-run and runtime.py
     reports the served model on the event — but ONLY when that served id is one
@@ -295,7 +295,7 @@ class _UsageMeter:
         return self._configured
 
     def _billable_model(self, served: str | None) -> str:
-        """The id these tokens are LABELLED with — i.e. the id _charge_auto_run
+        """The id these tokens are LABELLED with — i.e. the id _charge_auto_thesis_run
         will price the resulting ledger row at.
 
         Keep the SERVED model when quality/model_prices.py actually prices it:
@@ -429,7 +429,7 @@ def main() -> int:
         # Billing: buffers `usage` events per model and flushes into a
         # `token_usage` event on every turn boundary (see _UsageMeter). Without
         # this, the deep agent run never reaches token_ledger and the
-        # billing sweep in job_runner._charge_auto_run finds nothing to charge.
+        # billing sweep in job_runner._charge_auto_thesis_run finds nothing to charge.
         meter = _UsageMeter(project_id, appender)
 
         def _on_event(ev: dict) -> None:
@@ -521,11 +521,11 @@ def main() -> int:
         _export_t0 = time.monotonic()
         # PARTNER-PATH WORK ONLY. run_partner_export re-composes the chapter
         # SUBSET a partner ordered and gates it on assess_export_readiness.
-        # Consumer auto-draft orders no chapters, so with no `depth` in params it
+        # Consumer Auto Thesis orders no chapters, so with no `depth` in params it
         # fell through to resolve_chapters("analysis_report", None) and raised
         # ReportError("needs_data") whenever M4.analysis_results was empty — a
         # thesis the agent had just finished emitted {"type": "error"}, _monitor
-        # marked the Job `failed`, and _charge_auto_run (job_runner.py:207-222,
+        # marked the Job `failed`, and _charge_auto_thesis_run (job_runner.py:207-222,
         # reached only on job_done) never ran. A completed thesis, given away
         # free. On the runs that did clear the gate it still wrote a spurious
         # second 4-chapter export tagged scope="partner".

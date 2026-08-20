@@ -1,6 +1,6 @@
 # DoThesis — The Method (M1–M5)
 
-DoThesis turns a blank topic into a finished thesis through **five modules**. The same five modules run two ways: **guided chat** (the student drives, turn by turn) and **Auto approve** (the whole pipeline runs unattended). Both write the same project `context_store` (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
+DoThesis turns a blank topic into a finished thesis through **five modules**. The same five modules run two ways: **guided chat** (the student drives, turn by turn) and **Auto Thesis** (the whole pipeline runs unattended). Both write the same project `context_store` (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 
 ```
 TOPIC ──► M1 Topic ──► M2 Literature ──► M3 Design ──► M4 Analysis ──► M5 Writing ──► DOCX + PDF
@@ -46,14 +46,14 @@ A new project opens the new-project modal, which collects whatever the student a
 
 ---
 
-## Auto-approve run
+## Auto Thesis run
 
-The "Auto approve" button (or a "write the whole thesis" request) starts an unattended run:
+The "Auto Thesis" button (or a "write the whole thesis" request) starts an unattended run:
 
-1. `POST /api/v1/projects/{id}/runs` → a detached `python -m orchestrator --auto-draft` subprocess.
-2. The LangGraph graph walks M1→M5; each module agent auto-fills its slice (auto-fill gets a generous wall-clock cap since it generates a whole schema at once). M3 is constrained to a simple linear-regression design; M5 (`_auto_compose_chapters`) composes the six chapters and renders DOCX + PDF to S3.
+1. `POST /api/v1/projects/{id}/runs` → a detached `python -m app.headless_entry` subprocess, with `params["mode"] = "full_thesis"`.
+2. The headless runner drives the SAME deep agent chat uses (`agent/headless.py`) until every module reads `done`, then exports DOCX + PDF to S3. Budgets — turns, wall clock, consecutive stalls — are data the caller passes; exhausting one fails the run with everything `commit_slice` wrote preserved.
 3. Progress streams to the drawer via `POST /api/v1/runs/{id}/events` — coarse node beats *and* agent-internal beats (M2 scout searching, M5 per-chapter writing) so the feed never looks stuck.
-4. Controls: **pause/resume** (resume re-enters at the last LangGraph checkpoint — a run that died in M3 resumes at M3 with M1/M2 intact), **cancel**, and **retry** (failed/canceled).
+4. Controls: **pause/resume**, **cancel**, and **retry** (failed/canceled). Resume re-runs a fresh agent over the state `commit_slice` already persisted — there is no checkpoint. Completed modules survive; a module in flight but uncommitted is redone.
 
 ---
 

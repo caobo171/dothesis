@@ -87,7 +87,7 @@ async def _get_checkpointer():
     """AsyncPostgresSaver over the api process's shared async pool.
 
     Reuses app.db's pool (moved out of orchestrator/graph.py during the
-    auto-draft migration — see app/db.py's get_async_pool docstring) so the
+    Auto Thesis migration — see app/db.py's get_async_pool docstring) so the
     api process keeps one Postgres pool regardless of which brain (graph or
     agent) serves a project.
     """
@@ -310,7 +310,7 @@ async def _get_agent(db: Session, project_id: uuid.UUID):
 
 
 # Credit-per-token scaling by active model lives in pricing.py so the chat turn
-# and the auto-draft run (job_runner) charge off one source of truth.
+# and the Auto Thesis run (job_runner) charge off one source of truth.
 from ..pricing import credit_multiplier as _credit_multiplier
 
 

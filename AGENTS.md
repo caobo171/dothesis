@@ -21,14 +21,13 @@ Plus `skills/dothesis/` (root: state protocol + routing — read first every con
 There are **two brains**, both writing the same project state:
 
 1. **Interactive chat — the deep agent (`agent/`).** Serves a chat turn when `DOTHESIS_AGENT_V3=1` (current default). One LLM agent + skills + tools, streamed over SSE.
-2. **Auto-approve — the orchestrator graph (`orchestrator/`).** The "Auto approve" button starts a detached subprocess (`python -m orchestrator --auto-draft`) that runs a LangGraph M1→M5 graph unattended, composes all six chapters, and renders DOCX + PDF. This is **not legacy** — it is the production auto-mode path. (When `DOTHESIS_AGENT_V3` is off, the same orchestrator graph can also serve interactive chat via `ORCHESTRATOR_ROUTER`, but that path is being retired.)
+2. **Auto Thesis — the same deep agent, headless (`agent/headless.py`).** The "Auto Thesis" button starts a detached subprocess (`python -m app.headless_entry`) that drives the SAME agent to roadmap completion with no human present, then exports DOCX + PDF. There is no second brain: mode differences are DATA the caller passes (budgets, which modules must be `done`), which is what stops a chat feature from ever gating a headless run.
 
-Both paths persist to the same Postgres-backed `context_store` slices; checkpoint namespaces are disjoint (`v3:<thread_id>` for the agent, `<run_id>` for auto runs).
+Until 2026-08-20 this was a separate LangGraph supervisor graph (`python -m orchestrator --auto-draft`). That layer is deleted. `orchestrator/` remains as a **library** — `tools/`, `backfill`, `chapter_split`, `artifacts`, `llm`, `token_meter`, `agents/base` — and is imported all over `api/`.
 
-- Chat AND auto-draft both run the deep agent (`agent/runtime.py`).
-  Auto-draft is the same brain driven headless (`api/app/headless_entry.py`).
-- `langgraph.json` exists only for `langgraph dev` (Studio) via `dev.sh`.
-  It is not read by any deployment.
+Both paths persist to the same Postgres-backed `context_store` slices via `commit_slice`, which is the only write path.
+
+`langgraph.json` exists only for `langgraph dev` (Studio) via `dev.sh`; no deployment reads it.
 
 ---
 
@@ -38,7 +37,7 @@ Both paths persist to the same Postgres-backed `context_store` slices; checkpoin
 - `skills/` — the eight DoThesis skills (deepagents SKILL.md layout). Source of truth for module behavior. Read-only at runtime, mounted at `/skills/`.
 - `api/` — FastAPI, **POST-only** (auth token in the JSON body; `/api/v1/health` is the one GET). Chat SSE = `routers/chat_v3.py`; auto runs = `routers/runs.py`; `job_runner.py` spawns + monitors the auto subprocess; `agent_state.py` (`DbProjectStateStore`) maps flat keys ↔ slice columns + `projects.module_status`/`focus`.
 - `web/` — Next.js 15 chat workspace. Streams SSE via `fetch`+ReadableStream (not EventSource) so the token rides in the POST body; hits `NEXT_PUBLIC_API_BASE` directly to dodge the dev proxy's SSE buffering.
-- `orchestrator/` — the auto-mode graph + agents (`agents/m1_topic.py` … `m5_writing.py`, `agents/base.py`), `__main__.py` (subprocess entrypoint, writes `events.jsonl`), `tools/m5_writing.py` (chapter composition + export), `tools/m2_literature.py` (research, reused by the agent's `research_scout`), `schemas/` (commit validation).
+- `orchestrator/` — a **library**, not a runtime. The graph, its module agents and `__main__.py` were deleted on 2026-08-20. What remains and is imported across `api/`: `tools/m5_writing.py` (chapter composition + export), `tools/m2_literature.py` (research, reused by the agent's `research_scout`), `backfill`, `chapter_split`, `artifacts`, `llm`, `token_meter`, `agents/base.py` (`bounded_invoke`), `schemas/`.
 - `engine/` — research + writing muscle: `utils/api_citations/` + `utils/deep_research.py` back M2's search; `phases/` + `utils/export_professional.py` back the draft/export path.
 
 ---
@@ -53,19 +52,19 @@ Both paths persist to the same Postgres-backed `context_store` slices; checkpoin
 | Soft locks, never walls | Skill instructions (`skills/dothesis/SKILL.md`) — the student may jump modules. |
 | **No fabricated sources / numbers** | Tools over memory: papers via `research_scout`/`parse_reference` (engine validation against CrossRef/OpenAlex/Semantic Scholar/arXiv); stats via `run_stats` (whitelisted ops only — the whitelist IS the security boundary). M4's skill forbids committing `analysis_results` without a real uploaded dataset. |
 | **No *incorrect* numbers — hard stats-validation findings block M4 commits** | Deterministic self-validation (thesis-stats) runs at `run_stats`/`check_thresholds` and at the M4 `commit_slice` gate (`agent/stats_validation.py`). A *hard* finding — a number that is mathematically impossible or self-contradictory (loading > 1, AVE ≠ mean λ², t↔p impossible, CI excludes its estimate, PLS/CB-SEM family mix) — blocks the `analysis_results` commit. The third hard boundary alongside verified sources and the whitelist. Soft findings warn only; the validator fails open. |
-| **Prose must match state — coherence gate blocks M5 commits** | The M5 `commit_slice` gate (`agent/coherence.py`) hard-blocks `final_sections` when a β/t/p/R²/f² quoted in the prose (attributed to a hypothesis) contradicts the persisted `analysis_results` beyond display-precision tolerance — a differing quote is provably wrong against state that already passed the M4 gate. Coverage/direction/decision/undiscussed checks are soft `coherence_warnings`. Also enforced by the rubric `coherence` dimension (hard → `blocking`) for the auto-draft/editor/legacy paths. Fails open. |
+| **Prose must match state — coherence gate blocks M5 commits** | The M5 `commit_slice` gate (`agent/coherence.py`) hard-blocks `final_sections` when a β/t/p/R²/f² quoted in the prose (attributed to a hypothesis) contradicts the persisted `analysis_results` beyond display-precision tolerance — a differing quote is provably wrong against state that already passed the M4 gate. Coverage/direction/decision/undiscussed checks are soft `coherence_warnings`. Also enforced by the rubric `coherence` dimension (hard → `blocking`) for the Auto Thesis/editor/legacy paths. Fails open. |
 | Long turns stay alive over SSE, survive disconnect | `agent/runtime.py:stream_turn` + `api/app/routers/chat_v3.py`: tool activity rides `progress` (plain-language, student-facing labels built in `chat_v3._tool_progress_label`); on client disconnect the agent task is cancelled and the partial reply is persisted via an idempotent `_finalize()`. |
-| Token metering + per-turn charge | `orchestrator/token_meter.py` sink registered in `api/app/main.py` lifespan; chat turns charge credits in `chat_v3._finalize`; auto runs charge in `job_runner._charge_auto_run`. |
+| Token metering + per-turn charge | `orchestrator/token_meter.py` sink registered in `api/app/main.py` lifespan; chat turns charge credits in `chat_v3._finalize`; auto runs charge in `job_runner._charge_auto_thesis_run`. |
 | Auto runs are simple + analysable | M3 auto-fill is constrained to plain multiple linear regression (`m3_design.py:auto_fill_directive`); M4/M5 prompts forbid mixing PLS-SEM and CB-SEM fit indices and require real-data tables. |
 
 **When updating any code:** comment the *reasoning* behind non-obvious changes (a short `# Decision:`/prose note). **When updating a module's behavior:** edit its `skills/*/SKILL.md` first (skill name == directory name, description ≤1024 chars, body <500 lines; heavy detail → `references/`).
 
 ---
 
-## Auto-approve run lifecycle
+## Auto Thesis run lifecycle
 
-1. `POST /api/v1/projects/{id}/runs` → `job_runner.spawn_orchestrator_run` writes `brief.json` + `events.jsonl`, spawns `python -m orchestrator --auto-draft`, and `start_monitor` schedules an async tailer on the app loop (works even though the endpoint is sync — the loop is captured at startup).
-2. The subprocess streams the graph, writing semantic events (`activity`, `phase_progress`, `job_done`, `error`) to `events.jsonl`. Agent-internal beats (M2 scout search, M5 per-chapter writing) are bound through `engine.utils.progress` and written too, so the feed isn't silent during long phases.
+1. `POST /api/v1/projects/{id}/runs` → `job_runner.spawn_headless_run` writes `params.json` + `events.jsonl`, spawns `python -m app.headless_entry`, and `start_monitor` schedules an async tailer on the app loop (works even though the endpoint is sync — the loop is captured at startup).
+2. The subprocess streams the agent's turns, writing semantic events (`activity`, `phase_progress`, `job_done`, `error`) to `events.jsonl`. Agent-internal beats (M2 scout search, M5 per-chapter writing) are bound through `engine.utils.progress` and written too, so the feed isn't silent during long phases.
 3. `_monitor` tails the file → `JobEvent` rows + `pubsub`. The drawer subscribes via `POST /api/v1/runs/{id}/events` (SSE: DB backlog replay, then live).
 4. Controls: `pause`/`resume` (resume re-enters at the LangGraph checkpoint), `cancel` (SIGTERM + mark canceled), and the drawer's **Retry** for failed/canceled runs.
 

@@ -312,7 +312,7 @@ artifacts and they play different roles:
 
 1. **`context_store` (Postgres JSONB row)** — the *living* artifact. The
    slice map says what's there. Versioned. Single-source-of-truth for any
-   downstream consumer (the docx renderer, the auto-draft job, the dashboard).
+   downstream consumer (the docx renderer, the Auto Thesis job, the dashboard).
 2. **DOCX + PDF (S3 objects)** — the *frozen* artifact. Renderable at any
    time from the `context_store`. Disposable. Re-renderable on convention
    change (citation style, language).

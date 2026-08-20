@@ -50,7 +50,7 @@ _async_pool = None
 async def get_async_pool():
     """Lazy AsyncConnectionPool used by AsyncPostgresSaver.
 
-    Moved here from orchestrator/graph.py during the auto-draft migration:
+    Moved here from orchestrator/graph.py during the Auto Thesis migration:
     routers/chat_v3.py's checkpointer needs this pool, and it must not die
     with the orchestrator graph layer (orchestrator is an editable-installed
     library and must not be a dependency of the API's own plumbing).

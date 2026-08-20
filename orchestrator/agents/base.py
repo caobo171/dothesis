@@ -238,7 +238,7 @@ class ModuleAgent(ABC):
         the interactive 12s. Auto-fill makes the LLM generate a whole module
         schema in one shot (M3, for instance, emits design + tool + the full
         conceptual model + sample size), which legitimately takes 10-20s. The
-        12s hot-path cap was killing M3 and failing the entire auto-draft. No
+        12s hot-path cap was killing M3 and failing the entire Auto Thesis. No
         user is watching a single keystroke here, so a longer wait is fine.
         """
         return int(os.getenv("ORCHESTRATOR_AUTOFILL_MAX_SECONDS", "60"))
@@ -260,7 +260,7 @@ class ModuleAgent(ABC):
         # Gemini 3.x returns message content as a LIST of blocks (thought
         # signatures etc.), but every caller here treats `.content` as a plain
         # string (`.content.strip()`, `_strip_code_fence(.content)`, `json.loads`).
-        # Flatten to text once, centrally, so the whole auto-draft path keeps
+        # Flatten to text once, centrally, so the whole Auto Thesis path keeps
         # working across model versions. These calls are text-only (no tool use).
         if isinstance(getattr(resp, "content", None), list):
             try:

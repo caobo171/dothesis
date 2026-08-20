@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
         try:
             # Warm the async PG pool so the first chat turn doesn't pay for
             # connection setup. (The auto graph warmed here died with the
-            # orchestrator graph layer — auto-draft is a subprocess now.)
+            # orchestrator graph layer — Auto Thesis is a subprocess now.)
             from .db import get_async_pool
             await get_async_pool()
         except Exception:

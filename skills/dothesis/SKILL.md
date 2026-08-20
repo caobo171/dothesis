@@ -168,7 +168,7 @@ store panel. Calling it IS the action.
 
 While it runs (composing 6 chapters takes ~1 min) stay quiet — progress streams
 to the user. When it returns `ok: true`, tell them the files are ready in the
-Context store panel. (The Auto-draft button does the same thing server-side and
+Context store panel. (The Auto Thesis button does the same thing server-side and
 is fine to mention as an alternative, but the message path must work on its own.)
 
 If it returns `{"error": "needs_data", …}` it did NOT export — the project is
@@ -226,7 +226,7 @@ requirement backward onto Chapters 1–3 merely because M4 is still locked.
    module skill before acting — do not treat them uniformly.
 6. **Tools over memory.** Papers come from `research_scout`/`parse_reference`
    (never fabricated), numbers come from `run_stats` (never hallucinated),
-   the full thesis comes from the Auto-draft button, and the downloadable
+   the full thesis comes from the Auto Thesis button, and the downloadable
    document comes from `export_docx` (never hand-rolled OOXML).
 
 ---

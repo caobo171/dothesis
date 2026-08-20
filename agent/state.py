@@ -335,7 +335,7 @@ class ProjectStateStore:
         (NON_CONTENT_KEYS are audit bookkeeping and NON_EARNING_KEYS are
         caller-supplied inputs — neither is evidence the module did any work).
         M5 is special — the finished chapters can live in the m5_writing
-        column (auto-draft path) rather than the owned `final_sections` key,
+        column (Auto Thesis path) rather than the owned `final_sections` key,
         so we also accept chapters when the store exposes the full view. A
         read failure there errs open (we don't block a done on a flaky read).
         """

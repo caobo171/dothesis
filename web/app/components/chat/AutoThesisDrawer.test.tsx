@@ -3,10 +3,10 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { server } from "../../../tests/setup";
 import { streamResponse } from "../../../tests/helpers/sseResponse";
-import { AutoDraftDrawer } from "./AutoDraftDrawer";
+import { AutoThesisDrawer } from "./AutoThesisDrawer";
 
 
-describe("AutoDraftDrawer", () => {
+describe("AutoThesisDrawer", () => {
   test("renders module progress from events", async () => {
     server.use(
       http.post("*/api/v1/runs/r1", () => HttpResponse.json({
@@ -21,7 +21,7 @@ describe("AutoDraftDrawer", () => {
       ])),
     );
 
-    render(<AutoDraftDrawer runId="r1" onClose={() => {}} />);
+    render(<AutoThesisDrawer runId="r1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("dot-M1")).toHaveClass("bg-[var(--ok-fg)]");
@@ -35,7 +35,7 @@ describe("AutoDraftDrawer", () => {
       http.get("/api/v1/runs/r2/events", () => streamResponse(['data: {"type":"done"}\n\n'])),
     );
     const onClose = vi.fn();
-    render(<AutoDraftDrawer runId="r2" onClose={onClose} />);
+    render(<AutoThesisDrawer runId="r2" onClose={onClose} />);
     await waitFor(() => screen.getByLabelText(/close drawer/i));
     fireEvent.click(screen.getByLabelText(/close drawer/i));
     expect(onClose).toHaveBeenCalled();

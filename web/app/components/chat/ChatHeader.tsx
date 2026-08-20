@@ -132,13 +132,13 @@ const PHASE_LABEL: Record<string, string> = {
  * Right cluster: history button, export button, notifications bell with
  * red dot when unread, vertical divider, user avatar + name + tier.
  *
- * `autoDraftButton` is still a render-prop slot — ChatPane passes the
- * project-aware autodraft button in there.
+ * `autoThesisButton` is still a render-prop slot — ChatPane passes the
+ * project-aware auto-thesis button in there.
  */
 export function ChatHeader({
   projectName,
   threadName,
-  autoDraftButton,
+  autoThesisButton,
   projectId,
   hasChapters,
   focusModule,
@@ -152,7 +152,7 @@ export function ChatHeader({
   /** The project hasn't arrived yet — show a skeleton instead of placeholder
    *  punctuation. */
   loading?: boolean;
-  autoDraftButton: ReactNode;
+  autoThesisButton: ReactNode;
   projectId?: string;
   hasChapters?: boolean;
   focusModule?: string;
@@ -268,7 +268,7 @@ export function ChatHeader({
           </Link>
         )}
 
-        {/* Quick actions — collapses Autopilot + history/export/notifications
+        {/* Quick actions — collapses Auto Thesis + history/export/notifications
             into one menu so the header isn't crowded (esp. on mobile). */}
         <div className="relative">
           <button
@@ -295,8 +295,8 @@ export function ChatHeader({
                 <div className="px-2 pt-1 pb-2 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400">
                   Run
                 </div>
-                {/* Autopilot (renamed from Auto approve) */}
-                <div className="px-1 pb-2">{autoDraftButton}</div>
+                {/* Auto Thesis */}
+                <div className="px-1 pb-2">{autoThesisButton}</div>
 
                 {onQuickPrompt && (
                   <>

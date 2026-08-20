@@ -66,7 +66,7 @@ def _token_cost(usage: list[dict]) -> tuple[int, dict[str, int]]:
     Billed at EACH model's own rate rather than one blended scalar: a single run
     can span models (the anchor router and the rewrite are separately
     configurable) and one number cannot price that. Same rule as
-    job_runner._charge_auto_run.
+    job_runner._charge_auto_thesis_run.
     """
     from .pricing import credit_multiplier  # noqa: PLC0415
 

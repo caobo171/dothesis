@@ -3,10 +3,10 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { http } from "msw";
 import { server } from "../../../../tests/setup";
 import { streamResponse } from "../../../../tests/helpers/sseResponse";
-import { useAutoDraftRun } from "./useAutoDraftRun";
+import { useAutoThesisRun } from "./useAutoThesisRun";
 
 
-describe("useAutoDraftRun", () => {
+describe("useAutoThesisRun", () => {
   test("subscribes to /runs/{rid}/events when runId set", async () => {
     server.use(
       http.get("/api/v1/runs/r1/events", () => streamResponse([
@@ -16,7 +16,7 @@ describe("useAutoDraftRun", () => {
       ])),
     );
 
-    const { result } = renderHook(() => useAutoDraftRun("r1"));
+    const { result } = renderHook(() => useAutoThesisRun("r1"));
     await waitFor(() => {
       expect(result.current.events.some(e => e.type === "job_done")).toBe(true);
     });
@@ -25,7 +25,7 @@ describe("useAutoDraftRun", () => {
   });
 
   test("no run id → no fetch", () => {
-    const { result } = renderHook(() => useAutoDraftRun(null));
+    const { result } = renderHook(() => useAutoThesisRun(null));
     expect(result.current.events).toEqual([]);
   });
 });

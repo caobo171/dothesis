@@ -5,7 +5,7 @@ import { useStream } from "./useStream";
 import { tokenStore } from "@/app/lib/tokenStore";
 
 
-export function useAutoDraftRun(runId: string | null) {
+export function useAutoThesisRun(runId: string | null) {
   const stream = useStream();
 
   // Subscribe to run events only when a runId is available.

@@ -26,7 +26,7 @@ results — full stop.
 - Never invent β, R², p, AVE, loadings, fit indices, or a sample size to "fill
   in" a Results chapter. A fabricated statistic is the single worst failure of
   this module.
-- When the user (or an auto-draft / "write my whole thesis" request) asks for
+- When the user (or an Auto Thesis / "write my whole thesis" request) asks for
   results but no data exists, do NOT proceed. Say plainly: *"To run the analysis
   I need your data — upload your survey dataset (`.sav` / `.csv` / `.xlsx`, or a
   SmartPLS/SPSS export). Without it I can't produce real results, and I won't

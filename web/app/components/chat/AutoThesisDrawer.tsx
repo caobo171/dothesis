@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import useSWR from "swr";
 import { X, Pause, Play, XCircle, RotateCcw, Loader2 } from "lucide-react";
 import { ModuleProgressDot, type ModuleStatus } from "./ModuleProgressDot";
-import { useAutoDraftRun } from "./hooks/useAutoDraftRun";
+import { useAutoThesisRun } from "./hooks/useAutoThesisRun";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
 import { apiFetch, swrFetcher as fetcher, triggerExportDownload } from "@/app/lib/api";
 
@@ -18,7 +18,7 @@ const MODULES = [
 ];
 
 
-export function AutoDraftDrawer({
+export function AutoThesisDrawer({
   runId,
   onClose,
   onRetry,
@@ -31,7 +31,7 @@ export function AutoDraftDrawer({
   onRetry?: () => void;
 }) {
   const { data: run, mutate: mutateRun } = useSWR(`/runs/${runId}`, fetcher, { refreshInterval: 5000 });
-  const { events } = useAutoDraftRun(runId);
+  const { events } = useAutoThesisRun(runId);
 
   const statusByModule = useMemo(() => {
     // Default all modules to locked; update as events arrive

@@ -6,7 +6,7 @@ import { X } from "lucide-react";
 import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 
 
-export function AutoDraftModal({
+export function AutoThesisModal({
   open,
   projectId,
   defaultTopic,
@@ -39,7 +39,7 @@ export function AutoDraftModal({
         aria-modal="true"
       >
         <div className="flex items-start justify-between mb-4">
-          <h2 className="text-lg font-semibold text-ink-900">Auto write full thesis</h2>
+          <h2 className="text-lg font-semibold text-ink-900">Auto Thesis</h2>
           <button type="button" onClick={onClose} aria-label="close">
             <X className="w-5 h-5 text-ink-500" />
           </button>
@@ -82,7 +82,7 @@ export function AutoDraftModal({
             disabled={!topic.trim() || (est && !est.sufficient_credit)}
             className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-full hover:bg-primary-700 disabled:opacity-50"
           >
-            Autopilot
+            Auto Thesis
           </button>
         </div>
       </div>

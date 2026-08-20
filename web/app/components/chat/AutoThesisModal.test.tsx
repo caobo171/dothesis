@@ -2,10 +2,10 @@ import { describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { server } from "../../../tests/setup";
-import { AutoDraftModal } from "./AutoDraftModal";
+import { AutoThesisModal } from "./AutoThesisModal";
 
 
-describe("AutoDraftModal", () => {
+describe("AutoThesisModal", () => {
   test("fetches estimate and renders it", async () => {
     server.use(
       http.post("*/api/v1/projects/p1/runs/estimate", () =>
@@ -13,7 +13,7 @@ describe("AutoDraftModal", () => {
       ),
     );
     render(
-      <AutoDraftModal
+      <AutoThesisModal
         open={true}
         projectId="p1"
         defaultTopic="Leadership"
@@ -33,15 +33,15 @@ describe("AutoDraftModal", () => {
     );
     const onConfirm = vi.fn();
     render(
-      <AutoDraftModal open={true} projectId="p1" defaultTopic="seed" onClose={() => {}} onConfirm={onConfirm} />,
+      <AutoThesisModal open={true} projectId="p1" defaultTopic="seed" onClose={() => {}} onConfirm={onConfirm} />,
     );
     await waitFor(() => expect(screen.getByDisplayValue("seed")).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: /^start auto-draft$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^auto thesis$/i }));
     expect(onConfirm).toHaveBeenCalledWith("seed");
   });
 
   test("does not render when open=false", () => {
-    render(<AutoDraftModal open={false} projectId="p1" defaultTopic="" onClose={() => {}} onConfirm={() => {}} />);
-    expect(screen.queryByText(/start auto-draft/i)).toBeNull();
+    render(<AutoThesisModal open={false} projectId="p1" defaultTopic="" onClose={() => {}} onConfirm={() => {}} />);
+    expect(screen.queryByText(/auto thesis/i)).toBeNull();
   });
 });

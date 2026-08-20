@@ -10,9 +10,9 @@ import { ChatHeader } from "./ChatHeader";
 import { ThreadSkeleton } from "./ThreadSkeleton";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
-import { AutoDraftButton, type RunStatus } from "./AutoDraftButton";
-import { AutoDraftModal } from "./AutoDraftModal";
-import { AutoDraftDrawer } from "./AutoDraftDrawer";
+import { AutoThesisButton, type RunStatus } from "./AutoThesisButton";
+import { AutoThesisModal } from "./AutoThesisModal";
+import { AutoThesisDrawer } from "./AutoThesisDrawer";
 import { synthesizeWidgetSelection } from "./widgets/synthesize";
 import type { WidgetSelectHandler } from "./widgets/types";
 import {
@@ -106,7 +106,7 @@ function getEmptyStateCopy(project: {
     title: "Start your thesis",
     body:
       "Type your research topic below and I'll guide you step by step — " +
-      "or hit Auto approve to write the full thesis end-to-end.",
+      "or hit Auto Thesis to write the whole thing end-to-end.",
   };
 }
 
@@ -346,7 +346,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   const upstreamDone =
     !!project?.module_status &&
     ["M1", "M2", "M3", "M4"].every(m => project.module_status?.[m] === "done");
-  const autoDraftReady = upstreamDone && (latestRun?.run?.status ?? null) === null;
+  const autoThesisReady = upstreamDone && (latestRun?.run?.status ?? null) === null;
 
   const [modalOpen, setModalOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -354,7 +354,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   // freshly re-spawned run (the previous stream closed on the terminal event).
   const [runNonce, setRunNonce] = useState(0);
 
-  const onAutoDraftClick = () => {
+  const onAutoThesisClick = () => {
     const status = latestRun?.run?.status ?? null;
     // If a run is active/done/failed, open the drawer to show its progress
     if (status === "running" || status === "paused" || status === "done" || status === "failed") {
@@ -364,7 +364,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     }
   };
 
-  const confirmAutoDraft = async (topic: string) => {
+  const confirmAutoThesis = async (topic: string) => {
     setModalOpen(false);
     try {
       await apiFetch(`/projects/${projectId}/runs`, {
@@ -496,11 +496,11 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
             ? project.module_status?.[project.focus ?? project.current_module ?? ""] ?? "in_progress"
             : undefined
         }
-        autoDraftButton={
-          <AutoDraftButton
+        autoThesisButton={
+          <AutoThesisButton
             runStatus={latestRun?.run?.status ?? null}
-            onClick={onAutoDraftClick}
-            ready={autoDraftReady}
+            onClick={onAutoThesisClick}
+            ready={autoThesisReady}
           />
         }
         projectId={projectId}
@@ -642,15 +642,15 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         focusModule={project ? (project.focus ?? project.current_module) : undefined}
       />
 
-      <AutoDraftModal
+      <AutoThesisModal
         open={modalOpen}
         projectId={projectId}
         defaultTopic={project?.context_store?.m1_topic?.research_title ?? ""}
         onClose={() => setModalOpen(false)}
-        onConfirm={confirmAutoDraft}
+        onConfirm={confirmAutoThesis}
       />
       {drawerOpen && latestRun?.run && (
-        <AutoDraftDrawer
+        <AutoThesisDrawer
           key={`${latestRun.run.id}:${runNonce}`}
           runId={latestRun.run.id}
           onClose={() => setDrawerOpen(false)}

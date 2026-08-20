@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from app.db import get_session_factory
-from app.job_runner import _charge_auto_run
+from app.job_runner import _charge_auto_thesis_run
 from app.models import CreditTransaction, Job, Project, TokenLedger, User
 
 
@@ -39,7 +39,7 @@ def test_auto_run_charges_actual_tokens_and_is_idempotent():
         _ledger(db, p.id, 2500, 3500)  # 6000 tokens → round(6.0) = 6 credits
         db.commit()
 
-        _charge_auto_run(db, run); db.commit()
+        _charge_auto_thesis_run(db, run); db.commit()
         db.refresh(u)
         assert u.credit == 10000 - 6
         txns = (db.query(CreditTransaction)
@@ -47,7 +47,7 @@ def test_auto_run_charges_actual_tokens_and_is_idempotent():
         assert len(txns) == 1 and txns[0].delta == -6
 
         # Second call must not double-charge.
-        _charge_auto_run(db, run); db.commit()
+        _charge_auto_thesis_run(db, run); db.commit()
         db.refresh(u)
         assert u.credit == 10000 - 6
         assert (db.query(CreditTransaction)
@@ -74,7 +74,7 @@ def test_auto_run_bills_each_model_at_its_own_rate(monkeypatch):
         _ledger(db, p.id, 1000, 1000, model="gemini-3.5-flash")   # 2000 tok @ 12.9 → 25.7
         db.commit()
 
-        _charge_auto_run(db, run); db.commit()
+        _charge_auto_thesis_run(db, run); db.commit()
         db.refresh(u)
         # ⚠️ REPRICED, not re-derived: 3.5-flash was 4.0 here (total 12) because the
         # old multiplier read engine/utils/model_config.py's $0.50/$3.00. That row is
@@ -110,7 +110,7 @@ def test_auto_run_ignores_tokens_from_before_it_started():
         old.created_at = run.started_at - timedelta(minutes=5)
         db.commit()
 
-        _charge_auto_run(db, run); db.commit()
+        _charge_auto_thesis_run(db, run); db.commit()
         db.refresh(u)
         assert u.credit == 10000  # nothing to charge for this run
         assert (db.query(CreditTransaction)
@@ -119,7 +119,7 @@ def test_auto_run_ignores_tokens_from_before_it_started():
 
 def test_headless_meter_event_bills_the_run_at_the_priced_rate(monkeypatch):
     """Spec §Testing item 4, end to end: a `_UsageMeter`-produced event lands in
-    token_ledger and `_charge_auto_run` debits > 0 at the RIGHT price.
+    token_ledger and `_charge_auto_thesis_run` debits > 0 at the RIGHT price.
 
     The test below drives `_ingest_event` from a hand-written payload, so nothing
     crossed from the runner's own emitter into billing — which is exactly how the
@@ -170,7 +170,7 @@ def test_headless_meter_event_bills_the_run_at_the_priced_rate(monkeypatch):
         assert all(is_priced(r.model) for r in rows), [r.model for r in rows]
 
         job = db.get(Job, run_id)
-        _charge_auto_run(db, job)
+        _charge_auto_thesis_run(db, job)
         db.commit()
         owner = db.get(User, db.get(Project, project_id).user_id)
         charged = before - owner.credit
@@ -189,7 +189,7 @@ def test_headless_meter_event_bills_the_run_at_the_priced_rate(monkeypatch):
 
 def test_token_usage_event_becomes_ledger_row_and_gets_charged():
     """The gap this closes: the orchestrator runs as a SUBPROCESS with a no-op
-    sink, so auto runs wrote zero token_ledger rows and _charge_auto_run billed
+    sink, so auto runs wrote zero token_ledger rows and _charge_auto_thesis_run billed
     nothing. Ledger entries now travel as `token_usage` events on the existing
     events.jsonl contract and are persisted API-side (the single DB writer)."""
     import asyncio
@@ -231,6 +231,6 @@ def test_token_usage_event_becomes_ledger_row_and_gets_charged():
         assert job.events_processed == events_before + 1
 
         # And it actually bills: 4000 tokens at gemini-3-flash-preview's 4.286x.
-        _charge_auto_run(db, job); db.commit()
+        _charge_auto_thesis_run(db, job); db.commit()
         owner = db.get(User, db.get(Project, project_id).user_id)
         assert owner.credit < before, "auto run must now be charged"

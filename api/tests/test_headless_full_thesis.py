@@ -171,7 +171,7 @@ def _run_main(tmp_path, monkeypatch, params, *, exports=None):
 def test_full_thesis_does_not_run_the_partner_export(tmp_path, monkeypatch):
     """C2: run_partner_export gates on assess_export_readiness against the
     4-chapter analysis_report default, so an EMPTY M4 turned a finished thesis
-    into {"type": "error"} → Job failed → _charge_auto_run never reached: the
+    into {"type": "error"} → Job failed → _charge_auto_thesis_run never reached: the
     student got the whole thesis free. The real full-thesis export is already
     written by the M5 done-hook (agent_state._auto_export_m5)."""
     exports = []
