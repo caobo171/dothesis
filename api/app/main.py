@@ -37,13 +37,18 @@ async def lifespan(app: FastAPI):
     job_runner.set_app_loop(_asyncio.get_running_loop())
 
     # Orchestrator startup priming. Chat turns run on the v3 deep agent, which
-    # reuses the orchestrator's shared async Postgres pool (chat_v3's
-    # checkpointer) — warm it so the first turn isn't slow. Auto-draft still
-    # runs the engine's auto graph (sync PostgresSaver, subprocess-invoked).
+    # reuses the api process's shared async Postgres pool (chat_v3's
+    # checkpointer, now defined in app/db.py rather than orchestrator/graph.py
+    # — see app/db.py's get_async_pool docstring) — warm it so the first turn
+    # isn't slow. Auto-draft still runs the engine's auto graph (sync
+    # PostgresSaver, subprocess-invoked); that warmup call stays here until
+    # the auto graph itself is retired.
     if settings.orchestrator_enabled:
         try:
-            from orchestrator.graph import _get_async_pool, get_auto_graph
-            await _get_async_pool()
+            from orchestrator.graph import get_auto_graph
+
+            from .db import get_async_pool
+            await get_async_pool()
             get_auto_graph()
         except Exception:
             import logging

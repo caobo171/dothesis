@@ -84,16 +84,18 @@ _checkpointer = None
 
 
 async def _get_checkpointer():
-    """AsyncPostgresSaver over the orchestrator's shared async pool.
+    """AsyncPostgresSaver over the api process's shared async pool.
 
-    Reuses orchestrator.graph's pool so the api process keeps one Postgres
-    pool regardless of which brain (graph or agent) serves a project.
+    Reuses app.db's pool (moved out of orchestrator/graph.py during the
+    auto-draft migration — see app/db.py's get_async_pool docstring) so the
+    api process keeps one Postgres pool regardless of which brain (graph or
+    agent) serves a project.
     """
     global _checkpointer
     if _checkpointer is None:
         from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-        from orchestrator.graph import _get_async_pool
-        pool = await _get_async_pool()
+        from ..db import get_async_pool
+        pool = await get_async_pool()
         saver = AsyncPostgresSaver(pool)
         # Publish only AFTER setup lands. Assigning the global first meant a
         # transient DB blip during setup() (it runs the checkpoint migrations)
