@@ -137,7 +137,7 @@ describe("mode tabs", () => {
   /** The composer reads locale context, so every render needs the provider —
    *  same reason the Harness above exists. */
   const renderComposer = (props: Record<string, unknown>) =>
-    render(<LocaleProvider initialLocale="en"><ThesisComposer {...base} {...props} /></LocaleProvider>);
+    render(<LocaleProvider initialLocale="en" hasCookie><ThesisComposer {...base} {...props} /></LocaleProvider>);
 
   test("offers both modes, guided selected by default", () => {
     renderComposer({ mode: "guided", onModeChange: () => {} });
@@ -166,5 +166,50 @@ describe("mode tabs", () => {
     // run, so offering conversation openers would misdescribe the button.
     renderComposer({ mode: "auto_thesis", onModeChange: () => {} });
     expect(screen.queryByText(/starting fresh|bắt đầu từ đầu/i)).toBeNull();
+  });
+});
+
+
+// --- Auto Thesis speaks in its own voice -----------------------------------
+// The tab shipped with the guided copy still around it: heading "Analyze your
+// thesis", a placeholder asking what you already have, and an "Analyze" button.
+// In Auto Thesis the student is not analysing anything — they are commissioning
+// a whole thesis — so the screen has to change voice with the tab, or the tab
+// reads as a switch bolted onto someone else's screen.
+
+describe("Auto Thesis copy", () => {
+  const base = {
+    value: "", onChange: () => {}, files: [], onAddFiles: () => {},
+    onRemoveFile: () => {}, onSubmit: () => {}, canSubmit: true,
+  };
+  const renderIn = (locale: Locale, props: Record<string, unknown>) =>
+    render(<LocaleProvider initialLocale={locale} hasCookie>
+      <ThesisComposer {...base} {...props} /></LocaleProvider>);
+
+  test("asks for a topic, not for what you already have", () => {
+    renderIn("en", { mode: "auto_thesis", onModeChange: () => {} });
+    const box = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(box.placeholder).toMatch(/topic/i);
+    expect(box.placeholder).not.toMatch(/what you have/i);
+  });
+
+  test("the button commissions a thesis instead of analysing one", () => {
+    renderIn("en", { mode: "auto_thesis", onModeChange: () => {} });
+    expect(screen.getByRole("button", { name: /write my thesis/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^analyze$/i })).toBeNull();
+  });
+
+  test("guided mode keeps its original copy", () => {
+    renderIn("en", { mode: "guided", onModeChange: () => {} });
+    expect(screen.getByRole("button", { name: /^analyze$/i })).toBeTruthy();
+  });
+
+  test("the Auto Thesis copy is translated, not English-only", () => {
+    // Vietnamese is the primary market; an English-only mode would read as
+    // half-finished exactly where the student is deciding to spend credits.
+    renderIn("vi", { mode: "auto_thesis", onModeChange: () => {} });
+    const box = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(box.placeholder).not.toMatch(/topic/i);
+    expect(screen.queryByRole("button", { name: /write my thesis/i })).toBeNull();
   });
 });

@@ -125,9 +125,13 @@ export function ThesisComposer({
     });
   };
 
-  const modes: { id: StartMode; label: string; hint: string }[] = [
-    { id: "guided", label: "Guided", hint: "Work through it together, step by step" },
-    { id: "auto_thesis", label: "Auto Thesis", hint: "Write the whole thesis end-to-end" },
+  // Auto Thesis is a different job, not a setting on the same one, so the whole
+  // composer changes voice with it: the student is commissioning a thesis, not
+  // telling us what they already have.
+  const auto = mode === "auto_thesis";
+  const modes: { id: StartMode; labelKey: MessageKey; hintKey: MessageKey }[] = [
+    { id: "guided", labelKey: "new.mode.guided", hintKey: "new.mode.guided.hint" },
+    { id: "auto_thesis", labelKey: "new.mode.auto", hintKey: "new.mode.auto.hint" },
   ];
 
   return (
@@ -145,7 +149,7 @@ export function ThesisComposer({
                 role="tab"
                 type="button"
                 aria-selected={selected}
-                title={m.hint}
+                title={t(m.hintKey)}
                 disabled={busy}
                 onClick={() => onModeChange(m.id)}
                 className={
@@ -155,7 +159,7 @@ export function ThesisComposer({
                     : "text-ink-500 hover:text-ink-800")
                 }
               >
-                {m.label}
+                {t(m.labelKey)}
               </button>
             );
           })}
@@ -216,7 +220,7 @@ export function ThesisComposer({
           }}
           disabled={busy}
           rows={2}
-          placeholder={t("new.placeholder")}
+          placeholder={t(auto ? "new.auto.placeholder" : "new.placeholder")}
           aria-label={t("new.title")}
           className="w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[14px] leading-relaxed text-ink-900 placeholder:text-ink-400 focus:outline-none disabled:opacity-60"
         />
@@ -242,7 +246,8 @@ export function ThesisComposer({
             disabled={!canSubmit}
             className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-3.5 py-2 text-[13px] font-bold text-white hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {busy ? t("new.analyzing") : t("new.analyze")}
+            {busy ? t(auto ? "new.auto.analyzing" : "new.analyzing")
+                  : t(auto ? "new.auto.analyze" : "new.analyze")}
             {!busy && <ArrowUp className="w-3.5 h-3.5" />}
           </button>
           <input

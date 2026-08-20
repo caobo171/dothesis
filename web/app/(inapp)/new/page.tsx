@@ -367,10 +367,21 @@ export default function NewThesisPage() {
         <ArrowLeft className="w-3.5 h-3.5" /> {t("new.back")}
       </Link>
 
+      {/* The heading changes with the mode. Leaving "Analyze your thesis" above
+          an Auto Thesis tab described the wrong job: the student is not
+          analysing anything, they are commissioning a whole thesis. The claim
+          in the Auto Thesis heading is one the product can back — full_thesis
+          resolves to exactly six chapters (M5_CHAPTER_ORDER) — rather than a
+          page count nothing in the system guarantees. */}
       <div className="text-center mb-7">
         <h1 className="m-0 text-[26px] font-extrabold font-serif tracking-tight text-ink-900">
-          {t("new.title")}
+          {t(mode === "auto_thesis" ? "new.auto.title" : "new.title")}
         </h1>
+        {mode === "auto_thesis" && (
+          <p className="mx-auto mt-2 mb-0 max-w-[46ch] text-[13.5px] leading-relaxed text-ink-500">
+            {t("new.auto.tagline")}
+          </p>
+        )}
       </div>
 
       {/* The composer IS the page now. Subtitle deleted on purpose: the

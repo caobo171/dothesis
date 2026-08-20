@@ -18,6 +18,22 @@
  */
 export const en = {
   // --- /new — analyze-your-thesis composer ---
+  // --- Auto Thesis mode ---
+  // The hero claim is deliberately a number the product can back: full_thesis
+  // resolves to M5_CHAPTER_ORDER, which is exactly six chapters
+  // (orchestrator/tools/m5_writing.py:1854). No page-count promise — nothing
+  // in the system guarantees one.
+  "new.auto.title": "One topic, six chapters.",
+  "new.auto.tagline":
+    "I handle the literature, the research design and the writing end-to-end. " +
+    "Attach your dataset and the analysis chapter comes back with real numbers.",
+  "new.auto.placeholder": "Your research topic — one sentence is enough.",
+  "new.auto.analyze": "Write my thesis",
+  "new.auto.analyzing": "Starting…",
+  "new.mode.guided": "Guided",
+  "new.mode.guided.hint": "Work through it together, step by step",
+  "new.mode.auto": "Auto Thesis",
+  "new.mode.auto.hint": "Write the whole thesis end-to-end",
   "new.back": "Back to home",
   "new.title": "Analyze your thesis",
   "new.placeholder":

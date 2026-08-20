@@ -18,6 +18,18 @@ import type { MessageKey } from "./en";
 
 export const vi: Record<MessageKey, string> = {
   // --- /new — trình phân tích luận văn ---
+  // --- Auto Thesis mode ---
+  "new.auto.title": "Một chủ đề, sáu chương.",
+  "new.auto.tagline":
+    "Tôi lo phần tổng quan tài liệu, thiết kế nghiên cứu và viết trọn sáu chương. " +
+    "Đính kèm dữ liệu của bạn thì chương phân tích có số liệu thật.",
+  "new.auto.placeholder": "Chủ đề nghiên cứu của bạn — một câu là đủ.",
+  "new.auto.analyze": "Viết luận văn cho tôi",
+  "new.auto.analyzing": "Đang khởi động…",
+  "new.mode.guided": "Có hướng dẫn",
+  "new.mode.guided.hint": "Cùng nhau đi từng bước một",
+  "new.mode.auto": "Auto Thesis",
+  "new.mode.auto.hint": "Viết trọn luận văn từ đầu đến cuối",
   "new.back": "Về trang chủ",
   "new.title": "Phân tích luận văn của bạn",
   "new.placeholder":
