@@ -63,3 +63,19 @@ async def test_monitor_ingests_lines_and_marks_done(tmp_path):
         assert j.events_processed == 3
         assert db.query(JobEvent).filter(JobEvent.job_id == job_id).count() == 3
     pubsub.unsubscribe(job_id, sub)
+
+
+def test_job_runner_has_no_orchestrator_spawn():
+    """The deep agent is the only auto-draft brain; a lingering spawner is a
+    second, untested path back to the deleted graph."""
+    from app import job_runner
+    assert not hasattr(job_runner, "spawn_orchestrator_run")
+    assert not hasattr(job_runner, "_sync_context_store_from_checkpoint")
+
+
+def test_context_store_is_written_by_the_store_not_a_mirror():
+    """DbProjectStateStore.commit_slice writes context_store directly, which is
+    why the checkpoint mirror could go."""
+    import inspect
+    from app import job_runner
+    assert "get_auto_graph" not in inspect.getsource(job_runner)

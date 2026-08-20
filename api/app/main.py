@@ -39,20 +39,17 @@ async def lifespan(app: FastAPI):
     # Orchestrator startup priming. Chat turns run on the v3 deep agent, which
     # reuses the api process's shared async Postgres pool (chat_v3's
     # checkpointer, now defined in app/db.py rather than orchestrator/graph.py
-    # — see app/db.py's get_async_pool docstring) — warm it so the first turn
-    # isn't slow. Auto-draft still runs the engine's auto graph (sync
-    # PostgresSaver, subprocess-invoked); that warmup call stays here until
-    # the auto graph itself is retired.
+    # — see app/db.py's get_async_pool docstring).
     if settings.orchestrator_enabled:
         try:
-            from orchestrator.graph import get_auto_graph
-
+            # Warm the async PG pool so the first chat turn doesn't pay for
+            # connection setup. (The auto graph warmed here died with the
+            # orchestrator graph layer — auto-draft is a subprocess now.)
             from .db import get_async_pool
             await get_async_pool()
-            get_auto_graph()
         except Exception:
             import logging
-            logging.exception("orchestrator graph init failed (continuing without it)")
+            logging.exception("async pool warmup failed (continuing without it)")
 
         # Brief §1.8 — register the SQL sink for the token meter so every
         # metered_invoke call gets persisted to token_ledger. Wired in

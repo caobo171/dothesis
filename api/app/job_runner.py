@@ -157,56 +157,6 @@ async def _monitor(job_id: uuid.UUID) -> None:
         return
 
 
-def _sync_context_store_from_checkpoint(db: Session, job: Job) -> None:
-    """Copy an auto-run's LangGraph checkpoint into the context_store table.
-
-    The orchestrator subprocess keeps module state only in its PostgresSaver
-    checkpoint (keyed by thread_id == run.id) and never writes the DB itself
-    (orchestrator/__main__.py). Without this, the context_store table — which
-    feeds the right-panel UI, the project module_status pills, and the handoff
-    into interactive editing (orchestrator/loader.py reads it) — stays empty for
-    auto runs, so a failed run looks like it lost all its progress. The API is
-    the single DB writer, so we read the checkpoint here and upsert the table at
-    every module boundary and on the terminal event.
-    """
-    if not job.project_id:
-        return
-    try:
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-        from orchestrator.graph import get_auto_graph
-        from orchestrator.state import compute_status_map
-
-        from .models import ContextStore as DbContextStore
-        from .models import Project
-
-        graph = get_auto_graph()
-        snap = graph.get_state({"configurable": {"thread_id": str(job.id)}})
-        cs = (snap.values or {}).get("context_store") if snap else None
-        if cs is None:
-            return
-
-        slices = dict(
-            m1_topic=cs.m1_topic, m2_literature=cs.m2_literature,
-            m3_design=cs.m3_design, m4_analysis=cs.m4_analysis,
-            m5_writing=cs.m5_writing,
-        )
-        stmt = (
-            pg_insert(DbContextStore.__table__)
-            .values(project_id=job.project_id, **slices)
-            .on_conflict_do_update(
-                index_elements=[DbContextStore.__table__.c.project_id], set_=slices
-            )
-        )
-        db.execute(stmt)
-
-        proj = db.get(Project, job.project_id)
-        if proj is not None:
-            proj.module_status = compute_status_map(cs).model_dump()
-    except Exception:  # noqa: BLE001 — a sync failure must never break the monitor
-        log.exception("context_store sync from checkpoint failed for run %s", job.id)
-
-
 async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
     """Persist one event, update job state, publish to subscribers. Returns True when terminal."""
     type_ = payload.get("type", "activity")
@@ -301,17 +251,11 @@ async def _ingest_event(job_id: uuid.UUID, payload: dict) -> bool:
                 job.status = "paused"
                 job.finished_at = datetime.now(timezone.utc)
 
-            # Auto runs only persist state in the LangGraph checkpoint. Mirror it
-            # into the context_store table at each module boundary (supervisor
-            # routing to the next module) and on every terminal event, so the UI
-            # panel, module_status, resume, and interactive handoff all see the
-            # progress — even when the run failed mid-way.
-            if job.mode == "auto" and (
-                type_ in {"job_done", "error", "paused"}
-                or (type_ == "activity"
-                    and (payload.get("text") or "").startswith("Supervisor routed to"))
-            ):
-                _sync_context_store_from_checkpoint(db, job)
+            # Auto runs used to persist state only in a LangGraph checkpoint and
+            # needed a mirror step here to reach context_store. That checkpoint
+            # is gone — auto-draft now runs on the deep agent, whose
+            # DbProjectStateStore.commit_slice writes context_store directly
+            # (see app/agent_state.py), so there is nothing left to sync here.
 
         db.commit()
         ev_id = event.id
@@ -411,69 +355,6 @@ def _charge_auto_run(db: Session, run: Job) -> None:
         debit(db, owner, delta=charge, reason="auto_run", ref_type="run", ref_id=run.id)
 
 
-def spawn_orchestrator_run(db: Session, run: Job, brief: dict,
-                           resume_from: str | None = None) -> None:
-    """Spawn `python -m orchestrator` as a subprocess for an auto-mode run.
-
-    Mirrors `spawn_job` but uses the orchestrator entrypoint. Reuses events.jsonl
-    contract so existing `_monitor` works unchanged.
-    """
-    settings = get_settings()
-    workdir = settings.job_workdir_root / str(run.id)
-    workdir.mkdir(parents=True, exist_ok=True)
-    if not resume_from:
-        (workdir / "brief.json").write_text(json.dumps(brief), encoding="utf-8")
-    (workdir / "events.jsonl").touch()
-
-    env = os.environ.copy()
-    env["RUN_ID"] = str(run.id)
-    if run.project_id:
-        env["PROJECT_ID"] = str(run.project_id)
-    env["DATABASE_URL"] = os.environ.get("DATABASE_URL", "")
-    env["AWS_REGION"] = settings.aws_region
-    env["S3_BUCKET"] = settings.s3_bucket
-    env["S3_PREFIX"] = settings.s3_prefix
-    env["AWS_ACCESS_KEY"] = settings.aws_access_key
-    env["AWS_SECRET_KEY"] = settings.aws_secret_key
-    if settings.gemini_api_key:
-        env["GEMINI_API_KEY"] = settings.gemini_api_key
-        env["GOOGLE_API_KEY"] = settings.gemini_api_key
-    if settings.openai_api_key:
-        env["OPENAI_API_KEY"] = settings.openai_api_key
-
-    user_id = None
-    if run.project_id:
-        from .models import Project
-        proj = db.get(Project, run.project_id)
-        user_id = str(proj.user_id) if proj else None
-
-    cmd = [sys.executable, "-m", "orchestrator",
-           "--workdir", str(workdir),
-           "--run-id", str(run.id)]
-    if resume_from:
-        cmd.extend(["--resume-run-id", resume_from])
-    else:
-        cmd.extend([
-            "--auto-draft",
-            "--brief-json", str(workdir / "brief.json"),
-            "--project-id", str(run.project_id) if run.project_id else "",
-            "--user-id", user_id or "",
-        ])
-
-    proc = subprocess.Popen(
-        cmd,
-        cwd=str(Path(__file__).resolve().parents[2]),
-        env=env,
-    )
-    run.pid = proc.pid
-    run.workdir = str(workdir)
-    run.status = "running"
-    run.started_at = datetime.now(timezone.utc)
-    db.commit()
-
-    start_monitor(run.id)
-
-
 def spawn_citation_search(project_id, run_id: int | None) -> bool:
     """Detach the M2 deep literature search from the request that triggered it.
 
@@ -541,11 +422,13 @@ def spawn_citation_search(project_id, run_id: int | None) -> bool:
 
 
 def spawn_headless_run(db: Session, run: Job, params: dict) -> None:
-    """Spawn `python -m app.headless_entry` — the deep-agent twin of
-    spawn_orchestrator_run. Reuses the events.jsonl contract so the existing
-    _monitor works unchanged, which is exactly what makes C (auto-mode
-    migration) a swap later: point THIS spawner at auto briefs instead of
-    `python -m orchestrator --auto-draft`.
+    """Spawn `python -m app.headless_entry` — the deep agent's headless runner.
+
+    Auto-draft now spawns through here too (the `spawn_orchestrator_run` /
+    `python -m orchestrator --auto-draft` path it used to go through is gone),
+    so this is the only subprocess brain for both interactive-headless and
+    auto-mode runs. Reuses the events.jsonl contract so the existing _monitor
+    works unchanged regardless of which caller started the run.
     """
     from .partner_run import mint_partner_token
 
