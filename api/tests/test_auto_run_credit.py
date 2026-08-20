@@ -117,6 +117,76 @@ def test_auto_run_ignores_tokens_from_before_it_started():
                   .filter_by(ref_type="run", ref_id=run.id).count() == 0)
 
 
+def test_headless_meter_event_bills_the_run_at_the_priced_rate(monkeypatch):
+    """Spec §Testing item 4, end to end: a `_UsageMeter`-produced event lands in
+    token_ledger and `_charge_auto_run` debits > 0 at the RIGHT price.
+
+    The test below drives `_ingest_event` from a hand-written payload, so nothing
+    crossed from the runner's own emitter into billing — which is exactly how the
+    unpriced-model overcharge (C1) survived every earlier review. Here the meter
+    builds the event, so the id it chooses is the id the student is charged for.
+    """
+    import asyncio
+
+    from app.headless_entry import _UsageMeter
+    from app.job_runner import _ingest_event
+    from app.pricing import credit_multiplier, is_priced
+
+    # Pin the CONFIGURED model: route=openai with no override resolves to
+    # gpt-5.6-luna (agent/model_factory.spec_from_env).
+    monkeypatch.setenv("DOTHESIS_MODEL_ROUTE", "openai")
+    monkeypatch.delenv("DOTHESIS_AGENT_MODEL", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    sf = get_session_factory()
+    with sf() as db:
+        u, p, run = _seed(db)
+        db.commit()
+        run_id, project_id, before = run.id, p.id, u.credit
+
+    emitted = []
+
+    class _Appender:
+        def write(self, ev):
+            emitted.append(ev)
+
+    meter = _UsageMeter(project_id, _Appender())
+    # A realistic turn: the main brain, plus a step whose served id the price
+    # table does not carry (a dated snapshot — the C1 shape).
+    meter.observe({"type": "usage", "input_tokens": 120_000,
+                   "output_tokens": 40_000, "model": "gemini-2.5-flash"})
+    meter.observe({"type": "usage", "input_tokens": 30_000,
+                   "output_tokens": 10_000, "model": "gpt-5.6-luna-2026-05-13"})
+    assert meter.flush() == 2
+
+    for ev in emitted:
+        assert asyncio.run(_ingest_event(run_id, ev)) is False
+
+    with sf() as db:
+        rows = db.query(TokenLedger).filter_by(project_id=project_id).all()
+        assert len(rows) == 2
+        # Every row the runner writes must be one the charge can actually price;
+        # an unpriced label silently bills at UNKNOWN_MODEL_MULTIPLIER (4.0x).
+        assert all(is_priced(r.model) for r in rows), [r.model for r in rows]
+
+        job = db.get(Job, run_id)
+        _charge_auto_run(db, job)
+        db.commit()
+        owner = db.get(User, db.get(Project, project_id).user_id)
+        charged = before - owner.credit
+
+    # Derived from the table, not hardcoded, so a repricing moves the assertion
+    # with the product: 160k tokens at the baseline + 40k at the configured
+    # model's rate (the snapshot id billed as gpt-5.6-luna, not as unknown).
+    expected = round(160_000 / 1000 * credit_multiplier("gemini-2.5-flash")
+                     + 40_000 / 1000 * credit_multiplier("gpt-5.6-luna"))
+    assert charged == expected
+    assert charged > 0, "a headless run that spent tokens must not be free"
+    # The 4.0x-fallback bill for the same tokens, which C1 was producing.
+    assert charged < round(160_000 / 1000 * credit_multiplier("gemini-2.5-flash")
+                           + 40_000 / 1000 * 4.0)
+
+
 def test_token_usage_event_becomes_ledger_row_and_gets_charged():
     """The gap this closes: the orchestrator runs as a SUBPROCESS with a no-op
     sink, so auto runs wrote zero token_ledger rows and _charge_auto_run billed
