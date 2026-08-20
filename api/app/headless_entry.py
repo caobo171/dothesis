@@ -469,20 +469,37 @@ def main() -> int:
                                     f"({attempt} attempt(s))"})
             return 1
 
-        from app.partner_run import ReportError, run_partner_export
+        out: dict = {}
         _export_t0 = time.monotonic()
-        try:
-            out = run_partner_export(store, project_id, params)
-        except ReportError as e:
-            # A REFUSAL is not a crash. Carry the stable code out over the events
-            # pipe (it lands in JobEvent.meta_json) so the endpoint can answer
-            # with the specific contract — `needs_data` tells the partner what to
-            # send next, where a generic report_failed tells them to retry the
-            # same doomed payload.
-            appender.write({"type": "phase_timings",
-                            **timer.summary({"attempts": attempt}, end=agent_end)})
-            appender.write({"type": "error", "code": e.code, "text": e.message})
-            return 1
+        # PARTNER-PATH WORK ONLY. run_partner_export re-composes the chapter
+        # SUBSET a partner ordered and gates it on assess_export_readiness.
+        # Consumer auto-draft orders no chapters, so with no `depth` in params it
+        # fell through to resolve_chapters("analysis_report", None) and raised
+        # ReportError("needs_data") whenever M4.analysis_results was empty — a
+        # thesis the agent had just finished emitted {"type": "error"}, _monitor
+        # marked the Job `failed`, and _charge_auto_run (job_runner.py:207-222,
+        # reached only on job_done) never ran. A completed thesis, given away
+        # free. On the runs that did clear the gate it still wrote a spurious
+        # second 4-chapter export tagged scope="partner".
+        #
+        # The consumer thesis is already exported: DbProjectStateStore's M5
+        # done-hook (_auto_export_m5, agent_state.py:378) fires inside the
+        # commit_slice that flips M5 to done and persists the full-thesis
+        # artifacts with scope="full". Nothing here has to export it again.
+        if not _is_full_thesis(params):
+            from app.partner_run import ReportError, run_partner_export  # noqa: PLC0415
+            try:
+                out = run_partner_export(store, project_id, params)
+            except ReportError as e:
+                # A REFUSAL is not a crash. Carry the stable code out over the
+                # events pipe (it lands in JobEvent.meta_json) so the endpoint can
+                # answer with the specific contract — `needs_data` tells the
+                # partner what to send next, where a generic report_failed tells
+                # them to retry the same doomed payload.
+                appender.write({"type": "phase_timings",
+                                **timer.summary({"attempts": attempt}, end=agent_end)})
+                appender.write({"type": "error", "code": e.code, "text": e.message})
+                return 1
         export_s = round(time.monotonic() - _export_t0, 1)
         # Per-run phase durations — informative: M1-M3 backfill vs M5 compose vs
         # export, plus how many attempts it took.
