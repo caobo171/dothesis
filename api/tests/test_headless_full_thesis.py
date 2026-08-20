@@ -230,3 +230,56 @@ def test_sigterm_writes_a_paused_event(tmp_path):
 
     assert written and written[0]["type"] == "paused"
     assert raised == [0]
+
+
+# --- R1: language must not be collateral damage of the title guard ------------
+# The export reads the thesis language from the STORE, not from params
+# (api/app/agent_state.py:407 reads m1_topic["language"], defaulting to "vi").
+# _seed_brief used to bail entirely when a research_title already existed, so a
+# project that got its title from an import/backfill and then started
+# auto-draft never had its language committed, and an English thesis exported
+# with Vietnamese scaffolding. The title guard protects the TITLE; it was never
+# meant to also drop the language the student chose on the project.
+
+def test_seed_brief_commits_language_even_when_a_title_already_exists(tmp_path):
+    from agent.state import ProjectStateStore
+    from app.headless_entry import _seed_brief
+
+    store = ProjectStateStore(tmp_path / "proj")
+    store.commit_slice("M1", {"research_title": "Imported title"},
+                       reason="prior work")
+
+    wrote = _seed_brief(store, {"mode": "full_thesis", "topic": "ignored",
+                                "language": "en"})
+
+    m1 = store.load()["contextStore"]
+    assert wrote is True
+    assert m1["language"] == "en"
+    # The title still wins — that guard is the whole point of it.
+    assert m1["research_title"] == "Imported title"
+
+
+def test_seed_brief_does_not_overwrite_a_language_already_chosen(tmp_path):
+    from agent.state import ProjectStateStore
+    from app.headless_entry import _seed_brief
+
+    store = ProjectStateStore(tmp_path / "proj")
+    store.commit_slice("M1", {"research_title": "T", "language": "vi"},
+                       reason="prior work")
+
+    _seed_brief(store, {"mode": "full_thesis", "topic": "x", "language": "en"})
+
+    assert store.load()["contextStore"]["language"] == "vi"
+
+
+def test_seed_brief_writes_nothing_when_there_is_nothing_left_to_seed(tmp_path):
+    from agent.state import ProjectStateStore
+    from app.headless_entry import _seed_brief
+
+    store = ProjectStateStore(tmp_path / "proj")
+    store.commit_slice("M1", {"research_title": "T", "language": "vi"},
+                       reason="prior work")
+    before = store.load()["contextStore"]
+
+    assert _seed_brief(store, {"mode": "full_thesis"}) is False
+    assert store.load()["contextStore"] == before

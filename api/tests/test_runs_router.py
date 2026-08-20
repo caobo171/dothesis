@@ -77,13 +77,16 @@ def test_resume_respawns_headless_over_committed_state(client, monkeypatch):
 
     r = client.post(f"/api/v1/runs/{rid}/resume")
     assert r.status_code == 200, r.text
-    # The resume spawn carries no topic: the project already holds its M1
-    # slice, and _seed_brief refuses to overwrite an existing research_title.
-    # It DOES carry language + citation_style, read off the Project row — the
-    # composition path defaults language to "en", so dropping it exported a
-    # Vietnamese thesis with English scaffolding.
-    assert spawned[-1] == {"mode": "full_thesis", "language": "vi",
-                           "citation_style": "ieee"}
+    # Exactly two keys, and the equality check is the point — anything extra is
+    # a param nothing reads, which is how the first version of this carried a
+    # dead `citation_style` (not an M1-owned key; the Project row is what
+    # exporters read).
+    #
+    # `language` is carried because _seed_brief commits it into the M1 slice
+    # when that slice has none, and the export reads it back from there
+    # (agent_state.py:407, default "vi"). `topic` is not, because _seed_brief
+    # refuses to overwrite an existing research_title.
+    assert spawned[-1] == {"mode": "full_thesis", "language": "vi"}
 
     sf = get_session_factory()
     with sf() as db:

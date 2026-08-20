@@ -173,20 +173,27 @@ def resume_run(run_id: uuid.UUID,
     # Clear the previous terminal markers so the resumed run reads as live.
     run.error_text = None
     run.finished_at = None
-    # Carry the thesis's LANGUAGE and CITATION STYLE across the resume. The
-    # composition path reads params["language"] and defaults to "en", so a
-    # Vietnamese thesis resumed mid-run came back with English scaffolding.
-    # Read from the PROJECT ROW (already loaded and ownership-checked by
-    # _owned_run), never from a request body: how the thesis is written is a
-    # property of the project, and /resume is a bare POST whose caller has no
-    # business changing it halfway through.
-    # `topic` is deliberately NOT carried — _seed_brief refuses to overwrite an
-    # existing research_title, so on a project with prior work it is pure noise.
+    # Carry the thesis's LANGUAGE across the resume, read from the PROJECT ROW
+    # (already loaded and ownership-checked) rather than a request body: how the
+    # thesis is written is a property of the project, and /resume is a bare POST
+    # whose caller has no business changing it halfway through.
+    #
+    # What consumes it: _seed_brief commits `language` into the M1 slice when the
+    # slice has none, and the export reads it back from there
+    # (agent_state.py:407, defaulting to "vi"). So this matters on a project
+    # whose language was never committed — one seeded by import or backfill —
+    # and is a no-op once M1 already carries it.
+    #
+    # NOT carried, both deliberately:
+    #   topic          — _seed_brief refuses to overwrite an existing
+    #                    research_title, so on a project with prior work it is noise.
+    #   citation_style — not an M1-owned key (agent/state.py SLICE_OWNERSHIP); it
+    #                    lives on the Project row, which is what exporters read.
+    #                    Passing it here would look load-bearing and read nowhere.
     project = _owned_project(db, user, run.project_id)
     job_runner.spawn_headless_run(db, run, {
         "mode": "full_thesis",
         "language": project.language,
-        "citation_style": project.citation_style,
     })
     db.commit()
     return {"status": run.status}

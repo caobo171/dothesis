@@ -70,22 +70,37 @@ def _seed_brief(store, params: dict) -> bool:
     Refuses to overwrite an existing research_title: resume re-runs this path
     over a project that already has work, and the student's own title outranks
     the brief that started the run.
+
+    The title guard protects the TITLE ONLY. It used to abort the whole
+    function, which quietly took the LANGUAGE with it — and the export reads
+    the language from this very slice (agent_state.py:407 reads
+    m1_topic["language"], defaulting to "vi"). So a project that got its title
+    from an import or backfill and then started auto-draft never had a language
+    committed, and an English thesis exported with Vietnamese scaffolding. The
+    two are separate decisions and are now guarded separately.
     """
+    cs = store.load().get("contextStore") or {}
+    writes: dict = {}
+
     topic = (params.get("topic") or "").strip()
-    if not topic:
-        return False
-    existing = (store.load().get("contextStore") or {}).get("research_title")
-    if existing:
-        return False
-    writes = {"research_title": topic,
-              # user_context is the seeding-only key (agent/state.py:30-34):
-              # the agent must not be able to rewrite the brief it is steered by.
-              "user_context": {k: v for k, v in {
-                  "topic": topic,
-                  "citation_style": params.get("citation_style"),
-              }.items() if v}}
-    if params.get("language"):
+    if topic and not cs.get("research_title"):
+        writes["research_title"] = topic
+        # user_context is the seeding-only key (agent/state.py:30-34): the agent
+        # must not be able to rewrite the brief it is steered by. citation_style
+        # rides here as an audit record of what was asked for — the Project row
+        # is what exporters actually read (models.py:245).
+        writes["user_context"] = {k: v for k, v in {
+            "topic": topic,
+            "citation_style": params.get("citation_style"),
+        }.items() if v}
+
+    # Never overwrite a language already chosen: like the title, an existing
+    # value is the student's, not this run's opening brief.
+    if params.get("language") and not cs.get("language"):
         writes["language"] = params["language"]
+
+    if not writes:
+        return False
     store.commit_slice("M1", writes, reason="auto-draft brief")
     return True
 
