@@ -137,10 +137,14 @@ export function ThesisComposer({
   return (
     <div className="flex flex-col gap-3">
       {/* Mode tabs. Rendered only when the parent actually handles the switch,
-          so every existing render of this composer is untouched. */}
+          so every existing render of this composer is untouched.
+
+          Centred (self-center) to match the heading and tagline above them.
+          Left-aligned they read as a stray control beside the centred copy
+          rather than as the choice that copy is describing. */}
       {onModeChange && (
         <div role="tablist" aria-label="How you want to work"
-             className="inline-flex self-start rounded-full bg-ink-100 p-1">
+             className="inline-flex self-center rounded-full bg-ink-100 p-1">
           {modes.map((m) => {
             const selected = mode === m.id;
             return (
