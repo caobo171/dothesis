@@ -214,6 +214,58 @@ class _PhaseTimer:
         return out
 
 
+class _UsageMeter:
+    """Turn the agent's `usage` events into `token_usage` events for the API.
+
+    The API is the single DB writer (module docstring), so this emits on the
+    events.jsonl contract and job_runner._ingest_event (job_runner.py:215-236)
+    creates the token_ledger row — the same path orchestrator/__main__.py:82-97
+    uses. _charge_auto_run then prices each row at ITS OWN model's rate, which
+    is why usage is grouped by the model that actually served the step:
+    OpenRouter can fail over to a pricier fallback mid-run and runtime.py
+    reports the served model on the event.
+
+    Buffered per turn so a long turn emits one event per model, not one per
+    LLM step.
+    """
+
+    def __init__(self, project_id, appender):
+        self.project_id = project_id
+        self._appender = appender
+        self._buf: dict[str, list[int]] = {}
+
+    def observe(self, ev: dict) -> None:
+        if ev.get("type") != "usage":
+            return
+        # runtime.py:846 only sets `model` when OpenRouter reports the served
+        # model on response_metadata; fall back to the configured model rather
+        # than mislabel it "unknown" and lose the per-model price split.
+        model = ev.get("model") or os.getenv("DOTHESIS_AGENT_MODEL", "unknown")
+        slot = self._buf.setdefault(model, [0, 0])
+        slot[0] += int(ev.get("input_tokens") or 0)
+        slot[1] += int(ev.get("output_tokens") or 0)
+
+    def flush(self) -> int:
+        if not self._buf:
+            return 0
+        buf, self._buf = self._buf, {}
+        for model, (prompt, completion) in buf.items():
+            self._appender.write({
+                "type": "token_usage",
+                "action_kind": "deep_agent_turn",
+                "model": model,
+                "prompt_tokens": prompt,
+                "completion_tokens": completion,
+                # NOT NULL on token_ledger. token_meter's reserve-then-reconcile
+                # loop has no analogue here: the agent reports true usage, so
+                # there is nothing reserved and no separate call to time.
+                "reserved": 0,
+                "duration_ms": 0,
+                "project_id": str(self.project_id),
+            })
+        return len(buf)
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -273,13 +325,22 @@ def main() -> int:
 
         timer = _PhaseTimer()
         progress_hook = _make_progress_hook(appender, store)
+        # Billing: buffers `usage` events per model and flushes into a
+        # `token_usage` event on every turn boundary (see _UsageMeter). Without
+        # this, the deep agent run never reaches token_ledger and the
+        # billing sweep in job_runner._charge_auto_run finds nothing to charge.
+        meter = _UsageMeter(project_id, appender)
 
         def _on_event(ev: dict) -> None:
+            meter.observe(ev)
             # Phase timing keys off the module FOCUS at each turn boundary — the
             # same signal the progress hook emits (phase_progress events are written
             # to the appender, they don't come back through on_event, so observing
             # the raw stream here would record nothing).
             if ev.get("type") == "done":
+                # One turn's worth of usage per flush; a crash mid-turn loses at
+                # most that turn's metering, never a committed slice.
+                meter.flush()
                 try:
                     timer.mark((store.load() or {}).get("focus") or "M1")
                 except Exception:  # noqa: BLE001
