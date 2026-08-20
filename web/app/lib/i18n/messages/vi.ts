@@ -26,6 +26,7 @@ export const vi: Record<MessageKey, string> = {
   "new.auto.placeholder": "Chủ đề nghiên cứu của bạn — một câu là đủ.",
   "new.auto.analyze": "Viết luận văn cho tôi",
   "new.auto.analyzing": "Đang khởi động…",
+  "new.mode.aria": "Bạn muốn làm theo cách nào",
   "new.mode.guided": "Có hướng dẫn",
   "new.mode.guided.hint": "Cùng nhau đi từng bước một",
   "new.mode.auto": "Auto Thesis",

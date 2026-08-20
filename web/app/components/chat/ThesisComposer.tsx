@@ -72,7 +72,6 @@ export function ThesisComposer({
   accept,
   onKindChange,
   mode = "guided",
-  onModeChange,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -88,10 +87,11 @@ export function ThesisComposer({
   /** Fired when a chip selects a non-default first-turn intent. Optional so
    *  existing renders (and the component test) don't have to care. */
   onKindChange?: (kind: AnalyzeKind) => void;
-  /** Which way the student wants to work. Defaults to the guided conversation
-   *  this screen has always started, so existing renders are unaffected. */
+  /** Which way the student wants to work — drives this component's COPY only.
+   *  The tabs that set it live in StartModeTabs, up in the page's hero block,
+   *  because the mode's tagline has to render after the control that picks it.
+   *  Defaults to guided so every existing render is unaffected. */
   mode?: StartMode;
-  onModeChange?: (mode: StartMode) => void;
 }) {
   const t = useT();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -129,47 +129,9 @@ export function ThesisComposer({
   // composer changes voice with it: the student is commissioning a thesis, not
   // telling us what they already have.
   const auto = mode === "auto_thesis";
-  const modes: { id: StartMode; labelKey: MessageKey; hintKey: MessageKey }[] = [
-    { id: "guided", labelKey: "new.mode.guided", hintKey: "new.mode.guided.hint" },
-    { id: "auto_thesis", labelKey: "new.mode.auto", hintKey: "new.mode.auto.hint" },
-  ];
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Mode tabs. Rendered only when the parent actually handles the switch,
-          so every existing render of this composer is untouched.
-
-          Centred (self-center) to match the heading and tagline above them.
-          Left-aligned they read as a stray control beside the centred copy
-          rather than as the choice that copy is describing. */}
-      {onModeChange && (
-        <div role="tablist" aria-label="How you want to work"
-             className="inline-flex self-center rounded-full bg-ink-100 p-1">
-          {modes.map((m) => {
-            const selected = mode === m.id;
-            return (
-              <button
-                key={m.id}
-                role="tab"
-                type="button"
-                aria-selected={selected}
-                title={t(m.hintKey)}
-                disabled={busy}
-                onClick={() => onModeChange(m.id)}
-                className={
-                  "rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors disabled:opacity-50 " +
-                  (selected
-                    ? "bg-white text-ink-900 shadow-sm"
-                    : "text-ink-500 hover:text-ink-800")
-                }
-              >
-                {t(m.labelKey)}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       <div
         onDragOver={(e) => {
           e.preventDefault();

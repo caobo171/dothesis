@@ -30,6 +30,7 @@ export const en = {
   "new.auto.placeholder": "Your research topic — one sentence is enough.",
   "new.auto.analyze": "Write my thesis",
   "new.auto.analyzing": "Starting…",
+  "new.mode.aria": "How you want to work",
   "new.mode.guided": "Guided",
   "new.mode.guided.hint": "Work through it together, step by step",
   "new.mode.auto": "Auto Thesis",

@@ -18,6 +18,7 @@ import { ImportSummary } from "@/app/components/chat/ImportSummary";
 // Shared with the document tools: the same "poll my in-flight run" hook, because
 // this screen has the same problem they do (see /runs/active).
 import { useRunProgress } from "@/app/(inapp)/tools/_components/use-tool";
+import { StartModeTabs } from "@/app/components/chat/StartModeTabs";
 import { ThesisComposer, type StartMode } from "@/app/components/chat/ThesisComposer";
 import {
   ReconstructedModules,
@@ -373,12 +374,19 @@ export default function NewThesisPage() {
           in the Auto Thesis heading is one the product can back — full_thesis
           resolves to exactly six chapters (M5_CHAPTER_ORDER) — rather than a
           page count nothing in the system guarantees. */}
-      <div className="text-center mb-7">
+      <div className="flex flex-col items-center text-center mb-7">
         <h1 className="m-0 text-[26px] font-extrabold font-serif tracking-tight text-ink-900">
           {t(mode === "auto_thesis" ? "new.auto.title" : "new.title")}
         </h1>
+        {/* Tabs sit BETWEEN the heading and the tagline. The tagline describes
+            the SELECTED mode, so it has to come after the control that selects
+            it — above, the page explained a choice the student had not been
+            offered yet. */}
+        <div className="mt-4">
+          <StartModeTabs mode={mode} onChange={setMode} busy={submitting} />
+        </div>
         {mode === "auto_thesis" && (
-          <p className="mx-auto mt-2 mb-0 max-w-[46ch] text-[13.5px] leading-relaxed text-ink-500">
+          <p className="mt-3 mb-0 max-w-[46ch] text-[13.5px] leading-relaxed text-ink-500">
             {t("new.auto.tagline")}
           </p>
         )}
@@ -399,7 +407,6 @@ export default function NewThesisPage() {
         accept={ACCEPT_TYPES}
         onKindChange={setKind}
         mode={mode}
-        onModeChange={setMode}
       />
 
       {/* Footer — status and the blank-start escape hatch only.

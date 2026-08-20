@@ -124,52 +124,6 @@ describe("ThesisComposer", () => {
 });
 
 
-// --- Auto Thesis tab --------------------------------------------------------
-// The most expensive thing DoThesis does was reachable only through a dropdown
-// three screens in. Putting the choice on the start screen is the point of this
-// control, so these tests assert it is visible and that it reports the switch.
-
-describe("mode tabs", () => {
-  const base = {
-    value: "", onChange: () => {}, files: [], onAddFiles: () => {},
-    onRemoveFile: () => {}, onSubmit: () => {}, canSubmit: false,
-  };
-  /** The composer reads locale context, so every render needs the provider —
-   *  same reason the Harness above exists. */
-  const renderComposer = (props: Record<string, unknown>) =>
-    render(<LocaleProvider initialLocale="en" hasCookie><ThesisComposer {...base} {...props} /></LocaleProvider>);
-
-  test("offers both modes, guided selected by default", () => {
-    renderComposer({ mode: "guided", onModeChange: () => {} });
-    expect(screen.getByRole("tab", { name: /guided/i }).getAttribute("aria-selected"))
-      .toBe("true");
-    expect(screen.getByRole("tab", { name: /auto thesis/i }).getAttribute("aria-selected"))
-      .toBe("false");
-  });
-
-  test("clicking Auto Thesis reports the change", () => {
-    const seen: string[] = [];
-    renderComposer({ mode: "guided", onModeChange: (m: string) => seen.push(m) });
-    fireEvent.click(screen.getByRole("tab", { name: /auto thesis/i }));
-    expect(seen).toEqual(["auto_thesis"]);
-  });
-
-  test("reflects the selected mode it is given", () => {
-    renderComposer({ mode: "auto_thesis", onModeChange: () => {} });
-    expect(screen.getByRole("tab", { name: /auto thesis/i }).getAttribute("aria-selected"))
-      .toBe("true");
-  });
-
-  test("starter chips are hidden in Auto Thesis mode", () => {
-    // The chips describe situations for a guided conversation ("I have data",
-    // "Starting fresh"). In Auto Thesis the next thing that happens is a paid
-    // run, so offering conversation openers would misdescribe the button.
-    renderComposer({ mode: "auto_thesis", onModeChange: () => {} });
-    expect(screen.queryByText(/starting fresh|bắt đầu từ đầu/i)).toBeNull();
-  });
-});
-
-
 // --- Auto Thesis speaks in its own voice -----------------------------------
 // The tab shipped with the guided copy still around it: heading "Analyze your
 // thesis", a placeholder asking what you already have, and an "Analyze" button.
@@ -187,27 +141,27 @@ describe("Auto Thesis copy", () => {
       <ThesisComposer {...base} {...props} /></LocaleProvider>);
 
   test("asks for a topic, not for what you already have", () => {
-    renderIn("en", { mode: "auto_thesis", onModeChange: () => {} });
+    renderIn("en", { mode: "auto_thesis" });
     const box = screen.getByRole("textbox") as HTMLTextAreaElement;
     expect(box.placeholder).toMatch(/topic/i);
     expect(box.placeholder).not.toMatch(/what you have/i);
   });
 
   test("the button commissions a thesis instead of analysing one", () => {
-    renderIn("en", { mode: "auto_thesis", onModeChange: () => {} });
+    renderIn("en", { mode: "auto_thesis" });
     expect(screen.getByRole("button", { name: /write my thesis/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^analyze$/i })).toBeNull();
   });
 
   test("guided mode keeps its original copy", () => {
-    renderIn("en", { mode: "guided", onModeChange: () => {} });
+    renderIn("en", { mode: "guided" });
     expect(screen.getByRole("button", { name: /^analyze$/i })).toBeTruthy();
   });
 
   test("the Auto Thesis copy is translated, not English-only", () => {
     // Vietnamese is the primary market; an English-only mode would read as
     // half-finished exactly where the student is deciding to spend credits.
-    renderIn("vi", { mode: "auto_thesis", onModeChange: () => {} });
+    renderIn("vi", { mode: "auto_thesis" });
     const box = screen.getByRole("textbox") as HTMLTextAreaElement;
     expect(box.placeholder).not.toMatch(/topic/i);
     expect(screen.queryByRole("button", { name: /write my thesis/i })).toBeNull();
