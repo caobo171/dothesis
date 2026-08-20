@@ -99,8 +99,11 @@ def test_resume_rejects_a_running_run(client, monkeypatch):
 def _seed_run_with_backlog(client, monkeypatch, events) -> str:
     """Create a run that is already finished, with `events` waiting in the DB."""
     pid = _setup(client)
-    monkeypatch.setattr("app.job_runner.spawn_orchestrator_run",
-                        lambda db, run, brief, resume_from=None: setattr(run, "status", "running"))
+    # Stub the real spawner so the setup POST below doesn't shell out to the
+    # headless subprocess — these tests only care about the SSE backlog replay,
+    # not about what a live run would do.
+    monkeypatch.setattr("app.job_runner.spawn_headless_run",
+                        lambda db, run, params: setattr(run, "status", "running"))
     rid = client.post(f"/api/v1/projects/{pid}/runs",
                       json={"mode": "auto", "topic": "x"}).json()["run_id"]
     # status=done keeps the route from starting a monitor: the point of these
@@ -159,8 +162,10 @@ def test_pause_run_calls_cancel(client, monkeypatch):
         called.append(job.id)
         job.status = "paused"
 
-    monkeypatch.setattr("app.job_runner.spawn_orchestrator_run",
-                        lambda db, run, brief, resume_from=None: setattr(run, "status", "running"))
+    # Stub the real spawner so the setup POST below doesn't shell out to the
+    # headless subprocess — this test only cares that /pause calls cancel_job.
+    monkeypatch.setattr("app.job_runner.spawn_headless_run",
+                        lambda db, run, params: setattr(run, "status", "running"))
     monkeypatch.setattr("app.job_runner.cancel_job", fake_cancel)
 
     rid = client.post(f"/api/v1/projects/{pid}/runs",
