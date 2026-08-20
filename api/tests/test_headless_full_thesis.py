@@ -121,9 +121,16 @@ def _run_main(tmp_path, monkeypatch, params, *, exports=None):
     import signal
     import sys
     import uuid
+    from pathlib import Path
 
     from agent.headless import RunResult
     from app import headless_entry
+
+    # main() puts the repo root on sys.path itself (engine/ is not an installed
+    # package), but the patch targets below are resolved BEFORE main() gets the
+    # chance and agent.runtime imports engine at module scope. Prepend it here so
+    # this test doesn't silently depend on an earlier test having done it first.
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
 
     workdir = tmp_path / "wd"
     params_path = tmp_path / "params.json"
