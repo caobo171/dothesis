@@ -115,10 +115,12 @@ def _usage_from_response(resp: Any) -> tuple[int, int]:
 def project_id_from_env() -> uuid.UUID | None:
     """The run's project, as job_runner puts it in the subprocess env.
 
-    job_runner.spawn_orchestrator_run sets PROJECT_ID (job_runner.py:407). Reading
-    it here is what lets metering be attached ONCE at client construction instead
-    of threading project_id through 20 tool call sites — none of which currently
-    take it.
+    job_runner.spawn_headless_run sets PROJECT_ID in the env dict it builds for
+    the subprocess (job_runner.py:452) — spawn_orchestrator_run, the old graph-
+    layer entrypoint this docstring used to name, was deleted with the rest of
+    the graph layer. Reading PROJECT_ID here is what lets metering be attached
+    ONCE at client construction instead of threading project_id through 20 tool
+    call sites — none of which currently take it.
     """
     raw = os.getenv("PROJECT_ID", "").strip()
     if not raw:

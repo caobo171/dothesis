@@ -244,12 +244,7 @@ def test_reasoning_is_disabled_only_for_tool_binding_callers(monkeypatch):
     tool_binding = get_orchestrator_llm(binds_tools=True)
     assert tool_binding.reasoning_effort == "none"  # required, or 400
 
-
-def test_the_router_declares_that_it_binds_tools(monkeypatch):
-    """The declaration lives at the call site, so adding a second tool-binding
-    caller is a visible one-line change rather than a silent 400 in production."""
-    monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "openai")
-    monkeypatch.setenv("OPENAI_API_KEY", "test")
-    from orchestrator.agents.router_agent import _router_llm
-
-    assert _router_llm().reasoning_effort == "none"
+# test_the_router_declares_that_it_binds_tools was removed with the graph
+# layer (Task 10): its subject, orchestrator.agents.router_agent._router_llm,
+# no longer exists — the deep agent is the only tool-binding caller now, and
+# it does not build its LLM through orchestrator.llm.get_orchestrator_llm.
