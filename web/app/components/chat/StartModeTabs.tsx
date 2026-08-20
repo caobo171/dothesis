@@ -8,11 +8,14 @@ import type { StartMode } from "./ThesisComposer";
  * Guided vs Auto Thesis, chosen before the student types anything.
  *
  * Lives outside ThesisComposer even though it started inside it. The composer
- * is the input; this is page chrome that sits in the hero block between the
- * heading and the mode's tagline. That order is load-bearing: the tagline
- * describes the SELECTED mode, so it has to come after the control that picks
- * it — with the tagline above, the page explained a choice the student had not
- * been offered yet.
+ * is the input; this is page chrome, and it renders at the TOP of the hero
+ * block — above the heading, not just above the tagline.
+ *
+ * That order is load-bearing rather than decorative. Both the heading and the
+ * tagline are per-mode text ("Analyze your thesis" vs "One topic, six
+ * chapters."), so anything above these tabs describes a choice the student has
+ * not been offered yet. Picking the mode is the first move on this screen;
+ * everything below reacts to it.
  */
 export function StartModeTabs({
   mode,

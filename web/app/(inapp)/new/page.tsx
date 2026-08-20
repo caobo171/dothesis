@@ -368,23 +368,21 @@ export default function NewThesisPage() {
         <ArrowLeft className="w-3.5 h-3.5" /> {t("new.back")}
       </Link>
 
-      {/* The heading changes with the mode. Leaving "Analyze your thesis" above
-          an Auto Thesis tab described the wrong job: the student is not
-          analysing anything, they are commissioning a whole thesis. The claim
-          in the Auto Thesis heading is one the product can back — full_thesis
-          resolves to exactly six chapters (M5_CHAPTER_ORDER) — rather than a
-          page count nothing in the system guarantees. */}
+      {/* Tabs FIRST, then the copy they select.
+          Both the heading and the tagline are per-mode text — "Analyze your
+          thesis" vs "One topic, six chapters." — so either of them above the
+          tabs has the page describing a choice the student has not been offered
+          yet. Choosing the mode is the first move on this screen; everything
+          below reacts to it.
+
+          The Auto Thesis heading claims a number the product can back:
+          full_thesis resolves to exactly six chapters (M5_CHAPTER_ORDER). Not a
+          page count — nothing in the system guarantees one. */}
       <div className="flex flex-col items-center text-center mb-7">
-        <h1 className="m-0 text-[26px] font-extrabold font-serif tracking-tight text-ink-900">
+        <StartModeTabs mode={mode} onChange={setMode} busy={submitting} />
+        <h1 className="m-0 mt-5 text-[26px] font-extrabold font-serif tracking-tight text-ink-900">
           {t(mode === "auto_thesis" ? "new.auto.title" : "new.title")}
         </h1>
-        {/* Tabs sit BETWEEN the heading and the tagline. The tagline describes
-            the SELECTED mode, so it has to come after the control that selects
-            it — above, the page explained a choice the student had not been
-            offered yet. */}
-        <div className="mt-4">
-          <StartModeTabs mode={mode} onChange={setMode} busy={submitting} />
-        </div>
         {mode === "auto_thesis" && (
           <p className="mt-3 mb-0 max-w-[46ch] text-[13.5px] leading-relaxed text-ink-500">
             {t("new.auto.tagline")}
