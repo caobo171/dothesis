@@ -13,7 +13,7 @@ def client(monkeypatch):
     return TestClient(create_app())
 
 
-def _setup(client) -> uuid.UUID:
+def _setup(client, **project_fields) -> uuid.UUID:
     sf = get_session_factory()
     with sf() as db:
         u = User(email=f"u{uuid.uuid4().hex[:6]}@x",
@@ -22,7 +22,8 @@ def _setup(client) -> uuid.UUID:
         db.add(u); db.commit()
         from app.security import create_session
         client.headers["Authorization"] = f"Bearer {create_session(db, u)}"
-    return uuid.UUID(client.post("/api/v1/projects", json={"name": "T"}).json()["id"])
+    return uuid.UUID(client.post("/api/v1/projects",
+                                 json={"name": "T", **project_fields}).json()["id"])
 
 
 def test_post_run_spawns_the_headless_deep_agent(client, monkeypatch):
@@ -64,7 +65,9 @@ def test_resume_respawns_headless_over_committed_state(client, monkeypatch):
     """A failed run resumes by re-running a fresh agent over the state
     commit_slice already persisted — there is no checkpoint to re-enter — and
     the stale error markers are cleared."""
-    pid = _setup(client)
+    # A Vietnamese thesis: the language lives on the PROJECT row, which is where
+    # resume has to read it from — the resume POST carries no body of its own.
+    pid = _setup(client, language="vi", citation_style="ieee")
     spawned = []
     monkeypatch.setattr("app.job_runner.spawn_headless_run",
                         lambda db, run, params: spawned.append(params))
@@ -76,7 +79,11 @@ def test_resume_respawns_headless_over_committed_state(client, monkeypatch):
     assert r.status_code == 200, r.text
     # The resume spawn carries no topic: the project already holds its M1
     # slice, and _seed_brief refuses to overwrite an existing research_title.
-    assert spawned[-1] == {"mode": "full_thesis"}
+    # It DOES carry language + citation_style, read off the Project row — the
+    # composition path defaults language to "en", so dropping it exported a
+    # Vietnamese thesis with English scaffolding.
+    assert spawned[-1] == {"mode": "full_thesis", "language": "vi",
+                           "citation_style": "ieee"}
 
     sf = get_session_factory()
     with sf() as db:
