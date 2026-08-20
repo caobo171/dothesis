@@ -25,24 +25,29 @@ def _setup(client) -> uuid.UUID:
     return uuid.UUID(client.post("/api/v1/projects", json={"name": "T"}).json()["id"])
 
 
-def test_post_run_spawns_orchestrator_subprocess(client, monkeypatch):
+def test_post_run_spawns_the_headless_deep_agent(client, monkeypatch):
+    """Auto-draft runs the deep agent headless, not the orchestrator graph."""
     pid = _setup(client)
     spawned = []
 
-    def fake_spawn(db, run, brief, resume_from=None):
+    def fake_spawn(db, run, params):
         run.pid = 12345
         run.status = "running"
-        spawned.append({"mode": run.mode, "project_id": run.project_id,
-                        "brief": brief, "resume_from": resume_from})
+        spawned.append({"mode": run.mode, "params": params})
 
-    monkeypatch.setattr("app.job_runner.spawn_orchestrator_run", fake_spawn)
+    monkeypatch.setattr("app.job_runner.spawn_headless_run", fake_spawn)
 
     r = client.post(f"/api/v1/projects/{pid}/runs",
-                    json={"mode": "auto", "topic": "Leadership in SMEs"})
+                    json={"mode": "auto", "topic": "Leadership in SMEs",
+                          "language": "vi"})
     assert r.status_code == 200, r.text
     assert "run_id" in r.json()
+    # Job.mode stays "auto" — it is the column the UI and admin screens read.
+    # params["mode"] is the headless runner's own vocabulary.
     assert spawned[0]["mode"] == "auto"
-    assert spawned[0]["brief"]["topic"] == "Leadership in SMEs"
+    assert spawned[0]["params"]["mode"] == "full_thesis"
+    assert spawned[0]["params"]["topic"] == "Leadership in SMEs"
+    assert spawned[0]["params"]["language"] == "vi"
 
 
 def _mark_run(rid: str, **fields):

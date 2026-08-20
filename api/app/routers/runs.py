@@ -131,12 +131,16 @@ def start_run(project_id: uuid.UUID, body: StartRunBody,
         langgraph_thread_id=str(uuid.uuid4()),
     )
     db.add(run); db.flush()
-    brief = {
+    # The deep agent is the only brain (2026-08-19 migration). `mode` is the
+    # headless runner's own vocabulary — "auto" is the Job.mode column, which
+    # the UI and admin screens still read, so the two must not be conflated.
+    params = {
+        "mode": "full_thesis",
         "topic": body.topic,
         "language": body.language or p.language,
         "citation_style": body.citation_style or p.citation_style,
     }
-    job_runner.spawn_orchestrator_run(db, run, brief)
+    job_runner.spawn_headless_run(db, run, params)
     db.commit()
     return {"run_id": str(run.id), "status": run.status}
 
