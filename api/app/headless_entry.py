@@ -131,6 +131,35 @@ def _build_profile(params: dict):
     )
 
 
+# The flat default the retry budget used to be, kept as the ANCHOR rather than
+# as the answer: 1200s was chosen against the report path's wall clock, so what
+# it really encodes is a RATIO (1200/1800 = two thirds of the window), i.e.
+# "only start another attempt while at least a third of the time remains".
+_RETRY_BUDGET_ANCHOR_S = 1200
+
+
+def _retry_budget_s(profile) -> int:
+    """Seconds into the run after which no NEW attempt starts.
+
+    Scales with the mode, for the same reason max_turns and wall_clock_s do
+    (spec §Budgets). Left flat at 1200s it was dead weight on the consumer path:
+    full_thesis runs to wall_clock_s=7200, so the budget expired at minute 20
+    and a run that ended `max_stalls` at minute 45 could never retry with 75
+    minutes still on its own clock — the retry loop existed and could not fire.
+    Expressed as the anchor's share of the wall clock it was chosen for, so the
+    ratio follows RunProfile's default if that ever moves.
+
+    DOTHESIS_HEADLESS_RETRY_BUDGET_S still overrides, as an ABSOLUTE number of
+    seconds — an operator setting it is naming a wall-clock ceiling (fillform's
+    axios timeout is one), not a share of anything.
+    """
+    override = os.getenv("DOTHESIS_HEADLESS_RETRY_BUDGET_S")
+    if override:
+        return int(override)
+    from agent.headless import RunProfile  # noqa: PLC0415
+    return int(profile.wall_clock_s * (_RETRY_BUDGET_ANCHOR_S / RunProfile.wall_clock_s))
+
+
 def _install_pause_handler(appender) -> None:
     """SIGTERM -> write `paused`, then exit 0.
 
@@ -263,11 +292,14 @@ class _UsageMeter:
         (4.0x), so a dated snapshot id (`gpt-5.6-luna-2026-05-13`) or a missing
         `model_name` on response_metadata would bill a WHOLE THESIS at 4.0x
         instead of the configured model's true rate — 7.6x on the openai route
-        (luna blends to 0.53x) and ~21x on ofox/qwen-plus. chat_v3._finalize
-        (chat_v3.py:520-528) rejected per-served-model billing outright for this
-        exact reason, and pricing.py:225-228 requires the two charge sites not to
-        drift. Falling back to the CONFIGURED model keeps the per-model accuracy
-        where it is REAL and bills the id chat bills where it is not.
+        (luna blends to 0.53x) and ~21x on ofox/qwen-plus. The OTHER charge site,
+        `_finalize` in the v3 chat router (grep `_credit_multiplier(spec_from_env`),
+        rejected per-served-model billing outright for this exact reason, and
+        pricing.py:225-228 requires the two not to drift. (Named, not imported:
+        this subprocess must never pull the chat router in — see
+        test_headless_entry_profile.) Falling back to the CONFIGURED model keeps
+        the per-model accuracy where it is REAL and bills the id chat bills where
+        it is not.
         """
         from app.pricing import UNKNOWN_MODEL_MULTIPLIER, is_priced  # noqa: PLC0415
 
@@ -405,12 +437,13 @@ def main() -> int:
         # the state commit_slice already persisted — a FRESH agent re-reads the
         # committed store (the intended "resume"). Credit-safe: only the final
         # job_done charges, and an intermediate failure emits NO error event.
-        # BUDGET-CAPPED: a retry only starts if enough of the report's time window
-        # remains, so retries never push total wall time past fillform's 30-min
-        # axios timeout (which turns a clean failure into a confusing "timeout").
+        # BUDGET-CAPPED: a retry only starts if enough of THIS run's time window
+        # remains (_retry_budget_s scales the cap with the mode), so on the report
+        # path retries never push total wall time past fillform's 30-min axios
+        # timeout (which turns a clean failure into a confusing "timeout").
         _RETRYABLE = {"max_stalls", "max_turns"}
         max_attempts = int(os.getenv("DOTHESIS_HEADLESS_RETRIES", "1")) + 1
-        _retry_budget_s = int(os.getenv("DOTHESIS_HEADLESS_RETRY_BUDGET_S", "1200"))
+        retry_budget_s = _retry_budget_s(profile)
 
         # Headless/B2B → strict gates: an unrunnable verification gate refuses the
         # commit (fail-closed at the fabrication boundary, gap 2). BUT distinguish
@@ -443,7 +476,7 @@ def main() -> int:
             if (result.status == "done" or result.reason not in _RETRYABLE
                     or attempt == max_attempts):
                 break
-            if time.monotonic() - timer.t0 >= _retry_budget_s:
+            if time.monotonic() - timer.t0 >= retry_budget_s:
                 appender.write({"type": "activity", "agent": "headless",
                                 "text": f"attempt {attempt} ended: {result.reason} — "
                                         f"retry budget exhausted, stopping"})

@@ -4,7 +4,7 @@ The partner report path scopes a run to the chapters it ordered; a thesis
 cannot be scoped that way, so mode=full_thesis must clear required_modules
 and must not apply the report-only chapter/grounding context vars.
 """
-from app.headless_entry import _build_profile, _is_full_thesis
+from app.headless_entry import _build_profile, _is_full_thesis, _retry_budget_s
 
 
 def test_full_thesis_requires_every_module():
@@ -24,6 +24,35 @@ def test_explicit_params_still_win_over_the_mode_default():
     profile = _build_profile({"mode": "full_thesis", "max_turns": 7,
                               "wall_clock_s": 60})
     assert profile.max_turns == 7 and profile.wall_clock_s == 60
+
+
+def test_retry_budget_scales_with_the_mode(monkeypatch):
+    """I4: a flat 1200s budget against a 7200s full-thesis wall clock expired at
+    minute 20, so a run that ended max_stalls at minute 45 could never retry —
+    the retry loop was dead on the consumer path."""
+    monkeypatch.delenv("DOTHESIS_HEADLESS_RETRY_BUDGET_S", raising=False)
+    report = _build_profile({"depth": "analysis_report"})
+    full = _build_profile({"mode": "full_thesis", "topic": "X"})
+    # The report path keeps exactly the number the flat default encoded.
+    assert _retry_budget_s(report) == 1200
+    # Same two-thirds share of the mode's own window: 7200 * (1200/1800).
+    assert _retry_budget_s(full) == 4800
+    assert _retry_budget_s(full) < full.wall_clock_s
+    assert (_retry_budget_s(full) / full.wall_clock_s
+            == _retry_budget_s(report) / report.wall_clock_s)
+
+
+def test_a_custom_wall_clock_moves_the_retry_budget_with_it(monkeypatch):
+    monkeypatch.delenv("DOTHESIS_HEADLESS_RETRY_BUDGET_S", raising=False)
+    profile = _build_profile({"mode": "full_thesis", "wall_clock_s": 900})
+    assert _retry_budget_s(profile) == 600
+
+
+def test_env_still_overrides_the_retry_budget_absolutely(monkeypatch):
+    """An operator naming a budget is naming a wall-clock ceiling, not a share."""
+    monkeypatch.setenv("DOTHESIS_HEADLESS_RETRY_BUDGET_S", "60")
+    assert _retry_budget_s(_build_profile({"mode": "full_thesis"})) == 60
+    assert _retry_budget_s(_build_profile({"depth": "analysis_report"})) == 60
 
 
 def test_report_mode_is_unchanged():
