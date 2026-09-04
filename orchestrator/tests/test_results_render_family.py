@@ -217,6 +217,34 @@ def test_the_closing_chapter_still_gets_its_limitations_block():
     assert "dt-rendered:begin kind=limitations" in out[0]["prose"]
 
 
+def test_a_legacy_discussion_section_still_gets_its_limitations_block():
+    """`chapter_name: "discussion"` is what a pre-branch project's closing
+    chapter is stored as, and it is exactly the cohort this collapse exists to
+    protect. It was not in the renderable set, so the stated name was thrown
+    away and the title consulted instead — and when the title carried no needle
+    (a cover-page line, an unnumbered heading) the section resolved to None and
+    the chapter silently lost its limitations disclosure."""
+    out = ensure_rendered(
+        [{"chapter_name": "discussion", "title": "Trường Đại học Kinh tế TP.HCM",
+          "prose": "Chương này thảo luận kết quả."}],
+        {"m4_analysis": {"analysis_results": _SPSS_WITH_A_NULL_RESULT}}, "vi")
+    assert "dt-rendered:begin kind=limitations" in out[0]["prose"]
+
+
+def test_a_stated_chapter_name_beats_a_needle_in_the_title():
+    """The producer said which chapter this is; a substring scan of the title is
+    a guess. A Chapter 2 that reviews prior RESULTS ("tổng quan tài liệu về kết
+    quả nghiên cứu trước đây") matches the results needle, and overriding the
+    stated name with it wove the Chapter 4 result tables into Chapter 2."""
+    sec = {"chapter_name": "lit_review",
+           "title": "Chương 2 — Tổng quan tài liệu về kết quả nghiên cứu trước đây",
+           "prose": "Chương này tổng quan các nghiên cứu trước."}
+    assert _section_chapter(sec) == "lit_review"
+    out = ensure_rendered([dict(sec)],
+                          {"m4_analysis": {"analysis_results": _SPSS_WITH_A_NULL_RESULT}}, "vi")
+    assert out[0]["prose"] == sec["prose"]
+
+
 def test_weave_removes_internal_token_when_source_block_is_unavailable():
     from orchestrator.tools.results_render import weave
 

@@ -737,14 +737,48 @@ def _chapter_of(title: str) -> Optional[str]:
     return matched[0] if matched else None
 
 
+# Retired key -> canonical, mirroring m5_writing.LEGACY_CHAPTER_ALIASES. Only a
+# fallback for the (in-repo, so effectively impossible) case where the lazy
+# import below fails; the same duplication quality/similarity.py carries, and
+# for the same reason — this module must stay import-light.
+_RETIRED_CHAPTERS = {"discussion": "conclusion"}
+
+
+def _canonical_chapter(name: Any) -> Optional[str]:
+    """`m5_writing.canonical_chapter`, imported lazily so the module contract
+    at the top of this file (no m5_writing at import time — it pulls in
+    boto3/langchain, and coherence.py imports us) still holds. Fail-open onto
+    the mirrored alias map above."""
+    try:
+        from orchestrator.tools.m5_writing import canonical_chapter  # noqa: PLC0415
+        return canonical_chapter(name)
+    except Exception:
+        logger.debug("canonical_chapter unavailable; using local aliases", exc_info=True)
+        key = str(name or "").strip()
+        key = _RETIRED_CHAPTERS.get(key, key)
+        return key if key in _NUMBER_CHAPTER.values() else None
+
+
 def _section_chapter(sec: dict) -> Optional[str]:
     """Which chapter a section is, preferring the canonical name over its title.
 
     `chapter_name` is set by the composer and by the import, is language-neutral,
     and is exactly the signal a title reverse-lookup keeps missing.
+
+    A STATED identity beats a substring guess, so the name is honoured whenever
+    it resolves to a chapter at all — not only when it is one of the three this
+    module renders for. Testing renderability here cost both directions: a
+    legacy `discussion` (the retired key `canonical_chapter` maps onto
+    `conclusion`) was discarded, and a section whose title carried no needle
+    then resolved to None and lost its limitations disclosure — the exact cohort
+    the five-chapter collapse exists to protect. In the other direction a
+    Chapter 2 titled "tổng quan tài liệu về kết quả nghiên cứu trước đây"
+    matches the results needle, so overriding its stated `lit_review` wove the
+    Chapter 4 result tables into the literature review. The title is consulted
+    only when there is no usable name.
     """
-    name = sec.get("chapter_name")
-    if name in _RENDERABLE_CHAPTERS:
+    name = _canonical_chapter(sec.get("chapter_name"))
+    if name:
         return name
     return _chapter_of(sec.get("title") or sec.get("name") or "")
 
