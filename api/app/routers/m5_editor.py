@@ -42,27 +42,46 @@ def _normalize_stored_chapters(chapters: dict) -> dict | None:
     reassembled around it: the surviving entry keeps its `pending_edits` and
     `citations_used`, since a pending edit whose offsets no longer line up
     already fails closed with 409 stale_offsets on accept.
+
+    FOLD, NEVER PRUNE. `merge_chapter_prose` returns only the chapters it
+    claims — it skips blank prose and anything that is not one of the five — so
+    driving the output off its keys made a READ delete persisted state: a
+    chapter the student had emptied in the editor, and any non-canonical key a
+    producer parked here (`abstract`), vanished on the next open and could not
+    be written back (PATCH 404s chapter_not_drafted on a key that is no longer
+    stored). Every key the merge does not claim is therefore carried forward
+    exactly as stored; only the retired keys move.
     """
     from orchestrator.tools.m5_writing import canonical_chapter, merge_chapter_prose
 
-    if not any(canonical_chapter(k) != k for k in chapters):
+    # A key is work for us only when it resolves to a DIFFERENT canonical
+    # chapter. Already-canonical keys and non-chapters both stay put, so
+    # neither is a reason to rewrite (and re-commit) the dict.
+    retired = {k: canonical_chapter(k) for k in chapters
+               if canonical_chapter(k) and canonical_chapter(k) != k}
+    if not retired:
         return None
 
     def _prose_of(ch):
         return (ch.get("prose") or "") if isinstance(ch, dict) else str(ch or "")
 
     merged = merge_chapter_prose((k, _prose_of(v)) for k, v in chapters.items())
-    out: dict = {}
-    for name, prose in merged.items():
+    # Carry everything forward first, in stored order; the retired keys are the
+    # only ones removed, and their prose reappears under the canonical home below.
+    out: dict = {k: v for k, v in chapters.items() if k not in retired}
+    for name in dict.fromkeys(retired.values()):
         # Prefer the canonical key's own entry for the non-prose fields; fall
         # back to whichever retired key held this chapter when only that exists.
         base = chapters.get(name)
         if not isinstance(base, dict):
             base = next((v for k, v in chapters.items()
-                         if isinstance(v, dict) and canonical_chapter(k) == name), {})
+                         if k in retired and retired[k] == name and isinstance(v, dict)), {})
         entry = dict(base)
         entry["name"] = name
-        entry["prose"] = prose
+        # `merged` has no entry when every block folding in here was blank —
+        # keep the canonical key anyway, so an emptied Chapter 5 stays an
+        # editable, PATCH-able pane instead of disappearing.
+        entry["prose"] = merged.get(name, _prose_of(base))
         out[name] = entry
     return out
 

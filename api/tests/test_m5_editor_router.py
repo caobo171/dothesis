@@ -212,6 +212,85 @@ def test_get_chapters_normalizes_a_stored_retired_key(client):
         assert "[[DT:limitations]]" in stored["conclusion"]["prose"]
 
 
+def test_get_chapters_normalization_keeps_a_chapter_the_student_emptied(client):
+    # Normalization COMMITS, so anything it fails to carry forward is deleted
+    # from persisted state by a plain read. `merge_chapter_prose` returns only
+    # the chapters it claims — blank prose is skipped — so a chapter the student
+    # cleared in the editor was dropped on the next open: the pane disappeared
+    # (presentNames filters on the returned keys) and autosave 404'd
+    # chapter_not_drafted, i.e. the chapter became unrecoverable.
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "X"})
+    pid = r.json()["id"]
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing = {"chapters": {
+            "intro": {"name": "intro", "prose": "Intro prose.", "pending_edits": []},
+            "results": {"name": "results", "prose": "", "pending_edits": []},
+            "discussion": {"name": "discussion", "prose": "Discussion prose.",
+                           "pending_edits": []},
+            "conclusion": {"name": "conclusion", "prose": "Closing remarks.",
+                           "pending_edits": []},
+        }}
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    data = client.post(f"/api/v1/projects/{pid}/m5/chapters").json()
+    # The retired key folds; the emptied one survives untouched.
+    assert set(data) == {"intro", "results", "conclusion"}
+    assert data["results"]["prose"] == ""
+    assert data["conclusion"]["prose"] == "Discussion prose.\n\nClosing remarks."
+
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        assert set(cs.m5_writing["chapters"]) == {"intro", "results", "conclusion"}
+
+    # …and the emptied chapter is still writable, which is the actual loss.
+    r = client.patch(f"/api/v1/projects/{pid}/m5/chapters/results",
+                     json={"prose": "Written again."})
+    assert r.status_code == 200, r.text
+    assert r.json()["prose"] == "Written again."
+
+
+def test_get_chapters_normalization_keeps_a_non_canonical_key(client):
+    # Same deletion, other shape: a key that is not one of the five at all
+    # (`abstract`, and anything else a producer parked in `chapters`) is not
+    # claimed by the merge either. Normalization folds RETIRED keys; it is not a
+    # licence to prune everything it does not recognise.
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "X"})
+    pid = r.json()["id"]
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing = {"chapters": {
+            "abstract": {"name": "abstract", "prose": "ABSTRACT", "pending_edits": []},
+            "intro": {"name": "intro", "prose": "Intro prose.", "pending_edits": []},
+            "discussion": {"name": "discussion", "prose": "Discussion prose.",
+                           "pending_edits": []},
+        }}
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    data = client.post(f"/api/v1/projects/{pid}/m5/chapters").json()
+    assert set(data) == {"abstract", "intro", "conclusion"}
+    assert data["abstract"]["prose"] == "ABSTRACT"
+    assert data["conclusion"]["prose"] == "Discussion prose."
+
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        stored = cs.m5_writing["chapters"]
+        assert set(stored) == {"abstract", "intro", "conclusion"}
+        assert stored["abstract"]["prose"] == "ABSTRACT"
+
+
 def test_get_chapters_leaves_an_already_canonical_dict_untouched(client):
     # Normalization must not rewrite (or re-commit) the common case.
     _create_user_and_set_cookie(client)
