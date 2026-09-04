@@ -20,7 +20,9 @@ def _sec(name, title=None):
 def test_preserved_chapters_alone_are_reported_incomplete():
     """Exactly the shape a fresh import leaves behind."""
     missing = Store._missing_chapters([_sec("results"), _sec("conclusion")])
-    assert missing == ["intro", "lit_review", "methodology", "discussion"]
+    # Five-chapter collapse: "discussion" is retired as a canonical name, its
+    # content lives inside "conclusion", so it no longer appears as missing.
+    assert missing == ["intro", "lit_review", "methodology"]
 
 
 def test_a_whole_thesis_is_reported_complete():
@@ -37,6 +39,18 @@ def test_sections_carrying_only_titles_still_match():
 def test_vietnamese_titles_match_too():
     assert Store._missing_chapters(
         [{"title": M5_CHAPTER_TITLES_VI[n], "prose": "b"} for n in M5_CHAPTER_ORDER]) == []
+
+
+def test_auto_export_emits_five_chapters_and_no_chapter_six():
+    # This path never called the merge, so before the collapse it shipped a
+    # Chapter 6 while the interactive export shipped five.
+    from orchestrator.tools.m5_writing import sections_from_m5_slice
+    slice_ = {"chapters": {n: {"prose": f"{n} prose"} for n in
+                           ("intro", "lit_review", "methodology", "results", "conclusion")}}
+    sections = sections_from_m5_slice(slice_)
+    assert len(sections) == 5
+    assert sections[-1]["title"] == "Chapter 5 — Conclusions and Recommendations"
+    assert not any("Chapter 6" in s["title"] for s in sections)
 
 
 def test_malformed_sections_fail_towards_skipping():

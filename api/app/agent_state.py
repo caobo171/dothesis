@@ -411,7 +411,7 @@ class DbProjectStateStore(ProjectStateStore):
         """Compose the chapter(s) a just-completed module owns into the slice.
 
         The per-module writing step: M1→intro, M2→lit_review, M3→methodology,
-        M4→results, M5→discussion+conclusion. Merges ONLY this module's chapter
+        M4→results, M5→conclusion. Merges ONLY this module's chapter
         keys into m5_writing.chapters, so it never clobbers another module's
         chapter or a student's imported one.
 

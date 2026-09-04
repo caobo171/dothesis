@@ -236,8 +236,8 @@ def make_writing_tools(store) -> list:
             Thus “problem statement + theoretical foundation + research
             proposal” MUST use "M1,M2,M3" so the theory chapter is not omitted.
           - named drafted chapters using "chapter:<names joined by |>", for
-            example "chapter:intro|discussion". Valid canonical names are
-            intro, lit_review, methodology, results, discussion, conclusion.
+            example "chapter:intro|conclusion". Valid canonical names are
+            intro, lit_review, methodology, results, conclusion.
             Use this immediately after writing or revising named M5 chapters.
 
         The export is recorded in the project's Exports list tagged with `scope`,
@@ -260,7 +260,7 @@ def make_writing_tools(store) -> list:
         Args:
             citation_style: apa7 (default), vancouver, ieee, …
             force: skip the missing-data check and export anyway (user opt-in).
-            scope: "full", module set, or "chapter:intro|discussion".
+            scope: "full", module set, or "chapter:intro|conclusion".
             humanize: re-voice the prose before rendering (opt-in, chat only).
         """
         project_id = getattr(store, "project_id", None)
@@ -340,7 +340,10 @@ def make_writing_tools(store) -> list:
                 "literature": "lit_review", "literature_review": "lit_review",
                 "lit_review": "lit_review", "method": "methodology",
                 "methodology": "methodology", "results": "results",
-                "discussion": "discussion", "conclusion": "conclusion",
+                # "discussion" stays accepted as INPUT — a student may still
+                # type it — but resolves to the one chapter that holds that
+                # material after the five-chapter collapse.
+                "discussion": "conclusion", "conclusion": "conclusion",
             }
             raw_names = [part.strip().lower() for part in _scope[8:].split("|") if part.strip()]
             names = [aliases.get(name, name) for name in raw_names]
@@ -350,7 +353,7 @@ def make_writing_tools(store) -> list:
                 return json.dumps({
                     "error": "bad_scope",
                     "hint": "chapter scope must use intro, lit_review, methodology, "
-                            "results, discussion, or conclusion, joined with |.",
+                            "results, or conclusion, joined with |.",
                 })
             by_name = {(section.get("chapter_name") or "").lower(): section
                        for section in sections or []}
