@@ -150,6 +150,52 @@ def test_legacy_final_sections_export_five_sections_with_no_chapter_six():
     assert chapters[-1]["prose"] == "DISC\n\nCONC"
 
 
+def test_an_imported_thesis_keeps_its_own_headings():
+    # api/app/import_work.py stores `title = head.splitlines()[0]` — the first
+    # line of the uploaded document, which on a Vietnamese thesis is usually a
+    # cover-page line, not a chapter heading. Re-titling every chapter from the
+    # canonical map therefore anglicized the chapters whose stored title happened
+    # not to start with "Chương", giving one document an English Chapter 4 and a
+    # Vietnamese Chapter 5. A section's own title is left alone.
+    out = M.sections_from_m5_slice({"final_sections": [
+        {"chapter_name": "results", "title": "TRƯỜNG ĐẠI HỌC KINH TẾ TP.HCM",
+         "source": "import", "prose": "R"},
+        {"chapter_name": "conclusion", "title": "CHƯƠNG 5: KẾT LUẬN VÀ KIẾN NGHỊ",
+         "source": "import", "prose": "C"},
+    ]})
+    assert [s["title"] for s in out] == [
+        "TRƯỜNG ĐẠI HỌC KINH TẾ TP.HCM", "CHƯƠNG 5: KẾT LUẬN VÀ KIẾN NGHỊ"]
+    assert [s["chapter_name"] for s in out] == ["results", "conclusion"]
+
+
+def test_a_section_with_no_title_still_gets_the_canonical_one():
+    out = M.sections_from_m5_slice({"final_sections": [
+        {"chapter_name": "methodology", "prose": "M"}]})
+    assert out[0]["title"] == "Chapter 3 — Methodology"
+
+
+def test_a_sixth_chapter_heading_is_retired_even_when_it_is_not_in_the_title_map():
+    # The finding-4 guarantee cannot depend on the legacy title map listing
+    # every wording a six-chapter thesis used: a heading that numbers itself
+    # past the canonical order is retired by definition.
+    out = M.sections_from_m5_slice({"final_sections": [
+        {"chapter_name": "conclusion",
+         "title": "Chương 6 — Kết luận và Kiến nghị", "prose": "C"}]})
+    assert out[0]["title"] == "Chương 5 — Kết luận và Kiến nghị"
+
+
+def test_a_merged_closing_chapter_cannot_keep_either_halfs_heading():
+    # Two legacy sections fold into one Chapter 5, so neither half's heading
+    # describes the result — the canonical title is the only honest one.
+    out = M.sections_from_m5_slice({"final_sections": [
+        {"chapter_name": "discussion", "title": "Chương 5 — Thảo luận kết quả",
+         "prose": "DISC"},
+        {"chapter_name": "conclusion", "title": "Chương 6 — Kết luận", "prose": "CONC"},
+    ]})
+    assert [s["title"] for s in out] == ["Chương 5 — Kết luận và Kiến nghị"]
+    assert out[0]["prose"] == "DISC\n\nCONC"
+
+
 def test_compose_module_chapters_shapes_and_filters(monkeypatch):
     # Stub composition: M5 owns [conclusion]; compose_all_sections returns it
     # plus a References section that must be filtered out.

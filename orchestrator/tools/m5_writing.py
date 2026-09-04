@@ -1957,6 +1957,41 @@ def chapter_title_lookup() -> dict[str, str]:
     return out
 
 
+# Headings that no longer describe one of the canonical five, in the normalized
+# form `_title_key` produces.
+_RETIRED_TITLE_KEYS = frozenset(_title_key(t) for t in _LEGACY_CHAPTER_TITLES)
+_TITLE_NUMBER_RE = re.compile(r"(?i)^\s*(?:chương|chapter)\s*0*(\d+)")
+
+
+def _is_retired_title(title: str | None) -> bool:
+    """Is `title` a heading the five-chapter collapse retired?
+
+    The test that decides whether a stored title may be overwritten, and it has
+    to be narrow. The import path stores `title = head.splitlines()[0]` — the
+    first line of the uploaded document, typically a cover-page line — under
+    `source: "import"` (api/app/import_work.py, agent/tools/backfill_tool.py).
+    Re-titling every chapter from the canonical map therefore both anglicized
+    Vietnamese theses (the language is inferred from a "Chương" prefix a
+    cover-page line does not have) and overwrote imported prose titles the rest
+    of the codebase deliberately protects.
+
+    Retired means one of two things and nothing else:
+    - the heading resolves through the legacy-title map, or
+    - it numbers itself past the canonical order ("Chapter 6 — …", any wording).
+      The map cannot list every phrasing a six-chapter thesis used, and the
+      guarantee that no Chapter 6 heading reaches the document must not depend
+      on it doing so.
+
+    An absent title counts as retired: there is nothing there to preserve.
+    """
+    if not str(title or "").strip():
+        return True
+    if _title_key(title) in _RETIRED_TITLE_KEYS:
+        return True
+    m = _TITLE_NUMBER_RE.match(str(title))
+    return bool(m) and int(m.group(1)) > len(M5_CHAPTER_ORDER)
+
+
 # Blank line = a markdown paragraph break, so the exporter renders the two
 # blocks as continuous prose rather than one run-on paragraph.
 _PROSE_JOIN = "\n\n"
@@ -2116,15 +2151,20 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
             return out
     final_sections = (m5_slice or {}).get("final_sections") or []
     # Resolve every section's canonical identity — from `chapter_name` when the
-    # producer set one, else from the (now retired-title-aware) reverse lookup —
-    # so a legacy slice cannot export a sixth chapter. Passing titles through
+    # producer set one, else from the (retired-title-aware) reverse lookup — so
+    # a legacy slice cannot export a sixth chapter. Passing titles through
     # verbatim is what let a literal "Chapter 6 — Conclusion" heading reach the
-    # document. Non-chapter sections (References) have no canonical identity and
-    # keep their own title.
+    # document. Identity is not the same as the HEADING though: only a retired
+    # or absent title is replaced (see `_is_retired_title`), because most stored
+    # titles are the producer's own and imported ones are the student's.
+    # Non-chapter sections (References) have no canonical identity either way
+    # and keep their own title.
     title_to_name = chapter_title_lookup()
     chapter_pairs: list[tuple[str, str]] = []
     lineage: dict[str, object] = {}
     vi_titled: set[str] = set()
+    own_title: dict[str, str] = {}     # chapter -> the heading it came with
+    contributors: dict[str, int] = {}  # chapter -> how many sections fed it
     slots: list[dict | str] = []   # a rendered non-chapter dict, or a chapter key
     for sec in final_sections:
         if not isinstance(sec, dict):
@@ -2146,6 +2186,13 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
             slots.append(extra)
             continue
         chapter_pairs.append((stored, prose))
+        contributors[name] = contributors.get(name, 0) + 1
+        # Keep the section's OWN heading unless it is one the five-chapter
+        # collapse retired. Only a retired (or absent) title is ours to replace;
+        # everything else is the producer's, and on an imported thesis it is the
+        # student's document talking.
+        if not _is_retired_title(title):
+            own_title.setdefault(name, title)
         # Re-titling must not anglicize a Vietnamese thesis. `language` is not
         # threaded into this function (deliberately — separate ticket), so infer
         # it from the heading the project actually wrote: a "Chương N …" title
@@ -2170,7 +2217,11 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
         if not merged.get(slot):
             continue
         titles = M5_CHAPTER_TITLES_VI if slot in vi_titled else M5_CHAPTER_TITLES
-        rendered = {"chapter_name": slot, "title": titles[slot],
+        # A chapter fed by two sections (the legacy discussion + conclusion pair)
+        # is neither of them, so neither half's heading describes it — the
+        # canonical title is the only honest one there.
+        keep = own_title.get(slot) if contributors.get(slot, 0) == 1 else None
+        rendered = {"chapter_name": slot, "title": keep or titles[slot],
                     "prose": merged[slot]}
         if slot in lineage:
             rendered["lineage"] = lineage[slot]
