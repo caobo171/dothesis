@@ -245,6 +245,35 @@ def test_dod_chapter_gap_when_missing_or_blank():
     assert dod_chapter("results")({"chapters": {"results": {"prose": "   "}}}).done is False
 
 
+def test_dod_chapter_conclusion_accepts_legacy_discussion_prose():
+    # ch_conclusion's DoD is what readiness()/the artifacts API expose per-chapter
+    # (api/app/routers/chat.py's "enter at any step" UI). A legacy project that
+    # wrote its closing chapter under the retired `discussion` key, with no
+    # `conclusion` key at all, must still read as done here — not just at the
+    # module level (dod_writing) — or that student's finished chapter shows up
+    # permanently unfinished in the chapter-level UI.
+    slice_ = {"chapters": {"discussion": {"prose": "Ket luan va kien nghi."}}}
+    assert dod_chapter("conclusion")(slice_).done is True
+
+
+def test_dod_chapter_conclusion_prefers_real_conclusion_over_legacy_discussion():
+    # Both keys present: the real `conclusion` prose must win, same rule
+    # `_m5_chapter_prose` already applies for dod_writing.
+    slice_ = {"chapters": {
+        "discussion": {"prose": "old discussion draft"},
+        "conclusion": {"prose": "current conclusion prose"},
+    }}
+    result = dod_chapter("conclusion")(slice_)
+    assert result.done is True
+
+
+def test_dod_chapter_conclusion_still_gaps_when_neither_key_present():
+    slice_ = {"chapters": {"intro": {"prose": "intro text"}}}
+    result = dod_chapter("conclusion")(slice_)
+    assert result.done is False
+    assert any("conclusion" in g for g in result.gaps)
+
+
 _FULL_ANALYSIS = {
     "data_type_detected": "SmartPLS",
     "analysis_outline": {"sections": ["descriptives"]},

@@ -268,10 +268,23 @@ def dod_writing(slice_: dict) -> DoD:
 def dod_chapter(chapter_name: str) -> Callable[[dict], DoD]:
     """Factory: DoD for one M5 chapter — done when m5_writing.chapters[name].prose
     is non-blank. Chapters are separate artifacts so a student stuck on a single
-    chapter can be placed precisely (Decision D5)."""
+    chapter can be placed precisely (Decision D5).
+
+    Routed through `_m5_chapter_prose` rather than reading `chapters.get(name)`
+    directly: this DoD is what `readiness()` evaluates per chapter, and it is
+    exposed live as the `ch_conclusion` artifact through
+    api/app/routers/chat.py's artifacts/impact/reconstruct routes (the
+    "enter at any step" UI). A legacy project whose closing chapter is still
+    stored under the retired `discussion` key has no `conclusion` entry at all
+    — reading the raw dict would report that finished chapter as permanently
+    unfinished at the artifact level even though dod_writing (module-level)
+    already accepts it via the same alias. Reusing `_m5_chapter_prose` keeps
+    the alias rule ("resolve through canonical_chapter, real key beats aliased
+    key") in the one place that already implements it, instead of a second
+    hand-rolled `.get('discussion')` fallback drifting out of sync with it.
+    """
     def _dod(slice_: dict) -> DoD:
-        chapters = (slice_ or {}).get("chapters") or {}
-        prose = (chapters.get(chapter_name) or {}).get("prose")
+        prose = _m5_chapter_prose(slice_).get(chapter_name)
         if isinstance(prose, str) and prose.strip():
             return DoD(done=True, gaps=[])
         return DoD(done=False, gaps=[f"chapter '{chapter_name}' has no prose yet"])
