@@ -36,7 +36,14 @@ MAX_SEEDS = 500
 MAX_FINDINGS = 15
 EXCERPT = 160
 
-_CHAPTERS = ("intro", "lit_review", "methodology", "results", "discussion", "conclusion")
+# The canonical five (m5_writing.M5_CHAPTER_ORDER). This was a sixth hand copy
+# still listing `discussion`; a stale superset is harmless here but it is one
+# more place the chapter list can drift from the product.
+_CHAPTERS = ("intro", "lit_review", "methodology", "results", "conclusion")
+# Retired key -> canonical, mirroring m5_writing.LEGACY_CHAPTER_ALIASES. Kept so
+# an in-flight project's closing chapter is still scanned for overlap instead of
+# being filtered out as "not a chapter".
+_RETIRED_CHAPTERS = {"discussion": "conclusion"}
 # Parity with orchestrator/tools/m5_writing.py's citation regex (duplicated to
 # keep this module import-light; the parity test asserts they agree).
 _CITATION = re.compile(r"\(([^)]{1,80}?),\s*(\d{4}|n\.d\.)\)")
@@ -232,21 +239,42 @@ def _strip_rendered(text):
         return text
 
 
+def _merge_chapters(items) -> dict:
+    """(chapter key, prose) pairs -> canonical chapter key -> prose.
+
+    Delegates the retired-key rule (a legacy `discussion` block is concatenated
+    ahead of the `conclusion` block, never dropped) to its one home in
+    m5_writing. Lazy + fail-open: this module is deliberately import-light and a
+    similarity scan must never break a run, so an import failure degrades to
+    "canonical keys only" rather than raising.
+    """
+    pairs = [(str(k).lower(), v) for k, v in items]
+    try:
+        from orchestrator.tools.m5_writing import merge_chapter_prose  # noqa: PLC0415
+        return merge_chapter_prose(pairs)
+    except Exception:
+        logger.warning("similarity: falling back to un-aliased chapter keys", exc_info=True)
+        return {k: v for k, v in pairs if k in _CHAPTERS}
+
+
 def _resolve_chapters(m5) -> dict:
     if isinstance(m5, dict):
-        return {str(k).lower(): _strip_rendered(v.get("prose") if isinstance(v, dict) else v)
-                for k, v in m5.items() if str(k).lower() in _CHAPTERS}
+        merged = _merge_chapters(
+            (k, v.get("prose") if isinstance(v, dict) else v) for k, v in m5.items())
+        return {k: _strip_rendered(v) for k, v in merged.items()}
     if isinstance(m5, list):
-        out = {}
+        pairs = []
         for s in m5:
             if isinstance(s, dict):
-                name = str(s.get("title") or s.get("name") or "").lower()
+                name = str(s.get("title") or s.get("name") or "").lower().replace(" ", "_")
                 # Canonical chapters only — a References section is not prose.
-                for c in _CHAPTERS:
-                    if c in name.replace(" ", "_"):
-                        out[c] = _strip_rendered(s.get("prose") or s.get("content"))
+                # Retired names are matched too, then folded onto their canonical
+                # key by _merge_chapters.
+                for c in (*_CHAPTERS, *_RETIRED_CHAPTERS):
+                    if c in name:
+                        pairs.append((c, s.get("prose") or s.get("content")))
                         break
-        return out
+        return {k: _strip_rendered(v) for k, v in _merge_chapters(pairs).items()}
     return {}
 
 

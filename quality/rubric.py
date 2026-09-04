@@ -9,8 +9,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-_ALL_CHAPTERS = ["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
-
 
 def _sections(context_store: dict) -> list[dict]:
     # Decision: tolerate both v3 (final_sections list) and auto-mode (chapters

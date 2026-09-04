@@ -1,6 +1,6 @@
 ---
 name: dothesis-m5-writing
-description: Use when writing thesis chapters — drafting intro, lit review, methodology, results, discussion, conclusion, formatting citations, or exporting to Word/PDF. Module M5 of DoThesis.
+description: Use when writing thesis chapters — drafting intro, lit review, methodology, results, the conclusions-and-recommendations chapter (the discussion of findings is written inside it), formatting citations, or exporting to Word/PDF. Module M5 of DoThesis.
 ---
 
 # M5 — Writing (Wizard Shape, Pipeline-Backed)
@@ -31,14 +31,14 @@ When the user asks for the **complete thesis** — *"viết luận văn hoàn ch
 *"export the thesis"*, *"tạo file"* — **call `export_docx()` right now.**
 
 That single tool call does everything: if no chapters exist yet it composes all
-6 from M1–M4, persists them, renders DOCX + PDF, and surfaces download links in
+five from M1–M4, persists them, renders DOCX + PDF, and surfaces download links in
 the Context store panel. You do NOT need to compose chapters yourself first, and
 you do NOT need `commit_slice` — the tool handles persistence.
 
 - Do NOT tell the user to click a button instead of acting. The message path
   must produce the file on its own.
 - Do NOT paste chapters into chat.
-- While it runs (~1 min to compose 6 chapters), stay quiet — progress streams.
+- While it runs (~1 min to compose 5 chapters), stay quiet — progress streams.
 - On `ok: true`, confirm: *"Luận văn đã sẵn sàng — bản DOCX và PDF nằm ở panel
   Context store bên phải."* (The Auto Thesis button at the top-right does the
   same thing and is fine to mention as an alternative.)
@@ -97,16 +97,21 @@ If any of M1–M4 is `needs_review`, warn first:
 | 4 | Theoretical Framework / Model | M3 (`conceptual_model`, `hypotheses`) |
 | 5 | Methodology | M3 (`methodology`, instrument) |
 | 6 | Results | M4 (`analysis_results`) — quote the computed numbers verbatim; for a CB-SEM analysis, report the `fit` table (χ²/df, CFI, TLI, RMSEA, SRMR) and per-construct reliability exactly as computed, same sourcing rule as PLS |
-| 7 | Discussion | M4 results × M3 hypotheses × M2 gaps |
-| 8 | Conclusion | M1 RQs answered + limitations + future work |
-| 9 | References | M2 `literature_sources`, formatted by the pipeline |
+| 7 | Conclusions and Recommendations (Chapter 5) | M4 results × M3 hypotheses × M2 gaps, then M1 RQs answered + limitations + future work |
+| 8 | References | M2 `literature_sources`, formatted by the pipeline |
+
+A Vietnamese quantitative thesis ends at **Chương 5 — Kết luận và Kiến nghị**.
+There is no separate Discussion chapter: the discussion of findings is section
+5.2 INSIDE the closing chapter, which is why `conclusion` is the only closing
+chapter key (`M5_CHAPTER_ORDER`). A student asking to "write the discussion"
+means that material — write it into `conclusion`, never a sixth chapter.
 
 Full lineage detail: `references/section-lineage.md`.
 
 ## The wizard
 
 ### Phase 1 — Scope
-Ask which section(s) to draft (1–9 or "all"), citation style (APA 7 default), and for
+Ask which section(s) to draft (1–8 or "all"), citation style (APA 7 default), and for
 "all": one document or section-by-section review.
 
 ### Phase 2 — Generate
@@ -114,7 +119,7 @@ For a **single named section**, draft it yourself from the project state (M1 RQs
 M2 sources/gaps, M3 model/methodology, M4 results) under the quality bars below,
 then `commit_slice("M5", {"final_sections": [...]}, …)` and immediately
 `export_docx(scope="chapter:<chapter_name>")`. For several named sections, use a
-pipe-separated scope such as `chapter:intro|methodology|discussion`. For the **whole thesis**,
+pipe-separated scope such as `chapter:intro|methodology|conclusion`. For the **whole thesis**,
 do NOT draft chapter-by-chapter in chat — call `export_docx()` directly (see the
 redirect section above).
 
@@ -138,7 +143,8 @@ DOCX + PDF pipeline. This is useful when completing the writing wizard; it does
 not replace `export_docx` for a direct export request.
 
 This means the **commit shape matters**: M5 done requires
-`chapters: {intro: {prose: "…"}, lit_review: {prose: "…"}, …}` (all 6 keys),
+`chapters: {intro: {prose: "…"}, lit_review: {prose: "…"}, …}` — all FIVE keys
+(`intro`, `lit_review`, `methodology`, `results`, `conclusion`) —
 not just `final_sections`. If you only have partial chapters, do NOT mark
 done — commit progress with `confirm_done=False` and ask the user which
 remaining chapter to draft next.
@@ -168,7 +174,7 @@ on S3 by the time you write that sentence.
   the analysis itself changed, recommit M4 first. Soft `coherence_warnings` (a direction/
   decision wording mismatch, or an undiscussed hypothesis) don't block — acknowledge them
   before `confirm_done`.
-- **Hypotheses stated verbatim** in the Discussion, then "supported" / "not supported"
+- **Hypotheses stated verbatim** in the discussion of findings (5.2), then "supported" / "not supported"
   — never "kind of supported".
 - **Nothing from outside the project state.** *"Add context about COVID's impact on
   retail"* with no M2 source → *"I'd need a source for that. Want to add a paper to

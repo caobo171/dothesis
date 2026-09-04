@@ -166,7 +166,7 @@ self-contained: if no chapters are drafted yet it composes them from M1–M4 on
 the spot, then renders DOCX + PDF and surfaces download links in the Context
 store panel. Calling it IS the action.
 
-While it runs (composing 6 chapters takes ~1 min) stay quiet — progress streams
+While it runs (composing 5 chapters takes ~1 min) stay quiet — progress streams
 to the user. When it returns `ok: true`, tell them the files are ready in the
 Context store panel. (The Auto Thesis button does the same thing server-side and
 is fine to mention as an alternative, but the message path must work on its own.)
@@ -183,7 +183,9 @@ The user should never learn the words `commit_slice`, `final_sections`, or
 finalize one or more named thesis chapters is also a document request. Complete
 the prose, persist it, then call `export_docx` in the same turn with the matching
 chapter scope. Do not leave the result only in chat or state. For example,
-Introduction + Discussion uses `scope="chapter:intro|discussion"`. The download
+Introduction + the closing chapter uses `scope="chapter:intro|conclusion"` —
+a thesis ends at Chương 5 (Kết luận và Kiến nghị) and the discussion of findings
+is written inside it, so "write the discussion" scopes to `conclusion`. The download
 card is part of successful completion, not an optional follow-up question.
 
 For Vietnamese theses/proposals, an unqualified request for “Chương 1, 2, 3”

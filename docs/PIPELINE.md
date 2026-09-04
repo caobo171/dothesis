@@ -4,7 +4,7 @@ DoThesis turns a blank topic into a finished thesis through **five modules**. Th
 
 ```
 TOPIC ──► M1 Topic ──► M2 Literature ──► M3 Design ──► M4 Analysis ──► M5 Writing ──► DOCX + PDF
-          discovery     review            (model +       (real stats     (6 chapters
+          discovery     review            (model +       (real stats     (5 chapters
           (title, RQs)   (sources, gaps)   methodology)   on your data)   + references)
 ```
 

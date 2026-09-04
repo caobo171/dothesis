@@ -20,8 +20,12 @@ export const vi: Record<MessageKey, string> = {
   // --- /new — trình phân tích luận văn ---
   // --- Auto Thesis mode ---
   "new.auto.title": "1 câu lệnh, trọn luận văn",
+  // "năm chương", not "sáu": a Vietnamese quantitative thesis ends at Chương 5
+  // and M5_CHAPTER_ORDER writes exactly five. The earlier sweep grepped
+  // "6 chapters"/"six chapters" and never the Vietnamese numeral, so the false
+  // claim survived on the flagship surface, in the market's own language.
   "new.auto.tagline":
-    "Tôi lo phần tổng quan tài liệu, thiết kế nghiên cứu và viết trọn sáu chương. " +
+    "Tôi lo phần tổng quan tài liệu, thiết kế nghiên cứu và viết trọn năm chương. " +
     "Đính kèm dữ liệu của bạn thì chương phân tích có số liệu thật.",
   "new.auto.placeholder": "Chủ đề nghiên cứu của bạn — một câu là đủ.",
   "auto.derived.reading": "Đang đọc tệp của bạn…",

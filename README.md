@@ -27,7 +27,7 @@ A thesis is not one prompt. DoThesis breaks the work into **five modules**, each
 Two ways content gets produced:
 
 1. **Guided chat** — the student talks to the agent turn by turn. The agent reads the relevant skill, proposes options (rendered as clickable cards / editable models), and commits each decision to the project state. Soft guidance, never hard walls — the student can jump modules.
-2. **Auto Thesis** — one button runs the whole M1→M5 pipeline unattended (a detached `orchestrator` subprocess), composes all six chapters, compiles citations, and renders DOCX + PDF. Progress streams live into the run drawer.
+2. **Auto Thesis** — one button runs the whole M1→M5 pipeline unattended (a detached `orchestrator` subprocess), composes all five chapters, compiles citations, and renders DOCX + PDF. Progress streams live into the run drawer.
 
 Core guarantees:
 
