@@ -679,18 +679,29 @@ def _norm_ws(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-_TITLE_CHAPTER = [("result", "results"), ("methodolog", "methodology"),
-                  ("data collect", "methodology"), ("conclusion", "conclusion"),
-                  ("discussion", "conclusion"), ("limitation", "conclusion"),
-                  # Vietnamese. Without these the title map matched nothing on a
-                  # Vietnamese thesis — "CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU" hit no
-                  # needle — so ensure_rendered, the export-time safety net, has
-                  # never once fired for the market this product is built for.
-                  # "kết luận" is listed before "kết quả" only for readability;
-                  # they are distinct strings and cannot both match.
-                  ("kết quả", "results"), ("phương pháp", "methodology"),
-                  ("thu thập dữ liệu", "methodology"), ("kết luận", "conclusion"),
-                  ("thảo luận", "conclusion"), ("hạn chế", "conclusion")]
+_TITLE_CHAPTER = [
+    # "discussion"/"thảo luận"/"limitation"/"hạn chế" are checked BEFORE
+    # "result"/"kết quả" on purpose: a real closing-chapter title like
+    # "Chương 5: Thảo luận kết quả nghiên cứu" (or English "Results
+    # Discussion") contains BOTH a results needle and a conclusion needle as
+    # substrings, and `_chapter_of` returns on the FIRST list match — so
+    # without this ordering every such title would silently mis-route to
+    # "results" instead of "conclusion" (five-chapter collapse made this a
+    # live bug: "conclusion" is now a real chapter students title this way,
+    # not just the retired "discussion" key).
+    ("discussion", "conclusion"), ("thảo luận", "conclusion"),
+    ("limitation", "conclusion"), ("hạn chế", "conclusion"),
+    ("result", "results"), ("methodolog", "methodology"),
+    ("data collect", "methodology"), ("conclusion", "conclusion"),
+    # Vietnamese. Without these the title map matched nothing on a
+    # Vietnamese thesis — "CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU" hit no
+    # needle — so ensure_rendered, the export-time safety net, has
+    # never once fired for the market this product is built for.
+    # "kết luận" is listed before "kết quả" only for readability;
+    # they are distinct strings and cannot both match.
+    ("kết quả", "results"), ("phương pháp", "methodology"),
+    ("thu thập dữ liệu", "methodology"), ("kết luận", "conclusion"),
+]
 # Note the needles for "discussion"/"thảo luận"/"hạn chế" are kept — a
 # student's imported thesis may still title a section that way, and it must
 # map to the one chapter (conclusion) that now holds that material.

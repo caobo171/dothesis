@@ -18,8 +18,12 @@ from agent.state import NON_CONTENT_KEYS, ProjectStateStore, SliceOwnershipError
 
 # An advisor directive names a thesis chapter; map it to the DoThesis module that
 # owns that chapter's work so the raised blocker lands on the right roadmap step.
+# "discussion" (pre-five-chapter-collapse name) is deliberately absent: neither
+# caller ever passes it — agent.feedback's directive-extraction prompt only
+# offers the five canonical names, and partner_run.resolve_chapters filters to
+# M5_CHAPTER_ORDER — so a stale entry here would be untested dead weight.
 _CHAPTER_TO_MODULE = {"intro": "M5", "lit_review": "M2", "methodology": "M3",
-                      "results": "M4", "discussion": "M5", "conclusion": "M5"}
+                      "results": "M4", "conclusion": "M5"}
 
 
 # Below this fraction of the stored length, a replacement for an IMPORTED

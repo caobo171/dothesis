@@ -690,11 +690,12 @@ def reexport(
     sections = sections_from_m5_slice(m5)
 
     # A docx should be producible AT ANY POINT — the thesis is written chapter by
-    # chapter as each module (M1→M5) completes, not only once all six exist. So
+    # chapter as each module (M1→M5) completes, not only once all five exist. So
     # we export whatever chapters carry prose and only refuse when there is
-    # nothing at all to render. (Was: hard 400 unless all six chapters present,
-    # which forced the user to "finish M5" before any export.) `missing` is still
-    # returned so the client can show what's left to draft.
+    # nothing at all to render. (Was: hard 400 unless all six chapters present —
+    # pre-five-chapter-collapse, which forced the user to "finish M5" before any
+    # export.) `missing` is still returned so the client can show what's left to
+    # draft.
     missing = [n for n in _REQUIRED_CHAPTERS if n not in (m5.get("chapters") or {})]
     if not sections:
         raise HTTPException(400, detail={"error": {"code": "no_chapters_yet", "missing": missing}})
@@ -708,6 +709,6 @@ def reexport(
     flag_modified(cs, "m5_writing")
     db.commit()
 
-    # `missing` lets the UI say "exported 4 of 6 chapters — Discussion &
-    # Conclusion still to draft" instead of implying the doc is complete.
+    # `missing` lets the UI say "exported 4 of 5 chapters — Conclusion still to
+    # draft" instead of implying the doc is complete.
     return {"docx": artifacts[0], "pdf": artifacts[1], "missing_chapters": missing}

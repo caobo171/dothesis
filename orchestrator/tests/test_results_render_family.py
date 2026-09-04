@@ -116,6 +116,16 @@ def test_the_canonical_name_beats_the_title():
     assert _section_chapter({"chapter_name": "results", "title": "Chương bốn"}) == "results"
 
 
+def test_a_discussion_titled_chapter_routes_to_conclusion_not_results():
+    """A closing-chapter title containing BOTH a "results" needle and a
+    "conclusion" needle (thao luan ket qua = "discussion of results") must not
+    mis-route to Results just because the results needle happens to sit
+    earlier in an unordered NEEDLE list — conclusion is the real chapter this
+    prose belongs to since the five-chapter collapse."""
+    assert _section_chapter({"title": "Chương 5: Thảo luận kết quả nghiên cứu"}) == "conclusion"
+    assert _section_chapter({"title": "Chapter 5 — Results Discussion"}) == "conclusion"
+
+
 def test_an_imported_chapter_is_left_alone():
     """It already carries the student's own tables; ours would be duplicates."""
     sec = {"chapter_name": "results", "title": "CHƯƠNG 4: KẾT QUẢ", "source": "import",

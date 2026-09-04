@@ -873,11 +873,12 @@ def test_reject_404_when_edit_id_belongs_to_other_chapter(client):
 
 
 def _make_project_with_all_chapters(client: TestClient) -> str:
-    """Create a project then seed ALL 6 chapters into context_store.m5_writing.
+    """Create a project then seed ALL 5 chapters into context_store.m5_writing.
 
-    Decision: export requires all 6 chapters; this helper is separate from
-    _make_project_with_chapters (which only seeds 2) so the incomplete-chapters
-    400 test can reuse _make_project_with_chapters without modification.
+    Decision: export requires all 5 chapters (M5_CHAPTER_ORDER); this helper is
+    separate from _make_project_with_chapters (which only seeds 2) so the
+    incomplete-chapters 400 test can reuse _make_project_with_chapters without
+    modification.
     """
     from sqlalchemy.orm.attributes import flag_modified
 
@@ -894,7 +895,6 @@ def _make_project_with_all_chapters(client: TestClient) -> str:
                 "lit_review":  {"name": "lit_review",  "prose": "Lit review prose.",     "pending_edits": []},
                 "methodology": {"name": "methodology", "prose": "Methodology prose.",    "pending_edits": []},
                 "results":     {"name": "results",     "prose": "Results prose.",        "pending_edits": []},
-                "discussion":  {"name": "discussion",  "prose": "Discussion prose.",     "pending_edits": []},
                 "conclusion":  {"name": "conclusion",  "prose": "Conclusion prose.",     "pending_edits": []},
             }
         }
@@ -906,7 +906,7 @@ def _make_project_with_all_chapters(client: TestClient) -> str:
 @patch("app.routers.m5_editor.run_export")
 def test_export_runs_both_compilers_and_returns_artifacts(mock_run_export, client):
     """1. Mock run_export → [docx artifact, pdf artifact]
-    2. Auth + create project + seed ALL 6 chapters
+    2. Auth + create project + seed ALL 5 chapters
     3. POST /api/v1/projects/{pid}/m5/export
     4. Assert 200; body has docx.s3_key + pdf.size_bytes + docx.download_url
     5. Assert run_export called exactly once

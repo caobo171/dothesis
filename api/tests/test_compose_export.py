@@ -3,7 +3,10 @@ context_store dict — no network, no export subprocess (run_export/compose_chap
 are stubbed where used)."""
 from orchestrator.tools.m5_writing import assess_export_readiness
 
-_FULL = ["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
+# Five-chapter collapse: "discussion" is retired as a canonical chapter name
+# (LEGACY_CHAPTER_ALIASES maps it to "conclusion"); this list matches
+# M5_CHAPTER_ORDER.
+_FULL = ["intro", "lit_review", "methodology", "results", "conclusion"]
 
 
 def test_gate_all_chapters_reports_everything_missing():
@@ -11,9 +14,9 @@ def test_gate_all_chapters_reports_everything_missing():
 
 
 def test_gate_scopes_to_requested_chapters():
-    # A store with only M4 results, composing ONLY results+discussion:
+    # A store with only M4 results, composing ONLY results+conclusion:
     store = {"m4_analysis": {"analysis_results": "AVE=0.62 HTMT ok R2=.41"}}
-    missing = assess_export_readiness(store, ["results", "discussion"])
+    missing = assess_export_readiness(store, ["results", "conclusion"])
     # methodology not requested -> not reported; M4 results present -> not reported.
     assert not any("methodology" in m.lower() for m in missing)
     assert not any("analysis results" in m.lower() for m in missing)
@@ -67,7 +70,7 @@ def test_compose_sections_orders_canonically_and_calls_compose(monkeypatch):
 
 # --- the composer must SEE M2 -----------------------------------------------
 def test_context_slice_carries_m2_research_gaps(monkeypatch):
-    """The Introduction/Lit-review/Discussion prompts all interpolate
+    """The Introduction/Lit-review/Conclusion prompts all interpolate
     {research_gaps} and label it "from M2" — but the slice was built from
     m1+m3+m4 only, so the key was ALWAYS empty and the gap-rendering block right
     below it was dead code. `research_gaps` is M2-owned (agent/state.py), so the

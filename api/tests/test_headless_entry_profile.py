@@ -10,10 +10,10 @@ from app.partner_run import ReportError
 
 
 def test_profile_requires_only_the_modules_the_request_needs():
-    # analysis_report = intro/results/discussion/conclusion. A seeded partner
-    # project usually has an EMPTY M2, and nobody asked for a literature review —
-    # requiring one turned "give me 4 chapters" into a full thesis run that
-    # failed the partner on work they never requested.
+    # analysis_report = intro/results/conclusion (ANALYSIS_CHAPTERS). A seeded
+    # partner project usually has an EMPTY M2, and nobody asked for a literature
+    # review — requiring one turned "give me 3 chapters" into a full thesis run
+    # that failed the partner on work they never requested.
     p = _build_profile({"depth": "analysis_report"})
     assert p.required_modules == frozenset({"M4", "M5"})
     assert p.interactive is False

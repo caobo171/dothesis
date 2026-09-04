@@ -214,7 +214,6 @@ def _compose_section_via_engine(section_name: str, context_store: dict) -> str:
             "lit_review":  getattr(_compose, "_compose_lit_review", None),
             "methodology": getattr(_compose, "_compose_methodology", None),
             "results":     getattr(_compose, "_compose_results", None),
-            "discussion":  getattr(_compose, "_compose_discussion", None),
             "conclusion":  getattr(_compose, "_compose_conclusion", None),
         }.get(section_name)
         if composer is None:
@@ -1747,7 +1746,7 @@ def compose_section(section_name: str, context_store: dict) -> str:
     """Compose one section of the thesis from the project's context_store.
 
     `section_name` is one of: intro, lit_review, methodology, results,
-    discussion, conclusion.
+    conclusion (M5_CHAPTER_ORDER).
     """
     return _compose_section_via_engine(section_name, context_store)
 
@@ -2066,7 +2065,7 @@ def assess_export_readiness(context_store: dict, chapters: list[str] | None = No
 
     When `chapters` is given, only report items whose owning chapter is in the
     requested set, so a subset compose (partner "analysis_report" = intro/
-    results/discussion) isn't blocked by data a skipped chapter would have used.
+    results/conclusion) isn't blocked by data a skipped chapter would have used.
     Title/RQs and literature are needed by every academic chapter (owner ANY);
     methodology + results are chapter-specific. This is the ONE gate for full
     AND subset composes — it replaces partner's second _has_sufficient_m4_data
@@ -2202,7 +2201,7 @@ def _match_language(prose: str, chapter_name: str, language: str) -> str:
 
 def compose_all_sections(context_store: dict,
                          chapters: list[str] | None = None) -> list[dict]:
-    """Compose all 6 chapters from a nested context_store → [{title, prose}].
+    """Compose all 5 chapters from a nested context_store → [{title, prose}].
 
     `context_store` is the nested module shape ({m1_topic, m2_literature,
     m3_design, m4_analysis}). Each chapter is written by `compose_chapter`
@@ -3081,7 +3080,7 @@ def _weave_verified_blocks(chapter_name: str, prose: str, context_slice: dict,
                            language: str = "en") -> str:
     """Splice renderer blocks into a chapter's prose (vision §3.6). Pure/fail-open;
     imports results_render lazily so m5_writing's heavy deps never load it."""
-    if chapter_name not in ("results", "methodology", "conclusion", "discussion"):
+    if chapter_name not in ("results", "methodology", "conclusion"):
         return prose
     from orchestrator.tools.results_render import (  # noqa: PLC0415
         render_cleaning_section, render_limitations, render_results_tables, weave)
@@ -3096,7 +3095,7 @@ def _weave_verified_blocks(chapter_name: str, prose: str, context_slice: dict,
     elif chapter_name == "methodology":
         b = render_cleaning_section(ar, language)
         blocks = [b] if b else []
-    else:  # conclusion / discussion → limitations
+    else:  # conclusion → limitations
         nested = {"m3_design": {"sample_plan": cs.get("sample_plan")},
                   "m4_analysis": {"analysis_results": ar}}
         b = render_limitations(nested, language=language)

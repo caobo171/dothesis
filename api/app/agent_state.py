@@ -502,8 +502,8 @@ class DbProjectStateStore(ProjectStateStore):
                     return
                 # Export whatever chapters carry prose — the thesis is written
                 # chapter by chapter as each module completes, so a partial docx
-                # (e.g. Chapters 1–4 while Discussion is still to come) is a
-                # first-class, expected state, not an error.
+                # (e.g. Chapters 1–4 while Chapter 5's Conclusion is still to
+                # come) is a first-class, expected state, not an error.
                 #
                 # Historically this refused a partial ("only export a WHOLE
                 # thesis") because it renders exactly what the slice holds and

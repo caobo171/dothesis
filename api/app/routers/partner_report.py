@@ -194,8 +194,8 @@ async def create_partner_report(
     file: UploadFile | None = File(None),
     depth: str = Form("analysis_report"),
     # Optional comma-separated subset of intro,lit_review,methodology,results,
-    # discussion,conclusion. When set it overrides `depth` (the "tick Chương N"
-    # path). Empty/absent falls back to `depth`.
+    # conclusion (M5_CHAPTER_ORDER). When set it overrides `depth` (the "tick
+    # Chương N" path). Empty/absent falls back to `depth`.
     chapters: str | None = Form(None),
     title: str | None = Form(None),
     # Optional free-text context the end user typed to steer the writing.

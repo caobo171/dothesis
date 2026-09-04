@@ -2,10 +2,10 @@
 
 Pivot (continuous per-module writing): the thesis is composed chapter by chapter
 as each module M1→M5 completes, so a PARTIAL docx (e.g. Chapters 1–4 while
-Discussion is still to come) is a first-class, expected state — the hook renders
-it rather than waiting for all six chapters. `_missing_chapters` is retained for
-logging/UX ("still to draft: …"), not as an export gate. The only skip left is
-when there is no drafted prose at all (nothing to render).
+Chapter 5's Conclusion is still to come) is a first-class, expected state — the
+hook renders it rather than waiting for all five chapters. `_missing_chapters`
+is retained for logging/UX ("still to draft: …"), not as an export gate. The
+only skip left is when there is no drafted prose at all (nothing to render).
 """
 from app.agent_state import DbProjectStateStore as Store
 from orchestrator.tools.m5_writing import (
