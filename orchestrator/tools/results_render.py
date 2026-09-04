@@ -778,7 +778,17 @@ def ensure_rendered(sections: list, nested_cs: dict, language: str = "en") -> li
                 continue
             chapter = _section_chapter(sec)
             prose = sec.get("prose") or sec.get("content")
-            if chapter is None or not isinstance(prose, str):
+            # Only the three chapters this module can actually render for are
+            # let through. The branch below ends in an `else`, so ANY other
+            # answer — `intro` and `lit_review` are the two `_chapter_of` can
+            # now give — falls into the limitations disclosure and welds it onto
+            # Chapter 1 or Chapter 2 of every export. Testing membership here
+            # rather than pruning the number map keeps `_chapter_of` a general
+            # title→chapter reader (it is also the reverse lookup for a section
+            # whose `chapter_name` is missing) and makes "the else is
+            # conclusion-only" true by construction, whatever it learns to
+            # answer next.
+            if chapter not in _RENDERABLE_CHAPTERS or not isinstance(prose, str):
                 out.append(sec)
                 continue
             have = rendered_kinds(prose)

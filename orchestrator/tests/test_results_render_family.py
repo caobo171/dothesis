@@ -172,6 +172,51 @@ def test_a_composed_vietnamese_chapter_is_covered():
     assert out[0]["prose"].count("dt-rendered:begin") == 3
 
 
+# A study with a null result — the ordinary case, not an edge one. This is the
+# state that makes `render_limitations` return a block at all, so it is the
+# state that exposes which chapters the limitations branch can reach.
+_SPSS_WITH_A_NULL_RESULT = dict(
+    _SPSS,
+    hypothesis_tests=[
+        {"id": "H1", "path": "ATT → PB", "decision": "supported",
+         "numbers": {"beta": 0.371, "t": 11.921, "p": "0.000"}},
+        {"id": "H2", "path": "SN → PB", "decision": "not supported",
+         "numbers": {"beta": 0.031, "t": 0.84, "p": "0.401"}},
+    ],
+)
+
+
+def test_the_limitations_block_never_lands_in_chapter_one_or_two():
+    """`ensure_rendered`'s final branch is the limitations disclosure, and it is
+    an `else` — so it fires for every chapter that is neither results nor
+    methodology. The moment `_chapter_of` learned to answer "intro"/"lit_review"
+    that `else` started appending a limitations disclosure to Chapter 1 and
+    Chapter 2 of every thesis with a null hypothesis, a power shortfall or a
+    screening removal, on the ordinary export path."""
+    sections = [
+        {"chapter_name": "intro", "title": "Chương 1 — Giới thiệu",
+         "prose": "Chương này trình bày bối cảnh nghiên cứu."},
+        {"chapter_name": "lit_review", "title": "Chapter 2 — Literature Review",
+         "prose": "This chapter reviews the literature."},
+    ]
+    out = ensure_rendered(
+        [dict(s) for s in sections],
+        {"m4_analysis": {"analysis_results": _SPSS_WITH_A_NULL_RESULT}}, "vi")
+    for before, after in zip(sections, out):
+        assert "dt-rendered" not in after["prose"], after["title"]
+        assert after["prose"] == before["prose"], after["title"]
+
+
+def test_the_closing_chapter_still_gets_its_limitations_block():
+    """The other half of the same guarantee: `conclusion` is the ONE chapter the
+    `else` branch is for, and narrowing what reaches it must not close it."""
+    out = ensure_rendered(
+        [{"chapter_name": "conclusion", "title": "Chương 5 — Kết luận và Kiến nghị",
+          "prose": "Chương này tổng kết nghiên cứu."}],
+        {"m4_analysis": {"analysis_results": _SPSS_WITH_A_NULL_RESULT}}, "vi")
+    assert "dt-rendered:begin kind=limitations" in out[0]["prose"]
+
+
 def test_weave_removes_internal_token_when_source_block_is_unavailable():
     from orchestrator.tools.results_render import weave
 
