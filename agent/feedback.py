@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 _PROMPT = (
     "You are parsing a thesis supervisor's feedback into discrete, actionable "
     "directives. For each distinct requested change, output one item. Map it to the "
-    "most likely chapter (intro|lit_review|methodology|results|discussion|conclusion) "
+    "most likely chapter (intro|lit_review|methodology|results|conclusion) "
     "when clear, else '-'.\nReturn STRICT JSON only:\n"
     '{"directives": [{"chapter": "", "section": "", "quote": "", "issue": "", '
     '"required_change": ""}]}\n\nFEEDBACK:\n'

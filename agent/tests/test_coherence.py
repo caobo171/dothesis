@@ -263,6 +263,23 @@ def test_a_genuinely_wrong_remainder_still_fails():
     assert "UNexplained" in out[0]["message"]
 
 
+def test_traceability_flags_an_uncited_hypothesis_in_the_conclusion_chapter():
+    # The check used to read chapters["discussion"]. After the five-chapter
+    # collapse that key is never written, so the check would fire on nothing.
+    #
+    # `literature_sources` is REQUIRED in the m2 fixture: traceability_findings
+    # returns early without it (agent/coherence.py:606, "only meaningful once
+    # the project has a literature base"). Verified: with it, the old
+    # `discussion` key yields two findings and `conclusion` yields none — which
+    # is exactly the red state this test must start from.
+    from agent.coherence import traceability_findings
+    m2 = {"literature_sources": [{"title": "Davis 1989"}]}
+    chapters = {"conclusion": "H1 was supported by the data, plainly.\n\n"
+                              "H2 was supported by the data, plainly."}
+    out = traceability_findings(m2, {}, chapters)
+    assert any(f["check"] == "traceability.discussion_uncited" for f in out)
+
+
 def test_a_finding_quotes_the_offending_sentence():
     """Naming a chapter is not enough to act on.
 

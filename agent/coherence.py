@@ -23,7 +23,10 @@ from agent.stats_validation import _agg, _norm_path, _p_value
 
 logger = logging.getLogger(__name__)
 
-_RESULT_CHAPTERS = ("results", "discussion", "conclusion")
+# The chapters whose prose reports and interprets results. `discussion` is gone
+# with the five-chapter collapse — the discussion of findings is written inside
+# the conclusion chapter.
+_RESULT_CHAPTERS = ("results", "conclusion")
 
 
 # --- id normalization -------------------------------------------------------
@@ -544,10 +547,14 @@ def _decision_checks(entry) -> list[dict]:
 def _co3(entry, chapters_present) -> list[dict]:
     if not (entry["m4"].get("present") and chapters_present):
         return []
-    if not set(entry["m5"]["mentioned_in"]) & {"results", "discussion"}:
+    # `mentioned_in` is populated from _RESULT_CHAPTERS (results, conclusion) —
+    # this set must match it or a hypothesis discussed only in the conclusion
+    # chapter (where the discussion of findings now lives) would be wrongly
+    # flagged as undiscussed on every five-chapter thesis.
+    if not set(entry["m5"]["mentioned_in"]) & {"results", "conclusion"}:
         return [_finding("coherence.undiscussed_hypothesis", "soft",
                          f"{entry['id']} has an analysis result but is not discussed in the Results or "
-                         "Discussion chapter.", hypothesis=entry["id"], source="parsed")]
+                         "Conclusion chapter.", hypothesis=entry["id"], source="parsed")]
     return []
 
 
@@ -573,7 +580,7 @@ def validate_m5_sections(final_sections, flat_context: dict) -> dict:
         registry = build_registry(hyps, cm, ar, final_sections)
         chapters = _resolve_chapters(final_sections)
         present = bool((chapters.get("results") and not _is_stub(chapters.get("results")))
-                       and (chapters.get("discussion") and not _is_stub(chapters.get("discussion"))))
+                       and (chapters.get("conclusion") and not _is_stub(chapters.get("conclusion"))))
         findings = check_coherence(registry, hyps, ar, present)
         findings += percent_variance_findings(chapters, ar)   # gap 4: percent R²
         return _agg(findings)
@@ -627,11 +634,14 @@ def traceability_findings(m2: dict, m3: dict, chapters: dict) -> list[dict]:
                                     "gap — make the gap→hypothesis link explicit.", hypothesis=label,
                                     chapter="framework"))
 
-        disc = chapters.get("discussion")
+        # The discussion of findings lives in the conclusion chapter (5.2).
+        disc = chapters.get("conclusion")
         if isinstance(disc, str) and not _is_stub(disc):
             for para in re.split(r"\n\s*\n", disc):
                 if _ANCHOR.search(para) and not _CITE_RE.search(para):
                     hid = normalize_hypothesis_id(_ANCHOR.search(para).group(0))
+                    # Finding id and `chapter` label stay "discussion": they are
+                    # a stable identifier for stored feedback, not a chapter key.
                     out.append(_finding("traceability.discussion_uncited", "soft",
                                         f"The discussion of {hid or 'a hypothesis'} does not cite the "
                                         "literature it confirms or contradicts — tie the result back to a "
@@ -728,7 +738,7 @@ def validate_coherence(nested: dict) -> dict:
         registry = build_registry(m3.get("hypotheses"), m3.get("conceptual_model"), ar, m5src)
         chapters = _resolve_chapters(m5src)
         present = bool((chapters.get("results") and not _is_stub(chapters.get("results")))
-                       and (chapters.get("discussion") and not _is_stub(chapters.get("discussion"))))
+                       and (chapters.get("conclusion") and not _is_stub(chapters.get("conclusion"))))
         findings = check_coherence(registry, m3.get("hypotheses"), ar, present)
         findings += traceability_findings(m2, m3, chapters)
         findings += percent_variance_findings(chapters, ar)   # gap 4: percent R²

@@ -681,7 +681,7 @@ def _norm_ws(s: str) -> str:
 
 _TITLE_CHAPTER = [("result", "results"), ("methodolog", "methodology"),
                   ("data collect", "methodology"), ("conclusion", "conclusion"),
-                  ("discussion", "discussion"), ("limitation", "discussion"),
+                  ("discussion", "conclusion"), ("limitation", "conclusion"),
                   # Vietnamese. Without these the title map matched nothing on a
                   # Vietnamese thesis — "CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU" hit no
                   # needle — so ensure_rendered, the export-time safety net, has
@@ -690,9 +690,12 @@ _TITLE_CHAPTER = [("result", "results"), ("methodolog", "methodology"),
                   # they are distinct strings and cannot both match.
                   ("kết quả", "results"), ("phương pháp", "methodology"),
                   ("thu thập dữ liệu", "methodology"), ("kết luận", "conclusion"),
-                  ("thảo luận", "discussion"), ("hạn chế", "discussion")]
+                  ("thảo luận", "conclusion"), ("hạn chế", "conclusion")]
+# Note the needles for "discussion"/"thảo luận"/"hạn chế" are kept — a
+# student's imported thesis may still title a section that way, and it must
+# map to the one chapter (conclusion) that now holds that material.
 
-_RENDERABLE_CHAPTERS = {"results", "methodology", "conclusion", "discussion"}
+_RENDERABLE_CHAPTERS = {"results", "methodology", "conclusion"}
 
 
 def _chapter_of(title: str) -> Optional[str]:
@@ -717,7 +720,7 @@ def _section_chapter(sec: dict) -> Optional[str]:
 
 def ensure_rendered(sections: list, nested_cs: dict, language: str = "en") -> list:
     """Export-time safety net: for each section whose title maps to a
-    results/methodology/conclusion/discussion chapter, weave in any renderer block
+    results/methodology/conclusion chapter, weave in any renderer block
     NOT already present (by kind). Idempotent, pure, fail-open — a section that
     already carries its rendered tables (composed via compose_chapter) is
     unchanged. Covers sections that reached export without compose (chat-committed
