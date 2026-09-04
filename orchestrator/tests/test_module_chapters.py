@@ -161,22 +161,52 @@ def test_legacy_final_sections_export_five_sections_with_no_chapter_six():
     assert chapters[-1]["prose"] == "DISC\n\nCONC"
 
 
-def test_an_imported_thesis_keeps_its_own_headings():
+def test_an_imported_thesis_keeps_its_own_headings_but_not_its_cover_page():
     # api/app/import_work.py stores `title = head.splitlines()[0]` — the first
-    # line of the uploaded document, which on a Vietnamese thesis is usually a
-    # cover-page line, not a chapter heading. Re-titling every chapter from the
-    # canonical map therefore anglicized the chapters whose stored title happened
-    # not to start with "Chương", giving one document an English Chapter 4 and a
-    # Vietnamese Chapter 5. A section's own title is left alone.
+    # line of the uploaded document, which on a Vietnamese thesis is the cover
+    # page, not a chapter heading. Preserving every non-retired stored title
+    # shipped the university's name as the Chapter 4 heading. Only a title that
+    # looks like a heading (numbered "Chương"/"Chapter" prefix) is the
+    # student's own; anything else falls back to the canonical title in the
+    # language resolved from the prose.
     out = M.sections_from_m5_slice({"final_sections": [
         {"chapter_name": "results", "title": "TRƯỜNG ĐẠI HỌC KINH TẾ TP.HCM",
-         "source": "import", "prose": "R"},
+         "source": "import", "prose": VI_PROSE},
         {"chapter_name": "conclusion", "title": "CHƯƠNG 5: KẾT LUẬN VÀ KIẾN NGHỊ",
-         "source": "import", "prose": "C"},
+         "source": "import", "prose": VI_PROSE},
     ]})
     assert [s["title"] for s in out] == [
-        "TRƯỜNG ĐẠI HỌC KINH TẾ TP.HCM", "CHƯƠNG 5: KẾT LUẬN VÀ KIẾN NGHỊ"]
+        "Chương 4 — Kết quả", "CHƯƠNG 5: KẾT LUẬN VÀ KIẾN NGHỊ"]
     assert [s["chapter_name"] for s in out] == ["results", "conclusion"]
+
+
+def test_a_cover_page_line_never_becomes_a_chapter_heading():
+    # The headline bug, isolated: one imported section whose stored title is a
+    # cover-page line exports the canonical Vietnamese heading instead.
+    out = M.sections_from_m5_slice({"final_sections": [
+        {"chapter_name": "results", "title": "TRƯỜNG ĐẠI HỌC KINH TẾ TP.HCM",
+         "source": "import", "prose": VI_PROSE}]})
+    assert [s["title"] for s in out] == ["Chương 4 — Kết quả"]
+
+
+def test_an_english_numbered_heading_is_preserved_verbatim():
+    # The number prefix is the discriminator in either language.
+    out = M.sections_from_m5_slice({"final_sections": [
+        {"chapter_name": "results", "title": "Chapter 4 — Results and Discussion",
+         "source": "import", "prose": EN_PROSE}]})
+    assert out[0]["title"] == "Chapter 4 — Results and Discussion"
+
+
+def test_a_heading_with_no_number_prefix_falls_back_to_the_canonical_title():
+    # The accepted tradeoff, pinned: a real heading written without the word
+    # "Chương"/"Chapter" reads exactly like a cover-page line to this test, so
+    # it is replaced. Deliberate — nothing separates the two cases (the cover
+    # line is all-caps and short too), and a correct canonical heading beats
+    # shipping "TRƯỜNG ĐẠI HỌC …" as Chapter 4.
+    out = M.sections_from_m5_slice({"final_sections": [
+        {"chapter_name": "conclusion", "title": "KẾT LUẬN VÀ KIẾN NGHỊ",
+         "source": "import", "prose": VI_PROSE}]})
+    assert out[0]["title"] == "Chương 5 — Kết luận và Kiến nghị"
 
 
 def test_a_section_with_no_title_still_gets_the_canonical_one():

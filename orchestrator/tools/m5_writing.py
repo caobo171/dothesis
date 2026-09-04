@@ -2203,9 +2203,10 @@ def sections_from_m5_slice(m5_slice: dict, language: str | None = None) -> list[
     # producer set one, else from the (retired-title-aware) reverse lookup — so
     # a legacy slice cannot export a sixth chapter. Passing titles through
     # verbatim is what let a literal "Chapter 6 — Conclusion" heading reach the
-    # document. Identity is not the same as the HEADING though: only a retired
-    # or absent title is replaced (see `_is_retired_title`), because most stored
-    # titles are the producer's own and imported ones are the student's.
+    # document. Identity is not the same as the HEADING though: a live stored
+    # title that reads as a chapter heading is kept, because it is the
+    # producer's own and on an import it is the student's (see own_title below
+    # for both halves of that test).
     # Non-chapter sections (References) have no canonical identity either way
     # and keep their own title.
     title_to_name = chapter_title_lookup()
@@ -2235,11 +2236,23 @@ def sections_from_m5_slice(m5_slice: dict, language: str | None = None) -> list[
             continue
         chapter_pairs.append((stored, prose))
         contributors[name] = contributors.get(name, 0) + 1
-        # Keep the section's OWN heading unless it is one the five-chapter
-        # collapse retired. Only a retired (or absent) title is ours to replace;
-        # everything else is the producer's, and on an imported thesis it is the
-        # student's document talking.
-        if not _is_retired_title(title):
+        # Keep the section's OWN heading only when it is BOTH a live heading
+        # (not one the five-chapter collapse retired) and something that
+        # actually reads as a chapter heading. "Not retired" alone was too weak:
+        # the import path stores `title = head.splitlines()[0]` — the first line
+        # of the uploaded file — so a Vietnamese thesis handed us its cover page
+        # ("TRƯỜNG ĐẠI HỌC KINH TẾ TP.HCM") and we printed the university's name
+        # as the Chapter 4 heading.
+        #
+        # The numbered "Chương"/"Chapter" prefix is the discriminator, and it is
+        # the only one available: the cover line is all-caps and short, exactly
+        # like a real heading, so neither casing nor length separates them.
+        # Tradeoff, accepted: a genuine heading written without the word
+        # ("KẾT LUẬN VÀ KIẾN NGHỊ") is replaced by the canonical title. That is
+        # the better failure — the canonical heading is correct and matches
+        # what the rest of the document uses, whereas a cover-page line is
+        # wrong in a way the student has to notice and fix by hand.
+        if not _is_retired_title(title) and _TITLE_NUMBER_RE.match(title):
             own_title.setdefault(name, title)
         # Lineage keeps the student's own imported prose traceable through
         # rendering; keep the first one seen for the chapter.
