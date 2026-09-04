@@ -55,8 +55,7 @@ def test_ensure_partner_user_is_idempotent():
 
 
 def test_resolve_chapters():
-    assert resolve_chapters("analysis_report", None) == ["intro", "results",
-                                                         "discussion", "conclusion"]
+    assert resolve_chapters("analysis_report", None) == ["intro", "results", "conclusion"]
     assert resolve_chapters("full_thesis", None)[0] == "intro"
     assert resolve_chapters("ignored", ["results", "bogus"]) == ["results"]
     with pytest.raises(ReportError):
@@ -69,7 +68,7 @@ def test_required_modules_for():
     # An analysis_report needs no literature review and no design chapter, so a
     # seeded project with an EMPTY M2 must not have to run one to finish: the
     # required set is exactly the modules that own the requested chapters.
-    assert required_modules_for(["intro", "results", "discussion", "conclusion"]) == \
+    assert required_modules_for(["intro", "results", "conclusion"]) == \
         frozenset({"M4", "M5"})
     assert required_modules_for(["lit_review"]) == frozenset({"M2"})
     assert required_modules_for(["methodology", "results"]) == frozenset({"M3", "M4"})
@@ -175,10 +174,12 @@ def test_run_partner_export_composes_and_persists(tmp_path, monkeypatch):
         assert all(r.scope == "partner" for r in rows)
 
 
-def test_run_partner_export_merges_conclusion_into_discussion(tmp_path, monkeypatch):
-    """Discussion+Conclusion merge is an export ARGUMENT (Task 8), not a fork —
-    partner must pass merge_conclusion=True or the old service's two merge sites
-    (chapter-key drop + retitle) silently vanish with the pipeline."""
+def test_run_partner_export_calls_compose_sections_with_the_resolved_chapters(
+    tmp_path, monkeypatch,
+):
+    """No merge argument to carry anymore (Task 2 deleted it) — `chapters` and
+    `language` reaching compose_sections must still be exactly what the
+    request resolved to, since `conclusion` is now the real final chapter."""
     store, pid = _partner_project(tmp_path)
     _seed_ready(store)
 
@@ -192,7 +193,9 @@ def test_run_partner_export_merges_conclusion_into_discussion(tmp_path, monkeypa
     monkeypatch.setattr(pr, "compose_sections", _capture)
     monkeypatch.setattr(pr, "run_export", lambda *a, **k: [])
     run_partner_export(store, pid, {"depth": "analysis_report", "language": "en"})
-    assert seen["merge_conclusion"] is True
+    assert seen["chapters"] == ["intro", "results", "conclusion"]
+    assert seen["language"] == "en"
+    assert "merge_conclusion" not in seen
 
 
 def test_run_partner_export_gates_on_missing_data(tmp_path, monkeypatch):

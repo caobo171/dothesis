@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from agent.state import SLICE_OWNERSHIP
 # Module-level (not lazy) so tests can monkeypatch partner_run.compose_sections /
 # partner_run.run_export; m5_writing defers its own heavy LLM deps internally.
-from orchestrator.tools.compose_export import compose_sections, merged_chapter_keys
+from orchestrator.tools.compose_export import compose_sections
 from orchestrator.tools.m5_writing import (
     M5_CHAPTER_ORDER,
     assess_export_readiness,
@@ -37,7 +37,10 @@ logger = logging.getLogger(__name__)
 
 # Subset composed for the lighter "analysis_report" depth (single copy now —
 # the old _CHAPTER_ORDER clone is gone; the canonical order is M5_CHAPTER_ORDER).
-ANALYSIS_CHAPTERS = ["intro", "results", "discussion", "conclusion"]
+# The chapters an analysis-only order buys. `discussion` is gone with the
+# five-chapter collapse — the discussion of findings is written inside
+# Chapter 5 (Kết luận và Kiến nghị), not as a chapter of its own.
+ANALYSIS_CHAPTERS = ["intro", "results", "conclusion"]
 
 PARTNER_USER_EMAIL = "partner-system@dothesis.internal"
 
@@ -228,10 +231,7 @@ def run_partner_export(store, project_id, params: dict) -> dict:
         raise ReportError("needs_data", "missing required data: " + "; ".join(missing))
 
     references = (full_cs.get("m2_literature") or {}).get("literature_sources") or None
-    # merge_conclusion=True carries BOTH of the old service's merge sites (the
-    # chapter-key drop and the separate retitle) as one Task 8 argument.
-    sections = compose_sections(full_cs, chapters, language,
-                                references=references, merge_conclusion=True)
+    sections = compose_sections(full_cs, chapters, language, references=references)
     if not sections:
         raise ReportError("compose_failed", "the writing engine produced no sections")
     report_title = (full_cs.get("m1_topic") or {}).get("research_title") or None
@@ -250,11 +250,11 @@ def run_partner_export(store, project_id, params: dict) -> dict:
         logger.exception("run_partner_export: gate summary failed (advisory)")
     return {
         "sections": [s["title"] for s in sections],
-        # POST-merge keys — what was actually WRITTEN, which is what the old
-        # pipeline echoed (it merged before composing, so its `chapter_keys` were
-        # already folded). Reporting the pre-merge request here would tell the
-        # partner about a `conclusion` chapter that exists in no section.
-        "chapters": merged_chapter_keys(chapters),
+        # No merge to reconcile anymore — `conclusion` is the real, canonical
+        # final chapter (five-chapter collapse), so `chapters` is already what
+        # got composed. The old comment here explained a POST-merge/PRE-merge
+        # split; that split doesn't exist once there's nothing to merge.
+        "chapters": chapters,
         "artifact_keys": {a.get("kind"): a.get("s3_key")
                           for a in artifacts if a.get("s3_key")},
         "gate_summary": gate,

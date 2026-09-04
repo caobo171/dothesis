@@ -131,25 +131,39 @@ def test_compose_and_export_calls_run_export(monkeypatch):
     assert arts[0]["kind"] == "pdf"
 
 
-# --- headless convergence: Discussion+Conclusion merge is an export argument -
-def test_merge_conclusion_relabels_discussion(monkeypatch):
-    seen = []
-
+# --- Task 2: the conclusion-merge machinery is deleted, not just unused -----
+# With M5_CHAPTER_ORDER collapsed to five chapters (Task 1), `conclusion` IS
+# the final chapter — there is nothing left to merge it INTO. The old
+# merge_conclusion argument existed only because the canonical order used to
+# declare six chapters and this was the one path that patched it back to five;
+# now every path (auto-export, agent tool, editor, partner) gets five chapters
+# for free, from the same order, with no caller having to remember an argument.
+def test_compose_sections_emits_five_chapters_with_no_chapter_six(monkeypatch):
+    # The whole point of the collapse: no caller has to remember to merge,
+    # because there is no sixth chapter to merge away.
+    #
+    # compose_chapter is a LangChain StructuredTool (pydantic): `.invoke` is
+    # not a settable field on the instance (pydantic raises "no field
+    # 'invoke'"), so — same as the other fakes in this file — swap the whole
+    # object in the ce namespace rather than patching an attribute onto it.
     class _FakeTool:
         def invoke(self, payload):
-            seen.append(payload["chapter_name"])
-            return {"prose": f"prose for {payload['chapter_name']}"}
+            return {"prose": f"Prose for {payload['chapter_name']}."}
 
     monkeypatch.setattr(ce, "compose_chapter", _FakeTool())
-    sections = ce.compose_sections(
-        {"m1_topic": {}, "m4_analysis": {}},
-        ["intro", "results", "discussion", "conclusion"],
-        "vi", merge_conclusion=True,
-    )
-    assert "conclusion" not in seen            # dropped, not composed twice
-    # `seen` is append order across a ThreadPoolExecutor, so it says WHICH
-    # chapters were composed, never in what order they finished. Ordering is
-    # asserted below, on the returned sections, which compose_sections does
-    # guarantee.
-    assert "discussion" in seen
-    assert sections[-1]["title"] == "Chương 5 — Kết luận"
+
+    out = ce.compose_sections({}, list(ce.M5_CHAPTER_ORDER), "vi")
+
+    assert len(out) == 5
+    titles = [s["title"] for s in out]
+    assert titles[-1] == "Chương 5 — Kết luận và Kiến nghị"
+    assert not any("6" in t for t in titles)
+
+
+def test_compose_sections_has_no_merge_parameter():
+    # Guards against the merge being reintroduced as an argument some callers
+    # pass and others forget — the exact bug this change removes.
+    import inspect
+    assert "merge_conclusion" not in inspect.signature(ce.compose_sections).parameters
+    assert not hasattr(ce, "wants_merged_conclusion")
+    assert not hasattr(ce, "merged_chapter_keys")

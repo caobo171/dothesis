@@ -119,7 +119,7 @@ def _fake_spawn(db: Session, run: Job, params: dict) -> None:
     run.workdir = "/tmp/x"
     db.add(JobEvent(job_id=run.id, type="job_done",
                     meta_json={"sections": ["Chapter 5 — Conclusion"],
-                               "chapters": ["intro", "results", "discussion"],
+                               "chapters": ["intro", "results", "conclusion"],
                                "artifact_keys": {"pdf": "p/k.pdf",
                                                  "docx": "p/k.docx"}}))
     db.commit()
@@ -137,7 +137,7 @@ def test_happy_path_creates_project_job_and_presigns(client, monkeypatch):
     assert body["docx_url"].endswith("p/k.docx")
     assert body["pdf_key"] == "p/k.pdf"
     assert body["sections"] == ["Chapter 5 — Conclusion"]
-    assert body["chapters"] == ["intro", "results", "discussion"]
+    assert body["chapters"] == ["intro", "results", "conclusion"]
     assert body["pages"] == 3
     assert body["powered_by"] == "DoThesis"
     # The progress token is MINTED here and handed back — the caller no longer
@@ -204,12 +204,11 @@ def test_upload_is_mirrored_into_the_workspace(client, monkeypatch, tmp_path):
     assert (workspace_dir(pid) / "uploads" / "analysis.pdf").read_bytes() == b"%PDF-1.4 mirrored"
 
 
-def test_chapters_fallback_reports_post_merge_keys(client, monkeypatch):
-    """The fallback for a job_done event without `chapters` used the PRE-merge
-    request, which is the bug 9b7d862 fixed: analysis_report resolves to
-    [...,"discussion","conclusion"], the composer folds conclusion into
-    discussion, so echoing the request promises a chapter that exists in no
-    section. Both branches must answer post-merge."""
+def test_chapters_fallback_reports_the_resolved_chapters(client, monkeypatch):
+    """The fallback for a job_done event without `chapters` falls back to
+    `chapter_keys` (the resolved request). Task 2 deleted the merge, so —
+    unlike before — the resolved request IS what got composed; there is no
+    pre-/post-merge split left for the two branches to disagree on."""
     monkeypatch.setattr(router_mod.prun, "_extract_text", _analysis_text)
     monkeypatch.setattr(router_mod, "s3_from_env", lambda: _FakeS3())
 
@@ -223,7 +222,7 @@ def test_chapters_fallback_reports_post_merge_keys(client, monkeypatch):
     monkeypatch.setattr(job_runner, "spawn_headless_run", spawn_without_chapters)
     r = _post(client, depth="analysis_report")
     assert r.status_code == 200, r.text
-    assert r.json()["chapters"] == ["intro", "results", "discussion"]
+    assert r.json()["chapters"] == ["intro", "results", "conclusion"]
 
 
 def test_done_run_with_no_sections_is_502_not_an_empty_200(client, monkeypatch):
@@ -425,30 +424,31 @@ def test_partner_runs_the_deep_agent_not_a_private_pipeline(tmp_path):
 # remaining evidence that the switch preserved the partner contract, and the
 # only thing that will fail if a later change quietly moves it.
 #
-# Two divergences were found and accepted deliberately (see the task report):
+# One divergence was found and accepted deliberately (see the task report):
 #   1. `progress_token` is new (server-minted; was a caller-supplied form field).
-#   2. chapters=[...,"discussion"] WITHOUT "conclusion" now keeps the Discussion
-#      title. The old service dropped `conclusion` conditionally but retitled
-#      discussion->"Conclusion" UNCONDITIONALLY, so a caller who ticked only
-#      Discussion got a chapter renamed to Conclusion.
+# A second divergence used to live here, about chapters=[...,"discussion"]
+# keeping the Discussion title under the old conditional-merge behavior. Task 2
+# deleted the merge entirely — `discussion` is retired as a canonical chapter
+# name (M5_CHAPTER_ORDER collapsed to five) — so that divergence no longer
+# applies: `conclusion` is now the one and only final chapter, always.
 # ---------------------------------------------------------------------------
 
 _GOLDEN = {
     ("analysis_report", "en"): {
-        "chapters": ["intro", "results", "discussion"],
+        "chapters": ["intro", "results", "conclusion"],
         "sections": ["Chapter 1 — Introduction", "Chapter 4 — Results",
-                     "Chapter 5 — Conclusion"],
+                     "Chapter 5 — Conclusions and Recommendations"],
     },
     ("analysis_report", "vi"): {
-        "chapters": ["intro", "results", "discussion"],
+        "chapters": ["intro", "results", "conclusion"],
         "sections": ["Chương 1 — Giới thiệu", "Chương 4 — Kết quả",
-                     "Chương 5 — Kết luận"],
+                     "Chương 5 — Kết luận và Kiến nghị"],
     },
     ("full_thesis", "en"): {
-        "chapters": ["intro", "lit_review", "methodology", "results", "discussion"],
+        "chapters": ["intro", "lit_review", "methodology", "results", "conclusion"],
         "sections": ["Chapter 1 — Introduction", "Chapter 2 — Literature Review",
                      "Chapter 3 — Methodology", "Chapter 4 — Results",
-                     "Chapter 5 — Conclusion"],
+                     "Chapter 5 — Conclusions and Recommendations"],
     },
 }
 

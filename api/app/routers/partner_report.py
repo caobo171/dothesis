@@ -365,12 +365,10 @@ async def create_partner_report(
     return {
         "pages": pages,
         "depth": depth,
-        # POST-merge keys in BOTH branches. `chapter_keys` is the pre-merge
-        # request, so falling back to it re-introduced exactly what 9b7d862
-        # fixed: telling the partner about a `conclusion` chapter that exists in
-        # no section. The rule has one home (merged_chapter_keys) — restating it
-        # or bypassing it is how the two answers drift apart again.
-        "chapters": meta.get("chapters") or prun.merged_chapter_keys(chapter_keys),
+        # `chapter_keys` (the resolved request) IS what got composed now —
+        # Task 2 deleted the merge, so there is no pre-/post-merge split left
+        # to reconcile between the job_done event and this fallback.
+        "chapters": meta.get("chapters") or chapter_keys,
         "sections": meta["sections"],
         "pdf_url": _sign(keys.get("pdf")),
         "docx_url": _sign(keys.get("docx")),
