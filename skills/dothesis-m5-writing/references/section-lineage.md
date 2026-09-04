@@ -25,9 +25,17 @@ upstream state changes:
 | Theoretical Framework | scale/theory sources | grounding gaps | all | — |
 | Methodology | instrument-source scales | — | — | — |
 | Results | — | — | all (one block each) | all |
-| Discussion | sources being compared | gaps being filled | all (verbatim restatement) | the result per hypothesis |
-| Conclusion | — | locked gaps | all | headline numbers |
+| Conclusions and Recommendations (Chapter 5) | sources being compared | gaps being filled + locked gaps | all (verbatim restatement) | the result per hypothesis, plus the headline numbers |
 | References | every id in any other section's lineage.sources | — | — | — |
+
+Chapter 5 is ONE section, not two. A Vietnamese quantitative thesis ends at
+**Chương 5 — Kết luận và Kiến nghị** and writes the discussion of findings
+inside it (5.1 summary, 5.2 discussion, 5.3 implications, …), which is why
+`conclusion` is the only closing chapter key in `M5_CHAPTER_ORDER`. Its lineage
+is therefore the union of what the old Discussion and Conclusion sections each
+carried: it compares results against the sources, answers the locked gaps, and
+restates every hypothesis with its result. A student asking to "write the
+discussion" means this material — never a sixth chapter.
 
 Use the lineage to answer two recurring needs:
 
