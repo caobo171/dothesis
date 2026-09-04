@@ -22,6 +22,12 @@ from agent.state import NON_CONTENT_KEYS, ProjectStateStore, SliceOwnershipError
 # caller ever passes it — agent.feedback's directive-extraction prompt only
 # offers the five canonical names, and partner_run.resolve_chapters filters to
 # M5_CHAPTER_ORDER — so a stale entry here would be untested dead weight.
+# NOTE "intro": "M5" looks wrong next to MODULE_CHAPTERS (M1 owns "intro") but
+# is intentional and pinned by test_required_modules_for: M1 never appears in
+# a partner run's required-module set because its intake data is partner-
+# supplied input, not module output, and mapping "intro" to the
+# already-required M5 (rather than to M1) is how that's encoded. Changing it
+# would make headless "analysis_report" runs demand a full M1 pass. Leave it.
 _CHAPTER_TO_MODULE = {"intro": "M5", "lit_review": "M2", "methodology": "M3",
                       "results": "M4", "conclusion": "M5"}
 
