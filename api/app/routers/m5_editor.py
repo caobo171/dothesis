@@ -30,6 +30,43 @@ def _m5_slice(db: Session, project_id: uuid.UUID) -> dict:
     return (cs.m5_writing or {}) if cs else {}
 
 
+def _normalize_stored_chapters(chapters: dict) -> dict | None:
+    """Fold retired chapter keys in a stored `chapters` dict onto canonical ones.
+
+    Returns None when there is nothing to do — the overwhelmingly common case —
+    so the read path stays a plain read and never commits a no-op write.
+
+    The merge rule itself is NOT restated here: `merge_chapter_prose` owns it
+    (a retired key and the canonical key are concatenated, legacy first, never
+    picked between). Only the per-chapter bookkeeping the editor cares about is
+    reassembled around it: the surviving entry keeps its `pending_edits` and
+    `citations_used`, since a pending edit whose offsets no longer line up
+    already fails closed with 409 stale_offsets on accept.
+    """
+    from orchestrator.tools.m5_writing import canonical_chapter, merge_chapter_prose
+
+    if not any(canonical_chapter(k) != k for k in chapters):
+        return None
+
+    def _prose_of(ch):
+        return (ch.get("prose") or "") if isinstance(ch, dict) else str(ch or "")
+
+    merged = merge_chapter_prose((k, _prose_of(v)) for k, v in chapters.items())
+    out: dict = {}
+    for name, prose in merged.items():
+        # Prefer the canonical key's own entry for the non-prose fields; fall
+        # back to whichever retired key held this chapter when only that exists.
+        base = chapters.get(name)
+        if not isinstance(base, dict):
+            base = next((v for k, v in chapters.items()
+                         if isinstance(v, dict) and canonical_chapter(k) == name), {})
+        entry = dict(base)
+        entry["name"] = name
+        entry["prose"] = prose
+        out[name] = entry
+    return out
+
+
 @router.post("/projects/{project_id}/m5/chapters")
 def list_chapters(
     project_id: uuid.UUID,
@@ -44,12 +81,27 @@ def list_chapters(
     exists. We synthesize the canonical chapter dict from `final_sections` and
     persist it once, so the editor, autosave (PATCH), and export all read the
     same `chapters` shape afterwards.
+
+    Normalize-on-read: a PRE-EXISTING `chapters` dict skips that backfill
+    entirely, so a pre-branch auto-mode project — which stored all six keys —
+    was returned raw. Its `discussion` prose is then invisible and uneditable in
+    the editor (OutlineRail knows only the canonical five) while the export path
+    still ships it, i.e. editor and exported document disagree about Chapter 5
+    for exactly that cohort. Retired keys go through the same helper the
+    backfill uses.
     """
     _owned_project(db, user, project_id)
     cs = db.get(ContextStore, project_id)
     m5 = (cs.m5_writing or {}) if cs else {}
     chapters = m5.get("chapters") or {}
     if chapters:
+        normalized = _normalize_stored_chapters(chapters)
+        if normalized is not None and cs is not None:
+            m5["chapters"] = normalized
+            cs.m5_writing = m5
+            flag_modified(cs, "m5_writing")
+            db.commit()
+            return normalized
         return chapters
 
     final_sections = m5.get("final_sections") or []

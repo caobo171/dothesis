@@ -168,6 +168,59 @@ def test_get_chapters_backfill_keeps_both_legacy_closing_chapters(client):
         assert "[[DT:limitations]]" in stored["conclusion"]["prose"]
 
 
+def test_get_chapters_normalizes_a_stored_retired_key(client):
+    # A pre-branch AUTO-MODE project stored all six keys in `chapters` — the
+    # backfill above never runs for it, because `chapters` is already there.
+    # Returning that dict raw left its `discussion` prose invisible and
+    # uneditable in the editor (OutlineRail knows only the canonical five) while
+    # sections_from_m5_slice still shipped it in the export, so editor and
+    # exported document disagreed about Chapter 5 for exactly that cohort.
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "X"})
+    pid = r.json()["id"]
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing = {"chapters": {
+            "intro": {"name": "intro", "prose": "Intro prose.", "pending_edits": []},
+            "discussion": {"name": "discussion",
+                           "prose": "Discussion prose with [[DT:limitations]].",
+                           "pending_edits": []},
+            "conclusion": {"name": "conclusion", "prose": "Closing remarks.",
+                           "pending_edits": []},
+        }}
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    data = client.post(f"/api/v1/projects/{pid}/m5/chapters").json()
+    assert set(data) == {"intro", "conclusion"}
+    assert data["conclusion"]["prose"] == (
+        "Discussion prose with [[DT:limitations]].\n\nClosing remarks.")
+    assert data["conclusion"]["name"] == "conclusion"
+
+    # Committed in the normalized shape, so the next read is a plain one and the
+    # surviving keys are all PATCH-able.
+    from app.routers.m5_editor import _VALID_CHAPTER_NAMES
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        stored = cs.m5_writing["chapters"]
+        assert set(stored) == {"intro", "conclusion"}
+        assert set(stored) <= _VALID_CHAPTER_NAMES
+        assert "[[DT:limitations]]" in stored["conclusion"]["prose"]
+
+
+def test_get_chapters_leaves_an_already_canonical_dict_untouched(client):
+    # Normalization must not rewrite (or re-commit) the common case.
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    data = client.post(f"/api/v1/projects/{pid}/m5/chapters").json()
+    assert set(data) == {"intro", "lit_review"}
+    assert data["intro"]["prose"] == "Hello world."
+
+
 def test_get_chapters_404_for_other_user(client):
     # User 1 creates the project.
     _create_user_and_set_cookie(client)
