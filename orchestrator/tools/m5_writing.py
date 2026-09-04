@@ -1847,29 +1847,43 @@ def export_docx(sections: list[dict], project_id: str) -> dict:
     return {"s3_key": s3_key, "size_bytes": size_bytes}
 
 
-# Canonical 6-chapter order + display titles, shared by every caller that
+# Canonical 5-chapter order + display titles, shared by every caller that
 # turns an m5_writing slice into exporter sections (the auto-export hook in
 # api/app/agent_state.py, the /m5/export route, and the agent's export tool).
-# One source of truth so the three paths can't drift.
-M5_CHAPTER_ORDER = ["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
+# One source of truth so the paths can't drift.
+#
+# FIVE, not six. A Vietnamese quantitative thesis ends at "Chương 5 — Kết luận
+# và Kiến nghị" and writes the discussion of findings INSIDE it (5.1 summary,
+# 5.2 discussion, 5.3 contributions, ...). The order used to declare a separate
+# `discussion` chapter and compose_export patched it back to five at export
+# time — but only on 2 of the 5 export paths, so auto-mode and the editor
+# shipped a Chapter 6 no supervisor asked for. Removing the chapter from the
+# canonical order is what makes five hold everywhere by construction.
+M5_CHAPTER_ORDER = ["intro", "lit_review", "methodology", "results", "conclusion"]
 M5_CHAPTER_TITLES = {
     "intro":       "Chapter 1 — Introduction",
     "lit_review":  "Chapter 2 — Literature Review",
     "methodology": "Chapter 3 — Methodology",
     "results":     "Chapter 4 — Results",
-    "discussion":  "Chapter 5 — Discussion",
-    "conclusion":  "Chapter 6 — Conclusion",
+    "conclusion":  "Chapter 5 — Conclusions and Recommendations",
 }
 # Vietnamese chapter titles — the document language must be consistent, so the
 # headings match the (Vietnamese) chapter prose instead of staying English.
+# "Kiến nghị" (Recommendations), not "Hàm ý" (Implications): implications sit at
+# subsection level (5.3), not in the chapter title.
 M5_CHAPTER_TITLES_VI = {
     "intro":       "Chương 1 — Giới thiệu",
     "lit_review":  "Chương 2 — Tổng quan tài liệu",
     "methodology": "Chương 3 — Phương pháp nghiên cứu",
     "results":     "Chương 4 — Kết quả",
-    "discussion":  "Chương 5 — Thảo luận",
-    "conclusion":  "Chương 6 — Kết luận",
+    "conclusion":  "Chương 5 — Kết luận và Kiến nghị",
 }
+# Chapter names that no longer exist canonically, mapped to the one that
+# replaced them. Projects composed before the five-chapter collapse hold their
+# final chapter under `discussion`; reads alias it forward so a student
+# mid-thesis does not lose a written chapter. Writes only ever use canonical
+# names, so this never grows a second direction.
+LEGACY_CHAPTER_ALIASES = {"discussion": "conclusion"}
 _REFERENCES_TITLE = {"vi": "Tài liệu tham khảo", "en": "References"}
 
 
@@ -1878,18 +1892,32 @@ def _chapter_titles(language: str) -> dict:
     return M5_CHAPTER_TITLES_VI if str(language).lower().startswith("vi") else M5_CHAPTER_TITLES
 
 
+def canonical_chapter(name: str | None) -> str | None:
+    """Canonical chapter key for `name`, resolving retired aliases.
+
+    Returns None for anything that is not a chapter, so callers can use it as
+    the single "is this a chapter, and which one" test instead of each
+    re-implementing the alias rule.
+    """
+    if not name:
+        return None
+    key = str(name).strip()
+    key = LEGACY_CHAPTER_ALIASES.get(key, key)
+    return key if key in M5_CHAPTER_ORDER else None
+
+
 # Which canonical chapters each module OWNS. This is the pivot from "M5 writes
 # the whole thesis" to "every module composes its own chapter as it completes":
-# M1–M4 map 1:1 to Chapters 1–4, and M5 owns the closing pair (Discussion +
-# Conclusion). Single source of truth for per-module composition and the
-# module→chapter mapping the export/UI share. Keep consistent with
-# M5_CHAPTER_ORDER — every chapter must be owned by exactly one module.
+# M1–M4 map 1:1 to Chapters 1–4, and M5 owns the closing chapter. Single source
+# of truth for per-module composition and the module→chapter mapping the
+# export/UI share. Keep consistent with M5_CHAPTER_ORDER — every chapter must be
+# owned by exactly one module.
 MODULE_CHAPTERS = {
     "M1": ["intro"],
     "M2": ["lit_review"],
     "M3": ["methodology"],
     "M4": ["results"],
-    "M5": ["discussion", "conclusion"],
+    "M5": ["conclusion"],
 }
 
 
@@ -1914,7 +1942,7 @@ def chapters_from_final_sections(final_sections: list[dict]) -> dict:
     """Map the conversational `final_sections` list onto the editor's canonical
     chapter dict: ``{intro: {name, prose}, lit_review: {...}, …}``.
 
-    The editor (OutlineRail) only knows the six canonical chapter names, but the
+    The editor (OutlineRail) only knows the five canonical chapter names, but the
     conversational / export path stores M5 as a flat `final_sections` list. We
     resolve each section's canonical name from its explicit `chapter_name`
     (compose path) first, then fall back to a title reverse-lookup across the EN
@@ -1933,14 +1961,20 @@ def chapters_from_final_sections(final_sections: list[dict]) -> dict:
     for sec in final_sections or []:
         if not isinstance(sec, dict):
             continue
-        name = sec.get("chapter_name")
-        if name not in M5_CHAPTER_ORDER:
+        name = canonical_chapter(sec.get("chapter_name"))
+        if name is None:
             title = (sec.get("title") or sec.get("name") or "").strip().lower()
-            name = title_to_name.get(title)
-        if name not in M5_CHAPTER_ORDER:
+            name = canonical_chapter(title_to_name.get(title))
+        if name is None:
             continue
         prose = (sec.get("prose") or sec.get("body") or sec.get("content") or "").strip()
         if not prose:
+            continue
+        # A slice carrying BOTH a legacy `discussion` and a real `conclusion`
+        # must keep the conclusion: the alias exists to rescue old prose, not
+        # to overwrite new. Order in final_sections is not guaranteed, so this
+        # cannot rely on the loop reaching them in a particular sequence.
+        if name in out and sec.get("chapter_name") != name:
             continue
         # `source` rides along: it marks the student's own imported prose, and
         # dropping it here would strip the mark on the first compose — the same
@@ -1964,9 +1998,20 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
     """
     chapters = (m5_slice or {}).get("chapters") or {}
     if chapters:
+        # Resolve stored keys through the alias FIRST so a legacy `discussion`
+        # entry lands in the `conclusion` slot; a real `conclusion` already in
+        # the dict wins (setdefault would let the alias overwrite it).
+        resolved: dict = {}
+        for stored_name, ch in chapters.items():
+            name = canonical_chapter(stored_name)
+            if name is None:
+                continue
+            if name in resolved and stored_name != name:
+                continue
+            resolved[name] = ch
         out = []
         for name in M5_CHAPTER_ORDER:
-            ch = chapters.get(name)
+            ch = resolved.get(name)
             if not ch:
                 continue
             prose = (ch.get("prose") or ch.get("body") or "").strip() if isinstance(ch, dict) else str(ch)
