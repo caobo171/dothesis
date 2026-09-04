@@ -276,9 +276,11 @@ def dod_chapter(chapter_name: str) -> Callable[[dict], DoD]:
     — reading the raw dict would report that finished chapter as permanently
     unfinished at the artifact level even though dod_writing (module-level)
     already accepts it via the same alias. Reusing `_m5_chapter_prose` keeps
-    the alias rule ("resolve through canonical_chapter, real key beats aliased
-    key") in the one place that already implements it, instead of a second
-    hand-rolled `.get('discussion')` fallback drifting out of sync with it.
+    the alias rule in the one place that already implements it
+    (`merge_chapter_prose`: prose under a retired key and prose under the
+    canonical key are CONCATENATED, legacy first, never picked between),
+    instead of a second hand-rolled `.get('discussion')` fallback drifting out
+    of sync with it.
     """
     def _dod(slice_: dict) -> DoD:
         prose = _m5_chapter_prose(slice_).get(chapter_name)
