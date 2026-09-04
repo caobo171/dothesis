@@ -362,3 +362,19 @@ def test_chapter_draft_accepts_pending_edits():
     c = ChapterDraft(name="intro", prose="hello world", pending_edits=[pe])
     assert len(c.pending_edits) == 1
     assert c.pending_edits[0].source == "paraphrase"
+
+
+def test_every_hand_copied_chapter_list_matches_the_canonical_order():
+    # Three hand-maintained copies of the chapter list is how the six/five
+    # split survived: the canonical order said six, the merge said five, and
+    # each copy drifted on its own. This test is cheaper than a fourth copy.
+    from typing import get_args
+    from orchestrator.tools.m5_writing import M5_CHAPTER_ORDER
+    from orchestrator.schemas.m5 import ChapterName as M5Name
+    from orchestrator.schemas.m5_editor import ChapterName as EditorName
+    from api.app.routers.m5_editor import _VALID_CHAPTER_NAMES
+
+    canonical = set(M5_CHAPTER_ORDER)
+    assert set(get_args(M5Name)) == canonical
+    assert set(get_args(EditorName)) == canonical
+    assert _VALID_CHAPTER_NAMES == canonical

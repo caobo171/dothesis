@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 from orchestrator.schemas.m5_editor import PendingEdit
 
 
-ChapterName = Literal["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
+ChapterName = Literal["intro", "lit_review", "methodology", "results", "conclusion"]
 
 
 class ChapterDraft(BaseModel):
@@ -39,15 +39,15 @@ class M5Output(BaseModel):
 
     @model_validator(mode="after")
     def _require_artifacts_on_confirm(self):
-        """When confirmed, the agent must have produced all 6 chapters + at
+        """When confirmed, the agent must have produced all 5 chapters + at
         least the docx export. Pre-confirm partials remain valid."""
         if self.confirmed_at is None:
             return self
-        required = {"intro", "lit_review", "methodology", "results", "discussion", "conclusion"}
+        required = {"intro", "lit_review", "methodology", "results", "conclusion"}
         present = set(self.chapters.keys())
         missing = required - present
         if missing:
-            raise ValueError(f"M5 confirm requires all 6 chapters; missing: {sorted(missing)}")
+            raise ValueError(f"M5 confirm requires all 5 chapters; missing: {sorted(missing)}")
         if not any(a.kind == "docx" for a in self.export_artifacts):
             raise ValueError("M5 confirm requires at least the docx export artifact")
         return self

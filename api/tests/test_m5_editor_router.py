@@ -965,7 +965,9 @@ def test_export_renders_partial_chapters(mock_run_export, client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert "docx" in body and "pdf" in body
-    assert set(body["missing_chapters"]) == {"methodology", "results", "discussion", "conclusion"}
+    # Five-chapter collapse: "discussion" is retired, its content lives in
+    # "conclusion" (M5_CHAPTER_ORDER), so it no longer appears as missing.
+    assert set(body["missing_chapters"]) == {"methodology", "results", "conclusion"}
     mock_run_export.assert_called_once()
 
 

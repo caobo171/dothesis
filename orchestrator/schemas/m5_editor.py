@@ -18,7 +18,7 @@ PendingEditSource = Literal[
     "paraphrase", "translate", "cite", "chat_rewrite",
     "proofread", "improve", "humanize", "expand", "shorten",
 ]
-ChapterName = Literal["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
+ChapterName = Literal["intro", "lit_review", "methodology", "results", "conclusion"]
 
 
 class PendingEdit(BaseModel):

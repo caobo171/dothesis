@@ -69,8 +69,10 @@ def list_chapters(
 # PATCH /projects/{project_id}/m5/chapters/{chapter_name} — autosave
 # ---------------------------------------------------------------------------
 
+# Kept in step with m5_writing.M5_CHAPTER_ORDER by a test in
+# orchestrator/tests/test_schemas.py — this is a copy, not a source of truth.
 _VALID_CHAPTER_NAMES = {
-    "intro", "lit_review", "methodology", "results", "discussion", "conclusion"
+    "intro", "lit_review", "methodology", "results", "conclusion"
 }
 
 
