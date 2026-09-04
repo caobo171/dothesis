@@ -85,8 +85,10 @@ def test_null_safe_on_empty_state():
     assert next_action({"contextStore": {}, "status": {}, "focus": None}) is not None
 
 
-def test_m5_writes_the_closing_pair_and_export_is_terminal():
-    """M5 owns Discussion + Conclusion, and nothing sits between it and export.
+def test_m5_writes_the_closing_chapter_and_export_is_terminal():
+    """M5 owns the closing chapter (five-chapter thesis: discussion of findings
+    is written inside Chapter 5, "Kết luận và Kiến nghị", not as its own
+    chapter), and nothing sits between it and export.
 
     The spine used to run synthesize → assemble → review → export, describing
     the pre-continuous-writing job (M5 builds the whole document) with a
@@ -95,7 +97,7 @@ def test_m5_writes_the_closing_pair_and_export_is_terminal():
     file without passing a review first.
     """
     from agent.roadmap import ROADMAP
-    assert ROADMAP["M5"] == ["write_discussion", "write_conclusion", "export"]
+    assert ROADMAP["M5"] == ["write_conclusion", "export"]
     assert ROADMAP["M5"][-1] == "export"
     assert "review" not in ROADMAP["M5"]
 
@@ -124,6 +126,15 @@ def test_required_modules_skips_unordered_m4():
     assert next_action(st, required=frozenset({"M2", "M3", "M5"}))["module"] == "M5"
     # An order that DOES include Results still drives M4.
     assert next_action(st, required=frozenset({"M2", "M3", "M4", "M5"}))["module"] == "M4"
+
+
+def test_m5_spine_has_one_writing_step():
+    from agent.roadmap import ROADMAP, SUBSTEP_LABELS, SUBSTEP_ARTIFACT
+    assert ROADMAP["M5"] == ["write_conclusion", "export"]
+    assert "write_discussion" not in SUBSTEP_LABELS
+    # final_sections is where M5's composed prose lands, so it backs the one
+    # writing step that remains.
+    assert SUBSTEP_ARTIFACT["M5"] == {"write_conclusion": "final_sections"}
 
 
 def test_required_modules_from_report_scope(monkeypatch):

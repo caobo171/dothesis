@@ -15,18 +15,21 @@ ROADMAP: dict[str, list[str]] = {
     "M2": ["familiarize", "map_research_state", "find_gaps", "generate_output"],
     "M3": ["define_constructs", "build_model", "state_hypotheses", "choose_method", "design_instrument"],
     "M4": ["detect_data", "outline_analysis", "confirm_plan", "run_per_step", "interpret"],
-    # M5 owns the closing pair — Discussion + Conclusion — not the whole
-    # document. Every module composes its own chapter as it completes
+    # M5 owns the closing chapter — Chapter 5, "Kết luận và Kiến nghị" — not the
+    # whole document. Every module composes its own chapter as it completes
     # (orchestrator.tools.m5_writing.MODULE_CHAPTERS), so by the time a student
-    # reaches M5 chapters 1-4 already exist; "synthesize the chapters" and
-    # "assemble the thesis" described the pre-continuous-writing job.
+    # reaches M5 chapters 1-4 already exist.
+    #
+    # One writing step, not two: the thesis has five chapters, and the
+    # discussion of findings is written inside Chapter 5 rather than as a
+    # chapter of its own.
     #
     # The "review" step (a committee-readiness grade sitting between assembly
     # and export) is gone. It put a review in front of the student's output,
     # which is backwards — they get the document, then fine-tune it. The
     # review_thesis tool still exists and still grades on demand; it just isn't
     # a step anyone has to walk through first. Export is terminal.
-    "M5": ["write_discussion", "write_conclusion", "export"],
+    "M5": ["write_conclusion", "export"],
 }
 
 SUBSTEP_LABELS: dict[str, str] = {
@@ -41,7 +44,7 @@ SUBSTEP_LABELS: dict[str, str] = {
     "detect_data": "Detect the dataset", "outline_analysis": "Outline the analysis",
     "confirm_plan": "Confirm the analysis plan", "run_per_step": "Run each analysis step",
     "interpret": "Interpret the results",
-    "write_discussion": "Write the discussion", "write_conclusion": "Write the conclusion",
+    "write_conclusion": "Write the conclusion",
     "export": "Export the document",
 }
 
@@ -61,11 +64,9 @@ SUBSTEP_ARTIFACT: dict[str, dict[str, str]] = {
     "M3": {"build_model": "conceptual_model", "state_hypotheses": "hypotheses",
            "choose_method": "methodology"},
     "M4": {"outline_analysis": "analysis_outline", "run_per_step": "analysis_results"},
-    # `final_sections` is where M5's composed prose lands (both the discussion
-    # and the conclusion live in it), so it backs the first of the pair. Once it
-    # exists, derivation moves past write_discussion; write_conclusion is
-    # unbacked, the same way most spine steps are.
-    "M5": {"write_discussion": "final_sections"},
+    # `final_sections` is where M5's composed prose lands, so it backs the one
+    # writing step M5 has.
+    "M5": {"write_conclusion": "final_sections"},
 }
 
 

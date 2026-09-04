@@ -210,12 +210,11 @@ def dod_analysis(slice_: dict) -> DoD:
 
 
 # The chapters a thesis must actually have prose for before M5 can call itself
-# done. Deliberately not all six: Vietnamese theses routinely merge discussion
-# and conclusion into one final chapter ("KẾT LUẬN VÀ KHUYẾN NGHỊ"), so
-# demanding both separately would make a finished thesis report unfinished
-# forever — the failure dod_analysis had.
+# done. A Vietnamese thesis merges discussion and conclusion into one final
+# chapter ("KẾT LUẬN VÀ KIẾN NGHỊ"), which is now the only closing chapter in
+# the canonical order — so this is a single name rather than a pair.
 _M5_CORE_CHAPTERS = ("intro", "lit_review", "methodology", "results")
-_M5_CLOSING_CHAPTERS = ("discussion", "conclusion")
+_M5_CLOSING_CHAPTER = "conclusion"
 
 
 def _m5_chapter_prose(slice_: dict) -> dict[str, str]:
@@ -228,10 +227,20 @@ def _m5_chapter_prose(slice_: dict) -> dict[str, str]:
     visiting a particular screen.
     """
     slice_ = slice_ or {}
+    from orchestrator.tools.m5_writing import canonical_chapter  # noqa: PLC0415
+
     chapters = slice_.get("chapters")
     if isinstance(chapters, dict) and chapters:
-        return {name: (c or {}).get("prose") or ""
-                for name, c in chapters.items() if isinstance(c, dict)}
+        out: dict[str, str] = {}
+        for stored, c in chapters.items():
+            name = canonical_chapter(stored)
+            # A real `conclusion` beats a legacy `discussion` aliased onto it —
+            # an in-flight project that has both must not have its written
+            # conclusion clobbered by an older discussion draft.
+            if name is None or (name in out and stored != name):
+                continue
+            out[name] = (c or {}).get("prose") or "" if isinstance(c, dict) else ""
+        return out
     from orchestrator.tools.m5_writing import chapters_from_final_sections
 
     mapped = chapters_from_final_sections(slice_.get("final_sections") or [])
@@ -239,7 +248,7 @@ def _m5_chapter_prose(slice_: dict) -> dict[str, str]:
 
 
 def dod_writing(slice_: dict) -> DoD:
-    """M5 writing: prose for the core chapters, plus a closing chapter.
+    """M5 writing: prose for the core chapters, plus the closing chapter.
 
     M5 had no module-level DoD at all — `done` fired on `confirmed_at` alone —
     so a thesis with every chapter written still reported `in_progress` and no
@@ -251,8 +260,8 @@ def dod_writing(slice_: dict) -> DoD:
     have = {name for name, text in prose.items() if (text or "").strip()}
     gaps = [f"chapter '{n}' has no prose yet" for n in _M5_CORE_CHAPTERS
             if n not in have]
-    if not have & set(_M5_CLOSING_CHAPTERS):
-        gaps.append("no discussion or conclusion chapter yet")
+    if _M5_CLOSING_CHAPTER not in have:
+        gaps.append("no conclusion chapter yet")
     return DoD(done=not gaps, gaps=gaps)
 
 
@@ -282,8 +291,10 @@ ARTIFACTS: tuple[Artifact, ...] = (
     Artifact("ch_lit_review",  "m5_writing",    ("literature",),               dod_chapter("lit_review")),
     Artifact("ch_methodology", "m5_writing",    ("design",),                   dod_chapter("methodology")),
     Artifact("ch_results",     "m5_writing",    ("analysis",),                 dod_chapter("results")),
-    Artifact("ch_discussion",  "m5_writing",    ("ch_results", "topic"),       dod_chapter("discussion")),
-    Artifact("ch_conclusion",  "m5_writing",    ("ch_discussion", "analysis"), dod_chapter("conclusion")),
+    # ch_discussion is gone with the five-chapter collapse; ch_conclusion
+    # inherits its dependencies. `analysis` is not restated because ch_results
+    # already declares it, so it stays reachable transitively.
+    Artifact("ch_conclusion",  "m5_writing",    ("ch_results", "topic"),       dod_chapter("conclusion")),
 )
 
 

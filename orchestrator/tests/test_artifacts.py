@@ -253,8 +253,7 @@ _FULL_ANALYSIS = {
 _FULL_CHAPTERS = {
     "chapters": {
         name: {"prose": f"{name} text"}
-        for name in ("intro", "lit_review", "methodology",
-                     "results", "discussion", "conclusion")
+        for name in ("intro", "lit_review", "methodology", "results", "conclusion")
     }
 }
 
@@ -284,7 +283,7 @@ def test_readiness_through_analysis_unlocks_early_chapters():
     assert r["ch_methodology"] == "ready"
     assert r["ch_results"] == "ready"
     assert r["ch_intro"] == "ready"
-    assert r["ch_discussion"] == "blocked"  # needs ch_results first
+    assert r["ch_conclusion"] == "blocked"  # needs ch_results (done, not just ready) first
 
 
 def test_readiness_confirmed_slice_counts_as_done_even_if_dod_incomplete():
@@ -358,6 +357,31 @@ def test_artifacts_registry_keys_unique_and_deps_resolve():
     for a in ARTIFACTS:
         for dep in a.depends_on:
             assert dep in known, f"{a.key} depends on unknown artifact {dep}"
+
+
+def test_no_discussion_artifact_and_conclusion_inherits_its_deps():
+    from orchestrator.artifacts import ARTIFACTS
+    keys = {a.key for a in ARTIFACTS}
+    assert "ch_discussion" not in keys
+    conc = next(a for a in ARTIFACTS if a.key == "ch_conclusion")
+    # ch_discussion used to carry these; `analysis` stays reachable through
+    # ch_results, which already declares it.
+    assert conc.depends_on == ("ch_results", "topic")
+
+
+def test_dod_writing_accepts_a_thesis_whose_final_chapter_is_the_conclusion():
+    from orchestrator.artifacts import dod_writing
+    slice_ = {"chapters": {n: {"prose": "x"} for n in
+                           ("intro", "lit_review", "methodology", "results", "conclusion")}}
+    assert dod_writing(slice_).done is True
+
+
+def test_dod_writing_accepts_legacy_discussion_prose_as_the_final_chapter():
+    # An in-flight project wrote its final chapter under the retired name.
+    from orchestrator.artifacts import dod_writing
+    slice_ = {"chapters": {n: {"prose": "x"} for n in
+                           ("intro", "lit_review", "methodology", "results", "discussion")}}
+    assert dod_writing(slice_).done is True
 
 
 def test_dod_and_artifact_dataclasses():
