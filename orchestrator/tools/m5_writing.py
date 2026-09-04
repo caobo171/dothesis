@@ -1910,6 +1910,47 @@ def _chapter_titles(language: str) -> dict:
     return M5_CHAPTER_TITLES_VI if str(language).lower().startswith("vi") else M5_CHAPTER_TITLES
 
 
+def _resolve_title_language(prose_texts, language: str | None) -> str:
+    """Which language the CANONICAL chapter headings are written in.
+
+    ONE resolver for both shapes `sections_from_m5_slice` accepts. The two
+    branches used to answer this separately — the `chapters` branch hardcoded
+    English, the `final_sections` branch guessed from a "Chương" title prefix —
+    and a Vietnamese thesis came out with "Chapter 1 — Introduction" on three of
+    the five export paths.
+
+    Order, most authoritative first:
+
+    1. The thesis's own prose. Content beats the stored setting: `m1_topic.
+       language` can be stale or simply wrong (never set on an import, flipped
+       mid-project), and a heading that disagrees with the chapter under it is
+       precisely the defect being fixed. The student's words are the truth.
+       Read over the COMBINED prose of every chapter in the slice — more letters
+       make detect_language's diacritic ratio more reliable than any single
+       chapter would be, and one document gets one heading language anyway.
+    2. The caller's `language`, for prose too short to judge (detect_language
+       declines below 24 letters rather than guessing).
+    3. "en" — today's behaviour for the genuine no-information case, so a bare
+       caller cannot silently flip. Nothing in production decides here: all
+       three real call sites read a language and each defaults to "vi".
+
+    Lazy import + fail-open, the way `_match_language` and
+    `agent.tools.writing.resolve_output_language` do it: humanize is a heavy
+    module this one does not otherwise need, and a detector that raises must
+    cost the export a heading language, not the export.
+    """
+    if isinstance(prose_texts, str):
+        prose_texts = [prose_texts]
+    try:
+        from orchestrator.tools.humanize import detect_language  # noqa: PLC0415
+
+        detected = detect_language("\n\n".join(str(p) for p in prose_texts if p))
+    except Exception:
+        logger.exception("sections_from_m5_slice: chapter-title language detection failed")
+        detected = None
+    return detected or language or "en"
+
+
 def canonical_chapter(name: str | None) -> str | None:
     """Canonical chapter key for `name`, resolving retired aliases.
 
@@ -2122,7 +2163,7 @@ def chapters_from_final_sections(final_sections: list[dict]) -> dict:
     return out
 
 
-def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
+def sections_from_m5_slice(m5_slice: dict, language: str | None = None) -> list[dict]:
     """Build exporter sections [{title, prose}] from an m5_writing slice.
 
     Tolerates both shapes the writers produce:
@@ -2131,6 +2172,10 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
       shape (the M5 skill's DocumentSection list).
     Returns [] when neither carries usable prose, so callers can short-circuit
     instead of exporting an empty document.
+
+    `language` is the project's stored setting (the caller's `m1_topic.
+    language`) and is only a FALLBACK — see `_resolve_title_language`, which
+    reads the prose first. It stays optional so a bare call keeps working.
     """
     chapters = (m5_slice or {}).get("chapters") or {}
     if chapters:
@@ -2144,7 +2189,11 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
 
         merged = merge_chapter_prose(
             (stored, _prose_of(ch)) for stored, ch in chapters.items())
-        out = [{"chapter_name": name, "title": M5_CHAPTER_TITLES[name],
+        # Headings follow the prose, not a hardcoded map: this branch is what
+        # auto-mode, the editor's re-export and the agent's export tool all go
+        # through, and it used to anglicize every Vietnamese thesis.
+        titles = _chapter_titles(_resolve_title_language(merged.values(), language))
+        out = [{"chapter_name": name, "title": titles[name],
                 "prose": merged[name]}
                for name in M5_CHAPTER_ORDER if merged.get(name)]
         if out:
@@ -2162,7 +2211,6 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
     title_to_name = chapter_title_lookup()
     chapter_pairs: list[tuple[str, str]] = []
     lineage: dict[str, object] = {}
-    vi_titled: set[str] = set()
     own_title: dict[str, str] = {}     # chapter -> the heading it came with
     contributors: dict[str, int] = {}  # chapter -> how many sections fed it
     slots: list[dict | str] = []   # a rendered non-chapter dict, or a chapter key
@@ -2193,12 +2241,6 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
         # student's document talking.
         if not _is_retired_title(title):
             own_title.setdefault(name, title)
-        # Re-titling must not anglicize a Vietnamese thesis. `language` is not
-        # threaded into this function (deliberately — separate ticket), so infer
-        # it from the heading the project actually wrote: a "Chương N …" title
-        # keeps the Vietnamese canonical title, everything else stays English.
-        if re.match(r"(?i)^\s*chương\b", title):
-            vi_titled.add(name)
         # Lineage keeps the student's own imported prose traceable through
         # rendering; keep the first one seen for the chapter.
         if sec.get("lineage") and name not in lineage:
@@ -2209,6 +2251,12 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
         if name not in slots:
             slots.append(name)
     merged = merge_chapter_prose(chapter_pairs)
+    # One resolver for both shapes. This replaced a "^\s*chương" test on the
+    # STORED TITLE, which the import path defeats by construction: it stores
+    # `title = head.splitlines()[0]`, i.e. a cover-page line, so a Vietnamese
+    # thesis read as English. Only the CANONICAL fallback below is affected —
+    # a section's own heading still wins (own_title).
+    titles = _chapter_titles(_resolve_title_language(merged.values(), language))
     out = []
     for slot in slots:
         if isinstance(slot, dict):
@@ -2216,7 +2264,6 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
             continue
         if not merged.get(slot):
             continue
-        titles = M5_CHAPTER_TITLES_VI if slot in vi_titled else M5_CHAPTER_TITLES
         # A chapter fed by two sections (the legacy discussion + conclusion pair)
         # is neither of them, so neither half's heading describes it — the
         # canonical title is the only honest one there.

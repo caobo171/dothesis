@@ -758,7 +758,14 @@ def reexport(
     # run_export + sections_from_m5_slice are the single shared export path
     # (same one the auto-export hook and the agent's export tool use), so the
     # artifact shape + download URL can't drift across the three callers.
-    sections = sections_from_m5_slice(m5)
+    # `language` is read up here because the chapter HEADINGS need it too, not
+    # only the cover/TOC that run_export localizes; it is the fallback for prose
+    # too short to read (sections_from_m5_slice detects from the prose first).
+    # (Guarded on `cs` because this now runs BEFORE the no-chapters 400 that
+    # used to be the only thing standing between a missing row and this read.)
+    m1 = (cs.m1_topic or {}) if cs else {}
+    language = m1.get("language") or "vi"
+    sections = sections_from_m5_slice(m5, language=language)
 
     # A docx should be producible AT ANY POINT — the thesis is written chapter by
     # chapter as each module (M1→M5) completes, not only once all five exist. So
@@ -771,9 +778,8 @@ def reexport(
     if not sections:
         raise HTTPException(400, detail={"error": {"code": "no_chapters_yet", "missing": missing}})
     references = (cs.m2_literature or {}).get("literature_sources") or []
-    language = (cs.m1_topic or {}).get("language") or "vi"
     artifacts = run_export(sections, str(project_id), references=references, language=language,
-                           title=(cs.m1_topic or {}).get("research_title"))
+                           title=m1.get("research_title"))
 
     m5["export_artifacts"] = artifacts
     cs.m5_writing = m5

@@ -69,7 +69,7 @@ def test_hook_renders_a_partial_thesis(monkeypatch):
     monkeypatch.setattr(M, "run_export",
                         lambda *a, **kw: called.setdefault("ran", True) or ["docx", "pdf"])
     monkeypatch.setattr(M, "sections_from_m5_slice",
-                        lambda slice_: [_sec("results"), _sec("conclusion")])
+                        lambda slice_, language=None: [_sec("results"), _sec("conclusion")])
     monkeypatch.setattr(M, "m2_references", lambda *_a, **_k: [])
     monkeypatch.setattr(Store, "persist_export_artifacts", lambda self, arts: None)
 
@@ -103,7 +103,7 @@ def test_hook_skips_when_no_prose_at_all(monkeypatch):
     called = {}
     monkeypatch.setattr(M, "run_export",
                         lambda *a, **kw: called.setdefault("ran", True) or [])
-    monkeypatch.setattr(M, "sections_from_m5_slice", lambda slice_: [])
+    monkeypatch.setattr(M, "sections_from_m5_slice", lambda slice_, language=None: [])
     monkeypatch.setattr(M, "m2_references", lambda *_a, **_k: [])
 
     class _CS:
@@ -126,6 +126,52 @@ def test_hook_skips_when_no_prose_at_all(monkeypatch):
     store._auto_export_m5()
 
     assert "ran" not in called, "nothing to render → must skip"
+
+
+def test_hook_exports_vietnamese_headings_for_a_vietnamese_thesis(monkeypatch):
+    """End to end through the real section builder: a Vietnamese project must
+    not reach run_export carrying "Chapter 1 — Introduction".
+
+    The hook is one of the three export paths that went through
+    sections_from_m5_slice without a language, so every one of them anglicized
+    the headings while run_export localized the cover and TOC around them.
+    """
+    import app.agent_state as A
+    import orchestrator.tools.m5_writing as M
+
+    seen = {}
+
+    def _capture(sections, pid, **kw):
+        seen["titles"] = [s["title"] for s in sections]
+        return ["docx", "pdf"]
+
+    monkeypatch.setattr(M, "run_export", _capture)
+    monkeypatch.setattr(M, "m2_references", lambda *_a, **_k: [])
+    monkeypatch.setattr(Store, "persist_export_artifacts", lambda self, arts: None)
+
+    vi = ("Nghiên cứu này phân tích ảnh hưởng của chất lượng dịch vụ đến sự hài "
+          "lòng của khách hàng tại các ngân hàng thương mại.")
+
+    class _CS:
+        m5_writing = {"chapters": {n: {"prose": f"{vi} [{n}]"} for n in M5_CHAPTER_ORDER}}
+        m2_literature = {}
+        m1_topic = {"language": "vi"}
+
+    class _Sess:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def get(self, model, pid): return _CS()
+
+    monkeypatch.setattr(A, "Session", _Sess, raising=False)
+    monkeypatch.setattr("sqlalchemy.orm.Session", _Sess)
+
+    store = Store.__new__(Store)
+    store.engine = object()
+    store.project_id = "p1"
+    store._auto_export_m5()
+
+    assert seen["titles"] == [M5_CHAPTER_TITLES_VI[n] for n in M5_CHAPTER_ORDER]
 
 
 def test_auto_compose_module_merges_only_its_chapters(monkeypatch):

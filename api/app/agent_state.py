@@ -487,9 +487,14 @@ class DbProjectStateStore(ProjectStateStore):
                 if cs is None:
                     log.warning("M5 auto-export: no context_store row for %s", self.project_id)
                     return
-                sections = sections_from_m5_slice(cs.m5_writing or {})
-                references = m2_references(cs.m2_literature)
+                # Resolved BEFORE the section build: the chapter headings have
+                # to be in the document's language too, not just the cover and
+                # the TOC. It is a fallback there — sections_from_m5_slice reads
+                # the prose first — but a stale stored setting is still better
+                # than assuming English.
                 language = (cs.m1_topic or {}).get("language") or "vi"
+                sections = sections_from_m5_slice(cs.m5_writing or {}, language=language)
+                references = m2_references(cs.m2_literature)
                 if not sections:
                     # M5 done was claimed without usable chapter prose (neither
                     # the chapters shape nor final_sections carried text). The

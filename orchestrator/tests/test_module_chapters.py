@@ -6,6 +6,17 @@ No LLM — compose_all_sections is stubbed at its seam.
 """
 import orchestrator.tools.m5_writing as M
 
+# Long enough for detect_language to read (it declines under 24 letters) and
+# unambiguous in both directions.
+VI_PROSE = ("Nghiên cứu này phân tích ảnh hưởng của chất lượng dịch vụ đến sự "
+            "hài lòng của khách hàng tại các ngân hàng thương mại.")
+EN_PROSE = ("This study analyses how service quality influences customer "
+            "satisfaction across commercial retail banks.")
+
+
+def _chapters_slice(prose: str) -> dict:
+    return {"chapters": {n: {"prose": f"{prose} [{n}]"} for n in M.M5_CHAPTER_ORDER}}
+
 
 def test_module_chapters_partition_the_canonical_order_exactly():
     # Every canonical chapter is owned by exactly one module, and no module
@@ -178,9 +189,13 @@ def test_a_sixth_chapter_heading_is_retired_even_when_it_is_not_in_the_title_map
     # The finding-4 guarantee cannot depend on the legacy title map listing
     # every wording a six-chapter thesis used: a heading that numbers itself
     # past the canonical order is retired by definition.
+    # The prose, not the "Chương" prefix, is what makes the replacement heading
+    # Vietnamese now — a one-letter placeholder tells detect_language nothing,
+    # and a heading language guessed off a stored title is the bug this file's
+    # newer tests cover.
     out = M.sections_from_m5_slice({"final_sections": [
         {"chapter_name": "conclusion",
-         "title": "Chương 6 — Kết luận và Kiến nghị", "prose": "C"}]})
+         "title": "Chương 6 — Kết luận và Kiến nghị", "prose": VI_PROSE}]})
     assert out[0]["title"] == "Chương 5 — Kết luận và Kiến nghị"
 
 
@@ -189,11 +204,86 @@ def test_a_merged_closing_chapter_cannot_keep_either_halfs_heading():
     # describes the result — the canonical title is the only honest one.
     out = M.sections_from_m5_slice({"final_sections": [
         {"chapter_name": "discussion", "title": "Chương 5 — Thảo luận kết quả",
-         "prose": "DISC"},
-        {"chapter_name": "conclusion", "title": "Chương 6 — Kết luận", "prose": "CONC"},
+         "prose": f"DISC. {VI_PROSE}"},
+        {"chapter_name": "conclusion", "title": "Chương 6 — Kết luận",
+         "prose": f"CONC. {VI_PROSE}"},
     ]})
     assert [s["title"] for s in out] == ["Chương 5 — Kết luận và Kiến nghị"]
-    assert out[0]["prose"] == "DISC\n\nCONC"
+    assert out[0]["prose"] == f"DISC. {VI_PROSE}\n\nCONC. {VI_PROSE}"
+
+
+# --- chapter-heading language ------------------------------------------------
+# The headings must be in the language of the prose underneath them. This used
+# to be decided two different ways on the same product: compose_export read the
+# project's `language`, while sections_from_m5_slice hardcoded English for the
+# `chapters` shape and guessed from a "Chương" title prefix for final_sections.
+# Now ONE resolver reads the student's own prose, with the caller's language as
+# the fallback for prose too short to judge.
+
+
+def test_vietnamese_prose_gets_vietnamese_headings_with_no_language_argument():
+    # The headline bug: a Vietnamese thesis exported "Chapter 1 — Introduction"
+    # on the three paths that go through here.
+    out = M.sections_from_m5_slice(_chapters_slice(VI_PROSE))
+    assert [s["title"] for s in out] == [
+        M.M5_CHAPTER_TITLES_VI[n] for n in M.M5_CHAPTER_ORDER]
+    assert out[0]["title"] == "Chương 1 — Giới thiệu"
+    assert out[-1]["title"] == "Chương 5 — Kết luận và Kiến nghị"
+
+
+def test_english_prose_gets_english_headings_with_no_language_argument():
+    out = M.sections_from_m5_slice(_chapters_slice(EN_PROSE))
+    assert [s["title"] for s in out] == [
+        M.M5_CHAPTER_TITLES[n] for n in M.M5_CHAPTER_ORDER]
+
+
+def test_prose_overrides_a_stored_language_that_disagrees_with_it():
+    # Content wins: `m1_topic.language` can be stale or simply wrong, and a
+    # heading that contradicts the chapter under it is the defect being fixed.
+    out = M.sections_from_m5_slice(_chapters_slice(VI_PROSE), language="en")
+    assert out[0]["title"] == "Chương 1 — Giới thiệu"
+
+
+def test_prose_too_short_to_read_falls_back_to_the_callers_language():
+    # detect_language declines below 24 letters rather than guessing wrong.
+    out = M.sections_from_m5_slice({"chapters": {"intro": {"prose": "x"}}},
+                                   language="vi")
+    assert out[0]["title"] == "Chương 1 — Giới thiệu"
+
+
+def test_no_prose_and_no_language_stays_english():
+    # The genuine no-information case keeps today's behaviour, so a bare caller
+    # cannot silently flip language. No real call site lands here — all three
+    # pass a language, and each of those defaults to "vi".
+    out = M.sections_from_m5_slice({"chapters": {"intro": {"prose": "x"}}})
+    assert out[0]["title"] == "Chapter 1 — Introduction"
+
+
+def test_an_imported_vietnamese_thesis_gets_vietnamese_canonical_headings():
+    # The case the deleted "^chương" heuristic got wrong. api/app/import_work.py
+    # stores `title = head.splitlines()[0]` — a cover-page line, not a chapter
+    # heading — so inferring the language from the title read a Vietnamese
+    # thesis as English. The prose says otherwise.
+    out = M.sections_from_m5_slice({"final_sections": [
+        {"chapter_name": "results", "title": "TRƯỜNG ĐẠI HỌC KINH TẾ TP.HCM",
+         "source": "import", "prose": VI_PROSE},
+        # Two sections fold into Chapter 5, so neither heading survives and the
+        # canonical title has to be chosen — in Vietnamese.
+        {"chapter_name": "discussion", "title": "TRƯỜNG ĐẠI HỌC KINH TẾ TP.HCM",
+         "source": "import", "prose": VI_PROSE},
+        {"chapter_name": "conclusion", "title": "TRƯỜNG ĐẠI HỌC KINH TẾ TP.HCM",
+         "source": "import", "prose": VI_PROSE},
+    ]})
+    assert out[-1]["title"] == "Chương 5 — Kết luận và Kiến nghị"
+
+
+def test_a_sections_own_heading_still_wins_over_the_resolved_language():
+    # Regression guard on the own_title path: resolving the language changes
+    # only the CANONICAL fallback, never a real stored heading.
+    out = M.sections_from_m5_slice({"final_sections": [
+        {"chapter_name": "results", "title": "Chapter 4 — What We Found",
+         "prose": VI_PROSE}]})
+    assert out[0]["title"] == "Chapter 4 — What We Found"
 
 
 def test_compose_module_chapters_shapes_and_filters(monkeypatch):

@@ -300,7 +300,6 @@ def make_writing_tools(store) -> list:
             "final_sections": flat.get("final_sections"),
             "chapters": flat.get("chapters"),
         }
-        sections = sections_from_m5_slice(m5_slice)
         generated = False
 
         # Load the full nested context store once — needed both for the
@@ -331,6 +330,14 @@ def make_writing_tools(store) -> list:
         from orchestrator.tools.m5_writing import m2_references  # noqa: PLC0415
         references = m2_references((full_cs or {}).get("m2_literature"))
         language = resolve_output_language(full_cs or {})
+
+        # Built AFTER the language resolves, so the chapter headings go out in
+        # the same language as everything else the export localizes. Reusing
+        # resolve_output_language rather than re-reading `m1_topic.language`
+        # here keeps the one precedence rule this repo already settled on; it
+        # is only the fallback anyway, since sections_from_m5_slice reads the
+        # chapter prose before it trusts any stored setting.
+        sections = sections_from_m5_slice(m5_slice, language=language)
 
         # --- Chapter-scoped export (newly written/revised M5 sections) -------
         _scope = (scope or "full").strip()
