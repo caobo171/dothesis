@@ -256,9 +256,9 @@ def test_dod_chapter_conclusion_accepts_legacy_discussion_prose():
     assert dod_chapter("conclusion")(slice_).done is True
 
 
-def test_dod_chapter_conclusion_prefers_real_conclusion_over_legacy_discussion():
-    # Both keys present: the real `conclusion` prose must win, same rule
-    # `_m5_chapter_prose` already applies for dod_writing.
+def test_dod_chapter_conclusion_keeps_both_closing_chapters():
+    # Both keys present: neither is discarded — the same concatenate rule
+    # `_m5_chapter_prose` applies for dod_writing and for export.
     slice_ = {"chapters": {
         "discussion": {"prose": "old discussion draft"},
         "conclusion": {"prose": "current conclusion prose"},
@@ -426,3 +426,17 @@ def test_dod_and_artifact_dataclasses():
     assert art.slice == "m1_topic"
     assert art.depends_on == ()
     assert art.dod({}).done is True
+
+
+def test_m5_chapter_prose_concatenates_both_closing_chapters():
+    """The third copy of the merge rule lived here. A legacy project with BOTH
+    closing chapters written must surface ONE Chapter 5 containing both blocks —
+    discussion first (it carries the 5.1→5.6 flow and [[DT:limitations]]) — so
+    the DoD/readiness surfaces read exactly what export ships."""
+    from orchestrator.artifacts import _m5_chapter_prose
+    prose = _m5_chapter_prose({"chapters": {
+        "discussion": {"prose": "DISC with [[DT:limitations]]"},
+        "conclusion": {"prose": "CONC closing"},
+    }})
+    assert prose["conclusion"] == "DISC with [[DT:limitations]]\n\nCONC closing"
+    assert "discussion" not in prose

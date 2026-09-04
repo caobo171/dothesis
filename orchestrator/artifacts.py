@@ -227,20 +227,17 @@ def _m5_chapter_prose(slice_: dict) -> dict[str, str]:
     visiting a particular screen.
     """
     slice_ = slice_ or {}
-    from orchestrator.tools.m5_writing import canonical_chapter  # noqa: PLC0415
+    from orchestrator.tools.m5_writing import merge_chapter_prose  # noqa: PLC0415
 
     chapters = slice_.get("chapters")
     if isinstance(chapters, dict) and chapters:
-        out: dict[str, str] = {}
-        for stored, c in chapters.items():
-            name = canonical_chapter(stored)
-            # A real `conclusion` beats a legacy `discussion` aliased onto it —
-            # an in-flight project that has both must not have its written
-            # conclusion clobbered by an older discussion draft.
-            if name is None or (name in out and stored != name):
-                continue
-            out[name] = (c or {}).get("prose") or "" if isinstance(c, dict) else ""
-        return out
+        # The alias/merge rule has ONE home (m5_writing.merge_chapter_prose):
+        # an in-flight project holding both closing chapters gets them
+        # concatenated under `conclusion`, never one silently dropped. This used
+        # to be a third hand-rolled copy of that rule, and it had it backwards.
+        return merge_chapter_prose(
+            (stored, (c or {}).get("prose") if isinstance(c, dict) else "")
+            for stored, c in chapters.items())
     from orchestrator.tools.m5_writing import chapters_from_final_sections
 
     mapped = chapters_from_final_sections(slice_.get("final_sections") or [])

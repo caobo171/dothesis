@@ -126,6 +126,48 @@ def test_get_chapters_backfills_from_final_sections(client):
         assert "lit_review" in cs.m5_writing["chapters"]
 
 
+def test_get_chapters_backfill_keeps_both_legacy_closing_chapters(client):
+    # The permanence case: list_chapters COMMITS what it synthesizes, and every
+    # later read prefers `chapters`. So if the backfill dropped a pre-branch
+    # project's discussion prose, opening the editor once would make the loss
+    # permanent. Chapter 5 must hold both blocks, discussion first, with the
+    # limitations token intact — and no un-PATCHable `discussion` pane.
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "X"})
+    pid = r.json()["id"]
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing = {
+            "final_sections": [
+                {"chapter_name": "intro", "title": "Chapter 1 — Introduction",
+                 "prose": "Intro prose here."},
+                {"title": "Chapter 5 — Discussion",
+                 "prose": "Discussion prose with [[DT:limitations]]."},
+                {"title": "Chapter 6 — Conclusion", "prose": "Closing remarks."},
+            ]
+        }
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    data = client.post(f"/api/v1/projects/{pid}/m5/chapters").json()
+    assert set(data) == {"intro", "conclusion"}
+    assert data["conclusion"]["prose"] == (
+        "Discussion prose with [[DT:limitations]].\n\nClosing remarks.")
+
+    # Committed in that shape, and the surviving keys are all PATCH-able
+    # (_VALID_CHAPTER_NAMES) so autosave cannot 404 on a rendered pane.
+    from app.routers.m5_editor import _VALID_CHAPTER_NAMES
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        stored = cs.m5_writing["chapters"]
+        assert set(stored) <= _VALID_CHAPTER_NAMES
+        assert "[[DT:limitations]]" in stored["conclusion"]["prose"]
+
+
 def test_get_chapters_404_for_other_user(client):
     # User 1 creates the project.
     _create_user_and_set_cookie(client)

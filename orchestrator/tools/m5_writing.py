@@ -1883,6 +1883,25 @@ M5_CHAPTER_TITLES_VI = {
 # mid-thesis does not lose a written chapter. Writes only ever use canonical
 # names, so this never grows a second direction.
 LEGACY_CHAPTER_ALIASES = {"discussion": "conclusion"}
+# Chapter TITLES that no longer exist, mapped to the chapter key they were
+# written under at the time. The agent path stores only `title` (no
+# `chapter_name`), so for a pre-branch project these headings are the ONLY
+# handle on its prose — unmapped means the section is dropped whole.
+# Values are the ORIGINAL keys, not the canonical ones, so `merge_chapter_prose`
+# can still tell a legacy `discussion` block from a `conclusion` block and order
+# them correctly; `canonical_chapter` resolves them afterwards.
+_LEGACY_CHAPTER_TITLES = {
+    # The six-chapter era: two separate closing chapters.
+    "chapter 5 - discussion":  "discussion",
+    "chương 5 - thảo luận":    "discussion",
+    "chapter 6 - conclusion":  "conclusion",
+    "chương 6 - kết luận":     "conclusion",
+    # The old export-time merge (compose_export.wants_merged_conclusion) wrote
+    # the discussion prose out under THESE titles, so a legacy export that was
+    # re-imported carries them.
+    "chapter 5 - conclusion":  "discussion",
+    "chương 5 - kết luận":     "discussion",
+}
 _REFERENCES_TITLE = {"vi": "Tài liệu tham khảo", "en": "References"}
 
 
@@ -1903,6 +1922,91 @@ def canonical_chapter(name: str | None) -> str | None:
     key = str(name).strip()
     key = LEGACY_CHAPTER_ALIASES.get(key, key)
     return key if key in M5_CHAPTER_ORDER else None
+
+
+def _title_key(title: str | None) -> str:
+    """Normalized lookup key for a chapter title.
+
+    Dash and spacing variants are noise, not identity: our own titles use an
+    em-dash but a re-imported or hand-edited heading may carry a hyphen, an
+    en-dash or doubled spaces (`_sections_to_markdown` itself rewrites em-dashes
+    to hyphens on the way out, so a round-tripped export comes back hyphenated).
+    Normalizing here is what lets ONE title map serve every producer.
+    """
+    t = str(title or "").strip().lower()
+    t = t.replace("—", "-").replace("–", "-")
+    return re.sub(r"\s+", " ", t)
+
+
+def chapter_title_lookup() -> dict[str, str]:
+    """Normalized chapter title -> stored chapter key, current AND retired.
+
+    Indexes BOTH language maps separately (a dict merge would collapse them —
+    they share the canonical-name keys, so the second map's titles would win and
+    the first language's titles would be lost), then folds in the retired titles
+    so a pre-branch project's headings still resolve.
+    """
+    out: dict[str, str] = {}
+    for mapping in (M5_CHAPTER_TITLES, M5_CHAPTER_TITLES_VI):
+        for name, title in mapping.items():
+            out[_title_key(title)] = name
+    # Retired titles are added last but can never shadow a current one: no
+    # canonical title is also a legacy title (the Chapter 5 heading changed).
+    for title, name in _LEGACY_CHAPTER_TITLES.items():
+        out.setdefault(_title_key(title), name)
+    return out
+
+
+# Blank line = a markdown paragraph break, so the exporter renders the two
+# blocks as continuous prose rather than one run-on paragraph.
+_PROSE_JOIN = "\n\n"
+
+
+def merge_chapter_prose(items) -> dict[str, str]:
+    """Fold ``(stored_chapter_name, prose)`` pairs onto canonical chapter keys.
+
+    THE rule for what happens when a legacy project holds prose under a retired
+    key that now shares a canonical home with a live one — implemented once,
+    here, because it was previously hand-rolled in three places (this module
+    twice, orchestrator/artifacts.py once) and all three had it backwards.
+
+    We CONCATENATE, we never pick a winner. In the six-chapter era `discussion`
+    and `conclusion` were two DISTINCT written chapters: the discussion ran
+    1200-2000 words (5.1 summary → 5.6 future research) and carried the
+    `[[DT:limitations]]` disclosure, while the conclusion was 500-800 words of
+    restatement and closing remarks. Dropping either deletes real written work
+    from a student's in-flight thesis — and rescuing in-flight projects is the
+    whole reason the aliases exist. So Chapter 5 is the legacy prose FIRST (it
+    holds the 5.1→5.6 flow) then the canonical prose, under one canonical title.
+
+    Ordering is by legacy-first, then first-seen — never by input order, because
+    neither `chapters` (a dict) nor `final_sections` (a list) guarantees one.
+    Returns {canonical_name: prose}; blank prose and non-chapters are skipped.
+    """
+    buckets: dict[str, list[tuple[int, int, str]]] = {}
+    for i, (stored, prose) in enumerate(items or []):
+        name = canonical_chapter(stored)
+        if name is None:
+            continue
+        text = (prose or "").strip()
+        if not text:
+            continue
+        # Rank 0 = written under a retired key, so it leads.
+        rank = 0 if str(stored or "").strip() in LEGACY_CHAPTER_ALIASES else 1
+        buckets.setdefault(name, []).append((rank, i, text))
+    out: dict[str, str] = {}
+    for name, blocks in buckets.items():
+        blocks.sort(key=lambda b: (b[0], b[1]))
+        kept: list[str] = []
+        for _rank, _i, text in blocks:
+            # The two old prompts overlapped heavily and some projects hold the
+            # same text under both keys; printing it twice is not "losing
+            # nothing", it is a visible defect. Exact duplicates only — near
+            # duplicates are real edits and stay.
+            if text not in kept:
+                kept.append(text)
+        out[name] = _PROSE_JOIN.join(kept)
+    return out
 
 
 # Which canonical chapters each module OWNS. This is the pivot from "M5 writes
@@ -1943,45 +2047,43 @@ def chapters_from_final_sections(final_sections: list[dict]) -> dict:
 
     The editor (OutlineRail) only knows the five canonical chapter names, but the
     conversational / export path stores M5 as a flat `final_sections` list. We
-    resolve each section's canonical name from its explicit `chapter_name`
-    (compose path) first, then fall back to a title reverse-lookup across the EN
-    and VI title maps (agent path, which carries only `title`). Sections that map
-    to no canonical chapter — e.g. References — are dropped: they aren't editable
-    chapters. Returns {} when nothing maps, so callers can fall through.
+    resolve each section's stored name from its explicit `chapter_name`
+    (compose path) first, then fall back to a title reverse-lookup across the EN,
+    VI and RETIRED title maps (agent path, which carries only `title`). Sections
+    that map to no canonical chapter — e.g. References — are dropped: they aren't
+    editable chapters. Returns {} when nothing maps, so callers can fall through.
+
+    Two closing chapters from a pre-branch project are CONCATENATED into the one
+    canonical Chapter 5 by `merge_chapter_prose` — see its docstring for why
+    nothing may be discarded.
     """
-    # Index BOTH language maps by their titles. (A dict merge would collapse
-    # them — they share the canonical-name keys, so the second map's titles
-    # would win and the first language's titles would be lost.)
-    title_to_name: dict[str, str] = {}
-    for mapping in (M5_CHAPTER_TITLES, M5_CHAPTER_TITLES_VI):
-        for name, title in mapping.items():
-            title_to_name[title.strip().lower()] = name
-    out: dict = {}
+    title_to_name = chapter_title_lookup()
+    pairs: list[tuple[str, str]] = []
+    sources: dict[str, str] = {}
     for sec in final_sections or []:
         if not isinstance(sec, dict):
             continue
-        name = canonical_chapter(sec.get("chapter_name"))
-        if name is None:
-            title = (sec.get("title") or sec.get("name") or "").strip().lower()
-            name = canonical_chapter(title_to_name.get(title))
+        stored = sec.get("chapter_name")
+        if canonical_chapter(stored) is None:
+            stored = title_to_name.get(_title_key(sec.get("title") or sec.get("name")))
+        name = canonical_chapter(stored)
         if name is None:
             continue
         prose = (sec.get("prose") or sec.get("body") or sec.get("content") or "").strip()
         if not prose:
             continue
-        # A slice carrying BOTH a legacy `discussion` and a real `conclusion`
-        # must keep the conclusion: the alias exists to rescue old prose, not
-        # to overwrite new. Order in final_sections is not guaranteed, so this
-        # cannot rely on the loop reaching them in a particular sequence.
-        if name in out and sec.get("chapter_name") != name:
-            continue
+        pairs.append((stored, prose))
         # `source` rides along: it marks the student's own imported prose, and
         # dropping it here would strip the mark on the first compose — the same
         # way dropping `chapter_name` used to strip the canonical name. A
         # protection that dissolves the first time it is read is not one.
+        if sec.get("source") and name not in sources:
+            sources[name] = sec["source"]
+    out: dict = {}
+    for name, prose in merge_chapter_prose(pairs).items():
         out[name] = {"name": name, "prose": prose}
-        if sec.get("source"):
-            out[name]["source"] = sec["source"]
+        if name in sources:
+            out[name]["source"] = sources[name]
     return out
 
 
@@ -1997,46 +2099,82 @@ def sections_from_m5_slice(m5_slice: dict) -> list[dict]:
     """
     chapters = (m5_slice or {}).get("chapters") or {}
     if chapters:
-        # Resolve stored keys through the alias FIRST so a legacy `discussion`
-        # entry lands in the `conclusion` slot; a real `conclusion` already in
-        # the dict wins (setdefault would let the alias overwrite it).
-        resolved: dict = {}
-        for stored_name, ch in chapters.items():
-            name = canonical_chapter(stored_name)
-            if name is None:
-                continue
-            if name in resolved and stored_name != name:
-                continue
-            resolved[name] = ch
-        out = []
-        for name in M5_CHAPTER_ORDER:
-            ch = resolved.get(name)
-            if not ch:
-                continue
-            prose = (ch.get("prose") or ch.get("body") or "").strip() if isinstance(ch, dict) else str(ch)
-            if prose:
-                out.append({"chapter_name": name, "title": M5_CHAPTER_TITLES[name],
-                            "prose": prose})
+        # One rule, one home: a legacy `discussion` entry is concatenated ahead
+        # of a real `conclusion` under the single canonical Chapter 5 rather
+        # than either one being dropped (see merge_chapter_prose).
+        def _prose_of(ch):
+            if isinstance(ch, dict):
+                return ch.get("prose") or ch.get("body") or ""
+            return str(ch or "")
+
+        merged = merge_chapter_prose(
+            (stored, _prose_of(ch)) for stored, ch in chapters.items())
+        out = [{"chapter_name": name, "title": M5_CHAPTER_TITLES[name],
+                "prose": merged[name]}
+               for name in M5_CHAPTER_ORDER if merged.get(name)]
         if out:
             return out
     final_sections = (m5_slice or {}).get("final_sections") or []
-    out = []
+    # Resolve every section's canonical identity — from `chapter_name` when the
+    # producer set one, else from the (now retired-title-aware) reverse lookup —
+    # so a legacy slice cannot export a sixth chapter. Passing titles through
+    # verbatim is what let a literal "Chapter 6 — Conclusion" heading reach the
+    # document. Non-chapter sections (References) have no canonical identity and
+    # keep their own title.
+    title_to_name = chapter_title_lookup()
+    chapter_pairs: list[tuple[str, str]] = []
+    lineage: dict[str, object] = {}
+    vi_titled: set[str] = set()
+    slots: list[dict | str] = []   # a rendered non-chapter dict, or a chapter key
     for sec in final_sections:
         if not isinstance(sec, dict):
             continue
         title = (sec.get("title") or sec.get("name") or "").strip()
         prose = (sec.get("prose") or sec.get("body") or sec.get("content") or "").strip()
-        if prose:
-            # Keep canonical identity and lineage through rendering. Targeted
-            # chapter exports cannot reliably infer "discussion" from a custom
-            # localized title, and dropping it made a successfully saved chapter
-            # look missing one line later.
-            rendered = {"title": title or "Section", "prose": prose}
+        if not prose:
+            continue
+        stored = sec.get("chapter_name")
+        if canonical_chapter(stored) is None:
+            stored = title_to_name.get(_title_key(title))
+        name = canonical_chapter(stored)
+        if name is None:
+            extra = {"title": title or "Section", "prose": prose}
+            # A non-canonical `chapter_name` is not a chapter, but it is still
+            # the producer's own label — pass it through rather than drop it.
             if sec.get("chapter_name"):
-                rendered["chapter_name"] = sec["chapter_name"]
-            if sec.get("lineage"):
-                rendered["lineage"] = sec["lineage"]
-            out.append(rendered)
+                extra["chapter_name"] = sec["chapter_name"]
+            slots.append(extra)
+            continue
+        chapter_pairs.append((stored, prose))
+        # Re-titling must not anglicize a Vietnamese thesis. `language` is not
+        # threaded into this function (deliberately — separate ticket), so infer
+        # it from the heading the project actually wrote: a "Chương N …" title
+        # keeps the Vietnamese canonical title, everything else stays English.
+        if re.match(r"(?i)^\s*chương\b", title):
+            vi_titled.add(name)
+        # Lineage keeps the student's own imported prose traceable through
+        # rendering; keep the first one seen for the chapter.
+        if sec.get("lineage") and name not in lineage:
+            lineage[name] = sec["lineage"]
+        # Each chapter occupies ONE slot, at its first occurrence, so the caller's
+        # section order survives (the two legacy closing blocks collapse into the
+        # discussion's slot) instead of being reshuffled into canonical order.
+        if name not in slots:
+            slots.append(name)
+    merged = merge_chapter_prose(chapter_pairs)
+    out = []
+    for slot in slots:
+        if isinstance(slot, dict):
+            out.append(slot)
+            continue
+        if not merged.get(slot):
+            continue
+        titles = M5_CHAPTER_TITLES_VI if slot in vi_titled else M5_CHAPTER_TITLES
+        rendered = {"chapter_name": slot, "title": titles[slot],
+                    "prose": merged[slot]}
+        if slot in lineage:
+            rendered["lineage"] = lineage[slot]
+        out.append(rendered)
     return out
 
 
