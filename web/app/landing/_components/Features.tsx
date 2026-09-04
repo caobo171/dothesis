@@ -293,7 +293,7 @@ function AutoThesisMock() {
     { id: "M4", now: "M4 · Analysis — reading the SmartPLS output",
       result: "H1 β .34 · H2 β .28 · H3 β .19 · all p<.05" },
     { id: "M5", now: "M5 · Writing — composing the chapters",
-      result: "6 chapters drafted · every claim cited" },
+      result: "5 chapters drafted · every claim cited" },
   ];
   const step = useCycle(modules.length + 1, 1200); // done count 0..5; == len → finished
   const done = step >= modules.length;
@@ -316,7 +316,7 @@ function AutoThesisMock() {
       <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0 12px" }}>
         <Badge tone={done ? "ok" : "idle"}>{done ? "Thesis ready" : "Auto Thesis running…"}</Badge>
         <span style={{ fontSize: 12.5, color: "var(--ink-500)", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {done ? "6 chapters · 14 references · APA 7" : modules[Math.min(step, modules.length - 1)].now}
+          {done ? "5 chapters · 14 references · APA 7" : modules[Math.min(step, modules.length - 1)].now}
         </span>
       </div>
 

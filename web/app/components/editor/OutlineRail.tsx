@@ -7,7 +7,13 @@ export type ChapterName = "intro" | "lit_review" | "methodology" | "results" | "
 // FIVE chapters, not six: the discussion of findings lives INSIDE Chapter 5
 // rather than as a chapter of its own, matching the backend's collapsed
 // M5_CHAPTER_ORDER / M5_CHAPTER_TITLES (orchestrator/tools/m5_writing.py).
-const _ORDER: { name: ChapterName; label: string }[] = [
+//
+// Exported so any other web surface that needs "how many chapters does a
+// finished thesis have" (e.g. ModuleSlices' M5Body progress line) derives it
+// from here instead of hardcoding a number that can drift out of sync — a
+// hardcoded `6` is exactly how the retired sixth chapter kept showing up
+// after the backend collapsed to five.
+export const CHAPTER_ORDER: { name: ChapterName; label: string }[] = [
   { name: "intro",        label: "Ch 1 — Introduction" },
   { name: "lit_review",   label: "Ch 2 — Literature Review" },
   { name: "methodology",  label: "Ch 3 — Methodology" },
@@ -29,7 +35,7 @@ export function OutlineRail({ present, active, onSelect }: Props) {
   return (
     <nav aria-label="Chapters" className="w-48 shrink-0 border-r border-gray-200 py-4 px-2 space-y-1">
       <div className="text-xs uppercase tracking-wider text-gray-400 px-2 mb-2">Outline</div>
-      {_ORDER.map(({ name, label }) => {
+      {CHAPTER_ORDER.map(({ name, label }) => {
         const isPresent = present.includes(name);
         const isActive = name === active;
         return (

@@ -17,7 +17,7 @@ const MODS: { id: string; label: string }[] = [
  * Export-to-Word picker. ONE tile row + ONE confirm button (previously the
  * "Full thesis" tile confirmed on click — the confirm button was only for
  * modules, which was inconsistent). The user picks a mode:
- *   - Full thesis (default) → agent runs export_docx(scope="full"): 6 chapters.
+ *   - Full thesis (default) → agent runs export_docx(scope="full"): 5 chapters.
  *   - Specific modules → tick M1..M4, combined into one .docx via
  *     export_docx(scope="M1,M3,…"), returned in canonical M1→M4 order.
  * Bottom "Export → .docx" is the single confirm.

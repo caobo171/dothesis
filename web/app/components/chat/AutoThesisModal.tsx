@@ -25,7 +25,7 @@ export function AutoThesisModal({
    * It changes what this dialog is for. Opened from the workspace button it is
    * a start-the-run gate, and the estimate is the useful part. Opened on a
    * derived topic it is showing the student a machine's guess about their own
-   * thesis before six chapters get written on it — so the title is the whole
+   * thesis before five chapters get written on it — so the title is the whole
    * point and a token count next to it is noise at the moment they most need
    * to read one sentence carefully.
    */

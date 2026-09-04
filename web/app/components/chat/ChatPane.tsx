@@ -490,7 +490,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   // The modal still owns two cases this cannot decide:
   //   derived topic — nothing typed, so the topic was read out of the uploads.
   //               The student has never seen that sentence and the run writes
-  //               six chapters on it, so it is shown once, editable. This is
+  //               five chapters on it, so it is shown once, editable. This is
   //               not the confirmation they already gave; it is a new fact.
   //   no credit — POST /runs has no credit gate of its own; the estimate is
   //               where the balance is checked and the start is blocked. Skip

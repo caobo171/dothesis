@@ -17,6 +17,10 @@ import { ExternalLink } from "lucide-react";
 
 import { SliceModal } from "./SliceModal";
 import { Mermaid } from "./Mermaid";
+// The canonical chapter count for "N/total chapters written" — CHAPTER_ORDER
+// is the same list the outline rail renders, so this can never drift out of
+// sync with the backend's five-chapter model the way a hardcoded `6` did.
+import { CHAPTER_ORDER } from "../editor/OutlineRail";
 
 // ---- module -> renderer ---------------------------------------------
 
@@ -171,7 +175,7 @@ export function M5Body({ data }: { data: Record<string, any> | null }) {
         <>
           <FieldLabel name="chapters" count={chapterCount} top />
           <div className="text-[12.5px] text-ink-600 mt-1">
-            {chapterCount}/6 chapters written
+            {chapterCount}/{CHAPTER_ORDER.length} chapters written
           </div>
         </>
       )}

@@ -20,8 +20,8 @@ export const en = {
   // --- /new — analyze-your-thesis composer ---
   // --- Auto Thesis mode ---
   // The hero claim is deliberately a number the product can back: full_thesis
-  // resolves to M5_CHAPTER_ORDER, which is exactly six chapters
-  // (orchestrator/tools/m5_writing.py:1854). No page-count promise — nothing
+  // resolves to M5_CHAPTER_ORDER, which is exactly five chapters
+  // (orchestrator/tools/m5_writing.py:1862). No page-count promise — nothing
   // in the system guarantees one.
   "new.auto.title": "1 prompt, full thesis",
   "new.auto.tagline":
@@ -30,7 +30,7 @@ export const en = {
   "new.auto.placeholder": "Your research topic — one sentence is enough.",
   // The Auto Thesis confirm, in the one case where there is something new to
   // confirm: the topic was READ OUT of the uploaded files, not typed. The
-  // student has never seen it, and an unattended run writes six chapters on
+  // student has never seen it, and an unattended run writes five chapters on
   // it, so it gets shown once. A typed topic skips this dialog entirely.
   "auto.derived.reading": "Reading your files…",
   "auto.derived.title": "We read your files",

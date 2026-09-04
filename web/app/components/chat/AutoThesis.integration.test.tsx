@@ -139,7 +139,7 @@ describe("AutoThesis integration", () => {
 
   // Dropped a half-finished thesis and typed nothing. The title is on page 1 of
   // that document, so it gets read back rather than demanded — but it is shown
-  // once before six chapters are written on a machine's guess.
+  // once before five chapters are written on a machine's guess.
   test("files with no typed topic: the title is read from them and confirmed once", async () => {
     let runStatus: "running" | null = null;
     let startedWith: string | null = null;
