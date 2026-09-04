@@ -116,6 +116,40 @@ def test_decision_prose_soft():
     assert any(x["check"] == "coherence.decision_prose" and x["severity"] == "soft" for x in f)
 
 
+# --- CO3 undiscussed-hypothesis (chapters_present must be True) -------------
+#
+# check_coherence's chapters_present parameter defaults to False, and _co3
+# short-circuits on `not chapters_present` before the mentioned_in/chapter-set
+# intersection ever runs (agent/coherence.py _co3, first line). Every OTHER
+# test in this file calls check_coherence with its default, so none of them
+# reach this logic at all — coherence.undiscussed_hypothesis was previously
+# untested in both directions. These two tests pass chapters_present=True
+# explicitly so the intersection this task's fix touched is actually
+# exercised, not skipped before it runs.
+
+def test_undiscussed_hypothesis_not_flagged_when_only_in_conclusion():
+    # H1 has an M4 result (from the shared AR fixture) and appears only in the
+    # conclusion chapter, never in results — exactly the five-chapter shape
+    # (discussion of findings now lives in 5.2, not a separate chapter). This
+    # must NOT be flagged: the fixed _co3 set is {"results", "conclusion"}.
+    chapters = {"results": "General results are reported without any hypothesis-specific detail.",
+                "conclusion": "H1 was supported by the data and confirms prior findings in the field."}
+    reg = build_registry(HYPS, CM, AR, chapters)
+    findings = check_coherence(reg, HYPS, AR, True)
+    assert not any(f["check"] == "coherence.undiscussed_hypothesis" for f in findings)
+
+
+def test_undiscussed_hypothesis_still_flagged_when_mentioned_nowhere():
+    # H1 has an M4 result but is named in NEITHER results nor conclusion —
+    # the check must still fire. Without this half, the test above would pass
+    # even if _co3 were disabled outright (e.g. an empty intersection set).
+    chapters = {"results": "General results are reported without referencing any hypothesis labels.",
+                "conclusion": "General conclusions are drawn without naming any specific hypothesis."}
+    reg = build_registry(HYPS, CM, AR, chapters)
+    findings = check_coherence(reg, HYPS, AR, True)
+    assert any(f["check"] == "coherence.undiscussed_hypothesis" for f in findings)
+
+
 # --- severity + determinism contracts ---------------------------------------
 
 def test_only_number_mismatch_is_hard():
