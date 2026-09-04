@@ -145,7 +145,9 @@ export const en = {
   "module.M2": "Literature Review",
   "module.M3": "Research Design",
   "module.M4": "Data Analysis",
-  "module.M5": "Discussion & Conclusion",
+  // One writing step, not two: the discussion of findings is written INSIDE
+  // the closing chapter rather than as a chapter of its own.
+  "module.M5": "Conclusion",
 
   // --- home dashboard ---
   // Launcher homepage (prompt-first) — replaces the old dashboard hero.

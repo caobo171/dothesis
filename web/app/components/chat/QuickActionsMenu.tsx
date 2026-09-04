@@ -14,13 +14,15 @@ import { ExportModulesModal } from "./ExportModulesModal";
 // Outputs list tagged with that scope (never dumped in M5). The docx/pdf show up
 // in the Outputs panel + as a download card in chat.
 function _exportPrompt(modules: string[]): string {
-  // "full" → the complete 6-chapter thesis (compose_all_sections), not a
-  // combination of module write-ups.
+  // "full" → the complete 5-chapter thesis (compose_all_sections), not a
+  // combination of module write-ups. Five, not six: the discussion of
+  // findings is written INSIDE the closing chapter (conclusion) rather than
+  // as a chapter of its own.
   if (modules.length === 1 && modules[0] === "full") {
     return (
       "Export my FULL thesis as a polished, professor-ready Word document — " +
       'call export_docx with scope "full" (all chapters: introduction, ' +
-      "literature review, methodology, results, discussion, conclusion, plus " +
+      "literature review, methodology, results, conclusion, plus " +
       "the reference list)."
     );
   }

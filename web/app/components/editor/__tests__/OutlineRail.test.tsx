@@ -7,7 +7,7 @@ describe("OutlineRail", () => {
   it("renders all present chapters in canonical order", () => {
     render(
       <OutlineRail
-        present={["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]}
+        present={["intro", "lit_review", "methodology", "results", "conclusion"]}
         active="methodology"
         onSelect={() => {}}
       />
@@ -18,9 +18,23 @@ describe("OutlineRail", () => {
       "Ch 2 — Literature Review",
       "Ch 3 — Methodology",
       "Ch 4 — Results",
-      "Ch 5 — Discussion",
-      "Ch 6 — Conclusion",
+      "Ch 5 — Conclusions and Recommendations",
     ]);
+  });
+
+  // Five chapters, not six: the discussion of findings now lives INSIDE
+  // Chapter 5 ("Conclusions and Recommendations") rather than as its own
+  // chapter, matching the backend's collapsed M5_CHAPTER_ORDER.
+  it("shows five chapters ending at the conclusion", () => {
+    render(
+      <OutlineRail
+        present={["intro", "lit_review", "methodology", "results", "conclusion"]}
+        active="conclusion"
+        onSelect={() => {}}
+      />
+    );
+    expect(screen.queryByText(/Discussion/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Chapter 6|Chương 6|Ch 6/i)).not.toBeInTheDocument();
   });
 
   it("highlights the active chapter", () => {

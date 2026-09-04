@@ -23,7 +23,9 @@ const MODULE_LABEL: Record<string, string> = {
   M2: "Literature",
   M3: "Design",
   M4: "Data Analysis",
-  M5: "Discussion & Conclusion",
+  // One writing step, not two: the discussion of findings is written INSIDE
+  // the closing chapter rather than as a chapter of its own.
+  M5: "Conclusion",
 };
 
 type StatusKey = "done" | "in_progress" | "locked" | "not_started";

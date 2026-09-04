@@ -1,16 +1,18 @@
 "use client";
 
 
-export type ChapterName = "intro" | "lit_review" | "methodology" | "results" | "discussion" | "conclusion";
+export type ChapterName = "intro" | "lit_review" | "methodology" | "results" | "conclusion";
 
 
+// FIVE chapters, not six: the discussion of findings lives INSIDE Chapter 5
+// rather than as a chapter of its own, matching the backend's collapsed
+// M5_CHAPTER_ORDER / M5_CHAPTER_TITLES (orchestrator/tools/m5_writing.py).
 const _ORDER: { name: ChapterName; label: string }[] = [
   { name: "intro",        label: "Ch 1 — Introduction" },
   { name: "lit_review",   label: "Ch 2 — Literature Review" },
   { name: "methodology",  label: "Ch 3 — Methodology" },
   { name: "results",      label: "Ch 4 — Results" },
-  { name: "discussion",   label: "Ch 5 — Discussion" },
-  { name: "conclusion",   label: "Ch 6 — Conclusion" },
+  { name: "conclusion",   label: "Ch 5 — Conclusions and Recommendations" },
 ];
 
 

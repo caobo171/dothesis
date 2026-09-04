@@ -90,8 +90,8 @@ export function ExportModulesModal({
         <span className="flex flex-col">
           <span className="text-[14px] font-bold text-ink-900">Full thesis</span>
           <span className="text-[12px] text-ink-500 leading-snug">
-            All 6 chapters — Introduction, Literature, Methodology, Results,
-            Discussion, Conclusion + references.
+            All 5 chapters — Introduction, Literature, Methodology, Results,
+            Conclusion + references.
           </span>
         </span>
       </button>

@@ -28,7 +28,9 @@ const MODULE_LABELS: Record<string, string> = {
   M2: "Literature",
   M3: "Design",
   M4: "Analysis",
-  M5: "Discussion & Conclusion",
+  // One writing step, not two: the discussion of findings is written INSIDE
+  // the closing chapter rather than as a chapter of its own.
+  M5: "Conclusion",
 };
 const label = (m: string) => MODULE_LABELS[m] ?? m;
 

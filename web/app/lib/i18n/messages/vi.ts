@@ -106,7 +106,9 @@ export const vi: Record<MessageKey, string> = {
   "module.M2": "Tổng quan tài liệu",
   "module.M3": "Thiết kế nghiên cứu",
   "module.M4": "Phân tích dữ liệu",
-  "module.M5": "Thảo luận & Kết luận",
+  // Một bước viết, không phải hai: phần thảo luận kết quả nằm TRONG chương
+  // kết luận, không còn là một chương riêng.
+  "module.M5": "Kết luận",
 
   // --- trang chủ ---
   // Trang chủ dạng "nhập thẳng" — thay cho hero dashboard cũ.

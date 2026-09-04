@@ -151,7 +151,7 @@ export function KV({ k, v }: { k: string; v: React.ReactNode }) {
 export function M5Body({ data }: { data: Record<string, any> | null }) {
   if (!data) {
     return (
-      <EmptyHint text="Not written yet — M5 adds the discussion and conclusion. Chapters 1–4 are written by M1–M4 as you finish them, so you can export what exists at any point." />
+      <EmptyHint text="Not written yet — M5 adds the closing chapter (conclusion). Chapters 1–4 are written by M1–M4 as you finish them, so you can export what exists at any point." />
     );
   }
   // Exports moved out of M5 into the dedicated module-agnostic Exports section
@@ -162,7 +162,7 @@ export function M5Body({ data }: { data: Record<string, any> | null }) {
   const finalSections = Array.isArray(data.final_sections) ? data.final_sections : [];
   if (chapterCount === 0 && finalSections.length === 0) {
     return (
-      <EmptyHint text="Not written yet — M5 adds the discussion and conclusion. Chapters 1–4 are written by M1–M4 as you finish them, so you can export what exists at any point." />
+      <EmptyHint text="Not written yet — M5 adds the closing chapter (conclusion). Chapters 1–4 are written by M1–M4 as you finish them, so you can export what exists at any point." />
     );
   }
   return (

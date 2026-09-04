@@ -10,20 +10,25 @@ test.skip(!process.env.DOTHESIS_E2E_HAS_SOFFICE,
 let projectId: string;
 let threadId: string;
 
-const SIX_CHAPTERS = [
+// FIVE chapters, not six: the discussion of findings is written INSIDE the
+// closing chapter rather than as a chapter of its own, matching the backend's
+// collapsed M5_CHAPTER_ORDER / M5_CHAPTER_TITLES (orchestrator/tools/
+// m5_writing.py). The title below must match that map's `conclusion` entry
+// exactly, or chapters_from_final_sections' title reverse-lookup drops the
+// section instead of mapping it.
+const FIVE_CHAPTERS = [
   ["Chapter 1 — Introduction", "This study examines how TikTok livestream shopping shapes Gen Z purchase intention in Hanoi. It motivates the research problem, presents the research questions, and outlines the thesis structure."],
   ["Chapter 2 — Literature Review", "Prior research links streamer credibility and livestream engagement to consumer purchase behavior. This chapter reviews that work and positions the perceived-scarcity gap this study addresses."],
   ["Chapter 3 — Methodology", "A quantitative cross-sectional survey design was used. Data from 350 Gen Z respondents in Hanoi were analyzed with PLS-SEM in SmartPLS 4, following a two-step measurement and structural model assessment."],
   ["Chapter 4 — Results", "The measurement model showed adequate reliability and validity (CR 0.84-0.91; AVE 0.58-0.67; HTMT below 0.85). H1 was supported (beta = 0.41, p < 0.001) and H2 was supported (indirect beta = 0.18, p < 0.01), with R2 of 0.52 for purchase intention."],
-  ["Chapter 5 — Discussion", "The findings confirm that streamer credibility is the dominant driver of purchase intention, while perceived scarcity partially transmits the effect of engagement. Theoretical and managerial implications are discussed."],
-  ["Chapter 6 — Conclusion", "The study answers both research questions and contributes a scarcity-mediation account of livestream commerce among Vietnamese Gen Z. Limitations and directions for future research close the thesis."],
+  ["Chapter 5 — Conclusions and Recommendations", "The findings confirm that streamer credibility is the dominant driver of purchase intention, while perceived scarcity partially transmits the effect of engagement. Theoretical and managerial implications are discussed. The study answers both research questions and contributes a scarcity-mediation account of livestream commerce among Vietnamese Gen Z. Limitations and directions for future research close the thesis."],
 ].map(([title, prose]) => ({ title, prose }));
 
 test.beforeAll(async () => {
   const rc = await request.newContext();
   const token = loadSessions().main.token;
   // Seed through the guarded store: M1–M4 done, M5 holds a COMPLETE
-  // six-chapter draft but stays in_progress (a done-flip would fire the
+  // five-chapter draft but stays in_progress (a done-flip would fire the
   // auto-export hook during seeding — this journey must trigger export
   // itself, through the chat turn).
   const seeded = await apiPost(rc, "/test/seed-project", {
@@ -44,7 +49,7 @@ test.beforeAll(async () => {
       },
       M3: { methodology: "Quantitative survey; PLS-SEM in SmartPLS 4; n=350." },
       M4: { analysis_results: "CR 0.84-0.91; AVE 0.58-0.67; HTMT < 0.85; H1 beta=0.41 p<0.001; R2=0.52." },
-      M5: { final_sections: SIX_CHAPTERS },
+      M5: { final_sections: FIVE_CHAPTERS },
     },
     done: ["M1", "M2", "M3", "M4"],
   });

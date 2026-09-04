@@ -217,8 +217,11 @@ export function ContextPanel({
               </div>
             </CtxSection>
 
+            {/* One writing step, not two — the discussion of findings is
+                written INSIDE the closing chapter rather than as a chapter
+                of its own (agent/roadmap.py ROADMAP["M5"]). */}
             <CtxSection
-              label="M5 · Discussion & conclusion"
+              label="M5 · Conclusion"
               moduleId="M5"
               status={sectionStatus("M5", contextStore.m5_writing)}
               stale={isStale("M5")}
@@ -376,12 +379,16 @@ type ExportRow = {
 
 const _SCOPE_LABEL: Record<string, string> = {
   full: "Toàn bộ luận văn", M1: "M1 · Chủ đề", M2: "M2 · Tổng quan",
-  M3: "M3 · Phương pháp", M4: "M4 · Phân tích", M5: "M5 · Thảo luận & kết luận",
+  M3: "M3 · Phương pháp", M4: "M4 · Phân tích", M5: "M5 · Kết luận",
 };
 
+// FIVE chapters, not six: `conclusion` IS Chương 5 now (the discussion of
+// findings is written inside it), so it takes the "Chương 5" tag that used to
+// belong to the retired `discussion` key — matching orchestrator.tools
+// .m5_writing.M5_CHAPTER_TITLES_VI.
 const _CHAPTER_SCOPE_LABEL: Record<string, string> = {
   intro: "Chương 1", lit_review: "Chương 2", methodology: "Chương 3",
-  results: "Chương 4", discussion: "Chương 5", conclusion: "Kết luận",
+  results: "Chương 4", conclusion: "Chương 5",
 };
 
 export function formatExportScope(scope: string): string {

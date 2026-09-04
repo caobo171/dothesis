@@ -109,8 +109,8 @@ const MODULE_LABEL: Record<string, string> = {
   M2: "Literature Review",
   M3: "Research Design",
   M4: "Data Analysis",
-  // M5 owns Discussion + Conclusion (MODULE_CHAPTERS), not the whole document.
-  M5: "Discussion & Conclusion",
+  // M5 owns the single closing chapter (MODULE_CHAPTERS)
+  M5: "Conclusion",
 };
 
 const MODULE_HINT: Record<string, string> = {
