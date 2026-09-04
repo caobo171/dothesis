@@ -7,7 +7,7 @@ import useSWR from "swr";
 import { apiFetch } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
 
-import { OutlineRail, type ChapterName } from "./OutlineRail";
+import { OutlineRail, CHAPTER_ORDER, type ChapterName } from "./OutlineRail";
 import { ChapterEditor } from "./ChapterEditor";
 import { EditorToolbar, FONT_FAMILIES } from "./EditorToolbar";
 import { SourcesRail } from "./SourcesRail";
@@ -147,7 +147,12 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
   // -70% bottom inset means a section counts as "current" once its top passes
   // the upper third — so the highlight flips as a heading reaches the top,
   // not when the section is merely peeking in from the bottom.
-  const chapterKeys = chapters ? Object.keys(chapters).join(",") : "";
+  // Canonical keys only — same filter as `presentNames` below (which cannot be
+  // reused here: it is computed after the early returns, and this hook must run
+  // unconditionally). A non-canonical key has no rendered section to observe.
+  const chapterKeys = chapters
+    ? CHAPTER_ORDER.map(c => c.name).filter(n => chapters[n]).join(",")
+    : "";
   useEffect(() => {
     const root = scrollRef.current;
     if (!root || !chapterKeys) return;
@@ -171,7 +176,15 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
   if (!chapters) return <EditorSkeleton />;
   if (Object.keys(chapters).length === 0) return <EmptyState projectId={projectId} />;
 
-  const presentNames = Object.keys(chapters) as ChapterName[];
+  // Canonical chapters only, in canonical order. Rendering raw Object.keys
+  // put a pane on screen for any key the API happened to return — including a
+  // pre-branch project's retired `discussion` key, which is typeable but whose
+  // every autosave PATCH 404s (_VALID_CHAPTER_NAMES no longer accepts it) and
+  // parks an error the student cannot clear. The backfill now folds that prose
+  // into `conclusion`; this makes an unrenderable key impossible regardless.
+  const presentNames = CHAPTER_ORDER
+    .map(c => c.name)
+    .filter(name => chapters[name]) as ChapterName[];
 
   return (
     // h-full (not min-h-screen) so this fills the bounded shell exactly; the

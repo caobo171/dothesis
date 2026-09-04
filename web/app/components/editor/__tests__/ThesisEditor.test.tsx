@@ -82,3 +82,26 @@ describe("ThesisEditor", () => {
     expect(screen.getAllByRole("toolbar", { name: "Định dạng" })).toHaveLength(1);
   });
 });
+
+describe("ThesisEditor legacy chapter keys", () => {
+  it("renders no pane for a retired chapter key", async () => {
+    // A `discussion` pane would render and be typeable, but PATCH
+    // /m5/chapters/discussion 404s (_VALID_CHAPTER_NAMES dropped it), so every
+    // autosave retries and parks an error on prose the student can't save.
+    // The backfill no longer produces that key; the editor renders canonical
+    // chapters only so a stale row in an old project can't resurrect it.
+    (global.fetch as any) = vi.fn().mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.endsWith("/m5/chapters")) {
+        return { ok: true, json: async () => ({
+          intro: { name: "intro", prose: "Intro prose.", pending_edits: [] },
+          discussion: { name: "discussion", prose: "Legacy discussion prose.", pending_edits: [] },
+        }) };
+      }
+      return { ok: true, json: async () => [] };
+    });
+    const { container } = renderWithFreshCache(<ThesisEditor projectId="p1" />);
+    await waitFor(() => expect(screen.getByText(/Intro prose/)).toBeInTheDocument());
+    expect(container.querySelector("#ch-discussion")).toBeNull();
+    expect(screen.queryByText(/Legacy discussion prose/)).not.toBeInTheDocument();
+  });
+});
