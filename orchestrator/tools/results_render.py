@@ -680,15 +680,11 @@ def _norm_ws(s: str) -> str:
 
 
 _TITLE_CHAPTER = [
-    # "discussion"/"thảo luận"/"limitation"/"hạn chế" are checked BEFORE
-    # "result"/"kết quả" on purpose: a real closing-chapter title like
-    # "Chương 5: Thảo luận kết quả nghiên cứu" (or English "Results
-    # Discussion") contains BOTH a results needle and a conclusion needle as
-    # substrings, and `_chapter_of` returns on the FIRST list match — so
-    # without this ordering every such title would silently mis-route to
-    # "results" instead of "conclusion" (five-chapter collapse made this a
-    # live bug: "conclusion" is now a real chapter students title this way,
-    # not just the retired "discussion" key).
+    # Ordering matters only as the LAST tie-break, when a title matches several
+    # needles AND its chapter number agrees with none of them (see
+    # `_chapter_of`). Closing-chapter needles lead, because a title that mixes
+    # the two vocabularies without a number ("Thảo luận kết quả") is far more
+    # often the closing chapter than the results chapter.
     ("discussion", "conclusion"), ("thảo luận", "conclusion"),
     ("limitation", "conclusion"), ("hạn chế", "conclusion"),
     ("result", "results"), ("methodolog", "methodology"),
@@ -697,8 +693,8 @@ _TITLE_CHAPTER = [
     # Vietnamese thesis — "CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU" hit no
     # needle — so ensure_rendered, the export-time safety net, has
     # never once fired for the market this product is built for.
-    # "kết luận" is listed before "kết quả" only for readability;
-    # they are distinct strings and cannot both match.
+    # "kết quả" is listed before "kết luận" here; they are distinct strings
+    # and cannot both match, so their relative order carries no meaning.
     ("kết quả", "results"), ("phương pháp", "methodology"),
     ("thu thập dữ liệu", "methodology"), ("kết luận", "conclusion"),
 ]
@@ -706,15 +702,39 @@ _TITLE_CHAPTER = [
 # student's imported thesis may still title a section that way, and it must
 # map to the one chapter (conclusion) that now holds that material.
 
+# An explicit chapter NUMBER is the one signal that separates "Chương 4: Kết
+# quả nghiên cứu VÀ THẢO LUẬN" (a very common Vietnamese Chapter 4 title) from
+# "Chương 5: Thảo luận kết quả" — the substrings alone cannot, because each
+# title contains both vocabularies. 5 AND 6 both land on `conclusion`: a legacy
+# six-chapter thesis numbered its discussion 5 and its conclusion 6, and that
+# material now belongs to the single Chapter 5.
+_NUMBER_CHAPTER = {1: "intro", 2: "lit_review", 3: "methodology",
+                   4: "results", 5: "conclusion", 6: "conclusion"}
+_CHAPTER_NUMBER_RE = re.compile(r"(?i)\b(?:chương|chapter)\s*0*(\d+)")
+
 _RENDERABLE_CHAPTERS = {"results", "methodology", "conclusion"}
 
 
 def _chapter_of(title: str) -> Optional[str]:
+    """Which chapter a heading names, disambiguated by its chapter number.
+
+    The number DECIDES among the needles the title actually matched, rather than
+    overriding them: a thesis that numbers its chapters unusually ("Chapter 3 —
+    Results") is still read by its words. When the title matches no needle at
+    all, the number stands on its own; when there is no number, first needle
+    wins, as before.
+    """
     t = (title or "").lower()
+    matched: list[str] = []
     for needle, chapter in _TITLE_CHAPTER:
-        if needle in t:
-            return chapter
-    return None
+        if needle in t and chapter not in matched:
+            matched.append(chapter)
+    m = _CHAPTER_NUMBER_RE.search(t)
+    if m:
+        numbered = _NUMBER_CHAPTER.get(int(m.group(1)))
+        if numbered and (not matched or numbered in matched):
+            return numbered
+    return matched[0] if matched else None
 
 
 def _section_chapter(sec: dict) -> Optional[str]:

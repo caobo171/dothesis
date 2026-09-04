@@ -126,6 +126,37 @@ def test_a_discussion_titled_chapter_routes_to_conclusion_not_results():
     assert _section_chapter({"title": "Chapter 5 — Results Discussion"}) == "conclusion"
 
 
+def test_a_results_and_discussion_chapter_four_still_routes_to_results():
+    """"Kết quả nghiên cứu VÀ THẢO LUẬN" is a very common Vietnamese Chapter 4
+    title, and it contains BOTH a conclusion needle and a results needle. A
+    first-match scan over overlapping substrings cannot express "chapter 4 vs
+    chapter 5" — whichever needle leads, one of the two titles mis-routes. When
+    Chapter 4 lost, ensure_rendered wove the limitations block into the results
+    chapter and skipped the verified results tables entirely."""
+    assert _section_chapter(
+        {"title": "CHƯƠNG 4: KẾT QUẢ NGHIÊN CỨU VÀ THẢO LUẬN"}) == "results"
+    assert _section_chapter(
+        {"title": "Chapter 4 — Results and Discussion"}) == "results"
+    # …and the chapter-5 side keeps working.
+    assert _section_chapter({"title": "Chương 5: Thảo luận kết quả"}) == "conclusion"
+
+
+def test_the_chapter_number_only_decides_between_competing_needles():
+    """An explicit number is the strongest signal a title carries, but a thesis
+    that numbers its chapters unusually must still be read by its words: the
+    number picks among the needles the title actually matched, and loses to them
+    when it agrees with none."""
+    from orchestrator.tools.results_render import _chapter_of
+    # No number at all → needles alone.
+    assert _chapter_of("PHƯƠNG PHÁP NGHIÊN CỨU") == "methodology"
+    assert _chapter_of("KẾT QUẢ NGHIÊN CỨU") == "results"
+    # Number disagrees with the only needle → the words win.
+    assert _chapter_of("Chapter 3 — Results") == "results"
+    # Legacy six-chapter numbering: both closing chapters are Chapter 5 now.
+    assert _chapter_of("Chương 6: Kết luận") == "conclusion"
+    assert _chapter_of("Chương 5: Thảo luận") == "conclusion"
+
+
 def test_an_imported_chapter_is_left_alone():
     """It already carries the student's own tables; ours would be duplicates."""
     sec = {"chapter_name": "results", "title": "CHƯƠNG 4: KẾT QUẢ", "source": "import",
