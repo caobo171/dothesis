@@ -297,10 +297,11 @@ def test_m5_unconfirmed_partial_is_valid_minimal():
     assert out.confirmed_at is None
 
 
-def test_m5_confirm_requires_all_six_chapters():
+def test_m5_confirm_requires_all_five_chapters():
     from datetime import datetime, timezone
     from pydantic import ValidationError
     from orchestrator.schemas.m5 import M5Output, ExportArtifact
+    from orchestrator.tools.m5_writing import M5_CHAPTER_ORDER
     with pytest.raises(ValidationError) as exc:
         M5Output(
             chapters={"intro": {"name": "intro", "prose": "x"}},
@@ -309,16 +310,20 @@ def test_m5_confirm_requires_all_six_chapters():
             )],
             confirmed_at=datetime.now(timezone.utc),
         )
-    assert "missing" in str(exc.value).lower()
+    # Discriminating: pins the *exact* missing set the validator reports —
+    # the other four canonical chapters, never "discussion" (retired) and
+    # never more/fewer than what M5_CHAPTER_ORDER actually requires. A
+    # regression back to six (or a dropped member) changes this list.
+    expected_missing = sorted(set(M5_CHAPTER_ORDER) - {"intro"})
+    assert f"missing: {expected_missing}" in str(exc.value)
 
 
 def test_m5_confirm_requires_docx_artifact():
     from datetime import datetime, timezone
     from pydantic import ValidationError
     from orchestrator.schemas.m5 import M5Output
-    chapters = {n: {"name": n, "prose": "x"}
-                for n in ("intro", "lit_review", "methodology",
-                          "results", "discussion", "conclusion")}
+    from orchestrator.tools.m5_writing import M5_CHAPTER_ORDER
+    chapters = {n: {"name": n, "prose": "x"} for n in M5_CHAPTER_ORDER}
     with pytest.raises(ValidationError) as exc:
         M5Output(
             chapters=chapters,
@@ -328,12 +333,36 @@ def test_m5_confirm_requires_docx_artifact():
     assert "docx" in str(exc.value).lower()
 
 
-def test_m5_confirm_passes_with_six_chapters_and_docx():
+def test_m5_confirm_passes_with_five_chapters_and_docx():
     from datetime import datetime, timezone
     from orchestrator.schemas.m5 import M5Output, ExportArtifact
-    chapters = {n: {"name": n, "prose": "x"}
-                for n in ("intro", "lit_review", "methodology",
-                          "results", "discussion", "conclusion")}
+    from orchestrator.tools.m5_writing import M5_CHAPTER_ORDER
+    chapters = {n: {"name": n, "prose": "x"} for n in M5_CHAPTER_ORDER}
+    out = M5Output(
+        chapters=chapters,
+        export_artifacts=[ExportArtifact(
+            kind="docx", s3_key="k", download_url="u", size_bytes=1,
+        )],
+        confirmed_at=datetime.now(timezone.utc),
+    )
+    # Discriminating against the required set drifting: asserts the present
+    # chapters are exactly the five canonical names (M5_CHAPTER_ORDER), not
+    # a hardcoded count that would stay green under a six-chapter regression.
+    assert set(out.chapters) == set(M5_CHAPTER_ORDER)
+    assert len(out.chapters) == 5
+
+
+def test_m5_confirm_tolerates_a_stray_retired_discussion_key():
+    """`chapters` is typed `dict[str, dict]`, not keyed on `ChapterName`, so
+    a project carrying a leftover "discussion" chapter from before the
+    five-chapter collapse must NOT fail confirm — it's dead weight, not a
+    shape violation. In-flight projects depend on this tolerance until
+    they're backfilled; this pins it as deliberate, not accidental."""
+    from datetime import datetime, timezone
+    from orchestrator.schemas.m5 import M5Output, ExportArtifact
+    from orchestrator.tools.m5_writing import M5_CHAPTER_ORDER
+    chapters = {n: {"name": n, "prose": "x"} for n in M5_CHAPTER_ORDER}
+    chapters["discussion"] = {"name": "discussion", "prose": "stale leftover"}
     out = M5Output(
         chapters=chapters,
         export_artifacts=[ExportArtifact(
@@ -342,6 +371,7 @@ def test_m5_confirm_passes_with_six_chapters_and_docx():
         confirmed_at=datetime.now(timezone.utc),
     )
     assert len(out.chapters) == 6
+    assert "discussion" in out.chapters
 
 
 def test_chapter_draft_pending_edits_default_empty():
