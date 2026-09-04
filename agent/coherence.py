@@ -389,18 +389,43 @@ def _strip_rendered(text):
         return text
 
 
+def _canonical_chapters(items: dict) -> dict:
+    """Chapter key -> prose, with retired keys resolved to canonical ones.
+
+    Keys used to pass through verbatim, so a legacy project whose closing
+    chapter is stored under `discussion` had no `conclusion` entry at all:
+    `present` came out False, _co3 short-circuited, and the traceability check
+    on that chapter could never fire — for exactly the in-flight projects the
+    aliasing work exists to rescue. Non-chapter keys are left alone.
+
+    Lazy + fail-open: coherence must never break because an import failed.
+    """
+    plain = {str(k).lower(): (v.get("prose") if isinstance(v, dict) else v)
+             for k, v in items.items()}
+    try:
+        from orchestrator.tools.m5_writing import (  # noqa: PLC0415
+            canonical_chapter, merge_chapter_prose)
+    except Exception:
+        return plain
+    out = {k: v for k, v in plain.items() if canonical_chapter(k) is None}
+    # merge_chapter_prose owns the both-closing-chapters rule (concatenate,
+    # discussion first) so this reader sees the same Chapter 5 the export ships.
+    out.update(merge_chapter_prose(plain.items()))
+    return out
+
+
 def _resolve_chapters(m5) -> dict:
     def _s(d):
         return {k: _strip_rendered(v) for k, v in d.items()}
     if isinstance(m5, dict) and any(k in m5 for k in ("results", "discussion", "conclusion", "intro")):
         # chapter values may be plain strings or {prose: ...} dicts (auto-mode).
-        return _s({str(k).lower(): (v.get("prose") if isinstance(v, dict) else v) for k, v in m5.items()})
+        return _s(_canonical_chapters(m5))
     if isinstance(m5, list):
         try:
             from orchestrator.tools.m5_writing import chapters_from_final_sections  # noqa: PLC0415
             ch = chapters_from_final_sections(m5)
             if isinstance(ch, dict):
-                return _s({str(k).lower(): (v.get("prose") if isinstance(v, dict) else v) for k, v in ch.items()})
+                return _s(_canonical_chapters(ch))
         except Exception:
             pass
         out = {}
@@ -612,6 +637,11 @@ def traceability_findings(m2: dict, m3: dict, chapters: dict) -> list[dict]:
         # can't judge gap-grounding or citability, and shouldn't nag early work.
         if not m2.get("literature_sources"):
             return out
+        # This is a public entry point, and not every caller comes through
+        # `_resolve_chapters` — resolve here too so a raw legacy slice
+        # ({"discussion": …}) reaches the check below instead of matching
+        # nothing. Idempotent on already-resolved input.
+        chapters = _canonical_chapters(chapters or {})
         gaps = m2.get("research_gaps") or []
         hyps = (m3 or {}).get("hypotheses") or []
         gap_kw = set()

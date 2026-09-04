@@ -314,6 +314,30 @@ def test_traceability_flags_an_uncited_hypothesis_in_the_conclusion_chapter():
     assert any(f["check"] == "traceability.discussion_uncited" for f in out)
 
 
+def test_a_legacy_discussion_slice_reaches_the_traceability_and_coherence_checks():
+    """`_resolve_chapters` passed dict keys through verbatim, so a legacy
+    project whose closing chapter is stored under `discussion` produced
+    chapters["conclusion"] is None: `present` was False, _co3 short-circuited,
+    and traceability.discussion_uncited could never fire for the exact projects
+    the aliasing work exists to rescue."""
+    from agent.coherence import _resolve_chapters, traceability_findings
+
+    slice_ = {"results": "H1 shows a strong path.",
+              "discussion": "H1 was supported by the data, plainly.\n\n"
+                            "H2 was supported by the data, plainly."}
+    chapters = _resolve_chapters(slice_)
+    assert "discussion" not in chapters
+    assert chapters["conclusion"].startswith("H1 was supported")
+
+    m2 = {"literature_sources": [{"title": "Davis 1989"}]}
+    out = traceability_findings(m2, {}, chapters)
+    assert any(f["check"] == "traceability.discussion_uncited" for f in out)
+    # The finding id and its chapter label are stable identifiers for persisted
+    # feedback — the alias must not rename them.
+    assert all(f["location"]["chapter"] == "discussion"
+               for f in out if f["check"] == "traceability.discussion_uncited")
+
+
 def test_a_finding_quotes_the_offending_sentence():
     """Naming a chapter is not enough to act on.
 
