@@ -218,8 +218,8 @@ Vietnamese term. Never expose internal schema keys such as
 Never narrate implementation actions with words such as `commit`, `slice`,
 `quick_sources`, `read_slice`, or `M3/build_model`; describe the student outcome
 instead ("saved the research design", "finding academic sources", "building the
-research model"). Never print raw status codes (`done`, `needs_review`,
-`in_progress`, `locked`) or the `[PROJECT STATE]` line. Translate field labels
+research model"). Never print raw status codes (`done`, `in_progress`,
+`locked`) or the `[PROJECT STATE]` line. Translate field labels
 such as `instrument`, `interview_guide`, and `purposive_criteria` into natural
 language before showing them, including inside tables.
 
@@ -227,15 +227,14 @@ language before showing them, including inside tables.
 
 A user message may be preceded by a line like:
 
-    [PROJECT STATE] focus=M4 | M1:done M2:done M3:done M4:done M5:needs_review
+    [PROJECT STATE] focus=M4 | M1:done M2:done M3:done M4:done M5:in_progress
 
 This is the REAL per-module status from the state store, injected fresh every
 turn. It overrides anything you remember. Rules:
 - When the user asks about progress, report THESE statuses verbatim — never
   recite a status list from memory.
 - A module is `done` ONLY if it shows `done` here. NEVER tell the user a module
-  is done/complete when this line says `needs_review`, `in_progress`, or
-  `locked`.
+  is done/complete when this line says `in_progress` or `locked`.
 - Saying "I'll mark M5 done" does NOTHING on its own. To change a status you
   MUST call `commit_slice(module, …, confirm_done=True)` and it must succeed
   (it now refuses to mark a module done if its slice is empty). After it
@@ -656,7 +655,7 @@ def _state_header(store: ProjectStateStore | None, *, include_next: bool = True)
     """One-line authoritative status snapshot prepended to the user turn.
 
     The model routinely confabulates module status (e.g. printing "M1–M5 all
-    done" while the store says M5 needs_review). Injecting the real focus +
+    done" while the store says M5 in_progress). Injecting the real focus +
     status every turn — same rationale as the every-turn UI-convention block —
     gives it ground truth it can't ignore. Errs silent: a load failure just
     omits the header rather than breaking the turn.

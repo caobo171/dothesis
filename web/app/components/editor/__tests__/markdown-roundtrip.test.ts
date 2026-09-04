@@ -3,8 +3,11 @@ import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 
+import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
+
 import { CitationMark } from "../extensions/CitationMark";
 import { AiPending } from "../extensions/AiPending";
+import { DtPlaceholder, preserveDtTokens } from "../extensions/DtPlaceholder";
 
 
 // Guards export quality: the editor stores `editor.storage.markdown.getMarkdown()`,
@@ -13,7 +16,10 @@ import { AiPending } from "../extensions/AiPending";
 // editor-only marks never leak syntax into the export).
 function mkEditor(markdown: string) {
   return new Editor({
-    extensions: [StarterKit, Markdown.configure({ html: false }), AiPending, CitationMark],
+    extensions: [
+      StarterKit, Markdown.configure({ html: false }), AiPending, CitationMark,
+      Table, TableRow, TableHeader, TableCell, DtPlaceholder,
+    ],
     content: markdown,
   });
 }
@@ -48,5 +54,45 @@ describe("markdown round-trip (export safety)", () => {
     const md = editor.storage.markdown.getMarkdown();
     expect(md).toBe("This is draft text.");
     expect(md).not.toContain("data-pending-id");
+  });
+
+  it("round-trips a GFM table (parse → serialize) so the export keeps it", () => {
+    const src = [
+      "| Construct | Items |",
+      "| --- | --- |",
+      "| Attractiveness | 4 |",
+      "| Trustworthiness | 3 |",
+    ].join("\n");
+    const editor = mkEditor(src);
+    // Parses into a real table node...
+    expect(editor.getHTML()).toContain("<table");
+    expect(editor.getHTML()).toContain("Attractiveness");
+    // ...and serializes back to a GFM pipe table the Pandoc export renders.
+    const md = editor.storage.markdown.getMarkdown();
+    expect(md).toContain("| Construct | Items |");
+    expect(md).toContain("| --- | --- |");
+    expect(md).toContain("| Attractiveness | 4 |");
+    expect(md).not.toContain("<table");
+  });
+
+  it("round-trips a ```mermaid block as a fenced code block", () => {
+    const src = "```mermaid\ngraph TD;\n  A-->B;\n```";
+    const editor = mkEditor(src);
+    const md = editor.storage.markdown.getMarkdown();
+    // Serializes back to the same fenced block the export/preview both read.
+    expect(md).toContain("```mermaid");
+    expect(md).toContain("graph TD;");
+    expect(md).toContain("A-->B;");
+  });
+
+  it("keeps a [[DT:kind]] token bare after the autosave normalization step", () => {
+    const src = "Screening summary follows.\n\n[[DT:data_cleaning]]\n\nNext paragraph.";
+    const editor = mkEditor(src);
+    // The serializer escapes brackets (\[\[DT:…\]\]) — the export matcher would
+    // miss that, so ChapterEditor runs preserveDtTokens before persisting. This
+    // is exactly what autosave stores.
+    const persisted = preserveDtTokens(editor.storage.markdown.getMarkdown());
+    expect(persisted).toContain("[[DT:data_cleaning]]");
+    expect(persisted).not.toContain("\\[\\[DT");
   });
 });

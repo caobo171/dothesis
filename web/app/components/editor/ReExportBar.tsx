@@ -40,7 +40,7 @@ export function ReExportBar({ lastExportAt, editsSinceExport, onReExport, export
         type="button"
         disabled={exporting}
         onClick={onReExport}
-        className="text-sm px-4 py-1.5 bg-purple-600 text-white rounded-md font-medium hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed"
+        className="text-sm px-4 py-1.5 bg-primary-600 text-white rounded-md font-medium hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {exporting ? "Exporting…" : "Re-export"}
       </button>

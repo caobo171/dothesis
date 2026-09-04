@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MessageSquare, Plus } from "lucide-react";
+import { Home, MessageSquare, Plus } from "lucide-react";
 
 import { LocaleSwitcher } from "../LocaleSwitcher";
 import { BrandMark } from "../layout/Brand";
@@ -62,13 +62,15 @@ export function WorkflowSidebar({
             Thesis copilot
           </div>
         </div>
+        {/* Was the Unicode glyph "⌂" (U+2302), which renders as a thin,
+            off-baseline house that looked broken. A real vector icon fixes it. */}
         <Link
           href="/"
           aria-label="Home"
           title="Home"
-          className="w-7 h-7 rounded-full text-ink-500 hover:bg-ink-50 hover:text-ink-900 inline-flex items-center justify-center text-[13px] transition-colors"
+          className="w-7 h-7 rounded-full text-ink-500 hover:bg-ink-50 hover:text-ink-900 inline-flex items-center justify-center transition-colors shrink-0"
         >
-          ⌂
+          <Home className="w-4 h-4" />
         </Link>
       </div>
 

@@ -45,9 +45,14 @@ export function ChatShellLayout({
   children,
 }: {
   leftPane: ReactNode;
+  // Nullable: the editor route passes null to reclaim the whole width for the
+  // document (the context store is redundant while writing). When absent we drop
+  // the resize handle and the right column entirely rather than render an empty
+  // rail.
   rightPane: ReactNode;
   children: ReactNode;
 }) {
+  const hasRightPane = rightPane != null;
   const [rightWidth, setRightWidth] = useState<number>(RIGHT_DEFAULT);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -134,7 +139,9 @@ export function ChatShellLayout({
 
       {/* Resize handle — only meaningful on lg+ screens where the right
           pane shows at all. The handle is 6px wide so it's easy to hit
-          without dominating the gap visually. */}
+          without dominating the gap visually. Hidden with the pane in editor
+          mode so there's no dangling divider against the window edge. */}
+      {hasRightPane && (
       <div
         role="separator"
         aria-orientation="vertical"
@@ -146,9 +153,10 @@ export function ChatShellLayout({
         {/* Visual grip — small ribbon that fades in on hover. */}
         <span className="block w-px h-8 bg-ink-400 opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
+      )}
 
       {/* Context-panel drawer backdrop (mobile) */}
-      {contextOpen && (
+      {hasRightPane && contextOpen && (
         <div
           className="fixed inset-0 z-40 bg-ink-900/50 lg:hidden"
           onClick={() => setContextOpen(false)}
@@ -156,7 +164,9 @@ export function ChatShellLayout({
         />
       )}
       {/* Right pane — static width-controlled column on lg+, slide-in drawer
-          from the right on mobile (opened via the header's panel button). */}
+          from the right on mobile (opened via the header's panel button).
+          Omitted entirely in editor mode (rightPane == null). */}
+      {hasRightPane && (
       <div
         className={`fixed inset-y-0 right-0 z-50 flex bg-white shadow-xl transition-transform duration-300 lg:static lg:z-auto lg:shadow-none lg:flex-shrink-0 lg:translate-x-0 ${
           contextOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
@@ -165,6 +175,7 @@ export function ChatShellLayout({
       >
         {rightPane}
       </div>
+      )}
     </div>
     </ChatSidebarContext.Provider>
   );

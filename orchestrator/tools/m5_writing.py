@@ -1878,6 +1878,34 @@ def _chapter_titles(language: str) -> dict:
     return M5_CHAPTER_TITLES_VI if str(language).lower().startswith("vi") else M5_CHAPTER_TITLES
 
 
+# Which canonical chapters each module OWNS. This is the pivot from "M5 writes
+# the whole thesis" to "every module composes its own chapter as it completes":
+# M1–M4 map 1:1 to Chapters 1–4, and M5 owns the closing pair (Discussion +
+# Conclusion). Single source of truth for per-module composition and the
+# module→chapter mapping the export/UI share. Keep consistent with
+# M5_CHAPTER_ORDER — every chapter must be owned by exactly one module.
+MODULE_CHAPTERS = {
+    "M1": ["intro"],
+    "M2": ["lit_review"],
+    "M3": ["methodology"],
+    "M4": ["results"],
+    "M5": ["discussion", "conclusion"],
+}
+
+
+def chapters_for_module(module: str) -> list[str]:
+    """Canonical chapter keys a module owns; [] for an unknown module."""
+    return list(MODULE_CHAPTERS.get(str(module).upper(), []))
+
+
+def module_for_chapter(chapter: str) -> str | None:
+    """The module that owns a canonical chapter, or None if unowned."""
+    for mod, names in MODULE_CHAPTERS.items():
+        if chapter in names:
+            return mod
+    return None
+
+
 def _references_title(language: str) -> str:
     return _REFERENCES_TITLE["vi"] if str(language).lower().startswith("vi") else _REFERENCES_TITLE["en"]
 
@@ -2233,6 +2261,42 @@ def compose_all_sections(context_store: dict,
     refs_body = _references_section_body(references)
     if refs_body:
         out.append({"title": _references_title(language), "prose": refs_body})
+    return out
+
+
+def compose_module_chapters(context_store: dict, module: str) -> dict:
+    """Compose the chapter(s) a single module owns → {name: {name, prose, ...}}.
+
+    The per-module writing step behind "every module contributes to the docx as
+    it completes." Reuses compose_all_sections (which already composes a chapter
+    subset via its `chapters=` arg, grounded in the flattened M1–M4 slice), then
+    reshapes the result to merge straight into context_store.m5_writing.chapters.
+
+    Returns {} for a module that owns no chapters, or on any failure — fail-open
+    so composing a chapter can never block a module from completing.
+    """
+    names = chapters_for_module(module)
+    if not names:
+        return {}
+    try:
+        # Explicit chapter subset → compose_all_sections composes exactly these
+        # (it still appends a References section, which we filter out below).
+        sections = compose_all_sections(context_store, chapters=names)
+    except Exception:
+        logger.exception("compose_module_chapters: compose failed for %s", module)
+        return {}
+    out: dict = {}
+    for sec in sections:
+        name = sec.get("chapter_name")
+        if name not in names:
+            continue  # drops the appended References section
+        prose = (sec.get("prose") or "").strip()
+        if not prose:
+            continue
+        entry = {"name": name, "prose": prose}
+        if sec.get("source"):
+            entry["source"] = sec["source"]
+        out[name] = entry
     return out
 
 

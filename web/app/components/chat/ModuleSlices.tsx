@@ -151,7 +151,7 @@ export function KV({ k, v }: { k: string; v: React.ReactNode }) {
 export function M5Body({ data }: { data: Record<string, any> | null }) {
   if (!data) {
     return (
-      <EmptyHint text="Writing hasn't started — M5 builds the final docx/pdf from M1–M4 once those are done." />
+      <EmptyHint text="Not written yet — M5 adds the discussion and conclusion. Chapters 1–4 are written by M1–M4 as you finish them, so you can export what exists at any point." />
     );
   }
   // Exports moved out of M5 into the dedicated module-agnostic Exports section
@@ -162,7 +162,7 @@ export function M5Body({ data }: { data: Record<string, any> | null }) {
   const finalSections = Array.isArray(data.final_sections) ? data.final_sections : [];
   if (chapterCount === 0 && finalSections.length === 0) {
     return (
-      <EmptyHint text="Writing hasn't started — M5 builds the final docx/pdf from M1–M4 once those are done." />
+      <EmptyHint text="Not written yet — M5 adds the discussion and conclusion. Chapters 1–4 are written by M1–M4 as you finish them, so you can export what exists at any point." />
     );
   }
   return (
@@ -342,7 +342,7 @@ export function M2Body({ data }: { data: Record<string, any> | null }) {
     if (typeof h === "string") return h;
     // Different commit paths use different keys: design uses `text`,
     // M3 schema migration left some commits as `statement`, the engine
-    // sometimes writes `description` or `hypothesis`, and the autodraft
+    // sometimes writes `description` or `hypothesis`, and the auto-thesis
     // path occasionally lands `content` or `body`. Try them all; fall
     // back to em-dash so we never throw.
     return (
@@ -676,10 +676,18 @@ export function M3Body({ data }: { data: Record<string, any> | null }) {
   const meth = data.methodology;
   const conceptualModel = data.conceptual_model as { nodes?: any[]; edges?: any[] } | undefined;
   const hypotheses = (data.hypotheses || []) as Array<{ id?: string; text?: string; statement?: string }>;
-  const questionnaire = data.questionnaire_text as string | undefined;
+  // `instrument` is the canonical questionnaire the agent writes (M3-owned key,
+  // shape per agent/m3_contract.py). `questionnaire_text` is the legacy string
+  // from the orchestrator schema. The panel used to read ONLY the legacy field,
+  // so every agent-authored project had a questionnaire sitting in the store
+  // that this panel silently dropped.
+  const instrument = data.instrument as InstrumentSlice | undefined;
+  const instrumentItems = instrument?.items ?? [];
+  const questionnaire = (data.questionnaire_text as string | undefined) || instrument?.raw;
   const sampling = meth?.sampling || {};
 
-  if (!meth && !conceptualModel && hypotheses.length === 0 && !questionnaire) {
+  if (!meth && !conceptualModel && hypotheses.length === 0
+      && instrumentItems.length === 0 && !questionnaire) {
     return <EmptyHint text="No M3 data committed yet." />;
   }
 
@@ -759,25 +767,31 @@ export function M3Body({ data }: { data: Record<string, any> | null }) {
         </>
       )}
 
-      {questionnaire && (
+      {instrumentItems.length > 0 ? (
+        <ClickRow
+          name="instrument"
+          summary={`${instrumentItems.length} item${instrumentItems.length === 1 ? "" : "s"}${
+            countConstructs(instrumentItems)
+              ? ` · ${countConstructs(instrumentItems)} constructs`
+              : ""
+          }`}
+          onClick={() => setModal({ kind: "instrument" })}
+        />
+      ) : questionnaire ? (
+        // Legacy projects carry the questionnaire as a plain string only.
         <ClickRow
           name="questionnaire_text"
           summary={`${questionnaire.split(/\s+/).length} words · click to view`}
           onClick={() => setModal({ kind: "instrument" })}
         />
-      )}
+      ) : null}
 
-      {data.needs_review_note && (
-        <div className="mt-2.5 px-2.5 py-2 rounded-lg bg-amber-50 text-amber-800 text-[11.5px] leading-snug font-semibold">
-          ⚠ {data.needs_review_note}
-        </div>
-      )}
 
       {/* Detail modal */}
       <SliceModal
         open={modal !== null}
         title={m3ModalTitle(modal, hypotheses)}
-        subtitle={m3ModalSubtitle(modal)}
+        subtitle={m3ModalSubtitle(modal, instrumentItems.length)}
         onClose={() => setModal(null)}
       >
         {modal?.kind === "methodology" && <MethodologyDetail meth={meth} sampling={sampling} />}
@@ -789,7 +803,9 @@ export function M3Body({ data }: { data: Record<string, any> | null }) {
                 text={readHypothesisText(hypotheses[modal.index])}
               />
         )}
-        {modal?.kind === "instrument" && <InstrumentDetail text={questionnaire ?? ""} />}
+        {modal?.kind === "instrument" && (
+          <InstrumentDetail instrument={instrument} text={questionnaire ?? ""} />
+        )}
       </SliceModal>
     </>
   );
@@ -825,13 +841,18 @@ function m3ModalSubtitle(
     | { kind: "hypotheses"; index: number | null }
     | { kind: "instrument" }
     | null,
+  instrumentItemCount = 0,
 ): string | undefined {
   if (!m) return undefined;
   switch (m.kind) {
     case "methodology":      return "Design · sampling · analysis";
     case "conceptual_model": return "Constructs and hypothesis paths";
     case "hypotheses":       return m.index === null ? "All committed hypotheses" : "Hypothesis";
-    case "instrument":       return "Full questionnaire text";
+    // Structured instruments are shown as items grouped by construct; legacy
+    // projects still render the raw text, so the subtitle has to say which.
+    case "instrument":       return instrumentItemCount > 0
+      ? "Items grouped by construct"
+      : "Full questionnaire text";
   }
 }
 
@@ -1059,7 +1080,113 @@ function readHypothesisText(h: any): string {
   );
 }
 
-function InstrumentDetail({ text }: { text: string }) {
+// Canonical questionnaire shape written by the agent (agent/m3_contract.py:19-24).
+export type InstrumentItem = {
+  id?: string;
+  text?: string;
+  construct?: string;
+  scale?: string;
+  reverse_coded?: boolean;
+  attention_check?: boolean;
+  source?: string;
+};
+
+export type InstrumentSlice = {
+  items?: InstrumentItem[];
+  preamble?: string;
+  raw?: string;
+};
+
+/** How many distinct constructs the items cover (0 when none are tagged). */
+export function countConstructs(items: InstrumentItem[]): number {
+  return new Set(items.map((it) => it.construct).filter(Boolean)).size;
+}
+
+/**
+ * Group items by construct, preserving first-appearance order.
+ *
+ * Mirrors how M5 composes the instrument section
+ * (orchestrator/tools/m5_writing.py:582-630) so the panel and the written
+ * chapter don't describe the same questionnaire two different ways. Items with
+ * no construct fall into a trailing "Ungrouped" bucket rather than vanishing.
+ */
+export function groupItemsByConstruct(
+  items: InstrumentItem[],
+): Array<{ construct: string; items: InstrumentItem[] }> {
+  const groups = new Map<string, InstrumentItem[]>();
+  for (const item of items) {
+    const key = item.construct?.trim() || "Ungrouped";
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(item);
+    else groups.set(key, [item]);
+  }
+  // "Ungrouped" last: it is a fallback bucket, not a construct.
+  return [...groups.entries()]
+    .sort((a, b) => Number(a[0] === "Ungrouped") - Number(b[0] === "Ungrouped"))
+    .map(([construct, groupItems]) => ({ construct, items: groupItems }));
+}
+
+// ink-700, not ink-600: the tailwind `ink` scale has no 600 step
+// (tailwind.config), so the text-ink-600 used elsewhere in this file emits
+// no colour at all.
+function ItemFlag({ label }: { label: string }) {
+  return (
+    <span className="ml-1.5 px-1.5 py-px rounded text-[10px] uppercase tracking-[0.04em] font-semibold bg-ink-100 text-ink-700 align-middle">
+      {label}
+    </span>
+  );
+}
+
+function InstrumentDetail({
+  instrument,
+  text,
+}: {
+  instrument?: InstrumentSlice;
+  text: string;
+}) {
+  const items = instrument?.items ?? [];
+
+  if (items.length > 0) {
+    const groups = groupItemsByConstruct(items);
+    return (
+      <div className="space-y-4">
+        {instrument?.preamble && (
+          <p className="text-[13px] leading-relaxed text-ink-700 italic border-l-2 border-ink-200 pl-3">
+            {instrument.preamble}
+          </p>
+        )}
+        {groups.map((group) => (
+          <div key={group.construct}>
+            <div className="text-[11px] uppercase tracking-[0.05em] text-ink-500 font-semibold mb-1.5">
+              {group.construct}
+              <span className="ml-1.5 normal-case tracking-normal text-ink-400 font-medium">
+                {group.items.length} item{group.items.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <ol className="space-y-1.5">
+              {group.items.map((item, i) => (
+                <li
+                  key={item.id ?? `${group.construct}-${i}`}
+                  className="text-[13.5px] leading-relaxed text-ink-900 flex gap-2"
+                >
+                  <span className="text-ink-400 font-mono text-[11.5px] pt-0.5 shrink-0">
+                    {item.id ?? i + 1}
+                  </span>
+                  <span>
+                    {item.text ?? "—"}
+                    {item.scale && <ItemFlag label={item.scale} />}
+                    {item.reverse_coded && <ItemFlag label="reverse" />}
+                    {item.attention_check && <ItemFlag label="attention" />}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (!text.trim()) {
     return <EmptyHint text="Questionnaire is empty." />;
   }

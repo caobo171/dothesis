@@ -26,6 +26,8 @@ describe("ChapterEditor — mount + autosave", () => {
         pendingEdits={[]}
         onPendingMutate={() => {}}
         onDirty={() => {}}
+        fontFamily="serif"
+        fontSize={16}
       />
     );
     await waitFor(() => expect(screen.getByText(/Hello world/)).toBeInTheDocument());

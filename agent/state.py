@@ -3,7 +3,7 @@
 This is the v3 architecture's enforcement point for the v2 brief's principles
 (docs/architecture/2026-06-10-deepagent-skills-architecture.md §3): the agent is
 free-roaming, but state changes are deterministic code — ownership validation,
-version snapshot, focus shift, downstream needs_review propagation.
+version snapshot, focus shift, downstream staleness propagation.
 
 Scope: the store is **per project, not per thread**. Every chat session in a
 project shares one context_store; the spike backs it with a JSON file in the
@@ -213,6 +213,13 @@ class SliceOwnershipError(ValueError):
 def _empty_state() -> dict[str, Any]:
     return {
         "status": {m: "locked" for m in MODULES},
+        # Modules whose committed content was derived from an upstream slice that
+        # has since changed. Deliberately SEPARATE from `status`: staleness is a
+        # fact about content, not a workflow position, and the product rule is
+        # that a student always gets output they can fine-tune later — so nothing
+        # here ever blocks, re-orders, or downgrades a module. It renders as a
+        # passive "may be out of date" note on a module that still reads done.
+        "stale": [],
         "focus": None,
         "contextStore": {},
         "versionHistory": [],
@@ -362,7 +369,7 @@ class ProjectStateStore:
         status_overrides: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """The ONLY write path. Validates ownership, snapshots, applies,
-        shifts focus, and propagates needs_review downstream.
+        shifts focus, and marks finished downstream modules stale.
         """
         _validate_module(module)
         if not writes and not confirm_done and not status_overrides:
@@ -464,9 +471,21 @@ class ProjectStateStore:
         if writes and set(writes).issubset(PREFERENCE_KEYS):
             pass
         else:
+            # Mark staleness, never status. This used to write
+            # status[down] = "needs_review", which outranked `done` and so
+            # DEMOTED finished modules — the roadmap then routed the student
+            # back to re-check them before letting anything move forward. The
+            # product rule is the opposite: hand over the output, let them fine
+            # tune afterwards. So the downstream module stays done and merely
+            # carries a note.
+            #
+            # Narrowed to `done` (was: anything not locked) to match
+            # orchestrator.state.propagate_needs_review. An in_progress module
+            # has nothing committed to be inconsistent WITH — the student is
+            # still writing it, and they will see the upstream change as they
+            # go. Flagging it only produced a warning on work in flight.
             for down in DOWNSTREAM[module]:
-                if state["status"][down] != "locked":
-                    state["status"][down] = "needs_review"
+                if state["status"][down] == "done":
                     flagged.append(down)
 
         for mod, st in overrides.items():
@@ -483,12 +502,21 @@ class ProjectStateStore:
         # invalidation on every single headless auto-decision.
         flagged = [m for m in flagged if m not in overrides]
 
+        # Staleness tracks `flagged` exactly, for the same reason: a module the
+        # overrides pinned back was never invalidated. Committing to a module
+        # also CLEARS its own marker — the student has just rewritten it against
+        # the current upstream, so whatever it was out of date with is resolved.
+        state["stale"] = sorted(
+            (set(state.get("stale") or []) | set(flagged)) - {module} - set(overrides)
+        )
+
         self._save(state)
         return {
             "module": module,
             "focus": state["focus"],
             "status": state["status"],
             "flagged": flagged,
+            "stale": state["stale"],
             "version": len(state["versionHistory"]),
         }
 
@@ -658,7 +686,7 @@ class ProjectStateStore:
         COACHING_KEY, so this is a DEDICATED path (same rationale as
         set_institution_profile): recording a calendar is not a module design
         decision, so it must NEVER shift focus, flip module status, propagate
-        needs_review, or add a version snapshot — hence not commit_slice, whose
+        staleness, or add a version snapshot — hence not commit_slice, whose
         ownership check is module-scoped and would reject it. DbProjectStateStore
         round-trips it via the coaching JSONB column."""
         state = self.load()

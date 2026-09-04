@@ -31,6 +31,44 @@ if (typeof (globalThis as any).DOMMatrixReadOnly === "undefined") {
   };
 }
 
+// TipTap/ProseMirror measures caret geometry via getClientRects whenever a
+// command focuses the editor (e.g. toggleBold → focus → scrollToSelection).
+// jsdom omits getClientRects on Text/Range, so those commands throw an
+// unhandled "getClientRects is not a function" that Vitest flags as an error
+// even when assertions pass. A zero-rect stub is enough — no editor test
+// asserts on caret pixel positions.
+// ProseMirror's singleRect() calls target.getClientRects() and, when that's
+// empty, falls through to target.getBoundingClientRect() — and `target` can be
+// a Text node, which lacks BOTH in jsdom. Stub both with zero-rects.
+const _zeroRect = () => ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) });
+for (const proto of [
+  (globalThis as any).Text?.prototype,
+  (globalThis as any).Range?.prototype,
+  (globalThis as any).Element?.prototype,
+]) {
+  if (proto && typeof proto.getClientRects !== "function") {
+    proto.getClientRects = () => Object.assign([], { item: () => null });
+  }
+  if (proto && typeof proto.getBoundingClientRect !== "function") {
+    proto.getBoundingClientRect = _zeroRect;
+  }
+}
+
+// jsdom ships neither IntersectionObserver (the editor's scrollspy) nor
+// Element.scrollIntoView (outline click-to-scroll). No-op stubs are enough —
+// these tests assert structure/state, not real scroll geometry.
+if (typeof (globalThis as any).IntersectionObserver === "undefined") {
+  (globalThis as any).IntersectionObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return []; }
+  };
+}
+if (typeof (globalThis as any).Element !== "undefined" && !(globalThis as any).Element.prototype.scrollIntoView) {
+  (globalThis as any).Element.prototype.scrollIntoView = () => {};
+}
+
 export const server = setupServer(...defaultHandlers);
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));

@@ -2,7 +2,7 @@ import { Mark, mergeAttributes } from "@tiptap/core";
 
 export interface AiPendingAttrs {
   pendingId: string;
-  source: "paraphrase" | "translate" | "cite" | "chat_rewrite";
+  source: "paraphrase" | "translate" | "cite" | "chat_rewrite" | "proofread" | "improve" | "humanize" | "expand" | "shorten";
   oldText: string;
   newText: string;
 }

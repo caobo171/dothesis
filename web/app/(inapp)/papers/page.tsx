@@ -7,14 +7,13 @@
 // list and the dashboard cards can never disagree about a draft's state.
 import useSWR from "swr";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Plus } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 
 import { useT } from "@/app/lib/i18n/LocaleProvider";
 import {
   MODULES,
   SEGMENT_STYLE,
   moduleStatus,
-  needsReview,
   relativeTime,
   type Project,
 } from "@/app/components/chat/HomeDashboard";
@@ -22,19 +21,19 @@ import { swrFetcher as fetcher } from "@/app/lib/api";
 
 
 // One coarse status per draft, same precedence as the dashboard card:
-// finished > flagged > started > untouched.
-type DraftStatus = "done" | "needs_review" | "in_progress" | "draft";
+// finished > started > untouched. A "flagged" tier used to sit between the
+// first two, driven by needsReview(); it labelled a student's work as needing
+// review on the list page before they had opened it.
+type DraftStatus = "done" | "in_progress" | "draft";
 
 function draftStatus(p: Project): DraftStatus {
   if (p.current_module === "DONE") return "done";
-  if (needsReview(p)) return "needs_review";
   if (MODULES.some(m => moduleStatus(p, m) !== "locked")) return "in_progress";
   return "draft";
 }
 
 const STATUS_TAG: Record<DraftStatus, { label: string; cls: string }> = {
   done:         { label: "Done",         cls: "bg-[var(--ok-bg)] text-[var(--ok-fg)]" },
-  needs_review: { label: "Needs review", cls: "bg-[var(--pause-bg)] text-[var(--pause-fg)]" },
   in_progress:  { label: "In progress",  cls: "bg-primary-50 text-primary-700" },
   draft:        { label: "Draft",        cls: "bg-ink-100 text-ink-500" },
 };
@@ -158,7 +157,6 @@ function StatusTag({ p }: { p: Project }) {
   const s = STATUS_TAG[draftStatus(p)];
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-[3px] rounded-full text-[11.5px] font-semibold whitespace-nowrap ${s.cls}`}>
-      {draftStatus(p) === "needs_review" && <AlertTriangle className="w-3 h-3" />}
       {s.label}
     </span>
   );

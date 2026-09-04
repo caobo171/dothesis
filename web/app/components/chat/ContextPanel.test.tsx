@@ -21,6 +21,29 @@ describe("export scope labels", () => {
 
 
 describe("ContextPanel", () => {
+  test("while the project is loading, does not claim modules are empty", () => {
+    // Same class of bug as the chat pane flashing "Start your thesis" over a
+    // thread that hasn't arrived: the layout used to pass a null store while
+    // /projects/{id} was in flight, and every card said "Topic not set yet".
+    render(
+      <ContextPanel
+        loading
+        contextStore={{
+          m1_topic: null, m2_literature: null, m3_design: null,
+          m4_analysis: null, m5_writing: null,
+        }}
+        uploads={[]}
+      />,
+    );
+    expect(screen.queryByText(/topic not set yet/i)).toBeNull();
+    expect(screen.queryByText(/no literature yet/i)).toBeNull();
+    expect(screen.queryByText(/no exports yet/i)).toBeNull();
+    expect(screen.getByTestId("context-panel")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByTestId("context-panel-skeleton")).toBeTruthy();
+    // Chrome stays — this is the panel loading, not the panel missing.
+    expect(screen.getByText("Workspace")).toBeTruthy();
+  });
+
   test("renders all 5 module dots", () => {
     render(<ContextPanel contextStore={_baseCtx} uploads={[]} />);
     expect(screen.getByTestId("dot-M1")).toBeTruthy();
@@ -47,29 +70,49 @@ describe("ContextPanel", () => {
     expect(screen.getByText(/research_title/i)).toBeTruthy();
   });
 
-  test("module_status needs_review renders amber ⚠ badge (brief §1.5)", () => {
-    // Brief §1.5: when an upstream mutate flags M3 as needs_review, the
-    // panel must surface a review badge regardless of whether M3 had been
-    // confirmed before (which would otherwise show green). Reuses the
-    // existing `needs_attention` ModuleStatus so no theming work is needed.
+  test("a stale module keeps its done status and gets a note, not a warning badge", () => {
+    // This asserted the opposite: an upstream mutate flagged M3 and the panel
+    // replaced its progress with an amber "Needs review" badge, while the
+    // status itself flipped away from done. Both are gone — the student is
+    // told their work may be out of date without it being taken off them.
     render(
       <ContextPanel
         contextStore={{
           m1_topic: { confirmed_at: "2026-06-03" },
           m2_literature: { confirmed_at: "2026-06-03" },
-          // M3 was confirmed before the upstream M2 mutate hit it —
-          // confirmed_at is still set, but module_status now flags review.
+          // M3 was confirmed before the upstream M2 edit landed on it.
           m3_design: { confirmed_at: "2026-06-03" },
           m4_analysis: null,
           m5_writing: null,
         }}
         uploads={[]}
-        moduleStatus={{ M1: "done", M2: "done", M3: "needs_review", M4: "locked", M5: "locked" }}
+        moduleStatus={{ M1: "done", M2: "done", M3: "done", M4: "locked", M5: "locked" }}
+        staleModules={["M3"]}
       />,
     );
-    expect(screen.getByTestId("dot-M3")).toHaveClass("bg-[var(--pause-bg)]");
-    // Sanity: confirmed-and-not-flagged stays green.
-    expect(screen.getByTestId("dot-M1")).toHaveClass("bg-[var(--ok-fg)]");
+    // Still done — staleness does not demote it.
+    expect(screen.getByTestId("ctx-M3").getAttribute("data-status")).toBe("done");
+    expect(screen.getByText(/may be out of date/i)).toBeTruthy();
+    // And nothing tells the student to go review it first.
+    expect(screen.queryByText(/needs review/i)).toBeNull();
+  });
+
+  test("a legacy needs_review row reads as done and stale", () => {
+    // Rows written before the migration can still arrive over the wire mid
+    // deploy. needs_review always meant "was done, then invalidated", so it
+    // must not render as some unknown fourth state.
+    render(
+      <ContextPanel
+        contextStore={{
+          m1_topic: { confirmed_at: "2026-06-03" }, m2_literature: null,
+          m3_design: { confirmed_at: "2026-06-03" }, m4_analysis: null, m5_writing: null,
+        }}
+        uploads={[]}
+        moduleStatus={{ M1: "done", M2: "locked", M3: "needs_review", M4: "locked", M5: "locked" }}
+      />,
+    );
+    expect(screen.getByTestId("ctx-M3").getAttribute("data-status")).toBe("done");
+    expect(screen.getByText(/may be out of date/i)).toBeTruthy();
   });
 
   test("missing module_status falls back to legacy context-store derivation", () => {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { type Editor } from "@tiptap/react";
 import useSWR from "swr";
 
 import { apiFetch } from "@/app/lib/api";
@@ -8,9 +9,11 @@ import { tokenStore } from "@/app/lib/tokenStore";
 
 import { OutlineRail, type ChapterName } from "./OutlineRail";
 import { ChapterEditor } from "./ChapterEditor";
+import { EditorToolbar, FONT_FAMILIES } from "./EditorToolbar";
 import { SourcesRail } from "./SourcesRail";
 import { ReExportBar } from "./ReExportBar";
 import { EmptyState } from "./EmptyState";
+import { EditorSkeleton } from "./EditorSkeleton";
 
 
 // POST-only read: the key is already an absolute /api/v1/… path, so we POST
@@ -29,7 +32,7 @@ type ChapterDict = Record<string, {
   prose: string;
   pending_edits: Array<{
     id: string;
-    source: "paraphrase" | "translate" | "cite" | "chat_rewrite";
+    source: "paraphrase" | "translate" | "cite" | "chat_rewrite" | "proofread" | "improve" | "humanize" | "expand" | "shorten";
     old_text: string;
     new_text: string;
     from_offset: number;
@@ -55,6 +58,10 @@ function _toPendingEdits(raw: ChapterDict[string]["pending_edits"]) {
 // Top-level editor surface. Owns chapter selection state, edits-since-export
 // counter, and orchestrates re-export. Per-chapter logic (autosave, AiPending,
 // selection toolbar) lives inside ChapterEditor.
+// Stable anchor id for a chapter section, so the outline can scroll to it.
+const chapterAnchor = (name: string) => `ch-${name}`;
+
+
 export function ThesisEditor({ projectId }: { projectId: string }) {
   const url = `/api/v1/projects/${projectId}/m5/chapters`;
   const { data: chapters, mutate } = useSWR<ChapterDict>(url, fetcher);
@@ -63,6 +70,42 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
   const [editsSinceExport, setEditsSinceExport] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<Error | null>(null);
+
+  // The one shared toolbar binds to whichever chapter editor currently has the
+  // caret; each ChapterEditor reports itself via onActiveEditor.
+  const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
+  // Reference id of the citation the user last clicked — highlights it in the
+  // SourcesRail so a citation acts as a jump-to-source.
+  const [highlightedSource, setHighlightedSource] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Document-level font, persisted per project so the choice survives a reload
+  // and applies across every stacked chapter. NOT a TipTap mark: chapters are
+  // stored as clean markdown (html:false), so a font mark would be dropped on
+  // the next autosave — a whole-document setting is lossless and how a thesis is
+  // actually styled. Read lazily to avoid an SSR/client mismatch.
+  const fontKey = `dothesis_editor_font_${projectId}`;
+  const [font, setFont] = useState<{ family: string; size: number }>(() => {
+    if (typeof window === "undefined") return { family: FONT_FAMILIES[0].value, size: 16 };
+    try {
+      const raw = window.localStorage.getItem(fontKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed?.family === "string" && Number.isFinite(parsed?.size)) return parsed;
+      }
+    } catch { /* corrupt value — fall through to the default */ }
+    return { family: FONT_FAMILIES[0].value, size: 16 };
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(fontKey, JSON.stringify(font));
+  }, [fontKey, font]);
+
+  // Outline click → smooth-scroll the chapter section into view.
+  const scrollToChapter = useCallback((name: ChapterName) => {
+    setActive(name);
+    document.getElementById(chapterAnchor(name))?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   const handleDirty = useCallback((dirty: boolean) => {
     if (dirty) setEditsSinceExport(n => n + 1);
@@ -99,17 +142,42 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
     return () => window.removeEventListener("beforeunload", handler);
   }, [editsSinceExport]);
 
-  if (!chapters) return <div className="flex items-center justify-center min-h-screen text-gray-500">Loading…</div>;
+  // Scrollspy: highlight the outline entry for whichever chapter is at the top
+  // of the viewport as the user scrolls the one-page document. rootMargin's
+  // -70% bottom inset means a section counts as "current" once its top passes
+  // the upper third — so the highlight flips as a heading reaches the top,
+  // not when the section is merely peeking in from the bottom.
+  const chapterKeys = chapters ? Object.keys(chapters).join(",") : "";
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || !chapterKeys) return;
+    const obs = new IntersectionObserver(
+      entries => {
+        const top = entries
+          .filter(e => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        const name = top?.target.getAttribute("data-chapter");
+        if (name) setActive(name as ChapterName);
+      },
+      { root, rootMargin: "0px 0px -70% 0px", threshold: 0 },
+    );
+    chapterKeys.split(",").forEach(n => {
+      const el = document.getElementById(chapterAnchor(n));
+      if (el) obs.observe(el);
+    });
+    return () => obs.disconnect();
+  }, [chapterKeys]);
+
+  if (!chapters) return <EditorSkeleton />;
   if (Object.keys(chapters).length === 0) return <EmptyState projectId={projectId} />;
 
   const presentNames = Object.keys(chapters) as ChapterName[];
-  const activeChapter = chapters[active];
 
   return (
     // h-full (not min-h-screen) so this fills the bounded shell exactly; the
     // body row gets min-h-0 so it can shrink below its content height, which is
-    // what lets ChapterEditor's overflow-y-auto take over and scroll instead of
-    // the whole column overflowing the clipped (overflow-hidden) shell.
+    // what lets the shared scroll container take over instead of the whole
+    // column overflowing the clipped (overflow-hidden) shell.
     <div className="flex flex-col h-full">
       <ReExportBar
         lastExportAt={lastExportAt}
@@ -119,23 +187,50 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
         error={exportError}
       />
       <div className="flex flex-1 min-h-0">
-        <OutlineRail present={presentNames} active={active} onSelect={setActive} />
-        {activeChapter ? (
-          <ChapterEditor
-            key={active}
-            projectId={projectId}
-            chapterName={active}
-            initialProse={activeChapter.prose}
-            pendingEdits={_toPendingEdits(activeChapter.pending_edits)}
-            onPendingMutate={onPendingMutate}
-            onDirty={handleDirty}
-          />
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400">
-            Select a chapter to edit.
+        {/* Outline click scrolls to the chapter; scrollspy keeps it in sync. */}
+        <OutlineRail present={presentNames} active={active} onSelect={scrollToChapter} />
+
+        {/* Center column: one shared toolbar pinned on top, every chapter
+            stacked in a single scroll container below — the whole thesis reads
+            as one continuous page. */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {activeEditor && (
+            <EditorToolbar
+              editor={activeEditor}
+              fontFamily={font.family}
+              fontSize={font.size}
+              onFontFamily={family => setFont(f => ({ ...f, family }))}
+              onFontSize={size => setFont(f => ({ ...f, size }))}
+            />
+          )}
+          <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-6 space-y-12">
+            {presentNames.map(name => {
+              const chapter = chapters[name];
+              if (!chapter) return null;
+              return (
+                <section key={name} id={chapterAnchor(name)} data-chapter={name} className="scroll-mt-4">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-400 mb-3">
+                    {chapter.name}
+                  </h2>
+                  <ChapterEditor
+                    projectId={projectId}
+                    chapterName={name}
+                    initialProse={chapter.prose}
+                    pendingEdits={_toPendingEdits(chapter.pending_edits)}
+                    onPendingMutate={onPendingMutate}
+                    onDirty={handleDirty}
+                    fontFamily={font.family}
+                    fontSize={font.size}
+                    onActiveEditor={setActiveEditor}
+                    onCitationClick={setHighlightedSource}
+                  />
+                </section>
+              );
+            })}
           </div>
-        )}
-        <SourcesRail projectId={projectId} />
+        </div>
+
+        <SourcesRail projectId={projectId} highlightedId={highlightedSource} />
       </div>
     </div>
   );

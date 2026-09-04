@@ -23,11 +23,21 @@ export const en = {
   // resolves to M5_CHAPTER_ORDER, which is exactly six chapters
   // (orchestrator/tools/m5_writing.py:1854). No page-count promise — nothing
   // in the system guarantees one.
-  "new.auto.title": "One topic, six chapters.",
+  "new.auto.title": "1 prompt, full thesis",
   "new.auto.tagline":
     "I handle the literature, the research design and the writing end-to-end. " +
     "Attach your dataset and the analysis chapter comes back with real numbers.",
   "new.auto.placeholder": "Your research topic — one sentence is enough.",
+  // The Auto Thesis confirm, in the one case where there is something new to
+  // confirm: the topic was READ OUT of the uploaded files, not typed. The
+  // student has never seen it, and an unattended run writes six chapters on
+  // it, so it gets shown once. A typed topic skips this dialog entirely.
+  "auto.derived.reading": "Reading your files…",
+  "auto.derived.title": "We read your files",
+  "auto.derived.topic": "Writing the thesis on:",
+  "auto.derived.edit": "Not right? Edit it.",
+  "auto.derived.start": "Write my thesis",
+  "auto.derived.lowCredit": "Not enough credits to finish this run.",
   "new.auto.analyze": "Write my thesis",
   "new.auto.analyzing": "Starting…",
   "new.mode.aria": "How you want to work",
@@ -37,6 +47,17 @@ export const en = {
   "new.mode.auto.hint": "Write the whole thesis end-to-end",
   "new.back": "Back to home",
   "new.title": "Analyze your thesis",
+  // Guided needs a tagline for the same reason Auto Thesis has one: the tabs
+  // now sit above the heading, so whichever mode is selected has to say what it
+  // will do. A heading alone left Guided reading as the plain/lesser option
+  // next to a mode that describes itself in two sentences.
+  //
+  // It answers the question the mode actually raises — "guided by whom, to
+  // do what?" — with the two things this mode does that Auto Thesis doesn't:
+  // it reads what you already have, and it stops at every step for you.
+  "new.tagline":
+    "Drop a draft, papers or data and I'll tell you where the thesis stands " +
+    "and what to fix first. We go one step at a time, and you approve each one.",
   "new.placeholder":
     "Tell me what you have so far — a draft, papers, data, or just an idea.",
   "new.attach": "Attach files",
@@ -68,6 +89,46 @@ export const en = {
   "new.chip.fresh": "Starting fresh",
   "new.chip.fresh.text": "I'm just starting — I have a topic idea but nothing written yet.",
 
+  // --- Auto Thesis run screen (the workspace while a run is going) ---
+  // "Nothing here needs an answer from you" is the load-bearing line. The run
+  // is unattended; every previous version of this screen was a chat thread
+  // asking the student what they wanted to study while the answer was already
+  // being written.
+  "run.eyebrow": "Auto Thesis",
+  "run.live.title": "Writing your thesis",
+  "run.live.body":
+    "This runs on its own — you can close the tab and come back to it. " +
+    "Nothing here needs an answer from you.",
+  "run.done.title": "Your thesis is ready",
+  "run.done.body":
+    "Every chapter is written and saved. Open it in the editor to read and " +
+    "edit it, or download the Word file.",
+  "run.failed.title": "The run stopped before it finished",
+  "run.canceled.title": "You stopped this run",
+  // One body for both: what matters is the same either way, and it is the
+  // thing students get wrong — they assume a stopped run threw the work away
+  // and start over, paying twice.
+  "run.stopped.body":
+    "What finished was saved. Resuming picks up from the module it stopped on, " +
+    "not from the beginning.",
+  "run.queued": "Starting…",
+  "run.elapsed": "Running for {n} min",
+  "run.tokens": "{n} tokens so far",
+  "run.pause": "Pause",
+  "run.resume": "Resume",
+  "run.stop": "Stop run",
+  "run.retry": "Resume run",
+  "run.openEditor": "Open editor",
+  "run.download": "Download {kind}",
+  "run.askInChat": "Ask a question about it \u2192",
+  "run.askChanges": "Want changes? Ask in chat \u2192",
+  // "Ask in chat" used to be a one-way door — the run hid and the only
+  // return lived inside Quick actions. This is the visible way back.
+  // Keys are `auto.back*`, not `run.back` — that key already means "All
+  // tool runs" on the tool-run detail page.
+  "auto.back": "Back to Auto Thesis",
+  "auto.back.live": "Still writing — back to Auto Thesis",
+
   // --- project sidebar ---
   "sidebar.projectCredits": "Project credits",
   "sidebar.threads": "Threads",
@@ -84,9 +145,12 @@ export const en = {
   "module.M2": "Literature Review",
   "module.M3": "Research Design",
   "module.M4": "Data Analysis",
-  "module.M5": "Writing",
+  "module.M5": "Discussion & Conclusion",
 
   // --- home dashboard ---
+  // Launcher homepage (prompt-first) — replaces the old dashboard hero.
+  "home.launcher.title": "What can I do for your thesis?",
+  "home.launcher.tryTitle": "Try one of these",
   "home.greeting.morning": "Good morning",
   "home.greeting.afternoon": "Good afternoon",
   "home.greeting.evening": "Good evening",
@@ -108,15 +172,10 @@ export const en = {
   "home.stat.doneSub": "of 5 per thesis",
   "home.stat.progress": "In progress",
   "home.stat.progressSub": "modules being worked",
-  "home.stat.review": "Needs review",
-  "home.stat.reviewOpen": "open ⚠ flags",
-  "home.stat.reviewClear": "all clear",
 
   "home.theses": "Your theses",
   "home.thesesCount_one": "{count} active",
   "home.thesesCount_other": "{count} active",
-  "home.reviewCount_one": "{count} needs review",
-  "home.reviewCount_other": "{count} need review",
   "home.newThesis": "New thesis",
   "home.empty": "No projects yet. Click the New thesis button to get started.",
   "home.noField": "No field set",
@@ -124,9 +183,7 @@ export const en = {
   "home.continue": "Continue {module}",
   "home.lastTouched": "last touched {when}",
   "home.recent": "Recent activity",
-  "home.flaggedIn": "Flagged for review in",
   "home.workingIn": "Working in",
-  "home.needsReview": "Needs review",
   "home.proTip": "Pro tip",
   "home.proTipBody":
     "You can ask about any module from any other — focus only shifts on an edit, not a read.",

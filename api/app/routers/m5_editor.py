@@ -179,13 +179,51 @@ from datetime import datetime, timezone  # noqa: E402 — stdlib, safe to re-imp
 from uuid import uuid4  # noqa: E402
 
 from orchestrator.schemas.m5_editor import PendingEdit  # noqa: E402
-from orchestrator.tools.m5_inline import paraphrase_selection, translate_selection, build_citation_text  # noqa: E402 — translate_selection + build_citation_text reused by Tasks 12+13
+from orchestrator.tools.m5_inline import paraphrase_selection, translate_selection, rewrite_selection, build_citation_text  # noqa: E402 — translate_selection + build_citation_text reused by Tasks 12+13
 
 
 class ParaphraseBody(BaseModel):
     from_offset: int
     to_offset: int
     style: str = ""
+
+
+# The "practical inline actions" (jenni-style) share ONE endpoint shape: rewrite
+# the selection per a fixed instruction, wrap it in a PendingEdit. The kind is
+# the URL segment; the instruction is what actually differs. Kept as data here
+# so a new action is one line, and the PendingEditSource literal is the single
+# gate on which kinds exist.
+class RewriteBody(BaseModel):
+    from_offset: int
+    to_offset: int
+
+
+_INLINE_INSTRUCTIONS: dict[str, str] = {
+    "proofread": (
+        "Fix grammar, spelling, punctuation, and awkward word choice. Do NOT "
+        "change the meaning, terminology, numbers, or citations. Stay as close "
+        "to the original wording as the corrections allow."
+    ),
+    "improve": (
+        "Rewrite in a stronger, more formal academic voice — precise, objective, "
+        "and well structured — while preserving the meaning, numbers, and "
+        "citations."
+    ),
+    "humanize": (
+        "Rewrite so it reads as natural human academic writing rather than "
+        "AI-generated prose: vary the sentence rhythm and remove formulaic "
+        "phrasing and filler. Do NOT change the meaning, numbers, or citations."
+    ),
+    "expand": (
+        "Expand the selection with more detail, explanation, or supporting "
+        "reasoning, staying on topic and in the same academic register. Do NOT "
+        "invent citations or fabricate data."
+    ),
+    "shorten": (
+        "Make the selection more concise — cut redundancy and filler while "
+        "keeping all substantive content, numbers, and citations."
+    ),
+}
 
 
 def _validate_range(prose: str, from_offset: int, to_offset: int) -> None:
@@ -290,6 +328,91 @@ def paraphrase_chapter_selection(
     edit_dict = _append_pending_edit(cs, chapter_name, pe)
     db.commit()
     return edit_dict
+
+
+# ---------------------------------------------------------------------------
+# Practical inline actions (jenni-style): proofread / improve / humanize /
+# expand / shorten. Same shape as paraphrase — rewrite the selection per a fixed
+# instruction and return a PendingEdit — so one helper backs all five.
+# ---------------------------------------------------------------------------
+def _rewrite_selection_edit(
+    kind: str, project_id: uuid.UUID, chapter_name: str, body: RewriteBody,
+    user: User, db: Session,
+) -> dict:
+    _owned_project(db, user, project_id)
+    cs = db.get(ContextStore, project_id)
+    ch = _load_chapter_or_404(cs, chapter_name)
+    prose = ch.get("prose", "")
+    _validate_range(prose, body.from_offset, body.to_offset)
+    before, after = _surrounding_context(prose, body.from_offset, body.to_offset)
+    selection = prose[body.from_offset: body.to_offset]
+    language = ((cs.m1_topic or {}).get("language", "en")) if cs else "en"
+    new_text = rewrite_selection.invoke({
+        "chapter_name": chapter_name,
+        "language": language,
+        "context_before": before,
+        "selection": selection,
+        "context_after": after,
+        "instruction": _INLINE_INSTRUCTIONS[kind],
+    })
+    pe = PendingEdit(
+        id=uuid4().hex,
+        chapter_name=chapter_name,
+        from_offset=body.from_offset,
+        to_offset=body.to_offset,
+        old_text=selection,
+        new_text=new_text,
+        source=kind,
+        pending_at=datetime.now(timezone.utc),
+    )
+    edit_dict = _append_pending_edit(cs, chapter_name, pe)
+    db.commit()
+    return edit_dict
+
+
+@router.post("/projects/{project_id}/m5/chapters/{chapter_name}/proofread")
+def proofread_chapter_selection(
+    project_id: uuid.UUID, chapter_name: str, body: RewriteBody,
+    user: User = Depends(current_user), db: Session = Depends(db_session),
+):
+    """Fix grammar/punctuation/word-choice in a selection → PendingEdit."""
+    return _rewrite_selection_edit("proofread", project_id, chapter_name, body, user, db)
+
+
+@router.post("/projects/{project_id}/m5/chapters/{chapter_name}/improve")
+def improve_chapter_selection(
+    project_id: uuid.UUID, chapter_name: str, body: RewriteBody,
+    user: User = Depends(current_user), db: Session = Depends(db_session),
+):
+    """Rewrite a selection in a stronger academic voice → PendingEdit."""
+    return _rewrite_selection_edit("improve", project_id, chapter_name, body, user, db)
+
+
+@router.post("/projects/{project_id}/m5/chapters/{chapter_name}/humanize")
+def humanize_chapter_selection(
+    project_id: uuid.UUID, chapter_name: str, body: RewriteBody,
+    user: User = Depends(current_user), db: Session = Depends(db_session),
+):
+    """Rewrite AI-sounding prose in a selection into a natural voice → PendingEdit."""
+    return _rewrite_selection_edit("humanize", project_id, chapter_name, body, user, db)
+
+
+@router.post("/projects/{project_id}/m5/chapters/{chapter_name}/expand")
+def expand_chapter_selection(
+    project_id: uuid.UUID, chapter_name: str, body: RewriteBody,
+    user: User = Depends(current_user), db: Session = Depends(db_session),
+):
+    """Expand a selection with more detail → PendingEdit."""
+    return _rewrite_selection_edit("expand", project_id, chapter_name, body, user, db)
+
+
+@router.post("/projects/{project_id}/m5/chapters/{chapter_name}/shorten")
+def shorten_chapter_selection(
+    project_id: uuid.UUID, chapter_name: str, body: RewriteBody,
+    user: User = Depends(current_user), db: Session = Depends(db_session),
+):
+    """Make a selection more concise → PendingEdit."""
+    return _rewrite_selection_edit("shorten", project_id, chapter_name, body, user, db)
 
 
 # ---------------------------------------------------------------------------
@@ -558,19 +681,21 @@ def reexport(
     _owned_project(db, user, project_id)
     cs = db.get(ContextStore, project_id)
     m5 = (cs.m5_writing or {}) if cs else {}
-    chapters = m5.get("chapters") or {}
-
-    # Guard: all 6 chapters must be present before we can produce a coherent export.
-    # Decision: return 400 (not 404) — the project exists but the pre-condition
-    # (all chapters drafted) is unmet; 400 communicates a client-fixable problem.
-    missing = [n for n in _REQUIRED_CHAPTERS if n not in chapters]
-    if missing:
-        raise HTTPException(400, detail={"error": {"code": "chapters_incomplete", "missing": missing}})
 
     # run_export + sections_from_m5_slice are the single shared export path
     # (same one the auto-export hook and the agent's export tool use), so the
     # artifact shape + download URL can't drift across the three callers.
     sections = sections_from_m5_slice(m5)
+
+    # A docx should be producible AT ANY POINT — the thesis is written chapter by
+    # chapter as each module (M1→M5) completes, not only once all six exist. So
+    # we export whatever chapters carry prose and only refuse when there is
+    # nothing at all to render. (Was: hard 400 unless all six chapters present,
+    # which forced the user to "finish M5" before any export.) `missing` is still
+    # returned so the client can show what's left to draft.
+    missing = [n for n in _REQUIRED_CHAPTERS if n not in (m5.get("chapters") or {})]
+    if not sections:
+        raise HTTPException(400, detail={"error": {"code": "no_chapters_yet", "missing": missing}})
     references = (cs.m2_literature or {}).get("literature_sources") or []
     language = (cs.m1_topic or {}).get("language") or "vi"
     artifacts = run_export(sections, str(project_id), references=references, language=language,
@@ -581,4 +706,6 @@ def reexport(
     flag_modified(cs, "m5_writing")
     db.commit()
 
-    return {"docx": artifacts[0], "pdf": artifacts[1]}
+    # `missing` lets the UI say "exported 4 of 6 chapters — Discussion &
+    # Conclusion still to draft" instead of implying the doc is complete.
+    return {"docx": artifacts[0], "pdf": artifacts[1], "missing_chapters": missing}

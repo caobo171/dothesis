@@ -1,22 +1,27 @@
 "use client";
 
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 // BubbleMenu moved to a dedicated sub-path in TipTap v3 (no longer exported from
 // @tiptap/react root). Import from the menus sub-path per v3 migration guide.
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
+import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useState, useCallback, useRef } from "react";
 
 import { AiPending } from "./extensions/AiPending";
 import { CitationMark } from "./extensions/CitationMark";
 import { SlashCommand } from "./extensions/SlashCommand";
+import { MermaidBlock } from "./extensions/MermaidBlock";
+import { DtPlaceholder, preserveDtTokens } from "./extensions/DtPlaceholder";
+import { CitationHighlight } from "./extensions/CitationHighlight";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { CitePopover } from "./CitePopover";
 import { TranslateMenu } from "./TranslateMenu";
 import { PendingEditRibbon, type PendingEdit } from "./PendingEditRibbon";
 import { useChapterAutosave } from "./hooks/useChapterAutosave";
 import { buildOffsetMap, offsetToPos, posToOffset } from "./markdownOffset";
+import { apiFetch, ApiError } from "@/app/lib/api";
 
 
 type Props = {
@@ -27,6 +32,16 @@ type Props = {
   defaultTargetLang?: string;
   onPendingMutate: () => void;
   onDirty: (dirty: boolean) => void;
+  // Document font is owned by the parent (ThesisEditor) so one setting applies
+  // across every stacked chapter and drives the single shared toolbar.
+  fontFamily: string;
+  fontSize: number;
+  // Reports this chapter's editor to the parent when it gains focus, so the one
+  // shared toolbar binds to whichever chapter the caret is in.
+  onActiveEditor?: (editor: Editor) => void;
+  // Clicking an inserted citation reports its reference id so the parent can
+  // highlight the matching source in the rail.
+  onCitationClick?: (referenceId: string) => void;
 };
 
 
@@ -36,10 +51,18 @@ type Props = {
 //   - pending-edit reconciliation (apply AiPending marks for each server edit,
 //     remove marks no longer on the server, surface accept/reject handlers per ribbon)
 //   - stale-state tracking (accept that 409'd flips that edit's ribbon to "Discard")
+// The persistent formatting toolbar and the document font live in ThesisEditor
+// now — with chapters stacked on one page, a per-chapter toolbar would repeat
+// six times.
 export function ChapterEditor({
   projectId, chapterName, initialProse, pendingEdits,
   defaultTargetLang, onPendingMutate, onDirty,
+  fontFamily, fontSize, onActiveEditor, onCitationClick,
 }: Props) {
+  // Held in a ref so the useEditor config (built once) always calls the latest
+  // handler without re-creating the editor.
+  const citationClickRef = useRef(onCitationClick);
+  citationClickRef.current = onCitationClick;
   const [showCite, setShowCite] = useState(false);
   const [showTranslate, setShowTranslate] = useState(false);
   const [staleIds, setStaleIds] = useState<Set<string>>(new Set());
@@ -53,13 +76,36 @@ export function ChapterEditor({
     // and serializes back to markdown on save. html:false keeps raw HTML out of
     // the stored prose (and out of the exporter), so storage stays clean
     // markdown exactly like the exporter already expects.
-    extensions: [StarterKit, Markdown.configure({ html: false }), AiPending, CitationMark, SlashCommand],
+    // Table + its row/cell nodes: tiptap-markdown serializes them to GFM pipe
+    // tables, which the Pandoc export renders — so tables survive autosave AND
+    // land in the docx. resizable so columns can be dragged in the editor.
+    // codeBlock:false disables StarterKit's plain code block so MermaidBlock (a
+    // CodeBlock subclass, same "codeBlock" node name) takes its place — fenced
+    // code still round-trips to markdown, but ```mermaid blocks now render a
+    // live diagram preview.
+    extensions: [
+      StarterKit.configure({ codeBlock: false }),
+      Markdown.configure({ html: false }), AiPending, CitationMark, SlashCommand,
+      Table.configure({ resizable: true }), TableRow, TableHeader, TableCell,
+      MermaidBlock, DtPlaceholder, CitationHighlight,
+    ],
     // Apply prose styling + suppress the browser's default focus outline on the
     // contenteditable node itself. Putting the class here (not on EditorContent)
     // targets the inner `.ProseMirror` element — otherwise the wrapper styles
     // and the editable's blue focus ring fight, drawing a box around the column.
     editorProps: {
-      attributes: { class: "prose max-w-none focus:outline-none" },
+      // editor-prose (not `prose`): there's no @tailwindcss/typography plugin,
+      // so `prose` was a dead class and headings rendered unstyled. editor-prose
+      // carries the heading/list hierarchy and reads the font CSS vars set below.
+      attributes: { class: "editor-prose max-w-none focus:outline-none" },
+      // Clicking an inserted citation surfaces its source in the rail. Reads the
+      // citation mark at the click position; non-citation clicks fall through.
+      handleClick(view, pos) {
+        const cm = view.state.doc.resolve(pos).marks().find(m => m.type.name === "citation");
+        const refId = cm?.attrs.referenceId as string | undefined;
+        if (refId) { citationClickRef.current?.(refId); return true; }
+        return false;
+      },
     },
     content: initialProse,
     onUpdate({ editor }) {
@@ -67,7 +113,9 @@ export function ChapterEditor({
       // syntax now that they're structural nodes, corrupting the export. The
       // serializer round-trips the doc back to the same markdown dialect the
       // chapter was loaded from.
-      const text = editor.storage.markdown.getMarkdown();
+      // preserveDtTokens undoes the serializer's bracket-escaping so [[DT:kind]]
+      // placement tokens stay intact for the export weave (see DtPlaceholder).
+      const text = preserveDtTokens(editor.storage.markdown.getMarkdown());
       autosave.queue(text);
       onDirty(true);
     },
@@ -143,52 +191,62 @@ export function ChapterEditor({
   }, [editor, pendingEdits]);
 
   // Action handlers — each one captures the current selection then POSTs the relevant endpoint.
-  const _withSelection = useCallback(async (kind: "paraphrase" | "translate" | "cite", body: any) => {
+  const _withSelection = useCallback(async (kind: "paraphrase" | "translate" | "cite" | "proofread" | "improve" | "humanize" | "expand" | "shorten", body: any) => {
     const sel = selectionRef.current;
     if (!sel && kind !== "cite") return;
     if (!editor) return;
-    const url = `/api/v1/projects/${projectId}/m5/chapters/${chapterName}/${kind}`;
+    // apiFetch, NOT a raw fetch: the POST-only API reads the auth token from the
+    // JSON body (no cookies), and a bare fetch sent none — so every inline
+    // action 401'd with "missing access_token" and silently did nothing.
+    const path = `/projects/${projectId}/m5/chapters/${chapterName}/${kind}`;
     // Convert PM positions to markdown char offsets so the server's
     // prose[from:to] splice targets exactly what the user selected.
     const map = buildOffsetMap(editor);
     const payload = kind === "cite"
       ? { at_offset: posToOffset(map, editor.state.selection.from), ...body }
       : { from_offset: posToOffset(map, sel!.from), to_offset: posToOffset(map, sel!.to), ...body };
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (r.ok) onPendingMutate();
+    try {
+      await apiFetch(path, { method: "POST", body: payload });
+      onPendingMutate();
+    } catch {
+      // apiFetch redirects to /login on 401; other failures leave the selection
+      // intact so the user can retry.
+    }
   }, [projectId, chapterName, editor, onPendingMutate]);
 
   // Accept: POST to server. If 409 (stale conflict), mark the ribbon as stale
   // instead of removing it — user must "Discard" rather than "Accept".
   const handleAccept = useCallback(async (editId: string) => {
-    const r = await fetch(
-      `/api/v1/projects/${projectId}/m5/chapters/${chapterName}/pending/${editId}/accept`,
-      { method: "POST" }
-    );
-    if (r.status === 409) {
-      setStaleIds(prev => new Set(prev).add(editId));
-      return;
+    try {
+      await apiFetch(
+        `/projects/${projectId}/m5/chapters/${chapterName}/pending/${editId}/accept`,
+        { method: "POST" }
+      );
+      onPendingMutate();
+    } catch (e) {
+      // 409 = stale conflict: keep the ribbon but mark it, so the user discards
+      // rather than accepts. Any other error is swallowed (apiFetch handles 401).
+      if (e instanceof ApiError && e.status === 409) {
+        setStaleIds(prev => new Set(prev).add(editId));
+      }
     }
-    if (r.ok) onPendingMutate();
   }, [projectId, chapterName, onPendingMutate]);
 
   // Reject: POST to server, then clear any stale flag for this edit.
   const handleReject = useCallback(async (editId: string) => {
-    const r = await fetch(
-      `/api/v1/projects/${projectId}/m5/chapters/${chapterName}/pending/${editId}/reject`,
-      { method: "POST" }
-    );
-    if (r.ok) {
+    try {
+      await apiFetch(
+        `/projects/${projectId}/m5/chapters/${chapterName}/pending/${editId}/reject`,
+        { method: "POST" }
+      );
       setStaleIds(prev => {
         const next = new Set(prev);
         next.delete(editId);
         return next;
       });
       onPendingMutate();
+    } catch {
+      // apiFetch handles 401; leave the ribbon so the user can retry.
     }
   }, [projectId, chapterName, onPendingMutate]);
 
@@ -197,10 +255,30 @@ export function ChapterEditor({
     if (autosave.lastSavedAt) onDirty(false);
   }, [autosave.lastSavedAt, onDirty]);
 
-  if (!editor) return <div>Loading editor…</div>;
+  // Bind the shared toolbar to this chapter when it's ready and whenever it
+  // gains focus, so formatting acts on the chapter the caret is actually in.
+  useEffect(() => {
+    if (!editor) return;
+    onActiveEditor?.(editor);
+    const handler = () => onActiveEditor?.(editor);
+    editor.on("focus", handler);
+    return () => { editor.off("focus", handler); };
+  }, [editor, onActiveEditor]);
+
+  // Brief per-chapter fallback while this TipTap instance boots. A few muted
+  // lines (not raw "Loading…" text) so a stacked chapter doesn't flash a label.
+  if (!editor) return (
+    <div className="animate-pulse space-y-3 py-2" aria-hidden="true">
+      <div className="h-3.5 w-11/12 rounded bg-ink-100" />
+      <div className="h-3.5 w-4/5 rounded bg-ink-100" />
+      <div className="h-3.5 w-full rounded bg-ink-100" />
+    </div>
+  );
 
   return (
-    <div className="flex-1 px-8 py-6 overflow-y-auto">
+    // Just the chapter body now — no toolbar, no own scroll. The parent stacks
+    // these in one shared scroll container so the whole thesis reads as one page.
+    <div>
       {/* BubbleMenu appears on text selection; children switch between toolbar
           modes (default → translate picker → citation search). */}
       <BubbleMenu editor={editor}>
@@ -209,6 +287,11 @@ export function ChapterEditor({
             onParaphrase={() => _withSelection("paraphrase", {})}
             onTranslate={() => setShowTranslate(true)}
             onCite={() => setShowCite(true)}
+            onProofread={() => _withSelection("proofread", {})}
+            onImprove={() => _withSelection("improve", {})}
+            onHumanize={() => _withSelection("humanize", {})}
+            onExpand={() => _withSelection("expand", {})}
+            onShorten={() => _withSelection("shorten", {})}
           />
         )}
         {showTranslate && (
@@ -233,7 +316,17 @@ export function ChapterEditor({
         )}
       </BubbleMenu>
 
-      <EditorContent editor={editor} />
+      {/* Drive the document font through CSS variables the .editor-prose rules
+          consume — this lets headings inherit the family while keeping their own
+          sizes, and never touches the stored markdown. */}
+      <div
+        style={{
+          ["--editor-font-family" as string]: fontFamily,
+          ["--editor-font-size" as string]: `${fontSize}px`,
+        }}
+      >
+        <EditorContent editor={editor} />
+      </div>
 
       {pendingEdits.length > 0 && (
         <div className="mt-6 border-t border-gray-200 pt-4 space-y-2">

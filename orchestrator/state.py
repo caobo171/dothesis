@@ -16,7 +16,7 @@ _MODULES: tuple[ModuleKey, ...] = ("M1", "M2", "M3", "M4", "M5")
 # Brief §1.4 — per-module workflow status (separate from conversation focus).
 # Soft lock per §8.4: `locked` is a recommendation, NOT a wall — the router
 # and handlers must still respond when a user wanders into a locked module.
-ModuleStatus = Literal["locked", "in_progress", "done", "needs_review"]
+ModuleStatus = Literal["locked", "in_progress", "done"]
 
 
 class ContextStore(BaseModel):
@@ -270,20 +270,36 @@ def dod_for_module(module: str):
     return _dod_map().get(module)
 
 
+def compute_stale_map(cs: ContextStore) -> frozenset[str]:
+    """Modules carrying the `_needs_review` marker — content committed before a
+    later upstream change, so it may no longer agree with what is above it.
+
+    Split out of compute_status_map so staleness can be SHOWN without being
+    ENFORCED: it is a note on a module that still reads done, never a status
+    that outranks it. Nothing downstream of this is allowed to gate export,
+    re-order the roadmap, or change what the agent does next.
+    """
+    return frozenset(
+        m for m in _MODULES if get_module_slice(cs, m).get("_needs_review")
+    )
+
+
 def compute_status_map(cs: ContextStore) -> ModuleStatusMap:
     """Derive the per-module workflow status from a ContextStore (brief §1.4).
 
     Status semantics (precedence order):
-      1. needs_review — slice carries `_needs_review` marker. Set by the
-         router (PR #2) when an upstream mutate invalidates this module.
-         Wins over `confirmed_at`: a done-but-now-stale module IS the case
-         the marker exists for.
-      2. done — `confirmed_at` present OR the module's DoD validator passes.
+      1. done — `confirmed_at` present OR the module's DoD validator passes.
          confirmed_at remains authoritative on top of DoD so a user-approved
          imperfect slice doesn't flap back to in_progress.
-      3. in_progress — slice has any non-meta content but isn't done yet.
-      4. locked — empty slice. SOFT lock per brief §8.4; the router and
+      2. in_progress — slice has any non-meta content but isn't done yet.
+      3. locked — empty slice. SOFT lock per brief §8.4; the router and
          module handlers must still answer for a locked module.
+
+    `_needs_review` used to sit ABOVE `done` here, so a module invalidated by an
+    upstream edit stopped reading done and the roadmap pushed the student back
+    to re-check it. Status is workflow position only now; the marker is still
+    written and still read, by compute_stale_map, where it can inform without
+    blocking.
 
     Pure function — single source of truth is ContextStore. Callers MUST
     recompute after any context_store write rather than mutating the returned
@@ -298,9 +314,6 @@ def compute_status_map(cs: ContextStore) -> ModuleStatusMap:
     out: dict[str, ModuleStatus] = {}
     for m in _MODULES:
         slice_ = get_module_slice(cs, m)
-        if slice_.get("_needs_review"):
-            out[m] = "needs_review"
-            continue
         confirmed = bool(slice_.get("confirmed_at"))
         dod_done = m in _dod_by_module and _dod_by_module[m](slice_).done
         if confirmed or dod_done:

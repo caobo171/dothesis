@@ -39,7 +39,7 @@ export function OutlineRail({ present, active, onSelect }: Props) {
             className={
               "w-full text-left text-sm px-3 py-2 rounded-md transition-colors " +
               (isActive
-                ? "bg-purple-100 text-purple-900 font-medium"
+                ? "bg-primary-100 text-primary-700 font-medium"
                 : isPresent
                 ? "text-gray-700 hover:bg-gray-100"
                 : "text-gray-400 cursor-not-allowed")

@@ -28,7 +28,7 @@ export function TranslateMenu({ defaultLang, onConfirm, onClose }: Props) {
   const [lang, setLang] = useState(defaultLang || "en");
 
   return (
-    <div role="dialog" aria-label="Translate selection" className="bg-white border border-purple-300 rounded-md shadow-lg p-3 w-56 z-50">
+    <div role="dialog" aria-label="Translate selection" className="bg-white border border-primary-500 rounded-md shadow-lg p-3 w-56 z-50">
       <label className="text-xs text-gray-600 mb-1 block">Target language</label>
       <select value={lang} onChange={e => setLang(e.target.value)}
               className="w-full text-sm px-2 py-1 border border-gray-200 rounded mb-2">
@@ -40,7 +40,7 @@ export function TranslateMenu({ defaultLang, onConfirm, onClose }: Props) {
           Cancel
         </button>
         <button type="button" onClick={() => { onConfirm(lang); onClose(); }}
-                className="text-xs px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700">
+                className="text-xs px-3 py-1 bg-primary-600 text-white rounded hover:bg-primary-700">
           Translate
         </button>
       </div>

@@ -17,4 +17,15 @@ describe("ChatShellLayout", () => {
     expect(screen.getByText("CENTER")).toBeTruthy();
     expect(screen.getByText("RIGHT")).toBeTruthy();
   });
+
+  test("drops the right pane and its resize handle when rightPane is null (editor mode)", () => {
+    render(
+      <ChatShellLayout leftPane={<div>LEFT</div>} rightPane={null}>
+        <div>CENTER</div>
+      </ChatShellLayout>,
+    );
+    expect(screen.getByText("LEFT")).toBeTruthy();
+    expect(screen.getByText("CENTER")).toBeTruthy();
+    expect(screen.queryByRole("separator", { name: "Resize context panel" })).toBeNull();
+  });
 });

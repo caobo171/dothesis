@@ -474,3 +474,89 @@ def test_the_web_import_moves_the_final_chapter_into_m5(monkeypatch):
     assert "CHƯƠNG 4" in m5[0]["prose"]
     assert "CHƯƠNG 5" in m5[1]["prose"]
     assert "CHƯƠNG 5" not in state["contextStore"]["analysis_results"]
+
+
+# --- POST /projects/{id}/topic-from-uploads --------------------------------
+#
+# Auto Thesis needs a topic string to seed the run's brief. A student who drops
+# a half-finished thesis and types nothing has already supplied one — it is on
+# page 1 of the file. These pin that the route reads it WITHOUT falling back to
+# the reconstruct walk, and that every "couldn't read one" case comes back as a
+# null title rather than an error (the caller's fallback is the same for all of
+# them: ask the student).
+
+class _StoreWithTitle:
+    def __init__(self, title=None):
+        self._title = title
+
+    def load(self):
+        cs = {"research_title": self._title} if self._title else {}
+        return {"contextStore": cs, "status": {}, "focus": "M1"}
+
+
+def _topic_app(monkeypatch, *, files, committed_title=None, inferred=None,
+               language="vi"):
+    """Wire the route's seams: ownership, the store read, the upload read and
+    the one LLM call. Records whether the inference actually ran."""
+    import app.import_work as iw
+    import app.routers.import_route as ir
+
+    class _Proj:
+        pass
+    proj = _Proj()
+    proj.language = language
+
+    calls = []
+    monkeypatch.setattr(ir, "_authorize", lambda db, user, pid: proj)
+    monkeypatch.setattr(ir, "_store", lambda db, pid: _StoreWithTitle(committed_title))
+    monkeypatch.setattr(ir, "_store_and_files",
+                        lambda db, pid: (_StoreWithTitle(committed_title), files, "vi"))
+
+    def _fake_infer(text, lang):
+        calls.append((text, lang))
+        return inferred or {}
+    monkeypatch.setattr(iw, "_infer_topic", _fake_infer)
+
+    app = FastAPI()
+    app.include_router(ir.router, prefix="/api/v1")
+    app.dependency_overrides[ir.current_user] = lambda: object()
+    return TestClient(app), calls
+
+
+def test_topic_is_inferred_from_the_uploaded_chapters(monkeypatch):
+    client, calls = _topic_app(
+        monkeypatch,
+        files=[{"filename": "Chuong 4 - KOL TikTok Shop.docx", "text": "KMO = .87 ..."}],
+        inferred={"research_title": "Ảnh hưởng của đặc điểm KOLs đến hành vi mua sắm"},
+    )
+    r = client.post("/api/v1/projects/abc/topic-from-uploads")
+    assert r.status_code == 200
+    assert r.json()["research_title"] == "Ảnh hưởng của đặc điểm KOLs đến hành vi mua sắm"
+    # Filenames go into the prompt with the text: a chapter file whose body is
+    # all tables often names the study only in its filename.
+    assert "Chuong 4 - KOL TikTok Shop.docx" in calls[0][0]
+    assert calls[0][1] == "vi"
+
+
+def test_a_committed_title_short_circuits_the_llm_call(monkeypatch):
+    client, calls = _topic_app(monkeypatch, files=[{"filename": "x", "text": "y"}],
+                               committed_title="The student's own title")
+    r = client.post("/api/v1/projects/abc/topic-from-uploads")
+    assert r.json()["research_title"] == "The student's own title"
+    assert calls == []      # nothing inferred, nothing billed
+
+
+def test_no_readable_uploads_returns_a_null_title_not_an_error(monkeypatch):
+    client, calls = _topic_app(monkeypatch, files=[])
+    r = client.post("/api/v1/projects/abc/topic-from-uploads")
+    assert r.status_code == 200
+    assert r.json()["research_title"] is None
+    assert calls == []
+
+
+def test_an_inference_that_finds_nothing_returns_a_null_title(monkeypatch):
+    client, _ = _topic_app(monkeypatch, files=[{"filename": "data.sav", "text": "1,2,3"}],
+                           inferred={"research_title": "   "})
+    r = client.post("/api/v1/projects/abc/topic-from-uploads")
+    assert r.status_code == 200
+    assert r.json()["research_title"] is None

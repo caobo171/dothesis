@@ -17,7 +17,7 @@ const MODULE_LABELS: Record<string, string> = {
   M2: "Literature",
   M3: "Design",
   M4: "Analysis",
-  M5: "Writing",
+  M5: "Discussion & Conclusion",
 };
 
 const label = (m: string) => MODULE_LABELS[m] ?? m;

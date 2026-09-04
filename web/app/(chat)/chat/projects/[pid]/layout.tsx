@@ -3,7 +3,7 @@
 import { type ReactNode } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, usePathname } from "next/navigation";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { ChatShellLayout } from "@/app/components/chat/ChatShellLayout";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
@@ -97,6 +97,14 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
   const pid = params.pid;
   const currentTid = params.tid;
 
+  // Editor mode hides the context store to give the document the full width.
+  // The editor route (/chat/projects/{pid}/editor) is nested UNDER this layout,
+  // so the ContextPanel would otherwise wrap the editor and eat ~340px. The
+  // editor carries its own outline rail + sources, so the context store is pure
+  // redundancy there.
+  const pathname = usePathname();
+  const isEditor = pathname?.endsWith("/editor") ?? false;
+
   // Brief §1.4 — module_status now ships with GET /projects/{id} (PR #2).
   // focus is the canonical conversation focus; current_module stays in the
   // type for backward compat during the dual-write window (PR #2b will
@@ -107,6 +115,9 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
     current_module: string;
     focus?: string | null;
     module_status?: ModuleStatusMap;
+    /** Modules whose content predates a later upstream edit — drives the
+     *  "may be out of date" note. Advisory; never gates anything. */
+    stale_modules?: string[];
   }>(`/projects/${pid}`, fetcher);
   const { data: threads, error: threadsError, mutate: mutateThreads } = useSWR<Thread[]>(
     `/projects/${pid}/threads/list`, fetcher,
@@ -164,16 +175,20 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
         />
       }
       rightPane={
-        <ContextPanel
-          projectId={pid}
-          contextStore={project?.context_store ?? {
-            m1_topic: null, m2_literature: null, m3_design: null, m4_analysis: null, m5_writing: null,
-          }}
-          uploads={uploads ?? []}
-          currentModule={project?.focus ?? project?.current_module}
-          moduleStatus={project?.module_status}
-          threadCredits={currentTid ? threadCredits?.total_credits : undefined}
-        />
+        isEditor ? null : (
+          <ContextPanel
+            projectId={pid}
+            loading={!project}
+            contextStore={project?.context_store ?? {
+              m1_topic: null, m2_literature: null, m3_design: null, m4_analysis: null, m5_writing: null,
+            }}
+            uploads={uploads ?? []}
+            currentModule={project?.focus ?? project?.current_module}
+            moduleStatus={project?.module_status}
+            staleModules={project?.stale_modules}
+            threadCredits={currentTid ? threadCredits?.total_credits : undefined}
+          />
+        )
       }
     >
       {children}

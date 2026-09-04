@@ -603,6 +603,8 @@ const _STATE_LABELS: Record<string, { vi: string; en: string }> = {
   interview_guide: { vi: "Hướng dẫn phỏng vấn", en: "Interview guide" },
   purposive_criteria: { vi: "Tiêu chí chọn mẫu", en: "Sampling criteria" },
   done: { vi: "hoàn tất", en: "complete" },
+  // Retained for OLD transcripts only: nothing emits needs_review any more,
+  // but messages written before the review gates came out still contain it.
   needs_review: { vi: "cần xem lại", en: "needs review" },
   in_progress: { vi: "đang thực hiện", en: "in progress" },
   locked: { vi: "chưa bắt đầu", en: "not started" },

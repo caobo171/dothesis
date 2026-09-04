@@ -26,4 +26,13 @@ describe("SourcesRail", () => {
     render(<SourcesRail projectId="p1" />);
     await waitFor(() => expect(screen.getByText(/Sources \(2\)/i)).toBeInTheDocument());
   });
+
+  it("highlights the source matching highlightedId (citation click target)", async () => {
+    const { container } = render(<SourcesRail projectId="p1" highlightedId="r2" />);
+    await waitFor(() => expect(screen.getByText(/Jones/)).toBeInTheDocument());
+    const highlighted = container.querySelector('[aria-current="true"]');
+    expect(highlighted?.id).toBe("src-r2");
+    // The non-highlighted source is not marked current.
+    expect(container.querySelector("#src-r1")?.getAttribute("aria-current")).toBeNull();
+  });
 });

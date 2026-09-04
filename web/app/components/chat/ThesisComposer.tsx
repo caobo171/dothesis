@@ -72,6 +72,7 @@ export function ThesisComposer({
   accept,
   onKindChange,
   mode = "guided",
+  showChips = true,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -92,6 +93,10 @@ export function ThesisComposer({
    *  because the mode's tagline has to render after the control that picks it.
    *  Defaults to guided so every existing render is unaffected. */
   mode?: StartMode;
+  /** Whether to render the inline starter chips under the composer. The
+   *  homepage renders the same prompts as full-body cards below the composer
+   *  instead, so it passes false to avoid two prompt rows. */
+  showChips?: boolean;
 }) {
   const t = useT();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -244,8 +249,8 @@ export function ThesisComposer({
           conversation with ("I have data", "Starting fresh"). In Auto Thesis
           the next thing that happens is a paid unattended run, so offering
           conversation openers would describe the button wrongly. */}
-      <div className={"flex flex-wrap gap-2" + (mode === "auto_thesis" ? " hidden" : "")}>
-        {mode === "auto_thesis" ? null : STARTER_CHIPS.map((chip) => (
+      <div className={"flex flex-wrap gap-2" + (mode === "auto_thesis" || !showChips ? " hidden" : "")}>
+        {mode === "auto_thesis" || !showChips ? null : STARTER_CHIPS.map((chip) => (
           <button
             key={chip.labelKey}
             type="button"

@@ -61,16 +61,21 @@ def test_header_reflects_real_status(tmp_path):
     assert "M5:locked" in header
 
 
-def test_header_surfaces_needs_review_drift(tmp_path):
-    # Reproduces the bug's truth: M5 done, then an M4 commit flips it to
-    # needs_review. The header must show needs_review so the agent can't claim
-    # "M5 done".
+def test_header_never_reports_a_status_that_is_not_a_workflow_position(tmp_path):
+    """An upstream re-run leaves M5 done in the header, and marks it stale.
+
+    This used to assert "M5:needs_review" — the header carried invalidation as
+    if it were a status, and the agent read a finished module as unfinished.
+    Staleness is tracked separately now, so the header states position only.
+    """
     store = ProjectStateStore(tmp_path)
     store.commit_slice("M4", {"analysis_results": {"r": 1}}, reason="r", confirm_done=True)
     store.commit_slice("M5", {"final_sections": [{"title": "Intro"}]}, reason="r", confirm_done=True)
     store.commit_slice("M4", {"analysis_results": {"r": 2}}, reason="rerun", confirm_done=True)
     header = _state_header(store)
-    assert "M5:needs_review" in header
+    assert "M5:done" in header
+    assert "needs_review" not in header
+    assert store.load()["stale"] == ["M5"]
 
 
 def test_the_clicked_option_directive_is_injected_with_the_state_block():

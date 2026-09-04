@@ -3,7 +3,7 @@
 
 export type PendingEdit = {
   id: string;
-  source: "paraphrase" | "translate" | "cite" | "chat_rewrite";
+  source: "paraphrase" | "translate" | "cite" | "chat_rewrite" | "proofread" | "improve" | "humanize" | "expand" | "shorten";
   oldText: string;
   newText: string;
   from_offset: number;
@@ -24,6 +24,11 @@ const _LABEL: Record<PendingEdit["source"], string> = {
   translate:  "Translate",
   cite:       "Cite",
   chat_rewrite: "Chat rewrite",
+  proofread:  "Proofread",
+  improve:    "Improve",
+  humanize:   "Humanize",
+  expand:     "Expand",
+  shorten:    "Shorten",
 };
 
 

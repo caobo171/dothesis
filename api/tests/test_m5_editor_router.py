@@ -354,6 +354,46 @@ def test_paraphrase_creates_pending_edit(mock_llm, client):
         assert pending[0]["new_text"] == "A growing body of work suggests"
 
 
+@pytest.mark.parametrize("kind", ["proofread", "improve", "humanize", "expand", "shorten"])
+@patch("orchestrator.tools.m5_inline._call_llm")
+def test_inline_rewrite_actions_create_pending_edit(mock_llm, client, kind):
+    """The jenni-style inline actions each rewrite the selection via the shared
+    rewrite tool and land a PendingEdit tagged with that action's source."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    mock_llm.return_value = "the rewritten selection"
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    full_prose = "The literature is broad. Recent studies have shown that algo decisions matter."
+    target = "Recent studies have shown"
+    from_o = full_prose.index(target)
+    to_o = from_o + len(target)
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing["chapters"]["intro"]["prose"] = full_prose
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/{kind}",
+        json={"from_offset": from_o, "to_offset": to_o},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["source"] == kind
+    assert body["new_text"] == "the rewritten selection"
+    assert body["old_text"] == target
+
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        pending = cs.m5_writing["chapters"]["intro"]["pending_edits"]
+        assert len(pending) == 1 and pending[0]["source"] == kind
+
+
 def test_paraphrase_404_unknown_chapter(client):
     """POSTing to a chapter name that was never seeded returns 404.
 
@@ -908,22 +948,34 @@ def test_export_runs_both_compilers_and_returns_artifacts(mock_run_export, clien
     mock_run_export.assert_called_once()
 
 
-def test_export_400_when_chapters_incomplete(client):
-    """_make_project_with_chapters seeds only 2 chapters (intro + lit_review).
-    POST .../m5/export → 400 with detail containing "chapters_incomplete".
-
-    Decision: the export endpoint must gate on all 6 required chapters being
-    present; returning 400 (not 404) keeps the semantics clear — the resource
-    exists but the pre-condition is unmet.
+@patch("app.routers.m5_editor.run_export")
+def test_export_renders_partial_chapters(mock_run_export, client):
+    """Pivot: a partial draft (only intro + lit_review) now EXPORTS — the thesis
+    is written chapter by chapter as each module completes, so the docx reflects
+    whatever exists. The response names the chapters still to draft.
     """
+    mock_run_export.return_value = [
+        {"kind": "docx", "s3_key": "k.docx", "size_bytes": 1, "download_url": "/x", "uri": ""},
+        {"kind": "pdf",  "s3_key": "k.pdf",  "size_bytes": 1, "download_url": "/y", "uri": ""},
+    ]
     _create_user_and_set_cookie(client)
-    # Only intro + lit_review seeded — 4 chapters missing
-    pid = _make_project_with_chapters(client)
+    pid = _make_project_with_chapters(client)  # intro + lit_review only
+
+    r = client.post(f"/api/v1/projects/{pid}/m5/export")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "docx" in body and "pdf" in body
+    assert set(body["missing_chapters"]) == {"methodology", "results", "discussion", "conclusion"}
+    mock_run_export.assert_called_once()
+
+
+def test_export_400_when_no_chapters_yet(client):
+    """The only remaining export gate: nothing drafted at all → 400 no_chapters_yet
+    (there is no prose to render into a document)."""
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "empty"})
+    pid = r.json()["id"]
 
     r = client.post(f"/api/v1/projects/{pid}/m5/export")
     assert r.status_code == 400, r.text
-    detail = r.json()["detail"]
-    assert detail["error"]["code"] == "chapters_incomplete"
-    # "missing" list must name the 4 absent chapters
-    missing = detail["error"]["missing"]
-    assert set(missing) == {"methodology", "results", "discussion", "conclusion"}
+    assert r.json()["detail"]["error"]["code"] == "no_chapters_yet"

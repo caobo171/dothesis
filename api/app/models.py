@@ -244,6 +244,15 @@ class Project(Base):
     language: Mapped[str] = mapped_column(String(16), nullable=False, server_default="en")
     citation_style: Mapped[str] = mapped_column(String(16), nullable=False, server_default="apa")
     research_approach: Mapped[str | None] = mapped_column(String(16))
+    # Persisted generation mode chosen at creation from the /new start screen:
+    # "auto" (Auto Thesis — write the whole thesis unattended) vs "chat" (guided,
+    # work through it turn by turn). Was previously a one-shot sessionStorage flag
+    # consumed on first mount, so reopening an Auto Thesis project silently fell
+    # back to plain chat and lost the credit/estimate gate. Storing it makes the
+    # mode a durable property of the project/goal, so a returning user re-enters
+    # the auto flow. Nullable: pre-existing projects (and any caller that omits it)
+    # read as None, which the client treats as "chat".
+    mode: Mapped[str | None] = mapped_column(String(16))
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="draft")
     current_module: Mapped[str] = mapped_column(String(8), nullable=False, server_default="M1")
     # Brief §1.4 — conversation focus, separate from current_module. Nullable
@@ -252,11 +261,27 @@ class Project(Base):
     # demotes current_module to a shadow column scheduled for removal.
     focus: Mapped[str | None] = mapped_column(String(8), nullable=True)
     # Brief §1.4 — per-module workflow status map. JSONB Dict[ModuleId, str]
-    # where str ∈ {locked, in_progress, done, needs_review}. Derived from
-    # context_store via orchestrator.state.compute_status_map and persisted
-    # here for fast UI reads — NEVER the source of truth.
+    # where str ∈ {locked, in_progress, done}. Derived from context_store via
+    # orchestrator.state.compute_status_map and persisted here for fast UI
+    # reads — NEVER the source of truth.
+    #
+    # `needs_review` was a fourth value here and is gone. It outranked `done`,
+    # so an upstream edit demoted finished modules and the roadmap sent the
+    # student back to re-check them before anything could move forward. Status
+    # now carries workflow position ONLY; invalidation moved to stale_modules,
+    # which never blocks.
     module_status: Mapped[dict] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    # Modules whose committed content predates a later upstream change — e.g. M2
+    # was edited after M3/M4 were already done, so their chapters may no longer
+    # agree with it. JSONB list of ModuleId. Purely informational: it renders as
+    # a "may be out of date" note on a module that still reads done, and never
+    # gates export, re-orders the roadmap, or changes what the agent does next.
+    # Separate column rather than a slice key because the agent's contextStore
+    # is flat, so per-module markers stored there would collide.
+    stale_modules: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

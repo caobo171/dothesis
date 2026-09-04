@@ -16,6 +16,7 @@ import {
   triggerUploadDownload,
   swrFetcher as fetcher,
 } from "@/app/lib/api";
+import { Skeleton } from "@/app/components/ui/skeleton";
 
 
 // ---- types (kept stable so callers don't change) ---------------------
@@ -39,14 +40,18 @@ export type UploadItem = {
 
 export type ModuleStatusMap = Partial<Record<"M1" | "M2" | "M3" | "M4" | "M5", string>>;
 
-type SectionStatus = "done" | "in_progress" | "needs_review" | "locked";
+// Workflow position only. `needs_review` was a fourth value here; it outranked
+// `done`, replaced the module's progress bar with an amber warning, and the
+// roadmap sent the student back to clear it before anything could move on.
+// Staleness is now a separate, passive fact — see `stale` below.
+type SectionStatus = "done" | "in_progress" | "locked";
 
 
 /**
  * Right rail — live context_store viewer. Mirrors the design's
  * `ContextPanel` from babel-05-ec044a3a.jsx:
  *
- *   - Header strip: "Context store" + `context_store.json` chip + "{ }"
+ *   - Header strip: "Workspace" + `context_store.json` chip + "{ }"
  *     raw JSON button
  *   - Stack of `CtxSection` cards, one per module: a color dot per
  *     status, label, optional ⚠ marker, and a "▸" toggle button
@@ -65,15 +70,27 @@ export function ContextPanel({
   uploads,
   currentModule,
   moduleStatus,
+  staleModules,
   threadCredits,
   onSendMessage,
   roadmapRefreshKey,
+  loading = false,
 }: {
   projectId?: string;
+  /**
+   * Project row hasn't landed yet. Without this the panel is given a null
+   * store and every card says "Topic not set yet" — the same empty-state
+   * flash the chat pane used to do, next to a thread that is still a
+   * skeleton. Chrome (the "Workspace" header) stays; the cards pulse.
+   */
+  loading?: boolean;
   contextStore: ContextStore;
   uploads: UploadItem[];
   currentModule?: string;
   moduleStatus?: ModuleStatusMap;
+  /** Modules whose content predates a later upstream edit. Advisory: it adds a
+   *  note inside the card and changes nothing else. */
+  staleModules?: string[];
   /** Total credits spent in the current thread — shown in the header. */
   threadCredits?: number;
   /** F2: when the host can post into chat, the roadmap Next-card CTAs use this
@@ -92,11 +109,15 @@ export function ContextPanel({
 
   const sectionStatus = (id: keyof ModuleStatusMap, data: Record<string, any> | null): SectionStatus => {
     const raw = moduleStatus?.[id];
-    if (raw === "needs_review") return "needs_review";
-    if (raw === "done" || data?.confirmed_at) return "done";
+    // Tolerate a `needs_review` still sitting in an unmigrated row or an
+    // in-flight response: it always meant "was done, then invalidated", so it
+    // reads as done and the staleness shows up through staleModules instead.
+    if (raw === "needs_review" || raw === "done" || data?.confirmed_at) return "done";
     if (raw === "in_progress" || id === currentModule) return "in_progress";
     return "locked";
   };
+  const isStale = (id: keyof ModuleStatusMap) =>
+    (staleModules ?? []).includes(id) || moduleStatus?.[id] === "needs_review";
 
   return (
     <aside
@@ -105,10 +126,16 @@ export function ContextPanel({
       // narrower lower bound (~280px).
       className="w-full min-w-0 border-l border-ink-200 bg-white h-full flex flex-col overflow-hidden"
       data-testid="context-panel"
+      aria-busy={loading || undefined}
     >
       {/* Header */}
       <div className="px-[18px] py-3.5 border-b border-ink-200 flex items-center gap-2">
-        <span className="text-[14px] font-bold shrink-0 whitespace-nowrap">Context store</span>
+        {/* "Workspace", not "Context store": the panel is the container for two
+            file groups now labelled Context (inputs) and Outputs, so reusing
+            "Context" for the whole panel would clash with the Context card
+            inside it. The context_store.json chip below keeps the underlying
+            name visible for anyone who knows it. */}
+        <span className="text-[14px] font-bold shrink-0 whitespace-nowrap">Workspace</span>
         <span className="inline-flex items-center min-w-0 px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-[11px] font-semibold font-mono truncate">
           context_store.json
         </span>
@@ -135,7 +162,9 @@ export function ContextPanel({
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
-        {showRaw ? (
+        {loading ? (
+          <ContextPanelSkeleton />
+        ) : showRaw ? (
           <pre className="text-[11.5px] font-mono text-ink-700 bg-ink-50 rounded-lg p-3 leading-snug overflow-x-auto">
             {JSON.stringify(contextStore, null, 2)}
           </pre>
@@ -150,6 +179,7 @@ export function ContextPanel({
               label="M1 · Topic & questions"
               moduleId="M1"
               status={sectionStatus("M1", contextStore.m1_topic)}
+              stale={isStale("M1")}
               substeps={substepsOf("M1")}
             >
               <M1Body data={contextStore.m1_topic} />
@@ -159,6 +189,7 @@ export function ContextPanel({
               label="M2 · Gaps & hypotheses"
               moduleId="M2"
               status={sectionStatus("M2", contextStore.m2_literature)}
+              stale={isStale("M2")}
               substeps={substepsOf("M2")}
             >
               <M2Body data={contextStore.m2_literature} />
@@ -168,6 +199,7 @@ export function ContextPanel({
               label="M3 · Methodology & model"
               moduleId="M3"
               status={sectionStatus("M3", contextStore.m3_design)}
+              stale={isStale("M3")}
               substeps={substepsOf("M3")}
             >
               <M3Body data={contextStore.m3_design} />
@@ -177,6 +209,7 @@ export function ContextPanel({
               label="M4 · Analysis"
               moduleId="M4"
               status={sectionStatus("M4", contextStore.m4_analysis)}
+              stale={isStale("M4")}
               substeps={substepsOf("M4")}
             >
               <div className="text-[12.5px] text-ink-500 leading-snug">
@@ -185,9 +218,10 @@ export function ContextPanel({
             </CtxSection>
 
             <CtxSection
-              label="M5 · Writing"
+              label="M5 · Discussion & conclusion"
               moduleId="M5"
               status={sectionStatus("M5", contextStore.m5_writing)}
+              stale={isStale("M5")}
               substeps={substepsOf("M5")}
             >
               <M5Body data={contextStore.m5_writing} />
@@ -196,7 +230,7 @@ export function ContextPanel({
             {projectId && <ExportsSection projectId={projectId} />}
 
             {uploads.length > 0 && (
-              <CtxSection label={`Uploads (${uploads.length})`} status="in_progress">
+              <CtxSection label={`Context (${uploads.length})`} status="in_progress">
                 <div className="space-y-1.5">
                   {uploads.slice(0, 5).map(u => <UploadRow key={u.id} upload={u} />)}
                   {uploads.length > 5 && (
@@ -228,17 +262,46 @@ export function ContextPanel({
 }
 
 
+// Same card stack the loaded panel uses (NEXT + five modules + Exports),
+// so the rail doesn't jump when the project lands. Pulse bars, not the
+// empty-module sentences — those are a claim about state we don't have yet.
+function ContextPanelSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-3"
+      data-testid="context-panel-skeleton"
+      aria-label="Loading workspace"
+    >
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="border border-ink-200 rounded-xl bg-white px-3.5 py-3">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-ink-200 animate-pulse shrink-0" />
+            <Skeleton className="h-3 w-36" />
+          </div>
+          <Skeleton className="h-2.5 w-full mt-3" />
+          <Skeleton className="h-2.5 w-2/3 mt-2" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
 // ---- per-module section card ---------------------------------------
 
 function CtxSection({
   label,
   status,
+  stale = false,
   moduleId,
   substeps = [],
   children,
 }: {
   label: string;
   status: SectionStatus;
+  /** Content predates a later upstream edit. Renders a note inside the card;
+   *  deliberately does NOT touch the status dot or the step bar. */
+  stale?: boolean;
   /** This module's roadmap sub-steps. Shown as a bar in the header (with the
    *  step names on hover) and in full when the card is expanded — replacing
    *  the separate strikethrough checklist that listed every module a second
@@ -268,24 +331,22 @@ function CtxSection({
         <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
         <span className="text-[12.5px] font-bold text-ink-800">{label}</span>
         <span className="flex-1" />
-        {status !== "needs_review" && <StepBar substeps={substeps} />}
-        {status === "needs_review" && (
-          // The bare ⚠ icon left users unsure what it meant or what to do.
-          // Label it + explain on hover: needs_review = a dependency hole the
-          // agent flagged (e.g. a hypothesis with no backing gap). The fix is
-          // to revisit the module in chat, where the agent walks the reconcile.
-          <span
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600"
-            title="Needs review — something this module depends on changed upstream (e.g. a hypothesis with no backing gap). Open this module in chat and the agent will help you reconcile it."
-          >
-            <AlertTriangle className="w-3.5 h-3.5" />
-            Needs review
-          </span>
-        )}
+        <StepBar substeps={substeps} />
         <span className="text-ink-400 text-[11px]">{collapsed ? "▸" : "▾"}</span>
       </button>
       {!collapsed && (
         <div className="px-3.5 pb-3.5">
+          {stale && (
+            // A note, not a gate. The module keeps its status and its progress
+            // bar; this only tells the student that something it was built on
+            // changed afterwards, so they can decide whether to revisit it.
+            // Nothing here blocks export or re-orders what comes next.
+            <div className="mb-2 text-[11px] text-ink-500 flex items-start gap-1.5">
+              <AlertTriangle className="w-3 h-3 mt-[2px] shrink-0" />
+              <span>May be out of date — something upstream changed after this
+                was written. Ask in chat to bring it up to date.</span>
+            </div>
+          )}
           <StepList substeps={substeps} />
           {children}
         </div>
@@ -297,7 +358,6 @@ function CtxSection({
 const STATUS_DOT: Record<SectionStatus, string> = {
   done:         "bg-emerald-600",
   in_progress:  "bg-primary-600",
-  needs_review: "bg-amber-600",
   locked:       "bg-ink-300",
 };
 
@@ -316,7 +376,7 @@ type ExportRow = {
 
 const _SCOPE_LABEL: Record<string, string> = {
   full: "Toàn bộ luận văn", M1: "M1 · Chủ đề", M2: "M2 · Tổng quan",
-  M3: "M3 · Phương pháp", M4: "M4 · Phân tích", M5: "M5 · Bài viết",
+  M3: "M3 · Phương pháp", M4: "M4 · Phân tích", M5: "M5 · Thảo luận & kết luận",
 };
 
 const _CHAPTER_SCOPE_LABEL: Record<string, string> = {
@@ -343,9 +403,9 @@ function ExportsSection({ projectId }: { projectId: string }) {
   const { data } = useSWR<ExportRow[]>(`/projects/${projectId}/exports/list`, fetcher);
   const rows = data ?? [];
   return (
-    <CtxSection label={`Exports${rows.length ? ` (${rows.length})` : ""}`} status="in_progress">
+    <CtxSection label={`Outputs${rows.length ? ` (${rows.length})` : ""}`} status="in_progress">
       {rows.length === 0 ? (
-        <EmptyHint text="No exports yet — ask to export a module or the full thesis, or use Quick actions → Export to Word." />
+        <EmptyHint text="No outputs yet — ask to export a module or the full thesis, or use Quick actions → Export to Word." />
       ) : (
         <div className="space-y-1.5">
           {rows.map(r => <ExportRowItem key={r.id} row={r} />)}

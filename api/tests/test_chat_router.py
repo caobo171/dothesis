@@ -46,6 +46,33 @@ def test_create_project_returns_id_and_default_thread(client):
         assert threads[0].name == "Main"
 
 
+def test_create_project_persists_auto_mode(client):
+    # Auto Thesis chosen on /new must be stored on the project (not a one-shot
+    # client flag) so reopening it re-enters the auto flow. The response echoes
+    # it and a fresh read still reports it.
+    _login_user(client)
+    r = client.post("/api/v1/projects", json={"name": "Auto one", "mode": "auto"})
+    assert r.status_code == 200, r.text
+    pid = r.json()["id"]
+    assert r.json()["mode"] == "auto"
+
+    sf = get_session_factory()
+    with sf() as db:
+        assert db.get(Project, uuid.UUID(pid)).mode == "auto"
+
+    # A later read (the return visit) still sees the persisted mode.
+    assert client.post(f"/api/v1/projects/{pid}").json()["mode"] == "auto"
+
+
+def test_create_project_mode_defaults_to_none(client):
+    # Omitting mode (headless/partner callers, legacy clients) leaves it NULL,
+    # which the client reads as ordinary chat.
+    _login_user(client)
+    r = client.post("/api/v1/projects", json={"name": "Plain"})
+    assert r.status_code == 200, r.text
+    assert r.json()["mode"] is None
+
+
 def test_get_project_returns_context_store_snapshot(client):
     _login_user(client)
     project_id = client.post("/api/v1/projects", json={"name": "X"}).json()["id"]
@@ -120,15 +147,18 @@ def test_list_projects_returns_slice_status_not_full_bodies(client):
     assert len(body) == 1
     store = body[0]["context_store"]
 
-    # Status survives: confirmed slice reports its timestamp...
-    assert store["m1_topic"] == {"confirmed_at": "2026-01-01T00:00:00Z"}
+    # Status survives: confirmed slice reports its timestamp, plus the ONE small
+    # body field the homepage cards need — the M1 research title. Both are single
+    # extracted strings, not the JSONB body.
+    assert store["m1_topic"] == {"confirmed_at": "2026-01-01T00:00:00Z",
+                                 "research_title": "T"}
     # ...an unconfirmed-but-present slice is an object with a null timestamp...
     assert store["m2_literature"] == {"confirmed_at": None}
     # ...and an absent slice stays None (never {} or a stub).
     assert store["m3_design"] is None
 
-    # Content does NOT: no slice body leaks through, at any depth.
-    assert "research_title" not in store["m1_topic"]
+    # The HEAVY bodies still do NOT leak — only research_title is whitelisted.
+    assert "objectives" not in store["m1_topic"]
     assert store["m5_writing"] == {"confirmed_at": None}
     assert "x" * 1000 not in client.post("/api/v1/projects/list").text
 

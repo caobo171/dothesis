@@ -50,11 +50,20 @@ def test_open_blocker_wins():
     assert na["module"] == "M4" and "HTMT" in na["title"]
 
 
-def test_needs_review_wins_over_advance():
-    s = _full({"M1": "done", "M2": "needs_review", "M3": "locked", "M4": "locked", "M5": "locked"},
+def test_stale_module_does_not_hijack_what_comes_next():
+    """A module invalidated upstream must not send the student backwards.
+
+    This asserted the opposite until the review gates came out: any stale
+    module jumped the queue with "Re-check M2 — resolve it before moving on",
+    so an edit to M1 stopped all forward progress. Output first, fine-tuning
+    after — the roadmap keeps advancing and the staleness shows up as a note.
+    """
+    s = _full({"M1": "done", "M2": "done", "M3": "locked", "M4": "locked", "M5": "locked"},
               cs={"research_title": "T", "research_questions": ["Q"]}, focus="M2")
+    s["stale"] = ["M2"]
     na = next_action(s)
-    assert na["module"] == "M2" and "review" in na["why"].lower()
+    assert "re-check" not in na["title"].lower()
+    assert "review" not in na["why"].lower()
 
 
 def test_advance_focus_when_clean():
@@ -76,9 +85,19 @@ def test_null_safe_on_empty_state():
     assert next_action({"contextStore": {}, "status": {}, "focus": None}) is not None
 
 
-def test_m5_has_review_before_export():
+def test_m5_writes_the_closing_pair_and_export_is_terminal():
+    """M5 owns Discussion + Conclusion, and nothing sits between it and export.
+
+    The spine used to run synthesize → assemble → review → export, describing
+    the pre-continuous-writing job (M5 builds the whole document) with a
+    committee-readiness grade gating the last step. Both are gone: chapters 1-4
+    are already written by the time M5 starts, and the student reaches their
+    file without passing a review first.
+    """
     from agent.roadmap import ROADMAP
-    assert ROADMAP["M5"].index("review") < ROADMAP["M5"].index("export")
+    assert ROADMAP["M5"] == ["write_discussion", "write_conclusion", "export"]
+    assert ROADMAP["M5"][-1] == "export"
+    assert "review" not in ROADMAP["M5"]
 
 
 def test_all_done_offers_defense_prep():

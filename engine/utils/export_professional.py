@@ -821,7 +821,13 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
             run.text = "1"
 
         BODY_FONT = "Times New Roman"
-        BODY_SIZE = Pt(12)
+        # Match the pandoc reference doc (engine/examples/create_reference_doc.py):
+        # 13pt / 1.25 / justified. This renderer runs when pandoc is absent AND is
+        # the primary renderer for the legacy paper re-export route
+        # (api/app/routers/papers.py:580,593) — if the two drift, the same thesis
+        # comes out formatted two different ways depending on which path served it.
+        BODY_SIZE = Pt(13)
+        BODY_LINE_SPACING = 1.25
 
         # --- Build Table of Contents from headings before walking the body ---
         toc_entries = _extract_toc_entries(lines)
@@ -844,7 +850,8 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
             _emit_inline_runs(p, txt, base_bold=base_bold, citation_map=citation_map)
 
         def style_body(para):
-            para.paragraph_format.line_spacing = 1.5
+            para.paragraph_format.line_spacing = BODY_LINE_SPACING
+            para.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             para.paragraph_format.space_after = Pt(6)
             for r in para.runs:
                 if not r.font.name:

@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts" / "m5_inline"
 _PARAPHRASE_PROMPT = (_PROMPTS_DIR / "paraphrase.md").read_text(encoding="utf-8")
 _TRANSLATE_PROMPT = (_PROMPTS_DIR / "translate.md").read_text(encoding="utf-8")
+_REWRITE_PROMPT = (_PROMPTS_DIR / "rewrite.md").read_text(encoding="utf-8")
 _TRANSLATE_CHAPTER_PROMPT = (_PROMPTS_DIR / "translate_chapter.md").read_text(encoding="utf-8")
 
 
@@ -58,6 +59,30 @@ def paraphrase_selection(
         selection=selection,
         context_after=context_after,
         style=style or "(none — use a natural academic register)",
+    )
+    return _strip(_call_llm(prompt))
+
+
+@tool
+def rewrite_selection(
+    chapter_name: str,
+    language: str,
+    context_before: str,
+    selection: str,
+    context_after: str,
+    instruction: str,
+) -> str:
+    """Rewrite a chapter selection per a free-form instruction (proofread,
+    improve tone, humanize, expand, shorten…). Returns the rewritten selection
+    only. One generic tool drives every inline action so a new action is a new
+    instruction, not a new LLM wrapper."""
+    prompt = _REWRITE_PROMPT.format(
+        chapter_name=chapter_name,
+        language=language,
+        context_before=context_before,
+        selection=selection,
+        context_after=context_after,
+        instruction=instruction,
     )
     return _strip(_call_llm(prompt))
 

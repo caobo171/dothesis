@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 
 import { apiFetch } from "@/app/lib/api";
 
@@ -39,9 +40,26 @@ export function CitePopover({ projectId, onSelect, onClose }: Props) {
     );
   });
 
+  // Escape returns to the selection toolbar. Without a way back, opening Cite
+  // over an empty reference list was a dead end — nothing to select, no button
+  // to close, so the only escape was clicking away and losing the selection.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <div role="dialog" aria-label="Insert citation"
-         className="bg-white border border-purple-300 rounded-md shadow-lg p-2 w-64 z-50">
+         className="bg-white border border-primary-500 rounded-md shadow-lg p-2 w-64 z-50">
+      {/* Back to the selection toolbar. */}
+      <button
+        type="button"
+        onClick={onClose}
+        className="inline-flex items-center gap-1 text-[12px] font-medium text-ink-500 hover:text-ink-900 mb-2 px-1 py-0.5 rounded hover:bg-ink-50"
+      >
+        <ArrowLeftIcon className="w-3.5 h-3.5" /> Back
+      </button>
       <input
         type="text"
         autoFocus
@@ -54,7 +72,7 @@ export function CitePopover({ projectId, onSelect, onClose }: Props) {
       {refs !== null && refs.length === 0 && (
         <div className="text-xs text-gray-500 px-2 py-2">
           No references yet. Citations are added in M2.{" "}
-          <a href={`/chat/projects/${projectId}`} className="text-purple-600 underline">Open chat</a>
+          <a href={`/chat/projects/${projectId}`} className="text-primary-600 underline">Open chat</a>
         </div>
       )}
       {refs !== null && refs.length > 0 && (
@@ -64,7 +82,7 @@ export function CitePopover({ projectId, onSelect, onClose }: Props) {
               key={r.id}
               type="button"
               onClick={() => { onSelect(r.id); onClose(); }}
-              className="text-left text-xs px-2 py-1.5 hover:bg-purple-50 rounded"
+              className="text-left text-xs px-2 py-1.5 hover:bg-primary-50 rounded"
             >
               <div className="font-medium text-gray-900">{r.author} ({r.year})</div>
               {r.title && <div className="text-gray-500 truncate">{r.title}</div>}

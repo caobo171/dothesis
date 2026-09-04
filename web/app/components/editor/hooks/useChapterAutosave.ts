@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { apiFetch } from "@/app/lib/api";
 
 
 type Params = {
@@ -30,15 +31,14 @@ export function useChapterAutosave({ projectId, chapterName, debounceMs = 1000 }
     let lastErr: Error | null = null;
     for (let i = 0; i < 3; i++) {
       try {
-        const r = await fetch(
-          `/api/v1/projects/${projectId}/m5/chapters/${chapterName}`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prose }),
-          }
+        // apiFetch, NOT a raw fetch: the POST-only API reads the auth token
+        // from the JSON body (no cookies). A bare fetch sent none, so every
+        // autosave 401'd and NOTHING the user typed was persisted. apiFetch
+        // folds the token in and throws on non-2xx (caught below to retry).
+        await apiFetch(
+          `/projects/${projectId}/m5/chapters/${chapterName}`,
+          { method: "PATCH", body: { prose } }
         );
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
         setLastSavedAt(new Date());
         setError(null);
         setSaving(false);

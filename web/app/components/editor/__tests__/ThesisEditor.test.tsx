@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 // SWRConfig with an isolated provider map gives each test its own cache —
 // prevents stale data from the "empty chapters" test bleeding into later tests.
 import { SWRConfig } from "swr";
@@ -37,6 +37,13 @@ afterEach(() => vi.restoreAllMocks());
 
 
 describe("ThesisEditor", () => {
+  it("shows the editor skeleton while chapters are loading", () => {
+    // Never-resolving fetch keeps SWR in the loading state.
+    (global.fetch as any) = vi.fn().mockImplementation(() => new Promise(() => {}));
+    renderWithFreshCache(<ThesisEditor projectId="p1" />);
+    expect(screen.getByLabelText("Đang tải trình soạn thảo")).toBeInTheDocument();
+  });
+
   it("renders EmptyState when no chapters", async () => {
     (global.fetch as any) = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     renderWithFreshCache(<ThesisEditor projectId="p1" />);
@@ -47,5 +54,31 @@ describe("ThesisEditor", () => {
     renderWithFreshCache(<ThesisEditor projectId="p1" />);
     await waitFor(() => expect(screen.getByText(/Ch 1 — Introduction/)).toBeInTheDocument());
     expect(screen.getByText(/Ch 2 — Literature Review/)).toBeInTheDocument();
+  });
+
+  it("stacks every chapter on one page with anchor ids", async () => {
+    const { container } = renderWithFreshCache(<ThesisEditor projectId="p1" />);
+    // Both chapter bodies render simultaneously (one-page), not one-at-a-time.
+    await waitFor(() => expect(screen.getByText(/Intro prose/)).toBeInTheDocument());
+    expect(screen.getByText(/Lit body/)).toBeInTheDocument();
+    // Each chapter is a scroll target the outline can jump to.
+    expect(container.querySelector("#ch-intro")).toBeTruthy();
+    expect(container.querySelector("#ch-lit_review")).toBeTruthy();
+  });
+
+  it("scrolls to a chapter when its outline entry is clicked", async () => {
+    const spy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {});
+    renderWithFreshCache(<ThesisEditor projectId="p1" />);
+    const entry = await screen.findByText(/Ch 2 — Literature Review/);
+    fireEvent.click(entry);
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+  });
+
+  it("mounts the single shared formatting toolbar once", async () => {
+    renderWithFreshCache(<ThesisEditor projectId="p1" />);
+    // The toolbar binds to the active chapter editor and must appear exactly
+    // once, not once per stacked chapter.
+    await waitFor(() => expect(screen.getByRole("toolbar", { name: "Định dạng" })).toBeInTheDocument());
+    expect(screen.getAllByRole("toolbar", { name: "Định dạng" })).toHaveLength(1);
   });
 });

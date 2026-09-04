@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import {
   AtSign, ChevronDown, Paperclip, Send, X,
 } from "lucide-react";
 import { FileDropZone } from "./FileDropZone";
 import { SkillAvatar, SkillPicker } from "./SkillPicker";
+import { QuickActionsMenu } from "./QuickActionsMenu";
 import { applySkillDirective, type Skill } from "@/app/lib/skills";
 import { Button } from "@/app/components/ui/button";
 
@@ -58,6 +59,9 @@ export function ChatInput({
   onFileDrop,
   disabled,
   focusModule,
+  autoThesisButton,
+  exportArtifacts,
+  onQuickPrompt,
 }: {
   /** Submit handler. `attachments` carries the chip metadata (server-side
    *  upload_id + filename + size) so the caller can ship the ids to the
@@ -75,6 +79,12 @@ export function ChatInput({
   disabled: boolean;
   /** Module the conversation is currently focused on. Used in the placeholder. */
   focusModule?: string;
+  /** Quick actions — moved here from the header to reclaim its space. Rendered
+   *  in the toolbar row, opening upward. Omitting all three (e.g. the run view)
+   *  hides the menu. */
+  autoThesisButton?: ReactNode;
+  exportArtifacts?: { kind: string; download_url: string }[];
+  onQuickPrompt?: (text: string) => void;
 }) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -291,6 +301,28 @@ export function ChatInput({
               onClick={openFilePicker}
               disabled={disabled}
             />
+
+            {/* Quick actions sits at the far right of the toolbar and opens
+                upward — a downward menu would be clipped by the viewport edge
+                the composer rests on. Rendered only when the host wires the
+                actions in (the run view omits them).
+
+                NOT tied to the composer's `disabled`: the text field disables
+                while a turn streams or when credits run out, but export,
+                history, and Auto Thesis (which gates its own run on credits
+                downstream) must stay reachable — the header menu it replaced
+                was never disabled either. */}
+            {autoThesisButton && (
+              <>
+                <span className="flex-1" />
+                <QuickActionsMenu
+                  autoThesisButton={autoThesisButton}
+                  exportArtifacts={exportArtifacts}
+                  onQuickPrompt={onQuickPrompt}
+                  placement="up"
+                />
+              </>
+            )}
           </div>
         </div>
 

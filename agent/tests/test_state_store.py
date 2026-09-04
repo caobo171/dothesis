@@ -49,20 +49,22 @@ def test_ownership_enforced(store):
     assert store.read_slice("M1")["exists"] is False
 
 
-def test_mutate_flags_started_downstream_only(store):
+def test_mutate_marks_done_downstream_stale_without_touching_status(store):
     # M1..M3 have content; M4/M5 untouched (locked).
     store.commit_slice("M1", {"research_title": "T"}, reason="r", confirm_done=True)
     store.commit_slice("M2", {"research_gaps": [{"id": "gap-1"}]}, reason="r", confirm_done=True)
     store.commit_slice("M3", {"hypotheses": ["H1"]}, reason="r", confirm_done=True)
 
-    # Re-mutating M1 flags M2+M3 (started) but NOT M4/M5 (locked — flagging an
-    # untouched module is noise; bootstrap-style holes are flagged explicitly).
+    # Re-mutating M1 marks M2+M3 stale. They STAY done — this used to write
+    # needs_review into status, which demoted them and made the roadmap route
+    # the student back before anything could move forward.
     result = store.commit_slice("M1", {"research_title": "T2"}, reason="pivot")
-    assert result["status"]["M2"] == "needs_review"
-    assert result["status"]["M3"] == "needs_review"
+    assert result["status"]["M2"] == "done"
+    assert result["status"]["M3"] == "done"
     assert result["status"]["M4"] == "locked"
     assert result["status"]["M5"] == "locked"
     assert result["flagged"] == ["M2", "M3"]
+    assert result["stale"] == ["M2", "M3"]
 
 
 def test_commit_snapshots_version_history(store):
@@ -331,8 +333,8 @@ def test_a_real_m1_edit_still_flags_downstream(store):
 
     result = store.commit_slice("M1", {"research_title": "T2", "language": "en"},
                                 reason="pivot + language")
-    assert result["status"]["M2"] == "needs_review"
     assert result["flagged"] == ["M2"]
+    assert result["stale"] == ["M2"]
 
 
 def test_a_done_module_does_not_flap_back_on_a_later_write(store):
@@ -357,13 +359,18 @@ def test_a_done_module_does_not_flap_back_on_a_later_write(store):
     assert result["status"]["M4"] == "done"          # still theirs, still done
 
 
-def test_invalidation_still_arrives_as_needs_review(store):
+def test_invalidation_still_arrives_on_the_stale_channel(store):
     """The carve-out must not swallow real invalidation — that has its own
-    channel, and it must still fire on a done module."""
+    channel, and it must still fire on a done module.
+
+    What changed is where it lands: `stale`, not `status`. The signal survives;
+    the gate it used to impose does not.
+    """
     store.commit_slice("M1", {"research_title": "T"}, reason="r", confirm_done=True)
     store.commit_slice("M2", {"research_gaps": [{"id": "g"}]}, reason="r", confirm_done=True)
     assert store.load()["status"]["M2"] == "done"
 
     result = store.commit_slice("M1", {"research_title": "A different thesis"},
                                 reason="pivot")
-    assert result["status"]["M2"] == "needs_review"
+    assert result["stale"] == ["M2"]
+    assert result["status"]["M2"] == "done"

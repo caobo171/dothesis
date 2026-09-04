@@ -122,8 +122,11 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
 
         Deterministically: validates `writes` against the module's owned keys,
         snapshots the previous version, applies the writes, sets focus to the
-        module, and flags started downstream modules `needs_review`
-        (M1→M2..M5, M2→M3..M5, M3→M4,M5, M4→M5).
+        module, and marks finished downstream modules STALE
+        (M1→M2..M5, M2→M3..M5, M3→M4,M5, M4→M5). Stale is a note that their
+        content predates this edit — their status is untouched and nothing is
+        blocked. Never tell the student they must go back and fix a module
+        before continuing.
 
         Args:
             module: One of M1..M5 — the module whose slice is being written.
@@ -133,7 +136,8 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
                 the module's done-criteria — marks the module `done` instead of
                 `in_progress`.
             status_overrides: Bootstrap only — explicit status flags for
-                dependency holes (e.g. {"M2": "needs_review"}).
+                dependency holes (e.g. {"M2": "in_progress"}). Values must be
+                one of locked / in_progress / done.
 
         LANGUAGE. The moment a student says which language they want the thesis
         WRITTEN in — "viết full bài này bằng tiếng Anh", "write this in

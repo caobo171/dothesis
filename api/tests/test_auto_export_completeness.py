@@ -1,15 +1,11 @@
-"""The M5 auto-export hook must not ship a partial thesis.
+"""The auto-export hook renders whatever chapters are written so far.
 
-The hook fires from the STORE layer when a commit flips M5 to done, and renders
-exactly what final_sections holds — it cannot compose, and must not, because it
-runs inside a commit where an LLM call has no business.
-
-That was harmless while final_sections stayed empty until the composer filled
-it. Once the import began preserving the student's chapters 4 and 5, the hook
-fired holding two chapters and produced a 35KB "full thesis" with no
-introduction, literature review or methodology. And because the export came from
-here rather than the export_docx tool, no export_artifacts widget was ever
-emitted, so the chat had no download card either — one cause, both symptoms.
+Pivot (continuous per-module writing): the thesis is composed chapter by chapter
+as each module M1→M5 completes, so a PARTIAL docx (e.g. Chapters 1–4 while
+Discussion is still to come) is a first-class, expected state — the hook renders
+it rather than waiting for all six chapters. `_missing_chapters` is retained for
+logging/UX ("still to draft: …"), not as an export gate. The only skip left is
+when there is no drafted prose at all (nothing to render).
 """
 from app.agent_state import DbProjectStateStore as Store
 from orchestrator.tools.m5_writing import (
@@ -49,16 +45,19 @@ def test_malformed_sections_fail_towards_skipping():
     assert Store._missing_chapters([None, "x", 42]) == list(M5_CHAPTER_ORDER)
 
 
-def test_hook_skips_the_export_when_chapters_are_missing(monkeypatch):
-    """End-to-end through _auto_export_m5: nothing is rendered or persisted."""
+def test_hook_renders_a_partial_thesis(monkeypatch):
+    """Pivot: a partial draft (only results + conclusion) IS now rendered —
+    continuous per-module writing means the docx reflects whatever exists."""
     import app.agent_state as A
     import orchestrator.tools.m5_writing as M
 
     called = {}
     monkeypatch.setattr(M, "run_export",
-                        lambda *a, **kw: called.setdefault("ran", True) or [])
+                        lambda *a, **kw: called.setdefault("ran", True) or ["docx", "pdf"])
     monkeypatch.setattr(M, "sections_from_m5_slice",
                         lambda slice_: [_sec("results"), _sec("conclusion")])
+    monkeypatch.setattr(M, "m2_references", lambda *_a, **_k: [])
+    monkeypatch.setattr(Store, "persist_export_artifacts", lambda self, arts: None)
 
     class _CS:
         m5_writing = {"final_sections": [1, 2]}
@@ -66,6 +65,7 @@ def test_hook_skips_the_export_when_chapters_are_missing(monkeypatch):
         m1_topic = {"language": "en"}
 
     class _Sess:
+        def __init__(self, *a, **k): pass
         def __enter__(self): return self
         def __exit__(self, *a): return False
         def get(self, model, pid): return _CS()
@@ -78,4 +78,84 @@ def test_hook_skips_the_export_when_chapters_are_missing(monkeypatch):
     store.project_id = "p1"
     store._auto_export_m5()
 
-    assert "ran" not in called, "a partial thesis was rendered and exported"
+    assert called.get("ran"), "a partial thesis should now be rendered and exported"
+
+
+def test_hook_skips_when_no_prose_at_all(monkeypatch):
+    """The only remaining skip: nothing drafted anywhere → no empty document."""
+    import app.agent_state as A
+    import orchestrator.tools.m5_writing as M
+
+    called = {}
+    monkeypatch.setattr(M, "run_export",
+                        lambda *a, **kw: called.setdefault("ran", True) or [])
+    monkeypatch.setattr(M, "sections_from_m5_slice", lambda slice_: [])
+    monkeypatch.setattr(M, "m2_references", lambda *_a, **_k: [])
+
+    class _CS:
+        m5_writing = {}
+        m2_literature = {}
+        m1_topic = {"language": "en"}
+
+    class _Sess:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def get(self, model, pid): return _CS()
+
+    monkeypatch.setattr(A, "Session", _Sess, raising=False)
+    monkeypatch.setattr("sqlalchemy.orm.Session", _Sess)
+
+    store = Store.__new__(Store)
+    store.engine = object()
+    store.project_id = "p1"
+    store._auto_export_m5()
+
+    assert "ran" not in called, "nothing to render → must skip"
+
+
+def test_auto_compose_module_merges_only_its_chapters(monkeypatch):
+    """_auto_compose_module writes the completed module's chapter(s) into
+    m5_writing.chapters WITHOUT clobbering chapters owned by other modules."""
+    import app.agent_state as A
+    import orchestrator.tools.m5_writing as M
+
+    # M3 owns methodology; stub its composition.
+    monkeypatch.setattr(
+        M, "compose_module_chapters",
+        lambda nested, module: {"methodology": {"name": "methodology", "prose": "Method prose."}},
+    )
+
+    committed = {}
+
+    class _CS:
+        def __init__(self):
+            # An intro chapter already written by M1 must survive the M3 compose.
+            self.m5_writing = {"chapters": {"intro": {"name": "intro", "prose": "Intro."}}}
+            self.m1_topic = {}
+            self.m2_literature = {}
+            self.m3_design = {}
+            self.m4_analysis = {}
+
+    cs = _CS()
+
+    class _Sess:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def get(self, model, pid): return cs
+        def commit(self): committed["done"] = True
+
+    monkeypatch.setattr(A, "Session", _Sess, raising=False)
+    monkeypatch.setattr("sqlalchemy.orm.Session", _Sess)
+    monkeypatch.setattr("sqlalchemy.orm.attributes.flag_modified", lambda *a, **k: None)
+
+    store = Store.__new__(Store)
+    store.engine = object()
+    store.project_id = "p1"
+    store._auto_compose_module("M3")
+
+    chapters = cs.m5_writing["chapters"]
+    assert chapters["intro"]["prose"] == "Intro.", "M1's chapter must be preserved"
+    assert chapters["methodology"]["prose"] == "Method prose.", "M3's chapter must be written"
+    assert committed.get("done")

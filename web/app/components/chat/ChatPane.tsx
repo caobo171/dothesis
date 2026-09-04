@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Zap } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Loader2, Zap } from "lucide-react";
 import useSWR from "swr";
 import { useChat } from "./hooks/useChat";
 import { useMe } from "@/app/lib/use-me";
@@ -12,7 +12,7 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { AutoThesisButton, type RunStatus } from "./AutoThesisButton";
 import { AutoThesisModal } from "./AutoThesisModal";
-import { AutoThesisDrawer } from "./AutoThesisDrawer";
+import { AutoThesisRunView } from "./AutoThesisRunView";
 import { synthesizeWidgetSelection } from "./widgets/synthesize";
 import type { WidgetSelectHandler } from "./widgets/types";
 import {
@@ -23,6 +23,7 @@ import {
 import { AnalysisOverlay } from "./AnalysisOverlay";
 import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 
 
 /**
@@ -35,13 +36,11 @@ import { tokenStore } from "@/app/lib/tokenStore";
  * thread on a partly-complete project picks up where the project is.
  *
  * Precedence:
- *   1. ANY module marked `needs_review` → invite the user to fix the
- *      flagged module first (that's the most urgent signal in the brief).
- *   2. M5 has chapters → handled by the caller (the auto-drafted branch
+ *   1. M5 has chapters → handled by the caller (the auto-drafted branch
  *      above this; we never reach `getEmptyStateCopy` in that case).
- *   3. Otherwise: greet by the "current focus" module — what's the user
+ *   2. Otherwise: greet by the "current focus" module — what's the user
  *      working on right now — and remind them what its job is.
- *   4. Cold start (no committed slices anywhere) → original "Start your
+ *   3. Cold start (no committed slices anywhere) → original "Start your
  *      thesis" copy.
  */
 function getEmptyStateCopy(project: {
@@ -61,16 +60,11 @@ function getEmptyStateCopy(project: {
   const focus = project.focus ?? project.current_module;
   const title = cs.m1_topic?.research_title;
 
-  // 1. Needs-review beats everything — surface the worst.
-  const flagged = ["M1", "M2", "M3", "M4", "M5"].find(m => status[m] === "needs_review");
-  if (flagged) {
-    return {
-      title: `${flagged} needs another look`,
-      body:
-        `Something in ${MODULE_LABEL[flagged]} changed upstream — let's revisit it so the rest stays grounded.` +
-        (title ? ` (Project: ${title})` : ""),
-    };
-  }
+  // A `needs_review` branch used to open here and outrank everything else: the
+  // first thing a returning student saw was "M2 needs another look", before any
+  // mention of what they were actually working on. Removed with the rest of the
+  // review gates — staleness is shown on the module's own card in the context
+  // panel, where it informs without redirecting them.
 
   // 2. The auto-drafted branch is handled above by the caller — but only when
   //    the thesis was genuinely written (see `autoWritten`). A project holding
@@ -115,7 +109,8 @@ const MODULE_LABEL: Record<string, string> = {
   M2: "Literature Review",
   M3: "Research Design",
   M4: "Data Analysis",
-  M5: "Writing",
+  // M5 owns Discussion + Conclusion (MODULE_CHAPTERS), not the whole document.
+  M5: "Discussion & Conclusion",
 };
 
 const MODULE_HINT: Record<string, string> = {
@@ -163,7 +158,16 @@ export function _isAutoWritten(project?: {
   );
 }
 
+// A run that is still going. The workspace belongs to it outright.
+const LIVE_RUN_STATUSES = new Set(["queued", "running", "paused"]);
+// Every status worth showing the run screen for at all — the live ones plus
+// the three ends, each of which has something the student needs (downloads,
+// an error, a resume).
+const RUN_VIEW_STATUSES = new Set([...LIVE_RUN_STATUSES, "done", "failed", "canceled"]);
+
+
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
+  const t = useT();
   const {
     messages, streamingText, streamingProgress, streamingError,
     messagesLoading, inflight, error: sendError, send,
@@ -200,6 +204,10 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     focus?: string | null;
     current_module?: string;
     module_status?: Record<string, string>;
+    // Persisted generation mode from /new: "auto" (Auto Thesis) vs "chat".
+    // Null on legacy projects — treated as "chat". Drives the return-visit
+    // effect below that re-opens the Auto Thesis credit gate.
+    mode?: string | null;
     // Each slice optional; presence + confirmed_at drives the empty-state
     // copy below. The shapes are loose on purpose — we only read a few
     // fields and want to tolerate dual-write / partial data.
@@ -255,6 +263,11 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   const { data: latestRun, mutate: mutateRun } = useSWR<{ run: { id: string; status: RunStatus } | null }>(
     `/projects/${projectId}/runs/list?latest=true`, fetcher,
   );
+  // The run we JUST started. /runs/list is fetched on mount (usually
+  // {run:null}) and a refetch can lose a race with that in-flight result,
+  // so the start response has to be enough to show the run screen.
+  const [startedRun, setStartedRun] = useState<{ id: string; status: RunStatus } | null>(null);
+  const activeRun = latestRun?.run ?? startedRun;
 
   // Analyze-intent pickup. The drop-first /new page stashes the dropped files
   // (already uploaded) + an optional note keyed by project id, then routes here
@@ -267,6 +280,9 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzePhase, setAnalyzePhase] = useState<"running" | "done" | "failed">("running");
   const analyzeFiredRef = useRef(false);
+  // Fires once per mount so the return-visit auto-mode prompt (below) doesn't
+  // re-open the modal every render after the student dismisses it.
+  const autoModePromptedRef = useRef(false);
   // Kept so "Try again" can re-run the same turn after the stash is consumed.
   // `kind` rides along so "Try again" re-runs the SAME job — re-firing a
   // humanize request as a plain assessment would silently change what the
@@ -321,19 +337,50 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     if (!intent) return;
     analyzeFiredRef.current = true;
     analyzeIntentRef.current = intent;
-    // Auto Thesis chosen on /new: open the run modal instead of firing a
-    // bootstrap turn. Deliberately NOT both — the run seeds M1 itself
-    // (_seed_brief), so a bootstrap turn alongside it would put two writers on
-    // the same slice, and the student would pay for a turn whose work the run
-    // is about to redo. The modal is reused rather than reimplemented on /new
-    // so the token estimate and the credit gate keep living in one place.
+    // Auto Thesis chosen on /new: START the run. Deliberately not a bootstrap
+    // turn — the run seeds M1 itself (_seed_brief), so a turn alongside it
+    // would put two writers on the same slice and bill the student for work
+    // the run is about to redo.
+    //
+    // It no longer opens the modal either. The student pressed a button
+    // labelled "Write my thesis" with their topic typed into the box above it;
+    // a dialog that re-asks for that same topic and quotes "estimated tokens"
+    // is a second confirmation of a decision already made, in units nobody
+    // outside this codebase thinks in. startAutoThesisFromNew keeps the modal
+    // as the fallback for the two things this path genuinely cannot resolve.
     if (intent.autoThesis) {
-      setAutoThesisTopic(intent.note.trim());
-      setModalOpen(true);
+      const topic = intent.note.trim();
+      setAutoThesisTopic(topic);
+      void startAutoThesisFromNew(topic);
       return;
     }
     void runAnalyze();
   }, [projectId, messagesLoading, messages.length, inflight, runAnalyze]);
+
+  // Persisted Auto Thesis mode restores the auto experience on a RETURN visit.
+  // The /new → sessionStorage handoff above starts the run on the very first
+  // load, but it's consumed once and gone on reload — so a user reopening an
+  // Auto Thesis project whose run never actually started (or bookmarking the
+  // thread) used to land in a plain chat with no way back to the credit /
+  // estimate gate ("I'm in auto mode but I do not have consume"). When the
+  // project is a persisted auto project, the thread is still empty, and no run
+  // exists yet, open the Auto Thesis modal — the consume/estimate gate — once so
+  // they can start it. Deliberately the modal, NOT startAutoThesisFromNew:
+  // silently re-firing the run on every open would risk charging a student who
+  // only came back to look. This effect is declared AFTER the analyze pickup so
+  // that on a fresh /new load analyzeFiredRef is already set and we don't double
+  // up with the handoff's own start.
+  useEffect(() => {
+    if (autoModePromptedRef.current) return;
+    if (analyzeFiredRef.current) return;      // /new handoff owns this load
+    if (!project) return;                     // wait for the project row
+    if (project.mode !== "auto") return;      // only persisted auto projects
+    if (latestRun === undefined) return;      // wait until we know a run's status
+    if ((activeRun?.status ?? null) !== null) return;  // a run exists — the run view owns the screen
+    if (messagesLoading || messages.length > 0 || inflight) return;  // only a fresh, empty thread
+    autoModePromptedRef.current = true;
+    setModalOpen(true);
+  }, [project, latestRun, activeRun, messagesLoading, messages.length, inflight]);
 
   // The editor entry point ("Open editor" / "Read your draft") should appear as
   // soon as there's an editable thesis — which is true via ANY of: drafted
@@ -357,10 +404,32 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   const upstreamDone =
     !!project?.module_status &&
     ["M1", "M2", "M3", "M4"].every(m => project.module_status?.[m] === "done");
-  const autoThesisReady = upstreamDone && (latestRun?.run?.status ?? null) === null;
+  const autoThesisReady = upstreamDone && (activeRun?.status ?? null) === null;
+
+  // "I've seen the run, let me talk to it" — the way out of the run screen and
+  // back to the thread. Session-scoped on purpose: it is a UI preference for
+  // this visit, not a fact about the project.
+  const [runViewDismissed, setRunViewDismissed] = useState(false);
+
+  // Does the run own the screen right now?
+  //
+  // While it is LIVE, unconditionally: there is nothing to say in a thread
+  // whose agent is mid-run, and the empty-state copy ("tell me the broad area
+  // you want to study") actively contradicts the work already in flight.
+  //
+  // Once it is TERMINAL, only until the student has something else to look at.
+  // The finished run is the payoff and stays on screen — but a project they
+  // come back to and start talking in is a conversation, not a run report, so
+  // any message in the thread hands the pane back. `messagesLoading` is in the
+  // test because an unsettled history reads as an empty one, which would flash
+  // the result screen over a thread that has plenty in it.
+  const runStatusNow = activeRun?.status ?? null;
+  const showRunView =
+    !!activeRun && !runViewDismissed && !!runStatusNow &&
+    (LIVE_RUN_STATUSES.has(runStatusNow) ||
+      (RUN_VIEW_STATUSES.has(runStatusNow) && !messagesLoading && messages.length === 0));
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   // Bumped on resume to remount the drawer so its SSE stream reconnects to the
   // freshly re-spawned run (the previous stream closed on the terminal event).
   const [runNonce, setRunNonce] = useState(0);
@@ -368,28 +437,110 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   // committed m1_topic.research_title for the modal to prefill from, so the
   // sentence the student typed on the start screen stands in for it.
   const [autoThesisTopic, setAutoThesisTopic] = useState("");
+  // The topic in the modal was read out of the uploads, not typed. Changes the
+  // dialog from "start the run?" to "is this what your thesis is about?".
+  const [topicWasDerived, setTopicWasDerived] = useState(false);
+  // Reading the files is one LLM call — seconds, not instant. Without this the
+  // student stares at an empty thread wondering whether pressing the button
+  // did anything.
+  const [derivingTopic, setDerivingTopic] = useState(false);
 
   const onAutoThesisClick = () => {
-    const status = latestRun?.run?.status ?? null;
-    // If a run is active/done/failed, open the drawer to show its progress
-    if (status === "running" || status === "paused" || status === "done" || status === "failed") {
-      setDrawerOpen(true);
+    // Clear the derived flag: this is the workspace button, a deliberate click
+    // on a run the student is starting themselves. Without the reset, anyone
+    // who dismissed the read-from-files dialog earlier in the session got its
+    // "We read your files" framing again over a topic nobody read.
+    setTopicWasDerived(false);
+    const status = activeRun?.status ?? null;
+    // There IS a run — show it. Bringing the run screen back is what "open the
+    // drawer" used to mean; the run is the main pane now, so this just undoes
+    // an earlier "ask in chat".
+    if (status && RUN_VIEW_STATUSES.has(status)) {
+      setRunViewDismissed(false);
     } else {
       setModalOpen(true);
     }
   };
 
-  const confirmAutoThesis = async (topic: string) => {
-    setModalOpen(false);
+  // Returns whether the run actually started. The modal stays open until this
+  // resolves: closing first, then hoping /runs/list would populate, is how
+  // "Write my thesis" landed on an empty "Start your thesis" thread.
+  const confirmAutoThesis = async (topic: string): Promise<boolean> => {
     try {
-      await apiFetch(`/projects/${projectId}/runs`, {
+      const created = (await apiFetch(`/projects/${projectId}/runs`, {
         method: "POST",
         body: { mode: "auto", topic },
-      });
-      void mutateRun();
-      setDrawerOpen(true);
+      })) as { run_id: string; status: RunStatus };
+      const run = { id: created.run_id, status: created.status || "queued" };
+      setStartedRun(run);
+      // Seed the list cache from the start response. revalidate:false so a
+      // lagging {run:null} poll cannot overwrite the run we just created.
+      await mutateRun({ run }, { revalidate: false });
+      setModalOpen(false);
+      setRunViewDismissed(false);
+      return true;
     } catch {
-      // Errors surface elsewhere; we just don't open the drawer.
+      return false;
+    }
+  };
+
+  // The /new → Auto Thesis handoff: no confirmation step, because pressing
+  // "Write my thesis" was the confirmation.
+  //
+  // The modal still owns two cases this cannot decide:
+  //   derived topic — nothing typed, so the topic was read out of the uploads.
+  //               The student has never seen that sentence and the run writes
+  //               six chapters on it, so it is shown once, editable. This is
+  //               not the confirmation they already gave; it is a new fact.
+  //   no credit — POST /runs has no credit gate of its own; the estimate is
+  //               where the balance is checked and the start is blocked. Skip
+  //               the modal for a student who can't afford the run and they
+  //               get a run that dies partway with no explanation.
+  // The estimate itself is advisory: if the check fails, start anyway rather
+  // than blocking a paid-up student on a broken read.
+  const startAutoThesisFromNew = async (topic: string) => {
+    if (!topic) { void deriveTopicThenAsk(); return; }
+    try {
+      const est = (await apiFetch(`/projects/${projectId}/runs/estimate`, {
+        method: "POST",
+        body: { topic },
+      })) as { sufficient_credit?: boolean };
+      if (est?.sufficient_credit === false) { setModalOpen(true); return; }
+    } catch {
+      /* advisory — a failed estimate must not stop the run */
+    }
+    const started = await confirmAutoThesis(topic);
+    // Fall back to the modal so there is something to retry from, rather than
+    // an empty thread that never explains itself.
+    if (!started) setModalOpen(true);
+  };
+
+  // Nothing typed on /new: the student dropped a document and asked for a
+  // thesis. The title is in that document — read it back and show it for one
+  // click rather than making them retype what they just handed over.
+  //
+  // Deliberately NOT the mid-journey import: /topic-from-uploads is a single
+  // inference for a single string, where /reconstruct is a minute-plus walk
+  // that also commits M1/M3 as earned state — state this run writes itself.
+  // Null title (no readable files, or the model couldn't tell) opens the same
+  // modal empty, which is the ask-the-student fallback.
+  const deriveTopicThenAsk = async () => {
+    setDerivingTopic(true);
+    try {
+      const res = (await apiFetch(`/projects/${projectId}/topic-from-uploads`, {
+        method: "POST",
+        body: {},
+      })) as { research_title?: string | null };
+      const title = (res?.research_title || "").trim();
+      if (title) {
+        setAutoThesisTopic(title);
+        setTopicWasDerived(true);
+      }
+    } catch {
+      /* fall through to the empty modal — the student types it */
+    } finally {
+      setDerivingTopic(false);
+      setModalOpen(true);
     }
   };
 
@@ -397,14 +548,15 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   // that died, keeping the completed ones) rather than starting over from M1.
   // If resume isn't possible, fall back to the fresh-run modal.
   const resumeRun = async () => {
-    const run = latestRun?.run;
+    const run = activeRun;
     if (!run) { setModalOpen(true); return; }
     try {
       await apiFetch(`/runs/${run.id}/resume`, { method: "POST" });
       void mutateRun();
       setRunNonce(n => n + 1);
     } catch {
-      setDrawerOpen(false);
+      // Not resumable — offer a fresh run instead of leaving a dead button on
+      // the run screen.
       setModalOpen(true);
     }
   };
@@ -489,6 +641,16 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
 
   return (
     <>
+      {/* Reading the uploaded files for a title. One LLM call, a few seconds —
+          long enough that an unexplained blank thread reads as "nothing
+          happened", which is when a student presses the button again. */}
+      {derivingTopic && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+          <p className="inline-flex items-center gap-2 text-[13.5px] font-semibold text-ink-700">
+            <Loader2 className="w-4 h-4 animate-spin" /> {t("auto.derived.reading")}
+          </p>
+        </div>
+      )}
       {analyzing && (
         <AnalysisOverlay
           phase={analyzePhase}
@@ -511,21 +673,39 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
             ? project.module_status?.[project.focus ?? project.current_module ?? ""] ?? "in_progress"
             : undefined
         }
-        autoThesisButton={
-          <AutoThesisButton
-            runStatus={latestRun?.run?.status ?? null}
-            onClick={onAutoThesisClick}
-            ready={autoThesisReady}
-          />
-        }
         projectId={projectId}
         hasChapters={hasChapters}
-        exportArtifacts={project?.context_store?.m5_writing?.export_artifacts}
-        // Export-to-Word quick actions → agent prompt (export_docx scope=Mx),
-        // which files the export under its module scope, not M5.
-        onQuickPrompt={(t) => void send(t)}
       />
-      {!project || messagesLoading ? (
+      {runViewDismissed && activeRun && runStatusNow && RUN_VIEW_STATUSES.has(runStatusNow) && (
+        <div
+          className={`flex items-center gap-2 px-[22px] py-2 border-b ${
+            LIVE_RUN_STATUSES.has(runStatusNow)
+              ? "bg-amber-50 border-amber-100"
+              : "bg-primary-50 border-primary-100"
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => setRunViewDismissed(false)}
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary-700 hover:text-primary-800 hover:underline"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" aria-hidden />
+            {t(LIVE_RUN_STATUSES.has(runStatusNow) ? "auto.back.live" : "auto.back")}
+          </button>
+        </div>
+      )}
+      {showRunView && activeRun ? (
+        <AutoThesisRunView
+          key={`${activeRun.id}:${runNonce}`}
+          runId={activeRun.id}
+          projectId={projectId}
+          topic={project?.context_store?.m1_topic?.research_title || autoThesisTopic}
+          initialStatus={activeRun.status}
+          moduleStatus={project?.module_status}
+          onRetry={resumeRun}
+          onAskInChat={() => setRunViewDismissed(true)}
+        />
+      ) : !project || messagesLoading ? (
         // Until the project lands this rendered the message list — which is
         // empty at that point — and before message history landed it also
         // flashed the empty-thread leading copy over populated conversations.
@@ -609,7 +789,12 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
           projectId={projectId}
         />
       )}
-      {outOfCredits && (
+      {/* Everything below is the CHAT surface: the credit CTA, the send-failure
+          notice and the composer. An unattended run has no composer at all —
+          shipping one told the student to reply to a job that was never going
+          to ask them anything, and disabling it instead would have left a dead
+          box under a finished thesis. */}
+      {!showRunView && outOfCredits && (
         <div className="mx-auto mb-2 flex w-full max-w-3xl items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <Zap className="h-4 w-4 shrink-0 text-amber-600" />
           <div className="flex-1 text-[13px] leading-snug text-amber-900">
@@ -624,7 +809,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
           </Link>
         </div>
       )}
-      {(sendError || readOnlyAdminView) && !outOfCredits && (
+      {!showRunView && (sendError || readOnlyAdminView) && !outOfCredits && (
         <div
           role="alert"
           className="mx-auto mb-2 flex w-full max-w-3xl items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-snug text-amber-950"
@@ -640,6 +825,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
           </div>
         </div>
       )}
+      {!showRunView && (
       <ChatInput
         // ChatInput emits (text, attachments[]) — send's signature is
         // (text, widgetPayload, attachments). Skip the widgetPayload slot
@@ -655,7 +841,21 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         // no-reply, and points the user at the upgrade CTA above instead.
         disabled={inflight || outOfCredits || readOnlyAdminView}
         focusModule={project ? (project.focus ?? project.current_module) : undefined}
+        // Quick actions live in the composer toolbar now (moved out of the
+        // header). Same wiring the header used to receive.
+        autoThesisButton={
+          <AutoThesisButton
+            runStatus={activeRun?.status ?? null}
+            onClick={onAutoThesisClick}
+            ready={autoThesisReady}
+          />
+        }
+        exportArtifacts={project?.context_store?.m5_writing?.export_artifacts}
+        // Export-to-Word quick actions → agent prompt (export_docx scope=Mx),
+        // which files the export under its module scope, not M5.
+        onQuickPrompt={(t) => void send(t)}
       />
+      )}
 
       <AutoThesisModal
         open={modalOpen}
@@ -663,18 +863,10 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         // A committed title wins: on a project with prior work it is the
         // student's own, while the /new sentence is just what started this run.
         defaultTopic={project?.context_store?.m1_topic?.research_title || autoThesisTopic}
+        derived={topicWasDerived}
         onClose={() => setModalOpen(false)}
         onConfirm={confirmAutoThesis}
       />
-      {drawerOpen && latestRun?.run && (
-        <AutoThesisDrawer
-          key={`${latestRun.run.id}:${runNonce}`}
-          runId={latestRun.run.id}
-          onClose={() => setDrawerOpen(false)}
-          // Retry a failed/canceled run = resume from its last checkpoint.
-          onRetry={resumeRun}
-        />
-      )}
     </>
   );
 }

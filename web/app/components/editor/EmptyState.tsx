@@ -14,7 +14,7 @@ export function EmptyState({ projectId }: { projectId: string }) {
       </p>
       <Link
         href={`/chat/projects/${projectId}`}
-        className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md text-sm font-medium hover:bg-purple-700"
+        className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-medium hover:bg-primary-700"
       >
         Open chat
       </Link>

@@ -10,7 +10,6 @@ import {
   DocumentTextIcon,
   HomeIcon,
   LinkIcon,
-  ShieldCheckIcon,
   WrenchScrewdriverIcon,
   SparklesIcon,
   SpeakerWaveIcon,
@@ -70,15 +69,13 @@ export function useSidebarSections(): SidebarSection[] {
         options: [
           { name: t("tools.humanize.name"), href: "/tools/humanize", icon: SparklesIcon },
           { name: t("tools.citation.name"), href: "/tools/citation", icon: BookOpenIcon },
-          // Named "Similarity & citations", NOT "Plagiarism checker". The
-          // category a student searches for is the second one, and every
-          // competitor uses it — but the name has to be one the tool can back
-          // up, and without a configured corpus provider this one cannot. It
-          // checks the student's own file: what repeats inside it, and whether
-          // the quotations and the reference list agree. That is real work and
-          // it is what lowers a real Turnitin score; it is not a Turnitin
-          // score. Rename it the day a provider is wired, not before.
-          { name: t("tools.similarity.name"), href: "/tools/similarity", icon: ShieldCheckIcon },
+          // NOT listed: /tools/similarity. Same treatment as /tools/rhythm —
+          // the route and the endpoint stay live for the MCP connector and
+          // for anyone holding the link. It is a self-check over the
+          // student's own file (repeats + quotation/reference agreement),
+          // not a similarity percentage, and without a configured corpus
+          // provider the name cannot back up what a student scanning this
+          // menu expects. Hide the door; keep the tool.
           // The student's own runs, alongside the tools that produce them.
           // /admin/tools has shown operators every run since it shipped; the
           // person who paid for one could only see it as a footnote under the
@@ -131,6 +128,3 @@ export function useSidebarSections(): SidebarSection[] {
     // language switch and at no other time.
   }, [me.data?.is_super_admin, t]);
 }
-
-// Re-export for layouts that want a quick consistent icon reference
-export { ShieldCheckIcon };

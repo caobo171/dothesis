@@ -276,6 +276,57 @@ def reconstruct_upstream_modules(project_id: str, request: Request,
             "focus": store.load()["focus"]}
 
 
+@router.post("/projects/{project_id}/topic-from-uploads")
+def topic_from_uploads(project_id: str, user: User = Depends(current_user),
+                       db: Session = Depends(db_session)):
+    """Read a research title out of the project's uploads. One LLM call.
+
+    Auto Thesis runs on a topic, and a student who drops a half-finished thesis
+    without typing one is not being unhelpful — the title is sitting on page 1
+    of the document they just handed over. Refusing to start until they retype
+    it is the product failing to read what it was given.
+
+    Deliberately NOT the reconstruct walk. /mid-journey-import/reconstruct is
+    where that title came from before (M4→M1, a minute-plus of billed
+    inference, and it commits M1/M3 as earned state). All this needs is a
+    string to seed the run's brief with — the run writes M1 itself — so it runs
+    the same single, cheap `_infer_topic` call the import already uses for
+    proposals, over whatever text the uploads have.
+
+    Best-effort by contract: returns {"research_title": null} rather than an
+    error when there is nothing to read, because the caller's fallback (ask the
+    student) is the same for "no files", "no extractable text" and "the model
+    couldn't tell".
+    """
+    p = _authorize(db, user, project_id)
+
+    # An already-committed title outranks any inference: it is either the
+    # student's own or a reconstruction they have seen. Costs nothing to check
+    # and skips the LLM call on every project that has one.
+    store = _store(db, project_id)
+    committed = ((store.load().get("contextStore") or {}).get("research_title") or "").strip()
+    if committed:
+        return {"research_title": committed, "source": None}
+
+    # Same neutralized read the import uses — an uploaded document is untrusted
+    # text going into a prompt, and this route hands its output to a run.
+    _, files, _ = _store_and_files(db, project_id)
+    if not files:
+        return {"research_title": None, "source": None}
+
+    # Concatenate rather than pick: the title may be in any of them (a chapter
+    # file carries it, a bare SPSS dump does not). _infer_topic caps its own
+    # snippet, so the join is bounded by what it reads, not by what we send.
+    # Filenames ride along — "Chuong 4 - KOL TikTok Shop.docx" is often the
+    # strongest signal in a file whose body is all tables.
+    joined = "\n\n".join(f"[{f['filename']}]\n{f['text']}" for f in files)
+    from ..import_work import _infer_topic  # noqa: PLC0415 — pulls the LLM stack
+    topic = _infer_topic(joined, p.language or "vi")
+    title = str(topic.get("research_title") or "").strip()
+    return {"research_title": title or None,
+            "source": files[0]["filename"] if title else None}
+
+
 class ConfirmReconstructionBody(BaseModel):
     module: str
     slice: dict

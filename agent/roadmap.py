@@ -15,10 +15,18 @@ ROADMAP: dict[str, list[str]] = {
     "M2": ["familiarize", "map_research_state", "find_gaps", "generate_output"],
     "M3": ["define_constructs", "build_model", "state_hypotheses", "choose_method", "design_instrument"],
     "M4": ["detect_data", "outline_analysis", "confirm_plan", "run_per_step", "interpret"],
-    # "review" (F3): a committee-readiness grade before export. Advisory, so
-    # derive_substep never SNAPS to it (no backing artifact) — it's a display
-    # spine step the review_thesis tool renders; export stays the terminal step.
-    "M5": ["synthesize_sections", "assemble", "review", "export"],
+    # M5 owns the closing pair — Discussion + Conclusion — not the whole
+    # document. Every module composes its own chapter as it completes
+    # (orchestrator.tools.m5_writing.MODULE_CHAPTERS), so by the time a student
+    # reaches M5 chapters 1-4 already exist; "synthesize the chapters" and
+    # "assemble the thesis" described the pre-continuous-writing job.
+    #
+    # The "review" step (a committee-readiness grade sitting between assembly
+    # and export) is gone. It put a review in front of the student's output,
+    # which is backwards — they get the document, then fine-tune it. The
+    # review_thesis tool still exists and still grades on demand; it just isn't
+    # a step anyone has to walk through first. Export is terminal.
+    "M5": ["write_discussion", "write_conclusion", "export"],
 }
 
 SUBSTEP_LABELS: dict[str, str] = {
@@ -33,8 +41,7 @@ SUBSTEP_LABELS: dict[str, str] = {
     "detect_data": "Detect the dataset", "outline_analysis": "Outline the analysis",
     "confirm_plan": "Confirm the analysis plan", "run_per_step": "Run each analysis step",
     "interpret": "Interpret the results",
-    "synthesize_sections": "Synthesize the chapters", "assemble": "Assemble the thesis",
-    "review": "Committee-readiness review",
+    "write_discussion": "Write the discussion", "write_conclusion": "Write the conclusion",
     "export": "Export the document",
 }
 
@@ -54,7 +61,11 @@ SUBSTEP_ARTIFACT: dict[str, dict[str, str]] = {
     "M3": {"build_model": "conceptual_model", "state_hypotheses": "hypotheses",
            "choose_method": "methodology"},
     "M4": {"outline_analysis": "analysis_outline", "run_per_step": "analysis_results"},
-    "M5": {"synthesize_sections": "final_sections"},
+    # `final_sections` is where M5's composed prose lands (both the discussion
+    # and the conclusion live in it), so it backs the first of the pair. Once it
+    # exists, derivation moves past write_discussion; write_conclusion is
+    # unbacked, the same way most spine steps are.
+    "M5": {"write_discussion": "final_sections"},
 }
 
 
@@ -101,7 +112,7 @@ def _title_for(module: str, substep: str | None) -> str:
 
 def next_action(state: dict, required: frozenset[str] | None = None) -> dict | None:
     """The single next thing the student should do. Deterministic precedence:
-    open blocker > needs_review > advance focus > next module > done.
+    open blocker > advance focus > next module > done.
 
     Null-safe on headless-produced state (no roadmap_tasks, minimal status) so it
     never crashes an auto-mode / partner turn — the chat coaching layer must not
@@ -128,15 +139,14 @@ def next_action(state: dict, required: frozenset[str] | None = None) -> dict | N
                     "why": t.get("why", "This is blocking progress."),
                     "cta_options": ["How do I fix this?", "Skip for now"]}
 
-    # 2) A started module flagged for review beats marching forward.
-    for m in MODULES:
-        if status.get(m) == "needs_review":
-            return {"module": m, "substep": derive_substep(m, state) or "",
-                    "title": f"Re-check {m}",
-                    "why": "An upstream change flagged it for review — resolve it before moving on.",
-                    "cta_options": [f"Review {m}", "Why does this need review?"]}
+    # A `needs_review` branch used to sit here, ahead of everything below: any
+    # module invalidated by an upstream edit hijacked "what's next" into
+    # "Re-check M2 — resolve it before moving on". Removed deliberately. Stale
+    # modules are still tracked (state["stale"]) and still shown, but the
+    # student is never sent backwards to clear a flag before they can keep
+    # going — output first, fine-tuning after.
 
-    # 3) Advance the focus module — only if it's a module this run needs. A
+    # 2) Advance the focus module — only if it's a module this run needs. A
     #    focus parked on an out-of-scope module (e.g. M4 on a no-Results order)
     #    falls through to step 4, which routes to the next REQUIRED module.
     if focus in eligible and (
@@ -151,7 +161,7 @@ def next_action(state: dict, required: frozenset[str] | None = None) -> dict | N
                     "why": f"{focus} has all its content — confirm it so we move on.",
                     "cta_options": [f"Mark {focus} done", "Not yet"]}
 
-    # 4) Move to the first not-done REQUIRED module in order.
+    # 3) Move to the first not-done REQUIRED module in order.
     for m in MODULES:
         if m in eligible and status.get(m) != "done":
             sub = derive_substep(m, state)
@@ -159,7 +169,7 @@ def next_action(state: dict, required: frozenset[str] | None = None) -> dict | N
                     "why": f"{focus} is done — {m} is next.",
                     "cta_options": [f"Start {m}", f"What does {m} involve?"]}
 
-    # 5) Everything done. Lead into the mock committee (F6) alongside export —
+    # 4) Everything done. Lead into the mock committee (F6) alongside export —
     #    the emotional peak of the journey, not just a file drop. substep stays
     #    "export" (the terminal spine step); defense prep is an optional
     #    rehearsal offered via the CTA, not a tracked module.

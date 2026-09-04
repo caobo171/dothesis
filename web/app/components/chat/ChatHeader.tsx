@@ -1,112 +1,17 @@
 import Link from "next/link";
-import { ReactNode, useContext, useState } from "react";
-import { ArrowLeft, Bell, ChevronDown, Download, FileDown, History, Loader2, Menu, PanelRight, PenSquare, Sparkles } from "lucide-react";
+import { useContext } from "react";
+import { ArrowLeft, Menu, PanelRight, PenSquare } from "lucide-react";
 
 import { useMe } from "@/app/lib/use-me";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
-import { triggerExportDownload } from "@/app/lib/api";
-import { useArtifactDownload } from "./hooks/useArtifactDownload";
 
-// Export is agent-driven: the user picks any modules in the ExportModulesModal,
-// and we ask the agent to call `export_docx(scope="M1,M3,…")` — which composes
-// the chosen module(s) into ONE professor-ready doc and records it in the
-// Exports list tagged with that scope (never dumped in M5). The docx/pdf show up
-// in the Exports panel + as a download card in chat.
-function _exportPrompt(modules: string[]): string {
-  // "full" → the complete 6-chapter thesis (compose_all_sections), not a
-  // combination of module write-ups.
-  if (modules.length === 1 && modules[0] === "full") {
-    return (
-      "Export my FULL thesis as a polished, professor-ready Word document — " +
-      'call export_docx with scope "full" (all chapters: introduction, ' +
-      "literature review, methodology, results, discussion, conclusion, plus " +
-      "the reference list)."
-    );
-  }
-  const scope = modules.join(",");
-  const list = modules.join(", ");
-  const noun = modules.length > 1 ? "modules" : "module";
-  return (
-    `Export my ${list} ${noun} as one polished, professor-ready Word document ` +
-    `— call export_docx with scope "${scope}". Use everything I've already ` +
-    `committed for ${modules.length > 1 ? "those modules" : list}.`
-  );
-}
 import { ChatSidebarContext } from "./ChatShellLayout";
-import { ExportModulesModal } from "./ExportModulesModal";
 import { MODULES } from "./HomeDashboard";
-
-
-// Header docx download button — enabled only when M5 has produced an
-// export artifact (auto-fires when M5 flips to done; see
-// api/app/agent_state.py:_auto_export_m5). The /exports/{filename} route
-// 302s to a signed S3 URL; the browser can't attach a body to <a> download
-// links, so instead of leaking the long-lived JWT in the URL we mint a
-// short-lived, scoped stream token on click and navigate with ?st=.
-function ExportDownloadButton({
-  artifacts,
-}: {
-  artifacts?: { kind: string; download_url: string }[];
-}) {
-  // Above the early return — the disabled branch below is a conditional exit,
-  // and a hook after it would change hook order between renders.
-  const { busy, error, start } = useArtifactDownload();
-  const docx = artifacts?.find(a => a.kind === "docx") ?? artifacts?.[0];
-
-  // Menu ROW, not an icon button. This was built as a round icon for the header
-  // toolbar and later moved inside Quick actions, where every other entry is
-  // "icon + words" — so it rendered as a bare download glyph with no label, and
-  // the only explanation of what it did lived in a title tooltip nobody hovers
-  // inside an open menu.
-  const row = "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left";
-
-  if (!docx) {
-    return (
-      <button
-        type="button"
-        disabled
-        title="Chưa có bản xuất — hoàn thành M5 trước"
-        className={`${row} text-ink-400 cursor-not-allowed`}
-      >
-        <Download className="w-4 h-4 text-ink-300 shrink-0" />
-        <span>Tải luận văn (.docx)</span>
-        <span className="ml-auto text-[11px] text-ink-400">chưa có</span>
-      </button>
-    );
-  }
-  return (
-    <a
-      href={docx.download_url}
-      download
-      aria-busy={busy}
-      onClick={(e) => {
-        e.preventDefault();
-        void start(() => triggerExportDownload(docx.download_url));
-      }}
-      className={`${row} ${
-        error ? "text-[#8E6B2A] hover:bg-[#F5EFE2]" : "text-ink-800 hover:bg-ink-50"
-      }`}
-    >
-      {busy
-        ? <Loader2 className="w-4 h-4 animate-spin text-ink-500 shrink-0" />
-        : <Download className="w-4 h-4 text-ink-500 shrink-0" />}
-      <span>Tải luận văn (.docx)</span>
-      {/* The state goes on the row itself now that there is room for words —
-          a tooltip is unreachable once a menu has the pointer. */}
-      {(busy || error) && (
-        <span className="ml-auto text-[11px] truncate max-w-[130px]">
-          {error ? `Lỗi: ${error}` : "Đang chuẩn bị…"}
-        </span>
-      )}
-    </a>
-  );
-}
 
 
 // Pill palette for the focus-bar status tag.
 const STATUS_TAG: Record<string, { label: string; cls: string }> = {
   in_progress:  { label: "In progress",   cls: "bg-primary-50 text-primary-700" },
-  needs_review: { label: "Needs review",  cls: "bg-amber-50 text-amber-700" },
   done:         { label: "Done",          cls: "bg-emerald-50 text-emerald-700" },
   locked:       { label: "Locked",        cls: "bg-ink-100 text-ink-500" },
 };
@@ -129,22 +34,17 @@ const PHASE_LABEL: Record<string, string> = {
  *
  * Left cluster: back-to-home circle, serif module chip, module label,
  * optional sub-phase label, status pill.
- * Right cluster: history button, export button, notifications bell with
- * red dot when unread, vertical divider, user avatar + name + tier.
- *
- * `autoThesisButton` is still a render-prop slot — ChatPane passes the
- * project-aware auto-thesis button in there.
+ * Right cluster: Open editor link, vertical divider, user avatar + name +
+ * tier. Quick actions (Auto Thesis, export, history, notifications) moved to
+ * the bottom composer — see QuickActionsMenu.
  */
 export function ChatHeader({
   projectName,
   threadName,
-  autoThesisButton,
   projectId,
   hasChapters,
   focusModule,
   focusStatus,
-  exportArtifacts,
-  onQuickPrompt,
   loading = false,
 }: {
   projectName: string;
@@ -152,18 +52,10 @@ export function ChatHeader({
   /** The project hasn't arrived yet — show a skeleton instead of placeholder
    *  punctuation. */
   loading?: boolean;
-  autoThesisButton: ReactNode;
   projectId?: string;
   hasChapters?: boolean;
   focusModule?: string;
   focusStatus?: string;
-  /** M5 export artifacts (docx/pdf). When present, the Download button
-   *  becomes a real link to the docx; otherwise it's disabled with a
-   *  "no export yet" tooltip. */
-  exportArtifacts?: { kind: string; download_url: string }[];
-  /** Send a pre-defined prompt into the chat — Export-to-Word quick actions
-   *  use it to ask the agent to export a module (export_docx scope). */
-  onQuickPrompt?: (text: string) => void;
 }) {
   const t = useT();
   const focusKey = MODULES.find(m => m.id === focusModule)?.labelKey;
@@ -172,8 +64,6 @@ export function ChatHeader({
   const tag = focusStatus ? STATUS_TAG[focusStatus] ?? STATUS_TAG.in_progress : null;
   const me = useMe();
   const sidebar = useContext(ChatSidebarContext);
-  const [quickOpen, setQuickOpen] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
   const user = me.data;
   const userInitials = user?.email
     ? user.email.slice(0, 2).toUpperCase()
@@ -268,80 +158,8 @@ export function ChatHeader({
           </Link>
         )}
 
-        {/* Quick actions — collapses Auto Thesis + history/export/notifications
-            into one menu so the header isn't crowded (esp. on mobile). */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setQuickOpen(o => !o)}
-            aria-haspopup="menu"
-            aria-expanded={quickOpen}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-600 text-white text-[12.5px] font-semibold hover:bg-primary-700 transition-colors"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Quick actions</span>
-            <ChevronDown className="w-3 h-3" />
-          </button>
-
-          {quickOpen && (
-            <>
-              {/* click-away */}
-              <div className="fixed inset-0 z-40" onClick={() => setQuickOpen(false)} aria-hidden="true" />
-              <div
-                role="menu"
-                className="absolute right-0 mt-2 z-50 w-64 rounded-2xl border border-ink-200 bg-white shadow-xl p-2"
-                onClick={() => setQuickOpen(false)}
-              >
-                <div className="px-2 pt-1 pb-2 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400">
-                  Run
-                </div>
-                {/* Auto Thesis */}
-                <div className="px-1 pb-2">{autoThesisButton}</div>
-
-                {onQuickPrompt && (
-                  <>
-                    <div className="px-2 pt-1 pb-1 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400 border-t border-ink-100">
-                      Export to Word
-                    </div>
-                    {/* One action → opens the module picker (choose any modules;
-                        they're combined into one .docx). */}
-                    <button
-                      type="button"
-                      onClick={() => setExportOpen(true)}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-ink-800 hover:bg-ink-50 text-left"
-                    >
-                      <FileDown className="w-4 h-4 text-ink-500" />
-                      <span>Export modules → .docx…</span>
-                    </button>
-                  </>
-                )}
-
-                <div className="px-2 pt-1 pb-1 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400 border-t border-ink-100">
-                  More
-                </div>
-                <ExportDownloadButton artifacts={exportArtifacts} />
-                <button
-                  type="button"
-                  title="Version history"
-                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-ink-800 hover:bg-ink-50 text-left"
-                >
-                  <History className="w-4 h-4 text-ink-500" /> Version history
-                </button>
-                <button
-                  type="button"
-                  title="Notifications"
-                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-ink-800 hover:bg-ink-50 text-left"
-                >
-                  <span className="relative inline-flex">
-                    <Bell className="w-4 h-4 text-ink-500" />
-                    <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-500" />
-                  </span>
-                  Notifications
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        {/* Quick actions moved to the bottom composer (ChatInput →
+            QuickActionsMenu) to free header space; see that component. */}
 
         <span className="hidden lg:block w-px h-[22px] bg-ink-200 mx-1" />
 
@@ -356,14 +174,6 @@ export function ChatHeader({
           {userInitials}
         </span>
       </div>
-
-      {onQuickPrompt && (
-        <ExportModulesModal
-          open={exportOpen}
-          onClose={() => setExportOpen(false)}
-          onExport={(modules) => onQuickPrompt(_exportPrompt(modules))}
-        />
-      )}
     </header>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import useSWR from "swr";
 
 import { tokenStore } from "@/app/lib/tokenStore";
@@ -22,9 +23,16 @@ const fetcher = (url: string) =>
 // Right rail. Read-only browser of the M2 reference pool. Insertion happens
 // via the SelectionToolbar's Cite popover; this rail is for "what's available"
 // at-a-glance.
-export function SourcesRail({ projectId }: { projectId: string }) {
+export function SourcesRail({ projectId, highlightedId }: { projectId: string; highlightedId?: string | null }) {
   const { data } = useSWR<Reference[]>(`/api/v1/projects/${projectId}/m5/references`, fetcher);
   const refs = data ?? [];
+
+  // Scroll the highlighted source into view when a citation is clicked.
+  useEffect(() => {
+    if (!highlightedId) return;
+    document.getElementById(`src-${highlightedId}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [highlightedId]);
+
   return (
     <aside className="w-56 shrink-0 border-l border-gray-200 py-4 px-3 overflow-y-auto">
       <div className="text-xs uppercase tracking-wider text-gray-400 mb-2">
@@ -34,12 +42,25 @@ export function SourcesRail({ projectId }: { projectId: string }) {
         <div className="text-xs text-gray-500">No references yet.</div>
       ) : (
         <ul className="space-y-1">
-          {refs.map(r => (
-            <li key={r.id} className="text-xs text-gray-700 bg-gray-50 rounded px-2 py-1">
-              <div className="font-medium text-gray-900">{r.author} ({r.year})</div>
-              {r.title && <div className="text-gray-500 truncate">{r.title}</div>}
-            </li>
-          ))}
+          {refs.map(r => {
+            const active = r.id === highlightedId;
+            return (
+              <li
+                key={r.id}
+                id={`src-${r.id}`}
+                aria-current={active ? "true" : undefined}
+                className={
+                  "text-xs rounded px-2 py-1 transition-colors " +
+                  (active
+                    ? "bg-primary-50 ring-1 ring-primary-500 text-ink-900"
+                    : "text-gray-700 bg-gray-50")
+                }
+              >
+                <div className="font-medium text-gray-900">{r.author} ({r.year})</div>
+                {r.title && <div className="text-gray-500 truncate">{r.title}</div>}
+              </li>
+            );
+          })}
         </ul>
       )}
     </aside>

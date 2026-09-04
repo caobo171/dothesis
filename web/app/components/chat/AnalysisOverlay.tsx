@@ -23,21 +23,23 @@ const MODULE_LABEL: Record<string, string> = {
   M2: "Literature",
   M3: "Design",
   M4: "Data Analysis",
-  M5: "Writing",
+  M5: "Discussion & Conclusion",
 };
 
-type StatusKey = "done" | "in_progress" | "needs_review" | "locked" | "not_started";
+type StatusKey = "done" | "in_progress" | "locked" | "not_started";
 
 const STATUS_META: Record<StatusKey, { label: string; icon: React.ReactNode; cls: string }> = {
   done:         { label: "done",         icon: <CheckCircle2 className="w-4 h-4" />,  cls: "text-green-700 bg-green-50 border-green-200" },
   in_progress:  { label: "in progress",  icon: <CircleDashed className="w-4 h-4" />,  cls: "text-primary-700 bg-primary-50 border-primary-200" },
-  needs_review: { label: "needs review", icon: <TriangleAlert className="w-4 h-4" />, cls: "text-amber-700 bg-amber-50 border-amber-200" },
   locked:       { label: "locked",       icon: <Lock className="w-4 h-4" />,          cls: "text-ink-500 bg-ink-50 border-ink-200" },
   not_started:  { label: "not started",  icon: <Lock className="w-4 h-4" />,          cls: "text-ink-500 bg-ink-50 border-ink-200" },
 };
 
 function statusKey(raw: string | undefined): StatusKey {
-  if (raw === "done" || raw === "in_progress" || raw === "needs_review" || raw === "locked") return raw;
+  // A legacy "needs_review" row reads as done — it always meant "was done,
+  // then invalidated upstream", and invalidation no longer changes status.
+  if (raw === "needs_review") return "done";
+  if (raw === "done" || raw === "in_progress" || raw === "locked") return raw;
   return "not_started";
 }
 

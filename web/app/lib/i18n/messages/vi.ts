@@ -19,11 +19,17 @@ import type { MessageKey } from "./en";
 export const vi: Record<MessageKey, string> = {
   // --- /new — trình phân tích luận văn ---
   // --- Auto Thesis mode ---
-  "new.auto.title": "Một chủ đề, sáu chương.",
+  "new.auto.title": "1 câu lệnh, trọn luận văn",
   "new.auto.tagline":
     "Tôi lo phần tổng quan tài liệu, thiết kế nghiên cứu và viết trọn sáu chương. " +
     "Đính kèm dữ liệu của bạn thì chương phân tích có số liệu thật.",
   "new.auto.placeholder": "Chủ đề nghiên cứu của bạn — một câu là đủ.",
+  "auto.derived.reading": "Đang đọc tệp của bạn…",
+  "auto.derived.title": "Mình đã đọc tệp của bạn",
+  "auto.derived.topic": "Sẽ viết luận văn về:",
+  "auto.derived.edit": "Chưa đúng? Bạn sửa lại nhé.",
+  "auto.derived.start": "Viết luận văn cho tôi",
+  "auto.derived.lowCredit": "Số dư không đủ để chạy hết lượt này.",
   "new.auto.analyze": "Viết luận văn cho tôi",
   "new.auto.analyzing": "Đang khởi động…",
   "new.mode.aria": "Bạn muốn làm theo cách nào",
@@ -33,6 +39,11 @@ export const vi: Record<MessageKey, string> = {
   "new.mode.auto.hint": "Viết trọn luận văn từ đầu đến cuối",
   "new.back": "Về trang chủ",
   "new.title": "Phân tích luận văn của bạn",
+  // Xưng "mình" như new.placeholder — giọng của chế độ có hướng dẫn là đồng
+  // hành, khác với "tôi" dứt khoát bên Auto Thesis.
+  "new.tagline":
+    "Gửi bản nháp, tài liệu hay dữ liệu, mình sẽ nói rõ luận văn đang ở đâu " +
+    "và cần sửa gì trước. Đi từng bước một, mỗi bước đều do bạn quyết.",
   "new.placeholder":
     "Cho mình biết bạn đang có gì — bản nháp, tài liệu, dữ liệu, hay chỉ mới có ý tưởng.",
   "new.attach": "Đính kèm tệp",
@@ -61,14 +72,46 @@ export const vi: Record<MessageKey, string> = {
   "new.chip.fresh.text":
     "Mình mới bắt đầu — có ý tưởng đề tài nhưng chưa viết gì cả.",
 
+  // --- màn hình Auto Thesis đang chạy ---
+  "run.eyebrow": "Auto Thesis",
+  "run.live.title": "Đang viết luận văn của bạn",
+  "run.live.body":
+    "Quá trình này tự chạy — bạn có thể đóng tab rồi quay lại sau. " +
+    "Ở đây không có gì cần bạn trả lời cả.",
+  "run.done.title": "Luận văn của bạn đã xong",
+  "run.done.body":
+    "Các chương đã được viết và lưu lại. Mở trong trình soạn thảo để đọc và " +
+    "chỉnh sửa, hoặc tải file Word về.",
+  "run.failed.title": "Lượt chạy dừng giữa chừng",
+  "run.canceled.title": "Bạn đã dừng lượt chạy này",
+  "run.stopped.body":
+    "Phần đã xong được lưu lại. Chạy tiếp sẽ bắt đầu từ module bị dừng, " +
+    "không phải làm lại từ đầu.",
+  "run.queued": "Đang khởi động…",
+  "run.elapsed": "Đã chạy {n} phút",
+  "run.tokens": "{n} token",
+  "run.pause": "Tạm dừng",
+  "run.resume": "Chạy tiếp",
+  "run.stop": "Dừng hẳn",
+  "run.retry": "Chạy tiếp",
+  "run.openEditor": "Mở trình soạn thảo",
+  "run.download": "Tải {kind}",
+  "run.askInChat": "Hỏi thêm về luận văn \u2192",
+  "run.askChanges": "Muốn sửa gì? Nhắn trong chat \u2192",
+  "auto.back": "Quay lại Auto Thesis",
+  "auto.back.live": "Đang viết — quay lại Auto Thesis",
+
   // --- tên các module — dùng chung ở dashboard, header chat và danh sách luận văn ---
   "module.M1": "Xác định đề tài",
   "module.M2": "Tổng quan tài liệu",
   "module.M3": "Thiết kế nghiên cứu",
   "module.M4": "Phân tích dữ liệu",
-  "module.M5": "Viết luận văn",
+  "module.M5": "Thảo luận & Kết luận",
 
   // --- trang chủ ---
+  // Trang chủ dạng "nhập thẳng" — thay cho hero dashboard cũ.
+  "home.launcher.title": "Mình có thể giúp gì cho luận văn của bạn?",
+  "home.launcher.tryTitle": "Thử một trong số này",
   "home.greeting.morning": "Chào buổi sáng",
   "home.greeting.afternoon": "Chào buổi chiều",
   "home.greeting.evening": "Chào buổi tối",
@@ -90,16 +133,11 @@ export const vi: Record<MessageKey, string> = {
   "home.stat.doneSub": "trên tổng số 5 module",
   "home.stat.progress": "Đang thực hiện",
   "home.stat.progressSub": "module đang được xử lý",
-  "home.stat.review": "Cần xem lại",
-  "home.stat.reviewOpen": "mục ⚠ đang mở",
-  "home.stat.reviewClear": "không có gì cần xem lại",
 
   "home.theses": "Luận văn của bạn",
   // Tiếng Việt không biến đổi danh từ theo số — hai dòng giống nhau là CỐ Ý.
   "home.thesesCount_one": "{count} luận văn đang làm",
   "home.thesesCount_other": "{count} luận văn đang làm",
-  "home.reviewCount_one": "{count} mục cần xem lại",
-  "home.reviewCount_other": "{count} mục cần xem lại",
   "home.newThesis": "Luận văn mới",
   "home.empty": "Chưa có luận văn nào. Bấm “Luận văn mới” để bắt đầu.",
   "home.noField": "Chưa chọn lĩnh vực",
@@ -107,9 +145,7 @@ export const vi: Record<MessageKey, string> = {
   "home.continue": "Tiếp tục {module}",
   "home.lastTouched": "sửa lần cuối {when}",
   "home.recent": "Hoạt động gần đây",
-  "home.flaggedIn": "Được đánh dấu cần xem lại ở",
   "home.workingIn": "Đang làm ở",
-  "home.needsReview": "Cần xem lại",
   "home.proTip": "Mẹo nhỏ",
   "home.proTipBody":
     "Bạn có thể hỏi về bất kỳ module nào từ bất kỳ đâu — chỉ khi bạn sửa thì trọng tâm mới chuyển, còn hỏi thì không.",

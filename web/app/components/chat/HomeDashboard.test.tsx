@@ -4,16 +4,23 @@ import { SWRConfig } from "swr";
 import { http, HttpResponse } from "msw";
 import { server } from "../../../tests/setup";
 import { HomeDashboard } from "./HomeDashboard";
+import { LocaleProvider } from "../../lib/i18n/LocaleProvider";
 
 
 // Isolated SWR cache per render — without it the useMe() result from one
 // test (e.g. the default credit:0 stub) is served from the module-level
 // cache in later tests. Same pattern as ChatPane.test.tsx.
 function renderDashboard() {
+  // LocaleProvider is required: HomeDashboard calls useT(), which throws
+  // outside a provider — every test in this file was failing on that before
+  // it ever reached an assertion. Pinned to "en" so the assertions can match
+  // English copy regardless of the DEFAULT_LOCALE ("vi").
   return render(
-    <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
-      <HomeDashboard />
-    </SWRConfig>,
+    <LocaleProvider initialLocale="en" hasCookie>
+      <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
+        <HomeDashboard />
+      </SWRConfig>
+    </LocaleProvider>,
   );
 }
 
@@ -27,7 +34,7 @@ vi.mock("next/navigation", () => ({
 
 
 // A realistic ProjectOut payload: module_status drives the card's module bar
-// and the needs-review tag; context_store.confirmed_at is the legacy fallback.
+// context_store.confirmed_at is the legacy fallback.
 const PROJECT = {
   id: "p1",
   name: "Leadership Thesis",
@@ -37,7 +44,8 @@ const PROJECT = {
   status: "draft",
   current_module: "M2",
   focus: "M2",
-  module_status: { M1: "done", M2: "in_progress", M3: "needs_review" },
+  module_status: { M1: "done", M2: "in_progress", M3: "done" },
+  stale_modules: ["M3"],
   context_store: { m1_topic: { confirmed_at: "x" } },
   created_at: "2026-05-27",
   updated_at: "2026-05-27",
@@ -45,7 +53,7 @@ const PROJECT = {
 
 
 describe("HomeDashboard", () => {
-  test("renders project cards with module bar and review tag", async () => {
+  test("renders project cards with a module bar and no review nag", async () => {
     server.use(
       http.post("*/api/v1/projects/list", () => HttpResponse.json([PROJECT])),
     );
@@ -54,8 +62,10 @@ describe("HomeDashboard", () => {
     // scope to the card's h3 heading.
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "Leadership Thesis" })).toBeTruthy());
-    // Module bar: M3 carries the needs_review flag → review tag + stat tile
-    expect(screen.getAllByText(/needs review/i).length).toBeGreaterThan(0);
+    // A stale module used to put a "Needs review" chip on the card and a
+    // fourth "needs review" tile at the top of the dashboard — the first thing
+    // a returning student saw was work to go back and redo. Neither remains.
+    expect(screen.queryByText(/needs review/i)).toBeNull();
     // Hero resume CTA points at the most recently updated project
     expect(
       (screen.getByRole("link", { name: /resume current thesis/i }) as HTMLAnchorElement).href,

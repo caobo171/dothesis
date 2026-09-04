@@ -3,7 +3,6 @@
 import useSWR from "swr";
 import Link from "next/link";
 import {
-  AlertTriangle,
   ArrowRight,
   BookOpenCheck,
   CheckCircle2,
@@ -38,14 +37,19 @@ export type Project = {
   current_module: string;
   focus: string | null;
   module_status: Partial<Record<ModuleId, string>>;
-  context_store: Partial<Record<SliceKey, { confirmed_at?: string | null } | null>>;
+  /** Modules whose content predates a later upstream edit. Advisory only —
+   *  never a status, never a gate. Optional: older API responses omit it. */
+  stale_modules?: string[];
+  // m1_topic also carries research_title on the LIST read (the homepage cards
+  // show it as the M1 brief); every slice still reports confirmed_at.
+  context_store: Partial<Record<SliceKey, { confirmed_at?: string | null; research_title?: string | null } | null>>;
   created_at: string;
   updated_at: string;
 };
 
 type ModuleId = "M1" | "M2" | "M3" | "M4" | "M5";
 type SliceKey = "m1_topic" | "m2_literature" | "m3_design" | "m4_analysis" | "m5_writing";
-export type ModuleDisplayStatus = "done" | "in_progress" | "needs_review" | "locked";
+export type ModuleDisplayStatus = "done" | "in_progress" | "locked";
 
 // `labelKey`, not `label`: these names are shared vocabulary (dashboard, chat
 // header, theses list), so they must resolve through the active locale at the
@@ -59,12 +63,17 @@ export const MODULES: Array<{ id: ModuleId; slice: SliceKey; labelKey: MessageKe
   { id: "M5", slice: "m5_writing",    labelKey: "module.M5" },
 ];
 
-// Same precedence as ContextPanel.statusFor so the home cards and the
+// Same precedence as ContextPanel.sectionStatus so the home cards and the
 // in-project progress panel never disagree about a module's state:
-// needs_review (explicit flag) > done > focus/current > locked.
+// done > focus/current > locked.
+//
+// `needs_review` used to top this list. It meant "was done, an upstream edit
+// invalidated it" — so it is folded into `done` here, including for rows not
+// yet migrated off the old value. Staleness lives in `stale_modules` and never
+// changes a module's state.
 export function moduleStatus(p: Project, m: { id: ModuleId; slice: SliceKey }): ModuleDisplayStatus {
   const fromMap = p.module_status?.[m.id];
-  if (fromMap === "needs_review") return "needs_review";
+  if (fromMap === "needs_review") return "done";
   if (fromMap === "done" || p.context_store?.[m.slice]?.confirmed_at) return "done";
   if (fromMap === "in_progress" || m.id === (p.focus ?? p.current_module)) return "in_progress";
   return "locked";
@@ -78,13 +87,20 @@ function progressPct(p: Project): number {
   for (const m of MODULES) {
     const s = moduleStatus(p, m);
     if (s === "done") score += 20;
-    else if (s === "in_progress" || s === "needs_review") score += 10;
+    else if (s === "in_progress") score += 10;
   }
   return score;
 }
 
-export function needsReview(p: Project): boolean {
-  return MODULES.some(m => moduleStatus(p, m) === "needs_review");
+/** Some committed module predates a later upstream edit.
+ *
+ * Read straight off `stale_modules`. It was derived from module_status ===
+ * "needs_review", which no longer exists: invalidation stopped being a status
+ * so that it could stop gating anything. Kept as a plain fact — callers may
+ * inform with it, but nothing in the product blocks on it.
+ */
+export function hasStaleModules(p: Project): boolean {
+  return (p.stale_modules ?? []).length > 0;
 }
 
 // Takes `t` rather than calling a hook, so it stays a pure function usable from
@@ -127,7 +143,6 @@ export function HomeDashboard() {
 
   // /projects is ordered updated_at desc, so [0] is "where you left off".
   const current = projects?.[0];
-  const reviewCount = projects?.filter(needsReview).length ?? 0;
   const firstName =
     me.data?.username || me.data?.email?.split("@")[0] || "there";
 
@@ -143,7 +158,7 @@ export function HomeDashboard() {
         meLoading={meLoading}
       />
 
-      <StatsRow projects={projects} reviewCount={reviewCount} loading={isLoading} />
+      <StatsRow projects={projects} loading={isLoading} />
 
       <div className="flex items-end justify-between mt-7 mb-4 px-0.5">
         <div>
@@ -154,15 +169,9 @@ export function HomeDashboard() {
             {isLoading ? (
               <Skeleton className="h-3.5 w-28 my-[1px]" />
             ) : (
-              // Two counted nouns, so two tn() calls joined by a separator —
-              // not one sentence built with a ternary on "s", which only ever
-              // produced English plurals.
-              [
-                tn("home.thesesCount_one", "home.thesesCount_other", projects?.length ?? 0),
-                reviewCount
-                  ? tn("home.reviewCount_one", "home.reviewCount_other", reviewCount)
-                  : null,
-              ].filter(Boolean).join(" · ")
+              // The open-reviews half of this line is gone with the review
+              // gates; what is left is the plain thesis count.
+              tn("home.thesesCount_one", "home.thesesCount_other", projects?.length ?? 0)
             )}
           </div>
         </div>
@@ -348,11 +357,9 @@ function Hero({
 /* ---------- Stats row ---------- */
 function StatsRow({
   projects,
-  reviewCount,
   loading,
 }: {
   projects: Project[] | undefined;
-  reviewCount: number;
   loading: boolean;
 }) {
   const t = useT();
@@ -369,8 +376,8 @@ function StatsRow({
     { icon: Clock3,        v: projects?.length ?? "—", l: t("home.stat.active"),   sub: t("home.stat.activeSub"),   chip: "bg-ink-100 text-ink-700" },
     { icon: CheckCircle2,  v: modulesDone,             l: t("home.stat.done"),     sub: t("home.stat.doneSub"),     chip: "bg-[#EEF4EE] text-[#3A5740]" },
     { icon: Loader2,       v: modulesActive,           l: t("home.stat.progress"), sub: t("home.stat.progressSub"), chip: "bg-primary-50 text-primary-700" },
-    { icon: AlertTriangle, v: reviewCount,             l: t("home.stat.review"),
-      sub: reviewCount ? t("home.stat.reviewOpen") : t("home.stat.reviewClear"),   chip: "bg-[#F5EFE2] text-[#6E5121]" },
+    // A fourth "needs review" tile sat here, counting work to go back and fix.
+    // It was the first number a student saw on opening the app.
   ];
 
   return (
@@ -403,19 +410,17 @@ function StatsRow({
 
 
 /* ---------- Project card with M1–M5 module bar ---------- */
-// Muted scholarly status palette: moss for done, primary for active, ochre
-// amber for review, neutral for locked. Bright emerald/amber were too loud
-// next to the serif project title.
+// Muted scholarly status palette: moss for done, primary for active, neutral
+// for locked. Bright emerald/amber were too loud next to the serif project
+// title.
 export const SEGMENT_STYLE: Record<ModuleDisplayStatus, string> = {
   done:         "bg-[#4A6B4F] text-white",
   in_progress:  "bg-primary-600 text-white",
-  needs_review: "bg-[#8E6B2A] text-white",
   locked:       "bg-ink-100 text-ink-500",
 };
 
 function ProjectCard({ p }: { p: Project }) {
   const t = useT();
-  const review = needsReview(p);
   const pct = progressPct(p);
   const focusModule = p.focus ?? p.current_module;
   const focusKey = MODULES.find(m => m.id === focusModule)?.labelKey;
@@ -431,11 +436,6 @@ function ProjectCard({ p }: { p: Project }) {
           {p.field ?? t("home.noField")}
         </span>
         <span className="flex-1" />
-        {review && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-[3px] rounded-full text-[11.5px] font-semibold bg-[var(--pause-bg)] text-[var(--pause-fg)] whitespace-nowrap shrink-0">
-            <AlertTriangle className="w-3 h-3" /> {t("home.needsReview")}
-          </span>
-        )}
         <span className="text-xs text-ink-500 font-semibold tabular-nums shrink-0">{pct}%</span>
       </div>
 
@@ -458,7 +458,6 @@ function ProjectCard({ p }: { p: Project }) {
             >
               {m.id}
               {s === "done" && <span aria-hidden>✓</span>}
-              {s === "needs_review" && <span aria-hidden>⚠</span>}
             </span>
           );
         })}
@@ -530,19 +529,16 @@ function RecentActivity({ projects }: { projects: Project[] }) {
           const focusModule = p.focus ?? p.current_module;
           const focusKey = MODULES.find(m => m.id === focusModule)?.labelKey;
           const focusLabel = focusKey ? t(focusKey) : undefined;
-          const review = needsReview(p);
           return (
             <li key={p.id} className={`relative flex gap-3 ${i === items.length - 1 ? "" : "pb-3.5"}`}>
               <span
-                className={`w-7 h-7 min-w-7 rounded-full bg-white border-2 inline-flex items-center justify-center z-[1] ${
-                  review ? "border-[var(--pause-fg)] text-[var(--pause-fg)]" : "border-primary-600 text-primary-600"
-                }`}
+                className="w-7 h-7 min-w-7 rounded-full bg-white border-2 border-primary-600 text-primary-600 inline-flex items-center justify-center z-[1]"
               >
-                {review ? <AlertTriangle className="w-3 h-3" /> : <BookOpenCheck className="w-3 h-3" />}
+                <BookOpenCheck className="w-3 h-3" />
               </span>
               <div className="flex-1 min-w-0">
                 <div className="text-[13.5px] text-ink-900 leading-relaxed truncate">
-                  {review ? t("home.flaggedIn") : t("home.workingIn")}{" "}
+                  {t("home.workingIn")}{" "}
                   <span className="font-semibold">{focusModule}{focusLabel ? ` · ${focusLabel}` : ""}</span>
                 </div>
                 <div className="text-[11.5px] text-ink-500 mt-0.5 flex items-center gap-1.5 min-w-0">

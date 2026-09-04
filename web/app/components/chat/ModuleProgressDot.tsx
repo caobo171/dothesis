@@ -24,12 +24,22 @@ export function ModuleProgressDot({
   module,
   status,
   label,
+  detail,
   onClick,
   isLast,
 }: {
   module: string;
   status: ModuleStatus;
   label: string;
+  /**
+   * What this module is doing RIGHT NOW, in place of the generic status word.
+   *
+   * On an unattended run "In progress" is the least informative thing the row
+   * could say for the twenty minutes M2 spends searching — the live line ("42
+   * sources, screening") is the only evidence the student has that anything is
+   * happening.
+   */
+  detail?: string;
   onClick?: () => void;
   // Hides the vertical track segment after the final module row.
   isLast?: boolean;
@@ -63,9 +73,13 @@ export function ModuleProgressDot({
             {label}
             {status === "needs_attention" && <span aria-hidden>⚠</span>}
           </span>
-          <span className="text-[10.5px] text-ink-400 uppercase tracking-[0.06em] font-semibold mt-0.5">
-            {STATUS_LABEL[status]}
-          </span>
+          {detail ? (
+            <span className="text-[11.5px] text-ink-500 mt-0.5 truncate">{detail}</span>
+          ) : (
+            <span className="text-[10.5px] text-ink-400 uppercase tracking-[0.06em] font-semibold mt-0.5">
+              {STATUS_LABEL[status]}
+            </span>
+          )}
         </span>
       </button>
     </div>

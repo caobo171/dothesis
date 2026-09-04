@@ -13,6 +13,10 @@ const PUBLIC_PATHS = [
   "/login", "/signup",
   "/verify", "/wait-verify",
   "/forgot-password", "/reset-password",
+  // The marketing landing page. Its entire audience is signed-out — gating it
+  // would 307 every first-time visitor straight to /login, which is the one
+  // screen the page exists to talk them into.
+  "/landing",
   "/_next", "/favicon.ico",
 ];
 

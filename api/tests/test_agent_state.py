@@ -52,16 +52,86 @@ def test_commit_lands_in_slice_columns_and_project_row(project_id, tmp_path):
     assert p.module_status["M1"] == "done"
 
 
-def test_propagation_flags_visible_to_web(project_id, tmp_path):
+def test_propagation_marks_stale_without_demoting_status(project_id, tmp_path):
+    """An upstream edit annotates the downstream module; it must not un-finish it.
+
+    This is the Db ROUND-TRIP test for `stale`: DbProjectStateStore rebuilds
+    state from named columns only, so a state key it doesn't explicitly load and
+    save is silently dropped in prod (project_db_store_persistence_gap). Asserting
+    through a fresh store instance is the point — an in-memory-only `stale` would
+    pass any assertion made on the store that wrote it.
+    """
     store = _store(project_id, tmp_path)
     store.commit_slice("M1", {"research_title": "T"}, reason="r", confirm_done=True)
     store.commit_slice("M2", {"research_gaps": [{"id": "gap-1"}]}, reason="r", confirm_done=True)
-    # Mutating M1 again flags M2 — exactly what module_status drives in the UI.
-    store.commit_slice("M1", {"research_title": "T2"}, reason="pivot")
+    # Mutating M1 again invalidates M2's committed work.
+    out = store.commit_slice("M1", {"research_title": "T2"}, reason="pivot")
+
+    assert out["flagged"] == ["M2"]
     with Session(get_engine()) as s:
         p = s.get(Project, project_id)
-    assert p.module_status["M2"] == "needs_review"
+    # M2 STAYS done. It used to flip to needs_review, which outranked done and
+    # sent the student back to re-check it before anything could move on.
+    assert p.module_status["M2"] == "done"
+    assert p.stale_modules == ["M2"]
     assert p.focus == "M1"
+
+    # Round-trips: a NEW store instance reads the flag back off the column.
+    assert _store(project_id, tmp_path).load()["stale"] == ["M2"]
+
+
+def test_legacy_needs_review_row_loads_as_done_and_stale(project_id, tmp_path):
+    """A row written before the migration must not resurrect the old status.
+
+    headless snapshots the status it loads straight back into status_overrides,
+    so a `needs_review` that survived the read would be written back out on the
+    next commit — reintroducing exactly what was removed. Simulated by writing
+    the legacy value to the column directly.
+    """
+    from sqlalchemy import update
+
+    store = _store(project_id, tmp_path)
+    store.commit_slice("M1", {"research_title": "T"}, reason="r", confirm_done=True)
+    with Session(get_engine()) as s:
+        s.execute(update(Project).where(Project.id == project_id)
+                  .values(module_status={"M1": "done", "M2": "needs_review",
+                                         "M3": "locked", "M4": "locked", "M5": "locked"},
+                          stale_modules=[]))
+        s.commit()
+
+    state = _store(project_id, tmp_path).load()
+    assert state["status"]["M2"] == "done"
+    assert "needs_review" not in state["status"].values()
+    # The information survives the coercion — it just moves channel.
+    assert state["stale"] == ["M2"]
+
+
+def test_recommitting_a_stale_module_clears_its_flag(project_id, tmp_path):
+    """Rewriting the module against the current upstream resolves the mismatch."""
+    store = _store(project_id, tmp_path)
+    store.commit_slice("M1", {"research_title": "T"}, reason="r", confirm_done=True)
+    store.commit_slice("M2", {"research_gaps": [{"id": "gap-1"}]}, reason="r", confirm_done=True)
+    store.commit_slice("M1", {"research_title": "T2"}, reason="pivot")
+    assert store.load()["stale"] == ["M2"]
+
+    store.commit_slice("M2", {"research_gaps": [{"id": "gap-2"}]}, reason="redone")
+    assert _store(project_id, tmp_path).load()["stale"] == []
+
+
+def test_in_progress_downstream_is_not_marked_stale(project_id, tmp_path):
+    """Only committed (done) work can be out of date with its upstream.
+
+    A module still being written has nothing settled to contradict, and the
+    student is watching the upstream change happen — flagging it was noise.
+    """
+    store = _store(project_id, tmp_path)
+    store.commit_slice("M1", {"research_title": "T"}, reason="r", confirm_done=True)
+    store.commit_slice("M2", {"research_gaps": [{"id": "gap-1"}]}, reason="wip")
+    assert store.load()["status"]["M2"] != "done"
+
+    out = store.commit_slice("M1", {"research_title": "T2"}, reason="pivot")
+    assert out["flagged"] == []
+    assert store.load()["stale"] == []
 
 
 def test_state_shared_across_store_instances(project_id, tmp_path):

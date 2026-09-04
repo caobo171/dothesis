@@ -221,7 +221,8 @@ class DbProjectStateStore(ProjectStateStore):
     def load(self) -> dict[str, Any]:
         with self.engine.connect() as conn:
             proj = conn.execute(
-                select(Project.__table__.c.focus, Project.__table__.c.module_status)
+                select(Project.__table__.c.focus, Project.__table__.c.module_status,
+                       Project.__table__.c.stale_modules)
                 .where(Project.__table__.c.id == self.project_id)
             ).first()
             cs = conn.execute(
@@ -231,7 +232,17 @@ class DbProjectStateStore(ProjectStateStore):
 
         status = {m: "locked" for m in MODULES}
         if proj and proj.module_status:
-            status.update({k: v for k, v in proj.module_status.items() if k in status})
+            # Coerce any legacy `needs_review` on the way in. The migration
+            # rewrites stored rows, but a row can still arrive from a replica
+            # mid-deploy or from a restored backup — and headless snapshots the
+            # status it loads straight back into status_overrides, so an
+            # uncoerced value would write itself back in and quietly resurrect
+            # the state this change removed. It always meant "was done, then
+            # invalidated upstream", so `done` + stale is the faithful reading.
+            status.update({
+                k: ("done" if v == "needs_review" else v)
+                for k, v in proj.module_status.items() if k in status
+            })
 
         flat: dict[str, Any] = {}
         if cs:
@@ -251,8 +262,24 @@ class DbProjectStateStore(ProjectStateStore):
                     if key in COACHING_KEYS:
                         flat[key] = value
 
+        # Staleness rides its own column, NOT the slice JSONB: the agent's
+        # contextStore is FLAT (every module's owned keys merged into one dict),
+        # so a per-module marker stored as a slice key would collide across
+        # modules — M2's would overwrite M3's. Explicit load/_save support is
+        # mandatory here; a state key this store doesn't name is dropped on the
+        # floor in prod (project_db_store_persistence_gap).
+        stale = [m for m in (getattr(proj, "stale_modules", None) or []) if m in status]
+        # A legacy row carries its invalidation in module_status, not in the new
+        # column — fold it in so the note still shows before the migration runs.
+        if proj and proj.module_status:
+            stale = sorted(set(stale) | {
+                k for k, v in proj.module_status.items()
+                if v == "needs_review" and k in status
+            })
+
         return {
             "status": status,
+            "stale": stale,
             "focus": proj.focus if proj else None,
             "contextStore": flat,
             # Version snapshots are in-turn only for now; durable history
@@ -282,7 +309,7 @@ class DbProjectStateStore(ProjectStateStore):
         # can detect the locked/in_progress → done transition. Without this
         # we'd re-export on every commit while M5 is already done.
         prev_state = self.load()
-        prev_m5_status = prev_state["status"].get("M5")
+        prev_status = prev_state["status"]
         flat = state["contextStore"]
         now = datetime.now(timezone.utc).isoformat()
         with self.engine.connect() as conn:
@@ -330,19 +357,24 @@ class DbProjectStateStore(ProjectStateStore):
             conn.execute(
                 Project.__table__.update()
                 .where(Project.__table__.c.id == self.project_id)
-                .values(focus=state["focus"], module_status=state["status"])
+                .values(focus=state["focus"], module_status=state["status"],
+                        stale_modules=list(state.get("stale") or []))
             )
             conn.commit()
 
-        # M5 auto-export: a docx + pdf are part of the M5 done-criteria,
-        # not a separate user-triggered step. When this commit flipped M5
-        # to `done`, run the exporter in-line and write the artifacts back
-        # so the ContextPanel can show download links the moment the user
-        # sees the status flip.
-        if (
-            prev_m5_status != "done"
-            and state["status"].get("M5") == "done"
-        ):
+        # Continuous writing: the thesis is composed chapter by chapter as each
+        # module completes — NOT only when the user reaches M5. When this commit
+        # flips ANY module (M1→M5) to `done`, compose the chapter(s) that module
+        # owns into the m5_writing slice, then (re)render the docx/pdf from every
+        # chapter written so far. So a student who has finished M1–M3 already has
+        # a 3-chapter thesis to download, and each later module extends it.
+        newly_done = [
+            m for m in ("M1", "M2", "M3", "M4", "M5")
+            if prev_status.get(m) != "done" and state["status"].get(m) == "done"
+        ]
+        for module in newly_done:
+            self._auto_compose_module(module)
+        if newly_done:
             self._auto_export_m5()
 
     @staticmethod
@@ -374,6 +406,59 @@ class DbProjectStateStore(ProjectStateStore):
             return missing
         except Exception:
             return []
+
+    def _auto_compose_module(self, module: str) -> None:
+        """Compose the chapter(s) a just-completed module owns into the slice.
+
+        The per-module writing step: M1→intro, M2→lit_review, M3→methodology,
+        M4→results, M5→discussion+conclusion. Merges ONLY this module's chapter
+        keys into m5_writing.chapters, so it never clobbers another module's
+        chapter or a student's imported one.
+
+        Best-effort + fail-open: composition is an LLM call, so any failure (no
+        model configured in tests, a transient error, an empty result) must
+        leave the module `done` and simply skip writing prose — never raise into
+        the state commit that triggered it.
+        """
+        import logging
+        log = logging.getLogger(__name__)
+        try:
+            from orchestrator.tools.m5_writing import (  # noqa: PLC0415
+                chapters_for_module, compose_module_chapters,
+            )
+            from .models import ContextStore as DbContextStore
+            from sqlalchemy.orm import Session
+            from sqlalchemy.orm.attributes import flag_modified
+
+            if not chapters_for_module(module):
+                return
+            with Session(self.engine) as db:
+                cs = db.get(DbContextStore, self.project_id)
+                if cs is None:
+                    return
+                # Nested module shape compose_all_sections reads from.
+                nested = {
+                    "m1_topic": cs.m1_topic or {},
+                    "m2_literature": cs.m2_literature or {},
+                    "m3_design": cs.m3_design or {},
+                    "m4_analysis": cs.m4_analysis or {},
+                    "m5_writing": cs.m5_writing or {},
+                }
+                composed = compose_module_chapters(nested, module)
+                if not composed:
+                    log.info("Auto-compose %s: nothing composed — skipped.", module)
+                    return
+                m5 = dict(cs.m5_writing or {})
+                chapters = dict(m5.get("chapters") or {})
+                chapters.update(composed)  # only this module's chapter keys
+                m5["chapters"] = chapters
+                cs.m5_writing = m5
+                flag_modified(cs, "m5_writing")
+                db.commit()
+                log.info("Auto-compose %s wrote chapters: %s", module, list(composed))
+        except Exception:
+            log.warning("Auto-compose for module %s failed — left as-is.",
+                        module, exc_info=True)
 
     def _auto_export_m5(self) -> None:
         """Run the engine docx/pdf pipeline and persist artifacts.
@@ -415,32 +500,23 @@ class DbProjectStateStore(ProjectStateStore):
                         "chapters or final_sections.", self.project_id,
                     )
                     return
-                # Only export a WHOLE thesis. This hook renders exactly what
-                # final_sections holds — it cannot compose, and must not: it
-                # runs inside a store commit, where an LLM call has no business.
+                # Export whatever chapters carry prose — the thesis is written
+                # chapter by chapter as each module completes, so a partial docx
+                # (e.g. Chapters 1–4 while Discussion is still to come) is a
+                # first-class, expected state, not an error.
                 #
-                # That was harmless while final_sections was empty until the
-                # composer filled it. Once the import began preserving the
-                # student's chapters 4 and 5, this fired with two chapters in
-                # hand and shipped a 35KB "full thesis" with no introduction,
-                # literature review or methodology — and because the export came
-                # from here rather than the export_docx tool, the chat had no
-                # download card either, so the reply just said the files were
-                # somewhere in the Context store.
-                #
-                # Skipping is the safe half: the `done` flag and the "no export
-                # yet" hint both stand, and export_docx (which CAN compose, and
-                # refuses a partial with incomplete_export) still produces the
-                # real document when the user or the agent asks for it.
+                # Historically this refused a partial ("only export a WHOLE
+                # thesis") because it renders exactly what the slice holds and
+                # cannot compose. That gate is what forced everything to wait for
+                # M5. Now that each module composes its own chapter into the
+                # slice (see _auto_compose_module), rendering the partial here is
+                # correct: it always reflects the chapters written so far.
                 missing = self._missing_chapters(sections)
                 if missing:
-                    log.warning(
-                        "M5 auto-export skipped for %s — draft has only %d "
-                        "chapter(s), missing %s. Leaving the export to "
-                        "export_docx, which can compose them.",
-                        self.project_id, len(sections), missing,
+                    log.info(
+                        "Auto-export for %s: rendering %d chapter(s), still to "
+                        "draft: %s.", self.project_id, len(sections), missing,
                     )
-                    return
 
             artifacts = run_export(sections, str(self.project_id), references=references,
                                    language=language,

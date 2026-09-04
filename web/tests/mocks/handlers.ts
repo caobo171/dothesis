@@ -12,4 +12,7 @@ export const defaultHandlers = [
     id: "u-test", email: "test@example.com", username: null,
     credit: 0, is_super_admin: false, created_at: null,
   })),
+  // Empty-thread ChatPane fetches this; tests that don't care about
+  // suggested actions would otherwise trip onUnhandledRequest:"error".
+  http.post("*/api/v1/projects/:id/roadmap", () => HttpResponse.json({})),
 ];

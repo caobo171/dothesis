@@ -77,9 +77,13 @@ export function stashAnalyzeIntent(projectId: string, intent: AnalyzeIntent): vo
   // student to be told what is on the screen behind it.
   //
   // Auto Thesis is exempt: it is not a chat turn at all, it is the signal to
-  // open the run modal. Dropping the stash here silently downgraded "write my
-  // whole thesis" to an ordinary chat for anyone who dropped files and typed
-  // nothing — the run has the imported modules to work from and needs no note.
+  // start the run. Dropping the stash here silently downgraded "write my whole
+  // thesis" to an ordinary chat for anyone who dropped files and typed nothing.
+  //
+  // Defensive rather than live: /new no longer runs the import in Auto Thesis
+  // (so nothing there writes preseeded + autoThesis together), and it refuses
+  // to submit Auto Thesis without a topic. Kept because the two flags are set
+  // independently and a stash that carries both must not be dropped.
   if (intent.preseeded && !intent.note.trim() && !intent.autoThesis) return;
   try {
     window.sessionStorage.setItem(KEY_PREFIX + projectId, JSON.stringify(intent));

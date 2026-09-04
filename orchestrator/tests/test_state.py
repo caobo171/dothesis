@@ -6,7 +6,7 @@ from langchain_core.messages import HumanMessage
 
 from orchestrator.state import (
     ContextStore, ModuleStatusMap, OrchestratorState,
-    compute_status_map, get_module_slice, modules_after,
+    compute_stale_map, compute_status_map, get_module_slice, modules_after,
     next_unconfirmed_module, propagate_needs_review,
 )
 
@@ -94,16 +94,18 @@ def test_compute_status_map_meta_only_slice_stays_locked():
     assert sm.M1 == "locked"
 
 
-def test_compute_status_map_needs_review_marker_overrides_done():
-    # PR #2 (router rewrite) will set _needs_review on downstream slices
-    # when an upstream mutate invalidates them. The marker must WIN over
-    # confirmed_at — that's the whole point of the brief §1.5 propagation
-    # rule: "this was done, but an upstream change means you should look
-    # at it again before trusting it."
+def test_stale_marker_does_not_override_done():
+    """A marked slice stays done; staleness is reported on its own channel.
+
+    The marker used to WIN over confirmed_at and render the module as
+    needs_review. That demoted finished work and pushed the student back to it
+    before they could continue, which is the opposite of the product rule:
+    they get the output, then fine-tune it.
+    """
     cs = ContextStore(m1_topic={"confirmed_at": "2026-06-03T00:00:00",
                                  "_needs_review": True})
-    sm = compute_status_map(cs)
-    assert sm.M1 == "needs_review"
+    assert compute_status_map(cs).M1 == "done"
+    assert compute_stale_map(cs) == frozenset({"M1"})
 
 
 def test_compute_status_map_dod_pass_without_confirm_is_done():
@@ -158,8 +160,9 @@ def test_propagate_needs_review_marks_done_downstream():
     new_cs = propagate_needs_review(cs, mutated="M2")
     sm = compute_status_map(new_cs)
     assert sm.M2 == "done"             # the mutated module itself is unaffected
-    assert sm.M3 == "needs_review"     # downstream done → flagged
+    assert sm.M3 == "done"             # downstream stays DONE — marked, not demoted
     assert sm.M4 == "locked"           # empty, was never done → no flag
+    assert compute_stale_map(new_cs) == frozenset({"M3"})
 
 
 def test_propagate_needs_review_skips_non_done_downstream():

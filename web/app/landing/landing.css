@@ -1,0 +1,835 @@
+/* ============================================================================
+   Landing page styles — imported ONLY by app/landing/page.tsx, so nothing here
+   ships on the in-app routes.
+
+   Two layers live in this file:
+     1. `.lp-root` scope  — the design-system tokens the landing page needs that
+        app/globals.css does not already define, plus the page's own utilities.
+     2. `.ds-*` classes   — the shared component CSS from the Claude Design
+        project, copied verbatim (half-pixels included).
+
+   Why the tokens are scoped to `.lp-root` instead of merged into globals.css:
+   globals.css already owns --ink-*, --blue-*, --radius-card, --shadow-card and
+   the shadcn HSL channels. The design system layers a second, richer set on top
+   (a full type ramp, semantic aliases, moss/ochre status hues). Merging them
+   would re-tune every in-app surface as a side effect of shipping a marketing
+   page, so they are confined to this subtree.
+
+   Why `.ds-*` is NOT scoped: globals.css has zero `ds-` selectors, so the
+   namespace is already free and the classes can stay byte-identical to the
+   design system — which keeps the next import a straight diff.
+   ========================================================================= */
+
+/* Anchor links in the nav rely on smooth scrolling, but setting it on <html>
+   unconditionally would change behaviour for the whole app. `:has()` turns it
+   on only while a landing page is mounted. */
+html:has(.lp-root) {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.lp-root) {
+    scroll-behavior: auto;
+  }
+}
+
+.lp-root {
+  /* ---- Brand indigo as literal hex ----------------------------------------
+     globals.css exposes the brand only as --blue-* and as shadcn HSL channels
+     (--primary: 235 100% 55%). The design system's components read
+     var(--primary-600) directly, so the named scale has to exist here. */
+  --primary-50: #eef2ff;
+  --primary-100: #e0e7ff;
+  --primary-500: #4f57ff;
+  --primary-600: #1c2eff;
+  --primary-700: #0a1ee0;
+
+  /* Muted scholarly status palette — used on module dots and verified-citation
+     ticks, where a bright emerald/amber would shout next to serif titles. */
+  --moss-fg: #4a6b4f;
+  --moss-bg: #eef4ee;
+  --moss-text: #3a5740;
+  --ochre-fg: #8e6b2a;
+  --ochre-bg: #f5efe2;
+  --ochre-text: #6e5121;
+  --ochre-border: #e4d5b7;
+
+  /* The ink ramp jumps 500 → 700, but the design reaches for --ink-600 twice
+     (the reference list, the competitor column header). Undefined there, it
+     silently fell back to whatever it inherited — ink-800 in one place, ink-900
+     in the other, i.e. darker than the text it was meant to sit quieter than.
+     #52525b is zinc-600, the step the ramp is missing, and the same grey the
+     design already hardcodes for .lp-navlink. */
+  --ink-600: #52525b;
+
+  --destructive-600: #dc2626;
+  --destructive-700: #b91c1c;
+
+  /* ---- Type ramp — the literal product values, half-pixels included ------ */
+  --text-section: 22px;
+  --text-h3: 18px;
+  --text-panel-title: 17px;
+  --text-prose: 16.5px;
+  --text-lg: 15px;
+  --text-base: 14px;
+  --text-btn: 13.5px;
+  --text-sm: 13px;
+  --text-sm-tight: 12.5px;
+  --text-xs: 12px;
+  --text-xxs: 11.5px;
+  --text-eyebrow: 11px;
+  --text-micro: 10.5px;
+
+  --weight-body: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-black: 800;
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+  --leading-prose: 1.72;
+
+  --tracking-display: -0.02em;
+  --tracking-tight: -0.01em;
+  --tracking-label: 0.04em;
+  --tracking-eyebrow: 0.08em;
+
+  /* ---- Radii not already in globals.css --------------------------------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 20px;
+
+  /* ---- Shadows + hairline borders --------------------------------------- */
+  --shadow-hairline: 0 1px 2px rgba(11, 13, 26, 0.04);
+  --shadow-menu: 0 10px 30px -12px rgba(15, 18, 60, 0.28);
+  --ring-focus: 0 0 0 3px rgba(28, 46, 255, 0.12);
+  --ring-offset: 0 0 0 2px #ffffff, 0 0 0 4px var(--blue-600);
+  --border-hairline: 1px solid var(--ink-100);
+  --border-default: 1px solid var(--ink-200);
+  --border-field: 1.5px solid var(--ink-200);
+
+  /* ---- Motion. Short and functional; nothing bounces or springs. --------- */
+  --duration-instant: 40ms;
+  --duration-fast: 120ms;
+  --duration-base: 150ms;
+  --duration-slow: 300ms;
+  --duration-bar: 500ms;
+  --ease-standard: ease;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --press-translate: translateY(1px);
+  --hover-lift: translateY(-1px);
+
+  /* ---- Semantic aliases (components prefer these over raw scales) -------- */
+  --surface-card: var(--paper);
+  --surface-hover: var(--ink-50);
+  --text-muted: var(--ink-500);
+  --text-on-accent: #ffffff;
+  --action-primary: var(--primary-600);
+  --action-primary-hover: var(--primary-700);
+  --action-secondary-hover-bg: var(--primary-50);
+  --action-ghost-hover-bg: var(--ink-50);
+  --action-dark: var(--ink-900);
+  --action-dark-hover: var(--ink-800);
+  --status-done-bg: var(--ok-bg);
+  --status-done-fg: var(--ok-fg);
+  --status-active-bg: var(--primary-50);
+  --status-active-fg: var(--primary-700);
+  --status-review-bg: var(--pause-bg);
+  --status-review-fg: var(--pause-fg);
+  --status-idle-bg: var(--ink-100);
+  --status-idle-fg: var(--ink-500);
+
+  font-family: var(--font-sans);
+  color: var(--ink-900);
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Tailwind preflight already zeroes most of this; restated so the page renders
+   identically if the utility layer ever changes underneath it.
+
+   Wrapped in :where() so these element defaults carry ZERO specificity. Without
+   it, `.lp-root a` (0,2,0) would beat `.ds-btn--default` and `.ds-cite` (0,1,0)
+   and repaint every link-shaped button and citation chip brand-indigo. */
+:where(.lp-root) a {
+  color: var(--primary-600);
+  text-decoration: none;
+}
+:where(.lp-root a:hover) {
+  color: var(--primary-700);
+}
+:where(.lp-root) img {
+  display: block;
+  max-width: 100%;
+}
+:where(.lp-root) :is(h1, h2, h3, h4, p, ul, li, figure, blockquote) {
+  margin: 0;
+  padding: 0;
+}
+:where(.lp-root) ul {
+  list-style: none;
+}
+:where(.lp-root) button {
+  font-family: inherit;
+}
+
+/* ============================ Page utilities ==============================
+   `lp-` prefixed because globals.css already ships a different `.eyebrow`
+   (11px/0.14em/ink-400) for the in-app chrome, and generic names like .wrap
+   or .lead would be a landmine for any future global rule. */
+.lp-wrap {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+.lp-wrap-narrow {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+.lp-sec {
+  padding: 104px 0;
+}
+/* Typography ported from jenni.ai (Framer / Inter). jenni sets its ENTIRE type
+   system in Inter — headings included — at Medium (500) weight with tight
+   negative tracking, rather than a bold serif. So the landing headings move off
+   Source Serif onto Inter here. The app (chat/editor) keeps its serif; this is
+   scoped to .lp-* on the landing only. */
+.lp-serif {
+  /* Card / brand headings — jenni H3 preset: Inter 500, slight negative track. */
+  font-family: var(--font-sans);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.lp-display {
+  /* Hero + section H2 base — jenni H1/H2: Inter Medium, tight tracking, 1.05–1.1
+     line-height. Per-element size + the very tight hero tracking are set where
+     each heading is rendered (Hero.tsx, SectionHead). */
+  font-family: var(--font-sans);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+.lp-eyebrow {
+  /* jenni eyebrow preset: Inter 600, 12px, uppercase, +1.2px (~0.1em) tracking. */
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-400);
+}
+.lp-lead {
+  /* jenni lead/body preset: Inter 400, ~18px, 1.5 line-height, faint negative
+     track, muted gray. */
+  color: var(--ink-500);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+  text-wrap: pretty;
+}
+.lp-navlink {
+  color: #52525b;
+  font-weight: 500;
+  font-size: 14px;
+  transition: color 0.12s;
+}
+.lp-navlink:hover {
+  color: var(--ink-900);
+}
+.lp-mono {
+  font-family: var(--font-mono);
+}
+.lp-tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scroll reveal. The class is added by an IntersectionObserver in Reveal. */
+.lp-fade-up {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.lp-fade-up.lp-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (max-width: 900px) {
+  .lp-sec {
+    padding: 72px 0;
+  }
+}
+
+/* Readers who ask for reduced motion get the content, not the choreography. */
+@media (prefers-reduced-motion: reduce) {
+  .lp-fade-up {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .lp-root *,
+  .lp-root *::before,
+  .lp-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------------------------- Nav ---------------------------------------- */
+@media (max-width: 860px) {
+  .lp-nav-links {
+    display: none !important;
+  }
+}
+
+/* --------------------------- Hero demo ----------------------------------- */
+.lp-doc-h {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--ink-900);
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--ink-200);
+}
+.lp-fin {
+  animation: lp-finup 0.4s ease;
+}
+@keyframes lp-finup {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.lp-demo-pulse {
+  animation: lp-demopulse 1.6s ease-out infinite;
+}
+@keyframes lp-demopulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(28, 46, 255, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(28, 46, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(28, 46, 255, 0);
+  }
+}
+
+/* The design ships narrow-viewport rules for every section except the hero
+   mock. Its M1–M5 strip is five `flex: 1` chips whose default `min-width: auto`
+   stops them shrinking past their own content, so below ~640px M4 and M5 fall
+   off the edge and the card's overflow:hidden simply eats them. Dropping the
+   label and letting the chips shrink fits all five without touching the desktop
+   layout. */
+@media (max-width: 640px) {
+  .lp-modstrip-label {
+    display: none;
+  }
+  .lp-modstrip > * {
+    min-width: 0;
+  }
+}
+
+/* ------------------------- How it works ---------------------------------- */
+@media (max-width: 820px) {
+  .lp-step-grid {
+    grid-template-columns: 1fr !important;
+    gap: 32px !important;
+  }
+  .lp-mtrack {
+    grid-template-columns: 1fr 1fr !important;
+    row-gap: 28px !important;
+  }
+  .lp-mtrack .lp-mline {
+    display: none !important;
+  }
+}
+
+/* --------------------------- Features ------------------------------------ */
+.lp-fade-in-mock {
+  animation: lp-fmock 0.35s ease;
+}
+@keyframes lp-fmock {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 820px) {
+  .lp-feat-explorer {
+    grid-template-columns: 1fr !important;
+    gap: 28px !important;
+  }
+}
+
+/* Alternating feature rows (jenni-style): text one side, animated demo the
+   other, flipping each row via `.reverse`. Stacks to one column on mobile with
+   the text always back on top, regardless of the desktop flip. */
+/* Blinking caret for the faux "someone is typing" composer. */
+@keyframes lp-blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+.lp-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: -2px;
+  background: var(--primary-600);
+  animation: lp-blink 1s step-end infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-caret { animation: none; opacity: 0; }
+}
+
+.lp-feat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 56px;
+  align-items: center;
+}
+.lp-feat-row.reverse .lp-feat-text {
+  order: 2;
+}
+@media (max-width: 820px) {
+  .lp-feat-row {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .lp-feat-row.reverse .lp-feat-text {
+    order: 0;
+  }
+}
+
+/* -------------------------- Comparison ----------------------------------- */
+@media (max-width: 720px) {
+  .lp-cmp {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ----------------------------- Tools ------------------------------------- */
+@media (max-width: 760px) {
+  .lp-tool-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* -------------------------- Testimonials --------------------------------- */
+@media (max-width: 840px) {
+  .lp-quote-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ---------------------------- Footer ------------------------------------- */
+.lp-footer a:hover {
+  color: #fff !important;
+}
+@media (max-width: 760px) {
+  .lp-foot-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* ============================================================================
+   Design-system component classes — copied from the Claude Design project
+   (_ds/.../components/components.css). Only the components this page actually
+   renders are included; the rest of the kit is dead weight on a landing page.
+   ========================================================================= */
+
+/* ---------------- Button ---------------- */
+.ds-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  height: 40px;
+  padding: 0 16px;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-instant) var(--ease-standard);
+}
+.ds-btn:active {
+  transform: var(--press-translate);
+}
+.ds-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-offset);
+}
+.ds-btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.ds-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.ds-btn--default {
+  background: var(--action-primary);
+  color: var(--text-on-accent);
+}
+.ds-btn--default:hover {
+  background: var(--action-primary-hover);
+}
+.ds-btn--secondary {
+  background: var(--paper);
+  color: var(--primary-600);
+  border-color: var(--primary-600);
+  border-width: 1.5px;
+}
+.ds-btn--secondary:hover {
+  background: var(--action-secondary-hover-bg);
+}
+.ds-btn--outline {
+  background: var(--paper);
+  color: var(--ink-900);
+  border-color: var(--ink-200);
+}
+.ds-btn--outline:hover {
+  background: var(--ink-100);
+}
+.ds-btn--ghost {
+  background: transparent;
+  color: var(--ink-700);
+}
+.ds-btn--ghost:hover {
+  background: var(--action-ghost-hover-bg);
+  color: var(--ink-900);
+}
+.ds-btn--dark {
+  background: var(--action-dark);
+  color: #fff;
+}
+.ds-btn--dark:hover {
+  background: var(--action-dark-hover);
+}
+.ds-btn--destructive {
+  background: var(--destructive-600);
+  color: #fff;
+}
+.ds-btn--destructive:hover {
+  background: var(--destructive-700);
+}
+.ds-btn--link {
+  background: transparent;
+  color: var(--primary-600);
+  height: auto;
+  padding: 0;
+  text-underline-offset: 4px;
+}
+.ds-btn--link:hover {
+  text-decoration: underline;
+}
+.ds-btn--sm {
+  height: 36px;
+  padding: 0 12px;
+  font-size: var(--text-sm);
+}
+.ds-btn--lg {
+  height: 44px;
+  padding: 0 32px;
+  font-size: var(--text-lg);
+}
+.ds-btn--icon {
+  height: 40px;
+  width: 40px;
+  padding: 0;
+}
+.ds-btn--pill {
+  border-radius: var(--radius-chip);
+  font-size: var(--text-btn);
+  font-weight: var(--weight-semibold);
+  height: 38px;
+  padding: 0 18px;
+}
+/* `pill` is declared after `--lg`, so on a `pill size="lg"` CTA the pill's
+   38px/13.5px wins the cascade. That is the design's own hero button — do not
+   "fix" it with a more specific .ds-btn--pill.ds-btn--lg rule. */
+.ds-btn--pill.ds-btn--sm {
+  height: 32px;
+  padding: 0 14px;
+  font-size: var(--text-sm-tight);
+}
+.ds-btn--block {
+  width: 100%;
+}
+
+/* ---------------- Card ---------------- */
+.ds-card {
+  background: var(--surface-card);
+  border: var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-hairline);
+  color: var(--ink-900);
+}
+.ds-card--panel {
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.ds-card--hover {
+  transition: border-color var(--duration-base), box-shadow var(--duration-base),
+    transform var(--duration-base);
+}
+.ds-card--hover:hover {
+  border-color: var(--primary-100);
+  box-shadow: var(--shadow-pop);
+  transform: var(--hover-lift);
+}
+
+/* ---------------- Badge ---------------- */
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-chip);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+}
+.ds-badge--run {
+  background: var(--run-bg);
+  color: var(--run-fg);
+}
+.ds-badge--pause {
+  background: var(--pause-bg);
+  color: var(--pause-fg);
+}
+.ds-badge--ok {
+  background: var(--ok-bg);
+  color: var(--ok-fg);
+}
+.ds-badge--stop {
+  background: var(--stop-bg);
+  color: var(--stop-fg);
+}
+.ds-badge--idle {
+  background: var(--ink-100);
+  color: var(--ink-500);
+}
+.ds-badge--dark {
+  background: var(--ink-900);
+  color: #fff;
+}
+.ds-badge__pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 0 currentColor;
+  animation: halo-pulse 1.6s ease-in-out infinite;
+}
+
+/* The agent-is-working halo. NAME MATTERS: it must not be called `pulse`,
+   which would override Tailwind's own animate-pulse opacity fade. */
+@keyframes halo-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(28, 46, 255, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(28, 46, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(28, 46, 255, 0);
+  }
+}
+
+/* ---------------- Status tag (uppercase pill) ---------------- */
+.ds-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-chip);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  white-space: nowrap;
+}
+.ds-status--in_progress {
+  background: var(--status-active-bg);
+  color: var(--status-active-fg);
+}
+.ds-status--done {
+  background: var(--status-done-bg);
+  color: var(--status-done-fg);
+}
+.ds-status--needs_review {
+  background: var(--status-review-bg);
+  color: var(--status-review-fg);
+}
+.ds-status--locked {
+  background: var(--status-idle-bg);
+  color: var(--status-idle-fg);
+}
+
+/* ---------------- Module chip ---------------- */
+.ds-module-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-serif);
+  font-weight: var(--weight-black);
+  letter-spacing: var(--tracking-label);
+  border-radius: var(--radius);
+  padding: 4px 10px;
+  font-size: var(--text-sm-tight);
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+.ds-module-chip--quiet {
+  background: var(--ink-100);
+  color: var(--ink-500);
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+  font-size: var(--text-eyebrow);
+  letter-spacing: 0.03em;
+}
+
+/* ---------------- Citation chip ---------------- */
+.ds-cite {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 2px;
+  padding: 1px 6px;
+  border-radius: var(--radius-chip);
+  background: var(--ink-100);
+  color: var(--ink-500);
+  font-family: var(--font-sans);
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  vertical-align: middle;
+  transition: background-color var(--duration-fast), color var(--duration-fast);
+}
+.ds-cite:hover {
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+.ds-cite svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+/* ---------------- Assistant turn + prose ---------------- */
+.ds-turn-assistant {
+  display: flex;
+  flex-direction: column;
+}
+.ds-turn-assistant__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ds-turn-assistant__foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+.ds-ghost-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-500);
+  font-family: var(--font-sans);
+  font-size: var(--text-xxs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background-color var(--duration-fast), color var(--duration-fast);
+}
+.ds-ghost-action svg {
+  width: 12px;
+  height: 12px;
+}
+.ds-ghost-action:hover {
+  background: var(--ink-100);
+  color: var(--ink-700);
+}
+.ds-prose {
+  font-family: var(--font-serif);
+  font-size: var(--text-prose);
+  line-height: var(--leading-prose);
+  color: var(--ink-800);
+}
+.ds-prose > * + * {
+  margin-top: 10px;
+}
+.ds-prose p {
+  margin: 10px 0;
+}
+.ds-prose p:first-child {
+  margin-top: 0;
+}
+.ds-prose p:last-child {
+  margin-bottom: 0;
+}
+.ds-prose strong {
+  font-weight: 600;
+  color: var(--ink-900);
+}
+.ds-prose a {
+  color: var(--primary-600);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ds-prose a:hover {
+  color: var(--primary-700);
+}
+/* A CitationChip nested in assistant prose is still a chip, not body link.
+   `.ds-prose a` (0,1,1) outranks `.ds-cite` (0,1,0), so without this the chips
+   in the M2 feature mock render underlined and brand-indigo instead of as the
+   grey pills every other citation on the page uses. */
+.ds-prose a.ds-cite {
+  color: var(--ink-500);
+  text-decoration: none;
+}
+.ds-prose a.ds-cite:hover {
+  color: var(--primary-700);
+}
+
+/* ---------------- Caveat ---------------- */
+.ds-caveat {
+  margin: 12px 0 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-200);
+  font-size: var(--text-xxs);
+  color: var(--ink-500);
+  line-height: var(--leading-relaxed);
+}

@@ -25,7 +25,8 @@ describe("useChapterAutosave", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(1100); });
     expect(fetch).toHaveBeenCalledTimes(1);
     const call = (fetch as any).mock.calls[0];
-    expect(call[0]).toBe("/api/v1/projects/p1/m5/chapters/intro");
+    // apiFetch prepends the API base; assert the path rather than an exact URL.
+    expect(call[0]).toContain("/api/v1/projects/p1/m5/chapters/intro");
     expect(call[1].method).toBe("PATCH");
     expect(JSON.parse(call[1].body).prose).toBe("third");
   });

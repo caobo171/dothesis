@@ -31,6 +31,12 @@ class CreateProjectBody(BaseModel):
     field: str | None = None
     language: str = "en"
     citation_style: str = "apa"
+    # Generation mode chosen on the /new start screen: "auto" (Auto Thesis) vs
+    # "chat" (guided). Persisted so reopening an Auto Thesis project re-enters
+    # the auto flow instead of a plain chat. Optional for back-compat and for
+    # the headless/partner callers that don't run the start screen — None is
+    # stored as-is and read as "chat" by the client.
+    mode: str | None = None
 
 
 class ProjectOut(BaseModel):
@@ -41,14 +47,22 @@ class ProjectOut(BaseModel):
     citation_style: str
     status: str
     current_module: str
+    # Persisted generation mode ("auto"|"chat"|None). The chat surface reads this
+    # to decide whether a returning visit re-opens the Auto Thesis run/credit gate
+    # or lands in ordinary chat. None (legacy rows) is treated as "chat".
+    mode: str | None = None
     # Brief §1.4 — conversation focus (distinct from current_module). Nullable
     # during the dual-write window of PR #1/#2: clients can fall back to
     # current_module when focus is None.
     focus: str | None = None
-    # Brief §1.4 — per-module workflow status (locked|in_progress|done|needs_review).
+    # Brief §1.4 — per-module workflow status (locked|in_progress|done).
     # JSONB Dict[ModuleId, str]; '{}' until the first orchestrator turn writes
     # the computed status back via compute_status_map.
     module_status: dict = Field(default_factory=dict)
+    # Modules whose content predates a later upstream edit. Advisory only — the
+    # client renders "may be out of date" on a module that still reads done.
+    # Never a status, so it can never gate or re-order anything.
+    stale_modules: list[str] = Field(default_factory=list)
     context_store: dict
     # Populated only for a super-admin inspecting someone else's project. The
     # workspace uses this minimal identity to explain its read-only boundary.
@@ -141,12 +155,14 @@ def _project_out(p: Project, context_store: dict) -> ProjectOut:
         id=p.id, name=p.name, field=p.field, language=p.language,
         citation_style=p.citation_style, status=p.status,
         current_module=p.current_module,
+        mode=p.mode,
         # PR #1/#2 — surface the new focus + module_status columns. focus
         # falls back to current_module on the client side when None during
         # the dual-write window; module_status defaults to {} until the
         # first orchestrator turn populates it.
         focus=p.focus,
         module_status=p.module_status or {},
+        stale_modules=list(p.stale_modules or []),
         context_store=context_store,
         created_at=p.created_at, updated_at=p.updated_at,
     )
@@ -193,15 +209,26 @@ def _slice_summaries(db: Session,
         # started-but-unconfirmed slice is distinguishable from an absent one.
         cols.append(col["confirmed_at"].astext.label(name))
         cols.append(col.isnot(None).label(f"{name}__present"))
+    # The homepage cards show each thesis's M1 brief — the research title — as
+    # the card body (not the project name, which is often "Untitled thesis").
+    # Pull JUST that one text field with `->>`, the same cheap extraction as
+    # confirmed_at, so the list read stays small (the whole m1_topic JSONB is
+    # never sent — see the response-size note above).
+    cols.append(ContextStore.m1_topic["research_title"].astext.label("m1_research_title"))
     rows = db.execute(select(*cols).where(
         ContextStore.project_id.in_(project_ids)))
     out: dict[uuid.UUID, dict] = {}
     for row in rows:
         m = row._mapping
-        out[m["project_id"]] = {
+        summary = {
             name: ({"confirmed_at": m[name]} if m[f"{name}__present"] else None)
             for name in _SLICE_COLUMNS
         }
+        # Fold the title into the m1_topic summary so the frontend reads it the
+        # same way it reads the full slice: context_store.m1_topic.research_title.
+        if summary["m1_topic"] is not None and m["m1_research_title"]:
+            summary["m1_topic"]["research_title"] = m["m1_research_title"]
+        out[m["project_id"]] = summary
     return out
 
 
@@ -215,6 +242,7 @@ def create_project(body: CreateProjectBody,
                    db: Session = Depends(db_session)):
     p = Project(user_id=user.id, name=body.name, field=body.field,
                 language=body.language, citation_style=body.citation_style,
+                mode=body.mode,
                 current_module="M1", status="draft")
     db.add(p); db.flush()
     db.add(Thread(project_id=p.id, name="Main",

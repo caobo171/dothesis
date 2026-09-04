@@ -11,7 +11,13 @@ from typing import Literal
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
-PendingEditSource = Literal["paraphrase", "translate", "cite", "chat_rewrite"]
+# The inline selection actions. paraphrase/translate/cite/chat_rewrite are the
+# originals; proofread…shorten are the "practical inline actions" ported from
+# jenni — all of them land as a PendingEdit the user accepts or rejects.
+PendingEditSource = Literal[
+    "paraphrase", "translate", "cite", "chat_rewrite",
+    "proofread", "improve", "humanize", "expand", "shorten",
+]
 ChapterName = Literal["intro", "lit_review", "methodology", "results", "discussion", "conclusion"]
 
 
