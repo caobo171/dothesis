@@ -54,7 +54,7 @@ def compose_sections(
     m4 = context_store.get("m4_analysis") or {}
     # m2 IS part of the slice. It was the one module left out, which made
     # `research_gaps` — an M2-OWNED key (agent/state.py SLICE_OWNERSHIP) that
-    # intro.md/lit_review.md/discussion.md all interpolate and explicitly label
+    # intro.md/lit_review.md/conclusion.md all interpolate and explicitly label
     # "from M2" — permanently empty, and the gap-rendering block below it dead.
     # The deleted partner_report_service hid the bug: it wrote the grounded
     # brief's gaps into a plain `m1_topic` dict with no ownership filter, so its

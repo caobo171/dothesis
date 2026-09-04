@@ -1650,7 +1650,7 @@ def _strip_uncited_citations(prose: str, references: list[dict]) -> str:
 # via pandoc, which needs well-formed markdown — the LLM otherwise mushes list
 # items onto one line and emits broken tables.
 # Appended to every chapter prompt so the academic-style + table-interpretation
-# rules apply uniformly across all 6 chapters from one place, rather than being
+# rules apply uniformly across all 5 chapters from one place, rather than being
 # duplicated (and drifting) across each prompts/m5/<chapter>.md file.
 _MARKDOWN_FORMAT_RULES = """
 
