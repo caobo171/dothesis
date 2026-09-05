@@ -615,13 +615,47 @@ class ProjectStateStore:
     # roadmap_tasks is a COACHING_KEYS member, so DbProjectStateStore already
     # round-trips it (see F0 / project_db_store_persistence_gap).
     def upsert_roadmap_task(self, task: dict[str, Any]) -> dict[str, Any]:
-        """Add or replace a blocker (by id). Only touches roadmap_tasks."""
+        """Add or replace a blocker. Only touches roadmap_tasks.
+
+        Matching, in order: an explicit id, then the advisor directive's
+        `feedback_id`, then an OPEN task on the same (module, substep).
+
+        That last rule is what stops one obstacle becoming a list. On a measured
+        run M4 could not find the student's dataset, flagged it, retried, and
+        flagged it again seven times in seven different wordings; only the first
+        is ever shown (roadmap.next_action returns the first open task), so the
+        rest sat in durable state where nobody could clear them. A sub-step is
+        blocked by one thing at a time, and the newest wording is the agent's
+        latest read of it.
+
+        Advisor directives are exempt via feedback_id, because they all share
+        (module, substep="") and each of a supervisor's comments is its own
+        piece of work. A resolved task is never matched, so a genuinely new
+        blocker after a fix opens a new row rather than reviving a closed one.
+        """
         import uuid as _uuid
         state = self.load()
         tasks = list(state["contextStore"].get("roadmap_tasks") or [])
         stored = {**task}
-        stored.setdefault("id", _uuid.uuid4().hex)
         stored.setdefault("status", "open")
+
+        existing = None
+        if stored.get("id"):
+            existing = next((t for t in tasks if t.get("id") == stored["id"]), None)
+        elif stored.get("feedback_id"):
+            existing = next((t for t in tasks
+                             if t.get("feedback_id") == stored["feedback_id"]), None)
+        else:
+            existing = next((t for t in tasks
+                             if t.get("status") == "open"
+                             and not t.get("feedback_id")
+                             and t.get("module") == stored.get("module")
+                             and (t.get("substep") or "") == (stored.get("substep") or "")),
+                            None)
+
+        # Keep the id when replacing: anything already holding it (a resolve
+        # call, a rendered row) has to keep working across a restatement.
+        stored["id"] = (existing or {}).get("id") or stored.get("id") or _uuid.uuid4().hex
         tasks = [t for t in tasks if t.get("id") != stored["id"]] + [stored]
         state["contextStore"]["roadmap_tasks"] = tasks
         self._save(state)

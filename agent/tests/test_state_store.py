@@ -172,6 +172,71 @@ def test_upsert_roadmap_task_does_not_touch_focus_or_status(store):
     assert after["contextStore"]["roadmap_tasks"][0]["title"] == "HTMT fails"
 
 
+def test_one_obstacle_stays_one_task(store):
+    """Measured on a real run: M4 could not find the student's dataset, said so,
+    retried, and said it again — seven open tasks for one obstacle, each worded
+    differently, none of which the student could ever finish clearing. Only the
+    first is ever surfaced (roadmap.next_action returns the first open task), so
+    the other six were invisible noise sitting in durable state."""
+    for title in ("Thiếu dữ liệu khảo sát để chạy phân tích",
+                  "Chưa có tệp dữ liệu phân tích",
+                  "Thiếu dữ liệu đầu vào để phân tích"):
+        store.upsert_roadmap_task({"module": "M4", "substep": "run_per_step",
+                                   "title": title, "why": "no dataset",
+                                   "status": "open"})
+
+    tasks = store.load()["contextStore"]["roadmap_tasks"]
+    assert len(tasks) == 1
+    # The newest wording wins: it is the agent's latest read of the obstacle.
+    assert tasks[0]["title"] == "Thiếu dữ liệu đầu vào để phân tích"
+
+
+def test_the_task_id_survives_being_restated(store):
+    """Whatever is holding the id — a resolve call, a UI row — must still work
+    after the agent restates the same blocker."""
+    first = store.upsert_roadmap_task({"module": "M4", "substep": "run_per_step",
+                                       "title": "no data", "status": "open"})
+    again = store.upsert_roadmap_task({"module": "M4", "substep": "run_per_step",
+                                       "title": "still no data", "status": "open"})
+    assert again["id"] == first["id"]
+    assert store.resolve_roadmap_task(first["id"]) is True
+
+
+def test_a_new_blocker_after_a_resolve_is_a_new_task(store):
+    """Collapsing onto the open one must not resurrect a cleared task."""
+    first = store.upsert_roadmap_task({"module": "M4", "substep": "run_per_step",
+                                       "title": "no data", "status": "open"})
+    store.resolve_roadmap_task(first["id"])
+    second = store.upsert_roadmap_task({"module": "M4", "substep": "run_per_step",
+                                        "title": "HTMT fails", "status": "open"})
+
+    tasks = store.load()["contextStore"]["roadmap_tasks"]
+    assert second["id"] != first["id"]
+    assert len(tasks) == 2
+    assert [t["status"] for t in tasks] == ["done", "open"]
+
+
+def test_advisor_directives_are_not_collapsed_into_each_other(store):
+    """Every one of a supervisor's comments is its own piece of work, and they
+    all land on (module, substep="") — so the dedupe key cannot be that pair
+    alone or four comments on chapter 4 would become one."""
+    for i in (1, 2, 3):
+        store.upsert_roadmap_task({"module": "M4", "substep": "",
+                                   "title": f"Advisor: comment {i}",
+                                   "status": "open", "feedback_id": f"fb{i}"})
+    assert len(store.load()["contextStore"]["roadmap_tasks"]) == 3
+
+
+def test_re_ingesting_the_same_advisor_comment_updates_its_task(store):
+    a = store.upsert_roadmap_task({"module": "M4", "substep": "", "title": "Advisor: fix Table 4.2",
+                                   "status": "open", "feedback_id": "fb1"})
+    b = store.upsert_roadmap_task({"module": "M4", "substep": "", "title": "Advisor: fix Table 4.2 caption",
+                                   "status": "open", "feedback_id": "fb1"})
+    tasks = store.load()["contextStore"]["roadmap_tasks"]
+    assert len(tasks) == 1 and b["id"] == a["id"]
+    assert tasks[0]["title"] == "Advisor: fix Table 4.2 caption"
+
+
 def test_resolve_roadmap_task_flips_status(store):
     t = store.upsert_roadmap_task({"module": "M4", "title": "x", "why": "y", "status": "open"})
     assert store.resolve_roadmap_task(t["id"]) is True
