@@ -1,6 +1,7 @@
 """The project workspace path helper — one definition, no surface attached."""
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from uuid import uuid4
 
@@ -20,6 +21,44 @@ def test_workspace_root_follows_job_workdir_root(monkeypatch, tmp_path):
     monkeypatch.setenv("JOB_WORKDIR_ROOT", str(tmp_path))
     pid = uuid4()
     assert workspace_dir(pid) == tmp_path / "agent_projects" / str(pid)
+
+
+def test_a_relative_root_resolves_to_the_same_place_from_any_cwd(monkeypatch):
+    """The bug this exists for, measured on a real project:
+
+        api/var/jobs/agent_projects/<pid>/uploads/Results.docx   ← the API wrote it
+        var/jobs/agent_projects/<pid>/                           ← the run looked here, empty
+
+    `JOB_WORKDIR_ROOT=./var/jobs` is relative, and job_runner spawns the run
+    with cwd=<repo root> (job_runner.py:70,482) while the API serves from
+    api/. Same env var, same project, two directories — so M4 could not find
+    the dataset the student had uploaded, refused to invent numbers, and
+    flagged the same blocker seven times.
+    """
+    monkeypatch.setenv("JOB_WORKDIR_ROOT", "./var/jobs")
+    pid = uuid4()
+
+    monkeypatch.chdir(Path(__file__).resolve().parents[1])          # api/
+    from_api = workspace_dir(pid)
+    monkeypatch.chdir(Path(__file__).resolve().parents[2])          # repo root
+    from_repo_root = workspace_dir(pid)
+
+    assert from_api == from_repo_root
+    assert from_api.is_absolute()
+
+
+def test_an_absolute_root_is_left_alone(monkeypatch, tmp_path):
+    monkeypatch.setenv("JOB_WORKDIR_ROOT", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    pid = uuid4()
+    assert workspace_dir(pid) == tmp_path / "agent_projects" / str(pid)
+
+
+def test_an_unset_root_still_falls_back_to_the_temp_dir(monkeypatch):
+    monkeypatch.delenv("JOB_WORKDIR_ROOT", raising=False)
+    pid = uuid4()
+    assert workspace_dir(pid) == (
+        Path(tempfile.gettempdir()) / "agent_projects" / str(pid))
 
 
 def test_workspace_helper_pulls_in_no_router():
