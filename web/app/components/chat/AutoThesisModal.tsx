@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
 
@@ -37,10 +37,51 @@ export function AutoThesisModal({
   const t = useT();
   const [topic, setTopic] = useState(defaultTopic);
   const [starting, setStarting] = useState(false);
+  // This dialog read the topic out of the uploads itself, as opposed to being
+  // handed one already derived by the caller. Same framing either way.
+  const [readFromFiles, setReadFromFiles] = useState(false);
+  const [reading, setReading] = useState(false);
+  const askedFor = useRef<string | null>(null);
   // Sync topic when defaultTopic changes (e.g. project data arrives after modal mount)
   useEffect(() => {
     if (defaultTopic && !topic) setTopic(defaultTopic);
   }, [defaultTopic]);
+
+  // Nothing to start a run on, and the title is very likely sitting on page 1
+  // of a file the student already uploaded. Read it.
+  //
+  // This lives HERE rather than in the caller because ChatPane opens this
+  // dialog from four places and only one of them derived a topic: the auto-mode
+  // empty-thread prompt, the workspace button and both start-failure fallbacks
+  // all opened it blank, so a student who had uploaded a finished results
+  // chapter was asked to retype the title they had just handed over. Three
+  // surfaces cannot each remember to do this. The dialog that needs the topic
+  // is the thing that asks for it.
+  //
+  // Cheap where it should be: POST /topic-from-uploads returns without an LLM
+  // call when a title is already committed or the project has no readable
+  // files, so only the case this exists for costs anything.
+  useEffect(() => {
+    if (!open || !projectId) return;
+    if (defaultTopic || topic) return;             // already have one
+    if (askedFor.current === projectId) return;    // once per project, not per render
+    askedFor.current = projectId;
+    setReading(true);
+    void apiFetch(`/projects/${projectId}/topic-from-uploads`, { method: "POST", body: {} })
+      .then(res => {
+        const title = ((res as { research_title?: string | null })?.research_title || "").trim();
+        if (title) {
+          setTopic(title);
+          setReadFromFiles(true);
+        }
+      })
+      // No files, nothing readable, or the read failed: all three land on the
+      // same fallback, which is the empty box asking the student to type it.
+      .catch(() => {})
+      .finally(() => setReading(false));
+  }, [open, projectId, defaultTopic, topic]);
+
+  const isDerived = derived || readFromFiles;
   const { data: est } = useSWR(
     open && projectId ? `/projects/${projectId}/runs/estimate?topic=${encodeURIComponent(topic)}` : null,
     fetcher,
@@ -57,7 +98,7 @@ export function AutoThesisModal({
       >
         <div className="flex items-start justify-between mb-4">
           <h2 className="text-lg font-semibold text-ink-900">
-            {derived ? t("auto.derived.title") : "Auto Thesis"}
+            {isDerived ? t("auto.derived.title") : "Auto Thesis"}
           </h2>
           <button type="button" onClick={onClose} aria-label="close">
             <X className="w-5 h-5 text-ink-500" />
@@ -65,19 +106,28 @@ export function AutoThesisModal({
         </div>
 
         <label className="block text-sm font-medium text-ink-700 mb-1">
-          {derived ? t("auto.derived.topic") : "Research topic"}
+          {isDerived ? t("auto.derived.topic") : "Research topic"}
         </label>
+
+        {/* Reading the files is one LLM call, seconds not instant. Unlabelled,
+            an empty box that fills itself a moment later reads as a glitch. */}
+        {reading && (
+          <p className="mb-1.5 inline-flex items-center gap-1.5 text-[12.5px] text-ink-500">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+            {t("auto.derived.reading")}
+          </p>
+        )}
         <textarea
           value={topic}
           onChange={e => setTopic(e.target.value)}
           rows={3}
           className={"w-full border border-ink-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 " +
-                     (derived ? "mb-1.5" : "mb-4")}
+                     (isDerived ? "mb-1.5" : "mb-4")}
         />
 
         {/* Say the title is editable. The student did not write it, so nothing
             about a prefilled box tells them they are allowed to correct it. */}
-        {derived && (
+        {isDerived && (
           <p className="text-[12.5px] text-ink-500 mb-4">{t("auto.derived.edit")}</p>
         )}
 
@@ -85,7 +135,7 @@ export function AutoThesisModal({
             topic the numbers are suppressed: the student is being shown a
             machine's guess at their own title, and a token count next to it is
             noise at the moment they most need to read one sentence carefully. */}
-        {!derived && est && (
+        {!isDerived && est && (
           <div className="bg-ink-50 rounded-md p-3 text-sm mb-4">
             <div className="flex justify-between mb-1">
               <span className="text-ink-600">Estimated tokens:</span>
@@ -141,10 +191,10 @@ export function AutoThesisModal({
               setStarting(true);
               void Promise.resolve(onConfirm(topic)).finally(() => setStarting(false));
             }}
-            disabled={!topic.trim() || starting || (est && !est.sufficient_credit)}
+            disabled={!topic.trim() || starting || reading || (est && !est.sufficient_credit)}
             className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-full hover:bg-primary-700 disabled:opacity-50"
           >
-            {starting ? t("new.auto.analyzing") : derived ? t("auto.derived.start") : "Auto Thesis"}
+            {starting ? t("new.auto.analyzing") : isDerived ? t("auto.derived.start") : "Auto Thesis"}
           </button>
         </div>
       </div>

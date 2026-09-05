@@ -437,20 +437,8 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   // committed m1_topic.research_title for the modal to prefill from, so the
   // sentence the student typed on the start screen stands in for it.
   const [autoThesisTopic, setAutoThesisTopic] = useState("");
-  // The topic in the modal was read out of the uploads, not typed. Changes the
-  // dialog from "start the run?" to "is this what your thesis is about?".
-  const [topicWasDerived, setTopicWasDerived] = useState(false);
-  // Reading the files is one LLM call — seconds, not instant. Without this the
-  // student stares at an empty thread wondering whether pressing the button
-  // did anything.
-  const [derivingTopic, setDerivingTopic] = useState(false);
 
   const onAutoThesisClick = () => {
-    // Clear the derived flag: this is the workspace button, a deliberate click
-    // on a run the student is starting themselves. Without the reset, anyone
-    // who dismissed the read-from-files dialog earlier in the session got its
-    // "We read your files" framing again over a topic nobody read.
-    setTopicWasDerived(false);
     const status = activeRun?.status ?? null;
     // There IS a run — show it. Bringing the run screen back is what "open the
     // drawer" used to mean; the run is the main pane now, so this just undoes
@@ -499,7 +487,10 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   // The estimate itself is advisory: if the check fails, start anyway rather
   // than blocking a paid-up student on a broken read.
   const startAutoThesisFromNew = async (topic: string) => {
-    if (!topic) { void deriveTopicThenAsk(); return; }
+    // No topic typed on /new: open the dialog and let it read the uploads. The
+    // read lives in AutoThesisModal so every entry point gets it, not just this
+    // one — see the comment on its effect.
+    if (!topic) { setModalOpen(true); return; }
     try {
       const est = (await apiFetch(`/projects/${projectId}/runs/estimate`, {
         method: "POST",
@@ -513,35 +504,6 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     // Fall back to the modal so there is something to retry from, rather than
     // an empty thread that never explains itself.
     if (!started) setModalOpen(true);
-  };
-
-  // Nothing typed on /new: the student dropped a document and asked for a
-  // thesis. The title is in that document — read it back and show it for one
-  // click rather than making them retype what they just handed over.
-  //
-  // Deliberately NOT the mid-journey import: /topic-from-uploads is a single
-  // inference for a single string, where /reconstruct is a minute-plus walk
-  // that also commits M1/M3 as earned state — state this run writes itself.
-  // Null title (no readable files, or the model couldn't tell) opens the same
-  // modal empty, which is the ask-the-student fallback.
-  const deriveTopicThenAsk = async () => {
-    setDerivingTopic(true);
-    try {
-      const res = (await apiFetch(`/projects/${projectId}/topic-from-uploads`, {
-        method: "POST",
-        body: {},
-      })) as { research_title?: string | null };
-      const title = (res?.research_title || "").trim();
-      if (title) {
-        setAutoThesisTopic(title);
-        setTopicWasDerived(true);
-      }
-    } catch {
-      /* fall through to the empty modal — the student types it */
-    } finally {
-      setDerivingTopic(false);
-      setModalOpen(true);
-    }
   };
 
   // Retry a failed/canceled run by RESUMING its checkpoint (re-runs the module
@@ -641,16 +603,6 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
 
   return (
     <>
-      {/* Reading the uploaded files for a title. One LLM call, a few seconds —
-          long enough that an unexplained blank thread reads as "nothing
-          happened", which is when a student presses the button again. */}
-      {derivingTopic && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
-          <p className="inline-flex items-center gap-2 text-[13.5px] font-semibold text-ink-700">
-            <Loader2 className="w-4 h-4 animate-spin" /> {t("auto.derived.reading")}
-          </p>
-        </div>
-      )}
       {analyzing && (
         <AnalysisOverlay
           phase={analyzePhase}
@@ -863,7 +815,6 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         // A committed title wins: on a project with prior work it is the
         // student's own, while the /new sentence is just what started this run.
         defaultTopic={project?.context_store?.m1_topic?.research_title || autoThesisTopic}
-        derived={topicWasDerived}
         onClose={() => setModalOpen(false)}
         onConfirm={confirmAutoThesis}
       />

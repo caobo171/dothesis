@@ -122,4 +122,87 @@ describe("AutoThesisModal", () => {
     });
     expect(screen.queryByText(/auto thesis/i)).toBeNull();
   });
+
+  // Reading the uploads belongs HERE, not in one caller. ChatPane opens this
+  // dialog from four places and only one of them derived a topic, so a student
+  // who uploaded a finished results chapter and landed on an auto-mode thread
+  // got an empty box asking them to retype the title sitting on page 1 of the
+  // file they had just handed over. The other three surfaces cannot each
+  // remember to do this; the dialog that needs the topic asks for it.
+  describe("reading the topic out of the uploads", () => {
+    const estimate = (id: string) =>
+      http.post(`*/api/v1/projects/${id}/runs/estimate`, () =>
+        HttpResponse.json({ estimated_tokens: 100, credit_balance: 9000, sufficient_credit: true }));
+
+    test("fills an empty box from the uploaded files", async () => {
+      server.use(
+        estimate("p9"),
+        http.post("*/api/v1/projects/p9/topic-from-uploads", () =>
+          HttpResponse.json({
+            research_title: "The Effects of Application Performance Expectations on App Adoption",
+            source: "Results.docx",
+          })),
+      );
+      renderModal({
+        open: true, projectId: "p9", defaultTopic: "",
+        onClose: () => {}, onConfirm: () => {},
+      });
+      await waitFor(() => expect(
+        screen.getByDisplayValue(/Application Performance Expectations/)).toBeTruthy());
+      // And it says where the sentence came from, because the student did not
+      // write it and nothing about a prefilled box says they may correct it.
+      expect(screen.getByText(/we read your files/i)).toBeTruthy();
+      expect(screen.getByText(/not right\? edit it\./i)).toBeTruthy();
+    });
+
+    test("does not ask when a topic is already known", async () => {
+      let asked = 0;
+      server.use(
+        estimate("p9"),
+        http.post("*/api/v1/projects/p9/topic-from-uploads", () => {
+          asked += 1;
+          return HttpResponse.json({ research_title: "Something else" });
+        }),
+      );
+      renderModal({
+        open: true, projectId: "p9", defaultTopic: "A title the student typed",
+        onClose: () => {}, onConfirm: () => {},
+      });
+      await waitFor(() => expect(screen.getByDisplayValue(/student typed/)).toBeTruthy());
+      expect(asked).toBe(0);
+    });
+
+    test("leaves the box empty, and typable, when there is nothing to read", async () => {
+      server.use(
+        estimate("p9"),
+        http.post("*/api/v1/projects/p9/topic-from-uploads", () =>
+          HttpResponse.json({ research_title: null, source: null })),
+      );
+      renderModal({
+        open: true, projectId: "p9", defaultTopic: "",
+        onClose: () => {}, onConfirm: () => {},
+      });
+      // Falls back to the ask-the-student dialog rather than a derived one.
+      await waitFor(() => expect(screen.getByText("Research topic")).toBeTruthy());
+      expect(screen.queryByText(/we read your files/i)).toBeNull();
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
+    });
+
+    test("a failed read does not block the student from typing one", async () => {
+      server.use(
+        estimate("p9"),
+        http.post("*/api/v1/projects/p9/topic-from-uploads", () =>
+          HttpResponse.json({ detail: "boom" }, { status: 500 })),
+      );
+      renderModal({
+        open: true, projectId: "p9", defaultTopic: "",
+        onClose: () => {}, onConfirm: () => {},
+      });
+      await waitFor(() => expect(screen.getByText("Research topic")).toBeTruthy());
+      const box = screen.getByRole("textbox") as HTMLTextAreaElement;
+      fireEvent.change(box, { target: { value: "typed by hand" } });
+      expect(box.value).toBe("typed by hand");
+      expect(screen.getByRole("button", { name: /^auto thesis$/i })).not.toBeDisabled();
+    });
+  });
 });
