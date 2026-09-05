@@ -34,6 +34,8 @@ export const vi: Record<MessageKey, string> = {
   "auto.derived.edit": "Chưa đúng? Bạn sửa lại nhé.",
   "auto.derived.start": "Viết luận văn cho tôi",
   "auto.derived.lowCredit": "Số dư không đủ để chạy hết lượt này.",
+  "auto.lowCredit.short": "Bạn còn thiếu {count}.",
+  "auto.lowCredit.action": "Nạp thêm credit",
   "new.auto.analyze": "Viết luận văn cho tôi",
   "new.auto.analyzing": "Đang khởi động…",
   "new.mode.aria": "Bạn muốn làm theo cách nào",

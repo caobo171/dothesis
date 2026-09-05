@@ -89,6 +89,32 @@ describe("AutoThesisModal", () => {
     expect(screen.getByRole("button", { name: /write my thesis/i })).toBeDisabled();
   });
 
+  // The workspace path — a topic the student typed, not one derived from their
+  // uploads. This used to render a red balance beside a dead button and say
+  // nothing about either: you could see the number was short, but not that it
+  // was what blocked the run, nor what to do next. The numbers are the estimate
+  // block's job; the sentence and the link are what make them actionable.
+  test("a typed topic explains the short balance and offers the way out", async () => {
+    server.use(
+      http.post("*/api/v1/projects/p1/runs/estimate", () =>
+        HttpResponse.json({ estimated_tokens: 17500, credit_balance: 13919, sufficient_credit: false }),
+      ),
+    );
+    renderModal({
+      open: true, projectId: "p1", defaultTopic: "AI shopping assistants",
+      onClose: () => {}, onConfirm: () => {},
+    });
+    await waitFor(() => expect(screen.getByText(/17,500/)).toBeTruthy());
+    // The estimate block still shows both numbers on this path...
+    expect(screen.getByText(/13,919/)).toBeTruthy();
+    // ...but they no longer stand alone.
+    expect(screen.getByText(/not enough credits/i)).toBeTruthy();
+    expect(document.body.textContent).toMatch(/3,581/);  // 17,500 − 13,919
+    expect(screen.getByRole("link", { name: /top up credits/i })
+      .getAttribute("href")).toBe("/credit");
+    expect(screen.getByRole("button", { name: /^auto thesis$/i })).toBeDisabled();
+  });
+
   test("does not render when open=false", () => {
     renderModal({
       open: false, projectId: "p1", defaultTopic: "",

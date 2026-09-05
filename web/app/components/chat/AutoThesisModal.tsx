@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import useSWR from "swr";
 import { X } from "lucide-react";
 import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
@@ -81,13 +82,9 @@ export function AutoThesisModal({
         )}
 
         {/* The estimate block is the workspace button's gate. On a derived
-            topic it is replaced by the credit WARNING alone: the balance only
-            matters here when it blocks the run, and the sentence above is what
-            the student is supposed to be reading. */}
-        {derived && est && !est.sufficient_credit && (
-          <p className="text-sm text-red-600 mb-4">{t("auto.derived.lowCredit")}</p>
-        )}
-
+            topic the numbers are suppressed: the student is being shown a
+            machine's guess at their own title, and a token count next to it is
+            noise at the moment they most need to read one sentence carefully. */}
         {!derived && est && (
           <div className="bg-ink-50 rounded-md p-3 text-sm mb-4">
             <div className="flex justify-between mb-1">
@@ -100,6 +97,29 @@ export function AutoThesisModal({
                 {(est.credit_balance as number).toLocaleString()}
               </span>
             </div>
+          </div>
+        )}
+
+        {/* The warning belongs on BOTH paths, not just the derived one. Without
+            it the typed-topic dialog rendered a red number and a dead button and
+            said nothing: the student can see their balance is short but not that
+            it is what blocks the run, nor what to do about it. A disabled button
+            with no sentence next to it is a dead end, so this names the shortfall
+            and links to the one page that fixes it. */}
+        {est && !est.sufficient_credit && (
+          <div className="text-sm text-red-600 mb-4">
+            <p>{t("auto.derived.lowCredit")}</p>
+            <p className="mt-0.5">
+              {t("auto.lowCredit.short", {
+                count: Math.max(
+                  0,
+                  (est.estimated_tokens as number) - (est.credit_balance as number),
+                ).toLocaleString(),
+              })}{" "}
+              <Link href="/credit" className="underline font-medium hover:no-underline">
+                {t("auto.lowCredit.action")}
+              </Link>
+            </p>
           </div>
         )}
 

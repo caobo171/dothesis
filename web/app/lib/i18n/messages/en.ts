@@ -38,6 +38,8 @@ export const en = {
   "auto.derived.edit": "Not right? Edit it.",
   "auto.derived.start": "Write my thesis",
   "auto.derived.lowCredit": "Not enough credits to finish this run.",
+  "auto.lowCredit.short": "You're {count} short.",
+  "auto.lowCredit.action": "Top up credits",
   "new.auto.analyze": "Write my thesis",
   "new.auto.analyzing": "Starting…",
   "new.mode.aria": "How you want to work",
