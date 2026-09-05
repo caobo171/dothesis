@@ -4,25 +4,36 @@ import Image from "next/image";
 import { Card } from "./ds";
 import { IconCheck, IconX, LOGO, SectionHead } from "./shared";
 
+// The right column describes a general chatbot as a CLASS — it names nobody,
+// and it must stay that way. The moment a competitor is named, each of these
+// lines becomes a factual assertion about that company rather than a
+// characterisation of the category.
 const ROWS: Array<[string, string]> = [
   [
-    "Draws only from the sources you upload",
+    // Was "Draws only from the sources you upload" — the opposite of what M2
+    // does. It searches Crossref, OpenAlex and Semantic Scholar; uploads are an
+    // addition, not the whole pool.
+    "Retrieves real papers from Crossref, OpenAlex and Semantic Scholar — plus any PDFs and DOIs you add",
     "Answers from general training data",
   ],
   [
-    "Every citation checked against CrossRef — unverifiable ones marked, never invented",
+    // Was "Every citation checked against CrossRef … never invented". Crossref
+    // is one backend of several, a result is accepted on a DOI *or* a URL, and
+    // the DOI existence check is off by default. What the code DOES guarantee
+    // is the reference-pool check that runs on every composed chapter.
+    "Citations checked against your project's reference list — anything not in it is stripped",
     "Citations formatted to look right, but unverified",
   ],
   [
     "Structured across five modules with a live context store",
-    "One chat box, no structure, no memory of your project",
+    "One chat box, no structure carried between sessions",
   ],
   [
-    "Humanize freezes every number and citation while re-voicing",
+    "Humanize discards a rewrite that would change a number or a citation",
     "A rewrite can silently change a figure or a source",
   ],
   [
-    "Metered in credits — you see exactly what each run costs",
+    "Metered in credits — you see the estimate before each run",
     "Flat subscription regardless of what you actually use",
   ],
 ];

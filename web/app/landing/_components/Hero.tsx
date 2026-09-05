@@ -14,7 +14,10 @@ const DEMO_CAPTIONS = [
   "M2 · Literature Review — synthesising 14 sources",
   "M3 · Research Design — choosing the methodology",
   "M4 · Data Analysis — reading the results",
-  "M5 · Writing — draft complete, every claim page-cited",
+  // Not "page-cited": verify_page_numbers returns "unverified" whenever there
+  // is no source PDF, and its own docstring defers the page lookup to a
+  // follow-on project. Citations are traced to the source, not to the page.
+  "M5 · Writing — draft complete, every claim traced to a source",
 ];
 
 const FIGURE_BARS: Array<[string, number]> = [
@@ -27,9 +30,9 @@ const FIGURE_BARS: Array<[string, number]> = [
 ];
 
 const REFERENCES = [
-  "Nguyen, T. (2021). Algorithmic accountability across jurisdictions. Computers in Human Behavior, 118.",
-  "Okafor, D., & Blau, R. (2023). Toward measurable AI accountability. ACM Computing Surveys, 55(4).",
-  "Schmidt, L., et al. (2022). Regulatory divergence in AI governance. Journal of Policy Analysis, 41(2).",
+  "Young, M., Katell, M., & Krafft, P. M. (2019). Municipal surveillance regulation and algorithmic accountability. Big Data & Society, 6(2).",
+  "Hunt, R., & McKelvey, F. (2019). Algorithmic regulation in media and cultural policy. Journal of Information Policy, 9.",
+  "de Menezes Acioly, B., et al. (2024). Accountability in Brazilian artificial intelligence regulation. Journal of AI Law and Regulation, 1(1).",
 ];
 
 // Table 1: the thesis's central comparison. Dimension, then the two regimes.
@@ -255,7 +258,10 @@ function ThesisDocument({ step }: { step: number }) {
             flexWrap: "wrap",
           }}
         >
-          <Badge tone="ok">100% citations verified</Badge>
+          {/* Not "100% citations verified": a source is accepted on a DOI *or* a
+              URL, and the DOI existence check is off by default, so "verified"
+              overstates it. Every citation IS traced to the reference list. */}
+          <Badge tone="ok">Every citation traced</Badge>
           <span
             style={{
               fontFamily: "var(--font-sans)",
@@ -295,9 +301,9 @@ function ThesisDocument({ step }: { step: number }) {
             account remain unevenly distributed. The enforcement asymmetry
             between EU and US regulators is well documented{" "}
             <CitationChip
-              label="Nguyen 2021"
-              title="Algorithmic accountability across jurisdictions"
-              url="https://doi.org/10.1016/j.chb.2021.106789"
+              label="Young 2019"
+              title="Municipal surveillance regulation and algorithmic accountability"
+              url="https://doi.org/10.1177/2053951719868492"
             />
             .
           </p>
@@ -308,9 +314,9 @@ function ThesisDocument({ step }: { step: number }) {
             accountability metric, cross-border comparison rests on incompatible
             baselines{" "}
             <CitationChip
-              label="Okafor 2023"
-              title="Toward measurable AI accountability"
-              url="https://doi.org/10.1145/3593013"
+              label="Hunt 2019"
+              title="Algorithmic regulation in media and cultural policy"
+              url="https://doi.org/10.5325/jinfopoli.9.2019.0307"
             />
             .
           </p>
@@ -871,7 +877,7 @@ export function Hero() {
             marginInline: "auto",
           }}
         >
-          One thread. Your sources. Every citation verified.
+          One thread. Real sources. Every citation traced.
         </p>
         <div
           style={{

@@ -7,12 +7,19 @@ import { IconPlus, SectionHead } from "./shared";
 
 const ITEMS: Array<[string, string]> = [
   [
+    // The old answer was a flat "No", which the rest of the page contradicts:
+    // Auto Thesis really does run every module unattended from one prompt. The
+    // honest answer is that both modes exist and the student picks.
     "Does DoThesis write my thesis for me?",
-    "No — it works alongside you. You choose the sources, approve each direction, and write in your own voice. The agent structures the work, synthesises what you give it, and cites every claim so the argument stays yours.",
+    "It can, and that's your choice. Auto Thesis drafts every module from one prompt while you watch, and you can stop it at any point. Or work module by module in chat, approving each direction and writing in your own voice. Either way you are the author, and the work is yours to check.",
   ],
   [
+    // Was "Only from the sources you provide and from CrossRef" — not true.
+    // M2's default path is a deep search across several academic APIs plus
+    // grounded web search; Crossref is one backend, and a result is accepted on
+    // a DOI *or* a URL, so "exact and definitive" oversold it.
     "Where do the citations come from?",
-    "Only from the sources you provide and from CrossRef. A DOI is an exact lookup and definitive; anything it can't confirm is marked, never invented to look plausible.",
+    "It searches the academic databases — Crossref, OpenAlex, Semantic Scholar — and the open web, and you can add your own PDFs and DOIs. Sources with a DOI are the strongest; ones found without one are kept but not treated as confirmed. When a chapter is written, any citation that isn't in the project's reference list is stripped out.",
   ],
   [
     "Will it change my numbers or results?",

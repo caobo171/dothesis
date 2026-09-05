@@ -21,14 +21,18 @@ import { FinalCta } from "./_components/FinalCta";
 import { Footer } from "./_components/Footer";
 import { Hero, LogoStrip } from "./_components/Hero";
 import { Nav } from "./_components/Nav";
-import { Testimonials } from "./_components/Testimonials";
 import { Tools } from "./_components/Tools";
 import { UseCases } from "./_components/UseCases";
 
 export const metadata: Metadata = {
   title: "DoThesis — Draft with conviction",
+  // "19 specialized agents" was dropped from the Hero and the stats row as
+  // "no longer accurate" (see the comments in FinalCta.tsx and Hero.tsx) but
+  // survived here, where it is still user-visible in search results and social
+  // previews. A number the codebase itself documents as false is the one claim
+  // that cannot be argued about.
   description:
-    "From a topic idea to a submitted thesis. One thread, your sources, every citation verified — an AI thesis agent with 19 specialized agents across five modules.",
+    "From a topic idea to a submitted thesis. One thread, sources it looked up, every citation checked against your reference list — an AI thesis agent across five modules.",
 };
 
 export default function LandingPage() {
@@ -41,7 +45,11 @@ export default function LandingPage() {
         <Features />
         <Comparison />
         <Tools />
-        <Testimonials />
+        {/* Testimonials removed: the three quotes were attributed to named
+            people with degrees and institutions, and nothing anywhere backed
+            them — no CMS, no seed data, no consent record. Invented reviews are
+            not a copy problem to soften, so the section is gone until there are
+            real ones with releases. */}
         <UseCases />
         <Faq />
         <FinalCta />

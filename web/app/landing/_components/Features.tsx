@@ -68,8 +68,10 @@ function Checking({ on, children }: { on: boolean; children: ReactNode }) {
   );
 }
 
-// VERIFIED CITATIONS — the checker sweeps each cited claim, then flips the badge
-// to "100% verified" before looping.
+// TRACEABLE CITATIONS — the checker sweeps each cited claim, then flips the
+// badge to "All traced" before looping. The two DOIs below are real and resolve
+// to the papers named beside them: this section promises citations that check
+// out, so its own demo has to survive being clicked.
 function CitationsMock() {
   const step = useCycle(3, 1500); // 0 → chip A, 1 → chip B, 2 → all verified
   const verified = step === 2;
@@ -84,19 +86,19 @@ function CitationsMock() {
         <p>
           The enforcement asymmetry between EU and US regulators is well documented{" "}
           <Checking on={step === 0}>
-            <CitationChip label="Nguyen 2021" title="Algorithmic accountability across jurisdictions"
-              url="https://doi.org/10.1016/j.chb.2021.106789" />
+            <CitationChip label="Young 2019" title="Municipal surveillance regulation and algorithmic accountability"
+              url="https://doi.org/10.1177/2053951719868492" />
           </Checking>
           , though a shared accountability metric is still missing{" "}
           <Checking on={step === 1}>
-            <CitationChip label="Okafor 2023" title="Toward measurable AI accountability"
-              url="https://doi.org/10.1145/3593013" />
+            <CitationChip label="Hunt 2019" title="Algorithmic regulation in media and cultural policy"
+              url="https://doi.org/10.5325/jinfopoli.9.2019.0307" />
           </Checking>.
         </p>
       </AssistantTurn>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-        <Badge tone={verified ? "ok" : "idle"}>{verified ? "100% verified" : "Verifying…"}</Badge>
-        <span style={{ fontSize: 12.5, color: "var(--ink-500)" }}>checked against CrossRef</span>
+        <Badge tone={verified ? "ok" : "idle"}>{verified ? "All traced" : "Checking…"}</Badge>
+        <span style={{ fontSize: 12.5, color: "var(--ink-500)" }}>checked against your references</span>
       </div>
     </MockShell>
   );
@@ -119,9 +121,9 @@ function PdfIcon() {
 // one it passes flips to "Cited", then the loop restarts.
 function SourcesMock() {
   const rows: Array<[string, string]> = [
-    ["Algorithmic accountability across jurisdictions", "Nguyen, Tran · 2021"],
-    ["Toward measurable AI accountability", "Okafor, Blau · 2023"],
-    ["Regulatory divergence in AI governance", "Schmidt et al. · 2022"],
+    ["Municipal surveillance regulation and algorithmic accountability", "Young, Katell · 2019"],
+    ["Algorithmic regulation in media and cultural policy", "Hunt, McKelvey · 2019"],
+    ["Accountability in Brazilian AI regulation", "de Menezes Acioly et al. · 2024"],
   ];
   const step = useCycle(rows.length + 1, 1100); // 0..len; row < step = cited, == step = reading
   // "Literature search", not "Your library": these sources are RETRIEVED from
@@ -293,11 +295,16 @@ function AutoThesisMock() {
   const modules = [
     { id: "M1", now: "M1 · Topic Discovery — framing the question",
       result: "Title & research question set" },
-    { id: "M2", now: "M2 · Literature Review — verifying sources",
+    { id: "M2", now: "M2 · Literature Review — searching the databases",
       result: "14 sources synthesised · gaps G1, G2" },
     { id: "M3", now: "M3 · Research Design — building the model",
       result: "3 constructs → purchase intention · H1–H3" },
-    { id: "M4", now: "M4 · Analysis — reading the SmartPLS output",
+    // Was "reading the SmartPLS output", which undersold it and implied an
+    // integration that does not exist. M4 RUNS the PLS-SEM itself from the
+    // student's own .sav/.csv (agent/tools/stats.py — path coefficients,
+    // bootstrap CIs, HTMT, AVE, VIF, f², Q²). It can also parse output pasted
+    // from SmartPLS, but computing it is the stronger and truer claim.
+    { id: "M4", now: "M4 · Analysis — running the PLS-SEM on your data",
       result: "H1 β .34 · H2 β .28 · H3 β .19 · all p<.05" },
     { id: "M5", now: "M5 · Writing — composing the chapters",
       result: "5 chapters drafted · every claim cited" },
@@ -442,9 +449,9 @@ function ChatModelCard() {
 /** The citations the agent "pulls" — real chips plus the verified badge. */
 function ChatCitationsCard() {
   const cites = [
-    { label: "Nguyen 2021", title: "Algorithmic accountability across jurisdictions", url: "https://doi.org/10.1016/j.chb.2021.106789" },
-    { label: "Okafor 2023", title: "Toward measurable AI accountability", url: "https://doi.org/10.1145/3593013" },
-    { label: "Schmidt 2022", title: "Regulatory divergence in AI governance" },
+    { label: "Young 2019", title: "Municipal surveillance regulation and algorithmic accountability", url: "https://doi.org/10.1177/2053951719868492" },
+    { label: "Hunt 2019", title: "Algorithmic regulation in media and cultural policy", url: "https://doi.org/10.5325/jinfopoli.9.2019.0307" },
+    { label: "Acioly 2024", title: "Accountability in Brazilian AI regulation", url: "https://doi.org/10.21552/aire/2024/1/10" },
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>

@@ -7,7 +7,11 @@ const STATS: Array<[string, string]> = [
   // promise is the flagship instead: one prompt to a full thesis.
   ["1", "prompt to a full thesis"],
   ["5", "modules, one thread"],
-  ["100%", "citations verified"],
+  // Was "100% citations verified". The page disproved it in two other places:
+  // the citation tool says "a fuzzy hit is evidence, not proof", and a search
+  // result is accepted on a DOI *or* a URL. What IS absolute is the stripper —
+  // every composed chapter is filtered against the project's reference list.
+  ["0", "citations we can't trace"],
 ];
 
 export function FinalCta() {
@@ -67,7 +71,7 @@ export function FinalCta() {
             marginInline: "auto",
           }}
         >
-          Draft with conviction — one thread, your sources, page-cited. Never
+          Draft with conviction — one thread, real sources, every claim traced. Never
           look back at the blank page.
         </p>
         <div style={{ marginTop: 34 }}>
@@ -88,7 +92,10 @@ export function FinalCta() {
             color: "rgba(255,255,255,0.45)",
           }}
         >
-          Free credits to start · no card required · cancel anytime
+          {/* "cancel anytime" is subscription language, and both the FAQ and the
+              comparison table say the opposite — credits, not a subscription.
+              There is nothing to cancel, which is the better promise anyway. */}
+          Free credits to start · no card required · nothing to cancel
         </p>
         {/* the nav's "Pricing" link lands here — credits are the pricing story */}
         <div
