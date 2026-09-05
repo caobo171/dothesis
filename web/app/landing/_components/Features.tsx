@@ -115,8 +115,8 @@ function PdfIcon() {
   );
 }
 
-// SOURCE-GROUNDED — a reading cursor moves down your library; each paper it
-// passes flips to "Cited", then the loop restarts.
+// SOURCE-GROUNDED — a cursor moves down the papers the search returned; each
+// one it passes flips to "Cited", then the loop restarts.
 function SourcesMock() {
   const rows: Array<[string, string]> = [
     ["Algorithmic accountability across jurisdictions", "Nguyen, Tran · 2021"],
@@ -124,8 +124,11 @@ function SourcesMock() {
     ["Regulatory divergence in AI governance", "Schmidt et al. · 2022"],
   ];
   const step = useCycle(rows.length + 1, 1100); // 0..len; row < step = cited, == step = reading
+  // "Literature search", not "Your library": these sources are RETRIEVED from
+  // Crossref / OpenAlex / Semantic Scholar, not read out of a folder the student
+  // uploaded. The old label illustrated a claim the product does not make.
   return (
-    <MockShell label="Your library · 14 sources" pad={16}>
+    <MockShell label="Literature search · 14 sources found" pad={16}>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {rows.map(([title, authors], i) => {
           const reading = i === step;
@@ -146,7 +149,7 @@ function SourcesMock() {
                 <div style={{ fontSize: 12, color: "var(--ink-500)" }}>{authors}</div>
               </div>
               <span style={{ marginLeft: "auto", flexShrink: 0, opacity: cited || reading ? 1 : 0.35, transition: "opacity .3s" }}>
-                <Badge tone={cited ? "ok" : "idle"}>{cited ? "Cited" : reading ? "Reading…" : "Queued"}</Badge>
+                <Badge tone={cited ? "ok" : "idle"}>{cited ? "Cited" : reading ? "Searching…" : "Queued"}</Badge>
               </span>
             </div>
           );
@@ -194,10 +197,14 @@ function ContextMock() {
           <span style={chip}>G1</span><span style={chip}>G2</span>
         </span>
       </Row>
-      <Row label="Sources verified">
+      {/* "found", not "verified — CrossRef-checked": Crossref is one of several
+          backends (OpenAlex, Semantic Scholar, grounded web search), and a
+          result is accepted on a DOI *or* a URL, so not every source carries a
+          Crossref record. Claim the retrieval, which is real. */}
+      <Row label="Sources found">
         <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
           <span style={{ transition: "color .3s" }}>{12 + step}</span>
-          <Badge tone="ok">CrossRef-checked</Badge>
+          <Badge tone="ok">Crossref · OpenAlex</Badge>
         </span>
       </Row>
       <Row label="Current step">M2 · Literature review</Row>
@@ -394,7 +401,7 @@ const CHAT_SCRIPT: Turn[] = [
     artifact: "model",
   },
   { role: "user", text: "Now pull sources on the EU–US enforcement gap." },
-  { role: "agent", text: "Found three, each CrossRef-checked:", artifact: "citations" },
+  { role: "agent", text: "Found three, with DOIs you can open:", artifact: "citations" },
 ];
 
 /** The model the agent "draws" in the chat — compact, same SVG language as
@@ -449,7 +456,7 @@ function ChatCitationsCard() {
         </div>
       ))}
       <div style={{ marginTop: 2 }}>
-        <Badge tone="ok">14 sources · CrossRef-checked</Badge>
+        <Badge tone="ok">14 sources · in your references</Badge>
       </div>
     </div>
   );
@@ -588,25 +595,25 @@ const FEATURES: Feature[] = [
   {
     eyebrow: "Chat",
     title: "Or just talk to your agent.",
-    body: "You're never locked out of the loop. Ask a question, challenge a source, or say what to change — the agent answers grounded in your library, cites what it claims, then edits the draft in place.",
+    body: "You're never locked out of the loop. Ask a question, challenge a source, or say what to change — the agent answers grounded in your project's sources, cites what it claims, then edits the draft in place.",
     demo: <ChatMock />,
   },
   {
     eyebrow: "Traceable citations",
     title: "Claims that link to the exact source.",
-    body: "Every sentence the agent writes ties back to a real paper you can open — each citation CrossRef-checked, never invented. Open the reference and land on the exact claim.",
+    body: "Every citation in the draft is checked against the project's reference list — anything that isn't in it is stripped before you read it. Open the reference and land on the exact claim.",
     demo: <CitationsMock />,
   },
   {
     eyebrow: "Source-grounded writing",
-    title: "Writes from your papers, not the web.",
-    body: "It draws only on the PDFs you upload, reading your library one source at a time, so your literature review reflects your judgement — not a model's training data.",
+    title: "Sources it looked up, not sources it remembered.",
+    body: "It searches Crossref, OpenAlex and Semantic Scholar for real papers — and you can add your own PDFs and DOIs, which it reads directly. Every citation in the draft is checked against that reference list.",
     demo: <SourcesMock />,
   },
   {
     eyebrow: "Context store",
     title: "A live memory you can inspect.",
-    body: "Everything the agent learns — your question, the gaps, the verified sources, where you are — is committed to a store you can open any time. Nothing is hidden in a black box.",
+    body: "Everything the agent learns — your question, the gaps, the sources it found, where you are — is committed to a store you can open any time. Nothing is hidden in a black box.",
     demo: <ContextMock />,
   },
   {
