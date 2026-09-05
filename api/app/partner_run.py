@@ -164,7 +164,31 @@ def seed_partner_store(
         _commit_owned(store, "M2", m2, "partner payload: literature seed")
     if m3:
         _commit_owned(store, "M3", m3, "partner payload: design seed")
-    store.commit_slice("M4", {"analysis_results": analysis_text},
+    # Structure the results before storing them. Committing the upload as a raw
+    # STRING left every downstream reader blind to it: results_render's
+    # detect_family bails on a non-dict, so render_results_tables produced no
+    # blocks, and weave() then STRIPS the [[DT:]] tokens the writer emitted —
+    # which is how a Chapter 4 full of statistics shipped with zero tables while
+    # the conclusion, where hand-written tables are not dropped, ended up
+    # carrying the results tables instead.
+    #
+    # The thesis-import path (import_work) has always done this; the partner
+    # path never did. Same helper, same fall back to the raw text when nothing
+    # can be evidenced, so a payload we cannot structure is no worse off.
+    analysis_slice: object = analysis_text
+    try:
+        from .import_work import _infer_analysis_results  # noqa: PLC0415 — heavy/lazy
+
+        parsed = _infer_analysis_results(analysis_text, language)
+        if parsed:
+            analysis_slice = parsed
+            logger.info("partner payload: structured analysis_results (%d keys)", len(parsed))
+        else:
+            logger.warning("partner payload: could not structure analysis_results; "
+                           "keeping raw text (Chapter 4 tables will not render)")
+    except Exception:
+        logger.exception("partner payload: analysis_results structuring failed; keeping raw text")
+    store.commit_slice("M4", {"analysis_results": analysis_slice},
                        "partner payload: uploaded analysis output")
 
 
