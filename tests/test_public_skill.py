@@ -11,13 +11,17 @@ these tests load it by path rather than through the package.
 from __future__ import annotations
 
 import importlib.util
+import json
+import re
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
 
-SKILL = Path(__file__).resolve().parents[1] / "skills-public" / "dothesis-humanizer"
+ROOT = Path(__file__).resolve().parents[1]
+SKILL = ROOT / "skills-public" / "dothesis-humanizer"
 SCRIPT = SKILL / "scripts" / "frozen_check.py"
 
 
@@ -216,3 +220,154 @@ def test_the_skill_documents_the_measurement_and_the_ladder():
     assert "0.247" in md and "0.473" in md
     assert "RESTRUCTURE" in md
     assert "--scan" in md
+
+
+# --- the pattern library --------------------------------------------------
+#
+# The skill tells the agent HOW to rewrite and WHEN TO STOP. The pattern library
+# is the third question — what is actually wrong with this passage — and it is
+# the half that has to be named, numbered and guarded, because an unguarded
+# pattern list turns into a search-and-destroy pass over prose that was fine.
+
+PATTERNS = SKILL / "references" / "ai-patterns.md"
+INTERNAL = ROOT / "skills" / "dothesis-humanize" / "references" / "ai-patterns.md"
+
+
+def _pattern_sections(text: str) -> list[tuple[int, str]]:
+    """(number, body) for each `### N. Name` block."""
+    parts = re.split(r"(?m)^### (\d+)\. ", text)[1:]
+    return [(int(parts[i]), parts[i + 1]) for i in range(0, len(parts), 2)]
+
+
+def test_the_pattern_library_ships_and_the_skill_points_at_it():
+    assert PATTERNS.exists(), "the reference the skill sends the agent to must ship"
+    assert "references/ai-patterns.md" in (SKILL / "SKILL.md").read_text(encoding="utf-8")
+
+
+def test_the_patterns_are_numbered_contiguously_from_one():
+    """A gap or a repeat breaks every citation of the form "this trips 7 and 23"."""
+    numbers = [n for n, _ in _pattern_sections(PATTERNS.read_text(encoding="utf-8"))]
+    assert numbers, "no numbered patterns found"
+    assert numbers == list(range(1, len(numbers) + 1)), numbers
+
+
+def test_the_pattern_count_matches_what_the_copy_promises():
+    """The count is quoted in both SKILL.md files and on the web download card
+    (`tools.skill.includes`, vi and en). Adding a pattern means editing four
+    other places, and this is the tripwire that says so."""
+    text = PATTERNS.read_text(encoding="utf-8")
+    assert len(_pattern_sections(text)) == 32
+    assert "thirty-two" in (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    assert "thirty-two" in (
+        ROOT / "skills" / "dothesis-humanize" / "SKILL.md").read_text(encoding="utf-8")
+
+
+def test_every_pattern_says_when_to_leave_it_alone():
+    """The guard is the point. Without it this is a list of things to delete,
+    and the measured failure mode of this whole feature is a rewrite that
+    "fixed" prose which was already the student's own."""
+    missing = [
+        n for n, body in _pattern_sections(PATTERNS.read_text(encoding="utf-8"))
+        if "**Leave it when:**" not in body
+    ]
+    assert not missing, f"patterns with no guard: {missing}"
+
+
+def test_the_library_keeps_the_thesis_specific_inversions():
+    """Two rules a general-purpose humanizer gets backwards for a thesis: a
+    construct keeps ONE name, and "đáng kể"/significant may be a technical term."""
+    text = PATTERNS.read_text(encoding="utf-8")
+    assert "What not to flag" in text
+    assert "đáng kể" in text
+
+
+def test_every_example_in_the_library_passes_the_gate_it_teaches(fc):
+    """The examples are the instruction. A before/after pair that quietly drops
+    a p-value or invents a citation teaches exactly the failure frozen_check.py
+    exists to catch, and it teaches it more strongly than the prose above it."""
+    field = re.compile(
+        r"(?ms)^\*\*(Before|After):\*\*\s+(.*?)(?=\n\*\*|\n### |\n## |\Z)")
+    for number, body in _pattern_sections(PATTERNS.read_text(encoding="utf-8")):
+        found = field.findall(body)
+        pairs = [(found[i][1], found[i + 1][1]) for i in range(0, len(found) - 1, 2)]
+        assert pairs, f"pattern {number} has no before/after pair"
+        for before, after in pairs:
+            r = fc.check(before.strip(), after.strip())
+            assert not r["missing"], f"pattern {number} drops {r['missing']}"
+            assert not r["added"], f"pattern {number} invents {r['added']}"
+            assert not r["language_changed"], f"pattern {number} translates"
+
+
+def test_the_internal_skill_carries_the_same_library():
+    """Two copies exist because a symlink does not survive the zip. Nothing but
+    a test stops them drifting."""
+    assert INTERNAL.exists()
+    assert INTERNAL.read_bytes() == PATTERNS.read_bytes()
+
+
+# --- the shipped package --------------------------------------------------
+
+ZIP = ROOT / "web" / "public" / "skills" / "dothesis-humanizer.zip"
+
+
+@pytest.fixture(scope="module")
+def build():
+    path = ROOT / "scripts" / "build_public_skill.py"
+    spec = importlib.util.spec_from_file_location("build_public_skill", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_the_shipped_zip_matches_its_sources(build):
+    """The zip is a build artifact committed to git, so it can go stale in a
+    commit that edits the skill and forgets to rebuild. Nothing would say so."""
+    expected = {str(arc): path.read_bytes() for arc, path in build.source_files()}
+    with zipfile.ZipFile(ZIP) as z:
+        actual = {name: z.read(name) for name in z.namelist()}
+    assert actual == expected, "run: python scripts/build_public_skill.py"
+
+
+def test_the_zip_carries_no_build_junk(build):
+    """A stray __pycache__ ships someone's local bytecode to a stranger."""
+    with zipfile.ZipFile(ZIP) as z:
+        names = z.namelist()
+    assert not [n for n in names if "__pycache__" in n or n.endswith(".pyc")]
+
+
+def test_the_build_syncs_the_library_into_the_internal_skill(tmp_path):
+    public = tmp_path / "skills-public" / "dothesis-humanizer" / "references"
+    public.mkdir(parents=True)
+    (public / "ai-patterns.md").write_text("# patterns\n", encoding="utf-8")
+
+    build_mod_synced = tmp_path / "skills" / "dothesis-humanize" / "references"
+    assert not build_mod_synced.exists()
+
+    import importlib.util as _u
+    spec = _u.spec_from_file_location(
+        "bps_tmp", ROOT / "scripts" / "build_public_skill.py")
+    mod = _u.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.sync_internal(tmp_path)
+
+    assert (build_mod_synced / "ai-patterns.md").read_text(
+        encoding="utf-8") == "# patterns\n"
+
+
+def test_the_package_manifests_agree_with_the_skill():
+    """Version parity across three files, blader's rule: a plugin that reports a
+    version the skill does not have is worse than no version at all."""
+    plugin = json.loads((SKILL / ".claude-plugin" / "plugin.json").read_text())
+    market = json.loads((SKILL / ".claude-plugin" / "marketplace.json").read_text())
+    md = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+
+    assert plugin["name"] == "dothesis-humanizer"
+    assert [p["name"] for p in market["plugins"]] == ["dothesis-humanizer"]
+    version = re.search(r'(?m)^\s+version:\s*"([^"]+)"', md)
+    assert version and version.group(1) == plugin["version"]
+
+
+def test_the_install_paths_are_documented_for_a_stranger():
+    install = (SKILL / "INSTALL.md").read_text(encoding="utf-8")
+    for path in ("claude.ai", "~/.claude/skills", "plugin"):
+        assert path in install

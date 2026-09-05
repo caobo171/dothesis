@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "dothesis-humanizer",
+  "description": "Re-voice academic prose that reads as AI-generated, without moving a number, a citation or a claim.",
+  "version": "1.0.0",
+  "author": {
+    "name": "DoThesis",
+    "url": "https://dothesis.info"
+  },
+  "homepage": "https://dothesis.info",
+  "keywords": ["writing", "editing", "humanize", "thesis", "academic", "vietnamese"],
+  "skills": ["./"]
+}

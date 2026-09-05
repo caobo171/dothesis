@@ -2,6 +2,8 @@
 name: dothesis-humanizer
 description: Use when writing is said to read as AI-generated — a supervisor, reviewer or detector flagged it, or the user says "viết lại cho tự nhiên", "giáo viên nói giống ChatGPT", "bị chê là toàn AI", "humanize this", "make this sound human", "rewrite so it doesn't read like AI". Re-voices prose that already exists without changing a single number, citation or claim. Not for drafting new text.
 license: Free to use and share. From DoThesis (dothesis.info).
+metadata:
+  version: "1.0.0"
 ---
 
 # Humanize — make written prose read as human-written
@@ -171,6 +173,15 @@ reorder how findings are presented within the paragraph. This is the strongest
 rewrite: change everything about HOW it is said and nothing about what it says.
 
 ## Rewrite rules
+
+The named patterns live in `references/ai-patterns.md`: thirty-two of them, each
+with watch-words in both languages, a before/after pair in academic register, and
+a line saying when to leave it alone. Read it when a passage still reads flat
+after a pass, or when the writer needs to be told WHICH thing is wrong rather
+than handed a rewrite.
+
+Its "What not to flag" section matters as much as the patterns. Most of the
+damage a rewrite does comes from fixing something that was already fine.
 
 **Language.** Write in the SAME language as the input. Never translate. This is
 worth stating because it has actually happened: a `language` default of

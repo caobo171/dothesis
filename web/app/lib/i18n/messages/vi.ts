@@ -431,9 +431,18 @@ export const vi: Record<MessageKey, string> = {
     + "Claude Skill để bạn giữ luôn. Nó viết lại đoạn bạn dán vào và kiểm tra bằng "
     + "đúng script bên mình dùng — không được đổi số liệu, trích dẫn hay ngôn ngữ. "
     + "Còn xử lý cả tệp .docx mà vẫn giữ tiêu đề, bảng biểu thì làm ở đây.",
+  "tools.skill.includes":
+    "Kèm thư viện 32 mẫu \"giọng AI\" thường gặp: mỗi mẫu có ví dụ trước/sau bằng "
+    + "cả tiếng Việt lẫn tiếng Anh, và một dòng nói rõ khi nào KHÔNG nên sửa.",
   "tools.skill.download": "Tải skill (.zip)",
   "tools.skill.how":
-    "Trong Claude: Settings → Skills → Add → Upload a skill, rồi chọn tệp này.",
+    "claude.ai hoặc Desktop: Settings → Skills → Add → Upload a skill, rồi chọn tệp này.",
+  "tools.skill.howCode":
+    "Claude Code: giải nén vào ~/.claude/skills/ sao cho có "
+    + "~/.claude/skills/dothesis-humanizer/SKILL.md.",
+  "tools.skill.howPlugin":
+    "Hoặc cài dạng plugin: /plugin marketplace add <thư mục>, rồi "
+    + "/plugin install dothesis-humanizer@dothesis. File INSTALL.md bên trong ghi đủ ba cách.",
   "tools.doc.run": "Humanize cả tài liệu",
   "tools.doc.runningCount": "Đang viết lại… {done}/{total}",
   "tools.doc.runningBatches": "Đã viết lại {done}/{total} lô",

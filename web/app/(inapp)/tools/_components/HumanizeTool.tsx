@@ -270,8 +270,11 @@ export function HumanizeTool() {
           <div className="text-[13px] font-bold text-ink-900">
             {t("tools.skill.title")}
           </div>
-          <p className="mt-1 mb-3 text-[12.5px] leading-relaxed text-ink-600">
+          <p className="mt-1 mb-2 text-[12.5px] leading-relaxed text-ink-600">
             {t("tools.skill.blurb")}
+          </p>
+          <p className="mt-0 mb-3 text-[12.5px] leading-relaxed text-ink-600">
+            {t("tools.skill.includes")}
           </p>
           <a
             href="/skills/dothesis-humanizer.zip"
@@ -281,9 +284,14 @@ export function HumanizeTool() {
             <Download className="w-3.5 h-3.5" aria-hidden />
             {t("tools.skill.download")}
           </a>
-          <p className="mt-2 mb-0 text-[11.5px] text-ink-400">
-            {t("tools.skill.how")}
-          </p>
+          {/* Three install paths, not one. The zip only ever worked for the
+              Desktop upload; students on Claude Code were left to guess, and
+              the two extra lines cost nothing next to a support thread. */}
+          <ol className="mt-2 mb-0 list-decimal space-y-0.5 pl-4 text-[11.5px] text-ink-400 marker:text-ink-300">
+            <li>{t("tools.skill.how")}</li>
+            <li>{t("tools.skill.howCode")}</li>
+            <li>{t("tools.skill.howPlugin")}</li>
+          </ol>
         </div>
       </div>
     </ToolPanel>

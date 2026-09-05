@@ -70,6 +70,21 @@ passage as humanized.
 and a literature review need different voices, and a shorter passage holds its
 numbers better.
 
+## Naming what is wrong, instead of rewriting again
+
+`references/ai-patterns.md` holds thirty-two named patterns, each with
+watch-words in Vietnamese and English, a before/after pair in academic register,
+and a line saying when to leave it alone.
+
+Read it when the pass has already run and the supervisor still objects, or when
+the student asks *why* their writing reads as AI. Pointing at a numbered pattern
+in their own paragraph teaches them something a second rewrite does not, and it
+is the only version of this answer they can use on the next chapter themselves.
+
+Its "What not to flag" section binds you too. Passive voice in a methods section,
+"đáng kể" reporting statistical significance, and a Vietnamese author's
+correct-but-unidiomatic English are all things a rewrite must leave alone.
+
 ## What the student should expect
 
 Say this before running it, once:

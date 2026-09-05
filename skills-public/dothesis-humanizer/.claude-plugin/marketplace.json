@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace-manifest.json",
+  "name": "dothesis",
+  "owner": {
+    "name": "DoThesis",
+    "url": "https://dothesis.info"
+  },
+  "description": "Install the DoThesis humanizer as a Claude Code plugin.",
+  "plugins": [
+    {
+      "name": "dothesis-humanizer",
+      "source": "./",
+      "description": "Re-voice academic prose that reads as AI-generated, without moving a number, a citation or a claim.",
+      "keywords": ["writing", "editing", "humanize", "thesis", "academic", "vietnamese"]
+    }
+  ]
+}

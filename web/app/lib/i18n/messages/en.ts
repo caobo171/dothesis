@@ -469,9 +469,18 @@ export const en = {
     + "It re-voices text you paste in and checks it with the same script we use — "
     + "no number, citation or language may change. Whole .docx files, with headings "
     + "and tables preserved, stay here.",
+  "tools.skill.includes":
+    "Includes the pattern library: 32 named AI-writing tells with before/after "
+    + "examples in Vietnamese and English, each with a line on when NOT to touch it.",
   "tools.skill.download": "Download the skill (.zip)",
   "tools.skill.how":
-    "In Claude: Settings → Skills → Add → Upload a skill, then pick this file.",
+    "claude.ai or Desktop: Settings → Skills → Add → Upload a skill, then pick this file.",
+  "tools.skill.howCode":
+    "Claude Code: unzip into ~/.claude/skills/ so you get "
+    + "~/.claude/skills/dothesis-humanizer/SKILL.md.",
+  "tools.skill.howPlugin":
+    "Or as a plugin: /plugin marketplace add <folder>, then "
+    + "/plugin install dothesis-humanizer@dothesis. INSTALL.md inside has all three.",
   "tools.doc.run": "Humanize document",
   "tools.doc.runningCount": "Rewriting… {done}/{total}",
   "tools.doc.runningBatches": "Batch {done} of {total} rewritten",

@@ -1,0 +1,4 @@
+interface:
+  display_name: "DoThesis Humanizer"
+  short_description: "Re-voice academic prose without moving a number or a citation"
+  default_prompt: "Use $dothesis-humanizer to rewrite this passage in my voice, keeping every number, citation and claim exactly as it is."
