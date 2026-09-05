@@ -219,16 +219,20 @@ _DOCX_MIME = ("application/vnd.openxmlformats-officedocument"
               ".wordprocessingml.document")
 
 
-def _transcribe_via_vision(att: Attachment) -> str:
+def _transcribe_via_vision(att: Attachment, prompt: str | None = None) -> str:
     """Turn an image / scanned-PDF attachment into text with the vision model.
 
     Isolated as the single function tests stub — same pattern as
     output_parse._vision_read — so the network/model boundary stays out of
     the test suite. Anti-fabrication: the prompt forbids invented values.
+
+    `prompt` overrides the default instruction for callers that know what the
+    image is (docx_extract passes a results-table prompt). Optional, so every
+    existing call site — and every test that stubs this — is unchanged.
     """
     from agent.model_factory import make_vision_model  # noqa: PLC0415 — lazy, heavy dep
 
-    prompt = (
+    prompt = prompt or (
         "Transcribe the full content of this file faithfully as plain "
         "text/Markdown. Render tables as Markdown tables. Do NOT invent or "
         "guess values; mark anything unreadable as [unreadable]."
