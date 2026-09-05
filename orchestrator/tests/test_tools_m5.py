@@ -392,7 +392,9 @@ def test_export_safety_net_replaces_orphan_model_caption(monkeypatch):
         "**Mối quan hệ giả thuyết trong mô hình:**\n\n"
         "- A → B (H1: tích cực)"
     )
-    monkeypatch.setattr(M, "_svg_model_figure", lambda *_args: "![Mô hình nghiên cứu](/tmp/model.png)")
+    # Pillow is the only figure renderer now (the cairosvg and mermaid ones are
+    # gone), so this stubs the renderer the code actually calls.
+    monkeypatch.setattr(M, "_pillow_model_figure", lambda *_args: "![Mô hình nghiên cứu](/tmp/model.png)")
     sections = [{"chapter_name": "methodology", "prose": orphan}]
     cs = {"m3_design": {"conceptual_model": {"nodes": [], "edges": []}}}
 
