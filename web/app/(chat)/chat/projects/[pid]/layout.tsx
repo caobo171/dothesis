@@ -15,6 +15,7 @@ import {
   type ModuleStatusMap,
   type UploadItem,
 } from "@/app/components/chat/ContextPanel";
+import { LIVE_RUN_STATUSES } from "@/app/components/chat/AutoThesisButton";
 import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 
 
@@ -105,6 +106,13 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isEditor = pathname?.endsWith("/editor") ?? false;
 
+  // Is a run in flight? Drives the polling below and the right rail's own.
+  // Cheap: the same key ChatPane polls, so SWR serves both from one request.
+  const { data: latestRun } = useSWR<{ run: { status?: string } | null }>(
+    `/projects/${pid}/runs/list?latest=true`, fetcher, { refreshInterval: 10000 },
+  );
+  const runLive = LIVE_RUN_STATUSES.has(latestRun?.run?.status ?? "");
+
   // Brief §1.4 — module_status now ships with GET /projects/{id} (PR #2).
   // focus is the canonical conversation focus; current_module stays in the
   // type for backward compat during the dual-write window (PR #2b will
@@ -118,7 +126,14 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
     /** Modules whose content predates a later upstream edit — drives the
      *  "may be out of date" note. Advisory; never gates anything. */
     stale_modules?: string[];
-  }>(`/projects/${pid}`, fetcher);
+  }>(`/projects/${pid}`, fetcher, {
+    // While Auto Thesis runs, the project row IS the progress: a subprocess
+    // commits each module's slice as it finishes. Fetched once, the right rail
+    // froze at whatever was on screen when the page loaded — five locked
+    // modules for twenty minutes, then a finished thesis on the next reload.
+    // Same key ChatPane and the run screen already poll, so SWR dedupes it.
+    refreshInterval: runLive ? 10000 : 0,
+  });
   const { data: threads, error: threadsError, mutate: mutateThreads } = useSWR<Thread[]>(
     `/projects/${pid}/threads/list`, fetcher,
   );
@@ -186,6 +201,7 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
             currentModule={project?.focus ?? project?.current_module}
             moduleStatus={project?.module_status}
             staleModules={project?.stale_modules}
+            runLive={runLive}
             threadCredits={currentTid ? threadCredits?.total_credits : undefined}
           />
         )

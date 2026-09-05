@@ -462,6 +462,13 @@ export const en = {
   "tools.doc.runsAs_other":
     "Runs as {count} rewrites (paragraphs are batched by section). You’re charged " +
     "for the tokens actually used — the exact amount lands in Transactions.",
+  // A run that raised a blocker is not "in progress": it has stopped and only
+  // the student can restart it. The live copy says nothing needs an answer,
+  // which is exactly wrong at that moment.
+  "run.blocked.body":
+    "This run has stopped because it needs something from you. It won't go any "
+    + "further until this is sorted out.",
+  "run.blocked.cta": "Answer this in chat",
   // --- what the run is doing right now ---
   // The runner writes `tool: <name>`; these are what a student sees instead.
   // Every tool in agent/runtime.py needs a line here, and anything unmapped

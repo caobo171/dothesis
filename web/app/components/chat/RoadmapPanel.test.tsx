@@ -1,12 +1,12 @@
-import { describe, expect, test, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
+import { act, render, renderHook, screen, fireEvent, waitFor } from "@testing-library/react";
 
 // Mock the shared authed POST helper (F0 Part C: not raw fetch) before importing
 // the component, so RoadmapPanel's load() resolves with the fixture roadmap.
 const apiFetch = vi.fn();
 vi.mock("@/app/lib/api", () => ({ apiFetch: (...a: any[]) => apiFetch(...a) }));
 
-import { RoadmapPanel, StepBar, StepList } from "./RoadmapPanel";
+import { RoadmapPanel, StepBar, StepList, useRoadmap } from "./RoadmapPanel";
 
 const FIXTURE = {
   modules: [{ id: "M1", status: "in_progress", current: "derive_questions",
@@ -91,5 +91,49 @@ describe("module sub-steps on the module card", () => {
   test("StepList shows every step in full for the expanded card", () => {
     render(<StepList substeps={SUBS} />);
     for (const s of SUBS) expect(screen.getByText(new RegExp(s.label))).toBeTruthy();
+  });
+});
+
+
+// Auto Thesis writes the whole context_store from a subprocess over twenty
+// minutes. The roadmap loaded once on mount and then sat there, so the right
+// rail told a student to "Confirm M3 is done" while the run was doing M3, and
+// never showed the blocker M4 raised after that.
+describe("useRoadmap", () => {
+  beforeEach(() => {
+    apiFetch.mockReset();
+    apiFetch.mockResolvedValue(FIXTURE);
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  test("polls while it is given an interval", async () => {
+    vi.useFakeTimers();
+    renderHook(() => useRoadmap("p1", 0, 15000));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    expect(apiFetch).toHaveBeenCalledTimes(3);
+  });
+
+  test("does not poll when there is nothing to follow", async () => {
+    vi.useFakeTimers();
+    renderHook(() => useRoadmap("p1"));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+
+    await act(async () => { vi.advanceTimersByTime(120_000); });
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+  });
+
+  test("stops polling when it unmounts", async () => {
+    vi.useFakeTimers();
+    const { unmount } = renderHook(() => useRoadmap("p1", 0, 15000));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+
+    unmount();
+    await act(async () => { vi.advanceTimersByTime(60_000); });
+    expect(apiFetch).toHaveBeenCalledTimes(1);
   });
 });

@@ -50,6 +50,86 @@ describe("AutoThesisRunView", () => {
     expect(screen.getByRole("button", { name: /stop run/i })).toBeTruthy();
   });
 
+  // A run that cannot continue is not a run in progress. On a measured run M4
+  // could not find the student's dataset, refused to invent numbers, and flagged
+  // a blocker — then this screen went on showing a spinner and "IN PROGRESS"
+  // over a module that was waiting for a human who had not been told.
+  test("a blocked module says what it needs, instead of spinning", async () => {
+    server.use(
+      runRow("blocked1", "running", { phase: "M4" }),
+      events("blocked1"),
+      http.post("*/api/v1/projects/p1/roadmap", () => HttpResponse.json({
+        modules: [], next_action: {},
+        tasks: [{
+          id: "t1", module: "M4", substep: "run_per_step", status: "open",
+          title: "Thiếu dữ liệu khảo sát để chạy phân tích",
+          why: "Dự án chưa có tệp dữ liệu thực tế hoặc tệp kết quả SPSS/SmartPLS.",
+        }],
+      })),
+    );
+    renderView({ runId: "blocked1" });
+
+    await waitFor(() => expect(
+      screen.getByTestId("dot-M4").className).toMatch(/pause-bg/));
+    expect(screen.getByText(/Thiếu dữ liệu khảo sát/)).toBeTruthy();
+    // And it must not also claim to be busy on the same row.
+    expect(screen.queryByTestId("busy-M4")).toBeNull();
+  });
+
+  test("a blocked run gives the student somewhere to answer", async () => {
+    // Naming the blocker and leaving it there is half a feature: the run cannot
+    // clear this itself, so the screen has to hand over. The thread is where
+    // they can attach the missing file or answer the question.
+    const onAskInChat = vi.fn();
+    server.use(
+      runRow("blocked4", "running", { phase: "M4" }),
+      events("blocked4"),
+      http.post("*/api/v1/projects/p1/roadmap", () => HttpResponse.json({
+        modules: [], next_action: {},
+        tasks: [{ id: "t1", module: "M4", status: "open",
+                  title: "Chưa có dữ liệu khảo sát để chạy kiểm định",
+                  why: "Cần tệp dữ liệu hoặc kết quả SPSS/SmartPLS." }],
+      })),
+    );
+    renderView({ runId: "blocked4", onAskInChat });
+
+    const cta = await screen.findByRole("button", { name: /answer this in chat/i });
+    fireEvent.click(cta);
+    expect(onAskInChat).toHaveBeenCalled();
+  });
+
+  test("no blockers, no amber", async () => {
+    server.use(
+      runRow("blocked2", "running", { phase: "M4" }),
+      events("blocked2"),
+      http.post("*/api/v1/projects/p1/roadmap", () => HttpResponse.json({
+        modules: [], next_action: {}, tasks: [],
+      })),
+    );
+    renderView({ runId: "blocked2" });
+
+    await waitFor(() => expect(screen.getByTestId("dot-M4")).toBeTruthy());
+    expect(screen.getByTestId("dot-M4").className).toMatch(/bg-primary-600/);
+  });
+
+  test("a blocker on a module the run already finished does not un-finish it", async () => {
+    // Advisor directives sit on modules that are done; they are the student's
+    // next job, not evidence that the run stalled.
+    server.use(
+      runRow("blocked3", "running", { phase: "M4" }),
+      events("blocked3"),
+      http.post("*/api/v1/projects/p1/roadmap", () => HttpResponse.json({
+        modules: [], next_action: {},
+        tasks: [{ id: "t2", module: "M1", status: "open", feedback_id: "fb1",
+                  title: "Advisor: tighten the research questions" }],
+      })),
+    );
+    renderView({ runId: "blocked3", moduleStatus: { M1: "done" } });
+
+    await waitFor(() => expect(screen.getByTestId("dot-M1")).toBeTruthy());
+    expect(screen.getByTestId("dot-M1").className).toMatch(/ok-fg/);
+  });
+
   test("phase_progress (what the runner actually emits) lights the working module", async () => {
     // Headless writes {type:phase_progress, phase:M2, done:1}, not
     // module_complete. Without this the live checklist stayed all-LOCKED

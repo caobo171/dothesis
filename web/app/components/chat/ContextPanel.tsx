@@ -74,6 +74,7 @@ export function ContextPanel({
   threadCredits,
   onSendMessage,
   roadmapRefreshKey,
+  runLive = false,
   loading = false,
 }: {
   projectId?: string;
@@ -98,12 +99,21 @@ export function ContextPanel({
   onSendMessage?: (text: string) => void;
   /** F2: bump to force the roadmap to re-fetch (e.g. after a turn completes). */
   roadmapRefreshKey?: number;
+  /**
+   * An Auto Thesis run is in flight, so this panel has to follow it.
+   *
+   * The run writes the entire context_store from a subprocess over twenty
+   * minutes and nothing here would hear about it: the roadmap loaded once on
+   * mount. So the rail told a student to "Confirm M3 is done" while the run was
+   * doing M3, and never showed the blocker M4 raised afterwards.
+   */
+  runLive?: boolean;
 }) {
   const [showRaw, setShowRaw] = useState(false);
   // Fetched once here, then split two ways: the Next card stays in
   // RoadmapPanel, and each module's sub-steps ride on that module's own card
   // instead of a second list above them.
-  const roadmap = useRoadmap(projectId, roadmapRefreshKey);
+  const roadmap = useRoadmap(projectId, roadmapRefreshKey, runLive ? 15000 : 0);
   const substepsOf = (id: string): Sub[] =>
     roadmap?.modules?.find(m => m.id === id)?.substeps ?? [];
 

@@ -7,6 +7,7 @@ import { Loader2, Pause, Play, RotateCcw, XCircle } from "lucide-react";
 
 import { ModuleProgressDot, type ModuleStatus } from "./ModuleProgressDot";
 import { activityLabel } from "./activityLabel";
+import { useRoadmap } from "./RoadmapPanel";
 import { useAutoThesisRun } from "./hooks/useAutoThesisRun";
 import type { SSEEvent } from "./hooks/useStream";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
@@ -92,6 +93,13 @@ export function AutoThesisRunView({
     },
   );
   const { events } = useAutoThesisRun(runId);
+  // Polled while the run is live, because a blocker can appear at any minute of
+  // it and the student is the only one who can clear it.
+  const roadmap = useRoadmap(projectId, 0, 15000);
+  const tasks = useMemo(
+    () => (Array.isArray(roadmap?.tasks) ? roadmap.tasks : []) as { module?: string; title?: string; why?: string }[],
+    [roadmap],
+  );
 
   // `job_done` arrives on the stream the moment the run finishes; the row this
   // polls catches up on its own 5s cycle. Waiting for the poll left the screen
@@ -173,6 +181,19 @@ export function AutoThesisRunView({
         delete detail[id];
       }
     }
+    // 3. Open blockers. A run that cannot continue is not a run in progress:
+    //    M4 hit a missing dataset, refused to invent numbers and flagged it,
+    //    while this screen went on spinning "IN PROGRESS" at a student who had
+    //    not been told anything was waiting on them. A blocker on a module the
+    //    run already finished is left alone — an advisor directive is the
+    //    student's next job, not evidence the run stalled.
+    for (const task of tasks) {
+      const m = typeof task.module === "string" ? task.module : null;
+      if (!m || !(m in byModule) || byModule[m] === "done") continue;
+      byModule[m] = "needs_attention";
+      if (typeof task.title === "string" && task.title) detail[m] = task.title;
+    }
+
     // An activity line describes work in flight, so it belongs only to the
     // module still doing it. Headless never emits `module_complete`, so the
     // beat that was current when a module finished used to stay pinned under
@@ -181,10 +202,17 @@ export function AutoThesisRunView({
     // without passing through the delete above, which is why this prunes at
     // the end rather than at the transition.
     for (const id of MODULES) {
-      if (byModule[id] !== "active") delete detail[id];
+      if (byModule[id] !== "active" && byModule[id] !== "needs_attention") {
+        delete detail[id];
+      }
     }
     return { statusByModule: byModule, detailByModule: detail };
-  }, [events, status, run?.phase, moduleStatus]);
+  }, [events, status, run?.phase, moduleStatus, tasks]);
+
+  // Blockers that are actually stalling the run: an advisor note on a module
+  // the run already finished is the student's next job, not a stall.
+  const blocking = tasks.filter(
+    tk => tk.module && statusByModule[tk.module] === "needs_attention");
 
   const tokens = events
     .filter(e => e.type === "token_cost")
@@ -211,7 +239,10 @@ export function AutoThesisRunView({
   const body: MessageKey =
     status === "done" ? "run.done.body"
       : status === "failed" || status === "canceled" ? "run.stopped.body"
-        : "run.live.body";
+        // "Nothing here needs an answer from you" is the sentence this screen
+        // exists to say, and it is false the moment the run raises a blocker.
+        : blocking.length ? "run.blocked.body"
+          : "run.live.body";
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-10">
@@ -251,6 +282,27 @@ export function AutoThesisRunView({
             />
           ))}
         </div>
+
+        {blocking.length > 0 && (
+          <div className="mt-5 rounded-xl border border-[var(--pause-fg)]/25 bg-[var(--pause-bg)]/40 p-3.5">
+            {/* No title here: the module row above already names the blocker,
+                and repeating it 80px later is noise. This card is the WHY and
+                the way out. */}
+            <p className="m-0 text-[12.5px] leading-relaxed text-ink-700">
+              {blocking[0].why || blocking[0].title}
+            </p>
+            {/* The thread is where they can attach the missing file or answer.
+                Naming a blocker and offering no way to clear it is half a
+                feature: the run cannot clear this one itself. */}
+            <button
+              type="button"
+              onClick={onAskInChat}
+              className="mt-2.5 inline-flex items-center rounded-full bg-primary-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:bg-primary-700"
+            >
+              {t("run.blocked.cta")}
+            </button>
+          </div>
+        )}
 
         <p className="mt-5 mb-0 text-[12px] text-ink-400">
           {status === "queued"

@@ -33,7 +33,16 @@ type Roadmap = {
  * strikethrough checklist here and once as a card below, which was most of the
  * scroll height for information the student had already read.
  */
-export function useRoadmap(projectId: string | undefined, refreshKey = 0) {
+/**
+ * @param intervalMs poll while > 0. Off by default.
+ *
+ * Auto Thesis writes the whole context_store from a subprocess, over twenty
+ * minutes, and nothing on this page would ever hear about it: the roadmap
+ * loaded once on mount and then sat there. So the right rail told a student to
+ * "Confirm M3 is done" while the run was doing M3, and never showed the blocker
+ * M4 raised afterwards.
+ */
+export function useRoadmap(projectId: string | undefined, refreshKey = 0, intervalMs = 0) {
   const [data, setData] = useState<Roadmap | null>(null);
 
   const load = useCallback(async () => {
@@ -47,6 +56,13 @@ export function useRoadmap(projectId: string | undefined, refreshKey = 0) {
   }, [projectId]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
+
+  useEffect(() => {
+    if (!intervalMs) return;
+    const id = setInterval(() => { void load(); }, intervalMs);
+    return () => clearInterval(id);
+  }, [load, intervalMs]);
+
   return data;
 }
 

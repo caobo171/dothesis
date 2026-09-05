@@ -50,6 +50,9 @@ export function ModuleProgressDot({
   // is the whole question they have, and the only spinner used to be up beside
   // the page headline, nowhere near the step it described.
   const running = status === "active";
+  // Waiting on the student. The run cannot clear this one itself, which is why
+  // it must not keep spinning as though it could.
+  const blocked = status === "needs_attention";
   return (
     <div className="relative">
       {/* vertical track connecting the badges, green once the module is done */}
@@ -90,16 +93,21 @@ export function ModuleProgressDot({
           }`}>
             {STATUS_LABEL[status]}
           </span>
-          {/* Only while it is running. A finished module kept the last beat it
-              wrote, so three green ✓ rows sat there all reporting the same
-              "saving this step" it had done minutes ago. */}
-          {running && detail && (
+          {/* Running: what it is doing. Blocked: what it is waiting for. Not a
+              finished module — that one kept the last beat it wrote, so three
+              green ✓ rows sat there all reporting the same "saving this step"
+              from minutes earlier. */}
+          {detail && (running || blocked) && (
             <span
-              data-testid={`busy-${module}`}
+              data-testid={`${running ? "busy" : "blocked"}-${module}`}
               role="status"
-              className="mt-1 flex items-center gap-1.5 text-[11.5px] text-ink-500 min-w-0"
+              className={`mt-1 flex items-center gap-1.5 text-[11.5px] min-w-0 ${
+                blocked ? "text-[var(--pause-fg)]" : "text-ink-500"
+              }`}
             >
-              <Loader2 className="w-3 h-3 shrink-0 animate-spin text-primary-600" aria-hidden />
+              {running
+                ? <Loader2 className="w-3 h-3 shrink-0 animate-spin text-primary-600" aria-hidden />
+                : <span className="shrink-0" aria-hidden>⚠</span>}
               <span className="truncate">{detail}</span>
             </span>
           )}

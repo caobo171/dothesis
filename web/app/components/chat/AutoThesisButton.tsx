@@ -10,6 +10,17 @@ export type RunStatus =
   | "failed"
   | "canceled";
 
+/**
+ * A run that is still going, so the surfaces around it have to keep up: the
+ * right rail re-reads the project while one of these is true, because the run
+ * commits each module's slice from a subprocess and nothing else would say so.
+ * Lives here with RunStatus rather than in a component, so importing it does
+ * not drag a whole pane behind it.
+ */
+export const LIVE_RUN_STATUSES: ReadonlySet<string> = new Set([
+  "queued", "running", "paused",
+]);
+
 
 // Tooltip shown on every state so the user knows what the button does before
 // clicking — it kicks off the fully-automatic ("auto-approve") run that writes

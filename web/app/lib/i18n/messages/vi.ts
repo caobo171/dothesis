@@ -431,6 +431,10 @@ export const vi: Record<MessageKey, string> = {
     + "Claude Skill để bạn giữ luôn. Nó viết lại đoạn bạn dán vào và kiểm tra bằng "
     + "đúng script bên mình dùng — không được đổi số liệu, trích dẫn hay ngôn ngữ. "
     + "Còn xử lý cả tệp .docx mà vẫn giữ tiêu đề, bảng biểu thì làm ở đây.",
+  "run.blocked.body":
+    "Quá trình đang dừng lại vì cần bạn bổ sung. Nó sẽ không chạy tiếp cho tới "
+    + "khi việc này được xử lý.",
+  "run.blocked.cta": "Trả lời trong chat",
   // --- việc hệ thống đang làm ngay lúc này ---
   "run.tool.research_scout": "Đang tìm và sàng lọc tài liệu",
   "run.tool.quick_sources": "Đang tra cứu nhanh nguồn tham khảo",
