@@ -7,6 +7,7 @@ import { Loader2, Pause, Play, RotateCcw, XCircle } from "lucide-react";
 
 import { ModuleProgressDot, type ModuleStatus } from "./ModuleProgressDot";
 import { useAutoThesisRun } from "./hooks/useAutoThesisRun";
+import type { SSEEvent } from "./hooks/useStream";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
 import { apiFetch, swrFetcher as fetcher, triggerExportDownload } from "@/app/lib/api";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
@@ -22,7 +23,7 @@ import type { MessageKey } from "@/app/lib/i18n/messages/en";
  * and the run itself — the thing the student is paying for and waiting on —
  * was a side panel with a monospace event log.
  *
- * So the run IS the screen. Six modules as steps, the live line under the one
+ * So the run IS the screen. Five modules as steps, the live line under the one
  * that's working, and the controls that actually apply (pause / stop / resume).
  * When it finishes the same screen becomes the payoff: the exports, the
  * editor, and an explicit door into chat for anyone who wants changes.
@@ -120,7 +121,13 @@ export function AutoThesisRunView({
     const detail: Record<string, string> = {};
     let current: string | null = null;
 
-    const asModule = (ev: { module?: unknown; phase?: unknown }) => {
+    // Typed as the SSEEvent it is actually called with, not as an inline
+    // `{ module?, phase? }`. That inline shape is a WEAK type — every property
+    // optional — and TypeScript rejects assigning SSEEvent to it, because
+    // SSEEvent declares neither `module` nor `phase` (they arrive through its
+    // `[key: string]: unknown` index signature), so the two share no declared
+    // property. The runtime typeof guards below are what actually narrow them.
+    const asModule = (ev: SSEEvent) => {
       const m = (typeof ev.module === "string" && ev.module)
         || (typeof ev.phase === "string" && ev.phase)
         || null;
