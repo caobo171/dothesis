@@ -24,6 +24,15 @@ Two properties matter, and both were learned the hard way:
     tables it had never been given. Images are transcribed with the vision
     model and emitted in place, for the same document-order reason as tables.
 
+  - Fourth: "we transcribe images" was not the same claim as "we read every
+    image", and the gap between them lost numbers quietly. An image is skipped
+    when it sits inside a table cell (a screenshot centred in a 1x1 table is an
+    ordinary Word habit and `cell.text` cannot see it), when it is small on
+    disk but large on the page (a cropped four-row table compresses under the
+    byte floor), or when it falls past the per-document cap. Only the cap is a
+    real decision, and it now says so in the output instead of dropping the
+    tail in silence.
+
 So walk the body XML instead of the convenience lists.
 """
 from __future__ import annotations
@@ -42,6 +51,11 @@ _NS_R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 # outright — logos, bullets and signature scribbles carry no statistics.
 _MAX_IMAGES = 25
 _MIN_IMAGE_BYTES = 3000
+# ...but bytes alone got this wrong in the direction that loses data. A tightly
+# cropped four-row reliability table is mostly white, compresses to well under
+# 2 KB, and is still 600px of readable numbers. So an image is only a logo when
+# it is small BOTH on disk and on the page.
+_MIN_IMAGE_PX = 200
 
 _IMAGE_PROMPT = (
     "This image comes from a thesis (often SmartPLS/SPSS output). "
@@ -54,13 +68,27 @@ _IMAGE_PROMPT = (
 )
 
 
-def _image_rids(paragraph_el) -> list[str]:
-    """Relationship ids of every image embedded in one paragraph element."""
+def _image_rids(element) -> list[str]:
+    """Relationship ids of every image embedded anywhere under one element.
+
+    Takes any block element, not just a paragraph: a screenshot centred by
+    dropping it into a 1x1 table is an ordinary Word habit, and a table cell is
+    where this has to look to find it.
+    """
     return [
         rid
-        for blip in paragraph_el.iter(f"{_NS_A}blip")
+        for blip in element.iter(f"{_NS_A}blip")
         if (rid := blip.get(f"{_NS_R}embed"))
     ]
+
+
+def _longest_side_px(part) -> int:
+    """Longest side of an image part in pixels, or 0 when it will not say."""
+    try:
+        image = part.image
+        return max(int(image.px_width or 0), int(image.px_height or 0))
+    except Exception:
+        return 0
 
 
 def _transcribe(doc, rid: str, index: int) -> str | None:
@@ -74,7 +102,9 @@ def _transcribe(doc, rid: str, index: int) -> str | None:
         data = part.blob
     except Exception:
         return None
-    if not data or len(data) < _MIN_IMAGE_BYTES:
+    if not data:
+        return None
+    if len(data) < _MIN_IMAGE_BYTES and _longest_side_px(part) < _MIN_IMAGE_PX:
         return None
     try:
         from agent.multimodal import Attachment, _transcribe_via_vision  # noqa: PLC0415 — heavy/lazy
@@ -113,27 +143,56 @@ def extract_docx_text(data: bytes, *, transcribe_images: bool = True) -> str:
         doc = Document(io.BytesIO(data))
         parts: list[str] = []
         images_done = 0
+        over_cap = 0
+        # One rid is one image, however many places reference it. `row.cells`
+        # repeats a merged cell, so without this a merged screenshot is
+        # transcribed twice: two vision calls, and the same table printed twice
+        # into text a model then reads as two findings.
+        seen_rids: set[str] = set()
+
+        def take_images(element) -> None:
+            nonlocal images_done, over_cap
+            if not transcribe_images:
+                return
+            for rid in _image_rids(element):
+                if rid in seen_rids:
+                    continue
+                seen_rids.add(rid)
+                if images_done >= _MAX_IMAGES:
+                    over_cap += 1
+                    continue
+                block = _transcribe(doc, rid, images_done + 1)
+                if block:
+                    images_done += 1
+                    parts.append(block)
+
         for child in doc.element.body.iterchildren():
             tag = child.tag.split("}")[-1]
             if tag == "p":
                 text = Paragraph(child, doc).text
                 if text and text.strip():
                     parts.append(text)
-                if not transcribe_images:
-                    continue
-                for rid in _image_rids(child):
-                    if images_done >= _MAX_IMAGES:
-                        break
-                    block = _transcribe(doc, rid, images_done + 1)
-                    if block:
-                        images_done += 1
-                        parts.append(block)
+                take_images(child)
             elif tag == "tbl":
                 for row in Table(child, doc).rows:
                     cells = [c.text.strip() for c in row.cells
                              if c.text and c.text.strip()]
                     if cells:
                         parts.append(" | ".join(cells))
+                    # `cell.text` cannot see a pasted screenshot, and a results
+                    # table inside a bordered cell is exactly where one lives.
+                    for cell in row.cells:
+                        take_images(cell._tc)
+        # Say what was left out. The cap is right — it bounds the spend on one
+        # upload — but dropping the excess silently is not: a results chapter
+        # with thirty screenshots came back looking complete and missing its
+        # last five tables, and nothing downstream could tell.
+        if over_cap:
+            parts.append(
+                f"[docx: {over_cap} more image(s) not read: over the "
+                f"{_MAX_IMAGES}-image limit for one document]")
+            logger.warning("docx extraction: %d image(s) over the %d-image cap",
+                           over_cap, _MAX_IMAGES)
         if images_done:
             logger.info("docx extraction: transcribed %d embedded image(s)", images_done)
         return "\n".join(parts)
