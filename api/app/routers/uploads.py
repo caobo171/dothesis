@@ -191,7 +191,8 @@ async def upload_paper(project_id: uuid.UUID,
     text_uri = None
     text_extracted_at = None
     if mime == "application/pdf" or fname.endswith(".pdf"):
-        text, page_count = extract_pdf_text(body)
+        # Ingest: a scanned or screenshot-built PDF must not cache as empty text.
+        text, page_count = extract_pdf_text(body, ocr_if_hollow=True)
     elif mime == _DOCX_MIME or fname.endswith(".docx"):
         text, page_count = _extract_docx_text(body)
     else:

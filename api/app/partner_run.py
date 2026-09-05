@@ -295,7 +295,9 @@ def _extract_text(file_bytes: bytes, filename: str | None) -> tuple[str, int]:
         from agent.docx_extract import extract_docx_text  # noqa: PLC0415 — heavy/lazy
 
         return (extract_docx_text(file_bytes), 0)
-    return extract_pdf_text(file_bytes)
+    # Partner ingest: the whole report is written from this file, so a scanned
+    # or screenshot-built PDF has to be transcribed rather than dropped.
+    return extract_pdf_text(file_bytes, ocr_if_hollow=True)
 
 
 # Signals that an uploaded file actually contains statistical-analysis output

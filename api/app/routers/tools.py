@@ -577,7 +577,9 @@ async def extract_text(request: Request, file: UploadFile = File(...),
 
     page_count = 0
     if mime == "application/pdf" or fname.endswith(".pdf"):
-        text, page_count = extract_pdf_text(body)
+        # This endpoint exists to hand back the file's text, so a scan should
+        # come back transcribed rather than blank.
+        text, page_count = extract_pdf_text(body, ocr_if_hollow=True)
     elif mime == _DOCX_MIME or fname.endswith(".docx"):
         text, page_count = _extract_docx_text(body)
     else:

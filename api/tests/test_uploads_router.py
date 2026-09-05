@@ -271,7 +271,9 @@ def test_admin_cannot_delete_someone_elses_upload(client, monkeypatch):
 
 def test_upload_with_no_extractable_text_leaves_text_extracted_at_null(client, monkeypatch):
     monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: MagicMock())
-    monkeypatch.setattr("app.routers.uploads.extract_pdf_text", lambda b: ("", 0))
+    # **kw so the stub tolerates the ingest flag (ocr_if_hollow) the router now
+    # passes; the case under test is still "extraction yields nothing at all".
+    monkeypatch.setattr("app.routers.uploads.extract_pdf_text", lambda b, **kw: ("", 0))
 
     _login(client)
     pid = _project(client)
