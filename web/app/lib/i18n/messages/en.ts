@@ -462,6 +462,38 @@ export const en = {
   "tools.doc.runsAs_other":
     "Runs as {count} rewrites (paragraphs are batched by section). You’re charged " +
     "for the tokens actually used — the exact amount lands in Transactions.",
+  // --- what the run is doing right now ---
+  // The runner writes `tool: <name>`; these are what a student sees instead.
+  // Every tool in agent/runtime.py needs a line here, and anything unmapped
+  // falls back to run.tool.unknown rather than showing its internal name.
+  "run.tool.research_scout": "Searching and screening sources",
+  "run.tool.quick_sources": "Looking up sources",
+  "run.tool.parse_reference": "Reading a reference",
+  "run.tool.topic_feasibility": "Checking the topic is workable",
+  "run.tool.audit_instrument": "Auditing the questionnaire",
+  "run.tool.sampling_plan": "Working out the sample size",
+  "run.tool.consent_notice": "Drafting the consent notice",
+  "run.tool.make_google_form_script": "Building the Google Form",
+  "run.tool.methods_preflight": "Checking the method against the model",
+  "run.tool.render_model_diagram": "Drawing the research model",
+  "run.tool.run_stats": "Running the statistics",
+  "run.tool.check_thresholds": "Checking results against thresholds",
+  "run.tool.parse_output_table": "Reading a results table",
+  "run.tool.parse_smartpls_export": "Reading the SmartPLS output",
+  "run.tool.render_verified_sections": "Building the verified tables",
+  "run.tool.export_docx": "Exporting the document",
+  "run.tool.humanize_text": "Rewriting for a natural voice",
+  "run.tool.review_thesis": "Reviewing the whole thesis",
+  "run.tool.generate_committee_questions": "Preparing committee questions",
+  "run.tool.set_defense_date": "Setting the defense date",
+  "run.tool.read_slice": "Reviewing earlier work",
+  "run.tool.commit_slice": "Saving this step's result",
+  "run.tool.backfill_upstream_modules": "Filling in the earlier chapters",
+  "run.tool.ingest_advisor_feedback": "Recording your supervisor's feedback",
+  "run.tool.mark_feedback_addressed": "Marking feedback as addressed",
+  "run.tool.flag_blocker": "Noting something that's blocking progress",
+  "run.tool.resolve_blocker": "Clearing a blocker",
+  "run.tool.unknown": "Working…",
   // --- the free Claude Skill ---
   "tools.skill.title": "Use this method in Claude, free",
   "tools.skill.blurb":

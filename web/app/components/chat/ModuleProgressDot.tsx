@@ -1,3 +1,5 @@
+import { Loader2 } from "lucide-react";
+
 export type ModuleStatus = "done" | "active" | "locked" | "needs_attention";
 
 // 2026-06-10 — DoThesis.html design: each module row gets a 34px serif
@@ -44,6 +46,10 @@ export function ModuleProgressDot({
   // Hides the vertical track segment after the final module row.
   isLast?: boolean;
 }) {
+  // The one row the student is waiting on. On a 20-minute unattended run this
+  // is the whole question they have, and the only spinner used to be up beside
+  // the page headline, nowhere near the step it described.
+  const running = status === "active";
   return (
     <div className="relative">
       {/* vertical track connecting the badges, green once the module is done */}
@@ -64,7 +70,9 @@ export function ModuleProgressDot({
       >
         <span
           data-testid={`dot-${module}`}
-          className={`w-[34px] h-[34px] min-w-[34px] rounded-[10px] inline-flex items-center justify-center font-serif font-extrabold text-xs tracking-[0.04em] ${BADGE_BY_STATUS[status]}`}
+          className={`w-[34px] h-[34px] min-w-[34px] rounded-[10px] inline-flex items-center justify-center font-serif font-extrabold text-xs tracking-[0.04em] ${BADGE_BY_STATUS[status]} ${
+            running ? "animate-pulse" : ""
+          }`}
         >
           {status === "done" ? "✓" : module}
         </span>
@@ -73,11 +81,26 @@ export function ModuleProgressDot({
             {label}
             {status === "needs_attention" && <span aria-hidden>⚠</span>}
           </span>
-          {detail ? (
-            <span className="text-[11.5px] text-ink-500 mt-0.5 truncate">{detail}</span>
-          ) : (
-            <span className="text-[10.5px] text-ink-400 uppercase tracking-[0.06em] font-semibold mt-0.5">
-              {STATUS_LABEL[status]}
+          {/* The status word stays on every row, including this one. It used to
+              be REPLACED by the activity line, which left the running step as
+              the only row on screen that never said what state it was in: the
+              locked rows below it said LOCKED and it said "tool: research_scout". */}
+          <span className={`text-[10.5px] uppercase tracking-[0.06em] font-semibold mt-0.5 ${
+            running ? "text-primary-600" : "text-ink-400"
+          }`}>
+            {STATUS_LABEL[status]}
+          </span>
+          {/* Only while it is running. A finished module kept the last beat it
+              wrote, so three green ✓ rows sat there all reporting the same
+              "saving this step" it had done minutes ago. */}
+          {running && detail && (
+            <span
+              data-testid={`busy-${module}`}
+              role="status"
+              className="mt-1 flex items-center gap-1.5 text-[11.5px] text-ink-500 min-w-0"
+            >
+              <Loader2 className="w-3 h-3 shrink-0 animate-spin text-primary-600" aria-hidden />
+              <span className="truncate">{detail}</span>
             </span>
           )}
         </span>

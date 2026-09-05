@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Loader2, Pause, Play, RotateCcw, XCircle } from "lucide-react";
 
 import { ModuleProgressDot, type ModuleStatus } from "./ModuleProgressDot";
+import { activityLabel } from "./activityLabel";
 import { useAutoThesisRun } from "./hooks/useAutoThesisRun";
 import type { SSEEvent } from "./hooks/useStream";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
@@ -172,6 +173,16 @@ export function AutoThesisRunView({
         delete detail[id];
       }
     }
+    // An activity line describes work in flight, so it belongs only to the
+    // module still doing it. Headless never emits `module_complete`, so the
+    // beat that was current when a module finished used to stay pinned under
+    // it: three completed modules on screen at once, each reporting the same
+    // "saving this step" from minutes earlier. walkTo moves modules to done
+    // without passing through the delete above, which is why this prunes at
+    // the end rather than at the transition.
+    for (const id of MODULES) {
+      if (byModule[id] !== "active") delete detail[id];
+    }
     return { statusByModule: byModule, detailByModule: detail };
   }, [events, status, run?.phase, moduleStatus]);
 
@@ -233,7 +244,9 @@ export function AutoThesisRunView({
               module={m}
               label={t(`module.${m}` as MessageKey)}
               status={statusByModule[m]}
-              detail={detailByModule[m]}
+              // `tool: research_scout` is what the runner writes and what the
+              // partner API reads back; it is not what a student reads.
+              detail={detailByModule[m] ? activityLabel(detailByModule[m], t) : undefined}
               isLast={i === MODULES.length - 1}
             />
           ))}

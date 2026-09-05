@@ -43,7 +43,8 @@ describe("AutoThesisRunView", () => {
     // makes students sit and wait for a question that never comes.
     expect(screen.getByText(/nothing here needs an answer from you/i)).toBeTruthy();
     expect(screen.getByText(/KOL characteristics/)).toBeTruthy();
-    // The live activity replaces the generic status word on the working module.
+    // The live activity sits UNDER the status word now, not in place of it: the
+    // running row was the only one on screen that never said what state it was in.
     await waitFor(() => expect(screen.getByText(/screening 42 sources/i)).toBeTruthy());
     expect(screen.getByText(/running for 12 min/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /stop run/i })).toBeTruthy();
