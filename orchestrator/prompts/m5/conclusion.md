@@ -21,7 +21,9 @@ is the last chapter of the thesis.
 {references_list}
 
 ## Instructions
-Write a 1200-2000 word Chapter 5 with these sections:
+Write a 2500-4000 word Chapter 5 with these sections. Each section carries its
+own argument at length — a closing chapter that reduces every section to a
+paragraph reads as a summary of the thesis rather than its conclusion.
 - 5.1 Summary of findings (one paragraph per research question; state how each
   objective was met)
 - 5.2 Discussion of findings (compare to prior literature; explain consistencies

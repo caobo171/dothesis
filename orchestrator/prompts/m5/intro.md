@@ -21,7 +21,9 @@ You are writing Chapter 1 (Introduction) of a master's thesis.
 {references_list}
 
 ## Instructions
-Write a 600-1000 word Chapter 1 with these sections:
+Write a 2000-3000 word Chapter 1 with these sections. Develop each section as
+argued prose — a chapter that gives every section a single paragraph reads as an
+abstract, not as the opening chapter of a thesis:
 - 1.1 Background and motivation
 - 1.2 Problem statement
 - 1.3 Research objectives (list the objectives above)

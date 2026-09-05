@@ -75,7 +75,10 @@ Adapt these standard academic phrasings — fill the brackets from the Inputs, n
 Keep the analysis steps consistent with the metric family Chapter 4 reports
 (variance-based for PLS-SEM; covariance-based fit indices for CB-SEM).
 
-Cite inline as (Author, Year). Write in {language}. Length: 800-1500 words.
+Cite inline as (Author, Year). Write in {language}. Length: 2500-4000 words —
+a methodology chapter has to be reproducible from its own text, so each design
+decision is stated, justified against the alternatives, and its execution
+described in enough detail that another researcher could repeat the study.
 
 When you describe the data-screening/cleaning procedure, introduce it in a sentence,
 then emit `[[DT:data_cleaning]]` on its own line — DoThesis inserts the committee-ready

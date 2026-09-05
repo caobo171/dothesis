@@ -15,7 +15,10 @@ You are writing Chapter 2 (Literature Review) of a master's thesis.
 {references_list}
 
 ## Instructions
-Write a 1200-2000 word Chapter 2 with these sections:
+Write a 4000-6000 word Chapter 2 with these sections. This is normally the
+longest chapter of the thesis: each construct, each theory and each hypothesis
+needs its own developed argument with its own citations, not a sentence in a
+list:
 - 2.1 Theoretical background (key constructs + their accepted definitions)
 - 2.2 Empirical literature (recent studies grouped by sub-topic; cite extensively)
 - 2.3 Research gaps (synthesize the gaps above; explain how this thesis addresses them)
