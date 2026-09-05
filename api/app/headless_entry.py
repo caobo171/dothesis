@@ -35,6 +35,44 @@ KICKOFF_PROMPT = (
     "instead of asking me for inputs."
 )
 
+# Junk that must never be offered to the agent as a student's attachment.
+_SKIP_UPLOADS = {".DS_Store", "Thumbs.db"}
+
+
+def kickoff_prompt(workspace: Path) -> str:
+    """KICKOFF_PROMPT, plus the files the student actually uploaded.
+
+    The interactive surface prefixes a turn with `[ATTACHED] uploads/…` and the
+    system prompt (agent/runtime.py, "Attachments") already tells the agent what
+    that line means and to read `<file>.txt` for the extracted text. A headless
+    run had no equivalent: nothing in its kickoff said a file existed.
+
+    That is not a theoretical gap. On a measured run, a student's results
+    chapter — eleven SmartPLS tables, transcribed into `uploads/….docx.txt`
+    during upload — went unread while M4 reported it had no data and raised the
+    same blocker seven times. A run that stops to ask for something already on
+    disk is worse than one that never asks.
+    """
+    uploads = workspace / "uploads"
+    names = sorted(
+        p.name for p in uploads.glob("*")
+        if p.is_file() and p.name not in _SKIP_UPLOADS
+        # The extracted sidecar is not a second attachment; the system prompt
+        # sends the agent to it from the original's name.
+        and not (p.name.endswith(".txt") and (uploads / p.name[:-4]).exists())
+    ) if uploads.is_dir() else []
+    if not names:
+        return KICKOFF_PROMPT
+    listed = " | ".join(f"uploads/{n}" for n in names)
+    return (
+        f"[ATTACHED] {listed}\n"
+        f"{KICKOFF_PROMPT} Read every attached file BEFORE deciding what is "
+        "missing: they are the student's own material and may already contain "
+        "the dataset, or already-computed results (a SmartPLS/SPSS export or "
+        "screenshots of the output tables) that M4 should parse rather than "
+        "recompute. Never report missing input without having read them."
+    )
+
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="python -m app.headless_entry")
@@ -485,7 +523,8 @@ def main() -> int:
             result = asyncio.run(run_headless(
                 agent, store, profile,
                 thread_id=f"headless:{args.job_id}:{attempt}",
-                initial_prompt=KICKOFF_PROMPT,
+                # Built per attempt: a retry after an upload should see it.
+                initial_prompt=kickoff_prompt(workspace),
                 on_event=_on_event,
             ))
             if (result.status == "done" or result.reason not in _RETRYABLE
