@@ -275,12 +275,91 @@ def _presign(s3, s3_key: str, *, expires_in: int = 3600) -> str:
 # --- Ingest helpers (moved verbatim from partner_report_service) --------------
 
 
+# A screenshot of a SmartPLS/SPSS results grid is the NORMAL way students hand
+# over their statistics — they paste the tool's output straight into the đề
+# cương rather than exporting a table. python-docx only sees paragraphs and real
+# <w:tbl> tables, so those pasted grids were invisible: an upload with eleven
+# result screenshots extracted as a page of prose with no numbers in it, and M4
+# then wrote a Results chapter that referenced tables it had never been given.
+# Transcribe them with the same provider-agnostic vision path the agent's
+# parse_output_table tool uses.
+_IMG_TABLE_PROMPT = (
+    "This image is from a thesis results section (SmartPLS/SPSS output). "
+    "If it shows a TABLE, transcribe it verbatim as a markdown table — keep every "
+    "row label, column header and number EXACTLY as shown. "
+    "If it is a path/model diagram, describe the constructs and the arrows between "
+    "them, including any numbers on the paths. "
+    "If it contains no data, reply with the single word NONE. "
+    "Never invent or round a number."
+)
+
+# Cap the per-document vision spend: a runaway deck of screenshots should not
+# turn one upload into fifty model calls.
+_MAX_VISION_IMAGES = 25
+_MIN_VISION_IMAGE_BYTES = 3000   # skip logos, bullets, signature scribbles
+
+
+def _transcribe_docx_images(doc) -> list[str]:
+    """Vision-transcribe the images embedded in a DOCX. Never raises: a vision
+    or key failure degrades to the text-only extraction that came before."""
+    try:
+        from agent.model_factory import make_vision_capable_model, spec_from_env
+        from agent.multimodal import (
+            Attachment, _flatten_content, build_user_message, resolve_vision,
+        )
+    except Exception:
+        logger.exception("partner_report: vision imports unavailable; skipping images")
+        return []
+
+    blobs: list[tuple[str, bytes, str]] = []
+    for rel in doc.part.rels.values():
+        if "image" not in rel.reltype:
+            continue
+        try:
+            part = rel.target_part
+            data = part.blob
+        except Exception:
+            continue
+        if len(data) < _MIN_VISION_IMAGE_BYTES:
+            continue
+        name = str(getattr(part, "partname", "image")).rsplit("/", 1)[-1]
+        blobs.append((name, data, getattr(part, "content_type", "image/png")))
+
+    if not blobs:
+        return []
+
+    try:
+        spec = spec_from_env()
+        res = resolve_vision(spec)
+        model = make_vision_capable_model(spec, use_sidecar=res.use_sidecar)
+    except Exception:
+        logger.exception("partner_report: vision model unavailable; skipping images")
+        return []
+
+    out: list[str] = []
+    for idx, (name, data, mime) in enumerate(blobs[:_MAX_VISION_IMAGES], start=1):
+        try:
+            att = Attachment(filename=name, bytes=data, mime_type=mime)
+            msg = build_user_message(_IMG_TABLE_PROMPT, [att], res.provider, supports_vision=True)
+            text = _flatten_content(getattr(model.invoke([msg]), "content", "")).strip()
+        except Exception:
+            logger.exception("partner_report: vision transcription failed for %s", name)
+            continue
+        if not text or text.strip().upper().startswith("NONE"):
+            continue
+        out.append(f"[Hình {idx} — {name}]\n{text}")
+    if out:
+        logger.info("partner_report: transcribed %d/%d embedded image(s)", len(out), len(blobs))
+    return out
+
+
 def _extract_text(file_bytes: bytes, filename: str | None) -> tuple[str, int]:
     """Extract analysis text from a PDF or DOCX. Returns (text, page_count).
 
     DOCX is detected by extension or the zip magic (PK). Everything else goes
     through the PDF extractor. Table cell text is flattened into pipe rows so the
-    statistics inside result tables survive.
+    statistics inside result tables survive, and embedded images (pasted
+    SmartPLS/SPSS screenshots) are vision-transcribed so their numbers survive too.
     """
     name = (filename or "").lower()
     if name.endswith(".docx") or file_bytes[:2] == b"PK":
@@ -295,6 +374,7 @@ def _extract_text(file_bytes: bytes, filename: str | None) -> tuple[str, int]:
                     cells = [c.text.strip() for c in row.cells if c.text and c.text.strip()]
                     if cells:
                         parts.append(" | ".join(cells))
+            parts.extend(_transcribe_docx_images(doc))
             return ("\n".join(parts), 0)
         except Exception:
             logger.exception("partner_report: docx text extraction failed")
