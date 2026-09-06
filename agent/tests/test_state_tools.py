@@ -452,3 +452,63 @@ def test_interactive_chat_is_not_tightened(tmp_path):
 
     assert store.load()["status"]["M4"] == "done"
     assert out.get("done_but_incomplete")
+
+
+# --- M5: chapter 5 has to be a chapter -------------------------------------
+#
+# MODULE_TO_ARTIFACT covers M1-M4, so the strict done-gate above could not judge
+# the writing module at all. On the measured run M5 committed one 747-character
+# section — about 120 words — and the whole thesis reported finished.
+#
+# M5 owns exactly one chapter (m5_writing.MODULE_CHAPTERS: {"M5": ["conclusion"]}),
+# so "M5 done" means the conclusion is written.
+
+_CONCLUSION = ("Nghiên cứu này kiểm định tác động của kỳ vọng hiệu năng ứng dụng. " * 40)
+
+
+def test_m5_cannot_be_done_without_a_conclusion(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store, strict_gates=True)}
+
+    out = _done_commit(tools, module="M5", reason="wrote it", confirm_done=True,
+                       writes={"final_sections": [
+                           {"chapter_name": "intro", "prose": _CONCLUSION}]})
+
+    assert store.load()["status"]["M5"] != "done"
+    assert out.get("done_refused"), out
+
+
+def test_a_120_word_conclusion_is_not_a_chapter(tmp_path):
+    """747 characters is what the broken run shipped as chapter 5."""
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store, strict_gates=True)}
+
+    stub = "Kết luận: nghiên cứu đã đạt được các mục tiêu đề ra. " * 14   # ~750 chars
+    out = _done_commit(tools, module="M5", reason="wrote it", confirm_done=True,
+                       writes={"final_sections": [
+                           {"chapter_name": "conclusion", "prose": stub}]})
+
+    assert store.load()["status"]["M5"] != "done"
+    assert out.get("done_refused"), out
+
+
+def test_a_real_conclusion_finishes_m5(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store, strict_gates=True)}
+
+    out = _done_commit(tools, module="M5", reason="wrote it", confirm_done=True,
+                       writes={"final_sections": [
+                           {"chapter_name": "conclusion", "prose": _CONCLUSION}]})
+
+    assert store.load()["status"]["M5"] == "done"
+    assert "done_refused" not in out
+
+
+def test_m5_in_chat_is_not_tightened(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store)}   # strict_gates=False
+
+    _done_commit(tools, module="M5", reason="wrote it", confirm_done=True,
+                 writes={"final_sections": [{"chapter_name": "conclusion", "prose": "short"}]})
+
+    assert store.load()["status"]["M5"] == "done"

@@ -101,6 +101,14 @@ def chapter_to_module(chapter: str | None) -> str:
     return _CHAPTER_TO_MODULE.get((chapter or "").lower(), "M5")
 
 
+# What separates a finished chapter from a stub, for the strict done-gate only.
+# Same number orchestrator/artifacts.py uses for the imported-write-up escape
+# (_IMPORTED_WRITEUP_MIN) and for the same reason: below this it is not prose
+# anyone would submit. The run that prompted the gate called 747 characters a
+# finished Chapter 5.
+_CHAPTER_STUB_CHARS = 1500
+
+
 def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) -> list:
     """`strict_gates` (boundary hardening, gap 2): when True (headless/B2B), a
     validation/coherence gate that CANNOT RUN (crash/exception) refuses the commit
@@ -411,13 +419,37 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
         _done_gaps = None
         if confirm_done and strict_gates:
             try:
-                from orchestrator.artifacts import MODULE_TO_ARTIFACT, gate_for  # noqa: PLC0415
-                _artifact = MODULE_TO_ARTIFACT.get(module)
+                from orchestrator.artifacts import (  # noqa: PLC0415
+                    MODULE_TO_ARTIFACT, _m5_chapter_prose, gate_for,
+                )
+                # MODULE_TO_ARTIFACT stops at M4 on purpose: backfill and the
+                # mid-journey import read it as "modules that can be
+                # RECONSTRUCTED from existing work", and the writing module is
+                # not one of those. The gate still needs a definition for M5,
+                # and M5 owns exactly one chapter (m5_writing.MODULE_CHAPTERS:
+                # {"M5": ["conclusion"]}) — so chapter 5 IS the definition.
+                _artifact = {**MODULE_TO_ARTIFACT, "M5": "ch_conclusion"}.get(module)
                 if _artifact:
                     _prospective = {**(store.load() or {}).get("contextStore", {}), **writes}
                     _dod = gate_for(_artifact)(_prospective)
                     if not _dod.done:
                         _done_gaps = _dod.gaps
+                    elif module == "M5":
+                        # dod_chapter asks only that the prose is non-blank,
+                        # which is right for the readiness UI (a chapter being
+                        # written is a chapter) and far too weak here: the run
+                        # that prompted this shipped 747 characters — about 120
+                        # words — as its finished Chapter 5. Same floor
+                        # artifacts.py already uses to tell a write-up from a
+                        # stub. Read through _m5_chapter_prose so the retired
+                        # `discussion` key still counts, rather than a fourth
+                        # copy of the alias rule.
+                        _prose = (_m5_chapter_prose(_prospective).get("conclusion") or "").strip()
+                        if len(_prose) < _CHAPTER_STUB_CHARS:
+                            _done_gaps = [
+                                f"chapter 'conclusion' is {len(_prose)} characters — "
+                                f"a stub, not a chapter"]
+                    if _done_gaps:
                         confirm_done = False
             except Exception:
                 logger.debug("commit_slice: strict done-gate skipped", exc_info=True)
