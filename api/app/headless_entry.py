@@ -97,7 +97,36 @@ def _is_full_thesis(params: dict) -> bool:
     return (params.get("mode") or "") == "full_thesis"
 
 
-def _seed_brief(store, params: dict) -> bool:
+def _title_from_uploads(workspace: Path, language: str) -> str | None:
+    """Read a research title out of the student's own files, or None.
+
+    Same single, cheap inference the /topic-from-uploads route runs, over the
+    `.txt` sidecars the upload path already extracted — no re-extraction, no
+    walk of the reconstruct pipeline.
+
+    Never raises: a title is worth one model call, not the run.
+    """
+    uploads = workspace / "uploads"
+    if not uploads.is_dir():
+        return None
+    texts = []
+    for sidecar in sorted(uploads.glob("*.txt")):
+        try:
+            texts.append(f"[{sidecar.name[:-4]}]\n{sidecar.read_text(encoding='utf-8')}")
+        except Exception:  # noqa: BLE001 — one unreadable file is not fatal
+            continue
+    if not texts:
+        return None
+    try:
+        from .import_work import _infer_topic  # noqa: PLC0415 — pulls the LLM stack
+        inferred = _infer_topic("\n\n".join(texts), language or "vi")
+        return (str(inferred.get("research_title") or "").strip()) or None
+    except Exception:  # noqa: BLE001
+        logger.exception("seed: could not read a title out of the uploads")
+        return None
+
+
+def _seed_brief(store, params: dict, workspace: Path | None = None) -> bool:
     """Commit the consumer brief into M1 before the first turn.
 
     Replaces the orchestrator's `_seed` graph node. Goes into the STORE rather
@@ -121,8 +150,22 @@ def _seed_brief(store, params: dict) -> bool:
     writes: dict = {}
 
     topic = (params.get("topic") or "").strip()
-    if topic and not cs.get("research_title"):
-        writes["research_title"] = topic
+    if not cs.get("research_title"):
+        # The files outrank the box. What a student types into "Research topic"
+        # is very often an instruction — one typed "Viết full bài này" ("write
+        # this whole thing"), which went in as the thesis title and produced a
+        # study about thesis-writing, hypotheses about "thesis defensibility"
+        # and all, while their real uploaded research sat unread.
+        #
+        # This is what the partner surface has always done: seed M1 from the
+        # material rather than from a sentence. Doing it here rather than in the
+        # dialog covers every way a run starts, and what they typed is kept as
+        # user_context — it is the steer it always was, just not a title.
+        derived = _title_from_uploads(workspace, params.get("language") or "") \
+            if workspace else None
+        title = derived or topic
+        if title:
+            writes["research_title"] = title
         # user_context is the seeding-only key (agent/state.py:30-34): the agent
         # must not be able to rewrite the brief it is steered by. citation_style
         # rides here as an audit record of what was asked for — the Project row
@@ -439,7 +482,7 @@ def main() -> int:
         # carries the topic (see _seed_brief). No-ops on resume: it refuses to
         # overwrite an existing research_title, so a project with prior work
         # keeps the student's own title instead of the brief that started the run.
-        _seed_brief(store, params)
+        _seed_brief(store, params, workspace)
         # InMemorySaver: the conversation only needs to outlive THIS run —
         # durable progress is whatever commit_slice wrote, and a failed run
         # "resumes" by re-running against that state, not by replaying chat.

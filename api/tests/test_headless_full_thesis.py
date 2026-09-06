@@ -283,3 +283,97 @@ def test_seed_brief_writes_nothing_when_there_is_nothing_left_to_seed(tmp_path):
 
     assert _seed_brief(store, {"mode": "full_thesis"}) is False
     assert store.load()["contextStore"] == before
+
+
+# --- the title an unattended run writes on ---------------------------------
+#
+# _seed_brief used to take whatever was typed in the Auto Thesis box and commit
+# it as `research_title`, unexamined. A student typed "Viết full bài này"
+# ("write this whole thing") — an instruction, not a topic — and the run built a
+# thesis on it: M1 framed a study about thesis-writing and produced hypotheses
+# like "Greater research problem clarity is positively associated with thesis
+# defensibility", while their real uploaded study sat unread.
+#
+# The partner surface never had this problem because it seeds M1 from the
+# payload. So an auto run reads the title out of the student's own files the
+# same way, and keeps what they typed as the steer it actually is.
+
+def _ws_with_upload(tmp_path, text="Mô hình chính như sau: APE -> PS -> AA"):
+    ws = tmp_path / "ws"
+    (ws / "uploads").mkdir(parents=True)
+    (ws / "uploads" / "Results.docx").write_bytes(b"PK")
+    (ws / "uploads" / "Results.docx.txt").write_text(text, encoding="utf-8")
+    return ws
+
+
+def test_the_title_is_read_from_the_uploads_not_from_what_was_typed(tmp_path, monkeypatch):
+    from agent.state import ProjectStateStore
+    import app.import_work as iw
+    from app.headless_entry import _seed_brief
+
+    monkeypatch.setattr(iw, "_infer_topic",
+                        lambda text, lang: {"research_title": "The Effects of APE on Adoption"})
+    store = ProjectStateStore(tmp_path / "proj")
+
+    assert _seed_brief(store, {"topic": "Viết full bài này", "language": "vi"},
+                       _ws_with_upload(tmp_path)) is True
+
+    cs = store.load()["contextStore"]
+    assert cs["research_title"] == "The Effects of APE on Adoption"
+    # What they typed is not thrown away — it is the instruction it always was.
+    assert cs["user_context"]["topic"] == "Viết full bài này"
+
+
+def test_without_uploads_the_typed_topic_is_still_the_title(tmp_path):
+    from agent.state import ProjectStateStore
+    from app.headless_entry import _seed_brief
+
+    store = ProjectStateStore(tmp_path / "proj")
+    _seed_brief(store, {"topic": "AI adoption in Vietnamese SMEs"}, tmp_path / "empty")
+
+    assert store.load()["contextStore"]["research_title"] == "AI adoption in Vietnamese SMEs"
+
+
+def test_a_failed_read_falls_back_to_what_was_typed(tmp_path, monkeypatch):
+    """One inference must not decide whether the run starts at all."""
+    from agent.state import ProjectStateStore
+    import app.import_work as iw
+    from app.headless_entry import _seed_brief
+
+    def boom(text, lang):
+        raise RuntimeError("model unavailable")
+
+    monkeypatch.setattr(iw, "_infer_topic", boom)
+    store = ProjectStateStore(tmp_path / "proj")
+
+    _seed_brief(store, {"topic": "AI adoption in SMEs"}, _ws_with_upload(tmp_path))
+
+    assert store.load()["contextStore"]["research_title"] == "AI adoption in SMEs"
+
+
+def test_an_empty_inference_falls_back_too(tmp_path, monkeypatch):
+    from agent.state import ProjectStateStore
+    import app.import_work as iw
+    from app.headless_entry import _seed_brief
+
+    monkeypatch.setattr(iw, "_infer_topic", lambda text, lang: {"research_title": "  "})
+    store = ProjectStateStore(tmp_path / "proj")
+
+    _seed_brief(store, {"topic": "AI adoption in SMEs"}, _ws_with_upload(tmp_path))
+
+    assert store.load()["contextStore"]["research_title"] == "AI adoption in SMEs"
+
+
+def test_the_students_own_committed_title_still_outranks_the_files(tmp_path, monkeypatch):
+    from agent.state import ProjectStateStore
+    import app.import_work as iw
+    from app.headless_entry import _seed_brief
+
+    monkeypatch.setattr(iw, "_infer_topic",
+                        lambda text, lang: {"research_title": "Something inferred"})
+    store = ProjectStateStore(tmp_path / "proj")
+    store.commit_slice("M1", {"research_title": "Student's own title"}, reason="prior work")
+
+    _seed_brief(store, {"topic": "typed"}, _ws_with_upload(tmp_path))
+
+    assert store.load()["contextStore"]["research_title"] == "Student's own title"
