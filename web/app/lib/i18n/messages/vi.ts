@@ -144,6 +144,7 @@ export const vi: Record<MessageKey, string> = {
 
   "home.theses": "Luận văn của bạn",
   // Tiếng Việt không biến đổi danh từ theo số — hai dòng giống nhau là CỐ Ý.
+  "home.seeAllTheses": "Xem tất cả {count} luận văn \u2192",
   "home.thesesCount_one": "{count} luận văn đang làm",
   "home.thesesCount_other": "{count} luận văn đang làm",
   "home.newThesis": "Luận văn mới",

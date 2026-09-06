@@ -58,6 +58,11 @@ const ACCEPT_TYPES =
  * /new redirects here so there is one start surface. The full theses list also
  * lives at /papers in the sidebar.
  */
+// Two rows of four on the widest grid. Enough to recognise your work at a
+// glance without the launcher becoming a list.
+const HOME_THESES = 8;
+
+
 export function HomeLauncher() {
   const router = useRouter();
   const t = useT();
@@ -331,22 +336,39 @@ export function HomeLauncher() {
         )}
       </div>
 
-      {/* Guided-mode only (Auto Thesis's next step is a paid run, not browsing).
-          Returning user → their theses, each card carrying the M1 brief and the
-          M1→M5 progression at its foot; brand-new user → sample prompts. While
-          /projects/list is still loading (undefined) neither shows, so a
-          returning user never flashes the new-user prompts. */}
-      {!auto && projects && projects.length > 0 && (
+      {/* The theses grid shows in BOTH modes. It used to be hidden alongside the
+          starter chips, and they are not the same thing: a chip writes a GUIDED
+          prompt ("I have a draft chapter, but no literature review yet") that
+          does not fit the Auto Thesis box, while this grid is the only route
+          from this screen back into a thesis that already exists. Switching tabs
+          made a student's whole list disappear, which reads as losing it.
+
+          Each card carries the M1 brief and the M1→M5 progression at its foot.
+          While /projects/list is still loading (undefined) neither this nor the
+          chips show, so a returning user never flashes the new-user prompts. */}
+      {projects && projects.length > 0 && (
         <div className="w-full mt-7">
           <div className="text-[11px] uppercase tracking-[0.08em] font-bold text-ink-400 mb-2.5 px-0.5">
             {t("home.theses")}
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-            {projects.map(p => <ThesisCard key={p.id} project={p} />)}
+            {projects.slice(0, HOME_THESES).map(p => <ThesisCard key={p.id} project={p} />)}
           </div>
+          {/* Two rows is a launcher; twenty is an archive that pushes the rest
+              of the screen away. /papers is the page that exists to list them
+              all, so past the cut this points at it rather than growing. */}
+          {projects.length > HOME_THESES && (
+            <Link
+              href="/papers"
+              className="mt-2.5 inline-block text-[12.5px] font-semibold text-primary-600 hover:text-primary-700 hover:underline"
+            >
+              {t("home.seeAllTheses", { count: String(projects.length) })}
+            </Link>
+          )}
         </div>
       )}
 
+      {/* Starter chips stay guided-only: their text is a guided-mode prompt. */}
       {!auto && projects && projects.length === 0 && (
         <div className="w-full mt-7">
           <div className="text-[11px] uppercase tracking-[0.08em] font-bold text-ink-400 mb-2.5 px-0.5">

@@ -178,6 +178,9 @@ export const en = {
   "home.stat.progressSub": "modules being worked",
 
   "home.theses": "Your theses",
+  // Shown under the home grid when it is capped. Names the real total so the
+  // cut is visible rather than looking like the list is all there is.
+  "home.seeAllTheses": "See all {count} theses \u2192",
   "home.thesesCount_one": "{count} active",
   "home.thesesCount_other": "{count} active",
   "home.newThesis": "New thesis",

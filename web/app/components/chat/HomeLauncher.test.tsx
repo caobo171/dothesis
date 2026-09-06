@@ -53,6 +53,56 @@ describe("HomeLauncher", () => {
     expect(screen.queryByText(/starting fresh/i)).not.toBeInTheDocument();
   });
 
+  test("Auto Thesis keeps the theses grid — it is the way back to existing work", async () => {
+    // The chips and the grid were hidden together, and they are not the same
+    // thing. A chip writes a GUIDED prompt ("I have a draft chapter…") that
+    // does not fit the Auto Thesis box, so it goes. The grid is the only route
+    // from this screen into a thesis you already have, and watching it vanish
+    // on a tab switch reads as "where did my theses go?".
+    server.use(
+      http.post("*/api/v1/projects/list", () => HttpResponse.json([thesis()])),
+    );
+    renderLauncher();
+    await screen.findByRole("link", { name: /KOLs and Gen-Z purchase intent/i });
+
+    fireEvent.click(screen.getByRole("tab", { name: /auto thesis/i }));
+
+    expect(screen.getByRole("link", { name: /KOLs and Gen-Z purchase intent/i })).toBeTruthy();
+  });
+
+  // The grid is a launcher, not an archive: past a certain point it stops being
+  // scannable and pushes everything else off the screen. /papers is the page
+  // that exists to list them all.
+  const many = (n: number) => Array.from({ length: n }, (_, i) => thesis({
+    id: `p${i}`,
+    context_store: { m1_topic: { confirmed_at: "x", research_title: `Thesis ${i}` } },
+  }));
+
+  test("shows at most eight theses", async () => {
+    server.use(http.post("*/api/v1/projects/list", () => HttpResponse.json(many(12))));
+    renderLauncher();
+    await screen.findByRole("link", { name: /Thesis 0/i });
+
+    expect(screen.getByRole("link", { name: /Thesis 7/i })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Thesis 8/i })).toBeNull();
+  });
+
+  test("and sends you to the theses page for the rest", async () => {
+    server.use(http.post("*/api/v1/projects/list", () => HttpResponse.json(many(12))));
+    renderLauncher();
+
+    const more = await screen.findByRole("link", { name: /all 12/i });
+    expect(more.getAttribute("href")).toBe("/papers");
+  });
+
+  test("no see-more when they all fit", async () => {
+    server.use(http.post("*/api/v1/projects/list", () => HttpResponse.json(many(8))));
+    renderLauncher();
+    await screen.findByRole("link", { name: /Thesis 7/i });
+
+    expect(screen.queryByRole("link", { name: /all 8/i })).toBeNull();
+  });
+
   test("a RETURNING user sees theses cards: M1 brief, % ring, gray focus line — no M1→M5 bar", async () => {
     server.use(
       http.post("*/api/v1/projects/list", () => HttpResponse.json([thesis()])),
