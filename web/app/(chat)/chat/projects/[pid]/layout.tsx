@@ -119,6 +119,8 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
   // drop the fallback).
   const { data: project, error: projectError } = useSWR<{
     name?: string;
+    /** "auto" | "chat" | null — an auto project's workspace is the run screen. */
+    mode?: string | null;
     context_store: ContextStore;
     current_module: string;
     focus?: string | null;
@@ -187,6 +189,7 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
           onSelectThread={tid => router.push(`/chat/projects/${pid}/threads/${tid}`)}
           onNewThread={createThread}
           projectCredits={projectCredits?.total_credits}
+          hideThreads={project?.mode === "auto" || runLive}
         />
       }
       rightPane={

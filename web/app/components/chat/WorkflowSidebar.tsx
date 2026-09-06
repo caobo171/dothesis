@@ -29,6 +29,7 @@ export function WorkflowSidebar({
   onNewThread,
   projectCredits,
   threadsFailed = false,
+  hideThreads = false,
 }: {
   projectName?: string;
   projectSubtitle?: string;
@@ -42,6 +43,18 @@ export function WorkflowSidebar({
   currentThreadId?: string;
   onSelectThread?: (tid: string) => void;
   onNewThread?: () => void;
+  /**
+   * Drop the conversation list. True for an auto-mode project and for any
+   * project with a live run — in both, the run screen owns the workspace and
+   * nothing in this list is actionable: it holds one thread, and "New
+   * conversation" invites the student to start a second one in the middle of a
+   * job whose whole premise is that nobody types anything.
+   *
+   * The project chip, the home link and the credits stay. Hiding the list must
+   * not strand anyone, and the thread itself is still right there in the main
+   * pane — this removes the switcher, not the conversation.
+   */
+  hideThreads?: boolean;
 }) {
   const t = useT();
   return (
@@ -95,6 +108,10 @@ export function WorkflowSidebar({
       )}
 
       {/* Threads header */}
+      {hideThreads ? (
+        <div className="flex-1" />
+      ) : (
+      <>
       <div className="px-[18px] mt-1 mb-2 flex items-center justify-between">
         <div className="text-[10.5px] uppercase tracking-[0.1em] text-ink-500 font-semibold">
           {t("sidebar.threads")}
@@ -131,6 +148,8 @@ export function WorkflowSidebar({
           <div className="text-[12px] text-ink-500 px-5 py-3">{t("sidebar.loading")}</div>
         )}
       </div>
+      </>
+      )}
 
       {/* Project credit total — sum of every response's cost across all
           threads of this project. */}
