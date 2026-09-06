@@ -76,6 +76,35 @@ describe("AutoThesisRunView", () => {
     expect(screen.queryByTestId("busy-M4")).toBeNull();
   });
 
+  test("a finished run reports how long it took, not how long ago it started", async () => {
+    // Seen on a run that took 27 minutes and had been sitting on screen since:
+    // "Đã chạy 352 phút". Elapsed was Date.now() − started_at on every status,
+    // so a finished run's number kept climbing for as long as the tab was open.
+    server.use(
+      runRow("elapsed1", "done", {
+        started_at: new Date(Date.now() - 300 * 60_000).toISOString(),
+        finished_at: new Date(Date.now() - 273 * 60_000).toISOString(),
+      }),
+      events("elapsed1"),
+    );
+    renderView({ runId: "elapsed1" });
+
+    await waitFor(() => expect(screen.getByText(/27 min/i)).toBeTruthy());
+    expect(screen.queryByText(/300 min/)).toBeNull();
+  });
+
+  test("a live run still counts up from its start", async () => {
+    server.use(
+      runRow("elapsed2", "running", {
+        started_at: new Date(Date.now() - 12 * 60_000).toISOString(),
+      }),
+      events("elapsed2"),
+    );
+    renderView({ runId: "elapsed2" });
+
+    await waitFor(() => expect(screen.getByText(/12 min/i)).toBeTruthy());
+  });
+
   test("a blocked run gives the student somewhere to answer", async () => {
     // Naming the blocker and leaving it there is half a feature: the run cannot
     // clear this itself, so the screen has to hand over. The thread is where

@@ -41,6 +41,7 @@ type RunRow = {
   status?: string;
   phase?: string | null;
   started_at?: string | null;
+  finished_at?: string | null;
   error_text?: string | null;
 };
 
@@ -222,8 +223,14 @@ export function AutoThesisRunView({
 
   // Elapsed, not "time remaining". Nothing in the system predicts how long a
   // thesis takes, and a countdown the run can't honour is worse than no number.
+  //
+  // A finished run measures to finished_at, not to now. It used to measure to
+  // now on every status, so a 27-minute run that stayed open on screen reported
+  // "Đã chạy 352 phút" — a number that kept climbing after the work stopped.
   const minutes = run?.started_at
-    ? Math.max(0, Math.round((Date.now() - new Date(run.started_at).getTime()) / 60000))
+    ? Math.max(0, Math.round(
+        ((run.finished_at ? new Date(run.finished_at).getTime() : Date.now())
+          - new Date(run.started_at).getTime()) / 60000))
     : null;
 
   const control = async (action: "pause" | "resume" | "cancel") => {
