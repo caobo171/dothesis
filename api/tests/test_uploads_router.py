@@ -341,3 +341,69 @@ def test_the_chapter_split_leaves_result_tables_with_the_analysis():
     head, tail = split
     assert "0.8431" in head                       # M4 keeps its results
     assert "0.8431" not in tail
+
+
+# --- the workspace mirror ---------------------------------------------------
+#
+# The route that WRITES the student's file into the agent's workspace had its
+# own inline copy of the path, so fixing the shared helper did not reach it and
+# a fresh upload still landed under the API's cwd. Measured after that fix
+# shipped: the file went to api/var/jobs/… while every reader looked in
+# var/jobs/…, and the run wrote a thesis with an empty Results chapter.
+
+def test_the_upload_lands_where_the_agent_looks_for_it(client, monkeypatch, tmp_path):
+    """Asserted through workspace_dir() on purpose. Spelling the path out here
+    would just re-create the duplicate that caused this."""
+    from app.workspace import workspace_dir
+
+    monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: MagicMock())
+    monkeypatch.setenv("JOB_WORKDIR_ROOT", str(tmp_path))
+    _login(client)
+    pid = _project(client)
+
+    with FIXTURE.open("rb") as f:
+        r = client.post(f"/api/v1/projects/{pid}/uploads",
+                        files={"file": ("sample.pdf", f, "application/pdf")})
+    assert r.status_code == 200, r.text
+
+    uploads = workspace_dir(pid) / "uploads"
+    assert (uploads / "sample.pdf").exists(), "the raw file the agent parses"
+    assert (uploads / "sample.pdf.txt").exists(), "the sidecar the agent reads"
+
+
+def test_a_relative_workdir_root_still_lands_where_the_agent_looks(client, monkeypatch):
+    """The exact production shape: JOB_WORKDIR_ROOT=./var/jobs, with the API
+    serving from api/ and the run spawned from the repo root."""
+    from app.workspace import workspace_dir
+
+    monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: MagicMock())
+    monkeypatch.setenv("JOB_WORKDIR_ROOT", "./var/jobs")
+    monkeypatch.chdir(Path(__file__).resolve().parents[1])   # api/, as the server runs
+    _login(client)
+    pid = _project(client)
+
+    with FIXTURE.open("rb") as f:
+        r = client.post(f"/api/v1/projects/{pid}/uploads",
+                        files={"file": ("sample.pdf", f, "application/pdf")})
+    assert r.status_code == 200, r.text
+
+    try:
+        assert (workspace_dir(pid) / "uploads" / "sample.pdf").exists()
+    finally:
+        import shutil
+        shutil.rmtree(workspace_dir(pid), ignore_errors=True)
+
+
+def test_nothing_else_builds_the_workspace_path_by_hand():
+    """One definition. uploads.py used to spell it out inline — 'the workspace
+    path matches chat_v3._workspace_dir', said the comment, and it did until the
+    helper changed underneath it."""
+    import re
+    app_dir = Path(__file__).resolve().parents[1] / "app"
+    offenders = [
+        p.relative_to(app_dir.parent)
+        for p in app_dir.rglob("*.py")
+        if p.name != "workspace.py"
+        and re.search(r'"agent_projects"|\'agent_projects\'', p.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, f"call workspace_dir() instead: {offenders}"

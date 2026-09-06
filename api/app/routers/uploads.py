@@ -25,6 +25,7 @@ from ..deps import current_user, stream_user_factory
 from ..models import PaperUpload, Project, User
 from ..pdf_extract import extract_pdf_text
 from ..http_headers import content_disposition
+from ..workspace import workspace_dir
 
 router = APIRouter(tags=["uploads"])
 logger = logging.getLogger(__name__)
@@ -210,16 +211,21 @@ async def upload_paper(project_id: uuid.UUID,
         text_extracted_at = datetime.now(timezone.utc)
 
     # Mirror the upload into the agent's workspace so the v3 deep agent's
-    # `read_file` and `parse_reference` tools can reach the file. The
-    # workspace path matches chat_v3._workspace_dir; both write to it. We
-    # write the RAW bytes (so `parse_reference` can PDF-extract directly)
-    # and a sidecar `.txt` (so `read_file` gives the agent quick text
-    # without paying for re-extraction every read). Best-effort —
-    # mirroring failure should never break the upload route.
+    # `read_file` and `parse_reference` tools can reach the file. We write the
+    # RAW bytes (so `parse_reference` can PDF-extract directly) and a sidecar
+    # `.txt` (so `read_file` gives the agent quick text without paying for
+    # re-extraction every read). Best-effort — mirroring failure should never
+    # break the upload route.
+    #
+    # Through workspace_dir(), not by hand. This line used to spell the path out
+    # inline under a comment claiming it "matches chat_v3._workspace_dir" — and
+    # it did, until the helper was fixed to stop resolving a relative
+    # JOB_WORKDIR_ROOT against the calling process's cwd. The copy kept the old
+    # behaviour, so the student's file went to api/var/jobs/… while every reader
+    # looked in var/jobs/…, and a full run wrote a thesis with an empty Results
+    # chapter over a dataset that was on disk the whole time.
     try:
-        from pathlib import Path as _P
-        import tempfile as _tmp
-        workspace = _P(os.getenv("JOB_WORKDIR_ROOT") or _tmp.gettempdir()) / "agent_projects" / str(project_id)
+        workspace = workspace_dir(project_id)
         (workspace / "uploads").mkdir(parents=True, exist_ok=True)
         safe_name = (file.filename or "untitled").replace("/", "_")
         (workspace / "uploads" / safe_name).write_bytes(body)
