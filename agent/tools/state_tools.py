@@ -392,6 +392,35 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
                     writes = {**writes, "analysis_provenance": _summary}
             except Exception:
                 logger.debug("commit_slice: provenance injection skipped", exc_info=True)
+        # An unattended run may not declare a module done on nothing.
+        #
+        # commit_slice's own gate is _has_done_content: one owned earning key is
+        # enough. That is right for a student working through a module in chat,
+        # and wrong for a run with nobody watching. Measured: M4 wrote
+        # `analysis_results = [{"status": "not_run", "reason": "No real dataset
+        # …"}]`, committed with confirm_done=True, and a 27-minute run reported
+        # "Your thesis is ready" over an empty Results chapter and two untested
+        # hypotheses. Every other M4 gate checks whether numbers CONTRADICT each
+        # other, so an analysis with no numbers passed all of them.
+        #
+        # The DoD that would have caught it was already computed below — as an
+        # advisory note attached to a payload nobody reads. Under strict gates
+        # it decides instead. The WRITE still lands: refusing the claim must not
+        # throw away a turn that cost real money, and a module left in_progress
+        # with its content saved is exactly the state a resume can finish.
+        _done_gaps = None
+        if confirm_done and strict_gates:
+            try:
+                from orchestrator.artifacts import MODULE_TO_ARTIFACT, gate_for  # noqa: PLC0415
+                _artifact = MODULE_TO_ARTIFACT.get(module)
+                if _artifact:
+                    _prospective = {**(store.load() or {}).get("contextStore", {}), **writes}
+                    _dod = gate_for(_artifact)(_prospective)
+                    if not _dod.done:
+                        _done_gaps = _dod.gaps
+                        confirm_done = False
+            except Exception:
+                logger.debug("commit_slice: strict done-gate skipped", exc_info=True)
         try:
             result = store.commit_slice(
                 module, writes, reason,
@@ -402,6 +431,12 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
             # Surface the violation to the model so it can correct course —
             # a raise would abort the whole turn instead of one tool call.
             return json.dumps({"error": str(e)})
+        if _done_gaps and isinstance(result, dict):
+            result = {**result, "done_refused": _done_gaps,
+                      "hint": "The content was saved and the module stays in_progress. "
+                              "Close these gaps and commit again with confirm_done=True. "
+                              "If they cannot be closed — no dataset, no results to read — "
+                              "flag_blocker so the student is asked, and do NOT mark it done."}
         if _repair_note is not None and isinstance(result, dict):
             result = {**result, "conceptual_model_repaired": _repair_note}
         if _stats_warnings is not None and isinstance(result, dict):

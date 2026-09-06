@@ -362,3 +362,93 @@ def test_unarmed_project_not_nudged(tmp_path):
     store, tools = _tools(tmp_path)
     skt.reset()                                      # not armed → no nudge (test posture)
     assert "error" not in _commit(tools, {"analysis_results": copy.deepcopy(_GOOD_M4)})
+
+
+# --- "done" has to mean the work happened ----------------------------------
+#
+# From a real 27-minute run that reported success: M4 wrote
+#   analysis_results = [{"status": "not_run", "reason": "No real dataset …"}]
+# committed itself with confirm_done=True, and the student was shown "Your
+# thesis is ready" over an empty Results chapter and two untested hypotheses.
+#
+# Every M4 gate checks whether numbers CONTRADICT each other, so an analysis
+# with no numbers passed all of them unchallenged, and the DoD that would have
+# caught it was advisory: it attached `done_but_incomplete` to the payload and
+# marked the module done anyway.
+
+_NOT_RUN = [{"status": "not_run",
+             "reason": "No real dataset or validated SPSS/SmartPLS output is available."}]
+
+
+def _done_commit(tools, **kw):
+    return json.loads(tools["commit_slice"].func(**kw))
+
+
+def test_an_unattended_run_cannot_mark_a_module_done_on_no_results(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store, strict_gates=True)}
+
+    out = _done_commit(tools, module="M4", writes={"analysis_results": _NOT_RUN},
+                  reason="analysis could not run", confirm_done=True)
+
+    assert store.load()["status"]["M4"] != "done"
+    assert out.get("done_refused"), out
+
+
+def test_the_refusal_names_what_is_missing(tmp_path):
+    """The agent has to be able to act on it, and the student has to be able to
+    read it — "incomplete" on its own is not a next step."""
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store, strict_gates=True)}
+
+    out = _done_commit(tools, module="M4", writes={"analysis_results": _NOT_RUN},
+                  reason="x", confirm_done=True)
+
+    assert out["done_refused"], out
+    assert any("results" in g or "data_type_detected" in g for g in out["done_refused"])
+
+
+def test_the_work_is_still_saved_when_the_done_is_refused(tmp_path):
+    """Refusing the claim must not throw away the turn: the agent spent real
+    money producing this, and losing it guarantees it gets produced again."""
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store, strict_gates=True)}
+
+    _done_commit(tools, module="M4", writes={"analysis_results": _NOT_RUN},
+            reason="x", confirm_done=True)
+
+    cs = store.load()["contextStore"]
+    assert cs["analysis_results"] == _NOT_RUN
+    assert store.load()["status"]["M4"] == "in_progress"
+
+
+def test_a_complete_module_still_goes_done_in_an_unattended_run(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store, strict_gates=True)}
+
+    out = _done_commit(tools, module="M4", reason="analysis complete", confirm_done=True,
+                  writes={
+                      "data_type_detected": "Quantitative",
+                      "analysis_outline": [{"step": "reliability"}],
+                      "results": {"cronbach_alpha": {"AA": 0.827}},
+                      "analysis_results": [{"hypothesis": "H1", "supported": True,
+                                            "beta": 0.412, "p": 0.003}],
+                  })
+
+    assert store.load()["status"]["M4"] == "done"
+    assert "done_refused" not in out
+
+
+def test_interactive_chat_is_not_tightened(tmp_path):
+    """Deliberate asymmetry. A student working through M4 in chat commits as
+    they go, and blocking that would stall them mid-flow — the advisory note is
+    the right call there. It is an UNATTENDED run that must never report a done
+    nobody can see is hollow."""
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store)}   # strict_gates=False
+
+    out = _done_commit(tools, module="M4", writes={"analysis_results": _NOT_RUN},
+                  reason="x", confirm_done=True)
+
+    assert store.load()["status"]["M4"] == "done"
+    assert out.get("done_but_incomplete")
