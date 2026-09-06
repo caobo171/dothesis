@@ -10,14 +10,15 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from ..auth_admin import readable_project as _readable_project
 from ..admin_config import is_super_admin
 from ..db import db_session, get_session_factory
 from ..deps import current_user
-from ..models import ContextStore, Message, Project, Thread, User
+from ..models import (ContextStore, CreditTransaction, Job, Message, Project,
+                      Thread, User)
 
 router = APIRouter(tags=["chat"])
 
@@ -547,22 +548,53 @@ def thread_credits(thread_id: uuid.UUID,
 def project_credits(project_id: uuid.UUID,
                     user: User = Depends(current_user),
                     db: Session = Depends(db_session)):
-    """Total credits + tokens spent across ALL threads of this project.
+    """Total credits + tokens spent on this project, across everything.
 
-    Powers the left panel's project cost summary. Joins messages → threads so
-    the sum spans every conversation in the project.
+    Powers the left panel's cost summary, and it is read as "what this thesis
+    has cost me", so it has to include the expensive part.
+
+    Credits come from the LEDGER, not from Message.cost_credits. Two reasons,
+    both measured:
+
+      - The message sum counted chat turns only. A project whose whole cost was
+        one Auto Thesis run — 3,734 credits — displayed 0, because a headless
+        run writes no chat rows. It is the single most expensive thing this
+        product does and it was invisible here.
+      - Where both exist they disagree (18 vs 36 credits on one thread, 10,150
+        vs 9,561 on another). credit_transactions is what actually moved the
+        student's balance ("Every balance change has a matching ledger row",
+        credit_ledger.py) and what the Transactions page shows them, so it is
+        the number that has to appear here too.
+
+    Debits are negative, so this negates the sum and ignores positive rows: a
+    top-up is not project spend, and adding it raw would show a project that
+    gave credits back.
+
+    Tokens stay on the messages: the ledger stores money, not token counts, and
+    a headless run's tokens are already surfaced on the run screen itself.
     """
     _readable_project(db, user, project_id)
-    row = (
-        db.query(
-            func.coalesce(func.sum(Message.cost_credits), 0),
-            func.coalesce(func.sum(Message.total_tokens), 0),
+    thread_ids = select(Thread.id).where(Thread.project_id == project_id)
+    run_ids = select(Job.id).where(Job.project_id == project_id)
+    credits = db.scalar(
+        select(func.coalesce(func.sum(-CreditTransaction.delta), 0))
+        .where(
+            CreditTransaction.delta < 0,
+            or_(
+                and_(CreditTransaction.ref_type == "thread",
+                     CreditTransaction.ref_id.in_(thread_ids)),
+                and_(CreditTransaction.ref_type == "run",
+                     CreditTransaction.ref_id.in_(run_ids)),
+            ),
         )
+    ) or 0
+    tokens = (
+        db.query(func.coalesce(func.sum(Message.total_tokens), 0))
         .join(Thread, Thread.id == Message.thread_id)
         .filter(Thread.project_id == project_id)
-        .one()
-    )
-    return {"total_credits": int(row[0]), "total_tokens": int(row[1])}
+        .scalar()
+    ) or 0
+    return {"total_credits": int(credits), "total_tokens": int(tokens)}
 
 
 # Renamed from GET → POST .../messages/list: POST .../messages already posts a

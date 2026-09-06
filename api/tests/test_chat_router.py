@@ -166,3 +166,89 @@ def test_list_projects_returns_slice_status_not_full_bodies(client):
     full = client.post(f"/api/v1/projects/{pid}").json()["context_store"]
     assert full["m1_topic"]["research_title"] == "T"
     assert len(full["m5_writing"]["chapters"]["c1"]) == 100_000
+
+
+# --- the project's credit total --------------------------------------------
+#
+# "Tổng credits dự án" summed Message.cost_credits joined through threads, so it
+# counted chat turns and nothing else. A project whose entire cost came from an
+# Auto Thesis run — 3,734 credits on the measured one — displayed 0, and that is
+# the most expensive thing this product does.
+#
+# credit_transactions is the billing truth ("Every balance change has a matching
+# ledger row", credit_ledger.py) and it is what the Transactions page and the
+# user's balance are built from. Message.cost_credits is a per-message display
+# value that has drifted from it on real threads (18 vs 36, 10150 vs 9561).
+
+def _project_with_thread(client):
+    pid = client.post("/api/v1/projects", json={"name": "T"}).json()["id"]
+    tid = client.post(f"/api/v1/projects/{pid}/threads", json={"name": "Main"}).json()["id"]
+    return uuid.UUID(pid), uuid.UUID(tid)
+
+
+def _ledger(user_id, *, delta, reason, ref_type, ref_id):
+    from app.models import CreditTransaction
+    sf = get_session_factory()
+    with sf() as db:
+        db.add(CreditTransaction(user_id=user_id, delta=delta, reason=reason,
+                                 ref_type=ref_type, ref_id=ref_id))
+        db.commit()
+
+
+def test_an_auto_run_counts_toward_the_project_total(client):
+    from app.models import Job
+    u = _login_user(client)
+    pid, _ = _project_with_thread(client)
+    run_id = uuid.uuid4()
+    sf = get_session_factory()
+    with sf() as db:
+        db.add(Job(id=run_id, project_id=pid, mode="auto", status="done"))
+        db.commit()
+    _ledger(u.id, delta=-3734, reason="auto_run", ref_type="run", ref_id=run_id)
+
+    body = client.post(f"/api/v1/projects/{pid}/credits").json()
+
+    assert body["total_credits"] == 3734
+
+
+def test_chat_turns_still_count(client):
+    u = _login_user(client)
+    pid, tid = _project_with_thread(client)
+    _ledger(u.id, delta=-120, reason="chat_turn", ref_type="thread", ref_id=tid)
+
+    assert client.post(f"/api/v1/projects/{pid}/credits").json()["total_credits"] == 120
+
+
+def test_a_run_and_a_conversation_add_up(client):
+    from app.models import Job
+    u = _login_user(client)
+    pid, tid = _project_with_thread(client)
+    run_id = uuid.uuid4()
+    sf = get_session_factory()
+    with sf() as db:
+        db.add(Job(id=run_id, project_id=pid, mode="auto", status="done"))
+        db.commit()
+    _ledger(u.id, delta=-3734, reason="auto_run", ref_type="run", ref_id=run_id)
+    _ledger(u.id, delta=-120, reason="chat_turn", ref_type="thread", ref_id=tid)
+
+    assert client.post(f"/api/v1/projects/{pid}/credits").json()["total_credits"] == 3854
+
+
+def test_another_project_does_not_leak_in(client):
+    u = _login_user(client)
+    mine, _ = _project_with_thread(client)
+    _, theirs_tid = _project_with_thread(client)
+    _ledger(u.id, delta=-500, reason="chat_turn", ref_type="thread", ref_id=theirs_tid)
+
+    assert client.post(f"/api/v1/projects/{mine}/credits").json()["total_credits"] == 0
+
+
+def test_a_top_up_is_not_project_spend(client):
+    """Deltas are signed: a purchase is positive and belongs to nobody's
+    project. Summing them raw would show a project that REFUNDED credits."""
+    u = _login_user(client)
+    pid, tid = _project_with_thread(client)
+    _ledger(u.id, delta=-100, reason="chat_turn", ref_type="thread", ref_id=tid)
+    _ledger(u.id, delta=50_000, reason="admin_grant", ref_type="user", ref_id=u.id)
+
+    assert client.post(f"/api/v1/projects/{pid}/credits").json()["total_credits"] == 100
