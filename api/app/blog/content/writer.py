@@ -129,6 +129,29 @@ def normalise_internal_links(body: str, slugs: set[str]) -> tuple[str, int]:
     return _LINK_RE.sub(replace, body or ""), stripped
 
 
+# A citation the model wrapped in backticks: `(Hair và cộng sự, 2010)`. It renders
+# as a code span, which reads as a variable name rather than a source.
+_CODE_CITATION_RE = re.compile(r"`(\([^`()\n]{3,80}?\d{4}[a-z]?\))`")
+
+
+def normalise_citations(body: str) -> tuple[str, int]:
+    """Strip backticks around author-year citations.
+
+    Measured on the first five real posts: 33 of the citations in three of them
+    arrived as code spans, even though the contract asks for plain text. A
+    deterministic strip is cheaper and safer than a repair call, and it changes
+    nothing the QA gate reads (the allowlist match is on the parenthesised text).
+    """
+    fixed = 0
+
+    def replace(match):
+        nonlocal fixed
+        fixed += 1
+        return match.group(1)
+
+    return _CODE_CITATION_RE.sub(replace, body or ""), fixed
+
+
 def seed_from(row, produced: dict) -> dict:
     """Model output plus the pipeline's own fields.
 
@@ -268,6 +291,7 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
                 # target at all, and the repair pass is spent only on a post
                 # that is genuinely short of real links.
                 body, stripped = normalise_internal_links(produced.get("body") or "", known)
+                body, _cites = normalise_citations(body)
                 produced["body"] = body
                 unlinked += stripped
                 seed = seed_from(row, produced)

@@ -96,7 +96,8 @@ is accepted:
   do not exist. Link every entry on the list at least once where it fits the
   sentence you were writing anyway.
 - Exactly one link to `/landing`, in the closing paragraph.
-- Citations only from the allowlist above, copied character for character. If a
+- Citations only from the allowlist above, copied character for character, as
+  plain text inside the sentence, never inside backticks or a code span. If a
   claim needs a source that is not on the list, drop the number instead.
 - No em dash, no exclamation mark, no blacklisted phrase, no `## Kết luận`
   heading, no motivational close.

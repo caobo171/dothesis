@@ -498,3 +498,16 @@ class _Completion:
 
 def _fake_completion():
     return _Completion()
+
+
+def test_normalise_citations_strips_code_spans():
+    from app.blog.content.writer import normalise_citations
+
+    body = ("Ngưỡng 0.7 theo `(Nunnally, 1978)` và `(Hair và cộng sự, 2010)`. "
+            "Giữ nguyên `alpha` và `(x)` và (Kaiser, 1974).")
+    out, fixed = normalise_citations(body)
+    assert fixed == 2
+    assert "`(Nunnally, 1978)`" not in out and "(Nunnally, 1978)" in out
+    assert "(Hair và cộng sự, 2010)" in out and "`(Hair" not in out
+    assert "`alpha`" in out and "`(x)`" in out  # not citations, untouched
+    assert "(Kaiser, 1974)" in out
