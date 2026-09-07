@@ -10,6 +10,9 @@ const LINKS: Array<[string, string]> = [
   ["Tools", "#tools"],
   ["Pricing", "#pricing"],
   ["FAQ", "#faq"],
+  // The only entry that leaves the page. Kept last so the in-page anchors
+  // still read as one group.
+  ["Blog", "/blog/vi"],
 ];
 
 export function Nav() {

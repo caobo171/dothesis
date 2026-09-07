@@ -28,7 +28,7 @@ const COLUMNS: Array<[string, Array<[string, string]>]> = [
     "Company",
     [
       ["About", "#"],
-      ["Blog", "#"],
+      ["Blog", "/blog/vi"],
       ["Careers", "#"],
       ["Contact", "#"],
     ],

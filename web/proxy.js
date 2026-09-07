@@ -17,6 +17,11 @@ const PUBLIC_PATHS = [
   // would 307 every first-time visitor straight to /login, which is the one
   // screen the page exists to talk them into.
   "/landing",
+  // The blog. Same reason as /landing and then some: its entire audience
+  // arrives from a search engine, signed out, and Googlebot never has the
+  // auth-marker cookie — gating it would 307 the crawler to /login and the
+  // whole content bank would be indexed as a sign-in page.
+  "/blog",
   "/_next", "/favicon.ico",
 ];
 
