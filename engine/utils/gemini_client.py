@@ -276,7 +276,7 @@ class GeminiModelWrapper:
 
 def create_gemini_client(
     api_key: Optional[str] = None,
-    model_name: str = "gemini-2.0-flash",
+    model_name: str = "gemini-3-flash-preview",
     temperature: float = 0.7,
 ) -> GeminiModelWrapper:
     """

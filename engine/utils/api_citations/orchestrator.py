@@ -56,7 +56,8 @@ from .gemini_grounded import GeminiGroundedClient
 from .serper_client import SerperClient
 from .query_router import QueryRouter, QueryClassification
 from .base import validate_publication_year, validate_author_name
-from ..gemini_cache import cache_root, grounded_search_mode
+from ..gemini_cache import (cache_root, grounded_search_mode, make_key, search_cache_get,
+                            search_cache_put, TTL_GROUNDED_HIT, TTL_GROUNDED_MISS)
 
 from ..models import strip_markdown_json, LLMCitationResponse
 
@@ -347,10 +348,15 @@ class CitationResearcher:
                 if value is not None or topic not in merged:
                     merged[topic] = value
             self.CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            tmp_file = self.CACHE_FILE.with_name(f".{self.CACHE_FILE.name}.{os.getpid()}.tmp")
-            with open(tmp_file, 'w', encoding='utf-8') as f:
+            # mkstemp, not a pid-named file: the research phase saves from several
+            # threads of one process, and two threads sharing a temp name
+            # interleaved their writes into one corrupt file (seen 2026-09-07).
+            import tempfile
+            fd, tmp_name = tempfile.mkstemp(prefix=f".{self.CACHE_FILE.name}.", suffix=".tmp",
+                                            dir=str(self.CACHE_FILE.parent))
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 json.dump(merged, f, indent=2, ensure_ascii=False)
-            os.replace(tmp_file, self.CACHE_FILE)
+            os.replace(tmp_name, self.CACHE_FILE)
 
             logger.debug(f"Saved {len(merged)} citations to cache file {self.CACHE_FILE}")
         except Exception as e:
@@ -366,7 +372,13 @@ class CitationResearcher:
         Returns:
             List of Citation objects (may be empty if none found)
         """
-        # Check cache first
+        # Check cache first: this process's memo, then the shared search_cache
+        # table (every worker and host), then the APIs.
+        if topic not in self.cache:
+            shared = search_cache_get('citations', make_key('citations', topic))
+            if shared is not None:
+                results = shared.get('results')
+                self.cache[topic] = [(m, s) for m, s in results] if results else None
         if topic in self.cache:
             cached = self.cache[topic]
             if cached is None:
@@ -616,6 +628,9 @@ class CitationResearcher:
             self.cache[topic] = valid_results
         else:
             self.cache[topic] = None
+        search_cache_put('citations', make_key('citations', topic), topic, 'crossref+openalex+s2+grounded',
+                         {'results': [[m, s] for m, s in valid_results] if valid_results else None},
+                         TTL_GROUNDED_HIT if valid_results else TTL_GROUNDED_MISS)
 
         # Persist cache to disk
         self._save_cache()

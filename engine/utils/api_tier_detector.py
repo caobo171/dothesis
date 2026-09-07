@@ -143,7 +143,7 @@ class APITierDetector:
                 try:
                     # Minimal request to test rate limiting
                     client.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model='gemini-3-flash-preview',
                         contents="Say OK",
                         config={"max_output_tokens": 5},
                     )

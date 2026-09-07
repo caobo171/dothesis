@@ -9,8 +9,15 @@ every one of them again. Every process — API worker, engine CLI, tests —
 shares this directory, so it also replaces the three cwd-relative
 `.citation_cache_orchestrator.json` copies that used to drift apart.
 
+Search answers (grounded web search, per-query citation results) live in the
+Postgres table `search_cache` when DATABASE_URL is set — one memo shared by
+every worker and host — and fall back to the file cache otherwise. The
+generate_content replay cache stays on disk: it is a test/retry convenience,
+not shared product state.
+
 Switches (environment):
   DOTHESIS_CACHE_DIR        where to store (default ~/.dothesis/gemini_cache)
+  DOTHESIS_SEARCH_CACHE_DB  1/0, default 1  — use the search_cache table when DATABASE_URL is set
   DOTHESIS_GROUNDED_CACHE   1/0, default 1  — cache grounded-search answers
   DOTHESIS_LLM_CACHE        1/0, default 0  — cache generate_content answers
                             (opt-in: replays the identical text for an identical
@@ -24,6 +31,7 @@ import hashlib
 import json
 import logging
 import os
+import random
 import tempfile
 import time
 from pathlib import Path
@@ -87,6 +95,79 @@ def cache_get(kind: str, key: str) -> Optional[dict]:
     except Exception as e:  # a corrupt entry is a miss, never an error
         logger.debug("cache read failed for %s/%s: %s", kind, key[:12], e)
         return None
+
+
+# ---------------------------------------------------------------------------
+# search_cache table (api/migrations/versions/20260907_search_cache.py)
+# ---------------------------------------------------------------------------
+
+_db_engine = None
+_db_unavailable = False
+
+
+def _db():
+    """Lazily build one small SQLAlchemy engine per process; None when there is no DB to use."""
+    global _db_engine, _db_unavailable
+    if _db_unavailable:
+        return None
+    if _db_engine is None:
+        url = os.getenv("DATABASE_URL") or ""
+        if not url or not _flag("DOTHESIS_SEARCH_CACHE_DB", "1"):
+            _db_unavailable = True
+            return None
+        try:
+            from sqlalchemy import create_engine
+            _db_engine = create_engine(url, future=True, pool_pre_ping=True, pool_size=2, max_overflow=2)
+        except Exception as e:
+            logger.debug("search_cache DB unavailable (%s); using file cache", e)
+            _db_unavailable = True
+            return None
+    return _db_engine
+
+
+def search_cache_get(kind: str, key: str) -> Optional[dict]:
+    """Stored search answer from the DB (file cache when no DB); None when absent or expired."""
+    eng = _db()
+    if eng is None:
+        return cache_get(kind, key)
+    try:
+        from sqlalchemy import text
+        with eng.connect() as conn:
+            row = conn.execute(
+                text("SELECT payload FROM search_cache WHERE key = :k AND expires_at > now()"),
+                {"k": key},
+            ).first()
+        return row[0] if row is not None else None
+    except Exception as e:
+        logger.debug("search_cache read failed (%s); trying file cache", e)
+        return cache_get(kind, key)
+
+
+def search_cache_put(kind: str, key: str, query: str, model: str, payload: dict, ttl_s: int) -> None:
+    """Upsert a search answer; `payload` should carry a null inner result for a remembered miss."""
+    eng = _db()
+    if eng is None:
+        return cache_put(kind, key, payload, ttl_s)
+    try:
+        from sqlalchemy import text
+        hit = any(v for k, v in payload.items() if k in ("result", "results"))
+        with eng.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO search_cache (key, kind, model, query, payload, hit, created_at, expires_at) "
+                    "VALUES (:key, :kind, :model, :query, CAST(:payload AS jsonb), :hit, now(), "
+                    "        now() + make_interval(secs => :ttl)) "
+                    "ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, hit = EXCLUDED.hit, "
+                    "  model = EXCLUDED.model, created_at = now(), expires_at = EXCLUDED.expires_at"
+                ),
+                {"key": key, "kind": kind, "model": (model or "")[:64], "query": (query or "")[:2000],
+                 "payload": json.dumps(payload, ensure_ascii=False), "hit": hit, "ttl": int(ttl_s)},
+            )
+            if random.random() < 0.02:  # opportunistic sweep; nothing reads expired rows anyway
+                conn.execute(text("DELETE FROM search_cache WHERE expires_at < now() - interval '7 days'"))
+    except Exception as e:
+        logger.debug("search_cache write failed (%s); using file cache", e)
+        cache_put(kind, key, payload, ttl_s)
 
 
 def cache_put(kind: str, key: str, payload: dict, ttl_s: Optional[int] = None) -> None:

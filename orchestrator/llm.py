@@ -46,9 +46,9 @@ def resolve_orchestrator_model(model: str | None = None) -> str:
     # with no env now fails at model construction instead of quietly landing on
     # Gemini. That is the intended direction — a missing key should be loud.
     route = os.getenv("ORCHESTRATOR_LLM_ROUTE", "openai")
-    # native keeps gemini-2.5-flash: the exact id every `_get_llm()` site used, so
-    # the no-new-env back-compat contract in this module's header still holds.
-    default_model = "gemini-2.5-flash"
+    # native: current flash generation (gemini-2.5-flash is no longer offered to
+    # new accounts, 2026-09).
+    default_model = "gemini-3-flash-preview"
     if route == "ofox":
         # Ofox uses provider/model ids. qwen-plus matches the brain's ofox default
         # (agent/model_factory.spec_from_env) and is the model the owner's benchmark
@@ -221,5 +221,5 @@ def get_vision_llm(model: str | None = None, temperature: float | None = None):
     from agent.model_factory import ModelSpec, make_vision_model  # noqa: PLC0415 — cycle-avoiding lazy import
 
     route = (os.getenv("ORCHESTRATOR_LLM_ROUTE") or os.getenv("DOTHESIS_MODEL_ROUTE") or "native").lower()
-    m = model or os.getenv("DOTHESIS_VISION_MODEL", "gemini-2.5-flash")
+    m = model or os.getenv("DOTHESIS_VISION_MODEL", "gemini-3-flash-preview")
     return make_vision_model(ModelSpec(route=route, vision_model=m), temperature=temperature)

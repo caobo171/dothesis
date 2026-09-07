@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -411,6 +412,26 @@ class TokenLedger(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+
+class SearchCache(Base):
+    """Memo of paid citation / web searches, shared by every worker and host.
+
+    Written and read by engine/utils/gemini_cache.py over raw SQL (the engine
+    must not import the API), mapped here so create_all() and Alembic know it.
+    `key` = sha256(kind, model, query); `payload` holds the answer with a null
+    inner result for a remembered miss; hits live 30 days, misses 3.
+    """
+    __tablename__ = "search_cache"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    model: Mapped[str | None] = mapped_column(String(64))
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    hit: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
 
 
 class VersionHistory(Base):

@@ -13,11 +13,18 @@ from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
 
 try:
-    from ..gemini_cache import (grounded_cache_enabled, cache_get, cache_put, make_key,
+    from ..gemini_cache import (grounded_cache_enabled, search_cache_get, search_cache_put, make_key,
                                 TTL_GROUNDED_HIT, TTL_GROUNDED_MISS)
 except ImportError:  # script-style import
-    from utils.gemini_cache import (grounded_cache_enabled, cache_get, cache_put, make_key,
+    from utils.gemini_cache import (grounded_cache_enabled, search_cache_get, search_cache_put, make_key,
                                     TTL_GROUNDED_HIT, TTL_GROUNDED_MISS)
+
+# Current flash generation. gemini-2.5-flash is no longer offered to new
+# accounts; gemini-3-flash-preview answers a grounded query in ~15 s with ~1k
+# input tokens, where gemini-3.5-flash took ~115 s and 23k input + 24k thinking
+# tokens on the same query (measured 2026-09-07) — far outside the orchestrator's
+# 30 s parallel budget.
+DEFAULT_GROUNDED_MODEL = 'gemini-3-flash-preview'
 
 logger = logging.getLogger(__name__)
 
@@ -250,8 +257,7 @@ class GeminiGroundedClient(BaseAPIClient):
                 "Set via environment variable or constructor."
             )
 
-        # Use Gemini 2.5 Flash for fast grounding with two-step approach
-        self.model_name = 'gemini-2.5-flash'
+        self.model_name = os.getenv('GROUNDED_SEARCH_MODEL', DEFAULT_GROUNDED_MODEL)
 
         # Multi-key rotation for 429 rate limit handling
         self._fallback_keys = {
@@ -322,7 +328,7 @@ class GeminiGroundedClient(BaseAPIClient):
             cache_key = None
             if grounded_cache_enabled():
                 cache_key = make_key("grounded", self.model_name, prompt)
-                hit = cache_get("grounded", cache_key)
+                hit = search_cache_get("grounded", cache_key)
                 if hit is not None:
                     logger.info(f"Gemini grounded cache hit: {query[:60]}")
                     return hit.get("result")
@@ -345,8 +351,9 @@ class GeminiGroundedClient(BaseAPIClient):
                     result = valid_sources[0]
 
             if cache_key:
-                cache_put("grounded", cache_key, {"query": query, "result": result},
-                          TTL_GROUNDED_HIT if result else TTL_GROUNDED_MISS)
+                search_cache_put("grounded", cache_key, query, self.model_name,
+                                 {"query": query, "result": result},
+                                 TTL_GROUNDED_HIT if result else TTL_GROUNDED_MISS)
             return result
 
         except Exception as e:
