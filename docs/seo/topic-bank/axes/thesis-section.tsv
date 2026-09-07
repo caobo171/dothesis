@@ -1,0 +1,43 @@
+unit	display	templates	category	archetype	family
+mo-dau	mở đầu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch1
+ly-do-chon-de-tai	lý do chọn đề tài	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch1
+muc-tieu-nghien-cuu	mục tiêu nghiên cứu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch1
+cau-hoi-nghien-cuu	câu hỏi nghiên cứu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch1
+doi-tuong-va-pham-vi-nghien-cuu	đối tượng và phạm vi nghiên cứu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch1
+y-nghia-cua-de-tai	ý nghĩa của đề tài	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch1
+ket-cau-luan-van	kết cấu luận văn	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch1
+tong-quan-tai-lieu	tổng quan tài liệu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch2
+co-so-ly-thuyet	cơ sở lý thuyết	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch2
+khoang-trong-nghien-cuu	khoảng trống nghiên cứu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch2
+mo-hinh-nghien-cuu-de-xuat	mô hình nghiên cứu đề xuất	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch2
+gia-thuyet-nghien-cuu	giả thuyết nghiên cứu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch2
+phuong-phap-nghien-cuu	phương pháp nghiên cứu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch3
+quy-trinh-nghien-cuu	quy trình nghiên cứu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch3
+thiet-ke-nghien-cuu	thiết kế nghiên cứu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch3
+xay-dung-thang-do	xây dựng thang đo	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch3
+nghien-cuu-so-bo	nghiên cứu sơ bộ	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch3
+nghien-cuu-chinh-thuc	nghiên cứu chính thức	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch3
+ket-qua-nghien-cuu	kết quả nghiên cứu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch4
+thong-ke-mo-ta-mau	thống kê mô tả mẫu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch4
+ket-qua-kiem-dinh-thang-do	kết quả kiểm định thang đo	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch4
+ket-qua-efa	kết quả efa	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch4
+ket-qua-hoi-quy	kết quả hồi quy	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch4
+kiem-dinh-gia-thuyet	kiểm định giả thuyết	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	ch4
+thao-luan-ket-qua	thảo luận kết quả	cách viết {display} luận văn;{display} trong luận văn là gì	luan-van-thac-si	thesis-writing	ch5
+ket-luan	kết luận	cách viết {display} luận văn;{display} trong luận văn là gì	luan-van-thac-si	thesis-writing	ch5
+ham-y-quan-tri	hàm ý quản trị	cách viết {display} luận văn;{display} trong luận văn là gì	luan-van-thac-si	thesis-writing	ch5
+kien-nghi	kiến nghị	cách viết {display} luận văn;{display} trong luận văn là gì	luan-van-thac-si	thesis-writing	ch5
+han-che-cua-de-tai	hạn chế của đề tài	cách viết {display} luận văn;{display} trong luận văn là gì	luan-van-thac-si	thesis-writing	ch5
+huong-nghien-cuu-tiep-theo	hướng nghiên cứu tiếp theo	cách viết {display} luận văn;{display} trong luận văn là gì	luan-van-thac-si	thesis-writing	ch5
+tai-lieu-tham-khao	tài liệu tham khảo	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	front-back
+phu-luc	phụ lục	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	front-back
+tom-tat-luan-van	tóm tắt luận văn	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	front-back
+abstract	abstract	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	front-back
+loi-cam-doan	lời cam đoan	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	front-back
+loi-cam-on	lời cảm ơn	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	front-back
+muc-luc	mục lục	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	front-back
+danh-muc-bang-bieu	danh mục bảng biểu	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	front-back
+danh-muc-tu-viet-tat	danh mục từ viết tắt	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	front-back
+trang-bia	trang bìa	cách viết {display} luận văn;{display} trong luận văn là gì	khoa-luan-tot-nghiep	thesis-writing	front-back
+de-cuong	đề cương	cách viết {display} luận văn;{display} trong luận văn là gì	luan-van-thac-si	thesis-writing	planning
+slide-bao-ve	slide bảo vệ	cách viết {display} luận văn;{display} trong luận văn là gì	luan-van-thac-si	thesis-writing	planning

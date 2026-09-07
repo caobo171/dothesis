@@ -1,0 +1,201 @@
+unit	display	templates	category	archetype	family
+cronbach-alpha	cronbach alpha	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	reliability
+he-so-cronbach-alpha	hệ số cronbach alpha	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	reliability
+do-tin-cay-thang-do	độ tin cậy thang đo	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	reliability
+corrected-item-total-correlation	corrected item total correlation	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	reliability
+cronbach-alpha-if-item-deleted	cronbach alpha if item deleted	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	reliability
+composite-reliability	composite reliability	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	reliability
+rho-a	rho a	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	reliability
+do-tin-cay-tong-hop	độ tin cậy tổng hợp	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	reliability
+split-half-reliability	split half reliability	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	reliability
+test-retest-reliability	test retest reliability	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	reliability
+gia-tri-hoi-tu	giá trị hội tụ	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	validity
+gia-tri-phan-biet	giá trị phân biệt	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	validity
+gia-tri-noi-dung	giá trị nội dung	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	validity
+gia-tri-be-mat	giá trị bề mặt	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	validity
+ave	ave	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	validity
+phuong-sai-trich-ave	phương sai trích ave	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	validity
+htmt	htmt	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	validity
+fornell-larcker	fornell larcker	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	validity
+cross-loading	cross loading	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	validity
+construct-validity	construct validity	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	validity
+efa	efa	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+phan-tich-nhan-to-kham-pha	phân tích nhân tố khám phá	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+cfa	cfa	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+phan-tich-nhan-to-khang-dinh	phân tích nhân tố khẳng định	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+kmo	kmo	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+kiem-dinh-bartlett	kiểm định bartlett	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+eigenvalue	eigenvalue	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+phuong-sai-trich	phương sai trích	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+total-variance-explained	total variance explained	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+he-so-tai-nhan-to	hệ số tải nhân tố	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+factor-loading	factor loading	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+communality	communality	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+principal-component-analysis	principal component analysis	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+phep-xoay-varimax	phép xoay varimax	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+phep-xoay-promax	phép xoay promax	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+pattern-matrix	pattern matrix	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+structure-matrix	structure matrix	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+ma-tran-xoay-nhan-to	ma trận xoay nhân tố	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	efa
+gia-tri-trung-binh	giá trị trung bình	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+trung-vi	trung vị	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+mode-trong-thong-ke	mode trong thống kê	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+do-lech-chuan	độ lệch chuẩn	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+phuong-sai	phương sai	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+khoang-bien-thien	khoảng biến thiên	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+tu-phan-vi	tứ phân vị	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+skewness	skewness	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+kurtosis	kurtosis	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+phan-phoi-chuan	phân phối chuẩn	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+histogram	histogram	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+boxplot	boxplot	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+outlier	outlier	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+missing-value	missing value	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+thong-ke-mo-ta	thống kê mô tả	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+tan-so	tần số	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+phan-tram-tich-luy	phần trăm tích lũy	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+z-score	z score	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	descriptive
+p-value	p value	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+muc-y-nghia	mức ý nghĩa	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+gia-thuyet-h0	giả thuyết h0	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+gia-thuyet-doi	giả thuyết đối	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+sai-lam-loai-1	sai lầm loại 1	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+sai-lam-loai-2	sai lầm loại 2	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+khoang-tin-cay	khoảng tin cậy	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+do-tin-cay-95	độ tin cậy 95	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+bac-tu-do	bậc tự do	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+df	df	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+gia-tri-toi-han	giá trị tới hạn	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+kiem-dinh-mot-duoi	kiểm định một đuôi	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+kiem-dinh-hai-duoi	kiểm định hai đuôi	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+power-cua-kiem-dinh	power của kiểm định	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+effect-size	effect size	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+kiem-dinh-gia-thuyet	kiểm định giả thuyết	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+he-so-hoi-quy	hệ số hồi quy	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+beta-chuan-hoa	beta chuẩn hóa	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+r-binh-phuong	r bình phương	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+r-binh-phuong-hieu-chinh	r bình phương hiệu chỉnh	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+he-so-chan	hệ số chặn	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+da-cong-tuyen	đa cộng tuyến	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+vif	vif	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+tolerance	tolerance	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+durbin-watson	durbin watson	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+phan-du	phần dư	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+phuong-sai-sai-so-thay-doi	phương sai sai số thay đổi	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+hoi-quy-tuyen-tinh	hồi quy tuyến tính	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+hoi-quy-da-bien	hồi quy đa biến	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+hoi-quy-don-bien	hồi quy đơn biến	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+hoi-quy-logistic	hồi quy logistic	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+bien-gia	biến giả	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+phuong-phap-stepwise	phương pháp stepwise	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+phuong-phap-enter	phương pháp enter	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+sig-trong-hoi-quy	sig trong hồi quy	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+he-so-tuong-quan-pearson	hệ số tương quan pearson	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	correlation
+tuong-quan-spearman	tương quan spearman	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	correlation
+ma-tran-tuong-quan	ma trận tương quan	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	correlation
+tuong-quan-rieng-phan	tương quan riêng phần	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	correlation
+he-so-xac-dinh	hệ số xác định	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	correlation
+sem	sem	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+pls-sem	pls sem	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+cb-sem	cb sem	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+bien-tiem-an	biến tiềm ẩn	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+bien-quan-sat	biến quan sát	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+mo-hinh-do-luong	mô hình đo lường	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+mo-hinh-cau-truc	mô hình cấu trúc	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+path-coefficient	path coefficient	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+outer-loading	outer loading	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+outer-weight	outer weight	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+f-square	f square	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+q-square	q square	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+r-square	r square	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+chi-so-phu-hop-mo-hinh	chỉ số phù hợp mô hình	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+cfi	cfi	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+tli	tli	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+rmsea	rmsea	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+srmr	srmr	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+chi-square-tren-bac-tu-do	chi square trên bậc tự do	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+gfi	gfi	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+modification-indices	modification indices	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+thang-do-bac-hai	thang đo bậc hai	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+thang-do-cau-tao	thang đo cấu tạo	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+thang-do-phan-anh	thang đo phản ánh	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+bootstrapping	bootstrapping	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+blindfolding	blindfolding	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+pls-predict	pls predict	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	smartpls	term-la-gi	sem
+bien-trung-gian	biến trung gian	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+bien-dieu-tiet	biến điều tiết	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+bien-kiem-soat	biến kiểm soát	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+bien-doc-lap	biến độc lập	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+bien-phu-thuoc	biến phụ thuộc	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+tac-dong-truc-tiep	tác động trực tiếp	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+tac-dong-gian-tiep	tác động gián tiếp	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+tong-tac-dong	tổng tác động	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+vaf	vaf	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+bien-tuong-tac	biến tương tác	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+process-macro	process macro	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+sobel-test	sobel test	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+thang-do-likert	thang đo likert	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+thang-do-dinh-danh	thang đo định danh	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+thang-do-thu-bac	thang đo thứ bậc	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+thang-do-khoang	thang đo khoảng	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+thang-do-ty-le	thang đo tỷ lệ	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+thang-do-doi-nghia	thang đo đối nghĩa	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+ma-hoa-bien	mã hóa biến	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+bien-dao-nguoc	biến đảo ngược	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+bien-dinh-tinh	biến định tính	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+bien-dinh-luong	biến định lượng	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+bien-dai-dien	biến đại diện	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+co-mau	cỡ mẫu	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling
+co-mau-toi-thieu	cỡ mẫu tối thiểu	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling
+chon-mau-thuan-tien	chọn mẫu thuận tiện	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling
+chon-mau-ngau-nhien	chọn mẫu ngẫu nhiên	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling
+chon-mau-phan-tang	chọn mẫu phân tầng	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling
+chon-mau-theo-cum	chọn mẫu theo cụm	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling
+chon-mau-han-ngach	chọn mẫu hạn ngạch	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling
+sai-so-chon-mau	sai số chọn mẫu	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling
+tong-the-nghien-cuu	tổng thể nghiên cứu	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling
+khung-mau	khung mẫu	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling
+t-test	t test	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+anova	anova	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+kiem-dinh-chi-binh-phuong	kiểm định chi bình phương	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+mann-whitney	mann whitney	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+kruskal-wallis	kruskal wallis	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+wilcoxon	wilcoxon	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+kiem-dinh-levene	kiểm định levene	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+kiem-dinh-welch	kiểm định welch	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+post-hoc	post hoc	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+kiem-dinh-tukey	kiểm định tukey	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+hieu-chinh-bonferroni	hiệu chỉnh bonferroni	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+kolmogorov-smirnov	kolmogorov smirnov	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+shapiro-wilk	shapiro wilk	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+manova	manova	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+ancova	ancova	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+common-method-bias	common method bias	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	bias
+harman-single-factor	harman single factor	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	bias
+thien-lech-mong-muon-xa-hoi	thiên lệch mong muốn xã hội	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	bias
+thien-lech-khong-phan-hoi	thiên lệch không phản hồi	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	bias
+du-lieu-so-cap	dữ liệu sơ cấp	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	phan-tich-du-lieu	term-la-gi	data
+du-lieu-thu-cap	dữ liệu thứ cấp	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	phan-tich-du-lieu	term-la-gi	data
+du-lieu-bang	dữ liệu bảng	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	phan-tich-du-lieu	term-la-gi	data
+nghien-cuu-cat-ngang	nghiên cứu cắt ngang	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	phan-tich-du-lieu	term-la-gi	data
+nghien-cuu-theo-thoi-gian	nghiên cứu theo thời gian	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	phan-tich-du-lieu	term-la-gi	data
+lam-sach-du-lieu	làm sạch dữ liệu	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	phan-tich-du-lieu	term-la-gi	data
+chuan-hoa-du-lieu	chuẩn hóa dữ liệu	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	phan-tich-du-lieu	term-la-gi	data
+file-sav	file sav	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	phan-tich-du-lieu	term-la-gi	data
+nhap-lieu-spss	nhập liệu spss	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	phan-tich-du-lieu	term-la-gi	data
+phan-phoi-t	phân phối t	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+phan-phoi-chi-binh-phuong	phân phối chi bình phương	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	inference
+kiem-dinh-tham-so	kiểm định tham số	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+kiem-dinh-phi-tham-so	kiểm định phi tham số	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+kiem-dinh-trung-binh-hai-tong-the	kiểm định trung bình hai tổng thể	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	test-term
+gia-dinh-hoi-quy	giả định hồi quy	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+tu-tuong-quan	tự tương quan	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+odds-ratio	odds ratio	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+nagelkerke-r-square	nagelkerke r square	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+he-so-hoi-quy-chua-chuan-hoa	hệ số hồi quy chưa chuẩn hóa	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	thong-ke	term-la-gi	regression
+trung-gian-toan-phan	trung gian toàn phần	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+trung-gian-mot-phan	trung gian một phần	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	mo-hinh-nghien-cuu	term-la-gi	mediation
+thang-do-don-huong	thang đo đơn hướng	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+thang-do-da-huong	thang đo đa hướng	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	measurement
+mau-nghien-cuu	mẫu nghiên cứu	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling
+so-quan-sat-tren-mot-bien-quan-sat	số quan sát trên một biến quan sát	{display} là gì;{display} trong spss;{display} bao nhiêu là tốt	khao-sat	term-la-gi	sampling

@@ -1,0 +1,111 @@
+# Harvest exclusions for the DoThesis blog content engine.
+#
+# One Python regex per line, matched case-insensitively against the harvest
+# keyword and against the competitor URL. A row matching any line is dropped by
+# `python -m app.blog.content.cli plan` and never becomes a page.
+#
+# Never hand-edit the harvest TSVs. Add a rule here instead, with a comment, so
+# the reason a row was dropped stays committed and nobody re-adds it by accident.
+# Blank lines and lines starting with # are ignored.
+
+# --- TOEIC and exam answer keys -----------------------------------------------
+# phamlocblog ranks a TOEIC answer-key post; `đáp án ets 2016 part 1234` at
+# 27,100 is the single biggest row in the harvest and has nothing to do with a
+# thesis.
+toeic
+\bets\b
+đáp án ets
+đề thi
+
+# --- school algebra -----------------------------------------------------------
+# `bậc của đa thức` and friends. Secondary-school maths, wrong audience entirely.
+đa thức
+đơn thức
+thu gọn và tìm bậc
+^bậc( là gì)?$
+^bậc của
+
+# --- programming --------------------------------------------------------------
+# `cú pháp khai báo biến`, `std::`, `regression testing`. The word `biến` collides
+# with the statistical sense and drags in programming queries.
+cú pháp
+khai báo biến
+biến cục bộ
+std::
+regression testing
+^binary
+^width là gì$
+
+# --- brand and site noise -----------------------------------------------------
+# Competitor brand terms, and the junk rows any harvest carries.
+^loc$
+^locs$
+phamlocblog
+phạm lộc blog
+notebooklm
+phần mềm liên thông
+^bấm cái
+^chắt lọc$
+^đưa ra câu trả lời
+
+# --- scam and MLM rows --------------------------------------------------------
+# xulysolieu ranks a batch of `<công ty> lừa đảo` pages. Off brand and legally
+# fraught.
+lừa đảo
+đa cấp
+
+# --- software download, crack and version pages -------------------------------
+# `tải spss` 1,900 and `spss download` 2,900 are real volume and permanently out
+# of scope: instructing on cracked IBM software is not something a product
+# students trust with a thesis does. Version pages (`spss 20`, `spss 27`) differ
+# by a screenshot, which is the definition of a doorway set.
+download
+\btải\b
+crack
+miễn phí
+free
+for mac
+^spss \d+$
+^smart ?pls [0-9]$
+^stata
+
+# --- other tools we do not support --------------------------------------------
+# DoThesis runs SPSS, SmartPLS and AMOS. A page about a tool the product cannot
+# help with sends the reader somewhere we cannot follow.
+eviews
+\bR studio\b
+\brstudio\b
+
+# --- done-for-you service queries ---------------------------------------------
+# `dịch vụ spss` 1,900 is transactional and DoThesis is not a service. The honest
+# comparison belongs inside a how-to page, not on a URL chasing this query.
+dịch vụ
+thuê chạy
+thuê xử lý
+giá chạy spss
+chạy spss thuê
+
+# --- translation and off-domain definition intent -----------------------------
+tiếng anh là gì
+significant figure
+cung gì
+
+# --- qualitative research -----------------------------------------------------
+# DoThesis is quantitative only. A page teaching interviews or coding would
+# contradict the product and the writer is forbidden from producing one.
+^nghiên cứu định tính
+^dữ liệu định tính
+phỏng vấn sâu
+mã hóa định tính
+
+# --- undiacritised and garbled duplicates -------------------------------------
+# `model la gi`, `trung gian la gì`, `d f# là gì`. The proper phrasing of each is
+# already in the harvest and clustering keeps the better one.
+\bla gi\b
+\bla gì\b
+là j$
+^[a-z](\s|#)+[a-z#]{0,2} là gì$
+^(o r|c i|oci|rsd) là gì$
+
+# --- bare words with no answerable intent -------------------------------------
+^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$

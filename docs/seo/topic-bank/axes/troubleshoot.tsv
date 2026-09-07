@@ -1,0 +1,43 @@
+unit	display	templates	category	archetype	family
+ma-tran-xoay-lon-xon	ma trận xoay lộn xộn	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+ma-tran-xoay-khong-hoi-tu	ma trận xoay không hội tụ	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+bien-bi-loai-khi-xoay-nhan-to	biến bị loại khi xoay nhân tố	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+bien-tai-len-hai-nhan-to	biến tải lên hai nhân tố	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+kmo-nho-hon-0-5	kmo nhỏ hơn 0 5	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+kiem-dinh-bartlett-khong-co-y-nghia	kiểm định bartlett không có ý nghĩa	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+phuong-sai-trich-duoi-50	phương sai trích dưới 50	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+he-so-tai-nhan-to-thap	hệ số tải nhân tố thấp	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+efa-ra-mot-nhan-to	efa ra một nhân tố	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+cronbach-alpha-thap	cronbach alpha thấp	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	reliability
+cronbach-alpha-am	cronbach alpha âm	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	reliability
+cronbach-alpha-qua-cao	cronbach alpha quá cao	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	reliability
+item-total-correlation-nho-hon-0-3	item total correlation nhỏ hơn 0 3	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	reliability
+thang-do-khong-dat-do-tin-cay	thang đo không đạt độ tin cậy	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	reliability
+vif-cao	vif cao	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+r-binh-phuong-qua-thap	r bình phương quá thấp	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+he-so-hoi-quy-trai-dau	hệ số hồi quy trái dấu	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+sig-lon-hon-0-05	sig lớn hơn 0 05	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+gia-thuyet-bi-bac-bo	giả thuyết bị bác bỏ	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+phan-du-khong-phan-phoi-chuan	phần dư không phân phối chuẩn	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+phuong-sai-sai-so-thay-doi	phương sai sai số thay đổi	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+sai-so-chuan-qua-lon	sai số chuẩn quá lớn	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+du-lieu-khong-phan-phoi-chuan	dữ liệu không phân phối chuẩn	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	data
+mau-qua-nho	mẫu quá nhỏ	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	data
+du-lieu-bi-thieu-nhieu	dữ liệu bị thiếu nhiều	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	data
+nhieu-outlier	nhiều outlier	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	data
+tra-loi-cung-mot-dap-an	trả lời cùng một đáp án	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	data
+mat-du-lieu-khi-recode	mất dữ liệu khi recode	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	data
+bien-dinh-tinh-chay-hoi-quy	biến định tính chạy hồi quy	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	data
+ave-nho-hon-0-5	ave nhỏ hơn 0 5	{display} phải làm sao;lỗi {display} spss	smartpls	troubleshoot	pls
+htmt-lon-hon-0-9	htmt lớn hơn 0 9	{display} phải làm sao;lỗi {display} spss	smartpls	troubleshoot	pls
+gia-tri-phan-biet-khong-dat	giá trị phân biệt không đạt	{display} phải làm sao;lỗi {display} spss	smartpls	troubleshoot	pls
+outer-loading-thap	outer loading thấp	{display} phải làm sao;lỗi {display} spss	smartpls	troubleshoot	pls
+mo-hinh-khong-hoi-tu	mô hình không hội tụ	{display} phải làm sao;lỗi {display} spss	smartpls	troubleshoot	pls
+bootstrapping-bi-loi	bootstrapping bị lỗi	{display} phải làm sao;lỗi {display} spss	smartpls	troubleshoot	pls
+khong-mo-duoc-file-sav	không mở được file sav	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	software
+loi-nhap-du-lieu-tu-excel	lỗi nhập dữ liệu từ excel	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	software
+spss-bi-treo-khi-chay	spss bị treo khi chạy	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	software
+spss-het-han-dung-thu	spss hết hạn dùng thử	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	software
+ket-qua-khac-voi-bai-bao-goc	kết quả khác với bài báo gốc	{display} phải làm sao;lỗi {display} spss	nghien-cuu-khoa-hoc	troubleshoot	defence
+hoi-dong-hoi-ve-co-mau	hội đồng hỏi về cỡ mẫu	{display} phải làm sao;lỗi {display} spss	nghien-cuu-khoa-hoc	troubleshoot	defence
+bi-nghi-ngo-so-lieu-khong-that	bị nghi ngờ số liệu không thật	{display} phải làm sao;lỗi {display} spss	nghien-cuu-khoa-hoc	troubleshoot	defence

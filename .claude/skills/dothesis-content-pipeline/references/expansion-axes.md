@@ -74,7 +74,11 @@ PLS-SEM, and the pages map onto M3 and M4 directly.
 | Distinctness | High. Different constructs, different original scales, different hypotheses |
 
 Every model page cites its original author from the allowlist. A model whose
-original source is not in `canonical-sources.md` does not get a page until it is.
+original source is not yet in `canonical-sources.md` gets that entry added,
+checked, before the page is written. The axis file lists the model either way, so
+the missing-source gap is visible in `report` rather than silently dropped, and
+the writer's fallback is to describe the constructs with no author and no year
+rather than to guess one.
 
 ### Construct and scale, about 120 units
 

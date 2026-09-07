@@ -1,0 +1,41 @@
+unit	display	templates	category	archetype	family
+tao-du-an-moi	tạo dự án mới	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	setup
+nhap-du-lieu-csv	nhập dữ liệu csv	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	setup
+ve-mo-hinh-do-luong	vẽ mô hình đo lường	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	setup
+ve-mo-hinh-cau-truc	vẽ mô hình cấu trúc	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	setup
+xu-ly-missing-value	xử lý missing value	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	setup
+co-mau-toi-thieu	cỡ mẫu tối thiểu	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	setup
+pls-algorithm	pls algorithm	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	estimation
+bootstrapping	bootstrapping	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	estimation
+blindfolding	blindfolding	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	estimation
+plspredict	plspredict	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	estimation
+consistent-pls	consistent pls	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	estimation
+ipma	ipma	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	estimation
+outer-loading	outer loading	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+do-tin-cay-tong-hop	độ tin cậy tổng hợp	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+ave	ave	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+htmt	htmt	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+fornell-larcker	fornell larcker	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+cross-loading	cross loading	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+gia-tri-hoi-tu	giá trị hội tụ	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+gia-tri-phan-biet	giá trị phân biệt	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+thang-do-cau-tao	thang đo cấu tạo	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+thang-do-phan-anh	thang đo phản ánh	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+thang-do-bac-hai	thang đo bậc hai	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+outer-weight	outer weight	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+vif	vif	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	structural-model
+r-square	r square	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	structural-model
+f-square	f square	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	structural-model
+q-square	q square	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	structural-model
+path-coefficient	path coefficient	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	structural-model
+p-value-bootstrap	p value bootstrap	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	structural-model
+tac-dong-tong	tác động tổng	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	structural-model
+tac-dong-gian-tiep-cu-the	tác động gián tiếp cụ thể	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	structural-model
+bien-trung-gian	biến trung gian	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+bien-dieu-tiet	biến điều tiết	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+bien-tuong-tac	biến tương tác	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+phan-tich-da-nhom-mga	phân tích đa nhóm mga	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+micom	micom	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+fimix	fimix	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+xuat-ket-qua-ra-excel	xuất kết quả ra excel	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	reporting
+doc-bao-cao-html	đọc báo cáo html	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	reporting

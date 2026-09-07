@@ -1,0 +1,38 @@
+unit	display	templates	category	archetype	family
+quan-tri-kinh-doanh	quản trị kinh doanh	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	business
+marketing	marketing	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	business
+kinh-doanh-quoc-te	kinh doanh quốc tế	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	business
+thuong-mai-dien-tu	thương mại điện tử	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	business
+quan-tri-nhan-luc	quản trị nhân lực	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	business
+quan-tri-chat-luong	quản trị chất lượng	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	business
+tai-chinh-ngan-hang	tài chính ngân hàng	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	finance
+ke-toan	kế toán	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	finance
+kiem-toan	kiểm toán	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	finance
+tai-chinh-doanh-nghiep	tài chính doanh nghiệp	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	finance
+bat-dong-san	bất động sản	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	finance
+bao-hiem	bảo hiểm	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	finance
+kinh-te	kinh tế	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	economics
+kinh-te-phat-trien	kinh tế phát triển	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	economics
+kinh-te-dau-tu	kinh tế đầu tư	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	economics
+xuat-nhap-khau	xuất nhập khẩu	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	economics
+logistics	logistics	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	operations
+chuoi-cung-ung	chuỗi cung ứng	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	operations
+du-lich	du lịch	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	services
+khach-san	khách sạn	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	services
+nha-hang	nhà hàng	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	services
+cong-nghe-thong-tin	công nghệ thông tin	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	tech
+he-thong-thong-tin-quan-ly	hệ thống thông tin quản lý	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	tech
+luat-kinh-te	luật kinh tế	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	law
+quan-ly-cong	quản lý công	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	law
+su-pham	sư phạm	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	education
+giao-duc-mam-non	giáo dục mầm non	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	education
+quan-ly-giao-duc	quản lý giáo dục	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	education
+dieu-duong	điều dưỡng	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	health
+y-te-cong-cong	y tế công cộng	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	health
+duoc	dược	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	health
+cong-tac-xa-hoi	công tác xã hội	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	social
+tam-ly-hoc	tâm lý học	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	social
+quan-he-cong-chung	quan hệ công chúng	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	social
+moi-truong	môi trường	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	social
+nong-nghiep	nông nghiệp	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	social
+xay-dung	xây dựng	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	social

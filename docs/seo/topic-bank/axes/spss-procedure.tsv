@@ -1,0 +1,61 @@
+unit	display	templates	category	archetype	family
+thong-ke-mo-ta	thống kê mô tả	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	descriptive
+bang-tan-so	bảng tần số	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	descriptive
+bang-cheo-crosstabs	bảng chéo crosstabs	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	descriptive
+thong-ke-nhan-khau-hoc	thống kê nhân khẩu học	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	descriptive
+bieu-do-histogram	biểu đồ histogram	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	descriptive
+bieu-do-boxplot	biểu đồ boxplot	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	descriptive
+bieu-do-scatter	biểu đồ scatter	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	descriptive
+bieu-do-p-p-plot	biểu đồ p p plot	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	descriptive
+cronbach-alpha	cronbach alpha	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	reliability
+kiem-dinh-do-tin-cay-thang-do	kiểm định độ tin cậy thang đo	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	reliability
+efa	efa	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	efa
+phan-tich-nhan-to-kham-pha	phân tích nhân tố khám phá	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	efa
+ma-tran-xoay	ma trận xoay	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	efa
+tao-bien-dai-dien	tạo biến đại diện	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	efa
+tuong-quan-pearson	tương quan pearson	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	correlation
+tuong-quan-rieng-phan	tương quan riêng phần	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	correlation
+hoi-quy-tuyen-tinh	hồi quy tuyến tính	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	regression
+hoi-quy-boi	hồi quy bội	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	regression
+hoi-quy-logistic	hồi quy logistic	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	regression
+kiem-dinh-gia-dinh-hoi-quy	kiểm định giả định hồi quy	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	regression
+kiem-tra-da-cong-tuyen	kiểm tra đa cộng tuyến	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	regression
+kiem-dinh-durbin-watson	kiểm định durbin watson	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	regression
+hoi-quy-voi-bien-gia	hồi quy với biến giả	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	regression
+t-test-mot-mau	t test một mẫu	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+independent-samples-t-test	independent samples t test	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+paired-samples-t-test	paired samples t test	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+anova-mot-chieu	anova một chiều	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+anova-hai-chieu	anova hai chiều	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+ancova	ancova	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+manova	manova	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+anova-lap-lai	anova lặp lại	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+kiem-dinh-chi-binh-phuong	kiểm định chi bình phương	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+kiem-dinh-phan-phoi-chuan	kiểm định phân phối chuẩn	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+mann-whitney	mann whitney	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+kruskal-wallis	kruskal wallis	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+wilcoxon	wilcoxon	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+kiem-dinh-levene	kiểm định levene	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+post-hoc-tukey	post hoc tukey	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+kiem-dinh-su-khac-biet-trung-binh	kiểm định sự khác biệt trung bình	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+process-macro-trung-gian	process macro trung gian	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	mediation
+process-macro-dieu-tiet	process macro điều tiết	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	mediation
+sobel-test	sobel test	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	mediation
+bootstrap-trung-gian	bootstrap trung gian	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	mediation
+nhap-lieu	nhập liệu	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+ma-hoa-lai-bien-recode	mã hóa lại biến recode	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+compute-variable	compute variable	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+select-cases	select cases	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+split-file	split file	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+weight-cases	weight cases	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+xu-ly-missing-value	xử lý missing value	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+gop-file-du-lieu	gộp file dữ liệu	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+sap-xep-du-lieu	sắp xếp dữ liệu	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+khai-bao-bien	khai báo biến	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+gan-nhan-gia-tri	gán nhãn giá trị	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+nhap-du-lieu-tu-excel	nhập dữ liệu từ excel	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+mo-file-csv	mở file csv	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+xuat-ket-qua-ra-word	xuất kết quả ra word	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+chay-syntax	chạy syntax	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
+phan-tich-cum	phân tích cụm	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	advanced
+phan-tich-biet-so	phân tích biệt số	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	advanced
