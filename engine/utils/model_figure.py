@@ -185,26 +185,36 @@ def render_png(model: dict, out: Path) -> Path:
     for c in cons.values():
         cols.setdefault(c.get('role', 'independent'), cols['independent']).append(c['id'])
     has_mid = bool(cols['mediator'])
-    W, H = 2000, 1150
+    bw, bh = 400, 120
+    # The canvas grows with the tallest column. Seven predictors in a fixed
+    # 700 px span put 120 px boxes on top of each other.
+    tallest = max(len(cols['independent']) + len(cols['control']), len(cols['mediator']), len(cols['dependent']), 1)
+    slot = bh + 50
+    top = 200 if cols['moderator'] else 80
+    W = 2000
+    H = max(1150, top + tallest * slot + 120)
     img = Image.new('RGB', (W, H), 'white')
     d = ImageDraw.Draw(img)
     f_box, f_lab = _font(30), _font(26)
-    bw, bh = 400, 120
     xcol = {'independent': 120, 'mediator': 800, 'dependent': 1480 if has_mid else 1250}
     pos: dict[str, tuple[int, int]] = {}
 
     def place(ids, x, y0, y1):
         if not ids:
             return
-        gap = (y1 - y0) / max(len(ids), 1)
+        gap = max((y1 - y0) / len(ids), slot)
+        span = gap * len(ids)
+        start = y0 + max(0, (y1 - y0 - span) / 2)
         for i, cid in enumerate(ids):
-            pos[cid] = (x, int(y0 + gap * i + gap / 2 - bh / 2))
+            pos[cid] = (x, int(start + gap * i + gap / 2 - bh / 2))
 
-    place(cols['independent'], xcol['independent'], 200, 900)
-    place(cols['mediator'], xcol['mediator'], 200, 900)
-    place(cols['dependent'], xcol['dependent'], 200, 900)
-    place(cols['moderator'], xcol['mediator'] if has_mid else (xcol['independent'] + xcol['dependent']) // 2, 20, 200)
-    place(cols['control'], xcol['independent'], 900, 1120)
+    body_bottom = H - 60
+    ctrl_h = len(cols['control']) * slot
+    place(cols['independent'], xcol['independent'], top, body_bottom - ctrl_h)
+    place(cols['mediator'], xcol['mediator'], top, body_bottom)
+    place(cols['dependent'], xcol['dependent'], top, body_bottom)
+    place(cols['moderator'], xcol['mediator'] if has_mid else (xcol['independent'] + xcol['dependent']) // 2, 20, top)
+    place(cols['control'], xcol['independent'], body_bottom - ctrl_h, body_bottom)
 
     for cid, (x, y) in pos.items():
         role = cons[cid].get('role', '')
@@ -240,11 +250,44 @@ def render_png(model: dict, out: Path) -> Path:
                 lab = f"{e['h']} ({e['sign']})" if e.get('sign') else e['h']
                 d.text((mid[0] + 8, mid[1] - 34), lab, fill='#B8860B', font=f_lab)
                 continue
-        p1 = (x1 + bw, y1 + bh // 2) if x2 > x1 else (x1, y1 + bh // 2)
-        p2 = (x2, y2 + bh // 2) if x2 > x1 else (x2 + bw, y2 + bh // 2)
-        arrow(p1, p2)
+        if abs(x2 - x1) < 10:
+            # Same column (a mediator chain): connect bottom-centre to
+            # top-centre, not right-edge to right-edge across the box.
+            down = y2 > y1
+            p1 = (x1 + bw // 2, y1 + bh if down else y1)
+            p2 = (x2 + bw // 2, y2 if down else y2 + bh)
+        else:
+            p1 = (x1 + bw, y1 + bh // 2) if x2 > x1 else (x1, y1 + bh // 2)
+            p2 = (x2, y2 + bh // 2) if x2 > x1 else (x2 + bw, y2 + bh // 2)
+        # A straight edge from the left column to the right one passes through
+        # whatever sits in the middle. If it would cross a box that is neither
+        # end, route it around: down (or up) to a free lane, across, and in.
+        others = [(cid, pos[cid]) for cid in pos if cid not in (e['from'], e['to'])]
+
+        def crosses(a, b):
+            for _, (bx, by) in others:
+                for t in range(1, 20):
+                    px, py = a[0] + (b[0] - a[0]) * t / 20, a[1] + (b[1] - a[1]) * t / 20
+                    if bx - 6 <= px <= bx + bw + 6 and by - 6 <= py <= by + bh + 6:
+                        return True
+            return False
+
         lab = f"{e['h']} ({e['sign']})" if e.get('sign') else e['h']
-        mx, my = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
+        if crosses(p1, p2) and abs(x2 - x1) >= 10:
+            lowest = max(by for _, (_, by) in others) + bh + 70
+            highest = min(by for _, (_, by) in others) - 70
+            lane = lowest if (H - lowest) > 40 or highest < 40 else highest
+            w1 = (p1[0] + 40, lane)
+            w2 = (p2[0] - 40, lane)
+            d.line([p1, w1], fill='#222222', width=4)
+            d.line([w1, w2], fill='#222222', width=4)
+            arrow(w2, p2)
+            mx, my = w1[0] + 0.15 * (w2[0] - w1[0]), lane
+        else:
+            arrow(p1, p2)
+            # Label at 40% of the way, so a long edge keeps its label clear of
+            # the boxes further along.
+            mx, my = p1[0] + 0.4 * (p2[0] - p1[0]), p1[1] + 0.4 * (p2[1] - p1[1])
         tw = d.textlength(lab, font=f_lab)
         d.rectangle([mx - tw / 2 - 6, my - 20, mx + tw / 2 + 6, my + 16], fill='white')
         d.text((mx - tw / 2, my - 18), lab, fill='#111111', font=f_lab)
@@ -304,7 +347,21 @@ def add_model_figure(body_md: str, ctx, extra_context: str = '') -> str:
     # a long section cannot push it past the extractor's input cap.
     topic = getattr(ctx, 'topic', '') or ''
     context = ('TOPIC:\n' + topic[:1500] + '\n\nMODEL SECTION:\n' + context).strip()
-    model = _llm_model(getattr(ctx, 'model', None), hyps, context) or (_heuristic_model(hyps) if hyps else None)
+    folders = getattr(ctx, 'folders', None) or {}
+    base = Path(folders.get('drafts') or folders.get('exports') or '.')
+    saved = base / 'figures' / 'research_model.json'
+    model = None
+    if saved.exists():
+        # A re-export reuses the model extracted last time: deterministic, and
+        # no model call just to redraw the same diagram.
+        try:
+            model = json.loads(saved.read_text(encoding='utf-8'))
+            if not (model.get('constructs') and model.get('edges')):
+                model = None
+        except Exception:  # noqa: BLE001
+            model = None
+    if model is None:
+        model = _llm_model(getattr(ctx, 'model', None), hyps, context) or (_heuristic_model(hyps) if hyps else None)
     if model:
         for n, e in enumerate(model['edges'], 1):
             if not e.get('h'):
@@ -312,9 +369,8 @@ def add_model_figure(body_md: str, ctx, extra_context: str = '') -> str:
     if not model:
         logger.info('Model figure: could not derive constructs/edges; skipping')
         return body_md
-    folders = getattr(ctx, 'folders', None) or {}
-    base = Path(folders.get('drafts') or folders.get('exports') or '.')
     png = render_png(model, base / 'figures' / 'research_model.png')
+    (base / 'figures' / 'research_model.json').write_text(json.dumps(model, ensure_ascii=False, indent=1), encoding='utf-8')
     lang = (getattr(ctx, 'language', 'en') or 'en').split('-')[0].lower()
     caption = CAPTION.get(lang, CAPTION['en'])
     block = ['', f'![{caption}]({png.resolve()})', '']
