@@ -141,3 +141,152 @@ trung vị là gì	4400	0	harvest
 vif là gì	260	0	harvest
 đa cộng tuyến là gì	320	0	harvest
 độ lệch chuẩn là gì	2900	0	harvest
+hệ số cronbach alpha	40	17	openseo-bare
+độ tin cậy thang đo	10		openseo-bare
+corrected item total correlation	40		openseo-bare
+cronbach alpha if item deleted			openseo-bare
+composite reliability	50		openseo-bare
+rho a			openseo-bare
+độ tin cậy tổng hợp			openseo-bare
+split half reliability			openseo-bare
+test retest reliability			openseo-bare
+giá trị hội tụ			openseo-bare
+giá trị phân biệt			openseo-bare
+giá trị nội dung			openseo-bare
+giá trị bề mặt			openseo-bare
+phương sai trích ave			openseo-bare
+fornell larcker			openseo-bare
+cross loading			openseo-bare
+construct validity	70		openseo-bare
+phân tích nhân tố khám phá			openseo-bare
+phân tích nhân tố khẳng định			openseo-bare
+kiểm định bartlett	20		openseo-bare
+phương sai trích			openseo-bare
+total variance explained	20		openseo-bare
+hệ số tải nhân tố			openseo-bare
+factor loading	40	49	openseo-bare
+phép xoay varimax			openseo-bare
+phép xoay promax			openseo-bare
+pattern matrix			openseo-bare
+structure matrix			openseo-bare
+ma trận xoay nhân tố	10		openseo-bare
+giá trị trung bình			openseo-bare
+mode trong thống kê			openseo-bare
+khoảng biến thiên	4400	0	openseo-bare
+tứ phân vị	6600	0	openseo-bare
+skewness	320	14	openseo-bare
+phân phối chuẩn	1300	0	openseo-bare
+histogram			openseo-bare
+missing value			openseo-bare
+tần số			openseo-bare
+phần trăm tích lũy			openseo-bare
+z score	1000	17	openseo-bare
+mức ý nghĩa	140		openseo-bare
+giả thuyết h0			openseo-bare
+giả thuyết đối			openseo-bare
+sai lầm loại 1	40		openseo-bare
+sai lầm loại 2	20		openseo-bare
+độ tin cậy 95	20		openseo-bare
+bậc tự do			openseo-bare
+giá trị tới hạn			openseo-bare
+kiểm định một đuôi			openseo-bare
+kiểm định hai đuôi			openseo-bare
+power của kiểm định			openseo-bare
+effect size	70		openseo-bare
+kiểm định giả thuyết			openseo-bare
+hệ số hồi quy	110	41	openseo-bare
+beta chuẩn hóa			openseo-bare
+r bình phương	50		openseo-bare
+r bình phương hiệu chỉnh	10		openseo-bare
+hệ số chặn			openseo-bare
+đa cộng tuyến			openseo-bare
+tolerance	6600	6	openseo-bare
+durbin watson	170	0	openseo-bare
+phần dư			openseo-bare
+phương sai sai số thay đổi			openseo-bare
+hồi quy đa biến	140	0	openseo-bare
+hồi quy đơn biến	30		openseo-bare
+biến giả			openseo-bare
+phương pháp stepwise			openseo-bare
+phương pháp enter			openseo-bare
+sig trong hồi quy			openseo-bare
+hệ số tương quan pearson	140	0	openseo-bare
+tương quan spearman	30		openseo-bare
+ma trận tương quan	140		openseo-bare
+tương quan riêng phần			openseo-bare
+hệ số xác định	140	9	openseo-bare
+cb sem			openseo-bare
+biến tiềm ẩn			openseo-bare
+biến quan sát	70		openseo-bare
+mô hình đo lường			openseo-bare
+mô hình cấu trúc	40		openseo-bare
+path coefficient			openseo-bare
+bảng tần số	1300	0	openseo-bare
+bảng chéo crosstabs			openseo-bare
+thống kê nhân khẩu học			openseo-bare
+biểu đồ histogram	720	0	openseo-bare
+biểu đồ scatter	170		openseo-bare
+biểu đồ p p plot			openseo-bare
+kiểm định độ tin cậy thang đo			openseo-bare
+tạo biến đại diện			openseo-bare
+hồi quy bội	50		openseo-bare
+kiểm định giả định hồi quy			openseo-bare
+kiểm tra đa cộng tuyến			openseo-bare
+kiểm định durbin watson	70		openseo-bare
+hồi quy với biến giả	10		openseo-bare
+t test một mẫu			openseo-bare
+independent samples t test			openseo-bare
+paired samples t test			openseo-bare
+anova một chiều			openseo-bare
+anova hai chiều			openseo-bare
+ancova			openseo-bare
+manova	70		openseo-bare
+anova lặp lại			openseo-bare
+kiểm định chi bình phương	90	0	openseo-bare
+kiểm định phân phối chuẩn	50		openseo-bare
+mann whitney			openseo-bare
+kruskal wallis			openseo-bare
+wilcoxon	140		openseo-bare
+tạo dự án mới			openseo-bare
+nhập dữ liệu csv			openseo-bare
+vẽ mô hình đo lường			openseo-bare
+vẽ mô hình cấu trúc			openseo-bare
+xử lý missing value			openseo-bare
+pls algorithm	10		openseo-bare
+bootstrapping	9900	4	openseo-bare
+blindfolding			openseo-bare
+plspredict			openseo-bare
+consistent pls			openseo-bare
+outer loading			openseo-bare
+mở đầu			openseo-bare
+đối tượng và phạm vi nghiên cứu	140	0	openseo-bare
+ý nghĩa của đề tài			openseo-bare
+kết cấu			openseo-bare
+tổng quan tài liệu	140	0	openseo-bare
+khoảng trống nghiên cứu			openseo-bare
+mô hình nghiên cứu đề xuất	90	0	openseo-bare
+giả thuyết nghiên cứu	210	0	openseo-bare
+quy trình nghiên cứu	210	0	openseo-bare
+xây dựng thang đo	20		openseo-bare
+nghiên cứu sơ bộ			openseo-bare
+nghiên cứu chính thức			openseo-bare
+kết quả nghiên cứu			openseo-bare
+thống kê mô tả mẫu			openseo-bare
+ma trận xoay lộn xộn			openseo-bare
+ma trận xoay không hội tụ	10		openseo-bare
+biến bị loại khi xoay nhân tố			openseo-bare
+biến tải lên hai nhân tố			openseo-bare
+kmo nhỏ hơn 0 5			openseo-bare
+kiểm định bartlett không có ý nghĩa			openseo-bare
+phương sai trích dưới 50			openseo-bare
+hệ số tải nhân tố thấp			openseo-bare
+efa ra một nhân tố			openseo-bare
+cronbach alpha thấp			openseo-bare
+sự hài lòng khách hàng			openseo-bare
+sự hài lòng công việc			openseo-bare
+sự hài lòng sinh viên			openseo-bare
+sự hài lòng du khách			openseo-bare
+lòng trung thành khách hàng			openseo-bare
+lòng trung thành thương hiệu	20		openseo-bare
+ý định quay lại			openseo-bare
+ý định truyền miệng			openseo-bare
