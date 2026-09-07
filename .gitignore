@@ -73,6 +73,13 @@ web/.next/
 web/node_modules/
 web/tsconfig.tsbuildinfo
 
+# The ROOT node_modules was never ignored — only web/'s was — so vitest's
+# on-disk cache got committed as node_modules/.vite/vitest/<hash>/results.json
+# and every test run left the tree dirty. `.vite/` is listed separately because
+# the cache follows wherever vitest is run from, not only under node_modules.
+node_modules/
+.vite/
+
 # Brainstorming visual companion scratch files
 .superpowers/
 
