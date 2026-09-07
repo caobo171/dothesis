@@ -315,7 +315,7 @@ def run_compile_and_export(ctx: DraftContext) -> Tuple[Path, Path]:
     # figure is still a draft.
     try:
         from utils.model_figure import add_model_figure
-        body_clean = add_model_figure(body_clean, ctx)
+        body_clean = add_model_figure(body_clean, ctx, extra_context=intro_clean)
     except Exception as _fig_err:  # noqa: BLE001
         logger.warning(f"Model figure skipped: {_fig_err}")
 

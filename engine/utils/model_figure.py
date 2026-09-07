@@ -136,7 +136,9 @@ def _llm_model(model: Any, hyps: list[tuple[str, str]], context: str) -> dict | 
     try:
         from utils.agent_runner import run_agent
         prompt_path = Path(__file__).resolve().parents[1] / 'prompts' / 'utils' / 'model_figure_extract.md'
-        user_input = 'HYPOTHESES:\n' + '\n'.join(f'{h}: {t}' for h, t in hyps) + '\n\nCONTEXT:\n' + context[:2500]
+        # Topic first: it names the constructs and their order, and the section
+        # text can be long — with the topic last it was silently truncated away.
+        user_input = 'HYPOTHESES:\n' + '\n'.join(f'{h}: {t}' for h, t in hyps) + '\n\nCONTEXT:\n' + context[:6000]
         raw = run_agent(model=model, name='Model Figure - Extract', prompt_path=str(prompt_path),
                         user_input=user_input, verbose=False, skip_validation=True, max_retries=2)
         raw = re.sub(r'^```(?:json)?|```$', '', (raw or '').strip(), flags=re.M).strip()
@@ -252,10 +254,16 @@ def render_png(model: dict, out: Path) -> Path:
     return out
 
 
-def add_model_figure(body_md: str, ctx) -> str:
+def add_model_figure(body_md: str, ctx, extra_context: str = '') -> str:
+    """Insert the model figure into body_md.
+
+    extra_context is text that may DESCRIBE the model but is not part of the
+    body being edited — the introduction chapter, which often carries the
+    "conceptual model" section. It is searched for headings/hypotheses as
+    context only; the figure is always placed inside body_md."""
     if '![' in body_md and 'research_model' in body_md:
         return body_md  # already placed (resume path)
-    hyps = collect_hypotheses(body_md)
+    hyps = collect_hypotheses(body_md) or collect_hypotheses(extra_context)
     lines = body_md.split('\n')
     # The hypotheses live under the "proposed model" heading. Take the closest
     # heading ABOVE the first hypothesis when it names the model/hypotheses;
@@ -276,18 +284,26 @@ def add_model_figure(body_md: str, ctx) -> str:
         head_idx = next((i for i, ln in enumerate(lines)
                          if _MODEL_HEAD.match(ln) and not _APPENDIX_HEAD.search(ln)), None)
     span = 60
-    if head_idx is None and not hyps:
-        head_idx = next((i for i, ln in enumerate(lines) if _METHOD_HEAD.match(ln)), None)
-        span = 90
     context = '\n'.join(lines[head_idx:head_idx + span]) if head_idx is not None else ''
-    if not hyps and head_idx is None:
+    # The model section may live outside the body (introduction chapter):
+    # use it for context, keep placement in the body.
+    if not context and extra_context:
+        xl = extra_context.split('\n')
+        xi = next((i for i, ln in enumerate(xl) if _MODEL_HEAD.match(ln) and not _APPENDIX_HEAD.search(ln)), None)
+        if xi is not None:
+            context = '\n'.join(xl[xi:xi + 60])
+    if head_idx is None:
+        head_idx = next((i for i, ln in enumerate(lines) if _METHOD_HEAD.match(ln)), None)
+        if not context and head_idx is not None:
+            context = '\n'.join(lines[head_idx:head_idx + 90])
+    if not hyps and not context and head_idx is None:
         logger.info('Model figure: no hypotheses, no model or methods section; skipping')
         return body_md
     # Many drafts describe the model in prose without numbered hypotheses. The
-    # topic the run was started from names the constructs too, so hand both
-    # to the extractor and let it number the relationships.
+    # topic the run was started from names the constructs too — put it FIRST so
+    # a long section cannot push it past the extractor's input cap.
     topic = getattr(ctx, 'topic', '') or ''
-    context = (context + '\n\nTOPIC:\n' + topic[:1500]).strip()
+    context = ('TOPIC:\n' + topic[:1500] + '\n\nMODEL SECTION:\n' + context).strip()
     model = _llm_model(getattr(ctx, 'model', None), hyps, context) or (_heuristic_model(hyps) if hyps else None)
     if model:
         for n, e in enumerate(model['edges'], 1):
