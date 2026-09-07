@@ -1,0 +1,30 @@
+{
+  "version": "0.1.20260101",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0.0075,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "09071200-1234-0000-0000-abcdef012345",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "cost": 0.0075,
+      "result_count": 5,
+      "data": {
+        "api": "keywords_data",
+        "function": "search_volume",
+        "location_code": 2704,
+        "language_code": "vi"
+      },
+      "result": [
+        {"keyword": "spss", "search_volume": 14800, "competition": "LOW"},
+        {"keyword": "cronbach alpha", "search_volume": 1300, "competition": "LOW"},
+        {"keyword": "thang đo likert", "search_volume": 1600, "competition": "LOW"},
+        {"keyword": "hồi quy tuyến tính", "search_volume": 1000, "competition": "LOW"},
+        {"keyword": "mô hình nghiên cứu", "search_volume": 720, "competition": "LOW"}
+      ]
+    }
+  ]
+}

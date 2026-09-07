@@ -104,7 +104,7 @@ mã hóa định tính
 \bla gi\b
 \bla gì\b
 là j$
-^[a-z](\s|#)+[a-z#]{0,2} là gì$
+^[a-z][\s#]+[a-z0-9#]{0,2}( là gì)?$
 ^(o r|c i|oci|rsd) là gì$
 
 # --- bare words with no answerable intent -------------------------------------
