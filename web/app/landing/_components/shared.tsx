@@ -98,7 +98,10 @@ export function IconPlus({ size = 15 }: { size?: number }) {
 export function BrandLockup({ light = false }: { light?: boolean }) {
   return (
     <Link
-      href="#top"
+      // The lockup is shared with the blog shell, where a bare "#top" is a
+      // dead anchor. A full path scrolls the landing page the same way and
+      // takes a blog reader back to the marketing page.
+      href="/landing#top"
       style={{
         display: "inline-flex",
         alignItems: "center",

@@ -198,14 +198,24 @@ Public, plain `BaseModel` bodies, no `current_user` (the pattern
 `routers/auth.py` uses):
 
 - `POST /api/v1/blog/list` `{locale, page=1, page_size<=50, category?, q?}` →
-  `{posts: [compact], total, page, page_size}`. Compact = no body.
-- `POST /api/v1/blog/get` `{locale, slug}` → full post plus `related` (up to 5,
-  same category then shared tags) plus `category`. Increments `views`
-  best-effort.
-- `POST /api/v1/blog/categories` `{locale}` → categories with visible post
-  counts.
-- `POST /api/v1/blog/sitemap` `{locale?}` → `[{locale, slug, updated_at}]`
-  for visible posts, capped at 5,000.
+  `{posts: [compact], total, page, page_size}`. Compact = `id, locale, slug,
+  title, excerpt, image_url, tags, category {slug, name, display_name,
+  intro_md, sort_order} | null, published_at, updated_at, reading_time,
+  views`; no body.
+- `POST /api/v1/blog/get` `{locale, slug}` → the full post as one flat object
+  (compact fields plus `body, meta_title, meta_description, focus_keyword,
+  secondary_keywords, canonical_url, archetype`) with `related` (up to 5
+  compact posts, same category then shared tags) nested inside it. Increments
+  `views` best-effort. 404 for both missing and not-yet-visible posts.
+- `POST /api/v1/blog/categories` `{locale}` → `{categories: [{...category,
+  post_count}]}`.
+- `POST /api/v1/blog/sitemap` `{locale?}` → a bare array
+  `[{locale, slug, updated_at}]` of visible posts, capped at 5,000.
+
+(As built. The web fetchers in `web/app/blog/_lib/api.ts` accept both this
+flat `get` shape and a `{post, related}` envelope, and both a bare array and
+`{posts}` for `sitemap`, so either side can change later without a
+coordinated deploy.)
 
 Admin (router dependency `require_admin` from `api/app/auth_admin.py`):
 
