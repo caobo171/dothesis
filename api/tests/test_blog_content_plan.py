@@ -282,3 +282,194 @@ def test_a_candidate_measured_through_the_harvest_stays_measured(tmp_path):
     assert rows[0]["gate_status"] == "measured"
     assert rows[0]["search_volume"] == "880"
     assert summary["family_inferred"] == 0
+
+
+# ------------------------------------------------------- the vocabulary gate
+
+
+# Real rows from harvest-2026-09-07.tsv that must never become pages. The newest
+# competitor (trithuccongdong.net) is a thesis-writing service with a general
+# homework Q&A section, so it ranks for school algebra, English essay templates
+# and the CFA charter exam. A blacklist cannot keep up with that; the whitelist
+# is what stops them.
+OFF_TOPIC_HARVEST_ROWS = [
+    ("cách làm tài liệu", 368000),
+    ("quản lý giáo dục", 40500),
+    ("hàm số nào sau đây đồng biến trên r", 27100),
+    ("phương trình", 27100),
+    ("luận", 22200),
+    ("narrative essay mẫu", 22200),
+    ("acknowledgement là gì", 18100),
+    ("tích", 18100),
+    ("đề thi cfa", 12100),
+    ("sự cháy", 12100),
+    ("quản lý mầm non", 9900),
+    ("straight", 5400),
+    ("outline essay mẫu", 4400),
+    ("outline là gì", 3600),
+    ("outlined là gì", 3600),
+]
+
+ON_TOPIC_HARVEST_ROWS = [
+    ("cronbach alpha", 1300),
+    ("ma trận xoay", 6600),
+    ("cỡ mẫu là gì", 4400),
+    ("thang đo likert", 1600),
+    ("pls-sem", 720),
+    ("cách ghi tài liệu tham khảo", 14800),
+    ("tháp nhu cầu maslow", 14800),
+    ("thạc sĩ", 6600),
+    ("phiếu khảo sát online", 14800),
+    ("dữ liệu sơ cấp", 720),
+]
+
+
+def _read_committed_filters(tmp_path, rows):
+    """Run the committed exclusions, vocabulary and axes over `rows`."""
+    harvest = _write_tsv(tmp_path / "harvest.tsv", HARVEST_HEADER,
+                         [[kw, vol, "0", "informational", "trithuccongdong.net", "1", "/x"]
+                          for kw, vol in rows])
+    return plan.read_harvest(harvest, plan.load_exclusions())
+
+
+def test_the_committed_vocabulary_cuts_the_off_topic_harvest_rows(tmp_path):
+    kept, dropped = _read_committed_filters(tmp_path, OFF_TOPIC_HARVEST_ROWS)
+    assert [p.keyword for p in kept] == [], "no off-topic row may reach the backlog"
+    assert {k for k, _, _ in dropped} == {k for k, _ in OFF_TOPIC_HARVEST_ROWS}
+    reasons = {k: r for k, _, r in dropped}
+    # `cfa` is in the vocabulary (confirmatory factor analysis) so the finance
+    # exam has to be caught by the blacklist, not by the whitelist.
+    assert reasons["đề thi cfa"].startswith("exclusion:")
+    # `s-tra-ight` used to inherit the TRA model's family from a substring match.
+    assert reasons["straight"] == "off-vocabulary"
+    assert reasons["hàm số nào sau đây đồng biến trên r"] == "off-vocabulary"
+
+
+def test_the_committed_vocabulary_keeps_the_real_queries(tmp_path):
+    kept, dropped = _read_committed_filters(tmp_path, ON_TOPIC_HARVEST_ROWS)
+    assert {p.keyword for p in kept} == {k for k, _ in ON_TOPIC_HARVEST_ROWS}, \
+        f"whitelist over-rejected: {[k for k, _, _ in dropped]}"
+
+
+def test_a_vocabulary_entry_matches_a_whole_word_not_a_substring():
+    matcher = plan.compile_terms(["ave", "tra", "sem", "t-test"])
+    assert plan.matches_vocabulary("ave là gì", matcher)
+    assert plan.matches_vocabulary("mô hình tra", matcher)
+    assert plan.matches_vocabulary("kiểm định t-test spss", matcher)
+    assert not plan.matches_vocabulary("average là gì", matcher)
+    assert not plan.matches_vocabulary("straight", matcher)
+    assert not plan.matches_vocabulary("assembly", matcher)
+
+
+def test_a_candidate_keyword_is_never_rejected_by_the_vocabulary(tmp_path):
+    """`expand` produced it from an axis, so it is on topic by construction."""
+    harvest = _write_tsv(tmp_path / "harvest.tsv", HARVEST_HEADER,
+                         [["biến hiếm là gì", "880", "0", "x", "phamlocblog.com", "1", "/b"]])
+    kept, dropped = plan.read_harvest(harvest, [], allow={"biến hiếm là gì"})
+    assert [p.keyword for p in kept] == ["biến hiếm là gì"]
+    assert dropped == []
+
+
+def test_run_writes_every_dropped_row_with_its_reason(tmp_path):
+    harvest = _write_tsv(tmp_path / "harvest.tsv", HARVEST_HEADER, [
+        ["cronbach alpha", "1300", "0", "informational", "phantichspss.com", "4", "/c"],
+        ["tải spss", "1900", "0", "transactional", "phamlocblog.com", "2", "/t"],
+        ["sự cháy", "12100", "0", "informational", "trithuccongdong.net", "1", "/s"],
+        ["mẫu chưa đo", "0", "0", "informational", "trithuccongdong.net", "9", "/m"],
+    ])
+    candidates = _write_tsv(tmp_path / "candidates.tsv",
+                            ["keyword", "axis", "unit", "family", "category", "archetype"], [])
+    exclusions = tmp_path / "exclusions.txt"
+    exclusions.write_text("\\btải\\b\n", encoding="utf-8")
+    vocabulary = tmp_path / "vocabulary.txt"
+    vocabulary.write_text("# only one term\ncronbach\n", encoding="utf-8")
+
+    out = tmp_path / "backlog.tsv"
+    summary = plan.run(harvest_path=harvest, candidates_path=candidates,
+                       gate_dir=str(tmp_path), exclusions_path=str(exclusions),
+                       vocabulary_path=str(vocabulary), out_path=str(out), index_path=None)
+
+    rejected = tmp_path / "plan-rejected.tsv"
+    assert rejected.is_file(), "the rejects land beside the backlog they explain"
+    with open(rejected, encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh, delimiter="\t"))
+    assert list(rows[0]) == list(plan.REJECTED_COLUMNS)
+    by_keyword = {r["keyword"]: r for r in rows}
+    assert by_keyword["sự cháy"]["reason"] == "off-vocabulary"
+    assert by_keyword["sự cháy"]["volume"] == "12100"
+    assert by_keyword["tải spss"]["reason"].startswith("exclusion:")
+    assert by_keyword["mẫu chưa đo"]["reason"] == "no measured volume"
+    assert [r["keyword"] for r in rows] == ["sự cháy", "tải spss", "mẫu chưa đo"], \
+        "biggest first, so a human skims the expensive mistakes"
+    assert summary["off_vocabulary"] == 1
+    assert summary["blacklisted"] == 1
+
+
+# ----------------------------------------------- category and archetype rules
+
+
+# Ten real harvest keywords, one per category plus the two shapes that override
+# the category default. `plan` used to put `outline essay mẫu` in `smartpls` and
+# `cách làm tài liệu` in `thong-ke`.
+REPRESENTATIVE_ROWS = [
+    ("độ lệch chuẩn", "thong-ke", "term-la-gi"),
+    ("ma trận xoay", "spss", "spss-howto"),
+    ("pls-sem", "smartpls", "term-la-gi"),
+    ("phiếu khảo sát online", "khao-sat", "survey"),
+    ("tháp nhu cầu maslow", "mo-hinh-nghien-cuu", "model-theory"),
+    ("cách ghi tài liệu tham khảo", "khoa-luan-tot-nghiep", "thesis-writing"),
+    ("đề tài nghiên cứu khoa học", "khoa-luan-tot-nghiep", "topic-list"),
+    ("thạc sĩ", "luan-van-thac-si", "thesis-writing"),
+    ("dữ liệu sơ cấp", "nghien-cuu-khoa-hoc", "term-la-gi"),
+    ("xử lý dữ liệu", "phan-tich-du-lieu", "term-la-gi"),
+]
+
+
+@pytest.mark.parametrize(("keyword", "category", "archetype"), REPRESENTATIVE_ROWS)
+def test_representative_harvest_keywords_land_in_the_right_category(keyword, category,
+                                                                    archetype):
+    assert plan.classify_category(keyword) == category
+    assert plan.classify_archetype(keyword) == archetype
+
+
+def test_the_category_head_terms_each_land_in_their_own_category():
+    """Nine categories, nine measured head terms. `spss` used to fall to thong-ke."""
+    heads = {
+        "spss": "spss",
+        "thống kê": "thong-ke",
+        "khảo sát": "khao-sat",
+        "nghiên cứu khoa học": "nghien-cuu-khoa-hoc",
+        "khóa luận tốt nghiệp": "khoa-luan-tot-nghiep",
+        "smartpls": "smartpls",
+        "phân tích dữ liệu": "phan-tich-du-lieu",
+        "luận văn thạc sĩ": "luan-van-thac-si",
+        "mô hình nghiên cứu": "mo-hinh-nghien-cuu",
+    }
+    for keyword, category in heads.items():
+        assert plan.classify_category(keyword) == category, keyword
+
+
+def test_the_first_matching_rule_wins():
+    """Order is the editorial decision, so it is worth pinning."""
+    # the degree beats the generic thesis word
+    assert plan.classify_category("luận văn thạc sĩ ngành marketing") == "luan-van-thac-si"
+    # the tool the searcher named beats the concept
+    assert plan.classify_category("cách chạy efa trong spss") == "spss"
+    assert plan.classify_category("bootstrapping trong smartpls 4") == "smartpls"
+    # a survey word beats the model word that follows it in the rules
+    assert plan.classify_category("thang đo likert 5 mức độ") == "khao-sat"
+
+
+def test_the_page_shape_overrides_the_category_default():
+    assert plan.classify_archetype("htmt vượt ngưỡng phải làm sao") == "troubleshoot"
+    assert plan.classify_archetype("lỗi ma trận xoay trong spss") == "troubleshoot"
+    assert plan.classify_archetype("đề tài luận văn thạc sĩ quản trị") == "topic-list"
+    # and a caller that already knows the category is not made to re-derive it
+    assert plan.classify_archetype("ave là gì", "smartpls") == "term-la-gi"
+    assert plan.classify_archetype("cách chạy ave", "smartpls") == "smartpls-howto"
+
+
+def test_an_axis_display_must_be_named_not_spelled_inside_another_word():
+    lookup = [("tra", "behavior", "mo-hinh-nghien-cuu", "model-theory")]
+    assert plan._classify_from_axes("mô hình tra", lookup) is not None
+    assert plan._classify_from_axes("straight", lookup) is None

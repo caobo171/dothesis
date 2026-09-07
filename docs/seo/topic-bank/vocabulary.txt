@@ -1,0 +1,296 @@
+# Domain vocabulary for the DoThesis blog content engine — a WHITELIST.
+#
+# One token or phrase per line, matched case-insensitively as a whole word or
+# whole phrase against the harvest keyword. `#` starts a comment; blank lines
+# are ignored.
+#
+# Why a whitelist at all. `exclusions.txt` is a blacklist, and a blacklist only
+# knows the junk it has already met. The newest competitor in the harvest
+# (trithuccongdong.net) is a thesis-writing service with a huge generic Q&A
+# section, so it ranks for school maths, English-essay templates and finance
+# exams. Chasing that with one regex per accident is a losing race: the harvest
+# grows, the blacklist never catches up, and 368,000/month of `cách làm tài
+# liệu` walks into the backlog. A whitelist inverts the burden — a harvest row
+# earns a page only by naming something this product actually teaches.
+#
+# The rule `plan` applies to every harvest row: keep it only if it hits an axis
+# unit display, or contains at least one entry below as a whole word/phrase.
+# Everything else is written to `plan-rejected.tsv` for a human to skim.
+# The blacklist still runs first, for rows that use domain words in a domain we
+# do not serve (`đề thi cfa` is the finance exam, not confirmatory factor
+# analysis).
+#
+# Matching is whole-word, so `tra` does not match `straight` and `ave` does not
+# match `average`. Vietnamese is written syllable-by-syllable with spaces, so a
+# whole-word match on a single syllable is loose by design; that is why the
+# rejects file exists and why the blacklist keeps the last word.
+#
+# Every axis unit `display` is added to this vocabulary at load time rather than
+# copied here. Copying 600 displays would go stale the first time an axis file
+# changes, and the axis files are already the committed source of truth for what
+# a unit is called.
+
+# --- software ------------------------------------------------------------
+spss
+smartpls
+amos
+stata
+r studio
+rstudio
+jasp
+eviews
+google form
+# `excel` is deliberately absent: on its own it is a spreadsheet query, not a
+# thesis query. `hồi quy trong excel` is kept by `hồi quy`, which is the only
+# context in which we want it.
+
+# --- methods and models --------------------------------------------------
+pls
+sem
+cb-sem
+efa
+cfa
+anova
+ancova
+manova
+t-test
+t test
+chi-square
+chi bình phương
+mann whitney
+kruskal
+wilcoxon
+
+# --- reliability and validity --------------------------------------------
+cronbach
+alpha
+kmo
+bartlett
+eigenvalue
+communality
+loading
+factor
+nhân tố
+độ tin cậy
+reliability
+validity
+ave
+htmt
+fornell
+composite
+
+# --- regression and correlation ------------------------------------------
+hồi quy
+regression
+tương quan
+correlation
+pearson
+spearman
+vif
+đa cộng tuyến
+durbin
+r square
+r bình phương
+f square
+q square
+
+# --- descriptive statistics ----------------------------------------------
+phương sai
+variance
+độ lệch chuẩn
+standard deviation
+sd
+trung vị
+median
+trung bình
+mean
+mode
+outlier
+ngoại lai
+skewness
+kurtosis
+phân phối chuẩn
+
+# --- inference -----------------------------------------------------------
+p-value
+p value
+sig
+mức ý nghĩa
+giả thuyết
+kiểm định
+bootstrapping
+bootstrap
+blindfolding
+
+# --- variables in a model ------------------------------------------------
+biến trung gian
+biến điều tiết
+moderator
+mediator
+moderating
+mediation
+biến độc lập
+biến phụ thuộc
+biến quan sát
+biến tiềm ẩn
+biến kiểm soát
+
+# --- measurement and survey ----------------------------------------------
+thang đo
+likert
+scale
+bảng hỏi
+bảng câu hỏi
+phiếu khảo sát
+khảo sát
+survey
+cỡ mẫu
+sample size
+chọn mẫu
+sampling
+dữ liệu sơ cấp
+dữ liệu thứ cấp
+
+# --- research design -----------------------------------------------------
+định lượng
+định tính
+nghiên cứu khoa học
+nckh
+phương pháp nghiên cứu
+mô hình nghiên cứu
+mô hình
+lý thuyết
+cơ sở lý thuyết
+tổng quan
+giả thuyết nghiên cứu
+câu hỏi nghiên cứu
+
+# --- the named theories students build on --------------------------------
+tam
+tpb
+tra
+utaut
+servqual
+maslow
+herzberg
+
+# --- the thesis itself ---------------------------------------------------
+luận văn
+khóa luận
+luận án
+thạc sĩ
+tốt nghiệp
+đề tài
+tài liệu tham khảo
+trích dẫn
+apa
+abstract
+tóm tắt
+kết luận
+chương
+
+# --- data ----------------------------------------------------------------
+thống kê
+statistics
+số liệu
+dữ liệu
+data
+ma trận xoay
+rotated
+
+# =========================================================================
+# Added after reading the first `plan-rejected.tsv`. Everything above is the
+# seed list; everything below is a term the whitelist was dropping that this
+# product plainly does teach. Kept in its own block so the judgement calls are
+# reviewable in one place and any single line can be pulled without touching
+# the seed. Two kinds of miss, both mechanical:
+#
+#   1. An inflection or spelling of a term already above (`outliers`,
+#      `chi square` against the hyphenated `chi-square`, `std` against `sd`,
+#      `moderation` against `moderating`, `giả thiết` against `giả thuyết`).
+#   2. A term `classify_category` already routes somewhere — `swot`, `porter`,
+#      `partial least squares`, `missing` — but which the vocabulary rejected
+#      before the classifier ever saw it.
+# =========================================================================
+
+# --- inflections and spellings of the above ------------------------------
+outliers
+mediators
+mediating
+moderators
+moderation
+correlate
+correlated
+deviation
+std
+chi square
+chi test
+partial least squares
+giả thiết
+
+# --- statistics the seed list missed -------------------------------------
+coefficient
+coefficients
+coef
+beta
+hệ số chặn
+residual
+residuals
+phần dư
+covariance
+hiệp phương sai
+collinearity
+multicollinearity
+discriminant
+giá trị phân biệt
+eigenvector
+dummy
+biến giả
+paired
+skewed
+robustness
+percentile
+phân vị
+tần suất
+biểu đồ
+chuẩn hóa
+construct
+pca
+principal component
+ols
+ordinary least squares
+
+# --- models named in the category rules ----------------------------------
+swot
+aida
+porter
+five forces
+tháp nhu cầu
+
+# --- data handling -------------------------------------------------------
+phân tích dữ liệu
+xử lý dữ liệu
+xử lý số liệu
+làm sạch dữ liệu
+dữ liệu bị thiếu
+missing
+thu thập dữ liệu
+thu thập thông tin
+
+# --- thesis sections and mechanics ---------------------------------------
+đề cương
+đối tượng nghiên cứu
+phạm vi nghiên cứu
+khách thể nghiên cứu
+lĩnh vực nghiên cứu
+mục tiêu nghiên cứu
+lý do chọn đề tài
+cơ sở lý luận
+phương pháp luận
+lời nói đầu
+đặt vấn đề
+hàm ý quản trị
+đạo văn
+turnitin
+mendeley
+endnote

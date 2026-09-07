@@ -7,6 +7,13 @@
 # Never hand-edit the harvest TSVs. Add a rule here instead, with a comment, so
 # the reason a row was dropped stays committed and nobody re-adds it by accident.
 # Blank lines and lines starting with # are ignored.
+#
+# This file is the blacklist and it runs first. `vocabulary.txt` is the
+# whitelist that runs after it, and it does most of the work now: a row also
+# has to name something this product teaches. Add a rule here only for a row
+# the whitelist would let through — a domain word used in a domain we do not
+# serve (`đề thi cfa` is the finance exam), or a phrase that borrows a domain
+# word and asks nothing answerable (`cách làm tài liệu`).
 
 # --- TOEIC and exam answer keys -----------------------------------------------
 # phamlocblog ranks a TOEIC answer-key post; `đáp án ets 2016 part 1234` at
@@ -109,3 +116,40 @@ là j$
 
 # --- bare words with no answerable intent -------------------------------------
 ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+
+# --- the finance exam, not confirmatory factor analysis -----------------------
+# `cfa` is a real unit here (CFA on AMOS) and `cfa` is in vocabulary.txt, so the
+# whitelist waves these through. `đề thi cfa` at 12,100 is the CFA charter exam.
+# `đề thi` above already catches that phrasing; these keep the reason on record
+# and catch the phrasings a later harvest will bring.
+đề thi cfa
+cfa level
+cfa charter
+chứng chỉ cfa
+
+# --- generic how-to that borrows a domain word --------------------------------
+# `cách làm tài liệu` at 368,000 is the biggest row trithuccongdong ranks for and
+# it asks nothing: no unit, no software, no analysis. `tài liệu tham khảo` is the
+# query we want and it is its own page.
+^cách làm tài liệu
+^cách tạo tài liệu
+
+# --- discipline names harvested as bare head terms ----------------------------
+# The topic-list axis has `giáo dục` and `mầm non` as fields, so `quản lý giáo
+# dục` at 40,500 hits an axis display and survives the whitelist. Bare, it is
+# people reading about the sector, not students choosing a thesis topic; the
+# rules are anchored so `đề tài luận văn quản lý giáo dục` still gets its page.
+^quản lý giáo dục$
+^quản lý mầm non$
+^hệ thống quản lý giáo dục
+^phần mềm quản lý
+
+# --- English-composition rows from the competitor Q&A section -----------------
+# trithuccongdong runs a general homework Q&A. `đoạn văn bằng tiếng anh về ...`
+# and the essay-template rows are that section, not thesis work.
+đoạn văn bằng tiếng anh
+bằng tiếng anh về
+essay mẫu
+^outlines?( là gì)?$
+^outlined
+narrative essay
