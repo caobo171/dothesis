@@ -208,8 +208,13 @@ re-run those five with `--force`. Only then go to 50, then to the rest with
 
 The writer is resumable: a row whose seed file already exists is skipped, so the
 command can be interrupted and re-run. It stops on `--limit`, on the budget, and
-on nothing else. `write-log.tsv` records `slug`, `status`, `attempts`,
+on nothing else. `write-log.tsv` records `slug`, `status`, `attempts`, `unlinked`,
 `prompt_tokens`, `output_tokens`, `usd`, `seconds`, `failures` for every row.
+
+`unlinked` counts internal links the writer removed before the gate ran, because
+they pointed at a page nobody has planned. Anchor text is kept, the link goes. A
+few per batch is the model guessing; a column full of them means the brief's link
+list is too thin for that archetype.
 
 A post that fails QA gets exactly one repair call carrying the failure list. If it
 fails again it lands in `rejected/` and the run continues. Read `rejected/` after
@@ -225,6 +230,10 @@ python3 .claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py api/data/bl
 Exit 0 required. The rule list is in `dothesis-blog-content/references/voice.md`
 and `seed-schema.md`; the implementation is `api/app/blog/content/qa.py`. The shim
 runs on plain `python3`, no venv, because it is also the pre-publish check.
+
+Link resolution uses the seed directory plus `backlog.tsv`. When that file is not
+on disk, or the batch links to pages that are already live and no longer in the
+backlog, pass `--known-slugs <file>`, one slug per line.
 
 Then read ten posts by hand, chosen across archetypes, specifically for
 **swapped-noun sameness**: two pages in one family that differ only by the term.

@@ -9,7 +9,11 @@ Deliberately importable by a bare `python3` with no virtualenv: `qa.py` is
 stdlib-only for exactly this reason, and the seed dir is usually inspected by
 someone who has not activated `api/.venv`.
 
-    python3 .claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py [seed-dir]
+    python3 .claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py [seed-dir] \
+        [--known-slugs FILE]
+
+`--known-slugs` is a file of slugs, one per line, that internal links may resolve
+to on top of the seed dir and `backlog.tsv`. Without it nothing changes.
 
 Exit code 1 if any file FAILs.
 """

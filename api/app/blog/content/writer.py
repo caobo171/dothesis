@@ -4,6 +4,11 @@ Resumable by design: one file per row, named from the row's priority and slug,
 and a row whose file exists is skipped. That makes the run interruptible, which
 matters more than throughput when a thousand posts are involved.
 
+Internal links are normalised before QA sees the draft: a link to a page nobody
+has planned is unlinked, keeping its anchor text. The model invents sibling
+slugs no matter what the brief says, and a broken link is not worth a second
+call, so the gate is only ever asked whether enough real links remain.
+
 Each row gets at most two calls. The first writes the draft; if QA fails, the
 second gets the failure list and repairs it. A second failure lands in
 `rejected/` and the run continues, because one bad row must never stop the
@@ -22,10 +27,22 @@ from concurrent.futures import ThreadPoolExecutor
 from . import repo_root
 from .plan import read_backlog
 from .prompts import build_prompt, build_repair_prompt
-from .qa import check_post
 
-LOG_COLUMNS = ("slug", "status", "attempts", "prompt_tokens", "output_tokens",
-               "usd", "seconds", "failures")
+# `_LINK_RE` and `link_is_known` come from the gate on purpose: the writer must
+# strip exactly the links the gate would fail, and a second link grammar here
+# would drift from it.
+from .qa import _LINK_RE, check_post, link_is_known
+
+LOG_COLUMNS = ("slug", "status", "attempts", "unlinked", "prompt_tokens",
+               "output_tokens", "usd", "seconds", "failures")
+
+# Entries the brief's link list should offer. Three real targets (category
+# route, one sibling, /landing) against a floor of four distinct links is what
+# pushed the model into inventing a fourth, so a thin row is topped up from its
+# own category before the prompt is built.
+LINK_LIST_MIN = 6
+LINK_LIST_MAX = 8
+_FIXED_LINKS = 2  # the category route and /landing, always on the list
 
 STATUS_OK = "ok"
 STATUS_REPAIRED = "repaired"
@@ -55,6 +72,61 @@ def parse_model_json(text: str) -> dict:
     if not isinstance(data, dict):
         raise ValueError("model returned json that is not an object")
     return data
+
+
+def link_slugs_for(row, rows) -> list[str]:
+    """The row's own siblings, topped up so the brief lists `LINK_LIST_MIN`.
+
+    Top-ups are ordered the way `plan._round_robin` already orders rows:
+    measured before family-inferred, highest volume first inside each tier. An
+    inferred row's volume is a guess, so it must not outrank a measured page
+    just because the guess was large.
+
+    The row's `sibling_slugs` are not mutated: they are a pipeline field that
+    ends up in the published seed, and a link the model was merely offered is
+    not a sibling relationship.
+    """
+    picked: list[str] = []
+    seen = {row.slug}
+    for slug in row.sibling_slugs:
+        if slug not in seen:
+            seen.add(slug)
+            picked.append(slug)
+    want = LINK_LIST_MIN - _FIXED_LINKS
+    if len(picked) < want:
+        others = sorted(
+            (r for r in rows if r.category == row.category and r.slug not in seen),
+            key=lambda r: (r.gate_status == "family-inferred", -r.search_volume, r.slug))
+        for other in others:
+            picked.append(other.slug)
+            seen.add(other.slug)
+            if len(picked) >= want:
+                break
+    return picked[:LINK_LIST_MAX - _FIXED_LINKS]
+
+
+def normalise_internal_links(body: str, slugs: set[str]) -> tuple[str, int]:
+    """Unlink every internal target the gate would not resolve.
+
+    `[EFA](/blog/vi/efa-la-gi)` becomes `EFA` when no page and no backlog row
+    owns that slug. The model keeps inventing plausible siblings, and telling it not to
+    has not worked; an invented link is a broken link whichever way it arrived,
+    so it is removed here instead of costing a repair call. Returns the body and
+    how many links were removed (occurrences, not distinct targets).
+    """
+    stripped = 0
+
+    def replace(match):
+        nonlocal stripped
+        if match.group(0).startswith("!"):
+            return match.group(0)  # an image, not a link
+        href = (match.group(2) or "").strip()
+        if not href.startswith("/") or link_is_known(href, slugs):
+            return match.group(0)  # external, an in-page anchor, or a real page
+        stripped += 1
+        return match.group(1)
+
+    return _LINK_RE.sub(replace, body or ""), stripped
 
 
 def seed_from(row, produced: dict) -> dict:
@@ -138,7 +210,7 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
             break
 
     if dry_run:
-        prompts = [build_prompt(r, titles, skills_dir) for r in todo]
+        prompts = [build_prompt(r, titles, skills_dir, link_slugs_for(r, rows)) for r in todo]
         chars = sum(len(p) for p in prompts)
         # ~3 characters per token for mixed Vietnamese and markdown, and about
         # 3,500 output tokens for a 2,000-word post. An estimate, printed as one.
@@ -147,7 +219,7 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
         from .llm import usd_for  # noqa: PLC0415
 
         summary = {"planned": len(todo), "skipped": skipped, "written": 0, "repaired": 0,
-                   "rejected": 0, "errors": 0, "failed": 0, "usd": 0.0,
+                   "rejected": 0, "errors": 0, "failed": 0, "usd": 0.0, "unlinked": 0,
                    "estimated_usd": usd_for(est_in, est_out), "stopped_on_budget": False}
         print(f"write --dry-run: {len(todo)} rows to write, {skipped} already on disk")
         print(f"      prompt is {len(prompts[0]) if prompts else 0:,} chars for the first row")
@@ -162,7 +234,7 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
 
     log = _Log(log_path)
     state = {"usd": 0.0, "written": 0, "repaired": 0, "rejected": 0, "errors": 0,
-             "stopped_on_budget": False}
+             "unlinked": 0, "stopped_on_budget": False}
     lock = threading.Lock()
 
     def budget_left() -> bool:
@@ -176,11 +248,13 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
         attempts = 0
         spent = 0.0
         seconds = 0.0
+        unlinked = 0
         prompt_tokens = output_tokens = 0
         produced: dict = {}
         failures: list[str] = []
+        link_slugs = link_slugs_for(row, rows)
         try:
-            prompt = build_prompt(row, titles, skills_dir)
+            prompt = build_prompt(row, titles, skills_dir, link_slugs)
             for attempt in range(2):
                 completion = client.complete_json(prompt)
                 attempts += 1
@@ -189,40 +263,56 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
                 prompt_tokens += completion.prompt_tokens
                 output_tokens += completion.output_tokens
                 produced = parse_model_json(completion.text)
+                # Before the gate sees it: an internal link to a page nobody has
+                # planned is unlinked. The gate then cannot fail on an unknown
+                # target at all, and the repair pass is spent only on a post
+                # that is genuinely short of real links.
+                body, stripped = normalise_internal_links(produced.get("body") or "", known)
+                produced["body"] = body
+                unlinked += stripped
                 seed = seed_from(row, produced)
                 failures, _warns, _stats = check_post(seed, known)
                 if not failures:
                     _write_json(os.path.join(out_dir, seed_filename(row)), seed)
                     with lock:
                         state["usd"] += spent
+                        state["unlinked"] += unlinked
                         if attempt == 0:
                             state["written"] += 1
                         else:
                             state["repaired"] += 1
                     log.append(slug=row.slug,
                                status=STATUS_OK if attempt == 0 else STATUS_REPAIRED,
-                               attempts=attempts, prompt_tokens=prompt_tokens,
+                               attempts=attempts, unlinked=unlinked,
+                               prompt_tokens=prompt_tokens,
                                output_tokens=output_tokens, usd=f"{spent:.5f}",
                                seconds=f"{seconds:.1f}", failures="")
                     return
                 if attempt == 0:
-                    prompt = build_repair_prompt(row, produced, failures, titles, skills_dir)
+                    # `produced` carries the already-stripped body, so the retry
+                    # repairs the draft the checker actually read.
+                    prompt = build_repair_prompt(row, produced, failures, titles,
+                                                 skills_dir, link_slugs)
 
             _write_json(os.path.join(rejected_dir, seed_filename(row)),
                         seed_from(row, produced))
             with lock:
                 state["usd"] += spent
+                state["unlinked"] += unlinked
                 state["rejected"] += 1
             log.append(slug=row.slug, status=STATUS_REJECTED, attempts=attempts,
-                       prompt_tokens=prompt_tokens, output_tokens=output_tokens,
+                       unlinked=unlinked, prompt_tokens=prompt_tokens,
+                       output_tokens=output_tokens,
                        usd=f"{spent:.5f}", seconds=f"{seconds:.1f}",
                        failures=" | ".join(failures))
         except Exception as exc:  # noqa: BLE001 — one bad row must not stop the batch
             with lock:
                 state["usd"] += spent
+                state["unlinked"] += unlinked
                 state["errors"] += 1
             log.append(slug=row.slug, status=STATUS_ERROR, attempts=attempts,
-                       prompt_tokens=prompt_tokens, output_tokens=output_tokens,
+                       unlinked=unlinked, prompt_tokens=prompt_tokens,
+                       output_tokens=output_tokens,
                        usd=f"{spent:.5f}", seconds=f"{seconds:.1f}",
                        failures=f"{type(exc).__name__}: {exc}")
 
@@ -250,11 +340,16 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
         "errors": state["errors"],
         "failed": state["rejected"] + state["errors"],
         "usd": state["usd"],
+        "unlinked": state["unlinked"],
         "stopped_on_budget": state["stopped_on_budget"],
     }
     print(f"write: {summary['written']} written, {summary['repaired']} repaired, "
           f"{summary['rejected']} rejected, {summary['errors']} errors, "
           f"{summary['skipped']} skipped")
+    if summary["unlinked"]:
+        # A number that keeps climbing means the brief's link list is too thin
+        # for the archetype, not that the model is misbehaving.
+        print(f"       {summary['unlinked']} invented internal link(s) unlinked")
     print(f"       spent ${summary['usd']:.2f} of ${budget_usd:.2f}"
           + (" (stopped on budget)" if summary["stopped_on_budget"] else ""))
     print(f"       log: {log_path}")

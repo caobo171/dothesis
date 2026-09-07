@@ -89,6 +89,12 @@ is accepted:
 - A `## Câu hỏi thường gặp` section with 4 to 6 `### ` questions, each answered
   in one to three paragraphs.
 - At least 4 distinct internal links, taken only from the list in the brief.
+  Every internal link whose target is not on that list is deleted mechanically
+  before this is counted: the anchor text stays, the link is thrown away. So an
+  invented sibling slug cannot get you to four, and a plausible-looking guess
+  costs you a link instead of adding one. The four come from the list or they
+  do not exist. Link every entry on the list at least once where it fits the
+  sentence you were writing anyway.
 - Exactly one link to `/landing`, in the closing paragraph.
 - Citations only from the allowlist above, copied character for character. If a
   claim needs a source that is not on the list, drop the number instead.
@@ -153,16 +159,31 @@ def _competitor_hints(urls: list[str], limit: int = 4) -> list[str]:
     return hints
 
 
-def build_brief(row, sibling_titles: dict[str, str] | None = None,
-                structure_text: str | None = None) -> str:
+def internal_link_lines(row, sibling_titles: dict[str, str] | None = None,
+                        link_slugs: list[str] | None = None) -> list[str]:
+    """The brief's link list, one markdown bullet per allowed target.
+
+    `link_slugs` overrides the row's own siblings so the writer can top a thin
+    list up from the rest of the backlog. Shared with the repair prompt: the
+    retry has to see the same list, character for character, or it will invent
+    a target again.
+    """
     sibling_titles = sibling_titles or {}
+    slugs = row.sibling_slugs if link_slugs is None else link_slugs
     category_route = f"/blog/vi/chu-de/{row.category}"
     links = [f"- `{category_route}` (chủ đề {CATEGORY_NAMES.get(row.category, row.category)})"]
-    for slug in row.sibling_slugs:
+    for slug in slugs:
         title = sibling_titles.get(slug)
         label = f" — {title}" if title else ""
         links.append(f"- `/blog/vi/{slug}`{label}")
     links.append("- `/landing` (the single CTA, closing paragraph only)")
+    return links
+
+
+def build_brief(row, sibling_titles: dict[str, str] | None = None,
+                structure_text: str | None = None,
+                link_slugs: list[str] | None = None) -> str:
+    links = internal_link_lines(row, sibling_titles, link_slugs)
 
     parts = [
         "# This article",
@@ -183,7 +204,8 @@ def build_brief(row, sibling_titles: dict[str, str] | None = None,
                      "text is never source material): " + "; ".join(hints))
 
     parts.append("\n## Internal links available to you\n\nUse at least four, and no link "
-                 "outside this list. Every one of them resolves.\n" + "\n".join(links))
+                 "outside this list. Every one of them resolves, and anything else is "
+                 "deleted from your draft before it is checked.\n" + "\n".join(links))
 
     skeleton = archetype_skeleton(row.archetype, structure_text or "")
     if skeleton:
@@ -192,25 +214,40 @@ def build_brief(row, sibling_titles: dict[str, str] | None = None,
 
 
 def build_prompt(row, sibling_titles: dict[str, str] | None = None,
-                 skills_dir: str | None = None) -> str:
+                 skills_dir: str | None = None,
+                 link_slugs: list[str] | None = None) -> str:
     files = load_skill_files(skills_dir)
     return "\n\n".join([
         build_preamble(skills_dir),
-        build_brief(row, sibling_titles, files["structure"]),
+        build_brief(row, sibling_titles, files["structure"], link_slugs),
         OUTPUT_CONTRACT,
     ])
 
 
 def build_repair_prompt(row, previous: dict, failures: list[str],
                         sibling_titles: dict[str, str] | None = None,
-                        skills_dir: str | None = None) -> str:
-    """The one retry: same rules, the draft, and the exact list of what failed."""
+                        skills_dir: str | None = None,
+                        link_slugs: list[str] | None = None) -> str:
+    """The one retry: same rules, the draft, and the exact list of what failed.
+
+    The link list is repeated here rather than left to the brief above. The
+    measured failure mode is a model that invents `/blog/vi/efa`, is told the
+    link count is short, and invents two more: it has to read, in the same
+    breath as the failure, that unknown targets were already stripped out of the
+    draft it is looking at and that adding another cannot raise the count.
+    """
     return "\n\n".join([
-        build_prompt(row, sibling_titles, skills_dir),
+        build_prompt(row, sibling_titles, skills_dir, link_slugs),
         "# Your previous draft failed the checker\n\n"
         "Fix every item below and return the corrected json object. Keep "
         "everything that was already fine: do not rewrite the article, repair it.\n\n"
         + "\n".join(f"- {f}" for f in failures),
+        "## Internal links, again, because this is where drafts fail\n\n"
+        "Any internal link that was not on this list has already been stripped "
+        "out of the draft below: the anchor text is still there, the link is "
+        "gone. Inventing another target does nothing, it is stripped too. If the "
+        "link count is short, link more of these:\n"
+        + "\n".join(internal_link_lines(row, sibling_titles, link_slugs)),
         "## The draft to repair\n\n```json\n"
         + json.dumps({k: previous.get(k) for k in
                       ("title", "meta_title", "meta_description", "excerpt", "tags", "body")},

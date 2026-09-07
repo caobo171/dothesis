@@ -241,6 +241,37 @@ def test_link_resolution_knows_categories_routes_and_batch_slugs():
     assert not qa._link_is_known("/chat", slugs)
 
 
+def _seed_dir_linking_to(tmp_path, slug):
+    """A copy of the exemplar with one extra link, in a directory of its own."""
+    post = _passing_seed()
+    post["body"] += f"\n\nĐọc thêm bài [ghi chú](/blog/vi/{slug}).\n"
+    out = tmp_path / "posts"
+    out.mkdir()
+    (out / "0001-cronbach-alpha-la-gi.json").write_text(
+        json.dumps(post, ensure_ascii=False), encoding="utf-8")
+    return str(out)
+
+
+def test_an_unresolvable_link_still_fails_without_the_flag(tmp_path, capsys):
+    seed_dir = _seed_dir_linking_to(tmp_path, "khong-he-co-trong-backlog")
+    assert qa.main([seed_dir]) == 1
+    assert "resolve to nothing known" in capsys.readouterr().out
+
+
+def test_known_slugs_file_teaches_the_standalone_gate_what_resolves(tmp_path, capsys):
+    """The default is unchanged; the flag only widens what counts as known."""
+    seed_dir = _seed_dir_linking_to(tmp_path, "khong-he-co-trong-backlog")
+    listing = tmp_path / "known.txt"
+    listing.write_text("# slugs that exist on the site\n\n"
+                       "khong-he-co-trong-backlog\n"
+                       "/blog/vi/mot-bai-khac\n", encoding="utf-8")
+
+    assert qa.main([seed_dir, "--known-slugs", str(listing)]) == 0
+    assert "0 failing" in capsys.readouterr().out
+    assert qa.main(["--known-slugs=" + str(listing), seed_dir]) == 0
+    assert qa.read_slug_file(str(listing)) == {"khong-he-co-trong-backlog", "mot-bai-khac"}
+
+
 def test_citations_are_extracted_in_both_vietnamese_and_english_forms():
     body = ("Ngưỡng 0.7 (Nunnally, 1978) và 0.5 (Hair và cộng sự, 2010). "
             "Hair et al. (2022) đề xuất 5,000 lần lặp. "

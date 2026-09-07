@@ -294,7 +294,13 @@ def _default_backlog_path() -> str | None:
     return path if os.path.isfile(path) else None
 
 
-def _link_is_known(href: str, slugs: set[str]) -> bool:
+def link_is_known(href: str, slugs: set[str]) -> bool:
+    """Does this internal href resolve to a page that exists or is planned?
+
+    Public because the writer strips the links this returns False for before it
+    runs the gate. One predicate, so what the writer removes is exactly what the
+    gate would have failed.
+    """
     target = href.split("#")[0].split("?")[0].rstrip("/") or "/"
     if target in ALLOWED_ROUTES:
         return True
@@ -305,6 +311,9 @@ def _link_is_known(href: str, slugs: set[str]) -> bool:
     if m:
         return m.group(1) in slugs
     return False
+
+
+_link_is_known = link_is_known  # the old private name, kept for existing callers
 
 
 # ----------------------------------------------------------------- the checks
@@ -408,7 +417,7 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
     if len(links) < MIN_INTERNAL_LINKS:
         fails.append(f"{len(links)} distinct internal links, need at least "
                      f"{MIN_INTERNAL_LINKS}")
-    unknown = [href for href in links if not _link_is_known(href, slugs)]
+    unknown = [href for href in links if not link_is_known(href, slugs)]
     if unknown:
         fails.append(f"internal link(s) resolve to nothing known: {', '.join(unknown[:4])}")
 
@@ -462,9 +471,48 @@ def check_file(path: str, slugs: set[str] | None = None):
 # ------------------------------------------------------------------ reporting
 
 
+def read_slug_file(path: str) -> set[str]:
+    """One slug per line, `#` comments and blanks ignored.
+
+    A bare `/blog/vi/<slug>` line is accepted too, because the list someone
+    pastes in is usually copied out of a post's links.
+    """
+    slugs = set()
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            slugs.add(line.rstrip("/").rsplit("/", 1)[-1])
+    slugs.discard("")
+    return slugs
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    seed_dir = argv[0] if argv else os.path.join("data", "blog-seeds", "vi", "posts")
+    # Link resolution defaults to the batch on disk plus `backlog.tsv`. Outside
+    # a checkout there is no backlog, so every internal link would read as
+    # broken; `--known-slugs FILE` says what else resolves. Optional on purpose:
+    # without it this behaves exactly as it did.
+    extra: set[str] = set()
+    positional: list[str] = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--known-slugs":
+            if i + 1 >= len(argv):
+                print("--known-slugs needs a file path")
+                return 1
+            extra |= read_slug_file(argv[i + 1])
+            i += 2
+            continue
+        if arg.startswith("--known-slugs="):
+            extra |= read_slug_file(arg.split("=", 1)[1])
+        else:
+            positional.append(arg)
+        i += 1
+
+    seed_dir = positional[0] if positional else os.path.join("data", "blog-seeds", "vi", "posts")
     if not os.path.isdir(seed_dir):
         print(f"no seed dir at {seed_dir}")
         return 1
@@ -474,7 +522,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"no seed files in {seed_dir}")
         return 1
 
-    slugs = known_slugs(seed_dir)
+    slugs = known_slugs(seed_dir, extra)
     total_fail = 0
     detail = []
     print(f"{'file':<46} {'words':>6} {'h2':>3} {'faq':>4} {'tbl':>4} {'rows':>5} "

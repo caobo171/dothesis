@@ -115,6 +115,48 @@ def test_brief_carries_the_row_and_the_right_skeleton():
     assert "`spss-howto`" not in brief, "only this row's skeleton belongs in the brief"
 
 
+def test_brief_is_topped_up_when_the_row_has_almost_no_siblings(tmp_path):
+    """One sibling offers three real targets against a floor of four."""
+    thin = BacklogRow(**{**ROW.__dict__, "slug": "bai-mong", "priority": 3,
+                         "sibling_slugs": ["do-tin-cay-thang-do"]})
+    others = [
+        BacklogRow(**{**ROW.__dict__, "slug": "spss-lon", "priority": 4,
+                      "search_volume": 9000}),
+        BacklogRow(**{**ROW.__dict__, "slug": "spss-nho", "priority": 5,
+                      "search_volume": 800}),
+        BacklogRow(**{**ROW.__dict__, "slug": "spss-doan", "priority": 6,
+                      "search_volume": 99000, "gate_status": "family-inferred"}),
+        BacklogRow(**{**ROW.__dict__, "slug": "thong-ke-khac", "priority": 7,
+                      "category": "thong-ke", "search_volume": 50000}),
+    ]
+    rows = [thin, *others]
+
+    slugs = writer.link_slugs_for(thin, rows)
+    assert slugs[0] == "do-tin-cay-thang-do", "the row's own siblings come first"
+    assert slugs == ["do-tin-cay-thang-do", "spss-lon", "spss-nho", "spss-doan"], \
+        "measured before family-inferred, volume first inside each tier"
+    assert "thong-ke-khac" not in slugs, "top-ups stay inside the category"
+
+    brief = prompts.build_brief(thin, {r.slug: r.focus_keyword for r in rows},
+                                prompts.load_skill_files()["structure"], slugs)
+    links = [ln for ln in brief.splitlines() if ln.startswith("- `/")]
+    assert len(links) >= 6, "six real targets, so the model never has to invent one"
+    assert "/blog/vi/chu-de/spss" in brief and "/landing" in brief
+    assert "/blog/vi/spss-lon" in brief
+
+
+def test_a_row_with_a_full_sibling_list_is_left_alone():
+    fat = BacklogRow(**{**ROW.__dict__, "sibling_slugs": ["a", "b", "c", "d"]})
+    other = BacklogRow(**{**ROW.__dict__, "slug": "spss-them", "priority": 9})
+    assert writer.link_slugs_for(fat, [fat, other]) == ["a", "b", "c", "d"]
+
+
+def test_top_up_never_offers_a_slug_that_is_not_in_the_backlog():
+    """The whole point is that every offered target resolves."""
+    thin = BacklogRow(**{**ROW.__dict__, "sibling_slugs": []})
+    assert writer.link_slugs_for(thin, [thin]) == []
+
+
 def test_prompt_says_json_because_json_mode_requires_it():
     prompt = prompts.build_prompt(ROW)
     assert "json" in prompt.lower()
@@ -169,14 +211,70 @@ def test_write_log_carries_every_agreed_column(tmp_path):
     writer.run(backlog_path=_backlog(tmp_path), out_dir=str(out), client=model, workers=1)
     rows = _log_rows(tmp_path / "write-log.tsv")
     assert list(rows[0]) == list(writer.LOG_COLUMNS)
+    assert "unlinked" in writer.LOG_COLUMNS
     assert rows[0]["slug"] == "cronbach-alpha-la-gi"
     assert rows[0]["status"] == "ok"
     assert rows[0]["attempts"] == "1"
+    assert rows[0]["unlinked"] == "0"
     assert rows[0]["prompt_tokens"] == "8000"
     assert rows[0]["output_tokens"] == "4000"
     assert float(rows[0]["usd"]) == pytest.approx(llm.usd_for(8000, 4000))
     assert float(rows[0]["seconds"]) > 0
     assert rows[0]["failures"] == ""
+
+
+# ---------------------------------------------------------- internal links
+
+
+def test_normalise_unlinks_only_the_internal_targets_that_resolve_to_nothing():
+    body = ("Đọc [EFA](/blog/vi/efa-khong-co-that) và "
+            "[Cronbach](/blog/vi/cronbach-alpha-la-gi), "
+            "[chủ đề SPSS](/blog/vi/chu-de/spss), [DoThesis](/landing), "
+            "[nguồn ngoài](https://example.com/x), [mục dưới](#ket-qua), "
+            "![ảnh](/img/khong-phai-lien-ket.png).")
+    out, stripped = writer.normalise_internal_links(body, {"cronbach-alpha-la-gi"})
+    assert stripped == 1
+    assert "/blog/vi/efa-khong-co-that" not in out
+    assert "Đọc EFA và" in out
+    for kept in ("/blog/vi/cronbach-alpha-la-gi", "/blog/vi/chu-de/spss", "/landing",
+                 "https://example.com/x", "#ket-qua", "/img/khong-phai-lien-ket.png"):
+        assert kept in out
+
+
+def test_an_invented_internal_link_is_unlinked_and_the_post_still_passes(tmp_path):
+    body = good_seed()["body"] + (
+        "\n\nĐọc thêm bài [ma trận xoay](/blog/vi/ma-tran-xoay-efa) khi bảng đã chạy xong.\n")
+    model = StubModel([model_payload(body=body)])
+    out = tmp_path / "posts"
+    summary = writer.run(backlog_path=_backlog(tmp_path), out_dir=str(out), client=model,
+                         workers=1)
+
+    assert summary["written"] == 1 and summary["failed"] == 0
+    assert len(model.prompts) == 1, "an invented link must not cost a repair call"
+    seed = json.load(open(out / "0007-cronbach-alpha-la-gi.json", encoding="utf-8"))
+    assert "/blog/vi/ma-tran-xoay-efa" not in seed["body"]
+    assert "ma trận xoay" in seed["body"], "the anchor text stays, only the link goes"
+    assert _log_rows(tmp_path / "write-log.tsv")[0]["unlinked"] == "1"
+
+
+def test_a_draft_left_with_three_known_links_goes_to_repair(tmp_path):
+    """Stripping is not a free pass: too few real links is still a failure."""
+    body = (good_seed()["body"]
+            .replace("](/blog/vi/chu-de/thong-ke)", "](/blog/vi/eigenvalue)")
+            .replace("](/blog/vi)", "](/blog/vi/communality)"))
+    model = StubModel([model_payload(body=body), model_payload()])
+    out = tmp_path / "posts"
+    summary = writer.run(backlog_path=_backlog(tmp_path), out_dir=str(out), client=model,
+                         workers=1)
+
+    assert summary["repaired"] == 1
+    repair = model.prompts[1]
+    assert "3 distinct internal links" in repair
+    assert "already been stripped" in repair, "the retry is told adding more cannot help"
+    assert "/blog/vi/do-tin-cay-thang-do" in repair, "the allowed links, listed again"
+    assert "/blog/vi/eigenvalue" not in repair, \
+        "the draft it repairs no longer contains the invented links"
+    assert _log_rows(tmp_path / "write-log.tsv")[0]["unlinked"] == "2"
 
 
 # ------------------------------------------------------------------- repair
