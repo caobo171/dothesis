@@ -311,10 +311,14 @@ def run_agent(
             if token_tracker and hasattr(response, 'usage_metadata'):
                 try:
                     meta = response.usage_metadata
+                    # Gemini bills thinking tokens as output; leaving them out
+                    # understated a Gemini 3.1 Pro run's cost several-fold.
+                    thoughts = getattr(meta, 'thoughts_token_count', 0) or 0
                     token_tracker.add_call(
                         stage=token_stage or name,
                         input_tokens=getattr(meta, 'prompt_token_count', 0) or 0,
-                        output_tokens=getattr(meta, 'candidates_token_count', 0) or 0,
+                        output_tokens=(getattr(meta, 'candidates_token_count', 0) or 0) + thoughts,
+                        status=CallStatus.CACHED if getattr(response, 'from_cache', False) else CallStatus.SUCCESS,
                     )
                 except Exception:
                     pass  # Never break generation for tracking failures
@@ -384,6 +388,10 @@ def run_agent(
             # If not last attempt and it's a transient error, retry
             if attempt < max_retries - 1 and _is_transient_error(e):
                 backoff_seconds = 2 ** attempt
+                # A DNS/connect failure is usually an outage of seconds to a
+                # minute, not milliseconds: wait longer before the retry.
+                if _is_network_error(e):
+                    backoff_seconds = 15 * (attempt + 1)
                 logger.debug(f"Agent '{name}': Transient error, retrying after {backoff_seconds}s")
                 time.sleep(backoff_seconds)
                 continue
@@ -483,6 +491,20 @@ def _capture_partial_output(save_path: Path, agent_name: str) -> Optional[str]:
         return None
 
 
+_NETWORK_ERROR_PATTERNS = (
+    'nodename nor servname', 'name or service not known', 'name resolution',
+    'getaddrinfo', 'errno 8', 'connecterror', 'connection error',
+    'connection refused', 'connection reset', 'network is unreachable',
+    'network unreachable', 'no route to host',
+)
+
+
+def _is_network_error(error: Exception) -> bool:
+    """True for DNS / TCP connect failures (a blip that resolves in seconds)."""
+    error_str = str(error).lower()
+    return any(p in error_str for p in _NETWORK_ERROR_PATTERNS)
+
+
 def _is_transient_error(error: Exception) -> bool:
     """
     Check if error is transient and worth retrying.
@@ -521,6 +543,18 @@ def _is_transient_error(error: Exception) -> bool:
         'server disconnected',
         'broken pipe',
         'network unreachable',
+        'network is unreachable',
+        'no route to host',
+        'connecterror',
+        'connection error',
+        'connection aborted',
+        'remote end closed',
+        'nodename nor servname',        # macOS getaddrinfo failure (Errno 8)
+        'name or service not known',    # glibc getaddrinfo failure
+        'temporary failure in name resolution',
+        'name resolution',
+        'getaddrinfo',
+        'errno 8',
         'dns',
         'ssl',
         'certificate',

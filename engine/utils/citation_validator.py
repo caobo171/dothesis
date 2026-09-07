@@ -136,6 +136,11 @@ class CitationValidator:
             return None, "Connection failed"
         except requests.exceptions.RequestException as e:
             return None, f"Request error: {str(e)[:50]}"
+        except Exception as e:
+            # e.g. urllib3 LocationParseError on a garbage redirect target
+            # ('www.webofknowledge.comundefinednull&referrer=...'). A bad URL is
+            # a citation-level warning, never a reason to fail the draft.
+            return None, f"Invalid URL: {str(e)[:50]}"
 
     def check_metadata_quality(self, citation: Dict) -> List[str]:
         """
