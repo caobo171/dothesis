@@ -1,33 +1,33 @@
 unit	display	templates	category	archetype	family
-co-mau-toi-thieu	cỡ mẫu tối thiểu	cỡ mẫu tối thiểu;cỡ mẫu tối thiểu là bao nhiêu	khao-sat	survey	sample-size
-co-mau-efa	cỡ mẫu efa	cỡ mẫu efa;cỡ mẫu efa là bao nhiêu	khao-sat	survey	sample-size
-co-mau-hoi-quy	cỡ mẫu hồi quy	cỡ mẫu hồi quy;cỡ mẫu hồi quy là bao nhiêu	khao-sat	survey	sample-size
-co-mau-pls-sem	cỡ mẫu pls sem	cỡ mẫu pls sem;cỡ mẫu pls sem là bao nhiêu	khao-sat	survey	sample-size
-cong-thuc-tinh-co-mau	công thức tính cỡ mẫu	công thức tính cỡ mẫu;công thức tính cỡ mẫu là bao nhiêu	khao-sat	survey	sample-size
-co-mau-dinh-luong	cỡ mẫu định lượng	cỡ mẫu định lượng;cỡ mẫu định lượng là bao nhiêu	khao-sat	survey	sample-size
-bang-cau-hoi	bảng câu hỏi	bảng câu hỏi khảo sát;bảng câu hỏi là gì	khao-sat	survey	instrument
-thiet-ke-bang-hoi	thiết kế bảng hỏi	thiết kế bảng hỏi khảo sát;thiết kế bảng hỏi là gì	khao-sat	survey	instrument
-phieu-khao-sat	phiếu khảo sát	phiếu khảo sát;phiếu khảo sát là gì	khao-sat	survey	instrument
-mau-phieu-khao-sat	mẫu phiếu khảo sát	mẫu phiếu khảo sát;mẫu phiếu khảo sát là gì	khao-sat	survey	instrument
-thang-do-likert-5-muc	thang đo likert 5 mức	thang đo likert 5 mức khảo sát;thang đo likert 5 mức là gì	khao-sat	survey	instrument
-thang-do-likert-7-muc	thang đo likert 7 mức	thang đo likert 7 mức khảo sát;thang đo likert 7 mức là gì	khao-sat	survey	instrument
-cau-hoi-sang-loc	câu hỏi sàng lọc	câu hỏi sàng lọc khảo sát;câu hỏi sàng lọc là gì	khao-sat	survey	instrument
-cau-hoi-nhan-khau-hoc	câu hỏi nhân khẩu học	câu hỏi nhân khẩu học khảo sát;câu hỏi nhân khẩu học là gì	khao-sat	survey	instrument
-ma-hoa-bang-hoi	mã hóa bảng hỏi	mã hóa bảng hỏi khảo sát;mã hóa bảng hỏi là gì	khao-sat	survey	instrument
-khao-sat-online	khảo sát online	khảo sát online;cách làm khảo sát online	khao-sat	survey	collection
-form-khao-sat	form khảo sát	form khảo sát;cách làm form khảo sát	khao-sat	survey	collection
-google-form	google form	google form;cách làm google form	khao-sat	survey	collection
-khao-sat-thu	khảo sát thử	khảo sát thử;cách làm khảo sát thử	khao-sat	survey	collection
-ty-le-phan-hoi	tỷ lệ phản hồi	tỷ lệ phản hồi;tỷ lệ phản hồi là gì	khao-sat	survey	collection
-khao-sat-khach-hang	khảo sát khách hàng	khảo sát khách hàng;cách làm khảo sát khách hàng	khao-sat	survey	collection
-khao-sat-nhan-vien	khảo sát nhân viên	khảo sát nhân viên;cách làm khảo sát nhân viên	khao-sat	survey	collection
-khao-sat-sinh-vien	khảo sát sinh viên	khảo sát sinh viên;cách làm khảo sát sinh viên	khao-sat	survey	collection
-thu-thap-du-lieu-so-cap	thu thập dữ liệu sơ cấp	thu thập dữ liệu sơ cấp;thu thập dữ liệu sơ cấp là gì	khao-sat	survey	collection
-du-lieu-thu-cap	dữ liệu thứ cấp	dữ liệu thứ cấp;dữ liệu thứ cấp là gì	khao-sat	survey	collection
-phuong-phap-chon-mau	phương pháp chọn mẫu	phương pháp chọn mẫu;phương pháp chọn mẫu là gì	khao-sat	survey	sampling
-chon-mau-thuan-tien	chọn mẫu thuận tiện	chọn mẫu thuận tiện;chọn mẫu thuận tiện là gì	khao-sat	survey	sampling
-chon-mau-ngau-nhien	chọn mẫu ngẫu nhiên	chọn mẫu ngẫu nhiên;chọn mẫu ngẫu nhiên là gì	khao-sat	survey	sampling
-chon-mau-phi-xac-suat	chọn mẫu phi xác suất	chọn mẫu phi xác suất;chọn mẫu phi xác suất là gì	khao-sat	survey	sampling
-lam-sach-du-lieu	làm sạch dữ liệu	làm sạch dữ liệu;làm sạch dữ liệu là gì	khao-sat	survey	cleaning
-phieu-tra-loi-khong-hop-le	phiếu trả lời không hợp lệ	phiếu trả lời không hợp lệ;phiếu trả lời không hợp lệ là gì	khao-sat	survey	cleaning
-dao-duc-nghien-cuu	đạo đức nghiên cứu	đạo đức nghiên cứu;đạo đức nghiên cứu là gì	khao-sat	survey	cleaning
+co-mau-toi-thieu	cỡ mẫu tối thiểu	{display};{display} là bao nhiêu	khao-sat	survey	sample-size
+co-mau-efa	cỡ mẫu efa	{display};{display} là bao nhiêu	khao-sat	survey	sample-size
+co-mau-hoi-quy	cỡ mẫu hồi quy	{display};{display} là bao nhiêu	khao-sat	survey	sample-size
+co-mau-pls-sem	cỡ mẫu pls sem	{display};{display} là bao nhiêu	khao-sat	survey	sample-size
+cong-thuc-tinh-co-mau	công thức tính cỡ mẫu	{display};{display} là bao nhiêu	khao-sat	survey	sample-size
+co-mau-dinh-luong	cỡ mẫu định lượng	{display};{display} là bao nhiêu	khao-sat	survey	sample-size
+bang-cau-hoi	bảng câu hỏi	{display} khảo sát;{display} là gì	khao-sat	survey	instrument
+thiet-ke-bang-hoi	thiết kế bảng hỏi	{display} khảo sát;{display} là gì	khao-sat	survey	instrument
+phieu-khao-sat	phiếu khảo sát	{display};{display} là gì	khao-sat	survey	instrument
+mau-phieu-khao-sat	mẫu phiếu khảo sát	{display};{display} là gì	khao-sat	survey	instrument
+thang-do-likert-5-muc	thang đo likert 5 mức	{display} khảo sát;{display} là gì	khao-sat	survey	instrument
+thang-do-likert-7-muc	thang đo likert 7 mức	{display} khảo sát;{display} là gì	khao-sat	survey	instrument
+cau-hoi-sang-loc	câu hỏi sàng lọc	{display} khảo sát;{display} là gì	khao-sat	survey	instrument
+cau-hoi-nhan-khau-hoc	câu hỏi nhân khẩu học	{display} khảo sát;{display} là gì	khao-sat	survey	instrument
+ma-hoa-bang-hoi	mã hóa bảng hỏi	{display} khảo sát;{display} là gì	khao-sat	survey	instrument
+khao-sat-online	khảo sát online	{display};cách làm {display}	khao-sat	survey	collection
+form-khao-sat	form khảo sát	{display};cách làm {display}	khao-sat	survey	collection
+google-form	google form	{display};cách làm {display}	khao-sat	survey	collection
+khao-sat-thu	khảo sát thử	{display};cách làm {display}	khao-sat	survey	collection
+ty-le-phan-hoi	tỷ lệ phản hồi	{display};{display} là gì	khao-sat	survey	collection
+khao-sat-khach-hang	khảo sát khách hàng	{display};cách làm {display}	khao-sat	survey	collection
+khao-sat-nhan-vien	khảo sát nhân viên	{display};cách làm {display}	khao-sat	survey	collection
+khao-sat-sinh-vien	khảo sát sinh viên	{display};cách làm {display}	khao-sat	survey	collection
+thu-thap-du-lieu-so-cap	thu thập dữ liệu sơ cấp	{display};{display} là gì	khao-sat	survey	collection
+du-lieu-thu-cap	dữ liệu thứ cấp	{display};{display} là gì	khao-sat	survey	collection
+phuong-phap-chon-mau	phương pháp chọn mẫu	{display};{display} là gì	khao-sat	survey	sampling
+chon-mau-thuan-tien	chọn mẫu thuận tiện	{display};{display} là gì	khao-sat	survey	sampling
+chon-mau-ngau-nhien	chọn mẫu ngẫu nhiên	{display};{display} là gì	khao-sat	survey	sampling
+chon-mau-phi-xac-suat	chọn mẫu phi xác suất	{display};{display} là gì	khao-sat	survey	sampling
+lam-sach-du-lieu	làm sạch dữ liệu	{display};{display} là gì	khao-sat	survey	cleaning
+phieu-tra-loi-khong-hop-le	phiếu trả lời không hợp lệ	{display};{display} là gì	khao-sat	survey	cleaning
+dao-duc-nghien-cuu	đạo đức nghiên cứu	{display};{display} là gì	khao-sat	survey	cleaning
