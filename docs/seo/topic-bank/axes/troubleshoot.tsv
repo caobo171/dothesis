@@ -35,7 +35,7 @@ outer-loading-thap	outer loading thấp	{display} phải làm sao;lỗi {display
 mo-hinh-khong-hoi-tu	mô hình không hội tụ	{display} phải làm sao;lỗi {display} spss	smartpls	troubleshoot	pls
 bootstrapping-bi-loi	bootstrapping bị lỗi	{display} phải làm sao;lỗi {display} spss	smartpls	troubleshoot	pls
 khong-mo-duoc-file-sav	không mở được file sav	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	software
-loi-nhap-du-lieu-tu-excel	lỗi nhập dữ liệu từ excel	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	software
+loi-nhap-du-lieu-tu-excel	lỗi nhập dữ liệu từ excel	{display} spss;{display} phải làm sao	spss	troubleshoot	software
 spss-bi-treo-khi-chay	spss bị treo khi chạy	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	software
 spss-het-han-dung-thu	spss hết hạn dùng thử	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	software
 ket-qua-khac-voi-bai-bao-goc	kết quả khác với bài báo gốc	{display} phải làm sao;lỗi {display} spss	nghien-cuu-khoa-hoc	troubleshoot	defence

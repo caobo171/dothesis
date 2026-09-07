@@ -10,7 +10,7 @@ bieu-do-p-p-plot	biểu đồ p p plot	cách chạy {display} trong spss;phân t
 cronbach-alpha	cronbach alpha	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	reliability
 kiem-dinh-do-tin-cay-thang-do	kiểm định độ tin cậy thang đo	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	reliability
 efa	efa	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	efa
-phan-tich-nhan-to-kham-pha	phân tích nhân tố khám phá	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	efa
+phan-tich-nhan-to-kham-pha	phân tích nhân tố khám phá	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	efa
 ma-tran-xoay	ma trận xoay	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	efa
 tao-bien-dai-dien	tạo biến đại diện	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	efa
 tuong-quan-pearson	tương quan pearson	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	correlation
@@ -56,6 +56,6 @@ gan-nhan-gia-tri	gán nhãn giá trị	cách chạy {display} trong spss;phân t
 nhap-du-lieu-tu-excel	nhập dữ liệu từ excel	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
 mo-file-csv	mở file csv	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
 xuat-ket-qua-ra-word	xuất kết quả ra word	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
-chay-syntax	chạy syntax	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	data
-phan-tich-cum	phân tích cụm	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	advanced
-phan-tich-biet-so	phân tích biệt số	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	advanced
+chay-syntax	chạy syntax	cách {display} trong spss;{display} spss	spss	spss-howto	data
+phan-tich-cum	phân tích cụm	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	advanced
+phan-tich-biet-so	phân tích biệt số	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	advanced
