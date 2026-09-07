@@ -152,6 +152,53 @@ def normalise_citations(body: str) -> tuple[str, int]:
     return _CODE_CITATION_RE.sub(replace, body or ""), fixed
 
 
+_FAQ_H2_RE = re.compile(r"^## .*(Câu hỏi thường gặp|Hỏi đáp|FAQ).*$", re.IGNORECASE | re.MULTILINE)
+MIN_INTERNAL_LINKS = 4
+
+
+def ensure_read_more(body: str, row, link_slugs: list[str], titles: dict[str, str],
+                     minimum: int = MIN_INTERNAL_LINKS) -> tuple[str, int]:
+    """Guarantee the internal-link floor with a "Đọc thêm" line built from the brief.
+
+    After unknown links are stripped, a post can be left with one or two real
+    links; the repair call then tends to invent new unknown targets and fail
+    again (measured: 2 of the first 32 posts). WELE's structure closes with a
+    "đọc thêm" block anyway, so instead of paying for a second model call the
+    block is added mechanically from the same list the brief offered, right
+    before the FAQ so the close paragraph stays last. Returns (body, links added).
+    """
+    from .qa import internal_links  # noqa: PLC0415 — keep qa stdlib-importable on its own
+
+    present = set(internal_links(body))
+    have = [h for h in present if h.startswith("/blog/")]
+    if len(have) >= minimum:
+        return body, 0
+    candidates = [f"/blog/vi/{slug}" for slug in link_slugs] + [f"/blog/vi/chu-de/{row.category}"]
+    added: list[str] = []
+    for href in candidates:
+        if href in present or href in added:
+            continue
+        added.append(href)
+        if len(have) + len(added) >= minimum + 1:
+            break
+    if not added:
+        return body, 0
+
+    def label(href: str) -> str:
+        slug = href.rsplit("/", 1)[-1]
+        if "/chu-de/" in href:
+            return f"chủ đề {slug.replace('-', ' ')}"
+        return titles.get(slug) or slug.replace("-", " ")
+
+    line = "Đọc thêm: " + ", ".join(f"[{label(h)}]({h})" for h in added) + ".\n\n"
+    m = _FAQ_H2_RE.search(body)
+    if m:
+        body = body[:m.start()] + line + body[m.start():]
+    else:
+        body = body.rstrip() + "\n\n" + line
+    return body, len(added)
+
+
 def seed_from(row, produced: dict) -> dict:
     """Model output plus the pipeline's own fields.
 
@@ -292,6 +339,7 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
                 # that is genuinely short of real links.
                 body, stripped = normalise_internal_links(produced.get("body") or "", known)
                 body, _cites = normalise_citations(body)
+                body, _added = ensure_read_more(body, row, link_slugs, titles)
                 produced["body"] = body
                 unlinked += stripped
                 seed = seed_from(row, produced)

@@ -511,3 +511,28 @@ def test_normalise_citations_strips_code_spans():
     assert "(Hair và cộng sự, 2010)" in out and "`(Hair" not in out
     assert "`alpha`" in out and "`(x)`" in out  # not citations, untouched
     assert "(Kaiser, 1974)" in out
+
+
+def test_ensure_read_more_fills_the_link_floor_before_the_faq():
+    from app.blog.content.plan import BacklogRow
+    from app.blog.content.writer import ensure_read_more
+
+    row = BacklogRow(priority=1, slug="cfa", focus_keyword="cfa", search_volume=100,
+                     secondary_keywords=[], category="thong-ke", archetype="term-la-gi",
+                     family="sem", sibling_slugs=[], competitor_urls=[], gate_status="measured")
+    body = ("## CFA là gì\n\nXem [EFA](/blog/vi/efa) trước.\n\n"
+            "## Câu hỏi thường gặp\n\n### CFA khác EFA?\n\nKhác.\n\nĐoạn kết [DoThesis](/landing).")
+    out, added = ensure_read_more(body, row, ["efa", "ave-la-gi", "sem-la-gi", "bootstrapping"],
+                                  {"ave-la-gi": "AVE là gì", "sem-la-gi": "SEM là gì"})
+    assert added == 4  # ave, sem, bootstrapping, category route (efa already present)
+    faq_at = out.index("## Câu hỏi thường gặp")
+    read_more_at = out.index("Đọc thêm: ")
+    assert read_more_at < faq_at
+    assert "[AVE là gì](/blog/vi/ave-la-gi)" in out
+    assert "[chủ đề thong ke](/blog/vi/chu-de/thong-ke)" in out
+    assert out.count("/blog/vi/efa") == 1
+
+    already_enough = body.replace("Xem [EFA](/blog/vi/efa) trước.",
+                                  "[a](/blog/vi/a) [b](/blog/vi/b) [c](/blog/vi/c) [d](/blog/vi/d)")
+    same, added = ensure_read_more(already_enough, row, ["x"], {})
+    assert added == 0 and same == already_enough
