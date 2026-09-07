@@ -10,7 +10,9 @@ from .models import Job, Paper
 
 # A real concurrency constraint (one engine subprocess per user at a time).
 # Cannot be raised without changing the subprocess model.
-MAX_RUNNING_JOBS_PER_USER = 1
+# One running job per account by default. Overridable for load/e2e testing
+# on a dev box (MAX_RUNNING_JOBS_PER_USER=4); production keeps the default.
+MAX_RUNNING_JOBS_PER_USER = max(1, int(os.environ.get("MAX_RUNNING_JOBS_PER_USER", "1") or 1))
 
 # Daily cap is MVP scaffolding for a future billing system. Off by default so users
 # don't hit "429 Too Many Requests" with no warning. Set MAX_JOBS_PER_DAY env var

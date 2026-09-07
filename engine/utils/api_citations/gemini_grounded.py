@@ -12,6 +12,13 @@ import sys
 from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
 
+try:
+    from ..gemini_cache import (grounded_cache_enabled, cache_get, cache_put, make_key,
+                                TTL_GROUNDED_HIT, TTL_GROUNDED_MISS)
+except ImportError:  # script-style import
+    from utils.gemini_cache import (grounded_cache_enabled, cache_get, cache_put, make_key,
+                                    TTL_GROUNDED_HIT, TTL_GROUNDED_MISS)
+
 logger = logging.getLogger(__name__)
 
 # Safe print function that handles broken pipes (worker runs with stdio: 'ignore')
@@ -310,27 +317,37 @@ class GeminiGroundedClient(BaseAPIClient):
             # Construct grounded search prompt
             prompt = self._build_search_prompt(query)
 
+            # Every grounded call is billed (Google Search grounding + URL context
+            # + tokens), so the same query is answered once and replayed from disk.
+            cache_key = None
+            if grounded_cache_enabled():
+                cache_key = make_key("grounded", self.model_name, prompt)
+                hit = cache_get("grounded", cache_key)
+                if hit is not None:
+                    logger.info(f"Gemini grounded cache hit: {query[:60]}")
+                    return hit.get("result")
+
             # Generate with Google Search grounding via REST API
             response_data = self._generate_content_with_grounding(prompt)
 
-            # If googleSearch hit quota limit (429), try DataForSEO fallback
+            # If googleSearch hit quota limit (429), try DataForSEO fallback.
+            # Not cached: a 429/timeout is transient, not an answer.
             if not response_data:
                 return self._try_dataforseo_fallback(query)
 
             # Extract grounding citations from response
             sources = self._extract_grounding_citations(response_data)
+            result = None
+            if sources:
+                # Validate and unwrap URLs; keep the first valid source
+                valid_sources = self._validate_sources(sources)
+                if valid_sources:
+                    result = valid_sources[0]
 
-            if not sources:
-                return None
-
-            # Validate and unwrap URLs
-            valid_sources = self._validate_sources(sources)
-
-            if not valid_sources:
-                return None
-
-            # Return first valid source
-            return valid_sources[0]
+            if cache_key:
+                cache_put("grounded", cache_key, {"query": query, "result": result},
+                          TTL_GROUNDED_HIT if result else TTL_GROUNDED_MISS)
+            return result
 
         except Exception as e:
             # Try DataForSEO fallback on any error

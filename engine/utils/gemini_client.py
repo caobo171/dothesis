@@ -14,6 +14,81 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+try:
+    from .gemini_cache import llm_cache_enabled, cache_get, cache_put, make_key, TTL_LLM
+except ImportError:  # script-style import with engine/utils on sys.path
+    from gemini_cache import llm_cache_enabled, cache_get, cache_put, make_key, TTL_LLM
+
+
+class _CachedPart:
+    def __init__(self, text: str):
+        self.text = text
+        self.thought = False
+        self.function_call = None
+
+
+class _CachedContent:
+    def __init__(self, text: str):
+        self.role = "model"
+        self.parts = [_CachedPart(text)]
+
+
+class _CachedCandidate:
+    def __init__(self, text: str, finish_reason: str):
+        self.content = _CachedContent(text)
+        self.finish_reason = finish_reason
+
+
+class _CachedUsage:
+    def __init__(self, usage: dict):
+        self.prompt_token_count = int(usage.get("prompt") or 0)
+        self.candidates_token_count = int(usage.get("candidates") or 0)
+        self.thoughts_token_count = int(usage.get("thoughts") or 0)
+        self.cached_content_token_count = 0
+        self.total_token_count = self.prompt_token_count + self.candidates_token_count + self.thoughts_token_count
+
+
+class CachedResponse:
+    """Replay of a stored generate_content answer; quacks like the SDK response."""
+
+    from_cache = True
+
+    def __init__(self, payload: dict):
+        self.text = payload.get("text") or ""
+        self.model = payload.get("model")
+        self.candidates = [_CachedCandidate(self.text, payload.get("finish_reason") or "STOP")]
+        self.usage_metadata = _CachedUsage(payload.get("usage") or {})
+        self.function_calls = None
+
+
+def _store_response(cache_key: str, model: str, response: Any) -> None:
+    """Persist a complete, text-bearing answer. Truncated or empty answers are not worth replaying."""
+    try:
+        candidates = getattr(response, "candidates", None) or []
+        if not candidates:
+            return
+        first = candidates[0]
+        finish = getattr(first, "finish_reason", None)
+        finish_name = str(getattr(finish, "name", finish) or "STOP")
+        if finish_name not in ("STOP", "1", "FinishReason.STOP"):
+            return
+        parts = getattr(getattr(first, "content", None), "parts", None) or []
+        texts = [p.text for p in parts if getattr(p, "text", None) and not getattr(p, "thought", False)]
+        text = "".join(texts)
+        if not text.strip():
+            return
+        meta = getattr(response, "usage_metadata", None)
+        usage = {}
+        if meta is not None:
+            usage = {
+                "prompt": getattr(meta, "prompt_token_count", 0) or 0,
+                "candidates": getattr(meta, "candidates_token_count", 0) or 0,
+                "thoughts": getattr(meta, "thoughts_token_count", 0) or 0,
+            }
+        cache_put("llm", cache_key, {"model": model, "text": text, "finish_reason": "STOP", "usage": usage}, TTL_LLM)
+    except Exception as e:
+        logger.debug("LLM cache store skipped: %s", e)
+
 
 @runtime_checkable
 class GenerativeModel(Protocol):
@@ -151,16 +226,29 @@ class GeminiModelWrapper:
         else:
             contents = str(prompt)
 
+        # Optional replay cache (DOTHESIS_LLM_CACHE=1): identical model + prompt +
+        # config returns the stored answer without a paid API call.
+        cache_key = None
+        if llm_cache_enabled():
+            cache_key = make_key("llm", self.model_name, contents, config)
+            hit = cache_get("llm", cache_key)
+            if hit is not None:
+                logger.info("LLM cache hit (%s, %d-char prompt)", self.model_name, len(contents))
+                return CachedResponse(hit)
+
         # Try the current model; on overload, walk the fallback chain.
         attempt_model = self.model_name
         last_err: Optional[Exception] = None
         while True:
             try:
-                return self.client.models.generate_content(
+                response = self.client.models.generate_content(
                     model=attempt_model,
                     contents=contents,
                     config=config if config else None,
                 )
+                if cache_key:
+                    _store_response(cache_key, attempt_model, response)
+                return response
             except Exception as err:
                 last_err = err
                 if not _is_overload_error(err) or not self._fallback_queue:

@@ -87,7 +87,7 @@ class TokenTracker:
         total = input_tokens + output_tokens
 
         cost = 0.0
-        if self._pricing:
+        if self._pricing and status != CallStatus.CACHED:
             cost = (
                 (input_tokens / 1_000_000) * self._pricing.input_price
                 + (output_tokens / 1_000_000) * self._pricing.output_price

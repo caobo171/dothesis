@@ -56,6 +56,7 @@ from .gemini_grounded import GeminiGroundedClient
 from .serper_client import SerperClient
 from .query_router import QueryRouter, QueryClassification
 from .base import validate_publication_year, validate_author_name
+from ..gemini_cache import cache_root, grounded_search_mode
 
 from ..models import strip_markdown_json, LLMCitationResponse
 
@@ -151,8 +152,10 @@ class CitationResearcher:
     Gemini Grounded uses DataForSEO SERP API as fallback when googleSearch hits quota limits.
     """
 
-    # Persistent cache file path
-    CACHE_FILE = Path(".citation_cache_orchestrator.json")
+    # Persistent cache file path — one shared file for every process (API
+    # worker, engine CLI, tests). It used to be cwd-relative, which left three
+    # diverging copies around the repo and no sharing between them.
+    CACHE_FILE = cache_root() / "citation_cache_orchestrator.json"
 
     def __init__(
         self,
@@ -196,6 +199,10 @@ class CitationResearcher:
         else:
             self.use_serper = use_serper
         self.verbose = verbose
+        # always  → paid grounded search runs for every query (historical behaviour)
+        # fallback→ only when the free academic APIs found nothing for the query
+        # off     → never
+        self.grounded_mode = grounded_search_mode()
 
         # Initialize API clients
         if self.enable_crossref:
@@ -325,10 +332,27 @@ class CitationResearcher:
                     logger.warning(f"Unexpected cache format for topic '{topic}': {type(value)}")
                     cache_data[topic] = None
 
-            with open(self.CACHE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(cache_data, f, indent=2, ensure_ascii=False)
+            # Parallel jobs each hold their own copy: merge with what is on disk
+            # now (never replacing a real hit with a miss), then rename atomically
+            # so a concurrent writer can neither clobber nor half-write the file.
+            merged: Dict[str, Any] = {}
+            try:
+                if self.CACHE_FILE.exists():
+                    with open(self.CACHE_FILE, 'r', encoding='utf-8') as f:
+                        merged = json.load(f) or {}
+            except Exception as e:
+                logger.warning(f"Could not re-read {self.CACHE_FILE} before saving ({e}); overwriting")
+                merged = {}
+            for topic, value in cache_data.items():
+                if value is not None or topic not in merged:
+                    merged[topic] = value
+            self.CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            tmp_file = self.CACHE_FILE.with_name(f".{self.CACHE_FILE.name}.{os.getpid()}.tmp")
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(merged, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_file, self.CACHE_FILE)
 
-            logger.debug(f"Saved {len(cache_data)} citations to cache file {self.CACHE_FILE}")
+            logger.debug(f"Saved {len(merged)} citations to cache file {self.CACHE_FILE}")
         except Exception as e:
             logger.error(f"Failed to save cache to {self.CACHE_FILE}: {e}")
 
@@ -419,7 +443,7 @@ class CitationResearcher:
                 parallel_apis.append('openalex')
             if self.enable_semantic_scholar:
                 parallel_apis.append('semantic_scholar')
-            if self.enable_gemini_grounded:
+            if self.enable_gemini_grounded and self.grounded_mode == 'always':
                 parallel_apis.append('gemini_grounded')
 
 
@@ -430,6 +454,17 @@ class CitationResearcher:
                 apis_str = " + ".join([a.replace("_", " ").title() for a in parallel_apis])
                 safe_print(f"    → Querying {apis_str} in parallel...", end=" ", flush=True)
             results: List[Tuple[Optional[Dict[str, Any]], str]] = []
+            collected = set()
+
+            def _collect(future, api):
+                if future in collected:
+                    return
+                collected.add(future)
+                try:
+                    results.append(future.result(timeout=0))
+                except Exception as e:
+                    logger.debug(f"Parallel {api} error: {e}")
+                    results.append((None, api))
 
             # submit_with_context carries the parent thread's progress
             # emitter binding into each per-API worker so safe_print lines
@@ -443,25 +478,15 @@ class CitationResearcher:
                 }
                 try:
                     for future in as_completed(futures, timeout=30):  # 30s timeout - balanced for Gemini
-                        try:
-                            result = future.result()
-                            results.append(result)
-                        except Exception as e:
-                            api = futures[future]
-                            logger.debug(f"Parallel {api} error: {e}")
-                            results.append((None, api))
+                        _collect(future, futures[future])
                 except (TimeoutError, FuturesTimeoutError):
-                    # Graceful degradation: use whatever results we have
                     logger.warning(f"Parallel query timeout - {len(results)} of {len(futures)} APIs responded")
-                    # Collect any completed futures
-                    for future, api in futures.items():
-                        if future.done():
-                            try:
-                                result = future.result(timeout=0)
-                                if result not in results:
-                                    results.append(result)
-                            except Exception:
-                                pass
+            # Leaving the `with` block waited for the slow APIs anyway, so take
+            # their answers too instead of discarding a call already paid for
+            # (a quarter of grounded searches used to be thrown away this way).
+            for future, api in futures.items():
+                if future.done():
+                    _collect(future, api)
 
             # Collect ALL valid results (not just best one)
             for result_metadata, result_source in results:
@@ -470,6 +495,14 @@ class CitationResearcher:
                     # Update source usage count for logging
                     self.source_usage_count[result_source] = self.source_usage_count.get(result_source, 0) + 1
 
+
+            # Cost control: in 'fallback' mode the paid grounded search only runs
+            # when the free academic APIs found nothing for this query.
+            if not valid_results and self.enable_gemini_grounded and self.grounded_mode == 'fallback':
+                result_metadata, result_source = self._search_api('gemini_grounded', topic)
+                if result_metadata and (result_metadata.get('doi') or result_metadata.get('url')):
+                    valid_results.append((result_metadata, result_source))
+                    self.source_usage_count[result_source] = self.source_usage_count.get(result_source, 0) + 1
 
             if valid_results:
                 if self.verbose:
@@ -538,7 +571,8 @@ class CitationResearcher:
                             safe_print(f"✗ Error: {e}")
                         logger.error(f"Semantic Scholar error: {e}")
 
-                elif api_name == 'gemini_grounded' and self.enable_gemini_grounded:
+                elif api_name == 'gemini_grounded' and self.enable_gemini_grounded \
+                        and self._grounded_wanted(valid_results):
                     self._report_progress("AI-powered academic search...", "search")
                     if self.verbose:
                         search_name = "Serper" if self.use_serper else "Gemini Grounded (Google Search)"
@@ -807,6 +841,14 @@ class CitationResearcher:
         except Exception as e:
             logger.error(f"Error creating citation: {e}")
             return None
+    def _grounded_wanted(self, valid_results: list) -> bool:
+        """Whether the paid grounded search should run given what the free APIs found."""
+        if self.grounded_mode == 'off':
+            return False
+        if self.grounded_mode == 'fallback':
+            return not valid_results
+        return True
+
     def _search_api(self, api_name: str, topic: str) -> Tuple[Optional[Dict[str, Any]], str]:
         """
         Search a single API for citations.
