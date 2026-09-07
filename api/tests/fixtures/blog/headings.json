@@ -1,0 +1,23 @@
+{
+  "_comment": "Shared contract between api/app/blog/markdown.py and web/app/blog/_lib/markdown.ts. Both sides parse headings.md and must produce exactly these ids: the contents box on the web is built from one side and the anchors from the other, so a single character of drift breaks every in-page link. See markdown.py's module docstring for the algorithm.",
+  "headings": [
+    {"level": 1, "text": "Cronbach's Alpha là gì", "id": "cronbach-s-alpha-la-gi"},
+    {"level": 2, "text": "Phân tích EFA", "id": "phan-tich-efa"},
+    {"level": 3, "text": "Điều kiện áp dụng", "id": "dieu-kien-ap-dung"},
+    {"level": 2, "text": "Ma trận xoay lộn xộn: phải làm sao?", "id": "ma-tran-xoay-lon-xon-phai-lam-sao"},
+    {"level": 2, "text": "Phân tích EFA", "id": "phan-tich-efa-1"},
+    {"level": 2, "text": "Phân tích EFA", "id": "phan-tich-efa-2"},
+    {"level": 2, "text": "Câu hỏi thường gặp", "id": "cau-hoi-thuong-gap"},
+    {"level": 3, "text": "Cronbach's Alpha bao nhiêu là đạt?", "id": "cronbach-s-alpha-bao-nhieu-la-dat"},
+    {"level": 3, "text": "Có thể loại biến để tăng Alpha không?", "id": "co-the-loai-bien-de-tang-alpha-khong"},
+    {"level": 2, "text": "Kết thúc", "id": "ket-thuc"}
+  ],
+  "faq_questions": [
+    "Cronbach's Alpha bao nhiêu là đạt?",
+    "Có thể loại biến để tăng Alpha không?"
+  ],
+  "internal_links": [
+    "/blog/vi/do-tin-cay-thang-do",
+    "/landing"
+  ]
+}
