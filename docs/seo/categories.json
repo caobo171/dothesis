@@ -1,68 +1,65 @@
-{
-  "_comment": "Seven blog categories (phan-tich-du-lieu and luan-van-thac-si were folded on 2026-09-08, see topic-bank/category-folds.tsv). A category exists only if its name has measured search volume (Vietnam, vi, 2026-09-07), a real route (/blog/vi/chu-de/{slug}), a hand-written intro, and at least ten posts. The run copies this file to api/data/blog-seeds/vi/categories.json; `python -m app.blog.cli create --dir` upserts it before the posts. Intros are written by hand on purpose: a category that reads as a filtered list does not rank and does not help the reader decide where to start.",
-  "categories": [
-    {
-      "slug": "spss",
-      "name": "SPSS",
-      "display_name": "SPSS",
-      "target_keyword": "spss",
-      "search_volume": 14800,
-      "sort_order": 1,
-      "intro_md": "Phần lớn khóa luận và luận văn định lượng ở Việt Nam chạy số liệu trên SPSS, và phần lớn thời gian của sinh viên không nằm ở chỗ bấm nút. Nó nằm ở chỗ đọc bảng kết quả, biết con số nào là đạt, và biết phải làm gì khi nó không đạt.\n\nChuyên mục này đi theo đúng thứ tự bạn sẽ gặp trong một bài phân tích: làm sạch và mã hóa dữ liệu, thống kê mô tả, kiểm định độ tin cậy Cronbach's Alpha, phân tích nhân tố khám phá EFA, tương quan Pearson, hồi quy tuyến tính, rồi các kiểm định khác biệt như T-test và ANOVA. Mỗi bài dừng lại ở một thao tác, chỉ đúng đường menu trong SPSS, giải thích từng bảng output và ghi rõ ngưỡng chấp nhận kèm nguồn.\n\nBạn sẽ thấy nhiều bài xử lý tình huống hỏng: biến quan sát bị loại vì hệ số tải thấp, ma trận xoay lộn xộn, Sig. lớn hơn 0.05 ở đúng giả thuyết quan trọng nhất. Đó là những chỗ giáo viên hướng dẫn hay hỏi và cũng là chỗ dịch vụ chạy thuê hay giấu. Mục tiêu của chuyên mục là để bạn tự chạy được, tự giải thích được, và không phải trả tiền cho một bảng số mình không hiểu.\n\nNếu mô hình của bạn có biến trung gian, biến điều tiết hoặc cấu trúc phức tạp, hãy xem thêm chuyên mục SmartPLS. Nếu bạn chưa có dữ liệu, chuyên mục Khảo sát nói về cách thu thập và cỡ mẫu trước khi mở SPSS.\n\nBắt đầu từ đâu. Nếu bạn vừa nhập xong dữ liệu, đọc bài về làm sạch dữ liệu và mã hóa biến trước, rồi tới thống kê mô tả để có bảng đặc điểm mẫu cho chương 4. Sau đó đi đúng thứ tự một bài phân tích: Cronbach's Alpha, EFA, tương quan, hồi quy. Bài về cách đọc bảng Coefficients và bài về ý nghĩa của Sig. nên đọc trước khi bạn viết một câu kết luận nào về giả thuyết. Các bài xử lý sự cố chỉ cần khi bạn gặp đúng lỗi đó."
-    },
-    {
-      "slug": "thong-ke",
-      "name": "Thống kê",
-      "display_name": "Thống kê",
-      "target_keyword": "thống kê",
-      "search_volume": 14800,
-      "sort_order": 2,
-      "intro_md": "Một bài luận văn định lượng chỉ dùng chừng hai chục khái niệm thống kê, nhưng chúng xuất hiện ở khắp nơi và thường bị hiểu lệch: độ lệch chuẩn, phương sai, trung vị, giá trị ngoại lai, p-value, hệ số tương quan, khoảng tin cậy, cỡ mẫu.\n\nChuyên mục này giải thích từng khái niệm bằng ngôn ngữ người viết luận văn cần: nó đo cái gì, tính ra sao, đọc trong bảng SPSS hay SmartPLS ở cột nào, và bao nhiêu thì được coi là chấp nhận trong bối cảnh nghiên cứu xã hội. Mỗi bài có một ví dụ số minh họa để bạn đối chiếu với số của mình, và một đoạn gợi ý cách diễn đạt kết quả trong chương 4.\n\nThứ tự đọc hợp lý là bắt đầu từ mô tả dữ liệu, sang phân phối và ngoại lai, rồi mới tới suy diễn thống kê với p-value và kiểm định giả thuyết. Nếu bạn đang bị hội đồng hỏi vì sao chọn ngưỡng 0.05, hoặc vì sao trung vị thay vì trung bình, câu trả lời nằm ở đây.\n\nCác thao tác cụ thể trên phần mềm được tách sang chuyên mục SPSS và SmartPLS để bài ở đây tập trung vào ý nghĩa của con số.\n\nBắt đầu từ đâu. Nếu bạn mới cầm dữ liệu, đọc bài về thống kê mô tả để biết mô tả mẫu bằng tần số, trung bình và độ lệch chuẩn. Sau đó đọc về phân phối chuẩn và giá trị ngoại lai, vì hai thứ này quyết định bạn được dùng kiểm định tham số hay không. Bài về p-value và Sig. nên đọc trước khi chạy bất kỳ kiểm định nào, để bạn không đọc nhầm một con số nhỏ thành một kết quả lớn. Cuối cùng là hệ số tương quan và cỡ mẫu, hai khái niệm hội đồng hay hỏi nhất trong phần bảo vệ."
-    },
-    {
-      "slug": "khao-sat",
-      "name": "Khảo sát",
-      "display_name": "Khảo sát",
-      "target_keyword": "khảo sát",
-      "search_volume": 6600,
-      "sort_order": 3,
-      "intro_md": "Dữ liệu xấu không cứu được bằng phân tích tốt. Thang đo rời rạc, câu hỏi dẫn dắt, mẫu quá nhỏ hoặc trả lời cho có đều hiện ra ở bước Cronbach's Alpha và EFA, khi đã quá muộn để phát lại phiếu.\n\nChuyên mục này đi từ thiết kế bảng hỏi tới lúc có file dữ liệu sạch: chọn thang đo Likert mấy mức, đặt câu hỏi cho từng biến quan sát, tính cỡ mẫu theo số biến và theo phương pháp phân tích, phát phiếu trực tuyến bằng Google Forms, lọc phiếu trả lời không hợp lệ, mã hóa và nhập vào SPSS.\n\nBạn sẽ thấy các bài nói thẳng về những chỗ khó: tỷ lệ phản hồi thấp, câu hỏi đảo ngược làm rối người trả lời, và cách xử lý dữ liệu thiếu. Nơi nào có công thức, bài ghi rõ nguồn của công thức đó thay vì đưa một con số cho xong.\n\nVới bạn viết bằng tiếng Việt và cần một bộ dữ liệu khảo sát đủ điều kiện để chạy Cronbach's Alpha, EFA hay SEM, các bài trong chuyên mục nhắc tới fillform.info, sản phẩm cùng nhà với DoThesis, như một lựa chọn để thu thập và làm sạch dữ liệu từ Google Forms. Đó là gợi ý của chính chúng tôi, không phải đánh giá bên thứ ba.\n\nBắt đầu từ đâu. Đọc bài về thang đo Likert trước, vì nó quyết định cách bạn viết từng câu hỏi và cách mã hóa sau này. Tiếp theo là bài về cỡ mẫu, đọc trước khi phát phiếu chứ không phải sau, vì thiếu mẫu là lỗi không sửa được bằng phân tích. Bài về thiết kế bảng hỏi nói về thứ tự câu, câu đảo ngược và câu sàng lọc. Khi đã có dữ liệu, bài về làm sạch phiếu và mã hóa trong SPSS đưa bạn tới file sẵn sàng để chạy Cronbach's Alpha."
-    },
-    {
-      "slug": "nghien-cuu-khoa-hoc",
-      "name": "Nghiên cứu khoa học",
-      "display_name": "Nghiên cứu khoa học",
-      "target_keyword": "nghiên cứu khoa học",
-      "search_volume": 6600,
-      "sort_order": 4,
-      "intro_md": "Một đề tài nghiên cứu khoa học sinh viên hay một bài báo đầu tay khác khóa luận ở chỗ nó phải đứng được trước người phản biện không biết bạn là ai. Câu hỏi nghiên cứu phải rõ, phương pháp phải bảo vệ được, và kết quả phải nói đúng cái dữ liệu cho phép nói.\n\nChuyên mục này bao quát quy trình của một nghiên cứu định lượng: xác định vấn đề và câu hỏi nghiên cứu, tổng quan tài liệu, xây dựng giả thuyết, chọn phương pháp nghiên cứu, thu thập và phân tích dữ liệu, rồi viết và trình bày. Các bài về phương pháp nghiên cứu, dữ liệu sơ cấp và thứ cấp, định tính và định lượng, biến độc lập và biến phụ thuộc nằm ở đây.\n\nDoThesis chỉ hỗ trợ nghiên cứu định lượng bằng khảo sát và thống kê, nên khi một bài so sánh định tính với định lượng, mục đích là để bạn biết mình đang chọn gì và vì sao, không phải để hướng dẫn phỏng vấn hay phân tích chủ đề.\n\nNếu bạn đã có đề tài và cần đi thẳng vào mô hình, hãy sang chuyên mục Mô hình nghiên cứu. Nếu đích đến là khóa luận hay luận văn thạc sĩ, hai chuyên mục đó nói về yêu cầu riêng của từng loại.\n\nBắt đầu từ đâu. Bài về quy trình nghiên cứu định lượng cho bạn khung tổng thể trong một lần đọc. Sau đó đọc về câu hỏi nghiên cứu và giả thuyết, vì một giả thuyết viết mơ hồ sẽ không kiểm định được ở chương 4. Bài về biến độc lập, biến phụ thuộc và các loại biến khác giúp bạn vẽ mô hình mà không nhầm vai trò của từng biến. Bài về dữ liệu sơ cấp và thứ cấp, và bài về phương pháp nghiên cứu, là hai bài nên đọc trước khi viết chương 3."
-    },
-    {
-      "slug": "khoa-luan-tot-nghiep",
-      "name": "Khóa luận tốt nghiệp",
-      "display_name": "Khóa luận tốt nghiệp",
-      "target_keyword": "khóa luận tốt nghiệp",
-      "search_volume": 2900,
-      "sort_order": 5,
-      "intro_md": "Khóa luận tốt nghiệp là lần đầu phần lớn sinh viên phải tự làm một nghiên cứu từ đầu tới cuối trong vài tháng, song song với thực tập. Cái thiếu thường không phải kiến thức mà là thứ tự: làm gì trước, cái gì có thể làm song song, và mốc nào không được trễ.\n\nChuyên mục này bám theo cấu trúc năm chương quen thuộc: giới thiệu, cơ sở lý thuyết và mô hình, phương pháp nghiên cứu, kết quả, kết luận và hàm ý. Mỗi chương có bài riêng về yêu cầu, cách viết, những lỗi hội đồng hay bắt, và một vài câu mẫu để bạn thay số liệu của mình vào.\n\nBạn cũng sẽ thấy các bài về việc chọn đề tài theo ngành, viết tóm tắt, trình bày bảng biểu, trích dẫn theo APA và chuẩn bị bảo vệ. Các bài về chạy số cụ thể được để ở chuyên mục SPSS và SmartPLS để bài ở đây nói về cách đưa kết quả vào văn bản.\n\nNếu bạn học cao học, chuyên mục Luận văn thạc sĩ có yêu cầu cao hơn về đóng góp và về mô hình, nhưng phần lớn bài ở đây vẫn áp dụng được.\n\nBắt đầu từ đâu. Nếu chưa có đề tài, đọc bài về cách chọn đề tài theo ngành và bài về tiêu chí một đề tài làm được trong ba tháng. Nếu đã có đề tài, đọc bài về cấu trúc năm chương để biết mỗi chương cần gì, rồi đọc bài về chương 1 vì đó là chương hội đồng đọc kỹ nhất và sinh viên viết vội nhất. Bài về trích dẫn APA và bài về trình bày bảng biểu nên đọc trước khi bắt đầu viết chứ không phải lúc sửa. Bài về chuẩn bị bảo vệ để dành cho hai tuần cuối."
-    },
-    {
-      "slug": "smartpls",
-      "name": "SmartPLS",
-      "display_name": "SmartPLS",
-      "target_keyword": "smartpls",
-      "search_volume": 2400,
-      "sort_order": 6,
-      "intro_md": "Khi mô hình của bạn có nhiều biến tiềm ẩn, biến trung gian, biến điều tiết hoặc cỡ mẫu không lớn, SPSS bắt đầu đuối và SmartPLS với PLS-SEM trở thành lựa chọn mặc định của rất nhiều luận văn kinh tế và quản trị ở Việt Nam.\n\nChuyên mục này đi theo đúng hai bước của PLS-SEM. Bước một là mô hình đo lường: hệ số tải ngoài, độ tin cậy tổng hợp CR, phương sai trích trung bình AVE, giá trị phân biệt theo Fornell-Larcker và HTMT. Bước hai là mô hình cấu trúc: đa cộng tuyến VIF, hệ số đường dẫn và bootstrapping, R bình phương, f bình phương, Q bình phương, rồi tới trung gian, điều tiết và phân tích đa nhóm.\n\nMỗi bài chỉ đúng chỗ bấm trong SmartPLS 4, giải thích bảng kết quả, ghi ngưỡng kèm nguồn, và có một đoạn gợi ý cách viết kết quả vào chương 4. Các bài xử lý sự cố nói về loading thấp, HTMT vượt ngưỡng, và đường dẫn không có ý nghĩa thống kê.\n\nNếu bạn còn phân vân giữa PLS-SEM và CB-SEM trên AMOS, có bài so sánh thẳng thắn về khi nào nên dùng cái nào. Kiến thức nền về SEM và các khái niệm thống kê nằm ở chuyên mục Thống kê.\n\nBắt đầu từ đâu. Đọc bài giới thiệu PLS-SEM và bài so sánh với CB-SEM trước, để chắc rằng SmartPLS đúng là công cụ cho mô hình của bạn. Sau đó đi theo thứ tự chạy thật: bài về mô hình đo lường với loading, CR và AVE, rồi bài về giá trị phân biệt HTMT, rồi mới sang mô hình cấu trúc với bootstrapping và hệ số đường dẫn. Bài về biến trung gian và biến điều tiết chỉ cần khi mô hình của bạn có chúng. Bài xử lý sự cố về loading thấp và HTMT vượt ngưỡng nên đọc khi bạn gặp đúng vấn đề đó, không cần đọc trước."
-    },
-    {
-      "slug": "mo-hinh-nghien-cuu",
-      "name": "Mô hình nghiên cứu",
-      "display_name": "Mô hình nghiên cứu",
-      "target_keyword": "mô hình nghiên cứu",
-      "search_volume": 720,
-      "sort_order": 7,
-      "intro_md": "Mô hình nghiên cứu là thứ quyết định toàn bộ phần sau của luận văn: bảng hỏi đo cái gì, cỡ mẫu bao nhiêu, chạy phép phân tích nào, và kết quả có gì để bàn. Chọn mô hình sai ở chương 2 thì chương 4 không cứu được.\n\nChuyên mục này giới thiệu các lý thuyết và mô hình được dùng nhiều nhất trong luận văn kinh tế và quản trị ở Việt Nam: TAM, TPB, UTAUT, SERVQUAL, mô hình kỳ vọng và xác nhận, các mô hình về động lực, cam kết và ý định. Mỗi bài nói về nguồn gốc của mô hình với trích dẫn gốc, các biến và giả thuyết thường dùng, thang đo gợi ý cho từng biến, và những điều cần lưu ý khi đưa mô hình vào bối cảnh Việt Nam.\n\nBên cạnh đó là các bài về khái niệm nền: biến độc lập và phụ thuộc, biến trung gian, biến điều tiết, biến kiểm soát, cách vẽ mô hình và cách phát biểu giả thuyết cho chạy được.\n\nKhi đã chốt mô hình, chuyên mục Khảo sát nói về cách chuyển nó thành bảng hỏi, và chuyên mục SmartPLS nói về cách kiểm định nó.\n\nBắt đầu từ đâu. Đọc bài về các loại biến trong mô hình trước, vì nhầm vai trò của biến là lỗi phổ biến nhất khi vẽ mô hình. Sau đó chọn một mô hình nền phù hợp với đề tài: TAM hoặc UTAUT cho ý định sử dụng công nghệ, TPB cho ý định hành vi nói chung, SERVQUAL cho chất lượng dịch vụ và sự hài lòng. Bài về cách xây dựng mô hình nghiên cứu hướng dẫn bạn kết hợp và điều chỉnh mô hình gốc cho bối cảnh Việt Nam mà vẫn giữ được cơ sở lý thuyết. Bài về cách phát biểu giả thuyết nên đọc trước khi chốt mô hình, để mỗi mũi tên trong hình đều có một giả thuyết kiểm định được."
-    }
-  ]
-}
+[
+  {
+    "slug": "spss",
+    "name": "SPSS",
+    "display_name": "SPSS",
+    "target_keyword": "spss",
+    "search_volume": 14800,
+    "sort_order": 1,
+    "intro_md": "Phần lớn khóa luận và luận văn định lượng ở Việt Nam chạy số liệu trên SPSS, và phần lớn thời gian của sinh viên không nằm ở chỗ bấm nút. Nó nằm ở chỗ đọc bảng kết quả, biết con số nào là đạt, và biết phải làm gì khi nó không đạt.\n\nChuyên mục này đi theo đúng thứ tự bạn sẽ gặp trong một bài phân tích: làm sạch và mã hóa dữ liệu, thống kê mô tả, kiểm định độ tin cậy Cronbach's Alpha, phân tích nhân tố khám phá EFA, tương quan Pearson, hồi quy tuyến tính, rồi các kiểm định khác biệt như T-test và ANOVA. Mỗi bài dừng lại ở một thao tác, chỉ đúng đường menu trong SPSS, giải thích từng bảng output và ghi rõ ngưỡng chấp nhận kèm nguồn.\n\nBạn sẽ thấy nhiều bài xử lý tình huống hỏng: biến quan sát bị loại vì hệ số tải thấp, ma trận xoay lộn xộn, Sig. lớn hơn 0.05 ở đúng giả thuyết quan trọng nhất. Đó là những chỗ giáo viên hướng dẫn hay hỏi và cũng là chỗ dịch vụ chạy thuê hay giấu. Mục tiêu của chuyên mục là để bạn tự chạy được, tự giải thích được, và không phải trả tiền cho một bảng số mình không hiểu.\n\nNếu mô hình của bạn có biến trung gian, biến điều tiết hoặc cấu trúc phức tạp, hãy xem thêm chuyên mục SmartPLS. Nếu bạn chưa có dữ liệu, chuyên mục Khảo sát nói về cách thu thập và cỡ mẫu trước khi mở SPSS.\n\nBắt đầu từ đâu. Nếu bạn vừa nhập xong dữ liệu, đọc bài về làm sạch dữ liệu và mã hóa biến trước, rồi tới thống kê mô tả để có bảng đặc điểm mẫu cho chương 4. Sau đó đi đúng thứ tự một bài phân tích: Cronbach's Alpha, EFA, tương quan, hồi quy. Bài về cách đọc bảng Coefficients và bài về ý nghĩa của Sig. nên đọc trước khi bạn viết một câu kết luận nào về giả thuyết. Các bài xử lý sự cố chỉ cần khi bạn gặp đúng lỗi đó."
+  },
+  {
+    "slug": "thong-ke",
+    "name": "Thống kê",
+    "display_name": "Thống kê",
+    "target_keyword": "thống kê",
+    "search_volume": 14800,
+    "sort_order": 2,
+    "intro_md": "Một bài luận văn định lượng chỉ dùng chừng hai chục khái niệm thống kê, nhưng chúng xuất hiện ở khắp nơi và thường bị hiểu lệch: độ lệch chuẩn, phương sai, trung vị, giá trị ngoại lai, p-value, hệ số tương quan, khoảng tin cậy, cỡ mẫu.\n\nChuyên mục này giải thích từng khái niệm bằng ngôn ngữ người viết luận văn cần: nó đo cái gì, tính ra sao, đọc trong bảng SPSS hay SmartPLS ở cột nào, và bao nhiêu thì được coi là chấp nhận trong bối cảnh nghiên cứu xã hội. Mỗi bài có một ví dụ số minh họa để bạn đối chiếu với số của mình, và một đoạn gợi ý cách diễn đạt kết quả trong chương 4.\n\nThứ tự đọc hợp lý là bắt đầu từ mô tả dữ liệu, sang phân phối và ngoại lai, rồi mới tới suy diễn thống kê với p-value và kiểm định giả thuyết. Nếu bạn đang bị hội đồng hỏi vì sao chọn ngưỡng 0.05, hoặc vì sao trung vị thay vì trung bình, câu trả lời nằm ở đây.\n\nCác thao tác cụ thể trên phần mềm được tách sang chuyên mục SPSS và SmartPLS để bài ở đây tập trung vào ý nghĩa của con số.\n\nBắt đầu từ đâu. Nếu bạn mới cầm dữ liệu, đọc bài về thống kê mô tả để biết mô tả mẫu bằng tần số, trung bình và độ lệch chuẩn. Sau đó đọc về phân phối chuẩn và giá trị ngoại lai, vì hai thứ này quyết định bạn được dùng kiểm định tham số hay không. Bài về p-value và Sig. nên đọc trước khi chạy bất kỳ kiểm định nào, để bạn không đọc nhầm một con số nhỏ thành một kết quả lớn. Cuối cùng là hệ số tương quan và cỡ mẫu, hai khái niệm hội đồng hay hỏi nhất trong phần bảo vệ."
+  },
+  {
+    "slug": "khao-sat",
+    "name": "Khảo sát",
+    "display_name": "Khảo sát",
+    "target_keyword": "khảo sát",
+    "search_volume": 6600,
+    "sort_order": 3,
+    "intro_md": "Dữ liệu xấu không cứu được bằng phân tích tốt. Thang đo rời rạc, câu hỏi dẫn dắt, mẫu quá nhỏ hoặc trả lời cho có đều hiện ra ở bước Cronbach's Alpha và EFA, khi đã quá muộn để phát lại phiếu.\n\nChuyên mục này đi từ thiết kế bảng hỏi tới lúc có file dữ liệu sạch: chọn thang đo Likert mấy mức, đặt câu hỏi cho từng biến quan sát, tính cỡ mẫu theo số biến và theo phương pháp phân tích, phát phiếu trực tuyến bằng Google Forms, lọc phiếu trả lời không hợp lệ, mã hóa và nhập vào SPSS.\n\nBạn sẽ thấy các bài nói thẳng về những chỗ khó: tỷ lệ phản hồi thấp, câu hỏi đảo ngược làm rối người trả lời, và cách xử lý dữ liệu thiếu. Nơi nào có công thức, bài ghi rõ nguồn của công thức đó thay vì đưa một con số cho xong.\n\nVới bạn viết bằng tiếng Việt và cần một bộ dữ liệu khảo sát đủ điều kiện để chạy Cronbach's Alpha, EFA hay SEM, các bài trong chuyên mục nhắc tới fillform.info, sản phẩm cùng nhà với DoThesis, như một lựa chọn để thu thập và làm sạch dữ liệu từ Google Forms. Đó là gợi ý của chính chúng tôi, không phải đánh giá bên thứ ba.\n\nBắt đầu từ đâu. Đọc bài về thang đo Likert trước, vì nó quyết định cách bạn viết từng câu hỏi và cách mã hóa sau này. Tiếp theo là bài về cỡ mẫu, đọc trước khi phát phiếu chứ không phải sau, vì thiếu mẫu là lỗi không sửa được bằng phân tích. Bài về thiết kế bảng hỏi nói về thứ tự câu, câu đảo ngược và câu sàng lọc. Khi đã có dữ liệu, bài về làm sạch phiếu và mã hóa trong SPSS đưa bạn tới file sẵn sàng để chạy Cronbach's Alpha."
+  },
+  {
+    "slug": "nghien-cuu-khoa-hoc",
+    "name": "Nghiên cứu khoa học",
+    "display_name": "Nghiên cứu khoa học",
+    "target_keyword": "nghiên cứu khoa học",
+    "search_volume": 6600,
+    "sort_order": 4,
+    "intro_md": "Một đề tài nghiên cứu khoa học sinh viên hay một bài báo đầu tay khác khóa luận ở chỗ nó phải đứng được trước người phản biện không biết bạn là ai. Câu hỏi nghiên cứu phải rõ, phương pháp phải bảo vệ được, và kết quả phải nói đúng cái dữ liệu cho phép nói.\n\nChuyên mục này bao quát quy trình của một nghiên cứu định lượng: xác định vấn đề và câu hỏi nghiên cứu, tổng quan tài liệu, xây dựng giả thuyết, chọn phương pháp nghiên cứu, thu thập và phân tích dữ liệu, rồi viết và trình bày. Các bài về phương pháp nghiên cứu, dữ liệu sơ cấp và thứ cấp, định tính và định lượng, biến độc lập và biến phụ thuộc nằm ở đây.\n\nDoThesis chỉ hỗ trợ nghiên cứu định lượng bằng khảo sát và thống kê, nên khi một bài so sánh định tính với định lượng, mục đích là để bạn biết mình đang chọn gì và vì sao, không phải để hướng dẫn phỏng vấn hay phân tích chủ đề.\n\nNếu bạn đã có đề tài và cần đi thẳng vào mô hình, hãy sang chuyên mục Mô hình nghiên cứu. Nếu đích đến là khóa luận hay luận văn thạc sĩ, hai chuyên mục đó nói về yêu cầu riêng của từng loại.\n\nBắt đầu từ đâu. Bài về quy trình nghiên cứu định lượng cho bạn khung tổng thể trong một lần đọc. Sau đó đọc về câu hỏi nghiên cứu và giả thuyết, vì một giả thuyết viết mơ hồ sẽ không kiểm định được ở chương 4. Bài về biến độc lập, biến phụ thuộc và các loại biến khác giúp bạn vẽ mô hình mà không nhầm vai trò của từng biến. Bài về dữ liệu sơ cấp và thứ cấp, và bài về phương pháp nghiên cứu, là hai bài nên đọc trước khi viết chương 3."
+  },
+  {
+    "slug": "khoa-luan-tot-nghiep",
+    "name": "Khóa luận tốt nghiệp",
+    "display_name": "Khóa luận tốt nghiệp",
+    "target_keyword": "khóa luận tốt nghiệp",
+    "search_volume": 2900,
+    "sort_order": 5,
+    "intro_md": "Khóa luận tốt nghiệp là lần đầu phần lớn sinh viên phải tự làm một nghiên cứu từ đầu tới cuối trong vài tháng, song song với thực tập. Cái thiếu thường không phải kiến thức mà là thứ tự: làm gì trước, cái gì có thể làm song song, và mốc nào không được trễ.\n\nChuyên mục này bám theo cấu trúc năm chương quen thuộc: giới thiệu, cơ sở lý thuyết và mô hình, phương pháp nghiên cứu, kết quả, kết luận và hàm ý. Mỗi chương có bài riêng về yêu cầu, cách viết, những lỗi hội đồng hay bắt, và một vài câu mẫu để bạn thay số liệu của mình vào.\n\nBạn cũng sẽ thấy các bài về việc chọn đề tài theo ngành, viết tóm tắt, trình bày bảng biểu, trích dẫn theo APA và chuẩn bị bảo vệ. Các bài về chạy số cụ thể được để ở chuyên mục SPSS và SmartPLS để bài ở đây nói về cách đưa kết quả vào văn bản.\n\nNếu bạn học cao học, chuyên mục Luận văn thạc sĩ có yêu cầu cao hơn về đóng góp và về mô hình, nhưng phần lớn bài ở đây vẫn áp dụng được.\n\nBắt đầu từ đâu. Nếu chưa có đề tài, đọc bài về cách chọn đề tài theo ngành và bài về tiêu chí một đề tài làm được trong ba tháng. Nếu đã có đề tài, đọc bài về cấu trúc năm chương để biết mỗi chương cần gì, rồi đọc bài về chương 1 vì đó là chương hội đồng đọc kỹ nhất và sinh viên viết vội nhất. Bài về trích dẫn APA và bài về trình bày bảng biểu nên đọc trước khi bắt đầu viết chứ không phải lúc sửa. Bài về chuẩn bị bảo vệ để dành cho hai tuần cuối."
+  },
+  {
+    "slug": "smartpls",
+    "name": "SmartPLS",
+    "display_name": "SmartPLS",
+    "target_keyword": "smartpls",
+    "search_volume": 2400,
+    "sort_order": 6,
+    "intro_md": "Khi mô hình của bạn có nhiều biến tiềm ẩn, biến trung gian, biến điều tiết hoặc cỡ mẫu không lớn, SPSS bắt đầu đuối và SmartPLS với PLS-SEM trở thành lựa chọn mặc định của rất nhiều luận văn kinh tế và quản trị ở Việt Nam.\n\nChuyên mục này đi theo đúng hai bước của PLS-SEM. Bước một là mô hình đo lường: hệ số tải ngoài, độ tin cậy tổng hợp CR, phương sai trích trung bình AVE, giá trị phân biệt theo Fornell-Larcker và HTMT. Bước hai là mô hình cấu trúc: đa cộng tuyến VIF, hệ số đường dẫn và bootstrapping, R bình phương, f bình phương, Q bình phương, rồi tới trung gian, điều tiết và phân tích đa nhóm.\n\nMỗi bài chỉ đúng chỗ bấm trong SmartPLS 4, giải thích bảng kết quả, ghi ngưỡng kèm nguồn, và có một đoạn gợi ý cách viết kết quả vào chương 4. Các bài xử lý sự cố nói về loading thấp, HTMT vượt ngưỡng, và đường dẫn không có ý nghĩa thống kê.\n\nNếu bạn còn phân vân giữa PLS-SEM và CB-SEM trên AMOS, có bài so sánh thẳng thắn về khi nào nên dùng cái nào. Kiến thức nền về SEM và các khái niệm thống kê nằm ở chuyên mục Thống kê.\n\nBắt đầu từ đâu. Đọc bài giới thiệu PLS-SEM và bài so sánh với CB-SEM trước, để chắc rằng SmartPLS đúng là công cụ cho mô hình của bạn. Sau đó đi theo thứ tự chạy thật: bài về mô hình đo lường với loading, CR và AVE, rồi bài về giá trị phân biệt HTMT, rồi mới sang mô hình cấu trúc với bootstrapping và hệ số đường dẫn. Bài về biến trung gian và biến điều tiết chỉ cần khi mô hình của bạn có chúng. Bài xử lý sự cố về loading thấp và HTMT vượt ngưỡng nên đọc khi bạn gặp đúng vấn đề đó, không cần đọc trước."
+  },
+  {
+    "slug": "mo-hinh-nghien-cuu",
+    "name": "Mô hình nghiên cứu",
+    "display_name": "Mô hình nghiên cứu",
+    "target_keyword": "mô hình nghiên cứu",
+    "search_volume": 720,
+    "sort_order": 7,
+    "intro_md": "Mô hình nghiên cứu là thứ quyết định toàn bộ phần sau của luận văn: bảng hỏi đo cái gì, cỡ mẫu bao nhiêu, chạy phép phân tích nào, và kết quả có gì để bàn. Chọn mô hình sai ở chương 2 thì chương 4 không cứu được.\n\nChuyên mục này giới thiệu các lý thuyết và mô hình được dùng nhiều nhất trong luận văn kinh tế và quản trị ở Việt Nam: TAM, TPB, UTAUT, SERVQUAL, mô hình kỳ vọng và xác nhận, các mô hình về động lực, cam kết và ý định. Mỗi bài nói về nguồn gốc của mô hình với trích dẫn gốc, các biến và giả thuyết thường dùng, thang đo gợi ý cho từng biến, và những điều cần lưu ý khi đưa mô hình vào bối cảnh Việt Nam.\n\nBên cạnh đó là các bài về khái niệm nền: biến độc lập và phụ thuộc, biến trung gian, biến điều tiết, biến kiểm soát, cách vẽ mô hình và cách phát biểu giả thuyết cho chạy được.\n\nKhi đã chốt mô hình, chuyên mục Khảo sát nói về cách chuyển nó thành bảng hỏi, và chuyên mục SmartPLS nói về cách kiểm định nó.\n\nBắt đầu từ đâu. Đọc bài về các loại biến trong mô hình trước, vì nhầm vai trò của biến là lỗi phổ biến nhất khi vẽ mô hình. Sau đó chọn một mô hình nền phù hợp với đề tài: TAM hoặc UTAUT cho ý định sử dụng công nghệ, TPB cho ý định hành vi nói chung, SERVQUAL cho chất lượng dịch vụ và sự hài lòng. Bài về cách xây dựng mô hình nghiên cứu hướng dẫn bạn kết hợp và điều chỉnh mô hình gốc cho bối cảnh Việt Nam mà vẫn giữ được cơ sở lý thuyết. Bài về cách phát biểu giả thuyết nên đọc trước khi chốt mô hình, để mỗi mũi tên trong hình đều có một giả thuyết kiểm định được."
+  }
+]

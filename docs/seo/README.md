@@ -160,3 +160,7 @@ pages instead of forty rows of which some cannot go live. `create --reschedule`
 only respreads status 2, so it leaves the drafts alone. The way out of the draft
 state is to measure the keyword, set `gate_status` to `measured`, and re-run
 `update-from-seed`; nothing promotes a draft automatically, which is the point.
+
+## categories.json
+
+`docs/seo/categories.json` is a JSON array of the live blog categories (`slug`, `name`, `display_name`, `intro_md`, `target_keyword`, `search_volume`, `sort_order`). A category exists only if its name has measured search volume, a real route (`/blog/vi/chu-de/{slug}`), a hand-written intro, and at least ten posts; `phan-tich-du-lieu` and `luan-van-thac-si` were folded on 2026-09-08 (see `topic-bank/category-folds.tsv`). The run copies the file to `api/data/blog-seeds/vi/categories.json`, which `python -m app.blog.cli create --dir` upserts before the posts. Intros are written by hand on purpose: a category that reads as a filtered list does not rank.
