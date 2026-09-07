@@ -22,7 +22,7 @@ import unicodedata
 from dataclasses import dataclass, field
 
 from . import topic_bank_dir, repo_root
-from .expand import CATEGORY_SLUGS, normalise_keyword, read_candidates
+from .expand import normalise_keyword, read_candidates
 from .gate import read_gate_files
 
 BACKLOG_COLUMNS = (
@@ -501,8 +501,3 @@ def run(harvest_path: str | None = None, candidates_path: str | None = None,
     for category in sorted(per_category, key=lambda c: -per_category[c]):
         print(f"        {category:24} {per_category[category]:5d}")
     return summary
-
-
-# `CATEGORY_SLUGS` is re-exported so the CLI can validate a --category filter
-# without importing expand.
-__all__ = [n for n in dir() if not n.startswith("_")] + ["CATEGORY_SLUGS"]
