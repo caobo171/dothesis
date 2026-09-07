@@ -1,0 +1,61 @@
+keyword	search_volume	verdict	reason
+cỡ mẫu tối thiểu		drop	no volume returned
+cỡ mẫu tối thiểu là bao nhiêu		drop	unmeasured; family 'sample-size' sample 1/3 pass, aggregate 480
+cỡ mẫu efa		drop	no volume returned
+cỡ mẫu efa là bao nhiêu		drop	unmeasured; family 'sample-size' sample 1/3 pass, aggregate 480
+cỡ mẫu hồi quy		drop	unmeasured; family 'sample-size' sample 1/3 pass, aggregate 480
+cỡ mẫu hồi quy là bao nhiêu		drop	unmeasured; family 'sample-size' sample 1/3 pass, aggregate 480
+cỡ mẫu pls sem		drop	unmeasured; family 'sample-size' sample 1/3 pass, aggregate 480
+cỡ mẫu pls sem là bao nhiêu		drop	unmeasured; family 'sample-size' sample 1/3 pass, aggregate 480
+công thức tính cỡ mẫu	480	pass	volume 480
+công thức tính cỡ mẫu là bao nhiêu		drop	unmeasured; family 'sample-size' sample 1/3 pass, aggregate 480
+cỡ mẫu định lượng		drop	unmeasured; family 'sample-size' sample 1/3 pass, aggregate 480
+cỡ mẫu định lượng là bao nhiêu		drop	unmeasured; family 'sample-size' sample 1/3 pass, aggregate 480
+bảng câu hỏi khảo sát	170	pass	volume 170
+bảng câu hỏi là gì		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+thiết kế bảng hỏi khảo sát		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+thiết kế bảng hỏi là gì		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+phiếu khảo sát	1300	pass	volume 1300
+phiếu khảo sát là gì		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+mẫu phiếu khảo sát	320	pass	volume 320
+mẫu phiếu khảo sát là gì		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+thang đo likert 5 mức khảo sát		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+thang đo likert 5 mức là gì		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+thang đo likert 7 mức khảo sát		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+thang đo likert 7 mức là gì		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+câu hỏi sàng lọc khảo sát		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+câu hỏi sàng lọc là gì		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+câu hỏi nhân khẩu học khảo sát		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+câu hỏi nhân khẩu học là gì		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+mã hóa bảng hỏi khảo sát		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+mã hóa bảng hỏi là gì		pass	unmeasured; family 'instrument' sample 3/3 pass, aggregate 1,790
+khảo sát online	170	defer	difficulty 43 above 40
+cách làm khảo sát online		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+form khảo sát	6600	pass	volume 6600
+cách làm form khảo sát		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+google form		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+cách làm google form		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+khảo sát thử		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+cách làm khảo sát thử		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+tỷ lệ phản hồi		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+tỷ lệ phản hồi là gì		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+khảo sát khách hàng		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+cách làm khảo sát khách hàng		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+khảo sát nhân viên		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+cách làm khảo sát nhân viên		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+khảo sát sinh viên		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+cách làm khảo sát sinh viên		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+thu thập dữ liệu sơ cấp		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+thu thập dữ liệu sơ cấp là gì		pass	unmeasured; family 'collection' sample 2/3 pass, aggregate 7,650
+dữ liệu thứ cấp	880	pass	volume 880
+phương pháp chọn mẫu	210	pass	volume 210
+phương pháp chọn mẫu là gì		pass	unmeasured; family 'sampling' sample 2/4 pass, aggregate 4,610
+chọn mẫu thuận tiện		pass	unmeasured; family 'sampling' sample 2/4 pass, aggregate 4,610
+chọn mẫu ngẫu nhiên		pass	unmeasured; family 'sampling' sample 2/4 pass, aggregate 4,610
+chọn mẫu phi xác suất		pass	unmeasured; family 'sampling' sample 2/4 pass, aggregate 4,610
+chọn mẫu phi xác suất là gì		pass	unmeasured; family 'sampling' sample 2/4 pass, aggregate 4,610
+làm sạch dữ liệu		drop	unmeasured; family 'cleaning' sample 0/0 pass, aggregate 0
+phiếu trả lời không hợp lệ		drop	unmeasured; family 'cleaning' sample 0/0 pass, aggregate 0
+phiếu trả lời không hợp lệ là gì		drop	unmeasured; family 'cleaning' sample 0/0 pass, aggregate 0
+đạo đức nghiên cứu		drop	unmeasured; family 'cleaning' sample 0/0 pass, aggregate 0
+đạo đức nghiên cứu là gì		drop	unmeasured; family 'cleaning' sample 0/0 pass, aggregate 0

@@ -1,0 +1,289 @@
+keyword	volume	reason
+cách làm tài liệu	368000	exclusion: ^cách làm tài liệu
+quản lý giáo dục	40500	exclusion: ^quản lý giáo dục$
+hàm số nào sau đây đồng biến trên r	27100	off-vocabulary
+phương trình	27100	off-vocabulary
+đáp án ets 2016 part 1234	27100	exclusion: toeic
+d f	22200	exclusion: ^[a-z][\s#]+[a-z0-9#]{0,2}( là gì)?$
+luận	22200	off-vocabulary
+narrative essay mẫu	22200	exclusion: essay mẫu
+acknowledgement là gì	18100	off-vocabulary
+tích	18100	off-vocabulary
+spss	14800	exclusion: download
+biến	12100	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+sự cháy	12100	off-vocabulary
+đề thi cfa	12100	exclusion: đề thi
+bias là gì	9900	off-vocabulary
+nghiên cứu	9900	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+quản lý mầm non	9900	exclusion: ^quản lý mầm non$
+assignments	8100	off-vocabulary
+odd	8100	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+significant	8100	off-vocabulary
+appendix	6600	off-vocabulary
+biện	6600	off-vocabulary
+bài report mẫu	6600	exclusion: free
+bội la gì	6600	exclusion: \bla gì\b
+bội là gì	6600	off-vocabulary
+component	6600	off-vocabulary
+loc	6600	exclusion: ^loc$
+locs	6600	exclusion: ^locs$
+thành phần biệt lập	6600	off-vocabulary
+tieuluan	6600	off-vocabulary
+tiểu luận	6600	off-vocabulary
+xử lý	6600	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+xữ lý	6600	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+đáp án ets 2016 test 1	6600	exclusion: toeic
+bấm cái qq j cũng được	5400	exclusion: ^bấm cái
+essays	5400	off-vocabulary
+method	5400	off-vocabulary
+model la gi	5400	exclusion: \bla gi\b
+model la gì	5400	exclusion: \bla gì\b
+model là gì	5400	off-vocabulary
+modeling là gì	5400	off-vocabulary
+models là gì	5400	off-vocabulary
+salmonella	5400	off-vocabulary
+straight	5400	off-vocabulary
+bìa tiểu luận	4400	off-vocabulary
+bội số la gì	4400	exclusion: \bla gì\b
+bội số là gì	4400	off-vocabulary
+case study là gì	4400	off-vocabulary
+outline essay mẫu	4400	exclusion: essay mẫu
+reviews là gì	4400	exclusion: eviews
+thành phần biệt lập là gì	4400	off-vocabulary
+trục tung	4400	off-vocabulary
+tung độ	4400	off-vocabulary
+tích là gì	4400	off-vocabulary
+biến là gì	3600	off-vocabulary
+bìa	3600	off-vocabulary
+case study	3600	off-vocabulary
+học hàm học vị là gì	3600	off-vocabulary
+outline là gì	3600	exclusion: ^outlines?( là gì)?$
+outlined là gì	3600	exclusion: ^outlined
+reflection là gì	3600	off-vocabulary
+significance là gì	3600	off-vocabulary
+significant là gì	3600	off-vocabulary
+significantly là gì	3600	off-vocabulary
+std:: là gì	3600	exclusion: std::
+đa thức là gì	3600	exclusion: đa thức
+đạo hàm của ln	3600	off-vocabulary
+5 forces	2900	off-vocabulary
+citation là gì	2900	off-vocabulary
+công nợ là gì	2900	off-vocabulary
+essay mẫu đơn giản	2900	exclusion: essay mẫu
+hàm số đa thức là gì	2900	exclusion: đa thức
+học vị là gì	2900	off-vocabulary
+methodologies	2900	off-vocabulary
+methodology	2900	off-vocabulary
+phần mềm giáo dục	2900	off-vocabulary
+pilot là gì	2900	off-vocabulary
+piloting là gì	2900	off-vocabulary
+rstudio	2900	exclusion: \brstudio\b
+spss download	2900	exclusion: download
+tung độ hoành độ	2900	off-vocabulary
+valid	2900	off-vocabulary
+vlss	2900	off-vocabulary
+đoạn văn bằng tiếng anh về bảo vệ môi trường	2900	exclusion: đoạn văn bằng tiếng anh
+acknowledgement	2400	off-vocabulary
+acknowledgements	2400	off-vocabulary
+assignment là gì	2400	off-vocabulary
+assignments là gì	2400	off-vocabulary
+bài essay mẫu	2400	exclusion: essay mẫu
+bậc	2400	exclusion: ^bậc( là gì)?$
+chung thân	2400	off-vocabulary
+chảy	2400	off-vocabulary
+component là gì	2400	off-vocabulary
+cú pháp khai báo biến	2400	exclusion: cú pháp
+dea	2400	off-vocabulary
+glycogen	2400	off-vocabulary
+hệ thống quản lý giáo dục mầm non	2400	exclusion: ^hệ thống quản lý giáo dục
+học hàm là gì	2400	off-vocabulary
+method là gì	2400	off-vocabulary
+methodology là gì	2400	off-vocabulary
+methods là gì	2400	off-vocabulary
+nguyên hàm ln x	2400	off-vocabulary
+smart pls	2400	exclusion: crack
+smartpls	2400	exclusion: crack
+biến cố độc lập	1900	off-vocabulary
+bậc của đơn thức	1900	exclusion: đơn thức
+cumulative	1900	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+dịch vụ spss	1900	exclusion: dịch vụ
+eviews	1900	exclusion: eviews
+phương trình là gì	1900	off-vocabulary
+so lieu	1900	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+số liệu	1900	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+tiểu luận là gì	1900	off-vocabulary
+tuyến tính la gì	1900	exclusion: \bla gì\b
+tuyến tính là gì	1900	off-vocabulary
+tìm bậc của đa thức	1900	exclusion: đa thức
+tải spss	1900	exclusion: download
+600 từ vựng toeic	1600	exclusion: toeic
+bậc của đa thức	1600	exclusion: đa thức
+bậc của đa thức là gì	1600	exclusion: đa thức
+hệ số cao nhất của đa thức	1600	exclusion: đa thức
+phương trình tích là gì	1600	off-vocabulary
+s d là gì	1600	exclusion: ^[a-z][\s#]+[a-z0-9#]{0,2}( là gì)?$
+đa thức bậc 3	1600	exclusion: đa thức
+biến số là gì	1300	off-vocabulary
+bậc của đơn thức là gì	1300	exclusion: đơn thức
+bậc là gì	1300	exclusion: ^bậc( là gì)?$
+logo ueb	1300	off-vocabulary
+significant figure là gì	1300	exclusion: significant figure
+significant figures là gì	1300	exclusion: significant figure
+spss 20	1300	exclusion: download
+suy diễn là gì	1300	off-vocabulary
+định tính	1300	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+amos	1000	exclusion: download
+phương trình chữ	1000	off-vocabulary
+phần mềm spss	1000	exclusion: crack
+width là gì	1000	exclusion: ^width là gì$
+biến cố độc lập là gì	880	off-vocabulary
+categorical	880	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+cách ghi nguồn hình ảnh	880	off-vocabulary
+cách tải spss	880	exclusion: \btải\b
+d f là gì	880	exclusion: free
+d f# là gì	880	exclusion: free
+danh mục la gì	880	exclusion: \bla gì\b
+deviations là gì	880	off-vocabulary
+df là gì	880	exclusion: free
+dữ liệu định tính là gì	880	exclusion: ^dữ liệu định tính
+o r là gì	880	exclusion: ^[a-z][\s#]+[a-z0-9#]{0,2}( là gì)?$
+p l s là gì	880	off-vocabulary
+pls la gì	880	exclusion: \bla gì\b
+thu gọn và tìm bậc của đa thức	880	exclusion: đa thức
+tuyến tính	880	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+đa thức bậc 4	880	exclusion: đa thức
+chức năng briefing đọc trong notebooklm có tác dụng gì	720	exclusion: notebooklm
+dịch vụ amos	720	exclusion: dịch vụ
+dịch vụ hỗ trợ spss	720	exclusion: dịch vụ
+f2 s	720	off-vocabulary
+phi tuyến tính là gì	720	off-vocabulary
+quản trị nguồn nhân lực	720	off-vocabulary
+reversing	720	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+spss 26	720	exclusion: ^spss \d+$
+stata download	720	exclusion: download
+stata là gì	720	exclusion: ^stata
+trung gian	720	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+variable là gì	720	off-vocabulary
+variables là gì	720	off-vocabulary
+định biên là gì	720	off-vocabulary
+600 từ vựng toeic pdf	590	exclusion: toeic
+bảng biểu là gì	590	off-vocabulary
+c i là gì	590	exclusion: ^[a-z][\s#]+[a-z0-9#]{0,2}( là gì)?$
+ci là gì	590	off-vocabulary
+cách viết reference	590	off-vocabulary
+dịch vụ chạy spss	590	exclusion: dịch vụ
+dịch vụ spss phạm lộc blog	590	exclusion: phạm lộc blog
+dịch vụ xử lý số liệu spss	590	exclusion: dịch vụ
+fem la gì	590	exclusion: \bla gì\b
+khuyến nghị là gì	590	off-vocabulary
+luanvan	590	off-vocabulary
+mô hình tiếng anh là gì	590	exclusion: tiếng anh là gì
+nghiên cứu định tính là gì	590	exclusion: ^nghiên cứu định tính
+phương trình toán học	590	off-vocabulary
+spss 27	590	exclusion: ^spss \d+$
+stata 17	590	exclusion: ^stata
+thu thập	590	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+trung gian la gì	590	exclusion: \bla gì\b
+đưa ra câu trả lời dựa theo cách tính	590	exclusion: ^đưa ra câu trả lời
+đề thi toeic 2020	590	exclusion: toeic
+độ đúng và độ chính xác	590	off-vocabulary
+2 biến cố độc lập	480	off-vocabulary
+bảng t	480	off-vocabulary
+chuyên môn	480	off-vocabulary
+degree of freedom là gì	480	exclusion: free
+download spss	480	exclusion: download
+dịch vụ smart pls	480	exclusion: dịch vụ
+dịch vụ smartpls phạm lộc blog	480	exclusion: phạm lộc blog
+dịch vụ spss net	480	exclusion: dịch vụ
+hàm đa thức là gì	480	exclusion: đa thức
+hệ số cao nhất	480	off-vocabulary
+hệ số cao nhất là gì	480	off-vocabulary
+lý luận là gì	480	off-vocabulary
+nghiên cứu là gì	480	off-vocabulary
+nghiên cứu định tính	480	exclusion: ^nghiên cứu định tính
+ordinal	480	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+r 2	480	exclusion: ^[a-z][\s#]+[a-z0-9#]{0,2}( là gì)?$
+regression testing là gì	480	exclusion: regression testing
+starter toeic	480	exclusion: toeic
+thảo mộc 37 lừa đảo	480	exclusion: lừa đảo
+toeic starter	480	exclusion: toeic
+trung vị là j	480	exclusion: là j$
+trích yếu là gì	480	off-vocabulary
+tài liệu toeic	480	exclusion: toeic
+1 mẫu	390	off-vocabulary
+600 từ vựng toeic song ngữ pdf	390	exclusion: toeic
+binary la gì	390	exclusion: ^binary
+chạy spss thuê	390	exclusion: chạy spss thuê
+chắt lọc	390	exclusion: ^chắt lọc$
+crack spss	390	exclusion: download
+cách tìm bậc của đa thức	390	exclusion: đa thức
+cách tính đúng sai	390	off-vocabulary
+dịch vụ xử lý spss	390	exclusion: dịch vụ
+giá chạy spss	390	exclusion: giá chạy spss
+model nghĩa là gì	390	off-vocabulary
+nghiệm tổng quát của phương trình là gì	390	off-vocabulary
+phạm lộc blog	390	exclusion: phạm lộc blog
+spss download free	390	exclusion: download
+spss for mac	390	exclusion: for mac
+thuê chạy spss	390	exclusion: thuê chạy
+thuê xử lý số liệu spss	390	exclusion: thuê xử lý
+trung bình tiếng anh là gì	390	exclusion: tiếng anh là gì
+tttn là gì	390	off-vocabulary
+tải spss cho macbook	390	exclusion: \btải\b
+ueb logo	390	off-vocabulary
+vũ cao đàm	390	off-vocabulary
+xử lý thông tin	390	off-vocabulary
+đa thức là j	390	exclusion: đa thức
+đáp án ets 2016	390	exclusion: toeic
+đơn thức là j	390	exclusion: đơn thức
+đảo ngược	390	exclusion: ^(biến|nghiên cứu|thu thập|xử lý|xữ lý|số liệu|so lieu|đảo ngược|tuyến tính|định tính|trung gian|reversing|odd|cumulative|categorical|ordinal)$
+định tính định lượng la gì	390	exclusion: \bla gì\b
+2/1 là cung gì	320	exclusion: cung gì
+600 essential words for the toeic pdf	320	exclusion: toeic
+bậc là j	320	exclusion: là j$
+công ty care for việt nam lừa đảo	320	exclusion: lừa đảo
+công ty cổ phần zion lừa đảo	320	exclusion: lừa đảo
+mai thảo mộc lừa đảo	320	exclusion: lừa đảo
+new economy toeic	320	exclusion: toeic
+những công ty đa cấp lừa đảo ở việt nam	320	exclusion: lừa đảo
+phamlocblog	320	exclusion: phamlocblog
+phần mềm eview	320	off-vocabulary
+phần mềm eviews	320	exclusion: eviews
+phần mềm liên thông 3 cấp	320	exclusion: phần mềm liên thông
+smart pls 3	320	exclusion: crack
+smartpls 3	320	exclusion: crack
+trình tự	320	off-vocabulary
+tài liệu học toeic	320	exclusion: toeic
+tải stata	320	exclusion: \btải\b
+y intercept là gì	320	off-vocabulary
+bca solutions lừa đảo	260	exclusion: lừa đảo
+biến cục bộ là gì	260	exclusion: biến cục bộ
+biến là j	260	exclusion: là j$
+bậc của đa thức nhiều biến	260	exclusion: đa thức
+các phương pháp	260	off-vocabulary
+dichotomous là gì	260	off-vocabulary
+download spss for mac	260	exclusion: download
+green speed lừa đảo	260	exclusion: lừa đảo
+greenspeed lừa đảo	260	exclusion: lừa đảo
+khóa luận tốt nghiệp tiếng anh là gì	260	exclusion: tiếng anh là gì
+lỗi ma trận là gì	260	off-vocabulary
+model là	260	off-vocabulary
+oci là gì	260	exclusion: ^(o r|c i|oci|rsd) là gì$
+smartpls 4	260	exclusion: ^smart ?pls [0-9]$
+spss 22	260	exclusion: download
+spss download for mac	260	exclusion: download
+spss download mac	260	exclusion: download
+thứ cấp là gì	260	off-vocabulary
+tải spss miễn phí	260	exclusion: \btải\b
+vhealth lừa đảo	260	exclusion: lừa đảo
+điều tiết là gì	260	off-vocabulary
+dịch vụ smartpls	210	exclusion: dịch vụ
+economy toeic	210	exclusion: toeic
+hàm tuyến tính	210	off-vocabulary
+hàm tuyến tính là gì	210	off-vocabulary
+hệ số cao nhất của đa thức là gì	210	exclusion: đa thức
+mẫu là gì	210	off-vocabulary
+rsd là gì	210	exclusion: ^(o r|c i|oci|rsd) là gì$
+siberian wellness lừa đảo	210	exclusion: lừa đảo
+spss free download for windows	210	exclusion: download
+spss 25	170	exclusion: download

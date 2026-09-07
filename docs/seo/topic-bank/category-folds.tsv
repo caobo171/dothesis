@@ -1,0 +1,6 @@
+from_category	to_category	keyword_regex
+# phan-tich-du-lieu (5 rows) and luan-van-thac-si (4 rows) cannot clear ten posts on
+# the 2026-09-08 backlog. Folded per the taxonomy rule; revisit when the bank grows.
+phan-tich-du-lieu	nghien-cuu-khoa-hoc	sơ cấp|thứ cấp
+phan-tich-du-lieu	spss	
+luan-van-thac-si	khoa-luan-tot-nghiep	

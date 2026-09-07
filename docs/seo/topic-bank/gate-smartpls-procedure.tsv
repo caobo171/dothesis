@@ -1,0 +1,81 @@
+keyword	search_volume	verdict	reason
+tạo dự án mới trong smartpls		drop	no volume returned
+cách chạy tạo dự án mới smartpls 4		drop	unmeasured; family 'setup' sample 0/3 pass, aggregate 0
+nhập dữ liệu csv trong smartpls		drop	no volume returned
+cách chạy nhập dữ liệu csv smartpls 4		drop	unmeasured; family 'setup' sample 0/3 pass, aggregate 0
+vẽ mô hình đo lường trong smartpls		drop	no volume returned
+cách chạy vẽ mô hình đo lường smartpls 4		drop	unmeasured; family 'setup' sample 0/3 pass, aggregate 0
+vẽ mô hình cấu trúc trong smartpls		drop	unmeasured; family 'setup' sample 0/3 pass, aggregate 0
+cách chạy vẽ mô hình cấu trúc smartpls 4		drop	unmeasured; family 'setup' sample 0/3 pass, aggregate 0
+xử lý missing value trong smartpls		drop	unmeasured; family 'setup' sample 0/3 pass, aggregate 0
+cách chạy xử lý missing value smartpls 4		drop	unmeasured; family 'setup' sample 0/3 pass, aggregate 0
+cỡ mẫu tối thiểu trong smartpls		drop	unmeasured; family 'setup' sample 0/3 pass, aggregate 0
+cách chạy cỡ mẫu tối thiểu smartpls 4		drop	unmeasured; family 'setup' sample 0/3 pass, aggregate 0
+pls algorithm trong smartpls		drop	no volume returned
+cách chạy pls algorithm smartpls 4		drop	unmeasured; family 'estimation' sample 0/3 pass, aggregate 0
+bootstrapping trong smartpls		drop	no volume returned
+cách chạy bootstrapping smartpls 4		drop	unmeasured; family 'estimation' sample 0/3 pass, aggregate 0
+blindfolding trong smartpls		drop	no volume returned
+cách chạy blindfolding smartpls 4		drop	unmeasured; family 'estimation' sample 0/3 pass, aggregate 0
+plspredict trong smartpls		drop	unmeasured; family 'estimation' sample 0/3 pass, aggregate 0
+cách chạy plspredict smartpls 4		drop	unmeasured; family 'estimation' sample 0/3 pass, aggregate 0
+consistent pls trong smartpls		drop	unmeasured; family 'estimation' sample 0/3 pass, aggregate 0
+cách chạy consistent pls smartpls 4		drop	unmeasured; family 'estimation' sample 0/3 pass, aggregate 0
+ipma trong smartpls		drop	unmeasured; family 'estimation' sample 0/3 pass, aggregate 0
+cách chạy ipma smartpls 4		drop	unmeasured; family 'estimation' sample 0/3 pass, aggregate 0
+outer loading trong smartpls		drop	no volume returned
+cách chạy outer loading smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+độ tin cậy tổng hợp trong smartpls		drop	no volume returned
+cách chạy độ tin cậy tổng hợp smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+ave trong smartpls	10	pass	volume 10
+cách chạy ave smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+htmt trong smartpls		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+cách chạy htmt smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+fornell larcker trong smartpls		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+cách chạy fornell larcker smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+cross loading trong smartpls		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+cách chạy cross loading smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+giá trị hội tụ trong smartpls		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+cách chạy giá trị hội tụ smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+giá trị phân biệt trong smartpls		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+cách chạy giá trị phân biệt smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+thang đo cấu tạo trong smartpls		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+cách chạy thang đo cấu tạo smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+thang đo phản ánh trong smartpls		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+cách chạy thang đo phản ánh smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+thang đo bậc hai trong smartpls		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+cách chạy thang đo bậc hai smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+outer weight trong smartpls		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+cách chạy outer weight smartpls 4		drop	unmeasured; family 'measurement-model' sample 1/3 pass, aggregate 10
+vif trong smartpls		drop	no volume returned
+cách chạy vif smartpls 4		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+r square trong smartpls		drop	no volume returned
+cách chạy r square smartpls 4		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+f square trong smartpls		drop	no volume returned
+cách chạy f square smartpls 4		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+q square trong smartpls		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+cách chạy q square smartpls 4		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+path coefficient trong smartpls		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+cách chạy path coefficient smartpls 4		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+p value bootstrap trong smartpls		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+cách chạy p value bootstrap smartpls 4		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+tác động tổng trong smartpls		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+cách chạy tác động tổng smartpls 4		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+tác động gián tiếp cụ thể trong smartpls		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+cách chạy tác động gián tiếp cụ thể smartpls 4		drop	unmeasured; family 'structural-model' sample 0/3 pass, aggregate 0
+biến trung gian trong smartpls		drop	no volume returned
+cách chạy biến trung gian smartpls 4		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
+biến điều tiết trong smartpls	10	pass	volume 10
+cách chạy biến điều tiết smartpls 4		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
+biến tương tác trong smartpls		drop	no volume returned
+cách chạy biến tương tác smartpls 4		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
+phân tích đa nhóm mga trong smartpls		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
+cách chạy phân tích đa nhóm mga smartpls 4		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
+micom trong smartpls		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
+cách chạy micom smartpls 4		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
+fimix trong smartpls		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
+cách chạy fimix smartpls 4		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
+xuất kết quả ra excel trong smartpls		drop	unmeasured; family 'reporting' sample 0/0 pass, aggregate 0
+cách chạy xuất kết quả ra excel smartpls 4		drop	unmeasured; family 'reporting' sample 0/0 pass, aggregate 0
+đọc báo cáo html trong smartpls		drop	unmeasured; family 'reporting' sample 0/0 pass, aggregate 0
+cách chạy đọc báo cáo html smartpls 4		drop	unmeasured; family 'reporting' sample 0/0 pass, aggregate 0

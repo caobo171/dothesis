@@ -1,0 +1,75 @@
+keyword	search_volume	verdict	reason
+đề tài luận văn quản trị kinh doanh		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học quản trị kinh doanh		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài luận văn marketing		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học marketing		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài luận văn kinh doanh quốc tế		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học kinh doanh quốc tế		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài luận văn thương mại điện tử		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học thương mại điện tử		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài luận văn quản trị nhân lực		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học quản trị nhân lực		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài luận văn quản trị chất lượng		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học quản trị chất lượng		drop	unmeasured; family 'business' sample 0/0 pass, aggregate 0
+đề tài luận văn tài chính ngân hàng		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài nghiên cứu khoa học tài chính ngân hàng		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài luận văn kế toán		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài nghiên cứu khoa học kế toán		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài luận văn kiểm toán		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài nghiên cứu khoa học kiểm toán		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài luận văn tài chính doanh nghiệp		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài nghiên cứu khoa học tài chính doanh nghiệp		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài luận văn bất động sản		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài nghiên cứu khoa học bất động sản		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài luận văn bảo hiểm		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài nghiên cứu khoa học bảo hiểm		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đề tài luận văn kinh tế		drop	unmeasured; family 'economics' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học kinh tế		drop	unmeasured; family 'economics' sample 0/0 pass, aggregate 0
+đề tài luận văn kinh tế phát triển		drop	unmeasured; family 'economics' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học kinh tế phát triển		drop	unmeasured; family 'economics' sample 0/0 pass, aggregate 0
+đề tài luận văn kinh tế đầu tư		drop	unmeasured; family 'economics' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học kinh tế đầu tư		drop	unmeasured; family 'economics' sample 0/0 pass, aggregate 0
+đề tài luận văn xuất nhập khẩu		drop	unmeasured; family 'economics' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học xuất nhập khẩu		drop	unmeasured; family 'economics' sample 0/0 pass, aggregate 0
+đề tài luận văn logistics		drop	unmeasured; family 'operations' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học logistics		drop	unmeasured; family 'operations' sample 0/0 pass, aggregate 0
+đề tài luận văn chuỗi cung ứng		drop	unmeasured; family 'operations' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học chuỗi cung ứng		drop	unmeasured; family 'operations' sample 0/0 pass, aggregate 0
+đề tài luận văn du lịch		drop	unmeasured; family 'services' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học du lịch		drop	unmeasured; family 'services' sample 0/0 pass, aggregate 0
+đề tài luận văn khách sạn		drop	unmeasured; family 'services' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học khách sạn		drop	unmeasured; family 'services' sample 0/0 pass, aggregate 0
+đề tài luận văn nhà hàng		drop	unmeasured; family 'services' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học nhà hàng		drop	unmeasured; family 'services' sample 0/0 pass, aggregate 0
+đề tài luận văn công nghệ thông tin		drop	unmeasured; family 'tech' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học công nghệ thông tin		drop	unmeasured; family 'tech' sample 0/0 pass, aggregate 0
+đề tài luận văn hệ thống thông tin quản lý		drop	unmeasured; family 'tech' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học hệ thống thông tin quản lý		drop	unmeasured; family 'tech' sample 0/0 pass, aggregate 0
+đề tài luận văn luật kinh tế		drop	unmeasured; family 'law' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học luật kinh tế		drop	unmeasured; family 'law' sample 0/0 pass, aggregate 0
+đề tài luận văn quản lý công		drop	unmeasured; family 'law' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học quản lý công		drop	unmeasured; family 'law' sample 0/0 pass, aggregate 0
+đề tài luận văn sư phạm		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học sư phạm		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+đề tài luận văn giáo dục mầm non		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học giáo dục mầm non		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+đề tài luận văn quản lý giáo dục		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học quản lý giáo dục		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+đề tài luận văn điều dưỡng		drop	unmeasured; family 'health' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học điều dưỡng		drop	unmeasured; family 'health' sample 0/0 pass, aggregate 0
+đề tài luận văn y tế công cộng		drop	unmeasured; family 'health' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học y tế công cộng		drop	unmeasured; family 'health' sample 0/0 pass, aggregate 0
+đề tài luận văn dược		drop	unmeasured; family 'health' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học dược		drop	unmeasured; family 'health' sample 0/0 pass, aggregate 0
+đề tài luận văn công tác xã hội		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học công tác xã hội		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0
+đề tài luận văn tâm lý học		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học tâm lý học		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0
+đề tài luận văn quan hệ công chúng		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học quan hệ công chúng		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0
+đề tài luận văn môi trường		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học môi trường		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0
+đề tài luận văn nông nghiệp		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học nông nghiệp		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0
+đề tài luận văn xây dựng		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0
+đề tài nghiên cứu khoa học xây dựng		drop	unmeasured; family 'social' sample 0/0 pass, aggregate 0

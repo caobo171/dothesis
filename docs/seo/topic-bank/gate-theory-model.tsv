@@ -1,0 +1,194 @@
+keyword	search_volume	verdict	reason
+mô hình tam	1000	pass	volume 1000
+lý thuyết tam		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+tam là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình chấp nhận công nghệ tam	320	pass	volume 320
+lý thuyết chấp nhận công nghệ tam		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+chấp nhận công nghệ tam là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình tam 2		drop	no volume returned
+lý thuyết tam 2		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+tam 2 là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình tam 3		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+lý thuyết tam 3		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+tam 3 là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình utaut		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+lý thuyết utaut		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+utaut là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình utaut2		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+lý thuyết utaut2		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+utaut2 là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình toe		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+lý thuyết toe		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+toe là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình task technology fit		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+lý thuyết task technology fit		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+task technology fit là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình is success delone mclean		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+lý thuyết is success delone mclean		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+is success delone mclean là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình khuếch tán đổi mới		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+lý thuyết khuếch tán đổi mới		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+khuếch tán đổi mới là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình kỳ vọng xác nhận ecm		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+lý thuyết kỳ vọng xác nhận ecm		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+kỳ vọng xác nhận ecm là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình nhận thức rủi ro tpr		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+lý thuyết nhận thức rủi ro tpr		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+nhận thức rủi ro tpr là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+mô hình tra	260	pass	volume 260
+lý thuyết tra		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+tra là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+mô hình hành động hợp lý		drop	no volume returned
+lý thuyết hành động hợp lý		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+hành động hợp lý là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+mô hình tpb	590	pass	volume 590
+lý thuyết tpb		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+tpb là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+mô hình hành vi dự định		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+lý thuyết hành vi dự định		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+hành vi dự định là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+mô hình hành vi người tiêu dùng		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+lý thuyết hành vi người tiêu dùng		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+hành vi người tiêu dùng là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+mô hình niềm tin sức khỏe		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+lý thuyết niềm tin sức khỏe		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+niềm tin sức khỏe là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+mô hình trao đổi xã hội		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+lý thuyết trao đổi xã hội		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+trao đổi xã hội là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+mô hình giá trị tiêu dùng		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+lý thuyết giá trị tiêu dùng		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+giá trị tiêu dùng là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+mô hình tự quyết		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+lý thuyết tự quyết		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+tự quyết là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+mô hình servqual	1300	pass	volume 1300
+lý thuyết servqual		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+servqual là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+mô hình servperf	320	pass	volume 320
+lý thuyết servperf		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+servperf là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+mô hình 5 khoảng cách chất lượng dịch vụ	40	pass	volume 40
+lý thuyết 5 khoảng cách chất lượng dịch vụ		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+5 khoảng cách chất lượng dịch vụ là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+mô hình chất lượng dịch vụ gronroos		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+lý thuyết chất lượng dịch vụ gronroos		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+chất lượng dịch vụ gronroos là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+mô hình e servqual		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+lý thuyết e servqual		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+e servqual là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+mô hình acsi		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+lý thuyết acsi		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+acsi là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+mô hình ecsi		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+lý thuyết ecsi		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+ecsi là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+mô hình kano		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+lý thuyết kano		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+kano là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+mô hình sự hài lòng khách hàng		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+lý thuyết sự hài lòng khách hàng		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+mô hình maslow	210	pass	volume 210
+lý thuyết maslow		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+maslow là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+mô hình hai nhân tố herzberg		drop	no volume returned
+lý thuyết hai nhân tố herzberg		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+hai nhân tố herzberg là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+mô hình kỳ vọng vroom		drop	no volume returned
+lý thuyết kỳ vọng vroom		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+kỳ vọng vroom là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+mô hình công bằng adams		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+lý thuyết công bằng adams		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+công bằng adams là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+lý thuyết x và thuyết y		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thuyết x thuyết y là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thuyết x và thuyết y của mcgregor		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+mô hình cam kết tổ chức meyer allen		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+lý thuyết cam kết tổ chức meyer allen		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+cam kết tổ chức meyer allen là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+mô hình jdi		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+lý thuyết jdi		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+jdi là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+mô hình hành vi công dân tổ chức		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+lý thuyết hành vi công dân tổ chức		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+mô hình năm yếu tố tính cách		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+lý thuyết năm yếu tố tính cách		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+năm yếu tố tính cách là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+mô hình 5 áp lực cạnh tranh porter		drop	no volume returned
+lý thuyết 5 áp lực cạnh tranh porter		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+5 áp lực cạnh tranh porter là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+mô hình chuỗi giá trị porter	10	pass	volume 10
+lý thuyết chuỗi giá trị porter		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+chuỗi giá trị porter là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+mô hình swot	3600	pass	volume 3600
+lý thuyết swot		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+swot là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+mô hình bcg		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+lý thuyết bcg		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+bcg là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+mô hình balanced scorecard		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+lý thuyết balanced scorecard		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+balanced scorecard là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+mô hình nguồn lực rbv		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+lý thuyết nguồn lực rbv		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+nguồn lực rbv là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+mô hình thể chế		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+lý thuyết thể chế		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+thể chế là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+mô hình các bên liên quan		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+lý thuyết các bên liên quan		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+các bên liên quan là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+mô hình đại diện		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+lý thuyết đại diện		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+đại diện là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+mô hình 4p marketing mix		drop	no volume returned
+lý thuyết 4p marketing mix		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+4p marketing mix là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+mô hình 7p marketing mix		drop	no volume returned
+lý thuyết 7p marketing mix		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+7p marketing mix là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+mô hình aida	1600	pass	volume 1600
+lý thuyết aida		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+aida là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+mô hình rfm		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+lý thuyết rfm		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+rfm là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+mô hình tài sản thương hiệu aaker		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+lý thuyết tài sản thương hiệu aaker		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+tài sản thương hiệu aaker là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+mô hình tài sản thương hiệu keller		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+lý thuyết tài sản thương hiệu keller		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+tài sản thương hiệu keller là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+mô hình trật tự phân hạng		drop	no volume returned
+lý thuyết trật tự phân hạng		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+trật tự phân hạng là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+mô hình đánh đổi cấu trúc vốn		drop	no volume returned
+lý thuyết đánh đổi cấu trúc vốn		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+đánh đổi cấu trúc vốn là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+mô hình tín hiệu		drop	no volume returned
+lý thuyết tín hiệu		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+tín hiệu là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+mô hình capm		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+lý thuyết capm		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+capm là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+mô hình fama french		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+lý thuyết fama french		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+fama french là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+mô hình z score altman		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+lý thuyết z score altman		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+z score altman là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+mô hình camel		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+lý thuyết camel		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+camel là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
+mô hình ardl		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+lý thuyết ardl		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+ardl là gì		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+mô hình fem rem dữ liệu bảng		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+lý thuyết fem rem dữ liệu bảng		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+fem rem dữ liệu bảng là gì		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+mô hình var		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+lý thuyết var		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+var là gì		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+mô hình arima		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+lý thuyết arima		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+arima là gì		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0

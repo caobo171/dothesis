@@ -53,7 +53,8 @@ def _cmd_plan(args) -> int:
 
     run(harvest_path=args.harvest, candidates_path=args.candidates, gate_dir=args.gate_dir,
         exclusions_path=args.exclusions, out_path=args.out,
-        index_path=(None if args.no_index_check else "__default__"))
+        index_path=(None if args.no_index_check else "__default__"),
+        folds_path=args.folds)
     return 0
 
 
@@ -111,6 +112,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", default=None)
     p.add_argument("--no-index-check", action="store_true",
                    help="do not subtract slugs already listed in docs/blog-index.md")
+    p.add_argument("--folds", default=None,
+                   help="category folds TSV (default: topic-bank/category-folds.tsv)")
     p.set_defaults(func=_cmd_plan)
 
     p = sub.add_parser("write", help="write seed JSON for backlog rows")

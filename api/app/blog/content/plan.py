@@ -570,7 +570,49 @@ def _round_robin(rows: list[BacklogRow]) -> list[BacklogRow]:
     return out
 
 
-def build(phrasings: list[Phrasing], exclude_slugs: set[str] | None = None) -> list[BacklogRow]:
+FOLDS_COLUMNS = ("from_category", "to_category", "keyword_regex")
+
+
+def load_folds(path: str | None = None) -> list[tuple[str, str, re.Pattern | None]]:
+    """Category folds: (from, to, optional keyword regex), first match wins.
+
+    WELE's taxonomy rule: a category that cannot clear ten posts is folded into
+    a broader one rather than shipped thin. The fold lives in a TSV beside the
+    backlog so a re-run reproduces it instead of a hand edit that the next
+    `plan` silently undoes.
+    """
+    path = path or os.path.join(topic_bank_dir(), "category-folds.tsv")
+    if not os.path.isfile(path):
+        return []
+    out: list[tuple[str, str, re.Pattern | None]] = []
+    with open(path, encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
+            src = (row.get("from_category") or "").strip()
+            dst = (row.get("to_category") or "").strip()
+            if not src or not dst or src.startswith("#"):
+                continue
+            raw = (row.get("keyword_regex") or "").strip()
+            out.append((src, dst, re.compile(raw, re.IGNORECASE) if raw else None))
+    return out
+
+
+def apply_folds(rows: list[BacklogRow], folds) -> int:
+    """Rewrite row.category in place; returns how many rows moved."""
+    moved = 0
+    for row in rows:
+        for src, dst, pattern in folds:
+            if row.category != src:
+                continue
+            if pattern is not None and not pattern.search(row.focus_keyword):
+                continue
+            row.category = dst
+            moved += 1
+            break
+    return moved
+
+
+def build(phrasings: list[Phrasing], exclude_slugs: set[str] | None = None,
+          folds=None) -> list[BacklogRow]:
     exclude_slugs = exclude_slugs or set()
     clusters: dict[str, list[Phrasing]] = {}
     for p in phrasings:
@@ -610,6 +652,8 @@ def build(phrasings: list[Phrasing], exclude_slugs: set[str] | None = None) -> l
                                family=lead.family, sibling_slugs=[], competitor_urls=urls,
                                gate_status=status))
 
+    if folds:
+        apply_folds(rows, folds)  # before ordering: round-robin is per category
     ordered = _round_robin(rows)
     _assign_siblings(ordered)
     return ordered
@@ -659,7 +703,8 @@ def run(harvest_path: str | None = None, candidates_path: str | None = None,
         out_path: str | None = None,
         index_path: str | None = "__default__",
         vocabulary_path: str | None = None,
-        rejected_path: str | None = None) -> dict:
+        rejected_path: str | None = None,
+        folds_path: str | None = None) -> dict:
     bank = topic_bank_dir()
     harvest_path = harvest_path or default_harvest_path()
     candidates_path = candidates_path or os.path.join(bank, "candidates.tsv")
@@ -684,7 +729,8 @@ def run(harvest_path: str | None = None, candidates_path: str | None = None,
     gate_rows = read_gate_survivors(candidates_path, gate_dir)
     covered = read_covered_slugs(index_path)
 
-    all_rows = build(harvest_rows + gate_rows)
+    folds = load_folds(folds_path)
+    all_rows = build(harvest_rows + gate_rows, folds=folds)
     kept = [r for r in all_rows if r.slug not in covered]
     if len(kept) != len(all_rows):
         kept = _round_robin(kept)

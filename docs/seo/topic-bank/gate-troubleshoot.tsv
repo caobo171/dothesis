@@ -1,0 +1,85 @@
+keyword	search_volume	verdict	reason
+ma trận xoay lộn xộn phải làm sao		drop	no volume returned
+lỗi ma trận xoay lộn xộn spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+ma trận xoay không hội tụ phải làm sao		drop	no volume returned
+lỗi ma trận xoay không hội tụ spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+biến bị loại khi xoay nhân tố phải làm sao		drop	no volume returned
+lỗi biến bị loại khi xoay nhân tố spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+biến tải lên hai nhân tố phải làm sao		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+lỗi biến tải lên hai nhân tố spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+kmo nhỏ hơn 0 5 phải làm sao		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+lỗi kmo nhỏ hơn 0 5 spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+kiểm định bartlett không có ý nghĩa phải làm sao		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+lỗi kiểm định bartlett không có ý nghĩa spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+phương sai trích dưới 50 phải làm sao		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+lỗi phương sai trích dưới 50 spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+hệ số tải nhân tố thấp phải làm sao		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+lỗi hệ số tải nhân tố thấp spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+efa ra một nhân tố phải làm sao		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+lỗi efa ra một nhân tố spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
+cronbach alpha thấp phải làm sao		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
+lỗi cronbach alpha thấp spss		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
+cronbach alpha âm phải làm sao		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
+lỗi cronbach alpha âm spss		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
+cronbach alpha quá cao phải làm sao		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
+lỗi cronbach alpha quá cao spss		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
+item total correlation nhỏ hơn 0 3 phải làm sao		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
+lỗi item total correlation nhỏ hơn 0 3 spss		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
+thang đo không đạt độ tin cậy phải làm sao		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
+lỗi thang đo không đạt độ tin cậy spss		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
+vif cao phải làm sao		drop	no volume returned
+lỗi vif cao spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+r bình phương quá thấp phải làm sao		drop	no volume returned
+lỗi r bình phương quá thấp spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+hệ số hồi quy trái dấu phải làm sao		drop	no volume returned
+lỗi hệ số hồi quy trái dấu spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+sig lớn hơn 0 05 phải làm sao		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+lỗi sig lớn hơn 0 05 spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+giả thuyết bị bác bỏ phải làm sao		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+lỗi giả thuyết bị bác bỏ spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+phần dư không phân phối chuẩn phải làm sao		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+lỗi phần dư không phân phối chuẩn spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+phương sai sai số thay đổi phải làm sao		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+lỗi phương sai sai số thay đổi spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+sai số chuẩn quá lớn phải làm sao		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+lỗi sai số chuẩn quá lớn spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
+dữ liệu không phân phối chuẩn phải làm sao		drop	no volume returned
+lỗi dữ liệu không phân phối chuẩn spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
+mẫu quá nhỏ phải làm sao		drop	no volume returned
+lỗi mẫu quá nhỏ spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
+dữ liệu bị thiếu nhiều phải làm sao		drop	no volume returned
+lỗi dữ liệu bị thiếu nhiều spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
+nhiều outlier phải làm sao		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
+lỗi nhiều outlier spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
+trả lời cùng một đáp án phải làm sao		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
+lỗi trả lời cùng một đáp án spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
+mất dữ liệu khi recode phải làm sao		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
+lỗi mất dữ liệu khi recode spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
+biến định tính chạy hồi quy phải làm sao		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
+lỗi biến định tính chạy hồi quy spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
+ave nhỏ hơn 0 5 phải làm sao		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+lỗi ave nhỏ hơn 0 5 spss		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+htmt lớn hơn 0 9 phải làm sao		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+lỗi htmt lớn hơn 0 9 spss		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+giá trị phân biệt không đạt phải làm sao		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+lỗi giá trị phân biệt không đạt spss		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+outer loading thấp phải làm sao		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+lỗi outer loading thấp spss		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+mô hình không hội tụ phải làm sao		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+lỗi mô hình không hội tụ spss		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+bootstrapping bị lỗi phải làm sao		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+lỗi bootstrapping bị lỗi spss		drop	unmeasured; family 'pls' sample 0/0 pass, aggregate 0
+không mở được file sav phải làm sao		drop	unmeasured; family 'software' sample 0/0 pass, aggregate 0
+lỗi không mở được file sav spss		drop	unmeasured; family 'software' sample 0/0 pass, aggregate 0
+lỗi nhập dữ liệu từ excel spss		drop	unmeasured; family 'software' sample 0/0 pass, aggregate 0
+lỗi nhập dữ liệu từ excel phải làm sao		drop	unmeasured; family 'software' sample 0/0 pass, aggregate 0
+spss bị treo khi chạy phải làm sao		drop	unmeasured; family 'software' sample 0/0 pass, aggregate 0
+lỗi spss bị treo khi chạy spss		drop	unmeasured; family 'software' sample 0/0 pass, aggregate 0
+spss hết hạn dùng thử phải làm sao		drop	unmeasured; family 'software' sample 0/0 pass, aggregate 0
+lỗi spss hết hạn dùng thử spss		drop	unmeasured; family 'software' sample 0/0 pass, aggregate 0
+kết quả khác với bài báo gốc phải làm sao		drop	unmeasured; family 'defence' sample 0/0 pass, aggregate 0
+lỗi kết quả khác với bài báo gốc spss		drop	unmeasured; family 'defence' sample 0/0 pass, aggregate 0
+hội đồng hỏi về cỡ mẫu phải làm sao		drop	unmeasured; family 'defence' sample 0/0 pass, aggregate 0
+lỗi hội đồng hỏi về cỡ mẫu spss		drop	unmeasured; family 'defence' sample 0/0 pass, aggregate 0
+bị nghi ngờ số liệu không thật phải làm sao		drop	unmeasured; family 'defence' sample 0/0 pass, aggregate 0
+lỗi bị nghi ngờ số liệu không thật spss		drop	unmeasured; family 'defence' sample 0/0 pass, aggregate 0

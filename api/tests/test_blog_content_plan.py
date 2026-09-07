@@ -473,3 +473,41 @@ def test_an_axis_display_must_be_named_not_spelled_inside_another_word():
     lookup = [("tra", "behavior", "mo-hinh-nghien-cuu", "model-theory")]
     assert plan._classify_from_axes("mô hình tra", lookup) is not None
     assert plan._classify_from_axes("straight", lookup) is None
+
+
+def test_category_folds_move_rows_before_ordering(tmp_path):
+    """A thin category is folded into a broader one; a keyword regex can split the fold."""
+    from app.blog.content.plan import Phrasing, build, load_folds
+
+    folds_file = tmp_path / "category-folds.tsv"
+    folds_file.write_text(
+        "from_category\tto_category\tkeyword_regex\n"
+        "# comment lines are skipped\n"
+        "phan-tich-du-lieu\tnghien-cuu-khoa-hoc\tsơ cấp|thứ cấp\n"
+        "phan-tich-du-lieu\tspss\t\n"
+        "luan-van-thac-si\tkhoa-luan-tot-nghiep\t\n",
+        encoding="utf-8")
+    folds = load_folds(str(folds_file))
+    assert len(folds) == 3
+
+    rows = build([
+        Phrasing(keyword="dữ liệu thứ cấp là gì", search_volume=1300, family="data",
+                 category="phan-tich-du-lieu", archetype="term-la-gi"),
+        Phrasing(keyword="amos", search_volume=1000, family="software",
+                 category="phan-tich-du-lieu", archetype="term-la-gi"),
+        Phrasing(keyword="luận án tiến sĩ", search_volume=590, family="thesis",
+                 category="luan-van-thac-si", archetype="thesis-writing"),
+        Phrasing(keyword="độ lệch chuẩn", search_volume=8100, family="descriptive",
+                 category="thong-ke", archetype="term-la-gi"),
+    ], folds=folds)
+    by_slug = {r.slug: r.category for r in rows}
+    assert by_slug["du-lieu-thu-cap-la-gi"] == "nghien-cuu-khoa-hoc"
+    assert by_slug["amos"] == "spss"
+    assert by_slug["luan-an-tien-si"] == "khoa-luan-tot-nghiep"
+    assert by_slug["do-lech-chuan"] == "thong-ke"
+    assert not any(r.category in ("phan-tich-du-lieu", "luan-van-thac-si") for r in rows)
+
+
+def test_load_folds_missing_file_is_empty(tmp_path):
+    from app.blog.content.plan import load_folds
+    assert load_folds(str(tmp_path / "nope.tsv")) == []

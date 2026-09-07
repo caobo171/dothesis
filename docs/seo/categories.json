@@ -1,5 +1,5 @@
 {
-  "_comment": "Nine blog categories. A category exists only if its name has measured search volume (Vietnam, vi, 2026-09-07), a real route (/blog/vi/chu-de/{slug}), a hand-written intro, and at least ten posts. The run copies this file to api/data/blog-seeds/vi/categories.json; `python -m app.blog.cli create --dir` upserts it before the posts. Intros are written by hand on purpose: a category that reads as a filtered list does not rank and does not help the reader decide where to start.",
+  "_comment": "Seven blog categories (phan-tich-du-lieu and luan-van-thac-si were folded on 2026-09-08, see topic-bank/category-folds.tsv). A category exists only if its name has measured search volume (Vietnam, vi, 2026-09-07), a real route (/blog/vi/chu-de/{slug}), a hand-written intro, and at least ten posts. The run copies this file to api/data/blog-seeds/vi/categories.json; `python -m app.blog.cli create --dir` upserts it before the posts. Intros are written by hand on purpose: a category that reads as a filtered list does not rank and does not help the reader decide where to start.",
   "categories": [
     {
       "slug": "spss",
@@ -56,31 +56,13 @@
       "intro_md": "Khi mô hình của bạn có nhiều biến tiềm ẩn, biến trung gian, biến điều tiết hoặc cỡ mẫu không lớn, SPSS bắt đầu đuối và SmartPLS với PLS-SEM trở thành lựa chọn mặc định của rất nhiều luận văn kinh tế và quản trị ở Việt Nam.\n\nChuyên mục này đi theo đúng hai bước của PLS-SEM. Bước một là mô hình đo lường: hệ số tải ngoài, độ tin cậy tổng hợp CR, phương sai trích trung bình AVE, giá trị phân biệt theo Fornell-Larcker và HTMT. Bước hai là mô hình cấu trúc: đa cộng tuyến VIF, hệ số đường dẫn và bootstrapping, R bình phương, f bình phương, Q bình phương, rồi tới trung gian, điều tiết và phân tích đa nhóm.\n\nMỗi bài chỉ đúng chỗ bấm trong SmartPLS 4, giải thích bảng kết quả, ghi ngưỡng kèm nguồn, và có một đoạn gợi ý cách viết kết quả vào chương 4. Các bài xử lý sự cố nói về loading thấp, HTMT vượt ngưỡng, và đường dẫn không có ý nghĩa thống kê.\n\nNếu bạn còn phân vân giữa PLS-SEM và CB-SEM trên AMOS, có bài so sánh thẳng thắn về khi nào nên dùng cái nào. Kiến thức nền về SEM và các khái niệm thống kê nằm ở chuyên mục Thống kê.\n\nBắt đầu từ đâu. Đọc bài giới thiệu PLS-SEM và bài so sánh với CB-SEM trước, để chắc rằng SmartPLS đúng là công cụ cho mô hình của bạn. Sau đó đi theo thứ tự chạy thật: bài về mô hình đo lường với loading, CR và AVE, rồi bài về giá trị phân biệt HTMT, rồi mới sang mô hình cấu trúc với bootstrapping và hệ số đường dẫn. Bài về biến trung gian và biến điều tiết chỉ cần khi mô hình của bạn có chúng. Bài xử lý sự cố về loading thấp và HTMT vượt ngưỡng nên đọc khi bạn gặp đúng vấn đề đó, không cần đọc trước."
     },
     {
-      "slug": "phan-tich-du-lieu",
-      "name": "Phân tích dữ liệu",
-      "display_name": "Phân tích dữ liệu",
-      "target_keyword": "phân tích dữ liệu",
-      "search_volume": 1600,
-      "sort_order": 7,
-      "intro_md": "Phân tích dữ liệu trong luận văn không phải là chạy càng nhiều kiểm định càng tốt. Nó là chọn đúng phép phân tích cho câu hỏi và cho loại dữ liệu bạn có, làm theo đúng thứ tự, và biết dừng ở đâu.\n\nChuyên mục này là bản đồ tổng thể: kiểm tra và làm sạch dữ liệu, xử lý giá trị ngoại lai và dữ liệu thiếu, kiểm tra phân phối, chọn giữa hồi quy và SEM, chọn giữa kiểm định tham số và phi tham số, và cách đọc một bảng kết quả bất kỳ. Nhiều bài ở dạng so sánh hai lựa chọn, ví dụ tương quan với hồi quy, hồi quy tuyến tính với hồi quy logistic, T-test với Mann-Whitney.\n\nCác bài hướng dẫn thao tác chi tiết được xếp vào chuyên mục SPSS hoặc SmartPLS. Bài ở đây trả lời câu hỏi đứng trước đó: bạn nên dùng phép nào và vì sao.\n\nNếu bạn đang cầm một file dữ liệu và chưa biết bắt đầu từ đâu, hãy đọc bài về quy trình phân tích trước, rồi mới mở phần mềm.\n\nBắt đầu từ đâu. Bài về quy trình phân tích dữ liệu cho luận văn định lượng là bản đồ, hãy đọc nó trước. Tiếp theo là bài về làm sạch dữ liệu và xử lý giá trị ngoại lai, vì mọi phép phân tích sau đó đều dựa trên dữ liệu đã sạch. Bài về kiểm tra phân phối chuẩn quyết định nhánh bạn đi tiếp: kiểm định tham số hay phi tham số. Khi đã biết mình cần gì, bài so sánh giữa hồi quy và SEM, hoặc giữa tương quan và hồi quy, giúp bạn chọn đúng phép và giải thích được lý do chọn trong chương 3."
-    },
-    {
-      "slug": "luan-van-thac-si",
-      "name": "Luận văn thạc sĩ",
-      "display_name": "Luận văn thạc sĩ",
-      "target_keyword": "luận văn thạc sĩ",
-      "search_volume": 1000,
-      "sort_order": 8,
-      "intro_md": "Luận văn thạc sĩ khác khóa luận ở hai điểm hội đồng nhìn vào đầu tiên: tính mới của đề tài và độ chặt của phương pháp. Một mô hình mượn nguyên từ bài báo nước ngoài và chạy lại trên mẫu Việt Nam vẫn có thể đạt, nhưng chỉ khi bạn nói rõ được nó khác gì và đóng góp gì.\n\nChuyên mục này tập trung vào những việc riêng của bậc thạc sĩ: xây dựng khung lý thuyết từ nhiều nguồn, biện luận giả thuyết, chọn mô hình đo lường và mô hình cấu trúc, trình bày kết quả PLS-SEM hoặc hồi quy theo chuẩn học thuật, viết thảo luận đối chiếu với các nghiên cứu trước, và đề xuất hàm ý quản trị có cơ sở từ số liệu.\n\nBạn sẽ gặp các bài về cách trả lời phản biện, cách xử lý khi một giả thuyết bị bác, và cách viết phần hạn chế mà không tự hạ thấp công trình. Những chỗ cần trích dẫn phương pháp, bài ghi nguồn cụ thể để bạn đưa thẳng vào danh mục tài liệu tham khảo.\n\nPhần chạy số nằm ở chuyên mục SPSS và SmartPLS. Phần chọn và xây dựng mô hình nằm ở chuyên mục Mô hình nghiên cứu.\n\nBắt đầu từ đâu. Đọc bài về tính mới và đóng góp của luận văn thạc sĩ trước, vì đó là câu hỏi đầu tiên của hội đồng và là thứ khó bổ sung về sau. Tiếp theo là bài về xây dựng khung lý thuyết và bài về biện luận giả thuyết, hai bài quyết định chương 2 có đứng được hay không. Bài về trình bày kết quả PLS-SEM và bài về viết thảo luận đối chiếu với nghiên cứu trước dành cho giai đoạn sau khi có số liệu. Bài về trả lời phản biện và bài về phần hạn chế của nghiên cứu nên đọc một tháng trước ngày bảo vệ."
-    },
-    {
       "slug": "mo-hinh-nghien-cuu",
       "name": "Mô hình nghiên cứu",
       "display_name": "Mô hình nghiên cứu",
       "target_keyword": "mô hình nghiên cứu",
       "search_volume": 720,
-      "sort_order": 9,
+      "sort_order": 7,
       "intro_md": "Mô hình nghiên cứu là thứ quyết định toàn bộ phần sau của luận văn: bảng hỏi đo cái gì, cỡ mẫu bao nhiêu, chạy phép phân tích nào, và kết quả có gì để bàn. Chọn mô hình sai ở chương 2 thì chương 4 không cứu được.\n\nChuyên mục này giới thiệu các lý thuyết và mô hình được dùng nhiều nhất trong luận văn kinh tế và quản trị ở Việt Nam: TAM, TPB, UTAUT, SERVQUAL, mô hình kỳ vọng và xác nhận, các mô hình về động lực, cam kết và ý định. Mỗi bài nói về nguồn gốc của mô hình với trích dẫn gốc, các biến và giả thuyết thường dùng, thang đo gợi ý cho từng biến, và những điều cần lưu ý khi đưa mô hình vào bối cảnh Việt Nam.\n\nBên cạnh đó là các bài về khái niệm nền: biến độc lập và phụ thuộc, biến trung gian, biến điều tiết, biến kiểm soát, cách vẽ mô hình và cách phát biểu giả thuyết cho chạy được.\n\nKhi đã chốt mô hình, chuyên mục Khảo sát nói về cách chuyển nó thành bảng hỏi, và chuyên mục SmartPLS nói về cách kiểm định nó.\n\nBắt đầu từ đâu. Đọc bài về các loại biến trong mô hình trước, vì nhầm vai trò của biến là lỗi phổ biến nhất khi vẽ mô hình. Sau đó chọn một mô hình nền phù hợp với đề tài: TAM hoặc UTAUT cho ý định sử dụng công nghệ, TPB cho ý định hành vi nói chung, SERVQUAL cho chất lượng dịch vụ và sự hài lòng. Bài về cách xây dựng mô hình nghiên cứu hướng dẫn bạn kết hợp và điều chỉnh mô hình gốc cho bối cảnh Việt Nam mà vẫn giữ được cơ sở lý thuyết. Bài về cách phát biểu giả thuyết nên đọc trước khi chốt mô hình, để mỗi mũi tên trong hình đều có một giả thuyết kiểm định được."
     }
   ]
-}
+}\n

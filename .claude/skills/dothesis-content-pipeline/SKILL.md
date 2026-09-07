@@ -173,7 +173,12 @@ blocked, not to make a thin axis look bigger.
 cd api && ./run.sh python -m app.blog.content.cli plan
 ```
 
-Merges the harvest, minus `exclusions.txt`, with the gate survivors; clusters
+Merges the harvest with the gate survivors. A harvest row is kept only if it hits
+an axis unit or a whole-word entry in `vocabulary.txt` (a whitelist, because a
+blacklist alone let a thesis-service site's generic Q&A pages through); every
+drop is written to `plan-rejected.tsv` with its reason, so read that file for
+false rejections. `category-folds.tsv` then folds any category that cannot clear
+ten posts into a broader one. It clusters
 phrasings of one intent into a single page and keeps the losers as
 `secondary_keywords`; assigns category and archetype; picks 3 to 5 siblings;
 orders category round-robin by volume so the first tranche is the best page of

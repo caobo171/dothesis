@@ -1,0 +1,241 @@
+keyword	search_volume	verdict	reason
+thang đo sự hài lòng khách hàng		drop	unmeasured; family 'satisfaction' sample 0/0 pass, aggregate 0
+sự hài lòng khách hàng là gì		drop	unmeasured; family 'satisfaction' sample 0/0 pass, aggregate 0
+thang đo sự hài lòng công việc		drop	unmeasured; family 'satisfaction' sample 0/0 pass, aggregate 0
+sự hài lòng công việc là gì		drop	unmeasured; family 'satisfaction' sample 0/0 pass, aggregate 0
+thang đo sự hài lòng sinh viên		drop	unmeasured; family 'satisfaction' sample 0/0 pass, aggregate 0
+sự hài lòng sinh viên là gì		drop	unmeasured; family 'satisfaction' sample 0/0 pass, aggregate 0
+thang đo sự hài lòng du khách		drop	unmeasured; family 'satisfaction' sample 0/0 pass, aggregate 0
+sự hài lòng du khách là gì		drop	unmeasured; family 'satisfaction' sample 0/0 pass, aggregate 0
+thang đo lòng trung thành khách hàng		drop	no volume returned
+lòng trung thành khách hàng là gì		drop	unmeasured; family 'loyalty' sample 0/3 pass, aggregate 0
+thang đo lòng trung thành thương hiệu		drop	no volume returned
+lòng trung thành thương hiệu là gì		drop	unmeasured; family 'loyalty' sample 0/3 pass, aggregate 0
+thang đo ý định quay lại		drop	no volume returned
+ý định quay lại là gì		drop	unmeasured; family 'loyalty' sample 0/3 pass, aggregate 0
+thang đo ý định truyền miệng		drop	unmeasured; family 'loyalty' sample 0/3 pass, aggregate 0
+ý định truyền miệng là gì		drop	unmeasured; family 'loyalty' sample 0/3 pass, aggregate 0
+thang đo chi phí chuyển đổi		drop	unmeasured; family 'loyalty' sample 0/3 pass, aggregate 0
+chi phí chuyển đổi là gì		drop	unmeasured; family 'loyalty' sample 0/3 pass, aggregate 0
+thang đo rào cản chuyển đổi		drop	unmeasured; family 'loyalty' sample 0/3 pass, aggregate 0
+rào cản chuyển đổi là gì		drop	unmeasured; family 'loyalty' sample 0/3 pass, aggregate 0
+thang đo ý định mua		drop	no volume returned
+ý định mua là gì		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+thang đo ý định mua lại		drop	no volume returned
+ý định mua lại là gì		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+thang đo ý định sử dụng		drop	no volume returned
+ý định sử dụng là gì		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+thang đo ý định hành vi		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+ý định hành vi là gì		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+thang đo quyết định mua		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+quyết định mua là gì		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+thang đo hành vi mua ngẫu hứng		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+hành vi mua ngẫu hứng là gì		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+thang đo ý định tiếp tục sử dụng		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+ý định tiếp tục sử dụng là gì		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+thang đo ý định mua sản phẩm xanh		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+ý định mua sản phẩm xanh là gì		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+thang đo ý định khởi nghiệp		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+ý định khởi nghiệp là gì		drop	unmeasured; family 'intention' sample 0/3 pass, aggregate 0
+thang đo nhận biết thương hiệu		drop	no volume returned
+nhận biết thương hiệu là gì		drop	unmeasured; family 'brand' sample 0/3 pass, aggregate 0
+thang đo hình ảnh thương hiệu		drop	no volume returned
+hình ảnh thương hiệu là gì		drop	unmeasured; family 'brand' sample 0/3 pass, aggregate 0
+thang đo giá trị thương hiệu		drop	no volume returned
+giá trị thương hiệu là gì		drop	unmeasured; family 'brand' sample 0/3 pass, aggregate 0
+thang đo tình yêu thương hiệu		drop	unmeasured; family 'brand' sample 0/3 pass, aggregate 0
+tình yêu thương hiệu là gì		drop	unmeasured; family 'brand' sample 0/3 pass, aggregate 0
+thang đo uy tín thương hiệu		drop	unmeasured; family 'brand' sample 0/3 pass, aggregate 0
+uy tín thương hiệu là gì		drop	unmeasured; family 'brand' sample 0/3 pass, aggregate 0
+thang đo chất lượng dịch vụ	10	pass	volume 10
+chất lượng dịch vụ là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo chất lượng sản phẩm		drop	no volume returned
+chất lượng sản phẩm là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo chất lượng cảm nhận		drop	no volume returned
+chất lượng cảm nhận là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo chất lượng thông tin		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+chất lượng thông tin là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo chất lượng hệ thống		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+chất lượng hệ thống là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo chất lượng dịch vụ điện tử		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+chất lượng dịch vụ điện tử là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo chất lượng đào tạo		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+chất lượng đào tạo là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo sự tin cậy		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+sự tin cậy là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo sự đáp ứng		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+sự đáp ứng là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo năng lực phục vụ		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+năng lực phục vụ là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo sự đồng cảm		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+sự đồng cảm là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo phương tiện hữu hình		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+phương tiện hữu hình là gì		drop	unmeasured; family 'quality' sample 1/3 pass, aggregate 10
+thang đo giá cả cảm nhận		drop	no volume returned
+giá cả cảm nhận là gì		drop	unmeasured; family 'value' sample 0/3 pass, aggregate 0
+thang đo giá trị cảm nhận		drop	no volume returned
+giá trị cảm nhận là gì		drop	unmeasured; family 'value' sample 0/3 pass, aggregate 0
+thang đo giá trị hưởng thụ		drop	no volume returned
+giá trị hưởng thụ là gì		drop	unmeasured; family 'value' sample 0/3 pass, aggregate 0
+thang đo giá trị thực dụng		drop	unmeasured; family 'value' sample 0/3 pass, aggregate 0
+giá trị thực dụng là gì		drop	unmeasured; family 'value' sample 0/3 pass, aggregate 0
+thang đo sự thuận tiện		drop	unmeasured; family 'value' sample 0/3 pass, aggregate 0
+sự thuận tiện là gì		drop	unmeasured; family 'value' sample 0/3 pass, aggregate 0
+thang đo khuyến mãi		drop	unmeasured; family 'value' sample 0/3 pass, aggregate 0
+khuyến mãi là gì		drop	unmeasured; family 'value' sample 0/3 pass, aggregate 0
+thang đo tính hữu ích cảm nhận		drop	no volume returned
+tính hữu ích cảm nhận là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo tính dễ sử dụng cảm nhận		drop	no volume returned
+tính dễ sử dụng cảm nhận là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo thái độ	10	pass	volume 10
+thái độ là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo chuẩn chủ quan		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+chuẩn chủ quan là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo nhận thức kiểm soát hành vi		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+nhận thức kiểm soát hành vi là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo ảnh hưởng xã hội		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+ảnh hưởng xã hội là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo điều kiện thuận lợi		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+điều kiện thuận lợi là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo kỳ vọng nỗ lực		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+kỳ vọng nỗ lực là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo kỳ vọng hiệu quả		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+kỳ vọng hiệu quả là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo động lực hưởng thụ		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+động lực hưởng thụ là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo thói quen		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thói quen là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo giá trị giá cả		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+giá trị giá cả là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo tính tương thích		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+tính tương thích là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo sự thích thú cảm nhận		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+sự thích thú cảm nhận là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo niềm tin		drop	unmeasured; family 'trust' sample 0/0 pass, aggregate 0
+niềm tin là gì		drop	unmeasured; family 'trust' sample 0/0 pass, aggregate 0
+thang đo rủi ro cảm nhận		drop	unmeasured; family 'trust' sample 0/0 pass, aggregate 0
+rủi ro cảm nhận là gì		drop	unmeasured; family 'trust' sample 0/0 pass, aggregate 0
+thang đo an toàn bảo mật		drop	unmeasured; family 'trust' sample 0/0 pass, aggregate 0
+an toàn bảo mật là gì		drop	unmeasured; family 'trust' sample 0/0 pass, aggregate 0
+thang đo quyền riêng tư		drop	unmeasured; family 'trust' sample 0/0 pass, aggregate 0
+quyền riêng tư là gì		drop	unmeasured; family 'trust' sample 0/0 pass, aggregate 0
+thang đo sự hoài nghi		drop	unmeasured; family 'trust' sample 0/0 pass, aggregate 0
+sự hoài nghi là gì		drop	unmeasured; family 'trust' sample 0/0 pass, aggregate 0
+thang đo động lực làm việc		drop	no volume returned
+động lực làm việc là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo cam kết tổ chức		drop	no volume returned
+cam kết tổ chức là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo gắn kết công việc		drop	no volume returned
+gắn kết công việc là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo căng thẳng công việc		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+căng thẳng công việc là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo kiệt sức nghề nghiệp		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+kiệt sức nghề nghiệp là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo ý định nghỉ việc		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+ý định nghỉ việc là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo hiệu quả công việc		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+hiệu quả công việc là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo hành vi công dân tổ chức		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+hành vi công dân tổ chức là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo văn hóa tổ chức		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+văn hóa tổ chức là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo lãnh đạo chuyển đổi		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+lãnh đạo chuyển đổi là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo lãnh đạo chuyển giao		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+lãnh đạo chuyển giao là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo môi trường làm việc		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+môi trường làm việc là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo đào tạo và phát triển		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+đào tạo và phát triển là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo lương thưởng phúc lợi		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+lương thưởng phúc lợi là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo đánh giá thành tích		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+đánh giá thành tích là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo quan hệ đồng nghiệp		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+quan hệ đồng nghiệp là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo cơ hội thăng tiến		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+cơ hội thăng tiến là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo công bằng tổ chức		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+công bằng tổ chức là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo hỗ trợ từ tổ chức		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+hỗ trợ từ tổ chức là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo cân bằng công việc cuộc sống		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+cân bằng công việc cuộc sống là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
+thang đo truyền miệng điện tử		drop	no volume returned
+truyền miệng điện tử là gì		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+thang đo marketing nội dung		drop	no volume returned
+marketing nội dung là gì		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+thang đo marketing người ảnh hưởng		drop	no volume returned
+marketing người ảnh hưởng là gì		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+thang đo quảng cáo trên mạng xã hội		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+quảng cáo trên mạng xã hội là gì		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+thang đo trải nghiệm khách hàng		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+trải nghiệm khách hàng là gì		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+thang đo sự gắn kết khách hàng		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+sự gắn kết khách hàng là gì		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+thang đo tính dễ dùng của website		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+tính dễ dùng của website là gì		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+thang đo sự tham gia của khách hàng		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+sự tham gia của khách hàng là gì		drop	unmeasured; family 'digital' sample 0/3 pass, aggregate 0
+thang đo tiêu dùng xanh		drop	unmeasured; family 'sustainability' sample 0/0 pass, aggregate 0
+tiêu dùng xanh là gì		drop	unmeasured; family 'sustainability' sample 0/0 pass, aggregate 0
+thang đo ý thức môi trường		drop	unmeasured; family 'sustainability' sample 0/0 pass, aggregate 0
+ý thức môi trường là gì		drop	unmeasured; family 'sustainability' sample 0/0 pass, aggregate 0
+thang đo trách nhiệm xã hội doanh nghiệp		drop	unmeasured; family 'sustainability' sample 0/0 pass, aggregate 0
+trách nhiệm xã hội doanh nghiệp là gì		drop	unmeasured; family 'sustainability' sample 0/0 pass, aggregate 0
+thang đo phát triển bền vững		drop	unmeasured; family 'sustainability' sample 0/0 pass, aggregate 0
+phát triển bền vững là gì		drop	unmeasured; family 'sustainability' sample 0/0 pass, aggregate 0
+thang đo hình ảnh điểm đến		drop	unmeasured; family 'tourism' sample 0/0 pass, aggregate 0
+hình ảnh điểm đến là gì		drop	unmeasured; family 'tourism' sample 0/0 pass, aggregate 0
+thang đo động cơ du lịch		drop	unmeasured; family 'tourism' sample 0/0 pass, aggregate 0
+động cơ du lịch là gì		drop	unmeasured; family 'tourism' sample 0/0 pass, aggregate 0
+thang đo chất lượng điểm đến		drop	unmeasured; family 'tourism' sample 0/0 pass, aggregate 0
+chất lượng điểm đến là gì		drop	unmeasured; family 'tourism' sample 0/0 pass, aggregate 0
+thang đo giá trị mối quan hệ		drop	unmeasured; family 'tourism' sample 0/0 pass, aggregate 0
+giá trị mối quan hệ là gì		drop	unmeasured; family 'tourism' sample 0/0 pass, aggregate 0
+thang đo động lực học tập		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+động lực học tập là gì		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+thang đo kết quả học tập		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+kết quả học tập là gì		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+thang đo sự gắn kết học tập		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+sự gắn kết học tập là gì		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+thang đo phương pháp giảng dạy		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+phương pháp giảng dạy là gì		drop	unmeasured; family 'education' sample 0/0 pass, aggregate 0
+thang đo năng lực cạnh tranh		drop	no volume returned
+năng lực cạnh tranh là gì		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+thang đo hiệu quả hoạt động doanh nghiệp		drop	no volume returned
+hiệu quả hoạt động doanh nghiệp là gì		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+thang đo hiệu quả tài chính		drop	no volume returned
+hiệu quả tài chính là gì		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+thang đo đổi mới sáng tạo		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+đổi mới sáng tạo là gì		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+thang đo chấp nhận rủi ro		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+chấp nhận rủi ro là gì		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+thang đo cấu trúc vốn		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+cấu trúc vốn là gì		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+thang đo đòn bẩy tài chính		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+đòn bẩy tài chính là gì		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+thang đo thanh khoản		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+thanh khoản là gì		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+thang đo rủi ro tín dụng		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+rủi ro tín dụng là gì		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+thang đo quản trị lợi nhuận		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+quản trị lợi nhuận là gì		drop	unmeasured; family 'firm' sample 0/3 pass, aggregate 0
+thang đo tự tin khởi nghiệp		drop	unmeasured; family 'entrepreneurship' sample 0/0 pass, aggregate 0
+tự tin khởi nghiệp là gì		drop	unmeasured; family 'entrepreneurship' sample 0/0 pass, aggregate 0
+thang đo giáo dục khởi nghiệp		drop	unmeasured; family 'entrepreneurship' sample 0/0 pass, aggregate 0
+giáo dục khởi nghiệp là gì		drop	unmeasured; family 'entrepreneurship' sample 0/0 pass, aggregate 0
+thang đo chuẩn mực xã hội		drop	unmeasured; family 'entrepreneurship' sample 0/0 pass, aggregate 0
+chuẩn mực xã hội là gì		drop	unmeasured; family 'entrepreneurship' sample 0/0 pass, aggregate 0
+thang đo nhận thức về giá		drop	unmeasured; family 'value' sample 0/3 pass, aggregate 0
+nhận thức về giá là gì		drop	unmeasured; family 'value' sample 0/3 pass, aggregate 0
+thang đo sự đổi mới cá nhân		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+sự đổi mới cá nhân là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo kinh nghiệm sử dụng		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+kinh nghiệm sử dụng là gì		drop	unmeasured; family 'tam-construct' sample 1/3 pass, aggregate 10
+thang đo sự hài lòng điện tử		drop	unmeasured; family 'satisfaction' sample 0/0 pass, aggregate 0
+sự hài lòng điện tử là gì		drop	unmeasured; family 'satisfaction' sample 0/0 pass, aggregate 0
+thang đo ý định giới thiệu		drop	unmeasured; family 'loyalty' sample 0/3 pass, aggregate 0
+ý định giới thiệu là gì		drop	unmeasured; family 'loyalty' sample 0/3 pass, aggregate 0
+thang đo hình ảnh doanh nghiệp		drop	unmeasured; family 'brand' sample 0/3 pass, aggregate 0
+hình ảnh doanh nghiệp là gì		drop	unmeasured; family 'brand' sample 0/3 pass, aggregate 0
