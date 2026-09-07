@@ -355,7 +355,7 @@ def _assign_siblings(rows: list[BacklogRow]) -> None:
         row.sibling_slugs = picked[:MAX_SIBLINGS]
 
 
-def _round_robin(rows: list[BacklogRow]) -> list[BacklogRow]:
+def _round_robin_tier(rows: list[BacklogRow]) -> list[BacklogRow]:
     buckets: dict[str, list[BacklogRow]] = {}
     for row in sorted(rows, key=lambda r: (-r.search_volume, r.slug)):
         buckets.setdefault(row.category, []).append(row)
@@ -366,6 +366,21 @@ def _round_robin(rows: list[BacklogRow]) -> list[BacklogRow]:
         for category in order:
             if buckets[category]:
                 out.append(buckets[category].pop(0))
+    return out
+
+
+def _round_robin(rows: list[BacklogRow]) -> list[BacklogRow]:
+    """Two tiers, measured first, each one a category round robin.
+
+    `create` schedules in priority order, and a family-inferred row is inserted
+    as a DRAFT that is never scheduled until it is measured on its own. Ordering
+    both kinds together would let a draft take priority 3 while a measured page
+    waits at 40, i.e. spend a publishing slot on a page that cannot publish. So
+    the tier split comes first and the round robin runs inside each tier.
+    """
+    measured = [r for r in rows if r.gate_status != "family-inferred"]
+    inferred = [r for r in rows if r.gate_status == "family-inferred"]
+    out = _round_robin_tier(measured) + _round_robin_tier(inferred)
     for i, row in enumerate(out, 1):
         row.priority = i
     return out

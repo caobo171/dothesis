@@ -223,3 +223,62 @@ def test_run_skips_slugs_already_in_the_blog_index(tmp_path):
     slugs = [r["slug"] for r in csv.DictReader(open(out, encoding="utf-8"), delimiter="\t")]
     assert slugs == ["ma-tran-xoay"]
     assert summary["already_covered"] == 1
+
+
+def test_family_inferred_rows_come_after_every_measured_row():
+    """Drafts must not consume early slots.
+
+    `create` schedules in priority order and a family-inferred row is inserted
+    as DRAFT, never scheduled, so a low priority number spent on one would push
+    a measured page out of the first tranche.
+    """
+    phrasings = [
+        plan.Phrasing("spss alpha", 900, "f1", "spss", "term-la-gi"),
+        plan.Phrasing("spss beta", 5, "f1", "spss", "term-la-gi",
+                      gate_status="family-inferred"),
+        plan.Phrasing("pls gamma", 800, "f2", "smartpls", "smartpls-howto"),
+        plan.Phrasing("pls delta", 700, "f2", "smartpls", "smartpls-howto"),
+        plan.Phrasing("pls epsilon", 600, "f2", "smartpls", "smartpls-howto"),
+    ]
+    rows = plan.build(phrasings)
+    assert [r.gate_status for r in rows] == ["measured"] * 4 + ["family-inferred"]
+    assert [r.priority for r in rows] == [1, 2, 3, 4, 5]
+    # the measured tier keeps the category round robin it had before
+    assert [r.focus_keyword for r in rows][:2] == ["spss alpha", "pls gamma"]
+
+
+def test_family_inferred_rows_of_a_big_category_still_wait_for_small_categories():
+    """The tier split beats the round robin, not the other way round."""
+    phrasings = [plan.Phrasing(f"spss d{i}", 100 - i, "f1", "spss", "term-la-gi",
+                               gate_status="family-inferred") for i in range(3)]
+    phrasings.append(plan.Phrasing("luan van m", 40, "f2", "luan-van-thac-si",
+                                   "thesis-writing"))
+    rows = plan.build(phrasings)
+    assert rows[0].focus_keyword == "luan van m"
+    assert all(r.gate_status == "family-inferred" for r in rows[1:])
+
+
+def test_a_candidate_measured_through_the_harvest_stays_measured(tmp_path):
+    """Exact keyword match with a harvest row is measurement, whatever the gate said."""
+    harvest = _write_tsv(tmp_path / "harvest.tsv", HARVEST_HEADER, [
+        ["biến hiếm là gì", "880", "0", "informational", "phamlocblog.com", "3", "/b"],
+    ])
+    candidates = _write_tsv(
+        tmp_path / "candidates.tsv",
+        ["keyword", "axis", "unit", "family", "category", "archetype"],
+        [["biến hiếm là gì", "statistical-term", "bien-hiem", "misc", "thong-ke",
+          "term-la-gi"]])
+    _write_tsv(tmp_path / "gate-statistical-term.tsv",
+               ["keyword", "search_volume", "verdict", "reason"],
+               [["biến hiếm là gì", "", "pass",
+                 "unmeasured; family 'misc' sample 4/5 pass, aggregate 9,300"]])
+
+    out = tmp_path / "backlog.tsv"
+    summary = plan.run(harvest_path=harvest, candidates_path=candidates,
+                       gate_dir=str(tmp_path), exclusions_path=os.devnull,
+                       out_path=str(out), index_path=None)
+    rows = list(csv.DictReader(open(out, encoding="utf-8"), delimiter="\t"))
+    assert len(rows) == 1
+    assert rows[0]["gate_status"] == "measured"
+    assert rows[0]["search_volume"] == "880"
+    assert summary["family_inferred"] == 0
