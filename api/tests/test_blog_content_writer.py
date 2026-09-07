@@ -257,8 +257,35 @@ def test_an_invented_internal_link_is_unlinked_and_the_post_still_passes(tmp_pat
     assert _log_rows(tmp_path / "write-log.tsv")[0]["unlinked"] == "1"
 
 
-def test_a_draft_left_with_three_known_links_goes_to_repair(tmp_path):
-    """Stripping is not a free pass: too few real links is still a failure."""
+def test_a_draft_left_short_of_links_is_filled_from_the_brief(tmp_path):
+    """Stripping leaves three real links; the mechanical đọc thêm line fills the floor
+    from targets the gate resolves, so no repair call is spent."""
+    body = (good_seed()["body"]
+            .replace("](/blog/vi/chu-de/thong-ke)", "](/blog/vi/eigenvalue)")
+            .replace("](/blog/vi)", "](/blog/vi/communality)"))
+    sibling = BacklogRow(priority=8, slug="do-tin-cay-thang-do", focus_keyword="độ tin cậy thang đo",
+                         search_volume=200, secondary_keywords=[], category="spss",
+                         archetype="term-la-gi", family="reliability", sibling_slugs=[],
+                         competitor_urls=[], gate_status="measured")
+    model = StubModel([model_payload(body=body), model_payload()])
+    out = tmp_path / "posts"
+    summary = writer.run(backlog_path=_backlog(tmp_path, rows=(ROW, sibling)), out_dir=str(out),
+                         client=model, workers=1)
+
+    # Two rows in the backlog, so two posts; the point is zero repairs.
+    assert summary["written"] == 2 and summary["repaired"] == 0
+    assert len(model.prompts) == 2, "one call per row, no repair call"
+    with open(out / "0007-cronbach-alpha-la-gi.json", encoding="utf-8") as fh:
+        written = json.load(fh)["body"]
+    assert "Đọc thêm: " in written
+    assert "/blog/vi/do-tin-cay-thang-do" in written, "filled from a backlog sibling"
+    assert "/blog/vi/eigenvalue" not in written, "the invented link stayed stripped"
+    assert _log_rows(tmp_path / "write-log.tsv")[0]["unlinked"] == "2"
+
+
+def test_a_draft_that_cannot_reach_the_floor_still_goes_to_repair(tmp_path):
+    """With a one-row backlog the brief has nothing resolvable to add, so the
+    shortfall is real and the repair pass runs with the stripping rule spelled out."""
     body = (good_seed()["body"]
             .replace("](/blog/vi/chu-de/thong-ke)", "](/blog/vi/eigenvalue)")
             .replace("](/blog/vi)", "](/blog/vi/communality)"))
@@ -269,9 +296,8 @@ def test_a_draft_left_with_three_known_links_goes_to_repair(tmp_path):
 
     assert summary["repaired"] == 1
     repair = model.prompts[1]
-    assert "3 distinct internal links" in repair
+    assert "distinct internal links" in repair
     assert "already been stripped" in repair, "the retry is told adding more cannot help"
-    assert "/blog/vi/do-tin-cay-thang-do" in repair, "the allowed links, listed again"
     assert "/blog/vi/eigenvalue" not in repair, \
         "the draft it repairs no longer contains the invented links"
     assert _log_rows(tmp_path / "write-log.tsv")[0]["unlinked"] == "2"

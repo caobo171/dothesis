@@ -157,6 +157,7 @@ MIN_INTERNAL_LINKS = 4
 
 
 def ensure_read_more(body: str, row, link_slugs: list[str], titles: dict[str, str],
+                     known: set[str] | None = None,
                      minimum: int = MIN_INTERNAL_LINKS) -> tuple[str, int]:
     """Guarantee the internal-link floor with a "Đọc thêm" line built from the brief.
 
@@ -167,7 +168,7 @@ def ensure_read_more(body: str, row, link_slugs: list[str], titles: dict[str, st
     block is added mechanically from the same list the brief offered, right
     before the FAQ so the close paragraph stays last. Returns (body, links added).
     """
-    from .qa import internal_links  # noqa: PLC0415 — keep qa stdlib-importable on its own
+    from .qa import internal_links, link_is_known  # noqa: PLC0415 — keep qa stdlib-importable
 
     present = set(internal_links(body))
     have = [h for h in present if h.startswith("/blog/")]
@@ -177,6 +178,10 @@ def ensure_read_more(body: str, row, link_slugs: list[str], titles: dict[str, st
     added: list[str] = []
     for href in candidates:
         if href in present or href in added:
+            continue
+        # Only a target the gate resolves: a sibling the brief named but the
+        # backlog does not carry would be stripped again on the next pass.
+        if known is not None and not link_is_known(href, known):
             continue
         added.append(href)
         if len(have) + len(added) >= minimum + 1:
@@ -339,7 +344,7 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
                 # that is genuinely short of real links.
                 body, stripped = normalise_internal_links(produced.get("body") or "", known)
                 body, _cites = normalise_citations(body)
-                body, _added = ensure_read_more(body, row, link_slugs, titles)
+                body, _added = ensure_read_more(body, row, link_slugs, titles, known)
                 produced["body"] = body
                 unlinked += stripped
                 seed = seed_from(row, produced)
