@@ -194,8 +194,15 @@ def _expand_with_synonyms(keywords: Set[str]) -> Set[str]:
 
 
 def _extract_topic_keywords(topic: str) -> Set[str]:
-    """Extract meaningful keywords from the paper topic."""
-    words = re.findall(r'[a-z]{2,}', topic.lower())
+    r"""Extract meaningful keywords from the paper topic.
+
+    The pattern must be Unicode-aware. `[a-z]{2,}` silently shredded every
+    non-ASCII topic: "Tác động của các đặc điểm KOLs" yielded {ng, nh, ti, tr,
+    vi, kols, mua, shop} — mostly fragments left behind by stripped diacritics —
+    so relevance scored near zero and the filter deleted the entire
+    bibliography. `[^\W\d_]` keeps letters in any script.
+    """
+    words = re.findall(r'[^\W\d_]{2,}', topic.lower(), re.UNICODE)
     return {w for w in words if w not in _STOP_WORDS}
 
 
@@ -375,7 +382,26 @@ class CitationQualityFilter:
                         f"Topical filter: removed {off_topic_count} off-topic citations "
                         f"(threshold={_RELEVANCE_THRESHOLD:.2f}, kept={len(relevance_filtered)})"
                     )
-                filtered_citations = relevance_filtered
+                if relevance_filtered or not filtered_citations:
+                    filtered_citations = relevance_filtered
+                else:
+                    # Keeping loosely-relevant citations beats handing the writer
+                    # an empty bibliography, which fails the run outright
+                    # ("Citation database is empty"). This fires when keyword
+                    # overlap cannot work at all — most often a Vietnamese topic
+                    # scored against English-language sources, where no amount of
+                    # correct tokenising produces a shared keyword.
+                    logger.warning(
+                        "Topical filter would have removed ALL %d citations "
+                        "(threshold=%.2f); keeping them rather than emptying the "
+                        "bibliography. Topic and sources are probably in different "
+                        "languages.", len(filtered_citations), _RELEVANCE_THRESHOLD
+                    )
+                    for entry in removed_citations[-off_topic_count:]:
+                        entry['reason'] += ' [RESTORED: filter would have emptied the database]'
+                    filter_stats['total_removed'] -= off_topic_count
+                    filter_stats['removal_reasons']['low_relevance'] = 0
+                    filter_stats['relevance_filter_bypassed'] = True
 
         filter_stats['total_filtered'] = len(filtered_citations)
 
