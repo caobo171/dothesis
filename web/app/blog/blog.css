@@ -1,0 +1,420 @@
+/* ============================================================================
+   Blog surface styles.
+
+   Scoped under `.lp-root` so the blog inherits the landing page's tokens (the
+   indigo scale, the ink ramp, the type ramp, the radii) and reads as the same
+   product rather than a second site bolted on. Nothing here redefines a token;
+   it only composes them, so a change to the marketing palette carries over.
+
+   `blog-` prefix rather than `lp-`: these classes are the blog's own, and
+   sharing the landing prefix would make a future landing redesign silently
+   reflow every article.
+   ========================================================================= */
+
+/* ------------------------------- Layout --------------------------------- */
+.lp-root .blog-page {
+  padding: 40px 0 96px;
+}
+.lp-root .blog-measure {
+  /* ~720px is the classic 70-80 character measure at this body size. Wider and
+     the eye loses the line return on a 2,000-word Vietnamese article. */
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* -------------------------------- Hero ---------------------------------- */
+.lp-root .blog-hero {
+  border-bottom: 1px solid var(--ink-100);
+  padding: 56px 0 32px;
+}
+.lp-root .blog-hero__title {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  font-size: clamp(30px, 4vw, 42px);
+  color: var(--ink-900);
+}
+.lp-root .blog-hero__sub {
+  color: var(--ink-500);
+  font-size: 17px;
+  line-height: 1.6;
+  margin-top: 14px;
+  max-width: 620px;
+}
+
+/* ------------------------------- Chips ---------------------------------- */
+.lp-root .blog-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 26px;
+}
+.lp-root .blog-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--ink-200);
+  background: #fff;
+  color: var(--ink-700);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: border-color var(--duration-fast), color var(--duration-fast);
+}
+.lp-root .blog-chip:hover {
+  border-color: var(--primary-500);
+  color: var(--primary-700);
+}
+.lp-root .blog-chip[aria-current="page"] {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+  color: #fff;
+}
+.lp-root .blog-chip__count {
+  font-size: 12px;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------- Cards --------------------------------- */
+.lp-root .blog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+  margin-top: 40px;
+}
+@media (max-width: 980px) {
+  .lp-root .blog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .lp-root .blog-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.lp-root .blog-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lp-root .blog-card__thumb {
+  display: block;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--ink-100);
+  background: var(--ink-50);
+  aspect-ratio: 1200 / 630;
+}
+.lp-root .blog-card__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.lp-root .blog-card__title {
+  font-size: 17.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  margin-top: 14px;
+  color: var(--ink-900);
+  text-wrap: pretty;
+}
+.lp-root .blog-card__title a {
+  color: inherit;
+}
+.lp-root .blog-card__title a:hover {
+  color: var(--primary-600);
+}
+.lp-root .blog-card__excerpt {
+  color: var(--ink-500);
+  font-size: 14.5px;
+  line-height: 1.6;
+  margin-top: 8px;
+}
+.lp-root .blog-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-400);
+  font-size: 13px;
+  margin-top: 12px;
+}
+.lp-root .blog-meta__sep {
+  opacity: 0.5;
+}
+.lp-root .blog-meta a {
+  color: var(--ink-500);
+  font-weight: 500;
+}
+
+/* ------------------------------ Pagination ------------------------------ */
+.lp-root .blog-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 56px;
+}
+.lp-root .blog-pager a,
+.lp-root .blog-pager span {
+  min-width: 38px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--ink-200);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--ink-700);
+}
+.lp-root .blog-pager a:hover {
+  border-color: var(--primary-500);
+  color: var(--primary-700);
+}
+.lp-root .blog-pager [aria-current="page"] {
+  background: var(--ink-900);
+  border-color: var(--ink-900);
+  color: #fff;
+}
+.lp-root .blog-pager__gap {
+  border: none !important;
+  color: var(--ink-400) !important;
+}
+
+/* ------------------------------- Article -------------------------------- */
+.lp-root .blog-article__title {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  font-size: clamp(28px, 3.6vw, 40px);
+  color: var(--ink-900);
+  text-wrap: balance;
+}
+
+/* Contents box. A plain bordered list, not a sticky rail: the article measure
+   is 720px and a rail would either crowd it or float in dead space. */
+.lp-root .blog-toc {
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  margin: 36px 0;
+  background: var(--ink-50);
+}
+.lp-root .blog-toc__title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-500);
+  margin-bottom: 12px;
+}
+.lp-root .blog-toc ol {
+  list-style: decimal;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.lp-root .blog-toc li {
+  color: var(--ink-400);
+  font-size: 15px;
+}
+.lp-root .blog-toc a {
+  color: var(--ink-700);
+  line-height: 1.45;
+}
+.lp-root .blog-toc a:hover {
+  color: var(--primary-600);
+  text-decoration: underline;
+}
+
+/* ------------------------------ Prose ----------------------------------- */
+.lp-root .blog-prose {
+  font-size: 17.5px;
+  line-height: var(--leading-prose);
+  color: var(--ink-800);
+}
+.lp-root .blog-prose > * + * {
+  margin-top: 22px;
+}
+.lp-root .blog-prose h2 {
+  font-size: 25px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: var(--ink-900);
+  margin-top: 52px;
+  /* Sticky nav is 64px tall and the contents box links straight into these,
+     so the anchor target has to clear it or the heading lands under the bar. */
+  scroll-margin-top: 84px;
+}
+.lp-root .blog-prose h3 {
+  font-size: 19.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink-900);
+  margin-top: 36px;
+  scroll-margin-top: 84px;
+}
+.lp-root .blog-prose h4 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink-900);
+  margin-top: 28px;
+  scroll-margin-top: 84px;
+}
+.lp-root .blog-prose a {
+  color: var(--primary-600);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+.lp-root .blog-prose strong {
+  font-weight: 600;
+  color: var(--ink-900);
+}
+.lp-root .blog-prose ul {
+  list-style: disc;
+  padding-left: 24px;
+}
+.lp-root .blog-prose ol {
+  list-style: decimal;
+  padding-left: 24px;
+}
+.lp-root .blog-prose li + li {
+  margin-top: 8px;
+}
+.lp-root .blog-prose blockquote {
+  border-left: 3px solid var(--primary-500);
+  padding-left: 18px;
+  color: var(--ink-600);
+}
+.lp-root .blog-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--ink-50);
+  border: 1px solid var(--ink-100);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+}
+.lp-root .blog-prose pre {
+  background: var(--ink-900);
+  color: #e8e9f3;
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.lp-root .blog-prose pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+}
+.lp-root .blog-prose img {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--ink-100);
+}
+.lp-root .blog-prose hr {
+  border: none;
+  border-top: 1px solid var(--ink-100);
+  margin: 44px 0;
+}
+
+/* A threshold table is the proprietary element of most posts, and on a phone
+   it is always wider than the screen. The wrapper scrolls the TABLE instead of
+   the page — a body that scrolls sideways breaks every other section too. */
+.lp-root .blog-tablewrap {
+  overflow-x: auto;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-lg);
+}
+.lp-root .blog-tablewrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+.lp-root .blog-tablewrap th,
+.lp-root .blog-tablewrap td {
+  padding: 11px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--ink-100);
+  vertical-align: top;
+}
+.lp-root .blog-tablewrap th {
+  background: var(--ink-50);
+  font-weight: 600;
+  color: var(--ink-800);
+  white-space: nowrap;
+}
+.lp-root .blog-tablewrap tr:last-child td {
+  border-bottom: none;
+}
+
+/* --------------------------------- CTA ---------------------------------- */
+.lp-root .blog-cta {
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-xl);
+  background: var(--primary-50);
+  padding: 26px 28px;
+  margin: 52px 0;
+}
+.lp-root .blog-cta__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink-900);
+  letter-spacing: -0.01em;
+}
+.lp-root .blog-cta__body {
+  color: var(--ink-600);
+  font-size: 15px;
+  line-height: 1.6;
+  margin-top: 8px;
+}
+.lp-root .blog-cta__action {
+  margin-top: 18px;
+}
+
+/* ------------------------------- Related -------------------------------- */
+.lp-root .blog-related {
+  border-top: 1px solid var(--ink-100);
+  margin-top: 64px;
+  padding-top: 36px;
+}
+.lp-root .blog-section-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink-900);
+}
+.lp-root .blog-linklist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 16px;
+}
+.lp-root .blog-linklist li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ink-100);
+}
+.lp-root .blog-linklist a {
+  color: var(--ink-900);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.lp-root .blog-linklist a:hover {
+  color: var(--primary-600);
+}
+.lp-root .blog-empty {
+  color: var(--ink-500);
+  font-size: 15.5px;
+  margin-top: 40px;
+}
