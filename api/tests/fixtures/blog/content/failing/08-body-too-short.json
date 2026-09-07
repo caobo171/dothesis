@@ -1,0 +1,33 @@
+{
+  "schema": "dothesis-blog-seed/1",
+  "title": "Cronbach's Alpha là gì và bao nhiêu là đạt",
+  "slug": "cronbach-alpha-la-gi",
+  "locale": "vi",
+  "meta_title": "Cronbach's Alpha là gì, bao nhiêu là đạt | DoThesis",
+  "meta_description": "Cronbach's Alpha đo gì, ngưỡng 0.6 và 0.7 lấy từ nguồn nào, cách đọc bảng Item-Total Statistics trong SPSS và xử lý khi hệ số không đạt.",
+  "focus_keyword": "cronbach alpha",
+  "secondary_keywords": [
+    "cronbach alpha là gì",
+    "hệ số cronbach alpha",
+    "cronbach alpha bao nhiêu là tốt"
+  ],
+  "focus_keyword_volume": 1300,
+  "excerpt": "Hệ số Cronbach's Alpha đo độ tin cậy thang đo, ngưỡng bao nhiêu là đạt, và làm gì khi output SPSS trả về con số thấp.",
+  "category": "spss",
+  "tags": [
+    "cronbach alpha",
+    "độ tin cậy thang đo",
+    "spss"
+  ],
+  "archetype": "term-la-gi",
+  "family": "reliability",
+  "source_batch": "harvest-2026-09-07",
+  "gate_status": "measured",
+  "sibling_slugs": [
+    "do-tin-cay-thang-do",
+    "phan-tich-efa-trong-spss",
+    "tuong-quan-bien-tong"
+  ],
+  "images": [],
+  "body": "Bạn chạy Reliability Analysis lần đầu, SPSS trả về Cronbach's Alpha bằng 0.612 và bạn không biết con số đó nói gì về thang đo của mình. Giữ lại hay loại biến, và nếu loại thì loại biến nào.\n\nBài này trả lời ba câu hỏi đó theo đúng thứ tự bạn sẽ cần khi ngồi trước file dữ liệu: hệ số này đo cái gì, bao nhiêu thì được hội đồng chấp nhận, và xử lý ra sao khi nó thấp.\n\n## Cronbach's Alpha là gì"
+}
