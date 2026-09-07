@@ -20,11 +20,21 @@ REVISION = "20260908_blog01"
 
 
 def _alembic_config() -> Config:
+    """An alembic config with NO ini file, only a script location.
+
+    Deliberately not `Config("alembic.ini")`: `migrations/env.py` calls
+    `fileConfig(config.config_file_name)` when one is set, and that
+    reconfigures Python's logging from scratch — `disable_existing_loggers`
+    defaults to true, so every logger already created is switched off for the
+    rest of the process. Three unrelated tests later in the suite assert on
+    `caplog` records and started failing here, in a way that only appeared in a
+    full run. With no file to read, env.py skips `fileConfig` and the
+    migrations still get their URL from `config.set_main_option`.
+    """
     from pathlib import Path
 
-    api_root = Path(__file__).resolve().parents[1]
-    cfg = Config(str(api_root / "alembic.ini"))
-    cfg.set_main_option("script_location", str(api_root / "migrations"))
+    cfg = Config()
+    cfg.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "migrations"))
     return cfg
 
 
