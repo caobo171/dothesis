@@ -10,6 +10,8 @@ from .routers import admin_orders as admin_orders_router
 from .routers import admin_papers as admin_papers_router
 from .routers import admin_users as admin_users_router
 from .routers import announcements as announcements_router
+from .routers import admin_blog as admin_blog_router
+from .routers import blog as blog_router
 from .routers import admin_connectors as admin_connectors_router
 from .routers import admin_tools as admin_tools_router
 from .routers import connectors as connectors_router
@@ -157,6 +159,10 @@ def create_app() -> FastAPI:
     app.include_router(admin_orders_router.router, prefix="/api/v1")
     app.include_router(admin_announcements_router.router, prefix="/api/v1")
     app.include_router(announcements_router.router, prefix="/api/v1")
+    # Blog. Unconditional and outside the orchestrator block: the marketing
+    # surface has to serve on a deploy where chat is switched off.
+    app.include_router(blog_router.router, prefix="/api/v1")
+    app.include_router(admin_blog_router.router, prefix="/api/v1")
     # Connected AI apps (MCP connectors). Unconditional, not behind the
     # orchestrator flag: a user must be able to see and revoke a grant even
     # on a deploy where the tool surface itself is switched off.
