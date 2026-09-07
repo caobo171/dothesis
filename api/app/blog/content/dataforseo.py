@@ -67,7 +67,19 @@ class DataForSEOClient:
                                       auth=(self.login, self.password),
                                       headers={"Content-Type": "application/json"},
                                       timeout=TIMEOUT_S)
-            response.raise_for_status()
+            if response.status_code >= 400:
+                # DataForSEO puts the real reason in the body, not the status
+                # line. A bare `402 Unknown` traceback sent someone hunting for
+                # a code bug when the account had simply run out of balance
+                # (status_code 40200, "Payment Required", on 2026-09-08).
+                detail = ""
+                try:
+                    body = response.json()
+                    detail = f": {body.get('status_code')} {body.get('status_message')}"
+                except ValueError:
+                    detail = f": {response.text[:200]}"
+                raise DataForSEOError(
+                    f"DataForSEO returned HTTP {response.status_code}{detail}")
             body = response.json()
             if body.get("status_code") != OK_STATUS:
                 raise DataForSEOError(

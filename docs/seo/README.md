@@ -113,6 +113,15 @@ python3 ../.claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py \
 the writer. All three live in the repo `.env` and are loaded with `python-dotenv`
 from the repo root. Never print them, and never commit a file that contains them.
 
+**Known state, 2026-09-08.** The DataForSEO credentials in `.env` authenticate
+(the API answers, not a 401) but the account has **no balance**: the probe comes
+back `HTTP 402`, body `status_code 40200, "Payment Required"`, `cost 0`. So no
+bulk measurement can run until the account is topped up, and nothing was spent
+finding this out. Until then the gate has two working paths: `--source tsv` with
+volumes measured through OpenSEO, and the harvest, whose volumes are already
+measured and committed. `plan` runs on the harvest alone today and yields about
+200 rows.
+
 `gate` prints the `cost` field of every DataForSEO response and a running total.
 The Google Ads search-volume endpoint takes up to 1,000 keywords per request, so
 the whole candidate set is a small number of calls. OpenSEO, at about 1.7 credits

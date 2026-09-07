@@ -138,6 +138,13 @@ DataForSEO's Google Ads search-volume endpoint, up to 1,000 keywords per request
 and totalled. OpenSEO is the fallback for small lists at about 1.7 credits a
 keyword, not the bulk tool.
 
+**Check the probe first.** On 2026-09-08 it returned `HTTP 402`, body
+`status_code 40200, "Payment Required"`: the credentials are valid and the
+account has no balance. Until it is topped up, measure through OpenSEO and feed
+the result in with `gate --source tsv --file measured.tsv`, or work from the
+harvest, whose volumes are already measured. Do not write pages while the gate
+cannot answer.
+
 Cut rules:
 
 - **No volume returned, drop.** Not "write it anyway, it is cheap". Drop.

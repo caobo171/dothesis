@@ -299,7 +299,8 @@ def read_covered_slugs(index_path: str | None) -> set[str]:
     """Slugs already published, read from the committed blog index snapshot."""
     if not index_path or not os.path.isfile(index_path):
         return set()
-    text = open(index_path, encoding="utf-8").read()
+    with open(index_path, encoding="utf-8") as fh:
+        text = fh.read()
     return set(re.findall(r"/blog/[a-z]{2}/([a-z0-9][a-z0-9-]*)", text))
 
 

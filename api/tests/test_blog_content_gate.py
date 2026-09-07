@@ -87,6 +87,22 @@ def test_client_raises_on_a_non_20000_status():
     assert "40501" in str(err.value)
 
 
+def test_client_explains_an_http_error_from_the_body():
+    """A 402 means the account balance ran out, and the message must say so.
+
+    Measured on 2026-09-08: the endpoint answers `402` with status_code 40200,
+    "Payment Required" in the body, and httpx's bare `402 Unknown` sends the
+    reader looking for a bug in the request instead.
+    """
+    payload = {"status_code": 40200, "status_message": "Payment Required.", "cost": 0}
+    client = dataforseo.DataForSEOClient(login="u", password="p",
+                                         http=StubHttp(payload, status_code=402))
+    with pytest.raises(dataforseo.DataForSEOError) as err:
+        client.search_volume(["spss"])
+    assert "402" in str(err.value)
+    assert "Payment Required" in str(err.value)
+
+
 def test_client_reports_a_keyword_with_no_data_as_none():
     payload = _payload()
     payload["tasks"][0]["result"].append({"keyword": "khong ai tim", "search_volume": None})

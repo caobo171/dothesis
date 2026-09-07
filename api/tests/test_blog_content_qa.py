@@ -1,5 +1,4 @@
 """qa: the mechanical gate, every FAIL class and every WARN class."""
-import copy
 import json
 import os
 import re
