@@ -23,6 +23,23 @@ class ModelPricing:
 
 # Pricing updated February 2026
 MODEL_PRICING: Dict[str, ModelPricing] = {
+    # OpenAI direct (draft agents' default since 2026-09-07). Post-2026-07-30 cut;
+    # reasoning tokens are billed at the output rate.
+    "gpt-5.6-luna": ModelPricing(
+        input_price=0.20,
+        output_price=1.20,
+        name="GPT-5.6 Luna",
+        display_name="GPT-5.6 Luna",
+        provider="openai",
+    ),
+    # The same model resold through Ofox at its launch price (5x).
+    "openai/gpt-5.6-luna": ModelPricing(
+        input_price=1.00,
+        output_price=6.00,
+        name="GPT-5.6 Luna (Ofox)",
+        display_name="GPT-5.6 Luna via Ofox",
+        provider="ofox",
+    ),
     # Gemini 3 family (Preview)
     "gemini-3.1-pro-preview": ModelPricing(
         input_price=2.00,

@@ -604,7 +604,7 @@ def generate_draft(
             print("=" * 70)
 
         # Setup model
-        logger.info("[SETUP] Initializing Gemini model...")
+        logger.info(f"[SETUP] Initializing model {config.model.model_name}...")
         if tracker:
             tracker.log_activity("🤖 Loading AI model...", event_type="info", phase="research")
 

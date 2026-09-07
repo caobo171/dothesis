@@ -33,12 +33,45 @@ except ImportError:
     pass
 
 
+def draft_llm_route() -> str:
+    """Which provider the draft agents talk to: openai (default) | ofox | native (Gemini).
+
+    Same shape as orchestrator.llm.resolve_orchestrator_model: the route picks
+    a coherent default model, DRAFT_MODEL overrides the id. DRAFT_LLM_ROUTE falls
+    back to ORCHESTRATOR_LLM_ROUTE so one env line moves brain, orchestrator and
+    draft engine together.
+    """
+    route = (os.getenv('DRAFT_LLM_ROUTE') or os.getenv('ORCHESTRATOR_LLM_ROUTE') or 'openai').strip().lower()
+    return route if route in ('openai', 'ofox', 'native') else 'openai'
+
+
+def default_draft_model() -> str:
+    """Route-aware default for the draft agents.
+
+    2026-09-07: the writing agents moved from gemini-3.1-pro-preview ($2/$12 per
+    1M tokens, plus thinking billed as output) to gpt-5.6-luna ($0.20/$1.20) —
+    the same model the chat brain and orchestrator already run on. A day of
+    e2e drafts on Pro cost ≈5.3M VND; Luna is ~10x cheaper per token.
+    """
+    explicit = os.getenv('DRAFT_MODEL')
+    if explicit:
+        return explicit
+    route = draft_llm_route()
+    if route == 'native':
+        return os.getenv('GEMINI_MODEL', 'gemini-3.1-pro-preview')
+    if route == 'ofox':
+        return 'openai/gpt-5.6-luna'
+    return 'gpt-5.6-luna'
+
+
 @dataclass
 class ModelConfig:
     """
     Model configuration with sensible defaults.
 
-    Gemini only, deliberately. This config does NOT select the product's model.
+    Gemini names are validated against the whitelist below; any other id
+    (gpt-5.6-luna, openai/…) is handed to utils.openai_adapter and validated by
+    the endpoint. This config does NOT select the product's chat model.
 
     The live model surfaces are agent/model_factory.spec_from_env (chat brain)
     and orchestrator/llm.resolve_orchestrator_model (M1-M5 pipeline). What is
@@ -57,9 +90,7 @@ class ModelConfig:
     own client in orchestrator/tools/m2_literature._engine_model, pinned by
     CITATION_PLANNER_MODEL (default gemini-2.5-flash).
     """
-    model_name: str = field(
-        default_factory=lambda: os.getenv('GEMINI_MODEL', 'gemini-3.1-pro-preview')
-    )
+    model_name: str = field(default_factory=default_draft_model)
     temperature: float = 0.7
     max_output_tokens: Optional[int] = None
     api_key: Optional[str] = None
@@ -73,6 +104,7 @@ class ModelConfig:
             # fails at the API with Google's own migration message rather than
             # a confusing config ValueError.
             'gemini-3-pro-preview',
+            'gemini-3.5-flash',
             'gemini-3-flash-preview',  # Primary flash model (supports JSON output)
             'gemini-2.5-pro',          # Legacy support
             'gemini-2.5-flash',        # Legacy support
@@ -81,7 +113,7 @@ class ModelConfig:
             'gemini-1.5-pro',
         ]
 
-        if self.model_name not in valid_gemini_models:
+        if self.model_name.startswith('gemini') and self.model_name not in valid_gemini_models:
             raise ValueError(
                 f"Invalid Gemini model: {self.model_name}. "
                 f"Valid options: {', '.join(valid_gemini_models)}"
@@ -174,6 +206,11 @@ class AppConfig:
         """Non-raising counterpart to validate_api_keys."""
         return bool(self.google_api_key)
 
+    @property
+    def draft_provider(self) -> str:
+        """'gemini' or 'openai' — decided by the model id, so a Gemini name always goes to Gemini."""
+        return 'gemini' if self.model.model_name.startswith('gemini') else 'openai'
+
 
 # Global configuration instance - lazy loaded
 _config: Optional[AppConfig] = None
@@ -208,7 +245,7 @@ if __name__ == '__main__':
     # Configuration validation test
     cfg = get_config()
     print(f"✅ Configuration loaded successfully")
-    print(f"Model: {cfg.model.model_name} (Gemini — this config is Gemini-only)")
+    print(f"Model: {cfg.model.model_name} (provider: {cfg.draft_provider}, route: {draft_llm_route()})")
     print(f"API Key configured: {cfg.has_api_key}")
     print(f"Validation per section: {cfg.validation.validate_per_section}")
     print(f"Output directory: {cfg.paths.output_dir}")

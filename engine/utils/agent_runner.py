@@ -79,6 +79,18 @@ def setup_model(model_override: Optional[str] = None) -> Any:
         ValueError: If API key is missing or model name is invalid
     """
     config = get_config()
+    model_name = model_override or config.model.model_name
+
+    if not model_name.startswith('gemini'):
+        # gpt-5.6-luna and friends: same generate_content() surface, OpenAI behind it.
+        from utils.openai_adapter import OpenAIChatModel
+        from config import draft_llm_route
+        route = draft_llm_route()
+        return OpenAIChatModel(
+            model_name,
+            route='ofox' if (route == 'ofox' or '/' in model_name) else 'openai',
+            max_output_tokens=config.model.max_output_tokens,
+        )
 
     if not config.google_api_key:
         raise ValueError(
@@ -86,7 +98,6 @@ def setup_model(model_override: Optional[str] = None) -> Any:
         )
 
     client = genai.Client(api_key=config.google_api_key)
-    model_name = model_override or config.model.model_name
 
     return GeminiModelWrapper(
         client=client,
