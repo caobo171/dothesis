@@ -1,0 +1,30 @@
+{
+  "schema": "dothesis-blog-seed/1",
+  "title": "Cách chạy hồi quy tuyến tính trong SPSS",
+  "slug": "cach-chay-hoi-quy-trong-spss",
+  "locale": "vi",
+  "meta_title": "Cách chạy hồi quy tuyến tính trong SPSS | DoThesis",
+  "meta_description": "Các bước chạy hồi quy bội trong SPSS, cách đọc R bình phương, Sig., Beta và VIF, kèm mẫu câu để viết kết quả vào luận văn.",
+  "focus_keyword": "cách chạy hồi quy trong spss",
+  "secondary_keywords": [
+    "hồi quy tuyến tính spss",
+    "phân tích hồi quy spss"
+  ],
+  "focus_keyword_volume": 1000,
+  "excerpt": "Từng bước chạy hồi quy bội trong SPSS và cách đọc đúng bảng kết quả.",
+  "category": "spss",
+  "tags": [
+    "hồi quy",
+    "spss",
+    "phân tích dữ liệu"
+  ],
+  "archetype": "spss-howto",
+  "family": "regression",
+  "source_batch": "fixtures",
+  "gate_status": "measured",
+  "sibling_slugs": [
+    "cronbach-alpha-la-gi"
+  ],
+  "images": [],
+  "body": "Hồi quy tuyến tính bội là kỹ thuật kiểm định giả thuyết phổ biến nhất trong\nkhóa luận định lượng: nó cho biết mỗi biến độc lập giải thích được bao nhiêu\nbiến thiên của biến phụ thuộc khi các biến còn lại được giữ cố định.\n\n## Chuẩn bị dữ liệu trước khi chạy\n\nChạy hồi quy trên dữ liệu chưa làm sạch là nguồn gốc của phần lớn kết quả kỳ\nlạ. Trước khi bấm chạy, thang đo phải đạt độ tin cậy và các nhân tố phải đã\nđược rút ra. Xem lại bài [Cronbach's Alpha là gì](/blog/vi/cronbach-alpha-la-gi)\nnếu bước này chưa xong.\n\n## Các bước trong SPSS\n\nVào Analyze, chọn Regression, chọn Linear. Đưa biến phụ thuộc vào ô Dependent\nvà các biến độc lập vào ô Independents. Mở Statistics, tích Estimates, Model\nfit, Collinearity diagnostics và Durbin Watson. Mở Plots, đưa ZRESID vào trục\nY và ZPRED vào trục X để kiểm tra phương sai sai số.\n\n## Đọc bảng kết quả\n\n| Chỉ số | Vị trí | Ngưỡng tham chiếu |\n| --- | --- | --- |\n| R bình phương hiệu chỉnh | Model Summary | Càng cao càng giải thích tốt |\n| Sig. của F | ANOVA | Nhỏ hơn 0.05 thì mô hình phù hợp |\n| Sig. của t | Coefficients | Nhỏ hơn 0.05 thì giả thuyết được chấp nhận |\n| VIF | Coefficients | Dưới 10, chặt hơn là dưới 5 |\n| Durbin Watson | Model Summary | Quanh 2 |\n\nHệ số Beta chuẩn hóa dùng để so sánh mức tác động giữa các biến độc lập trong\ncùng một mô hình, còn hệ số B chưa chuẩn hóa dùng để viết phương trình.\n\n## Lỗi thường gặp\n\nĐa cộng tuyến là lỗi hay gặp nhất khi các biến độc lập được đo bằng những câu\nhỏi gần nghĩa nhau. VIF vượt ngưỡng thì phải xử lý ở khâu thang đo, không phải\nbằng cách bỏ bớt biến cho tới khi bảng đẹp.\n\n## Cách viết vào luận văn\n\nMột câu mẫu: \"Mô hình hồi quy giải thích được 61,4 phần trăm biến thiên của ý\nđịnh sử dụng, kiểm định F có mức ý nghĩa nhỏ hơn 0,05, các hệ số VIF đều dưới 2\nnên không có hiện tượng đa cộng tuyến.\"\n\n## Câu hỏi thường gặp\n\n### Cần cỡ mẫu bao nhiêu để chạy hồi quy?\n\nQuy tắc thực dụng hay dùng là ít nhất năm quan sát cho mỗi biến độc lập, và\ntổng mẫu không dưới một trăm. Cỡ mẫu lớn hơn cho ước lượng ổn định hơn.\n\n### Sig. lớn hơn 0.05 thì giả thuyết sai à?\n\nNghĩa là dữ liệu chưa đủ bằng chứng để bác bỏ giả thuyết không, chứ không phải\nđã chứng minh không có quan hệ. Trong bài nên viết đúng theo cách này.\n\n### VIF bao nhiêu là chấp nhận được?\n\nDưới 10 là mốc nới, dưới 5 là mốc chặt hơn thường được dùng trong luận văn.\nNếu vượt, hãy xem lại các biến quan sát có trùng nội dung không.\n\n### Có cần kiểm tra phân phối chuẩn của biến phụ thuộc không?\n\nĐiều kiện thực sự nằm ở phần dư chứ không ở biến phụ thuộc. Xem biểu đồ phần\ndư chuẩn hóa và biểu đồ P-P plot trong phần Plots.\n\n## Bước tiếp theo\n\nSau hồi quy là phần bàn luận, nơi mỗi hệ số phải nối lại với giả thuyết ban\nđầu. DoThesis viết chương kết quả và bàn luận ở module M5, xem thêm tại\n[trang giới thiệu](/landing).\n"
+}

@@ -1,0 +1,65 @@
+[
+  {
+    "slug": "spss",
+    "name": "SPSS",
+    "display_name": "SPSS",
+    "intro_md": "SPSS là phần mềm mà phần lớn khóa luận và luận văn định lượng ở Việt Nam dùng để chạy số. Chuyên mục này đi qua từng thao tác cụ thể: nhập liệu, làm sạch, kiểm định độ tin cậy, EFA, tương quan, hồi quy và cách đọc bảng kết quả để viết vào bài.",
+    "sort_order": 0
+  },
+  {
+    "slug": "thong-ke",
+    "name": "Thống kê",
+    "display_name": "Thống kê",
+    "intro_md": "Các khái niệm thống kê mà một bài nghiên cứu định lượng cần dùng đúng: trung bình, độ lệch chuẩn, p-value, mức ý nghĩa, cỡ mẫu, phân phối. Mỗi bài giải thích khái niệm kèm ngưỡng tham chiếu và nguồn của ngưỡng đó.",
+    "sort_order": 1
+  },
+  {
+    "slug": "khao-sat",
+    "name": "Khảo sát",
+    "display_name": "Khảo sát",
+    "intro_md": "Từ thiết kế bảng hỏi tới thu dữ liệu thật. Chuyên mục này bàn về thang đo, câu hỏi sàng lọc, cỡ mẫu tối thiểu, kênh phát phiếu và cách xử lý phiếu trả lời không hợp lệ trước khi đưa vào phân tích.",
+    "sort_order": 2
+  },
+  {
+    "slug": "nghien-cuu-khoa-hoc",
+    "name": "Nghiên cứu khoa học",
+    "display_name": "Nghiên cứu khoa học",
+    "intro_md": "Quy trình một nghiên cứu định lượng từ câu hỏi nghiên cứu tới kết luận: khoảng trống nghiên cứu, giả thuyết, thiết kế, thu thập, phân tích và bàn luận. Viết cho sinh viên làm đề tài lần đầu.",
+    "sort_order": 3
+  },
+  {
+    "slug": "khoa-luan-tot-nghiep",
+    "name": "Khóa luận tốt nghiệp",
+    "display_name": "Khóa luận tốt nghiệp",
+    "intro_md": "Cấu trúc và cách viết từng chương của khóa luận tốt nghiệp bậc đại học, kèm mẫu câu có thể chỉnh lại cho đề tài của bạn và các lỗi khiến hội đồng hỏi lại nhiều nhất.",
+    "sort_order": 4
+  },
+  {
+    "slug": "smartpls",
+    "name": "SmartPLS",
+    "display_name": "SmartPLS",
+    "intro_md": "PLS-SEM bằng SmartPLS: mô hình đo lường, mô hình cấu trúc, bootstrapping, biến điều tiết và biến trung gian. Mỗi bài nêu rõ ngưỡng chấp nhận và nguồn phương pháp luận đi kèm.",
+    "sort_order": 5
+  },
+  {
+    "slug": "phan-tich-du-lieu",
+    "name": "Phân tích dữ liệu",
+    "display_name": "Phân tích dữ liệu",
+    "intro_md": "Chọn kỹ thuật phân tích phù hợp với dữ liệu và giả thuyết, thay vì chạy hết mọi kiểm định rồi mới tìm cách giải thích. Bao gồm cả bước làm sạch và kiểm tra giả định trước khi chạy.",
+    "sort_order": 6
+  },
+  {
+    "slug": "luan-van-thac-si",
+    "name": "Luận văn thạc sĩ",
+    "display_name": "Luận văn thạc sĩ",
+    "intro_md": "Yêu cầu ở bậc thạc sĩ khác khóa luận ở chiều sâu lý thuyết và mức chặt của phương pháp. Chuyên mục này đi vào khung lý thuyết, mô hình đề xuất, bảo vệ lựa chọn phương pháp và trình bày kết quả.",
+    "sort_order": 7
+  },
+  {
+    "slug": "mo-hinh-nghien-cuu",
+    "name": "Mô hình nghiên cứu",
+    "display_name": "Mô hình nghiên cứu",
+    "intro_md": "Các mô hình và lý thuyết nền hay được kế thừa trong nghiên cứu định lượng về hành vi và quản trị, cùng cách vẽ mô hình đề xuất sao cho mỗi mũi tên đều tương ứng với một giả thuyết kiểm định được.",
+    "sort_order": 8
+  }
+]

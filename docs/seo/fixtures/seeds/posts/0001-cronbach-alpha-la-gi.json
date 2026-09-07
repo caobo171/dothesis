@@ -1,0 +1,30 @@
+{
+  "schema": "dothesis-blog-seed/1",
+  "title": "Cronbach's Alpha là gì và bao nhiêu là đạt",
+  "slug": "cronbach-alpha-la-gi",
+  "locale": "vi",
+  "meta_title": "Cronbach's Alpha là gì, bao nhiêu là đạt | DoThesis",
+  "meta_description": "Cronbach's Alpha đo tính nhất quán nội tại của thang đo. Ngưỡng chấp nhận, cách chạy trong SPSS và cách viết kết quả vào luận văn.",
+  "focus_keyword": "cronbach alpha là gì",
+  "secondary_keywords": [
+    "hệ số cronbach alpha",
+    "cronbach alpha bao nhiêu là đạt"
+  ],
+  "focus_keyword_volume": 1300,
+  "excerpt": "Hệ số đo tính nhất quán của thang đo, ngưỡng chấp nhận và cách viết kết quả vào bài.",
+  "category": "spss",
+  "tags": [
+    "cronbach alpha",
+    "độ tin cậy thang đo",
+    "spss"
+  ],
+  "archetype": "term-la-gi",
+  "family": "reliability",
+  "source_batch": "fixtures",
+  "gate_status": "measured",
+  "sibling_slugs": [
+    "cach-chay-hoi-quy-trong-spss"
+  ],
+  "images": [],
+  "body": "Cronbach's Alpha là hệ số đo mức độ nhất quán nội tại của một thang đo: các\nbiến quan sát trong cùng một nhân tố có đang đo cùng một thứ hay không. Hệ số\nchạy từ 0 tới 1, và trong khóa luận định lượng nó là bảng đầu tiên hội đồng\nnhìn vào trước khi tin phần còn lại của kết quả.\n\n## Cronbach's Alpha đo cái gì\n\nHệ số này dựa trên tương quan giữa các biến quan sát của cùng một thang đo.\nNếu ba câu hỏi cùng đo \"sự hài lòng\" mà người trả lời trả lời rất khác nhau\ngiữa ba câu, thang đo đó chưa nhất quán và mọi phân tích sau đó đều đứng trên\nnền yếu. Alpha cao không có nghĩa thang đo đúng khái niệm, nó chỉ nói các biến\nđang đi cùng nhau.\n\n## Bao nhiêu là đạt\n\n| Khoảng giá trị | Cách hiểu |\n| --- | --- |\n| Dưới 0.6 | Chưa chấp nhận được cho thang đo nhiều biến |\n| 0.6 đến 0.7 | Chấp nhận được với thang đo mới trong bối cảnh mới |\n| 0.7 đến 0.9 | Tốt, mức thường gặp trong luận văn |\n| Trên 0.95 | Nghi ngờ các biến trùng lặp nội dung |\n\nNgưỡng 0.7 là mốc quen thuộc nhất và được trích theo Nunnally (1978). Mốc trên\n0.95 đáng ngờ vì nó thường xuất hiện khi ba bốn câu hỏi thực chất là một câu\nviết lại, chứ không phải khi thang đo tốt hơn.\n\n## Cách chạy trong SPSS\n\nVào Analyze, chọn Scale, chọn Reliability Analysis, đưa các biến quan sát của\nmột nhân tố vào ô Items, mở Statistics và tích Scale if item deleted. Chạy từng\nnhân tố một, không gộp tất cả các biến của cả mô hình vào một lần chạy. Chi\ntiết từng bước nằm ở bài [cách chạy hồi quy trong SPSS](/blog/vi/cach-chay-hoi-quy-trong-spss).\n\n## Lỗi thường gặp\n\nLoại biến chỉ để đẩy Alpha lên là lỗi phổ biến nhất. Cột Corrected Item Total\nCorrelation dưới 0.3 mới là căn cứ loại biến; nếu biến đó vẫn cần cho nội dung\nkhái niệm thì phải giải thích trong bài chứ không lặng lẽ bỏ đi.\n\n## Cách viết vào luận văn\n\nMột câu mẫu bạn có thể chỉnh lại: \"Thang đo sự hài lòng gồm bốn biến quan sát\nđạt hệ số Cronbach's Alpha 0.842, các hệ số tương quan biến tổng đều lớn hơn\n0.3, do đó thang đo được giữ nguyên cho phân tích nhân tố khám phá.\"\n\n## Câu hỏi thường gặp\n\n### Cronbach's Alpha bao nhiêu là đạt?\n\nTừ 0.7 trở lên là mức thường được chấp nhận. Với thang đo mới hoặc mới dịch\nsang tiếng Việt, khoảng 0.6 đến 0.7 vẫn dùng được nếu bạn nêu rõ lý do.\n\n### Thang đo chỉ có hai biến quan sát thì tính Alpha được không?\n\nTính được nhưng hệ số sẽ thấp một cách hệ thống vì Alpha phụ thuộc số biến.\nVới hai biến, nên báo cáo thêm hệ số tương quan giữa hai biến đó.\n\n### Alpha thấp thì phải làm sao?\n\nXem cột Corrected Item Total Correlation trước. Nếu có biến dưới 0.3, cân nhắc\nloại và giải thích. Nếu mọi biến đều thấp, vấn đề nằm ở cách diễn đạt câu hỏi\nchứ không ở phân tích.\n\n### Alpha cao có nghĩa thang đo đúng không?\n\nKhông. Alpha nói về tính nhất quán, không nói về giá trị hội tụ hay phân biệt.\nHai tính chất đó cần EFA hoặc CFA để kiểm tra.\n\n## Bước tiếp theo\n\nSau khi thang đo đạt độ tin cậy, bước kế tiếp là phân tích nhân tố khám phá.\nDoThesis dựng thang đo và bảng hỏi ở module M3 rồi chạy phân tích ở M4, xem\nthêm tại [trang giới thiệu](/landing).\n"
+}
