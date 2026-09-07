@@ -56,6 +56,9 @@ export async function generateMetadata({
   const canonical = absoluteUrl(listingPath(locale, page));
   const title = page > 1 ? `${copy.metaTitle} — trang ${page}` : copy.metaTitle;
   return {
+    // metadataBase so any relative URL Next resolves here lands on the public
+    // origin rather than on the request host, which behind a proxy is internal.
+    metadataBase: new URL(absoluteUrl("/")),
     title,
     description: copy.sub,
     alternates: { canonical },

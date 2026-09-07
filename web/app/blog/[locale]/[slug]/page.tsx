@@ -43,6 +43,8 @@ export async function generateMetadata({
   const image = post.image_url || absoluteUrl(ogImagePath(locale, post.slug));
 
   return {
+    // metadataBase so any relative URL Next resolves here lands on the public
+    // origin rather than on the request host, which behind a proxy is internal.
     metadataBase: new URL(absoluteUrl("/")),
     title,
     description,

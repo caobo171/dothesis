@@ -46,6 +46,9 @@ export async function generateMetadata({
   // description; its first sentence is written to stand alone for that reason.
   const description = cat.intro_md.replace(/[#*_`>\[\]]/g, "").split(/\n+/)[0]?.slice(0, 300) ?? "";
   return {
+    // metadataBase so any relative URL Next resolves here lands on the public
+    // origin rather than on the request host, which behind a proxy is internal.
+    metadataBase: new URL(absoluteUrl("/")),
     title,
     description,
     alternates: { canonical },

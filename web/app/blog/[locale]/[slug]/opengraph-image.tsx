@@ -17,6 +17,11 @@ export const contentType = "image/png";
  *
  * Text only, no logo file: satori would have to fetch the PNG over HTTP on
  * every render, and a failed fetch takes the whole card down with it.
+ *
+ * No `fontFamily` and no font loading either. next/og bundles Geist Regular as
+ * its default, and that face does cover Vietnamese (checked: đ U+0111, ế
+ * U+1EBF, ạ U+1EA1 are all in its cmap) — naming a family satori has not been
+ * given would only send it back to the same default by a longer route.
  */
 export default async function Image({
   params,
@@ -42,7 +47,6 @@ export default async function Image({
           padding: "72px 80px",
           background: `linear-gradient(135deg, ${palette.from} 0%, ${palette.to} 100%)`,
           color: "#ffffff",
-          fontFamily: "sans-serif",
         }}
       >
         <div
