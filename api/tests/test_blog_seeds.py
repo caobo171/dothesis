@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app.blog import STATUS_PUBLISHED, STATUS_SCHEDULED
+from app.blog import STATUS_DRAFT, STATUS_PUBLISHED, STATUS_SCHEDULED
 from app.blog import seeds as S
 from app.db import get_session_factory
 from app.models import BlogCategory, BlogPost
@@ -199,4 +199,54 @@ def test_upsert_from_seed_updates_content_without_republishing(db, good_seed, ca
 def test_upsert_from_seed_creates_when_nothing_is_there(db, good_seed, categories):
     action, post = S.upsert_from_seed(db, good_seed, categories, now=NOW)
     assert action == "created"
+    assert post.status == STATUS_PUBLISHED
+
+
+# --- the draft rule for family-inferred seeds (design §5) -------------------
+
+def test_gate_status_defaults_to_measured(good_seed):
+    good_seed.pop("gate_status", None)
+    assert S.validate_seed(good_seed)["gate_status"] == "measured"
+    assert S.is_family_inferred(good_seed) is False
+
+
+def test_gate_status_accepts_family_inferred(good_seed):
+    good_seed["gate_status"] = "family-inferred"
+    clean = S.validate_seed(good_seed)
+    assert clean["gate_status"] == "family-inferred"
+    assert S.is_family_inferred(clean) is True
+
+
+def test_an_unknown_gate_status_is_refused_with_the_allowed_values(good_seed):
+    good_seed["gate_status"] = "guessed"
+    with pytest.raises(S.SeedError) as e:
+        S.validate_seed(good_seed)
+    assert "gate_status" in str(e.value) and "family-inferred" in str(e.value)
+
+
+def test_a_family_inferred_seed_inserts_as_a_dateless_draft(db, good_seed, categories):
+    """Unproven demand is stored, never published, whatever go_live says."""
+    good_seed["gate_status"] = "family-inferred"
+    action, post = S.create_from_seed(db, good_seed, categories,
+                                      go_live=NOW - timedelta(days=30), now=NOW)
+    assert action == "created"
+    assert post.status == STATUS_DRAFT
+    assert post.published_at is None
+    assert post.scheduled_at is None
+    # The body still landed: the page is ready for the day it is measured.
+    assert post.body
+
+
+def test_upsert_also_drafts_a_new_family_inferred_seed(db, good_seed, categories):
+    good_seed["gate_status"] = "family-inferred"
+    action, post = S.upsert_from_seed(db, good_seed, categories, now=NOW)
+    assert action == "created"
+    assert post.status == STATUS_DRAFT
+
+
+def test_an_explicit_status_still_overrides_the_draft_rule(db, good_seed, categories):
+    """The admin route deliberately publishing an inferred page must still win."""
+    good_seed["gate_status"] = "family-inferred"
+    _, post = S.upsert_from_seed(db, good_seed, categories, now=NOW,
+                                 status=STATUS_PUBLISHED, published_at=NOW)
     assert post.status == STATUS_PUBLISHED

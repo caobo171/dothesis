@@ -23,6 +23,7 @@ from typing import Any, Mapping
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import STATUS_DRAFT
 from .markdown import reading_time
 from .schedule import plan_status
 
@@ -49,6 +50,15 @@ REQUIRED_FIELDS: tuple[str, ...] = (
 )
 
 LIST_FIELDS: tuple[str, ...] = ("secondary_keywords", "tags", "sibling_slugs", "images")
+
+# How the page's demand was established (design §5). `measured` means the focus
+# keyword returned its own search volume. `family-inferred` means it did not and
+# the gate carried it on its family's evidence instead — either the thin-keyword
+# aggregate rule or the unmeasured fill. Both are real pages with unproven
+# demand, which is a different thing from a page we know people search for, so
+# `create` inserts them as drafts and never spends a slot on them.
+GATE_STATUSES: tuple[str, ...] = ("measured", "family-inferred")
+DEFAULT_GATE_STATUS = "measured"
 
 MAX_SLUG_LENGTH = 120
 
@@ -124,7 +134,27 @@ def validate_seed(data: Any, *, source: str | Path | None = None) -> dict:
         raise SeedError("focus_keyword_volume must be an integer",
                         field="focus_keyword_volume", source=source)
 
+    # Optional, but defaulted here rather than at every read site: this value
+    # decides whether the post publishes at all, and a `.get("gate_status")`
+    # spelled out in three callers is three chances to drift from the list.
+    gate_status = seed.get("gate_status") or DEFAULT_GATE_STATUS
+    if gate_status not in GATE_STATUSES:
+        raise SeedError(
+            f"gate_status is {gate_status!r}, expected one of "
+            + ", ".join(GATE_STATUSES),
+            field="gate_status", source=source)
+    seed["gate_status"] = gate_status
+
     return seed
+
+
+def is_family_inferred(seed: Mapping[str, Any]) -> bool:
+    """True when the gate carried this page on its family, not on its own volume.
+
+    The single spelling of the draft rule. `create_from_seed` reads it to force
+    status DRAFT, and `cli.cmd_create` reads it to skip the schedule slot.
+    """
+    return (seed.get("gate_status") or DEFAULT_GATE_STATUS) == "family-inferred"
 
 
 def load_seed(path: str | Path) -> dict:
@@ -262,7 +292,15 @@ def create_from_seed(
     if existing is not None:
         return "skipped", existing
 
-    status, published_at, scheduled_at = plan_status(go_live or moment, now=moment)
+    if is_family_inferred(seed):
+        # Unproven demand never publishes itself. The page is stored so it is
+        # ready the day its keyword is measured, but it goes in as a DRAFT with
+        # no dates: `visible_filter()` hides status 0 and `--reschedule` only
+        # walks status 2, so nothing promotes it by accident. Measuring the
+        # keyword and re-running `update-from-seed` is the only way out.
+        status, published_at, scheduled_at = STATUS_DRAFT, None, None
+    else:
+        status, published_at, scheduled_at = plan_status(go_live or moment, now=moment)
     post = BlogPost(locale=seed["locale"], slug=seed["slug"], status=status,
                     published_at=published_at, scheduled_at=scheduled_at,
                     created_at=moment, updated_at=moment)
@@ -297,6 +335,12 @@ def upsert_from_seed(
     if existing is None:
         planned_status, planned_published, planned_scheduled = plan_status(
             go_live or moment, now=moment)
+        # Same draft rule as `create_from_seed`: this branch is an insert too,
+        # and `update-from-seed` over a fresh inferred seed must not publish
+        # what `create` would have drafted. An explicit `status` still wins —
+        # that is the admin route deliberately overriding the gate.
+        if status is None and is_family_inferred(seed):
+            planned_status, planned_published, planned_scheduled = STATUS_DRAFT, None, None
         existing = BlogPost(
             locale=seed["locale"], slug=seed["slug"],
             status=status if status is not None else planned_status,

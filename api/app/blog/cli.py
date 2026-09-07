@@ -28,6 +28,7 @@ from .seeds import (
     SeedError,
     create_from_seed,
     find_post,
+    is_family_inferred,
     load_categories,
     load_dir,
     load_seed,
@@ -100,13 +101,23 @@ def cmd_create(args) -> int:
     else:
         print("No --schedule-start: every post goes live immediately.")
 
-    created = skipped = refused = 0
+    created = skipped = refused = drafted = 0
+    # The publishing slot, which is NOT the loop index: a family-inferred seed
+    # inserts as a draft and must not consume one, or every tranche would go out
+    # short by however many unmeasured pages happened to fall inside it. The
+    # counter still advances for a measured seed that is skipped or refused, so
+    # a re-run gives the same post the same date as the first run did.
+    slot = 0
     with _session() as db:
         category_ids = _category_ids(db, categories, dry_run=args.dry_run)
 
-        for index, (path, seed) in enumerate(seeds):
+        for path, seed in seeds:
             slug, locale = seed["slug"], seed["locale"]
-            go_live = go_live_at(index, start, args.per_week) if start else now
+            inferred = is_family_inferred(seed)
+            go_live = None
+            if not inferred:
+                go_live = go_live_at(slot, start, args.per_week) if start else now
+                slot += 1
 
             # Existence first, guard second. A re-run of `create` over the same
             # directory must report SKIP, not accuse every post of duplicating
@@ -126,12 +137,16 @@ def cmd_create(args) -> int:
                 refused += 1
                 continue
 
-            when = go_live.date().isoformat()
-            state = "live now" if go_live <= now else f"scheduled {when}"
+            if inferred:
+                state = "DRAFT, demand family-inferred"
+            else:
+                when = go_live.date().isoformat()
+                state = "live now" if go_live <= now else f"scheduled {when}"
             if args.dry_run:
                 print(f"  WOULD CREATE {slug} [{locale}] ({state}, "
                       f"category: {seed['category']})")
                 created += 1
+                drafted += inferred
                 continue
 
             action, _ = create_from_seed(db, seed, category_ids, go_live=go_live, now=now)
@@ -139,10 +154,12 @@ def cmd_create(args) -> int:
                   f"[{locale}] ({state}, category: {seed['category']})")
             created += action == "created"
             skipped += action == "skipped"
+            drafted += inferred and action == "created"
 
     verb = "would create" if args.dry_run else "created"
-    print(f"\n=== Summary ===\nPosts {verb}: {created}\nSkipped: {skipped}\n"
-          f"Refused (duplicate intent): {refused}")
+    print(f"\n=== Summary ===\nPosts {verb}: {created}\n"
+          f"Drafts (family-inferred, no schedule slot): {drafted}\n"
+          f"Skipped: {skipped}\nRefused (duplicate intent): {refused}")
     return 1 if refused else 0
 
 
@@ -158,6 +175,10 @@ def _reschedule(args) -> int:
 
     moved = 0
     with _session() as db:
+        # Status 2 only, which is also what keeps family-inferred drafts out of
+        # the respread: they are status 0 and have no date to move. Handing one
+        # a slot here would publish a page whose demand was never measured,
+        # which is the whole thing the draft rule exists to prevent.
         rows = db.scalars(
             select(BlogPost).where(BlogPost.status == STATUS_SCHEDULED)
             .order_by(asc(BlogPost.scheduled_at), asc(BlogPost.created_at))

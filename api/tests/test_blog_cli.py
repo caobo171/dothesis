@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.blog import STATUS_PUBLISHED, STATUS_SCHEDULED, cli
+from app.blog import STATUS_DRAFT, STATUS_PUBLISHED, STATUS_SCHEDULED, cli
 from app.blog.schedule import VN_TZ
 from app.blog.index import BANNER
 from app.db import get_session_factory
@@ -243,3 +243,83 @@ def test_export_index_defaults_to_the_repo_docs_directory():
     path = default_index_path()
     assert path.name == "blog-index.md"
     assert (path.parents[1] / "api").is_dir()  # found the checkout root, not /
+
+
+# --- family-inferred seeds insert as drafts (design §5) ---------------------
+
+def _mixed_dir(tmp_path):
+    """Four seeds, alternating measured and family-inferred.
+
+    Distinct focus keywords throughout so the duplicate guard has nothing to
+    say and the test is only about scheduling.
+    """
+    import json
+
+    base = json.loads((Path(FIXTURE_DIR) / "posts" / "0001-cronbach-alpha-la-gi.json")
+                      .read_text(encoding="utf-8"))
+    posts = tmp_path / "posts"
+    posts.mkdir()
+    (tmp_path / "categories.json").write_text(
+        (Path(FIXTURE_DIR) / "categories.json").read_text(encoding="utf-8"),
+        encoding="utf-8")
+
+    plan = [("do-tin-cay-thang-do", "measured"), ("bien-hiem-la-gi", "family-inferred"),
+            ("phan-tich-efa", "measured"), ("chi-so-hiem-gap", "family-inferred")]
+    for i, (slug, status) in enumerate(plan, 1):
+        seed = dict(base, slug=slug, title=slug.replace("-", " "),
+                    focus_keyword=slug.replace("-", " "), secondary_keywords=[],
+                    gate_status=status)
+        (posts / f"{i:04d}-{slug}.json").write_text(
+            json.dumps(seed, ensure_ascii=False), encoding="utf-8")
+    return str(tmp_path)
+
+
+def test_inferred_seeds_draft_while_measured_ones_take_consecutive_slots(capsys, db, tmp_path):
+    start = (NOW + timedelta(days=3)).date().isoformat()
+    assert cli.main(["create", "--dir", _mixed_dir(tmp_path),
+                     "--schedule-start", start, "--per-week", "1"]) == 0
+
+    posts = {p.slug: p for p in db.query(BlogPost).all()}
+    assert len(posts) == 4
+
+    for slug in ("bien-hiem-la-gi", "chi-so-hiem-gap"):
+        assert posts[slug].status == STATUS_DRAFT
+        assert posts[slug].scheduled_at is None
+        assert posts[slug].published_at is None
+
+    # The two measured posts hold slots 0 and 1, so one week apart. If the
+    # drafts had consumed slots they would be three weeks apart instead.
+    a, b = posts["do-tin-cay-thang-do"], posts["phan-tich-efa"]
+    assert a.status == b.status == STATUS_SCHEDULED
+    assert b.scheduled_at - a.scheduled_at == timedelta(days=7)
+    assert a.scheduled_at == datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=VN_TZ)
+
+    out = capsys.readouterr().out
+    assert "DRAFT, demand family-inferred" in out
+    assert "Drafts (family-inferred, no schedule slot): 2" in out
+
+
+def test_create_dry_run_reports_the_draft_count(capsys, db, tmp_path):
+    assert cli.main(["create", "--dir", _mixed_dir(tmp_path), "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "Posts would create: 4" in out
+    assert "Drafts (family-inferred, no schedule slot): 2" in out
+    assert db.query(BlogPost).count() == 0
+
+
+def test_reschedule_leaves_family_inferred_drafts_alone(capsys, db, tmp_path):
+    start = (NOW + timedelta(days=3)).date().isoformat()
+    cli.main(["create", "--dir", _mixed_dir(tmp_path), "--schedule-start", start,
+              "--per-week", "1"])
+    capsys.readouterr()
+
+    later = (NOW + timedelta(days=40)).date().isoformat()
+    assert cli.main(["create", "--reschedule", "--schedule-start", later,
+                     "--per-week", "2"]) == 0
+    out = capsys.readouterr().out
+    assert "Rescheduled: 2 post(s)" in out
+    assert "bien-hiem-la-gi" not in out
+
+    drafts = db.query(BlogPost).filter_by(status=STATUS_DRAFT).all()
+    assert {d.slug for d in drafts} == {"bien-hiem-la-gi", "chi-so-hiem-gap"}
+    assert all(d.scheduled_at is None for d in drafts)
