@@ -1,0 +1,343 @@
+"""`python -m app.blog.cli <command>` — load, update and audit the blog bank.
+
+Run it through the arch wrapper, which is the only way the venv's arm64 wheels
+import from a Rosetta shell:
+
+    cd api && ./run.sh python -m app.blog.cli create --dir ../docs/seo/fixtures/seeds
+
+Every command prints one line per item and a summary, and exits 1 if anything
+failed. Exit codes matter: these run in batches of hundreds, and a summary line
+nobody reads is not a gate.
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+from sqlalchemy import asc, select
+from sqlalchemy.orm import Session
+
+from . import STATUS_SCHEDULED
+from .audit import DEFAULT_THIN, audit_links, audit_seo
+from .guard import assert_no_duplicate
+from .index import BANNER, export_index
+from .schedule import go_live_at, parse_start_date
+from .seeds import (
+    SeedError,
+    create_from_seed,
+    find_post,
+    load_categories,
+    load_dir,
+    load_seed,
+    upsert_categories,
+    upsert_from_seed,
+)
+
+# WELE ships 25 a week; this bank is forty times bigger, so forty a week puts
+# a thousand posts live over about twenty-five weeks (design §15).
+DEFAULT_PER_WEEK = 40
+
+
+def _session() -> Session:
+    from ..db import get_session_factory  # noqa: PLC0415
+
+    return get_session_factory()()
+
+
+def _load_inputs(args) -> tuple[list[tuple[Path, dict]], list[dict]]:
+    """(seeds, categories) for `--dir` or `--file`."""
+    if args.dir:
+        directory = Path(args.dir)
+        return load_dir(directory), load_categories(directory)
+
+    path = Path(args.file)
+    seeds = [(path, load_seed(path))]
+    # A single seed file still needs its categories. The canonical layout puts
+    # categories.json beside `posts/`, so look one level up as well.
+    for candidate in (path.parent, path.parent.parent):
+        categories = load_categories(candidate)
+        if categories:
+            return seeds, categories
+    return seeds, []
+
+
+def _category_ids(db: Session, categories: list[dict], *, dry_run: bool) -> dict:
+    from ..models import BlogCategory  # noqa: PLC0415
+
+    if dry_run:
+        # A dry run must not write, so report against what the database already
+        # has and say which categories a real run would create.
+        existing = {c.slug: c.id for c in db.scalars(select(BlogCategory)).all()}
+        for row in categories:
+            if row["slug"] not in existing:
+                print(f"  WOULD CREATE category: {row['slug']}")
+        return existing
+    return upsert_categories(db, categories) if categories else {
+        c.slug: c.id for c in db.scalars(select(BlogCategory)).all()}
+
+
+# --------------------------------------------------------------------------
+# create
+# --------------------------------------------------------------------------
+
+def cmd_create(args) -> int:
+    if args.reschedule:
+        return _reschedule(args)
+
+    if not args.dir and not args.file:
+        print("create needs --dir or --file (or --reschedule)", file=sys.stderr)
+        return 2
+
+    seeds, categories = _load_inputs(args)
+    now = datetime.now(timezone.utc)
+
+    start = parse_start_date(args.schedule_start) if args.schedule_start else None
+    if start:
+        print(f"Scheduling {args.per_week} post(s)/week from {args.schedule_start}. "
+              "Posts dated in the future insert as SCHEDULED and stay hidden until then.")
+    else:
+        print("No --schedule-start: every post goes live immediately.")
+
+    created = skipped = refused = 0
+    with _session() as db:
+        category_ids = _category_ids(db, categories, dry_run=args.dry_run)
+
+        for index, (path, seed) in enumerate(seeds):
+            slug, locale = seed["slug"], seed["locale"]
+            go_live = go_live_at(index, start, args.per_week) if start else now
+
+            # Existence first, guard second. A re-run of `create` over the same
+            # directory must report SKIP, not accuse every post of duplicating
+            # the copy of itself that the previous run inserted.
+            if find_post(db, locale, slug) is not None:
+                print(f"  SKIP    {slug} [{locale}] (already exists)")
+                skipped += 1
+                continue
+
+            # Unlike WELE's create.blog, which skipped the guard entirely, this
+            # enforces it per seed: at a thousand posts, "we will notice the
+            # duplicate later" is not true.
+            verdict = assert_no_duplicate(db, seed)
+            if verdict.blocked:
+                print(f"  REFUSE  {slug} [{locale}] ({path.name})")
+                print(f"          {verdict.message}")
+                refused += 1
+                continue
+
+            when = go_live.date().isoformat()
+            state = "live now" if go_live <= now else f"scheduled {when}"
+            if args.dry_run:
+                print(f"  WOULD CREATE {slug} [{locale}] ({state}, "
+                      f"category: {seed['category']})")
+                created += 1
+                continue
+
+            action, _ = create_from_seed(db, seed, category_ids, go_live=go_live, now=now)
+            print(f"  {'CREATE ' if action == 'created' else 'SKIP   '} {slug} "
+                  f"[{locale}] ({state}, category: {seed['category']})")
+            created += action == "created"
+            skipped += action == "skipped"
+
+    verb = "would create" if args.dry_run else "created"
+    print(f"\n=== Summary ===\nPosts {verb}: {created}\nSkipped: {skipped}\n"
+          f"Refused (duplicate intent): {refused}")
+    return 1 if refused else 0
+
+
+def _reschedule(args) -> int:
+    """Re-spread the posts still waiting in status 2 (design §15)."""
+    from ..models import BlogPost  # noqa: PLC0415
+
+    if not args.schedule_start:
+        print("--reschedule needs --schedule-start", file=sys.stderr)
+        return 2
+    start = parse_start_date(args.schedule_start)
+    now = datetime.now(timezone.utc)
+
+    moved = 0
+    with _session() as db:
+        rows = db.scalars(
+            select(BlogPost).where(BlogPost.status == STATUS_SCHEDULED)
+            .order_by(asc(BlogPost.scheduled_at), asc(BlogPost.created_at))
+        ).all()
+        for index, post in enumerate(rows):
+            go_live = go_live_at(index, start, args.per_week)
+            print(f"  {'WOULD MOVE' if args.dry_run else 'MOVE'} {post.slug} "
+                  f"[{post.locale}] -> {go_live.date().isoformat()}")
+            if not args.dry_run:
+                post.scheduled_at = go_live
+                post.published_at = go_live
+            moved += 1
+        if not args.dry_run:
+            db.commit()
+
+    print(f"\n=== Summary ===\nRescheduled: {moved} post(s) at {args.per_week}/week")
+    return 0
+
+
+# --------------------------------------------------------------------------
+# update-from-seed
+# --------------------------------------------------------------------------
+
+def cmd_update_from_seed(args) -> int:
+    if not args.dir and not args.file:
+        print("update-from-seed needs --dir or --file", file=sys.stderr)
+        return 2
+
+    seeds, categories = _load_inputs(args)
+    now = datetime.now(timezone.utc)
+    updated = created = 0
+
+    with _session() as db:
+        category_ids = _category_ids(db, categories, dry_run=args.dry_run)
+        for path, seed in seeds:
+            slug, locale = seed["slug"], seed["locale"]
+            existing = find_post(db, locale, slug)
+            if args.dry_run:
+                print(f"  {'WOULD UPDATE' if existing else 'WOULD CREATE'} "
+                      f"{slug} [{locale}] ({path.name})")
+                updated += bool(existing)
+                created += not existing
+                continue
+            action, _ = upsert_from_seed(db, seed, category_ids, now=now)
+            print(f"  {action.upper():7} {slug} [{locale}]")
+            updated += action == "updated"
+            created += action == "created"
+
+    print(f"\n=== Summary ===\nUpdated: {updated}\nCreated: {created}")
+    return 0
+
+
+# --------------------------------------------------------------------------
+# audits
+# --------------------------------------------------------------------------
+
+def cmd_audit_seo(args) -> int:
+    with _session() as db:
+        report = audit_seo(db, locale=args.locale, thin_floor=args.thin)
+
+    print(f"\n=== Coverage map ({len(report.rows)} visible post(s))\n")
+    for row in report.rows:
+        keyword = f'"{row.focus}"' if row.focus else "_no target keyword_"
+        print(f"  {row.slug} [{row.locale}]  {keyword}")
+        print(f"      {row.intent_class}, {row.words} words")
+
+    print("\n=== Overlapping intent\n")
+    if not report.clashes:
+        print(f"  None at or above {int(0.6 * 100)}%.")
+    else:
+        print(f"  {len(report.clashes)} pair(s). Two pages on one intent split "
+              "their own ranking.")
+        print("  Fix by re-angling one of them, or by consolidating and redirecting.\n")
+        for pair in report.clashes:
+            print(f"  {pair.score * 100:.0f}% overlap, both \"{pair.intent}\"")
+            print(f"      {pair.a.slug}  ->  \"{pair.a.focus or pair.a.title}\"")
+            print(f"      {pair.b.slug}  ->  \"{pair.b.focus or pair.b.title}\"")
+
+    print("\n=== Quality flags\n")
+    print(f"  Under {report.thin_floor} words:   {len(report.thin)}")
+    for row in report.thin[:12]:
+        print(f"      {row.words:>5}  {row.slug}")
+    if len(report.thin) > 12:
+        print(f"      ... and {len(report.thin) - 12} more")
+    print(f"  No meta description: {len(report.no_meta)}")
+    print(f"  No target keyword:   {len(report.no_focus)}")
+
+    print("\n=== Summary ===")
+    print(f"Visible posts:   {len(report.rows)}")
+    print(f"Intent clashes:  {len(report.clashes)}")
+    print(f"Thin (<{report.thin_floor}):    {len(report.thin)}")
+    print("\nNothing was modified.")
+    # Clashes fail the command; thin posts and missing metadata are work items,
+    # not a reason to stop a publish.
+    return 1 if report.clashes else 0
+
+
+def cmd_audit_links(args) -> int:
+    with _session() as db:
+        report = audit_links(db)
+
+    print(f"\nScanned {report.checked} visible post(s), {report.total_links} link(s)\n")
+    if not report.findings:
+        print("  Every internal link resolves.")
+    for finding in report.findings:
+        print(f'  "{finding.href}" — {finding.reason}')
+        print(f"      in {len(finding.posts)} post(s): "
+              + ", ".join(finding.posts[:3])
+              + (" ..." if len(finding.posts) > 3 else ""))
+
+    print("\n=== Summary ===")
+    print(f"Posts scanned:   {report.checked}")
+    print(f"Broken links:    {len(report.findings)}")
+    print("\nNothing was modified.")
+    return 1 if report.findings else 0
+
+
+# --------------------------------------------------------------------------
+# export-index
+# --------------------------------------------------------------------------
+
+def cmd_export_index(args) -> int:
+    with _session() as db:
+        target = export_index(db, args.out)
+    print(f"Wrote {target}")
+    print(f"  {BANNER} Commit it: it is the offline answer to "
+          '"has this topic been written already".')
+    return 0
+
+
+# --------------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="app.blog.cli", description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    create = sub.add_parser("create", help="insert seeds, skipping what exists")
+    create.add_argument("--dir")
+    create.add_argument("--file")
+    create.add_argument("--schedule-start", help="YYYY-MM-DD, midnight Vietnam time")
+    create.add_argument("--per-week", type=int, default=DEFAULT_PER_WEEK)
+    create.add_argument("--dry-run", action="store_true")
+    create.add_argument("--reschedule", action="store_true",
+                        help="re-spread posts still in status 2; ignores --dir/--file")
+    create.set_defaults(func=cmd_create)
+
+    update = sub.add_parser("update-from-seed", help="refresh live posts from seeds")
+    update.add_argument("--dir")
+    update.add_argument("--file")
+    update.add_argument("--dry-run", action="store_true")
+    update.set_defaults(func=cmd_update_from_seed)
+
+    seo = sub.add_parser("audit-seo", help="coverage and intent-clash report")
+    seo.add_argument("--locale")
+    seo.add_argument("--thin", type=int, default=DEFAULT_THIN)
+    seo.set_defaults(func=cmd_audit_seo)
+
+    link = sub.add_parser("audit-links", help="internal links that resolve to nothing")
+    link.set_defaults(func=cmd_audit_links)
+
+    index = sub.add_parser("export-index", help="write docs/blog-index.md")
+    index.add_argument("--out", help="write somewhere other than docs/blog-index.md")
+    index.set_defaults(func=cmd_export_index)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        return args.func(args)
+    except SeedError as e:
+        # A bad seed is the expected failure of every command here, and its
+        # message already names the file and the field.
+        print(f"FAIL {e}", file=sys.stderr)
+        return 1
+    except ValueError as e:
+        print(f"FAIL {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())
