@@ -1,0 +1,19 @@
+{
+  "_comment": "Expected output of extractHeadings(headings.md). Shared contract with api/app/blog/markdown.py: both sides must produce these ids byte for byte, or the contents box, the FAQ JSON-LD anchors and every deep link in a post body point at nothing.",
+  "headings": [
+    { "level": 1, "text": "Cronbach's Alpha là gì", "id": "cronbach-s-alpha-la-gi" },
+    { "level": 2, "text": "Phân tích EFA", "id": "phan-tich-efa" },
+    { "level": 2, "text": "Độ tin cậy của thang đo", "id": "do-tin-cay-cua-thang-do" },
+    { "level": 2, "text": "Đánh giá mô hình đo lường", "id": "danh-gia-mo-hinh-do-luong" },
+    { "level": 3, "text": "Chỉ số AVE và HTMT", "id": "chi-so-ave-va-htmt" },
+    { "level": 2, "text": "Phân tích EFA", "id": "phan-tich-efa-1" },
+    { "level": 2, "text": "Phân tích EFA", "id": "phan-tich-efa-2" },
+    { "level": 2, "text": "Kiểm định t-test / ANOVA (SPSS 29)", "id": "kiem-dinh-t-test-anova-spss-29" },
+    { "level": 2, "text": "Đọc thêm về PLS-SEM", "id": "doc-them-ve-pls-sem" },
+    { "level": 2, "text": "Câu hỏi thường gặp", "id": "cau-hoi-thuong-gap" },
+    { "level": 3, "text": "Cronbach's Alpha bao nhiêu là đạt?", "id": "cronbach-s-alpha-bao-nhieu-la-dat" },
+    { "level": 3, "text": "Hệ số tương quan biến tổng thấp thì làm gì?", "id": "he-so-tuong-quan-bien-tong-thap-thi-lam-gi" },
+    { "level": 3, "text": "Thang đo hai biến quan sát có dùng được không?", "id": "thang-do-hai-bien-quan-sat-co-dung-duoc-khong" },
+    { "level": 3, "text": "Alpha quá cao có sao không?", "id": "alpha-qua-cao-co-sao-khong" }
+  ]
+}
