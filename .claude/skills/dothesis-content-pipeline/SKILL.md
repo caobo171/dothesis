@@ -34,9 +34,10 @@ thousand measured pages is an asset. A thousand pages of which four hundred have
 query is a manual action waiting for a reviewer.
 
 The engine enforces it. `gate` refuses to pass a keyword with no volume, `plan`
-only reads gate survivors and the harvest, and a row that only cleared on its
-family aggregate is stamped `gate_status = family-inferred`, inserted as DRAFT and
-never scheduled until it is measured on its own.
+only reads gate survivors and the harvest, and a row that cleared on its family
+rather than on itself — the thin-keyword aggregate rule, or `--fill-unmeasured` —
+is stamped `gate_status = family-inferred`, inserted as DRAFT and never scheduled
+until it is measured on its own.
 
 ## The market, measured 2026-09-07
 
@@ -156,6 +157,16 @@ Cut rules:
 Output is `gate-{axis}.tsv` with `keyword`, `search_volume`, `verdict`, `reason`.
 Commit it. The gate file is the evidence that a page was allowed to exist.
 
+When the budget only stretches to a sample of the candidates, add
+`--fill-unmeasured` to `gate --source tsv`. A candidate absent from the measured
+TSV is then judged on its family: it needs at least three measured siblings, at
+least half of them passing on their own, and a family aggregate over 500, or it
+drops. Survivors are `family-inferred` like the thin-keyword ones, and the summary
+counts measured, family-inferred and unmeasured-filled passes separately so you
+can see how much of the bank is inference. Without the flag an unmeasured
+candidate is still a plain drop — reach for it only when measurement is genuinely
+blocked, not to make a thin axis look bigger.
+
 ### 4. Plan
 
 ```bash
@@ -232,6 +243,15 @@ cd api && ./run.sh python -m app.blog.content.cli report
 Backlog priority order, so the highest-volume page of every category is in the
 first tranche. The nine category pages go live with it, or the posts have nothing
 to link up to.
+
+A seed whose `gate_status` is `family-inferred` is inserted as a DRAFT — status 0,
+no `published_at`, no `scheduled_at` — and does not consume a publishing slot; the
+slot counter advances for measured seeds only, so a tranche of 40 is 40 real
+pages rather than however many survived the mix. `create --reschedule` walks
+status 2 and leaves the drafts where they are. `plan` already orders every
+inferred row after every measured one for the same reason. A draft leaves this
+state one way: measure its keyword, set `gate_status` to `measured`, and re-run
+`update-from-seed`. It is written and waiting, not published on a guess.
 
 ### 9. Measure before enlarging
 

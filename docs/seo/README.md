@@ -122,6 +122,20 @@ volumes measured through OpenSEO, and the harvest, whose volumes are already
 measured and committed. `plan` runs on the harvest alone today and yields about
 200 rows.
 
+**Filling in around a partial measurement.** When only a sample of the candidates
+could be measured, `gate --source tsv --file measured.tsv --fill-unmeasured`
+judges each candidate missing from the TSV on its family instead of dropping it
+for no volume. It survives only if at least three of its family's keywords are in
+the measured TSV, at least half of those pass on their own, and the family's
+measured aggregate clears 500 — the same floor the thin-keyword rule uses, so the
+two fallbacks cannot disagree about which families carry weight. Survivors are
+stamped `family-inferred` and their reason records the sample
+(`unmeasured; family 'efa' sample 4/5 pass, aggregate 9,300`). Without the flag
+nothing changes: an unmeasured candidate stays a `no volume returned` drop, which
+is the default on purpose. The gate summary counts the three kinds of pass
+separately — measured, low-volume family-inferred, unmeasured-filled — so the
+honest number is never buried inside the total.
+
 `gate` prints the `cost` field of every DataForSEO response and a running total.
 The Google Ads search-volume endpoint takes up to 1,000 keywords per request, so
 the whole candidate set is a small number of calls. OpenSEO, at about 1.7 credits
@@ -133,3 +147,13 @@ a keyword, is the fallback for short lists.
 source of truth and `docs/blog-index.md` is the committed snapshot. Rejected
 drafts land in `rejected/` beside them and are worth reading: three rejects
 sharing a failure means the prompt is wrong, not the model.
+
+**`gate_status` decides whether a seed publishes.** It is optional in the schema
+and defaults to `measured`; the only other value is `family-inferred`. `create`
+inserts a `family-inferred` seed as a DRAFT — status 0, no `published_at`, no
+`scheduled_at` — and does not spend a publishing slot on it: the slot counter
+advances for measured seeds only, so a `--per-week 40` tranche is forty real
+pages instead of forty rows of which some cannot go live. `create --reschedule`
+only respreads status 2, so it leaves the drafts alone. The way out of the draft
+state is to measure the keyword, set `gate_status` to `measured`, and re-run
+`update-from-seed`; nothing promotes a draft automatically, which is the point.
