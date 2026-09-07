@@ -103,3 +103,8 @@ engine/tools/mermaid_cli/*.png
 engine/tools/mermaid_cli/*.svg
 .gstack/
 .1devtool/
+
+# Generated blog seeds. One JSON per post, up to ~1,000 of them, rewritten by
+# every `app.blog.content.cli write` run — the committed artefacts are
+# docs/blog-index.md and the backlog TSVs, not the seeds themselves.
+api/data/

@@ -7,10 +7,13 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     Sequence,
+    SmallInteger,
     String,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -716,3 +719,76 @@ class ToolRun(Base):
         Integer, nullable=False, default=0, server_default="0")
     progress_total: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0")
+
+
+# ---------------------------------------------------------------------------
+# Blog (see docs/superpowers/specs/2026-09-07-blog-content-engine-design.md §7)
+# ---------------------------------------------------------------------------
+
+class BlogCategory(Base):
+    __tablename__ = "blog_categories"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    # The nine slugs in §6 of the design. Kept as free text rather than an enum
+    # because a category is only allowed to exist once its name has measured
+    # search volume, and that list is expected to grow with the market, not
+    # with a migration.
+    slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    # Hand-written 300-500 words that give the category route something to rank
+    # with; a bare list of links is a thin page.
+    intro_md: Mapped[str | None] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class BlogPost(Base):
+    __tablename__ = "blog_posts"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    locale: Mapped[str] = mapped_column(String(8), nullable=False, default="vi", server_default="vi")
+    slug: Mapped[str] = mapped_column(String(200), nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    # Markdown, always. Unlike WELE there is no `body_format` column and no
+    # Quill HTML to migrate off: this blog is markdown from its first post.
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    excerpt: Mapped[str | None] = mapped_column(Text)
+    image_url: Mapped[str | None] = mapped_column(Text)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("blog_categories.id", ondelete="SET NULL"), index=True)
+    tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    # 0 draft, 1 published, 2 scheduled. A post is VISIBLE when status is 1, or
+    # status is 2 and scheduled_at has passed — app.blog.visible_filter() owns
+    # that rule so no route can reinvent half of it.
+    status: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=0, server_default="0")
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    meta_title: Mapped[str | None] = mapped_column(String(200))
+    meta_description: Mapped[str | None] = mapped_column(String(400))
+    # The one keyword this page is allowed to chase. Nullable, and the
+    # duplicate guard treats null as "never blocks and never blocks anyone
+    # else" — see app/blog/guard.py for why a title fallback is wrong here.
+    focus_keyword: Mapped[str | None] = mapped_column(String(200))
+    secondary_keywords: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]")
+    focus_keyword_volume: Mapped[int | None] = mapped_column(Integer)
+    canonical_url: Mapped[str | None] = mapped_column(Text)
+    # Prose, stored on the row and printed into docs/blog-index.md, so nobody
+    # fills it in reflexively to get past the guard.
+    duplicate_override_reason: Mapped[str | None] = mapped_column(Text)
+    reading_time: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    archetype: Mapped[str | None] = mapped_column(String(40))
+    source_batch: Mapped[str | None] = mapped_column(String(64))
+    views: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("locale", "slug", name="uq_blog_posts_locale_slug"),
+        Index("ix_blog_posts_status_published_at", "status", "published_at"),
+    )
