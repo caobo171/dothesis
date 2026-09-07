@@ -162,7 +162,7 @@ describe("JsonLd", () => {
     const body = "## Câu hỏi thường gặp\n\n### Bao nhiêu là đạt?\n\nTừ 0.7.\n";
     const ld = faqJsonLd(extractFaq(body), { locale: "vi", slug: "x", canonical_url: null }) as any;
     expect(ld.mainEntity.map((q: any) => q.name)).toEqual(["Bao nhiêu là đạt?"]);
-    expect(blogPostingJsonLd({ ...POST, body, meta_title: "t", meta_description: "d", canonical_url: null, updated_at: null, secondary_keywords: [], archetype: null })["@type"]).toBe("BlogPosting");
+    expect(blogPostingJsonLd({ ...POST, body, meta_title: "t", meta_description: "d", canonical_url: null, updated_at: null, focus_keyword: "cronbach alpha", secondary_keywords: [], archetype: null })["@type"]).toBe("BlogPosting");
   });
 });
 

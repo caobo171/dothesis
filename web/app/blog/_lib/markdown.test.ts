@@ -15,10 +15,29 @@ import {
 } from "./markdown";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURE_MD = readFileSync(path.join(here, "__fixtures__/headings.md"), "utf8");
-const FIXTURE_EXPECTED = JSON.parse(
-  readFileSync(path.join(here, "__fixtures__/headings.json"), "utf8"),
-) as { headings: Array<{ level: number; text: string; id: string }> };
+
+function fixture(name: string) {
+  return {
+    md: readFileSync(path.join(here, `__fixtures__/${name}.md`), "utf8"),
+    expected: JSON.parse(
+      readFileSync(path.join(here, `__fixtures__/${name}.json`), "utf8"),
+    ) as {
+      headings: Array<{ level: number; text: string; id: string }>;
+      faq_questions?: string[];
+    },
+  };
+}
+
+// The shared contract, copied byte for byte from api/tests/fixtures/blog/.
+// Both implementations parse this file; if they ever disagree, one of them has
+// broken every in-page anchor on the blog.
+const SHARED = fixture("headings");
+// Cases the shared fixture does not reach, all of them web-side rendering
+// concerns: a heading inside a code fence, inline markup, a heading that is a
+// link, and long punctuation runs.
+const EDGE = fixture("headings-edge");
+const FIXTURE_MD = EDGE.md;
+const FIXTURE_EXPECTED = EDGE.expected;
 
 describe("slugify", () => {
   test("strips Vietnamese diacritics and maps đ to d", () => {
@@ -53,7 +72,17 @@ describe("HeadingSlugger", () => {
 });
 
 describe("extractHeadings", () => {
-  test("matches the shared fixture byte for byte", () => {
+  test("matches the shared api fixture byte for byte", () => {
+    expect(extractHeadings(SHARED.md)).toEqual(SHARED.expected.headings);
+  });
+
+  test("finds the same FAQ questions the api fixture declares", () => {
+    expect(extractFaq(SHARED.md).map((f) => f.question)).toEqual(
+      SHARED.expected.faq_questions,
+    );
+  });
+
+  test("matches the web edge-case fixture byte for byte", () => {
     expect(extractHeadings(FIXTURE_MD)).toEqual(FIXTURE_EXPECTED.headings);
   });
 

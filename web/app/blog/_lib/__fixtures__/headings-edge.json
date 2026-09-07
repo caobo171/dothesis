@@ -1,5 +1,5 @@
 {
-  "_comment": "Expected output of extractHeadings(headings.md). Shared contract with api/app/blog/markdown.py: both sides must produce these ids byte for byte, or the contents box, the FAQ JSON-LD anchors and every deep link in a post body point at nothing.",
+  "_comment": "Web-side edge cases NOT covered by the shared api fixture (headings.md): a heading inside a fenced code block, inline markup in a heading, a heading that is a link, and punctuation runs. Expected output of extractHeadings(headings-edge.md). Shared contract with api/app/blog/markdown.py: both sides must produce these ids byte for byte, or the contents box, the FAQ JSON-LD anchors and every deep link in a post body point at nothing.",
   "headings": [
     { "level": 1, "text": "Cronbach's Alpha là gì", "id": "cronbach-s-alpha-la-gi" },
     { "level": 2, "text": "Phân tích EFA", "id": "phan-tich-efa" },

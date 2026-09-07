@@ -27,8 +27,11 @@ export type CompactPost = {
   category: BlogCategoryRef | null;
   tags: string[];
   published_at: string | null;
+  updated_at?: string | null;
   reading_time: number;
-  focus_keyword: string | null;
+  // Only the full serializer emits these; a listing card never shows them.
+  focus_keyword?: string | null;
+  views?: number;
 };
 
 /** A post as it appears on its own page. */
@@ -38,6 +41,7 @@ export type FullPost = CompactPost & {
   meta_description: string;
   canonical_url: string | null;
   updated_at: string | null;
+  focus_keyword: string | null;
   secondary_keywords: string[];
   archetype: string | null;
 };
@@ -119,13 +123,34 @@ export async function fetchPosts(params: {
  */
 export async function fetchPost(locale: string, slug: string): Promise<PostDetail | null> {
   try {
-    const res = await post<Partial<PostDetail>>("/blog/get", { locale, slug });
-    if (!res?.post) return null;
-    return { post: res.post, related: res.related ?? [], category: res.category ?? null };
+    const res = await post<Record<string, unknown>>("/blog/get", { locale, slug });
+    return normalizePostDetail(res);
   } catch (err) {
     if (isNotFound(err)) return null;
     throw err;
   }
+}
+
+/**
+ * Accept both shapes `/blog/get` has been written to.
+ *
+ * The design (spec §8) specifies `{post, related, category}`; the router that
+ * shipped returns the full post at the top level with `related` nested inside
+ * it and the category under `post.category`. Normalising here rather than
+ * picking a side means the blog keeps rendering whichever way that route is
+ * settled, and the pages above never learn about it.
+ */
+export function normalizePostDetail(res: Record<string, unknown> | null): PostDetail | null {
+  if (!res) return null;
+  const wrapped = res.post as FullPost | undefined;
+  const inner = wrapped ?? (res as unknown as FullPost);
+  if (!inner || typeof inner.slug !== "string") return null;
+  const related = (res.related as CompactPost[] | undefined)
+    ?? ((inner as unknown as { related?: CompactPost[] }).related ?? []);
+  const category = (res.category as BlogCategory | null | undefined)
+    ?? (inner.category as BlogCategory | null | undefined)
+    ?? null;
+  return { post: inner, related, category };
 }
 
 export async function fetchCategories(locale: string): Promise<BlogCategory[]> {
@@ -145,10 +170,16 @@ export async function fetchCategory(
   };
 }
 
+/**
+ * The sitemap feed. Same story as `/blog/get`: the design says
+ * `{posts: [...]}` and the shipped router returns the bare array, so both are
+ * accepted rather than betting the sitemap on which one lands.
+ */
 export async function fetchSitemap(locale?: string): Promise<SitemapEntry[]> {
-  const res = await post<{ posts?: SitemapEntry[] }>(
+  const res = await post<SitemapEntry[] | { posts?: SitemapEntry[] }>(
     "/blog/sitemap",
     locale ? { locale } : {},
   );
-  return res.posts ?? [];
+  if (Array.isArray(res)) return res;
+  return res?.posts ?? [];
 }

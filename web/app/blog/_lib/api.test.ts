@@ -68,6 +68,25 @@ describe("fetchPost", () => {
     expect(out?.category?.slug).toBe("spss");
   });
 
+  test("also accepts the router's flat shape: post at the top level", async () => {
+    server.use(
+      http.post("*/api/v1/blog/get", () =>
+        HttpResponse.json({
+          ...COMPACT,
+          body: "## Mở đầu\n",
+          meta_title: "t",
+          meta_description: "d",
+          related: [COMPACT],
+        }),
+      ),
+    );
+    const out = await fetchPost("vi", "cronbach-alpha-la-gi");
+    expect(out?.post.slug).toBe("cronbach-alpha-la-gi");
+    expect(out?.related).toHaveLength(1);
+    // The category rides inside the post in this shape.
+    expect(out?.category?.slug).toBe("spss");
+  });
+
   test("a 404 is 'no such post', not an error", async () => {
     server.use(
       http.post("*/api/v1/blog/get", () =>
@@ -103,5 +122,13 @@ describe("fetchCategories and fetchSitemap", () => {
   test("the sitemap feed tolerates an empty payload", async () => {
     server.use(http.post("*/api/v1/blog/sitemap", () => HttpResponse.json({})));
     expect(await fetchSitemap()).toEqual([]);
+  });
+
+  test("the sitemap feed reads both the wrapped and the bare-array shape", async () => {
+    const row = { locale: "vi", slug: "a", updated_at: null };
+    server.use(http.post("*/api/v1/blog/sitemap", () => HttpResponse.json({ posts: [row] })));
+    expect(await fetchSitemap()).toEqual([row]);
+    server.use(http.post("*/api/v1/blog/sitemap", () => HttpResponse.json([row])));
+    expect(await fetchSitemap("vi")).toEqual([row]);
   });
 });
