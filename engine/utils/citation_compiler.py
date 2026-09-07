@@ -160,7 +160,28 @@ class CitationCompiler:
                 return f"[MISSING: {cite_id}]"
 
             citation = self.citation_lookup[cite_id]
-            return self.format_in_text_citation(citation)
+            formatted = self.format_in_text_citation(citation)
+
+            # Narrative form. The writer often puts the placeholder right after
+            # naming the author — "Ismagilova et al. {cite_004}" or even
+            # "Ismagilova et al. (2020) {cite_004}". Expanding it to the full
+            # parenthetical produced "Ismagilova et al. (2020) (Ismagilova et
+            # al., 2020)" in every table. Emit only what is missing.
+            authors = getattr(citation, "authors", None) or []
+            surname = str(authors[0]).split(",")[0].strip() if authors else ""
+            year = getattr(citation, "year", None)
+            if surname and year:
+                before = text[max(0, match.start() - 90):match.start()]
+                narrative = re.search(
+                    re.escape(surname)
+                    + r"(?:\s+(?:et\s+al\.?|&\s*\S+|and\s+\S+|và\s+(?:cộng\s+sự|\S+)))?"
+                    + r"\s*(?:\((\d{4})[a-z]?\))?\s*$",
+                    before, re.IGNORECASE)
+                if narrative:
+                    return "" if narrative.group(1) else f"[({year})](#ref-{cite_id})"
+            # Internal link to the anchored reference entry (pandoc -> Word
+            # hyperlink). Before this, no exported draft had a single link.
+            return f"[{formatted}](#ref-{cite_id})"
 
         # Replace all {cite_XXX} patterns
         citation_pattern = r'\{cite_\d{3}\}'
@@ -546,7 +567,11 @@ class CitationCompiler:
                     f"See docs/CITATION_STYLES_ROADMAP.md for planned styles."
                 )
 
-            references.append(ref)
+            # Anchor the entry so in-text citations can link to it. Pandoc's
+            # bracketed span becomes a Word bookmark; the fallback python-docx
+            # path keys its own bookmarks off the surname, which still starts
+            # the visible text.
+            references.append(f"[{ref}]{{#ref-{citation.id}}}")
 
         references_content = "\n\n".join(references)
 
@@ -690,9 +715,9 @@ class CitationCompiler:
             if pages:
                 ref += f", {pages}"
             if doi:
-                ref += f". https://doi.org/{doi}"
+                ref += f". [https://doi.org/{doi}](https://doi.org/{doi})"
             elif url:
-                ref += f". {url}"
+                ref += f". [{url}]({url})"
             ref += "."
 
         elif source_type == 'book':
@@ -705,9 +730,9 @@ class CitationCompiler:
                 ref = f"{author_str} ({year}). *{title}*. {publisher}."
             # Add DOI/URL for books
             if doi:
-                ref += f" https://doi.org/{doi}"
+                ref += f" [https://doi.org/{doi}](https://doi.org/{doi})"
             elif url:
-                ref += f" {url}"
+                ref += f" [{url}]({url})"
 
         elif source_type in ['report', 'website']:
             url = citation.url or ""
@@ -720,9 +745,9 @@ class CitationCompiler:
             ref += "."
             # Prefer DOI over URL
             if doi:
-                ref += f" https://doi.org/{doi}"
+                ref += f" [https://doi.org/{doi}](https://doi.org/{doi})"
             elif url:
-                ref += f" {url}"
+                ref += f" [{url}]({url})"
 
         elif source_type == 'conference':
             publisher = citation.publisher or ""
@@ -737,9 +762,9 @@ class CitationCompiler:
                 ref += f" (pp. {pages})."
             # Add DOI/URL for conference papers
             if doi:
-                ref += f" https://doi.org/{doi}"
+                ref += f" [https://doi.org/{doi}](https://doi.org/{doi})"
             elif url:
-                ref += f" {url}"
+                ref += f" [{url}]({url})"
 
         else:
             # Fallback - still add DOI/URL if available
@@ -748,9 +773,9 @@ class CitationCompiler:
 
             ref = f"{author_str} ({year}). {title}."
             if doi:
-                ref += f" https://doi.org/{doi}"
+                ref += f" [https://doi.org/{doi}](https://doi.org/{doi})"
             elif url:
-                ref += f" {url}"
+                ref += f" [{url}]({url})"
 
         return ref
 

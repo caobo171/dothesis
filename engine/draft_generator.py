@@ -183,6 +183,16 @@ def run_phase_with_retry(
 # LOCALIZATION: Chapter and section names in different languages
 # =============================================================================
 CHAPTER_NAMES = {
+    'vi': {
+        'introduction': 'Giới thiệu',
+        'literature_review': 'Cơ sở lý thuyết',
+        'methodology': 'Phương pháp nghiên cứu',
+        'results': 'Kết quả nghiên cứu và phân tích',
+        'discussion': 'Thảo luận',
+        'conclusion': 'Kết luận',
+        'references': 'Tài liệu tham khảo',
+        'appendix': 'Phụ lục',
+    },
     'en': {
         'introduction': 'Introduction',
         'literature_review': 'Literature Review',

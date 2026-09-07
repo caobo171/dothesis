@@ -15,6 +15,34 @@ import re
 
 # Localized chapter names for post-processing
 CHAPTER_TRANSLATIONS = {
+    # Vietnamese was missing entirely, so every vi draft kept the English
+    # skeleton ("1. Introduction", "2. Main Body", "References") above
+    # Vietnamese subsections. 'Main Body' is the compose skeleton's own label
+    # and was never in any language map.
+    'vi': {
+        'Introduction': 'Giới thiệu',
+        'Main Body': 'Nội dung nghiên cứu',
+        'Literature Review': 'Cơ sở lý thuyết',
+        'Methodology': 'Phương pháp nghiên cứu',
+        'Results': 'Kết quả nghiên cứu',
+        'Results and Analysis': 'Kết quả nghiên cứu và phân tích',
+        'Analysis and Results': 'Phân tích và kết quả',
+        'Analysis': 'Phân tích',
+        'Discussion': 'Thảo luận',
+        'Conclusion': 'Kết luận',
+        'Conclusions': 'Kết luận',
+        'References': 'Tài liệu tham khảo',
+        'Bibliography': 'Tài liệu tham khảo',
+        'Appendix': 'Phụ lục',
+        'Appendices': 'Phụ lục',
+        'Abstract': 'Tóm tắt',
+        'Summary': 'Tóm tắt',
+        'Table of Contents': 'Mục lục',
+        'List of Figures': 'Danh mục hình',
+        'List of Tables': 'Danh mục bảng',
+        'Acknowledgments': 'Lời cảm ơn',
+        'Acknowledgements': 'Lời cảm ơn',
+    },
     'de': {
         'Introduction': 'Einleitung',
         'Literature Review': 'Literaturübersicht',
@@ -767,7 +795,8 @@ def clean_ai_language(text: str) -> str:
     # Clean up spaces before punctuation
     text = re.sub(r' +([.,;:!?])', r'\1', text)
     # Clean up sentence starts after removals
-    text = re.sub(r'\. +([a-z])', lambda m: '. ' + m.group(1).upper(), text)
+    # Not URLs: "Review. https://doi.org/…" must not become "Https://".
+    text = re.sub(r'\. +(?!https?://|www\.)([a-z])', lambda m: '. ' + m.group(1).upper(), text)
 
     return text
 

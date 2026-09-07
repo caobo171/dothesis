@@ -508,7 +508,10 @@ def _add_bookmark(para, name: str, bid: int) -> None:
 
 
 _REFERENCE_HEADING_RE = _re.compile(
-    r"^#{1,3}\s+("
+    # compile.py emits the list as "# 5. References" (or "# 4. References").
+    # Without the optional number this never matched, the citation map stayed
+    # empty, and no draft ever got an in-text hyperlink.
+    r"^#{1,3}\s+(?:\d+\.?\s+)?("
     r"references|bibliography|works\s+cited|"
     r"tài\s+liệu\s+tham\s+khảo|"
     r"literaturverzeichnis|literatur|"
@@ -520,7 +523,7 @@ _REFERENCE_HEADING_RE = _re.compile(
 )
 
 _REF_ENTRY_KEY_RE = _re.compile(
-    r"^\s*[-*]?\s*"
+    r"^\s*[-*]?\s*\[?"
     r"([\wÀ-ɏḀ-ỿ][\wÀ-ɏḀ-ỿ\.\-']*)"  # surname (first whole word; greedy)
     r"[^()]*?"                          # author list, initials, et al., …
     r"\(?(\d{4})\)?"                    # year
@@ -603,6 +606,65 @@ def _extract_toc_entries(lines: list[str]) -> list[dict]:
         counter += 1
         entries.append({"level": level, "text": text, "anchor": f"_Toc_{counter:04d}"})
     return entries
+
+
+_IMAGE_LINE_RE = _re.compile(r"^!\[([^\]]*)\]\(([^)]+)\)\s*$")
+
+# LaTeX inline math has no renderer on the docx path; it used to be dropped,
+# leaving "mô hình () và hệ số Beta" where "$R^2$" had been. Turn the common
+# thesis-statistics notation into readable plain text instead.
+_SUP = str.maketrans("0123456789+-=()n", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ")
+_SUB = str.maketrans("0123456789+-=()aeoxhklmnpst", "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜ")
+
+
+def _math_to_text(expr: str) -> str:
+    t = expr
+    t = _re.sub(r"\\(?:left|right|,|;|!|displaystyle)", "", t)
+    t = _re.sub(r"\\hat\{([^{}]*)\}", lambda m: m.group(1) + "̂", t)
+    t = _re.sub(r"\\bar\{([^{}]*)\}", lambda m: m.group(1) + "̄", t)
+    t = _re.sub(r"\\(sum|Sigma)", "Σ", t)
+    t = _re.sub(r"\\(alpha|beta|gamma|delta|epsilon|lambda|mu|sigma|rho|chi|eta|theta|pi)",
+                lambda m: {"alpha": "α", "beta": "β", "gamma": "γ", "delta": "δ", "epsilon": "ε", "lambda": "λ",
+                           "mu": "μ", "sigma": "σ", "rho": "ρ", "chi": "χ", "eta": "η", "theta": "θ", "pi": "π"}[m.group(1)], t)
+    t = _re.sub(r"\\(times|cdot)", "×", t)
+    t = _re.sub(r"\\(le|leq)", "≤", t); t = _re.sub(r"\\(ge|geq)", "≥", t); t = _re.sub(r"\\neq?", "≠", t)
+    t = _re.sub(r"\^\{([^{}]*)\}", lambda m: m.group(1).translate(_SUP), t)
+    t = _re.sub(r"\^(\w)", lambda m: m.group(1).translate(_SUP), t)
+    t = _re.sub(r"_\{([^{}]*)\}", lambda m: m.group(1).translate(_SUB), t)
+    t = _re.sub(r"_(\w)", lambda m: m.group(1).translate(_SUB), t)
+    # \frac last: by now sub/superscripts have consumed the inner braces, so
+    # a nested numerator like \frac{\sum_{i=1}^{n} …}{…} is flat enough to match.
+    for _ in range(3):
+        t = _re.sub(r"\\frac\{([^{}]*)\}\{([^{}]*)\}", r"(\1)/(\2)", t)
+    t = _re.sub(r"\\([A-Za-z]+)", r"\1", t)
+    t = t.replace("{", "").replace("}", "")
+    return _re.sub(r"\s+", " ", t).strip()
+
+
+def _convert_math(line: str) -> str:
+    line = _re.sub(r"\$\$(.+?)\$\$", lambda m: _math_to_text(m.group(1)), line)
+    line = _re.sub(r"(?<!\$)\$([^$\n]+?)\$(?!\$)", lambda m: _math_to_text(m.group(1)), line)
+    return line
+
+
+def _add_docx_image(doc, path: str, caption: str) -> bool:
+    """Place a picture on its own centred paragraph with an italic caption under it."""
+    from pathlib import Path as _P
+    from docx.shared import Inches as _Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH as _AL
+    p = _P(path)
+    if not p.exists():
+        return False
+    para = doc.add_paragraph()
+    para.alignment = _AL.CENTER
+    para.add_run().add_picture(str(p), width=_Inches(6.0))
+    if caption:
+        cap = doc.add_paragraph()
+        cap.alignment = _AL.CENTER
+        r = cap.add_run(caption)
+        r.italic = True
+        r.font.size = _docx_pt(10)
+    return True
 
 
 def _strip_inline_markers(text: str) -> str:
@@ -865,6 +927,18 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
 
             # Blank
             if not line.strip():
+                i += 1
+                continue
+
+            if "$" in line:
+                line = _convert_math(line)
+
+            # Image on its own line: ![caption](path)
+            m_img = _IMAGE_LINE_RE.match(line.strip())
+            if m_img:
+                if not _add_docx_image(doc, m_img.group(2), m_img.group(1)):
+                    para = doc.add_paragraph()
+                    inline(para, m_img.group(1))
                 i += 1
                 continue
 

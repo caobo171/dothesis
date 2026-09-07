@@ -289,20 +289,35 @@ def run_compile_and_export(ctx: DraftContext) -> Tuple[Path, Path]:
     degree = degree_labels.get(ctx.academic_level, 'Master of Science')
 
     # YAML metadata
-    yaml_author = ctx.author_name or "DoThesis AI"
-    yaml_institution = ctx.institution or "DoThesis University"
-    yaml_department = ctx.department or "Department of Computer Science"
-    yaml_faculty = ctx.faculty or "Faculty of Engineering"
-    yaml_advisor = ctx.advisor or "Prof. Dr. DoThesis Supervisor"
-    yaml_second_examiner = ctx.second_examiner or "Prof. Dr. Second Examiner"
-    yaml_location = ctx.location or "Munich"
-    yaml_student_id = ctx.student_id or "N/A"
+    # Unknown cover fields stay blank. The old defaults put "DoThesis
+    # University / Department of Computer Science / Prof. Dr. DoThesis
+    # Supervisor" on every draft the caller didn't fill in — a tourism thesis
+    # then claimed a computer-science department. The docx builder already
+    # skips empty fields, so blank means "not shown", not "shown empty".
+    yaml_author = ctx.author_name or ""
+    yaml_institution = ctx.institution or ""
+    yaml_department = ctx.department or ""
+    yaml_faculty = ctx.faculty or ""
+    yaml_advisor = ctx.advisor or ""
+    yaml_second_examiner = ctx.second_examiner or ""
+    yaml_location = ctx.location or ""
+    yaml_student_id = ctx.student_id or ""
 
     # Only include appendices section if there's actual content
     if appendix_clean.strip():
         appendices_block = f"# 4. Appendices\n{appendix_clean}\n\n\\newpage\n\n# 5. References"
     else:
         appendices_block = "# 4. References"
+
+    # Research-model figure: a thesis with hypotheses is expected to show them
+    # as a diagram. Drawn from the hypotheses the writer already stated, placed
+    # under the "proposed model" heading. Never fatal — a draft without the
+    # figure is still a draft.
+    try:
+        from utils.model_figure import add_model_figure
+        body_clean = add_model_figure(body_clean, ctx)
+    except Exception as _fig_err:  # noqa: BLE001
+        logger.warning(f"Model figure skipped: {_fig_err}")
 
     full_draft = f"""---
 title: "{ctx.topic}"
@@ -319,7 +334,7 @@ student_id: "{yaml_student_id}"
 project_type: "{draft_type}"
 word_count: "{word_count:,} words"
 pages: "{pages_estimate}"
-generated_by: "DoThesis AI - https://github.com/federicodeponte/dothesis"
+generated_by: ""
 ---
 
 ## Abstract
@@ -440,6 +455,12 @@ generated_by: "DoThesis AI - https://github.com/federicodeponte/dothesis"
 
     final_draft = clean_ai_language(final_draft)
     final_draft = strip_meta_text(final_draft)
+    # Compose writes a generic paper skeleton (Introduction / Main Body /
+    # Conclusion). A thesis is examined as numbered chapters — the outline
+    # planned Chương 1–5 but compose flattened them into 2.1–2.4. Promote
+    # them back before the headings are localised.
+    from utils.thesis_structure import restructure_to_thesis
+    final_draft = restructure_to_thesis(final_draft, ctx.language, ctx.academic_level)
     final_draft = localize_chapter_headings(final_draft, ctx.language)
     final_md_path.write_text(final_draft, encoding='utf-8')
 
