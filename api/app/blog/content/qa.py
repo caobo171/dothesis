@@ -29,6 +29,15 @@ shingle gate. This check refuses *reused text*; two pages competing for one
 query is a different failure with a different tool, `app/blog/similarity.py`,
 which classifies intent first. Neither substitutes for the other.
 
+**Two languages, one set of numbers.** The bank ships Vietnamese and English
+editions of the same posts, so every rule that reads the prose is stated per
+locale in `LOCALE_RULES` and picked with the seed's own `locale` field: the FAQ
+heading, the worked-table label, the writing-paragraph lead, the slop blacklist
+and the qualitative-method refusal. An English post has to pass on English
+terms and cannot buy a check with a Vietnamese string. Not one threshold moves
+between the two, and citations are shared: `(Hair et al., 2010)` and
+`(Hair và cộng sự, 2010)` are the same surname and the same year.
+
 **Stdlib only, and no import of `app.blog.markdown`.** This module is also
 reached from `.claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py`,
 which runs under a bare `python3` with no virtualenv, on a seed directory
@@ -88,8 +97,14 @@ ALLOWED_ARCHETYPES = {
 }
 
 # Routes that are not blog posts but are valid link targets.
-ALLOWED_ROUTES = {"/landing", "/signup", "/login", "/blog/vi"}
+ALLOWED_ROUTES = {"/landing", "/signup", "/login", "/blog/vi", "/blog/en"}
 CTA_ROUTE = "/landing"
+
+# The middle segment of a category route, `/blog/<locale>/<segment>/<category>`.
+# A constant with one reader here and one in `translate.py`, because the English
+# edition may end up on an English segment and the web route is owned elsewhere:
+# when it changes, this line moves and nothing else does.
+CATEGORY_SEGMENT = "chu-de"
 
 # Kept verbatim in sync with
 # .claude/skills/dothesis-blog-content/references/voice.md.
@@ -117,6 +132,116 @@ BLACKLIST = (
 # DoThesis is quantitative only. These are not "mention with care" phrases, they
 # are instructions the product cannot support, so the gate refuses the post.
 QUALITATIVE_PHRASES = ("phỏng vấn sâu", "mã hóa định tính")
+
+# ------------------------------------------------------------------- locales
+#
+# The bank ships in two languages, so every rule that reads the prose has to be
+# stated in the language it reads. An English post passes on its own terms: it
+# may not satisfy the FAQ rule, the worked-table rule or the writing-paragraph
+# rule by carrying a Vietnamese string, and a Vietnamese post may not satisfy
+# them with an English one. Which set applies is read off the seed's `locale`
+# field and never guessed from the text, because these posts mix languages by
+# design (`Cronbach's Alpha`, `Rotated Component Matrix`) and a guess would pick
+# the wrong rules for exactly the posts that follow the voice guide best.
+#
+# Nothing below is a threshold. The word floor, the H2 count, the FAQ minimum,
+# the table and link minimums and the doubled bar for a page with no measured
+# search volume are the same numbers in both languages.
+
+DEFAULT_LOCALE = "vi"
+ALLOWED_LOCALES = ("vi", "en")
+
+# The English half of the slop blacklist: same failure mode as the Vietnamese
+# list in `voice.md`, in the language the English edition is written in. A
+# phrase earns its place by being one no editor would leave in and one that a
+# model reaches for unprompted, so each is either a stock opener, a stock close,
+# or an intensifier that says nothing. It lives here rather than in the skill
+# file because a test pins that file's list to `BLACKLIST` word for word; the
+# translation prompt reads this tuple and quotes it.
+BLACKLIST_EN = (
+    "In this article, we will",
+    "This article will help you",
+    "We hope this article",
+    "Hopefully this article",
+    "It cannot be denied that",
+    "plays an extremely important role",
+    "one of the most effective methods available today",
+    "Let's dive right in",
+    "Let's dive in",
+    "As you may already know",
+    "you have probably wondered",
+    "incredibly simple and easy",
+    "quickly and accurately",
+    "reputable and professional",
+    "Contact us now",
+    "Good luck with your thesis",
+    "we wish you every success",
+    "In the era of Industry 4.0",
+    "In today's digital age",
+    "delve into",
+    "In conclusion,",
+    "a testament to",
+    "ever-evolving world of",
+)
+
+# The direct English equivalents of `QUALITATIVE_PHRASES`, and only those, so a
+# body fails on the same instruction in either language. `voice.md` also names
+# focus groups and saturation checks; the Vietnamese gate does not catch those
+# either, and widening one locale but not the other is how the two editions
+# start disagreeing about what a post may say.
+QUALITATIVE_PHRASES_EN = ("in-depth interview", "qualitative coding")
+
+
+def _writing_lead_re(phrase: str) -> "re.Pattern":
+    """The writing paragraph announces itself: a heading, or a bolded lead."""
+    return re.compile(r"^(?:\s{0,3}#{1,6}\s+|\s{0,3}\*\*)[^\n]*" + re.escape(phrase),
+                      re.IGNORECASE | re.MULTILINE)
+
+
+_Rules = collections.namedtuple(
+    "_Rules",
+    "locale faq_heading faq_markers worked_label writing_lead writing_lead_re "
+    "blacklist qualitative hedge")
+
+LOCALE_RULES = {
+    "vi": _Rules(
+        locale="vi",
+        faq_heading="Câu hỏi thường gặp",
+        faq_markers=("cau hoi thuong gap", "hoi dap", "faq"),
+        worked_label="số liệu minh họa",
+        writing_lead="cách viết vào luận văn",
+        writing_lead_re=_writing_lead_re("cách viết vào luận văn"),
+        blacklist=BLACKLIST,
+        qualitative=QUALITATIVE_PHRASES,
+        hedge="nghiên cứu cho thấy",
+    ),
+    "en": _Rules(
+        locale="en",
+        faq_heading="Frequently asked questions",
+        faq_markers=("frequently asked questions", "faq"),
+        # Both labels name a table of numbers the writer made up to show the
+        # shape of real output. `illustrative output` is the English wording the
+        # translation prompt requires verbatim, for the same reason the
+        # Vietnamese one is required verbatim: a label that varies is a label
+        # nothing can check.
+        worked_label="illustrative output",
+        writing_lead="how to write this in your thesis",
+        writing_lead_re=_writing_lead_re("how to write this in your thesis"),
+        blacklist=BLACKLIST_EN,
+        qualitative=QUALITATIVE_PHRASES_EN,
+        hedge="research shows",
+    ),
+}
+
+
+def rules_for(locale: str | None) -> "_Rules":
+    """The rule set for a seed's locale, Vietnamese when it is not one of the two.
+
+    Falling back rather than raising: an unrecognised locale already FAILs on
+    its own line in `check_post`, and a run that reported only that would hide
+    every other thing wrong with the file.
+    """
+    return LOCALE_RULES.get(locale or "", LOCALE_RULES[DEFAULT_LOCALE])
 
 # (first surname token, year) for every entry in
 # .claude/skills/dothesis-blog-content/references/canonical-sources.md.
@@ -150,7 +275,6 @@ _LINK_RE = re.compile(r"!?\[([^\]]*)\]\(\s*<?([^)\s>]*)>?(?:\s+[\"'][^\"')]*[\"'
 _IMAGE_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
 _TABLE_DELIM_RE = re.compile(r"^\s*\|?[\s:\-|]+\|[\s:\-|]*$")
 _HTML_TAG_RE = re.compile(r"</?[a-zA-Z][a-zA-Z0-9-]*(\s[^<>]*)?/?>")
-_FAQ_MARKERS = ("cau hoi thuong gap", "hoi dap", "faq")
 
 
 def _ascii(text: str) -> str:
@@ -207,12 +331,13 @@ def headings(body: str) -> list[tuple[int, str, str]]:
     return out
 
 
-def faq_questions(body: str) -> list[str]:
-    """The `### ` questions under the FAQ H2."""
+def faq_questions(body: str, locale: str = DEFAULT_LOCALE) -> list[str]:
+    """The `### ` questions under the FAQ H2, in this locale's wording."""
+    markers = rules_for(locale).faq_markers
     all_headings = headings(body)
     start = None
     for idx, (level, text, _) in enumerate(all_headings):
-        if level == 2 and any(m in _ascii(text).lower() for m in _FAQ_MARKERS):
+        if level == 2 and any(m in _ascii(text).lower() for m in markers):
             start = idx
             break
     if start is None:
@@ -314,17 +439,18 @@ def citations(body: str) -> list[tuple[str, int, str]]:
 #
 # - a threshold table is a table with a canonical citation *inside a row*, which
 #   is the "every row names its source" column and nothing else looks like it;
-# - a worked table is one labelled `số liệu minh họa`, which the skill requires
-#   verbatim, in the table or in the line either side of it;
-# - a `cách viết vào luận văn` paragraph announces itself as a heading or a
-#   bolded lead, because a bare mention inside prose is a cross-reference to
-#   another post's section, not the section itself.
+# - a worked table is one carrying the locale's worked label (`số liệu minh
+#   họa`, `illustrative output`), which the skill and the translation prompt
+#   both require verbatim, in the table or in the line either side of it;
+# - a writing paragraph (`cách viết vào luận văn`, `how to write this in your
+#   thesis`) announces itself as a heading or a bolded lead, because a bare
+#   mention inside prose is a cross-reference to another post's section, not the
+#   section itself.
+#
+# The label and the lead are per locale, in `LOCALE_RULES`. A citation is not:
+# `(Hair et al., 2010)` and `(Hair và cộng sự, 2010)` carry the same surname and
+# the same year, which is all `citations()` reads.
 PROPRIETARY_ELEMENTS = ("threshold-table", "worked-table", "writing-paragraph")
-
-_WORKED_LABEL = "số liệu minh họa"
-_WRITING_LEAD_RE = re.compile(
-    r"^(?:\s{0,3}#{1,6}\s+|\s{0,3}\*\*)[^\n]*cách viết vào luận văn",
-    re.IGNORECASE | re.MULTILINE)
 
 
 def table_blocks(body: str) -> list[tuple[list[str], list[str]]]:
@@ -355,9 +481,13 @@ def table_blocks(body: str) -> list[tuple[list[str], list[str]]]:
 # A threshold table states a cut-off: its header names one, or its cells carry a
 # decimal, a ratio or a percentage. A procedure table ("Bước | Thao tác") does
 # neither, which is what keeps a citation beside one from counting as a source.
+# Both languages in one list, because the header of an English table on this
+# blog often keeps a Vietnamese-bank term and vice versa; a table only has to
+# look like a threshold table in one of them.
 _THRESHOLD_WORDS = ("ngưỡng", "tối thiểu", "tối đa", "tiêu chuẩn", "chấp nhận",
                     "khuyến nghị", "mức", "giới hạn", "đạt", "threshold", "cut-off",
-                    "minimum")
+                    "cutoff", "minimum", "maximum", "acceptable", "recommended",
+                    "criterion", "rule of thumb")
 _THRESHOLD_NUMBER_RE = re.compile(r"\d+[.,]\d+|\d+\s*:\s*\d+|\d+\s*%")
 
 
@@ -367,12 +497,13 @@ def _looks_like_thresholds(rows: list[str]) -> bool:
             or bool(_THRESHOLD_NUMBER_RE.search(blob)))
 
 
-def proprietary_elements(body: str) -> list[str]:
+def proprietary_elements(body: str, locale: str = DEFAULT_LOCALE) -> list[str]:
     """Which of the three the post actually carries, in `PROPRIETARY_ELEMENTS` order."""
+    rules = rules_for(locale)
     found: set[str] = set()
     for rows, context in table_blocks(body):
         blob = "\n".join(rows + context).lower()
-        if _WORKED_LABEL in blob:
+        if rules.worked_label in blob:
             found.add("worked-table")
         if "threshold-table" not in found:
             # A citation inside the rows is a source column and always counts.
@@ -392,7 +523,7 @@ def proprietary_elements(body: str) -> list[str]:
                 for line in context for key, year, _raw in citations(line))
             if sourced_rows or (sourced_context and _looks_like_thresholds(rows)):
                 found.add("threshold-table")
-    if _WRITING_LEAD_RE.search(body or ""):
+    if rules.writing_lead_re.search(body or ""):
         found.add("writing-paragraph")
     return [name for name in PROPRIETARY_ELEMENTS if name in found]
 
@@ -570,7 +701,8 @@ def link_is_known(href: str, slugs: set[str]) -> bool:
     target = href.split("#")[0].split("?")[0].rstrip("/") or "/"
     if target in ALLOWED_ROUTES:
         return True
-    m = re.match(r"^/blog/[a-z]{2}/chu-de/([a-z0-9-]+)$", target)
+    m = re.match(r"^/blog/[a-z]{2}/" + re.escape(CATEGORY_SEGMENT) + r"/([a-z0-9-]+)$",
+                 target)
     if m:
         return m.group(1) in ALLOWED_CATEGORIES
     m = re.match(r"^/blog/[a-z]{2}/([a-z0-9-]+)$", target)
@@ -598,6 +730,10 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
         return fails, warns, {}
 
     body = post["body"]
+    # Which language's rules apply is decided here, once, off the seed's own
+    # `locale`. Everything below that reads the prose goes through `rules`.
+    locale = post.get("locale")
+    rules = rules_for(locale)
 
     # Volume no longer decides whether a page may exist, it only orders the
     # queue. What it still decides is how hard this page has to work: with no
@@ -611,8 +747,9 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
 
     if post.get("schema") != SCHEMA:
         fails.append(f"schema is {post.get('schema')!r}, must be {SCHEMA!r}")
-    if post.get("locale") != "vi":
-        fails.append(f"locale is {post.get('locale')!r}, must be 'vi'")
+    if locale not in ALLOWED_LOCALES:
+        fails.append(f"locale is {locale!r}, must be one of "
+                     + " or ".join(repr(x) for x in ALLOWED_LOCALES))
     category = post.get("category")
     if category and category not in ALLOWED_CATEGORIES:
         fails.append(f"category {category!r} is not one of the nine")
@@ -652,9 +789,9 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
     if any(h[0] == 1 for h in all_headings):
         warns.append("body contains an H1, the page renders `title` as the H1")
 
-    questions = faq_questions(body)
+    questions = faq_questions(body, rules.locale)
     if not questions:
-        fails.append("no `## Câu hỏi thường gặp` section with `###` questions")
+        fails.append(f"no `## {rules.faq_heading}` section with `###` questions")
     elif len(questions) < MIN_FAQ_QUESTIONS:
         fails.append(f"FAQ has {len(questions)} questions, need at least "
                      f"{MIN_FAQ_QUESTIONS}")
@@ -667,7 +804,7 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
             fails.append(f"{tables} table(s), a page with no measured search volume "
                          f"needs at least {min_tables}")
 
-    elements = proprietary_elements(body)
+    elements = proprietary_elements(body, rules.locale)
     if len(elements) < min_elements:
         have = ", ".join(elements) if elements else "none"
         fails.append(f"{len(elements)} of the three proprietary elements ({have}), "
@@ -680,10 +817,10 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
     if "!" in prose:
         fails.append("contains an exclamation mark")
     lowered = body.lower()
-    for phrase in BLACKLIST:
+    for phrase in rules.blacklist:
         if phrase.lower() in lowered:
             fails.append(f"blacklisted phrase: {phrase!r}")
-    for phrase in QUALITATIVE_PHRASES:
+    for phrase in rules.qualitative:
         if phrase in lowered:
             fails.append(f"tells the reader to do qualitative work: {phrase!r}. "
                          f"DoThesis is quantitative only")
@@ -724,12 +861,12 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
             warns.append(f"a percentage outside a table: {para[:60]!r}")
             break
     for para in _paragraphs(body):
-        if "nghiên cứu cho thấy" in para.lower() and not citations(para):
-            warns.append("`nghiên cứu cho thấy` with no citation in the same paragraph")
+        if rules.hedge in para.lower() and not citations(para):
+            warns.append(f"`{rules.hedge}` with no citation in the same paragraph")
             break
 
     stats = {"words": words, "h2": len(h2s), "tables": tables, "rows": rows,
-             "links": len(links), "faq": len(questions),
+             "links": len(links), "faq": len(questions), "locale": rules.locale,
              "elements": len(elements), "unmeasured": unmeasured}
     return fails, warns, stats
 

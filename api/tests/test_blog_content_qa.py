@@ -19,6 +19,7 @@ TESTS_DIR = os.path.dirname(__file__)
 REPO_ROOT = os.path.abspath(os.path.join(TESTS_DIR, "..", ".."))
 FIXTURES = os.path.join(TESTS_DIR, "fixtures", "blog", "content")
 PASSING_DIR = os.path.join(FIXTURES, "passing")
+PASSING_EN_DIR = os.path.join(FIXTURES, "passing-en")
 FAILING_DIR = os.path.join(FIXTURES, "failing")
 SKILL_DIR = os.path.join(REPO_ROOT, ".claude", "skills", "dothesis-blog-content", "references")
 
@@ -661,3 +662,196 @@ def test_a_threshold_table_may_be_sourced_in_the_sentence_above_it():
                  "| Số biến | Mức tối thiểu |\n|---|---:|\n| 20 | 100 |\n")
     assert "threshold-table" in qa.proprietary_elements(above)
     assert "threshold-table" not in qa.proprietary_elements(unsourced)
+
+
+# ------------------------------------------------------------ the English edition
+#
+# Same gate, same numbers, rules stated in the language they read. The exemplar
+# below is the English counterpart of the Vietnamese one: an English post has to
+# clear every bar on English terms, and neither edition may buy a check with the
+# other's strings.
+
+# The two siblings the English exemplar links to. They have no seed on disk and
+# no backlog row (the backlog is the Vietnamese plan), so the gate is told about
+# them the same way `--known-slugs` tells the standalone shim.
+EN_SIBLINGS = {"exploratory-factor-analysis-in-spss", "sample-size-for-a-thesis-survey"}
+
+
+def _passing_en_seed():
+    path = os.path.join(PASSING_EN_DIR, "0001-what-is-cronbachs-alpha.json")
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _check_en(post):
+    return qa.check_post(post, qa.known_slugs(PASSING_EN_DIR, set(EN_SIBLINGS)))
+
+
+def _en(body_transform=None, **overrides):
+    post = _passing_en_seed()
+    if body_transform:
+        post["body"] = body_transform(post["body"])
+    post.update(overrides)
+    return post
+
+
+def test_the_english_exemplar_passes_and_is_a_real_article():
+    fails, warns, stats = _check_en(_passing_en_seed())
+    assert fails == []
+    assert warns == []
+    assert stats["locale"] == "en"
+    assert stats["words"] >= qa.MIN_WORDS
+    assert stats["h2"] >= qa.MIN_H2 and stats["faq"] >= qa.MIN_FAQ_QUESTIONS
+    assert stats["links"] >= qa.MIN_INTERNAL_LINKS and stats["tables"] >= qa.MIN_TABLES
+
+
+def test_the_english_exemplar_clears_the_doubled_bar_too():
+    """Three elements, two tables, five links: the unmeasured bar, unchanged."""
+    fails, _warns, stats = _check_en(_en(gate_status="unmeasured"))
+    assert fails == []
+    assert stats["unmeasured"] is True and stats["elements"] == 3
+
+
+def test_english_thresholds_are_the_vietnamese_ones():
+    """The rules are per locale, the numbers are not. Nothing below may be relaxed."""
+    for locale in qa.ALLOWED_LOCALES:
+        assert locale in qa.LOCALE_RULES
+    assert (qa.MIN_WORDS, qa.MIN_H2, qa.MIN_FAQ_QUESTIONS, qa.MIN_INTERNAL_LINKS,
+            qa.MIN_TABLES, qa.MIN_PROPRIETARY) == (1500, 5, 4, 4, 1, 1)
+    assert qa.NEAR_DUPLICATE_UNMEASURED == qa.NEAR_DUPLICATE / 2
+
+
+def test_a_locale_that_is_neither_fails_on_its_own_line():
+    fails, _warns, _stats = _check_en(_en(locale="fr"))
+    assert any("locale is 'fr'" in f for f in fails), fails
+
+
+# ------------------------------------------------- each English rule on its own
+
+
+def test_the_english_faq_heading_is_required_in_english():
+    fails, _warns, stats = _check_en(_en(lambda b: b.replace(
+        "## Frequently asked questions", "## A few closing points")))
+    assert stats["faq"] == 0
+    assert any("no `## Frequently asked questions` section" in f for f in fails), fails
+
+
+def test_a_vietnamese_faq_heading_does_not_satisfy_an_english_post():
+    """The whole point of reading `locale`: no post passes on the other language."""
+    fails, _warns, _stats = _check_en(_en(lambda b: b.replace(
+        "## Frequently asked questions", "## Câu hỏi thường gặp")))
+    assert any("no `## Frequently asked questions` section" in f for f in fails), fails
+
+
+def test_the_english_worked_label_is_what_marks_a_worked_table():
+    body = _passing_en_seed()["body"]
+    assert "worked-table" in qa.proprietary_elements(body, "en")
+
+    dropped = body.replace("illustrative output", "some numbers")
+    assert "worked-table" not in qa.proprietary_elements(dropped, "en")
+
+    # And the Vietnamese label does not put it back: an English post carrying a
+    # Vietnamese caption is a half-translated post, not a compliant one.
+    borrowed = body.replace("illustrative output", "số liệu minh họa")
+    assert "worked-table" not in qa.proprietary_elements(borrowed, "en")
+    assert "worked-table" in qa.proprietary_elements(borrowed, "vi")
+
+
+def test_the_english_writing_paragraph_needs_its_own_heading_or_bold_lead():
+    body = _passing_en_seed()["body"]
+    assert "writing-paragraph" in qa.proprietary_elements(body, "en")
+
+    renamed = body.replace("## How to write this in your thesis", "## Writing it up")
+    assert "writing-paragraph" not in qa.proprietary_elements(renamed, "en")
+
+    # A bold lead counts, a bare mention in prose does not.
+    assert qa.proprietary_elements(
+        "**How to write this in your thesis.** You can write the following.\n", "en"
+    ) == ["writing-paragraph"]
+    assert qa.proprietary_elements(
+        "The section on how to write this in your thesis lives in the EFA post.\n", "en") == []
+
+
+def test_an_english_page_can_fall_under_the_element_floor():
+    """Strip two of the three and the doubled bar catches it, in English."""
+    strip = lambda b: (b.replace("illustrative output", "some numbers")
+                       .replace("## How to write this in your thesis", "## Writing it up"))
+    fails, _warns, stats = _check_en(_en(strip, gate_status="unmeasured"))
+    assert stats["elements"] == 1
+    assert any("1 of the three proprietary elements" in f
+               and "no measured search volume" in f for f in fails), fails
+
+
+@pytest.mark.parametrize("phrase", ["In this article, we will", "delve into",
+                                    "Good luck with your thesis"])
+def test_the_english_blacklist_fires(phrase):
+    fails, _warns, _stats = _check_en(_en(lambda b: b.replace(
+        "## Frequently asked questions",
+        f"Before that, {phrase} the coefficient once more.\n\n## Frequently asked questions")))
+    assert any("blacklisted phrase" in f and phrase in f for f in fails), fails
+
+
+def test_a_vietnamese_slop_phrase_is_not_what_an_english_post_is_checked_against():
+    """`BLACKLIST` and `BLACKLIST_EN` are two lists, not one merged list.
+
+    A Vietnamese phrase inside an English body is a translation bug, and the
+    thing that catches it is the reader, not this gate. Merging the lists would
+    make every rule bilingual and the two editions would stop being independent.
+    """
+    fails, _warns, _stats = _check_en(_en(lambda b: b.replace(
+        "## Frequently asked questions",
+        "Chúc bạn thành công.\n\n## Frequently asked questions")))
+    assert not any("blacklisted phrase" in f for f in fails), fails
+    assert set(qa.BLACKLIST).isdisjoint(qa.BLACKLIST_EN)
+
+
+@pytest.mark.parametrize("phrase", ["in-depth interviews", "qualitative coding"])
+def test_the_english_qualitative_refusal_fires(phrase):
+    fails, _warns, _stats = _check_en(_en(lambda b: b.replace(
+        "## Frequently asked questions",
+        f"You could also run {phrase} on ten students.\n\n## Frequently asked questions")))
+    assert any("quantitative only" in f for f in fails), fails
+
+
+def test_the_english_hedge_warns_without_a_citation():
+    fails, warns, _stats = _check_en(_en(lambda b: b.replace(
+        "## Frequently asked questions",
+        "Research shows that longer scales return higher alphas.\n\n"
+        "## Frequently asked questions")))
+    assert fails == []
+    assert any("research shows" in w for w in warns), warns
+
+
+# ------------------------------------------------------------ shared machinery
+
+
+def test_citations_read_et_al_in_both_the_parenthetical_and_narrative_forms():
+    """`và cộng sự` becomes `et al.` and nothing else about a citation moves."""
+    body = ("A loading of 0.5 is acceptable (Hair et al., 2010), and the 0.7 bar "
+            "comes from (Nunnally, 1978). Hair et al. (2022) propose 5,000 "
+            "resamples, while Nunnally and Bernstein (1994) set the item-total "
+            "condition. SmartPLS 4 (2024) is not a citation.")
+    keys = {(k, y) for k, y, _ in qa.citations(body)}
+    assert ("hair", 2010) in keys, "the parenthetical `et al.` form"
+    assert ("hair", 2022) in keys, "the narrative `et al.` form"
+    assert ("nunnally", 1978) in keys and ("nunnally", 1994) in keys
+    assert all(y != 2024 for _, y in keys)
+    assert all((k, y) in qa.ALLOWED_CITATIONS for k, y in keys)
+
+
+def test_link_resolution_covers_the_english_routes():
+    slugs = {"what-is-cronbachs-alpha"}
+    assert qa.link_is_known("/blog/en/what-is-cronbachs-alpha", slugs)
+    assert qa.link_is_known(f"/blog/en/{qa.CATEGORY_SEGMENT}/spss", slugs)
+    assert qa.link_is_known("/blog/en", slugs)
+    assert not qa.link_is_known("/blog/en/no-such-post", slugs)
+    assert not qa.link_is_known(f"/blog/en/{qa.CATEGORY_SEGMENT}/news", slugs)
+
+
+def test_main_runs_the_english_directory_end_to_end(tmp_path, capsys):
+    listing = tmp_path / "known.txt"
+    listing.write_text("\n".join(sorted(EN_SIBLINGS)) + "\n", encoding="utf-8")
+    assert qa.main([PASSING_EN_DIR, "--known-slugs", str(listing)]) == 0
+    out = capsys.readouterr().out
+    assert "0001-what-is-cronbachs-alpha.json" in out
+    assert "1 file(s), 0 failing" in out
