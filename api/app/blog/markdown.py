@@ -47,8 +47,12 @@ _TABLE_DELIM_RE = re.compile(r"^\s*\|?[\s:\-|]+\|[\s:\-|]*$")
 
 # H2s that open the question block. Matched against the diacritic-stripped,
 # lowercased heading text so `Câu hỏi thường gặp` and `Cau hoi thuong gap`
-# both hit.
-_FAQ_MARKERS = ("cau hoi thuong gap", "hoi dap", "faq")
+# both hit. The English edition writes the heading out in full, and `faq` is
+# not a substring of it, so it needs naming: nothing calls this today, and a
+# marker list that quietly misses a whole language is what makes the first
+# caller wrong.
+_FAQ_MARKERS = ("cau hoi thuong gap", "hoi dap", "faq",
+                "frequently asked questions", "common questions")
 
 
 @dataclass(frozen=True)

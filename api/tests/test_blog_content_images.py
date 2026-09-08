@@ -341,10 +341,18 @@ def test_generate_without_assign_uses_the_keys_the_seeds_already_carry(tmp_path)
     assert gen.calls == 1
 
 
-def test_the_cli_dry_run_reaches_the_library_and_calls_nothing(tmp_path, capsys):
-    """`--dry-run` through the real argument parser, with no stub in sight."""
+def test_the_cli_dry_run_reaches_the_library_and_calls_nothing(tmp_path, capsys, monkeypatch):
+    """`--dry-run` through the real argument parser, with no stub in sight.
+
+    Against its own empty library, not the repo's: every key in the committed
+    one now has a picture, so reading it would report "reused" and this test
+    would pass or fail on how much art happens to be checked in.
+    """
     posts = tmp_path / "posts"
     _seed(posts, "0001-cronbach-alpha.json", slug="cronbach-alpha")
+    library = tmp_path / "library.json"
+    library.write_text(json.dumps({"term-la-gi-1": {"prompt": "a scene"}}), encoding="utf-8")
+    monkeypatch.setattr(images, "library_path", lambda: str(library))
 
     code = cli.main(["images", "--dir", str(posts), "--assign", "--generate", "--dry-run"])
 
