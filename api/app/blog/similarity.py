@@ -14,7 +14,9 @@ gone.
 
 There is exactly one implementation, and both the save-time guard and the SEO
 audit call it — a second one would have to relearn the 48-pairs lesson, and
-would relearn it in production.
+would relearn it in production. `plan` joined them on 2026-09-08 through
+`same_page`, after a load in which 342 of 979 written pages were refused
+because plan's `cluster_key` and this module disagreed about what one page is.
 """
 from __future__ import annotations
 
@@ -84,12 +86,24 @@ _NON_WORD = re.compile(r"[^\w\s]", re.UNICODE)
 # syllables shared, so 0.67 on the overlap coefficient) and "ave trong spss" vs
 # "spss". Removed as PHRASES, not syllables: dropping "định" alone would gut
 # "định tính" and "định lượng", which are topics.
+#
+# Six phrases were added on the 979-seed load, where 342 seeds were refused and
+# every refusal was read. "lý thuyết" is the pair of "mô hình" ("lý thuyết TAM"
+# and "mô hình TAM" are one page), "biểu đồ" the pair of "thang đo", "kiểm tra"
+# the pair of "kiểm định", and "hệ số" is what made "hệ số ICC là gì" collide
+# with "hệ số chặn là gì" — two different coefficients sharing a family noun.
+# "trong luận văn" is "trong spss" for the other half of the bank: it names
+# where the thing sits, so "mục lục trong luận văn" and "kết luận trong luận
+# văn" are a table of contents and a conclusion, not one page. That one phrase
+# accounts for 30 of the 89 refusals this calibration lifted.
 FAMILY_PHRASES: tuple[str, ...] = (
-    "mô hình", "mo hinh", "thang đo", "thang do", "kiểm định", "kiem dinh",
+    "mô hình", "mo hinh", "lý thuyết", "ly thuyet", "thang đo", "thang do",
+    "biểu đồ", "bieu do", "hệ số", "he so", "kiểm định", "kiem dinh",
+    "kiểm tra", "kiem tra",
     "phân tích", "phan tich", "công thức", "cong thuc", "bài tập", "bai tap",
     "có lời giải", "co loi giai", "các loại", "cac loai", "cách tính", "cach tinh",
     "cách chạy", "cach chay", "trong spss", "trong smartpls", "trong amos",
-    "trong stata", "hướng dẫn", "huong dan",
+    "trong stata", "trong luận văn", "trong luan van", "hướng dẫn", "huong dan",
 )
 _FAMILY_RE = re.compile(
     r"(?<!\w)(" + "|".join(re.escape(p) for p in FAMILY_PHRASES) + r")(?!\w)",
@@ -118,6 +132,106 @@ def overlap(a: set[str], b: set[str]) -> float:
     if not a or not b:
         return 0.0
     return len(a & b) / min(len(a), len(b))
+
+
+# How many content tokens may sit in FRONT of the shared span before the longer
+# keyword counts as naming a different thing. One is a qualifier ("gg" in "gg
+# form khảo sát", "cb" in "cb sem là gì"); two is a Vietnamese noun ("đề cương",
+# "phương pháp", "đề tài") that takes the rest of the phrase as its complement.
+MAX_QUALIFIER_TOKENS = 1
+
+
+def _sequence(text: str) -> list[tuple[str, bool]]:
+    """`(token, is_family)` in reading order — `tokens()` with the order kept.
+
+    `tokens()` throws the family phrases away and returns a set, which is what
+    the overlap coefficient wants. `same_page` needs to know WHERE the words
+    that survived sat, so this keeps every content token and flags the ones a
+    family phrase contributed.
+    """
+    lowered = (text or "").lower()
+
+    def content(chunk: str) -> list[str]:
+        return [t for t in _NON_WORD.sub(" ", chunk).split()
+                if len(t) > 1 and t not in STOP]
+
+    out: list[tuple[str, bool]] = []
+    pos = 0
+    for match in _FAMILY_RE.finditer(lowered):
+        out += [(t, False) for t in content(lowered[pos:match.start()])]
+        out += [(t, True) for t in content(match.group(0))]
+        pos = match.end()
+    out += [(t, False) for t in content(lowered[pos:])]
+    return out
+
+
+def _narrows(broad: str, narrow: str) -> bool:
+    """Is `narrow` the same page as `broad`, only more specific?
+
+    Called only when `broad`'s topic tokens are a strict subset of `narrow`'s,
+    which is where the overlap coefficient reports 100% and is sometimes wrong.
+    Vietnamese is head-initial, so the position of the extra words decides:
+
+      `thang đo likert`  ->  `thang đo likert 5 mức độ`   appends a specifier to
+      the same head, one page — while
+
+      `nghiên cứu khoa học`  ->  `đề cương nghiên cứu khoa học`  puts a NEW head
+      ("đề cương", a proposal) in front and makes the old head its complement.
+      A research proposal is not research; these are two pages.
+
+    Two conditions, and the first one is the reason the fix could not just be a
+    higher threshold. `tokens()` strips page-family phrases, so a keyword whose
+    head IS a family phrase can shrink into a subset of an unrelated one:
+    `mô hình nghiên cứu` becomes `{nghiên, cứu}` and disappears inside
+    `nghiên cứu khoa học`. Stripping may EQUATE two keywords (`mô hình servqual`
+    and `servqual` are one page); it may not silently make one a subset of the
+    other. So every word of the broader keyword — family words included — has to
+    still be there in the narrower one.
+    """
+    narrow_seq = _sequence(narrow)
+    narrow_words = {t for t, _ in narrow_seq}
+    broad_words = {t for t, _ in _sequence(broad)}
+    if not broad_words or not broad_words <= narrow_words:
+        return False
+    lead = 0
+    for token, is_family in narrow_seq:
+        if token in broad_words:
+            break
+        # A family phrase in front names the KIND of page, not a new head:
+        # "công thức tính phương sai" is still the "cách tính phương sai" page.
+        lead += not is_family
+    return lead <= MAX_QUALIFIER_TOKENS
+
+
+def page_overlap(a: str, b: str) -> float:
+    """How much of one page's topic the other one covers, 0.0 when they differ.
+
+    The overlap coefficient with the head rule applied. `overlap()` alone
+    reports 100% for every containment, and containment is the one case it
+    cannot judge on its own — see `_narrows`. A partial overlap (neither set
+    inside the other) is two phrasings of one topic and the coefficient is
+    right about it, so it is passed straight through.
+    """
+    ta, tb = tokens(a), tokens(b)
+    score = overlap(ta, tb)
+    if score <= 0.0 or ta == tb:
+        return score
+    if ta < tb:
+        return score if _narrows(a, b) else 0.0
+    if tb < ta:
+        return score if _narrows(b, a) else 0.0
+    return score
+
+
+def same_page(a: str, b: str, threshold: float = CLASH_THRESHOLD) -> bool:
+    """THE test for "these two keywords are one page".
+
+    `plan` calls it over the rows it is about to emit and the loader's guard
+    calls it (through `find_clashes`) over the rows it is about to insert, so a
+    backlog row that plan kept cannot be refused at load time. Two answers to
+    this question is what cost 342 written pages on the 2026-09-08 load.
+    """
+    return classify(a) == classify(b) and page_overlap(a, b) >= threshold
 
 
 @dataclass(frozen=True)
@@ -164,7 +278,7 @@ def find_clashes(
         other_text = other.focus or other.title or ""
         if classify(other_text) != subject_intent:
             continue
-        score = overlap(subject_tokens, tokens(other_text))
+        score = page_overlap(subject_text, other_text)
         if score >= threshold:
             out.append(Clash(slug=other.slug, title=other.title, focus=other.focus,
                              score=score, intent=subject_intent))

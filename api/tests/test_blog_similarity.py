@@ -12,6 +12,8 @@ from app.blog.similarity import (
     classify,
     find_clashes,
     overlap,
+    page_overlap,
+    same_page,
     tokens,
 )
 
@@ -132,3 +134,77 @@ def test_a_procedure_page_and_its_definition_page_are_different_intents():
     assert classify("biến điều tiết trong smartpls") == "how-to"
     assert classify("biến điều tiết") == "informational"
     assert classify("cronbach alpha trong spss") == "how-to"
+
+
+# ---- the head rule, calibrated on the 979-seed load (342 refusals read) ----
+#
+# `tokens()` strips page-family phrases, and stripping can leave one keyword a
+# token subset of another. The overlap coefficient is `shared / min`, so every
+# such subset scored 100% and 342 written pages were refused. Vietnamese is
+# head-initial: extra words AFTER the shared span narrow the same head (one
+# page), extra words IN FRONT name a new head that takes the rest as its
+# complement (two pages). These are the real pairs the rule was calibrated on.
+
+
+def test_a_specifier_appended_to_the_same_head_is_still_one_page():
+    # The refusals this rule must NOT lift: they were all genuine.
+    assert same_page("thang đo likert 5 mức độ", "thang đo likert")
+    assert same_page("thang đo likert 7 mức độ", "thang đo likert")
+    # Family stripping may EQUATE two keywords — that is what it is for.
+    assert same_page("mô hình servqual", "servqual")
+    assert same_page("lý thuyết tam", "mô hình tam")
+    assert same_page("công thức phương sai", "phương sai")
+
+
+def test_one_qualifier_in_front_is_a_qualifier_not_a_new_head():
+    # A single token in front is a brand or an acronym prefix, not a noun that
+    # takes the phrase as its complement. "gg" is Google; a Google Form page
+    # and a form page are one SERP.
+    assert same_page("gg form khảo sát", "form khảo sát")
+    assert same_page("cb sem là gì", "sem là gì")
+
+
+def test_a_different_head_in_front_is_a_different_page():
+    # A research PROPOSAL is not research, a research METHOD is not research,
+    # and a research MODEL is not research. All three were refused against
+    # "nghiên cứu khoa học" on the 979-seed load; all three are real pages.
+    assert not same_page("đề cương nghiên cứu khoa học", "nghiên cứu khoa học")
+    assert not same_page("phương pháp nghiên cứu khoa học", "nghiên cứu khoa học")
+    assert not same_page("mô hình nghiên cứu", "nghiên cứu khoa học")
+    # ... and the same shape elsewhere in the bank.
+    assert not same_page("đề tài luận văn kinh tế", "luận văn")
+    assert not same_page("cấu trúc vốn là gì", "mô hình cấu trúc là gì")
+    assert not same_page("split half reliability là gì", "reliability là gì")
+
+
+def test_stripping_may_equate_two_keywords_but_not_nest_one_inside_the_other():
+    # "mô hình nghiên cứu" only fits inside "nghiên cứu khoa học" because its
+    # own head was stripped as a page family. Every word of the BROADER keyword
+    # has to survive in the narrower one, family words included, or the
+    # containment is an artefact of the stripper rather than a shared topic.
+    assert tokens("mô hình nghiên cứu") < tokens("nghiên cứu khoa học")
+    assert overlap(tokens("mô hình nghiên cứu"), tokens("nghiên cứu khoa học")) == 1.0
+    assert page_overlap("mô hình nghiên cứu", "nghiên cứu khoa học") == 0.0
+    # A family phrase in FRONT of the shared span is transparent, though: it
+    # names the kind of page, so it cannot be the new head.
+    assert same_page("công thức tính phương sai", "cách tính phương sai")
+
+
+def test_a_partial_overlap_is_left_to_the_coefficient():
+    # Neither token set contains the other, so there is no containment artefact
+    # to correct and the head rule stays out of it.
+    a, b = "lời nói đầu", "lời mở đầu"
+    assert not (tokens(a) < tokens(b) or tokens(b) < tokens(a))
+    assert page_overlap(a, b) == overlap(tokens(a), tokens(b)) >= CLASH_THRESHOLD
+
+
+def test_same_page_needs_the_intent_to_agree_as_well():
+    # `page_overlap` scores the topic; `same_page` is the whole test, and the
+    # intent split is the older half of it.
+    assert page_overlap("cronbach alpha trong spss", "cronbach alpha là gì") == 1.0
+    assert not same_page("cronbach alpha trong spss", "cronbach alpha là gì")
+
+
+def test_find_clashes_uses_the_head_rule():
+    subject = _c("new", "đề cương nghiên cứu khoa học")
+    assert find_clashes(subject, [_c("old", "nghiên cứu khoa học")]) == []
