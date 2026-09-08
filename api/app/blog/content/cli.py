@@ -71,7 +71,15 @@ def _cmd_write(args) -> int:
 def _cmd_qa(args) -> int:
     from .qa import main  # noqa: PLC0415
 
-    return main([args.seed_dir])
+    # The flag is forwarded rather than reimplemented: `qa.main` is also the
+    # entry point the skill shim calls with plain python3, so both routes must
+    # take the same arguments and give the same verdict.
+    argv = [args.seed_dir]
+    if args.corpus:
+        argv.append("--corpus")
+    if args.known_slugs:
+        argv += ["--known-slugs", args.known_slugs]
+    return main(argv)
 
 
 def _cmd_report(args) -> int:
@@ -133,6 +141,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("qa", help="run the mechanical gate over a seed directory")
     p.add_argument("seed_dir")
+    p.add_argument("--corpus", action="store_true",
+                   help="also compare every body against every other and fail near duplicates")
+    p.add_argument("--known-slugs", default=None,
+                   help="file of slugs that internal links may point at, one per line")
     p.set_defaults(func=_cmd_qa)
 
     p = sub.add_parser("report", help="counts, volume, spend and the shortfall against 1,000")

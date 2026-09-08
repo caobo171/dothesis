@@ -31,7 +31,7 @@ from .prompts import build_prompt, build_repair_prompt
 # `_LINK_RE` and `link_is_known` come from the gate on purpose: the writer must
 # strip exactly the links the gate would fail, and a second link grammar here
 # would drift from it.
-from .qa import _LINK_RE, check_post, link_is_known
+from .qa import _LINK_RE, UNMEASURED_STATUSES, check_post, link_is_known
 
 LOG_COLUMNS = ("slug", "status", "attempts", "unlinked", "prompt_tokens",
                "output_tokens", "usd", "seconds", "failures")
@@ -78,9 +78,11 @@ def link_slugs_for(row, rows) -> list[str]:
     """The row's own siblings, topped up so the brief lists `LINK_LIST_MIN`.
 
     Top-ups are ordered the way `plan._round_robin` already orders rows:
-    measured before family-inferred, highest volume first inside each tier. An
-    inferred row's volume is a guess, so it must not outrank a measured page
-    just because the guess was large.
+    measured before unmeasured, highest volume first inside each tier. An
+    unmeasured row's volume is a guess, so it must not outrank a measured page
+    just because the guess was large. The tier test goes through the gate's
+    `UNMEASURED_STATUSES` rather than a literal, so the legacy `family-inferred`
+    spelling and the current one sort the same way.
 
     The row's `sibling_slugs` are not mutated: they are a pipeline field that
     ends up in the published seed, and a link the model was merely offered is
@@ -96,7 +98,7 @@ def link_slugs_for(row, rows) -> list[str]:
     if len(picked) < want:
         others = sorted(
             (r for r in rows if r.category == row.category and r.slug not in seen),
-            key=lambda r: (r.gate_status == "family-inferred", -r.search_volume, r.slug))
+            key=lambda r: (r.gate_status in UNMEASURED_STATUSES, -r.search_volume, r.slug))
         for other in others:
             picked.append(other.slug)
             seen.add(other.slug)
@@ -154,6 +156,11 @@ def normalise_citations(body: str) -> tuple[str, int]:
 
 _FAQ_H2_RE = re.compile(r"^## .*(Câu hỏi thường gặp|Hỏi đáp|FAQ).*$", re.IGNORECASE | re.MULTILINE)
 MIN_INTERNAL_LINKS = 4
+
+
+def link_floor(row) -> int:
+    """How many distinct internal links the gate will demand of this row."""
+    return MIN_INTERNAL_LINKS + (1 if row.gate_status in UNMEASURED_STATUSES else 0)
 
 
 def ensure_read_more(body: str, row, link_slugs: list[str], titles: dict[str, str],
@@ -344,7 +351,12 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
                 # that is genuinely short of real links.
                 body, stripped = normalise_internal_links(produced.get("body") or "", known)
                 body, _cites = normalise_citations(body)
-                body, _added = ensure_read_more(body, row, link_slugs, titles, known)
+                # The top-up aims at the floor this row is actually held to. A
+                # page with no measured volume needs one more link than the
+                # default, and topping up to four would hand the repair call a
+                # failure the mechanical block could have prevented.
+                body, _added = ensure_read_more(body, row, link_slugs, titles, known,
+                                                minimum=link_floor(row))
                 produced["body"] = body
                 unlinked += stripped
                 seed = seed_from(row, produced)

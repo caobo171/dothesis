@@ -15,6 +15,11 @@ import re
 
 from . import skills_dir as default_skills_dir
 
+# The one definition of "this row has no measured search volume", shared with
+# the gate. A prompt that asked for a different bar than the gate enforces would
+# spend a repair call on every unmeasured row in the batch.
+from .qa import MIN_INTERNAL_LINKS, UNMEASURED_STATUSES
+
 BLOG_SKILL = "dothesis-blog-content"
 WORD_TARGET_MIN = 1800
 WORD_TARGET_MAX = 2400
@@ -61,7 +66,7 @@ never as a neutral third-party recommendation, and name Google Forms honestly
 as the alternative. Do not mention it in posts that are not about collecting
 responses."""
 
-OUTPUT_CONTRACT = """\
+_CONTRACT_TEMPLATE = """\
 ## Output
 
 Return exactly one json object, no prose around it, with these keys:
@@ -83,12 +88,10 @@ is accepted:
 - %(word_min)d to %(word_max)d words of Vietnamese.
 - The H2 spine of the archetype below, as `## ` headings. No `# ` H1, no manual
   heading ids, no raw HTML of any kind.
-- At least one GFM table. At least one of: a threshold table where every row
-  names its source, a worked output table labelled `số liệu minh họa`, or a
-  `cách viết vào luận văn` paragraph with an adaptable sentence.
+%(elements)s
 - A `## Câu hỏi thường gặp` section with 4 to 6 `### ` questions, each answered
   in one to three paragraphs.
-- At least 4 distinct internal links, taken only from the list in the brief.
+- At least %(link_floor)d distinct internal links, taken only from the list in the brief.
   Every internal link whose target is not on that list is deleted mechanically
   before this is counted: the anchor text stays, the link is thrown away. So an
   invented sibling slug cannot get you to four, and a plausible-looking guess
@@ -101,7 +104,42 @@ is accepted:
   claim needs a source that is not on the list, drop the number instead.
 - No em dash, no exclamation mark, no blacklisted phrase, no `## Kết luận`
   heading, no motivational close.
-""" % {"word_min": WORD_TARGET_MIN, "word_max": WORD_TARGET_MAX}
+"""
+
+# The three proprietary elements from `structure.md`, written twice: once for a
+# page whose query is measured, once for a page whose is not. The two variants
+# are substituted into the contract rather than appended to it, because a
+# contract that stated both floors would leave the model to pick one, and it
+# picks the cheaper one.
+_ELEMENTS_ONE = """\
+- At least one GFM table. At least one of: a threshold table where every row
+  names its source, a worked output table labelled `số liệu minh họa`, or a
+  `cách viết vào luận văn` paragraph with an adaptable sentence."""
+
+_ELEMENTS_TWO = """\
+- At least two GFM tables, and at least TWO of these three, not one:
+  a threshold table where every row names its source; a worked output table
+  labelled `số liệu minh họa`; a `cách viết vào luận văn` paragraph, led by its
+  own heading or a bold lead, with the placeholders visible. Two of the three,
+  because this page has no measured query behind it: it earns its place by
+  being the most useful page on the topic, and the elements are what a student
+  cannot get from a competitor's rewrite."""
+
+
+def output_contract(unmeasured: bool = False) -> str:
+    """The `## Output` block, at the bar this row is actually held to."""
+    return _CONTRACT_TEMPLATE % {
+        "word_min": WORD_TARGET_MIN, "word_max": WORD_TARGET_MAX,
+        "elements": _ELEMENTS_TWO if unmeasured else _ELEMENTS_ONE,
+        "link_floor": MIN_INTERNAL_LINKS + (1 if unmeasured else 0),
+    }
+
+
+OUTPUT_CONTRACT = output_contract()
+
+
+def row_is_unmeasured(row) -> bool:
+    return getattr(row, "gate_status", "") in UNMEASURED_STATUSES
 
 
 def _read(path: str) -> str:
@@ -185,16 +223,40 @@ def build_brief(row, sibling_titles: dict[str, str] | None = None,
                 structure_text: str | None = None,
                 link_slugs: list[str] | None = None) -> str:
     links = internal_link_lines(row, sibling_titles, link_slugs)
+    unmeasured = row_is_unmeasured(row)
+
+    # A row with no measured volume used to read as `0 searches a month`, which
+    # says the topic is worthless rather than that nobody measured it. Say what
+    # is actually true, and say what it costs.
+    volume = ("no measured search volume, this query was never sampled"
+              if unmeasured else f"{row.search_volume:,} searches a month, Vietnam")
 
     parts = [
         "# This article",
-        f"- **focus keyword**: `{row.focus_keyword}` "
-        f"({row.search_volume:,} searches a month, Vietnam)",
+        f"- **focus keyword**: `{row.focus_keyword}` ({volume})",
         f"- **slug** (already decided, use it): `{row.slug}`",
         f"- **category**: `{row.category}` ({CATEGORY_NAMES.get(row.category, row.category)})",
         f"- **archetype**: `{row.archetype}`",
         f"- **word target**: {WORD_TARGET_MIN} to {WORD_TARGET_MAX}",
     ]
+    if unmeasured:
+        parts.append(
+            "\n## This page has no measured query, so the bar is doubled\n\n"
+            "Nobody measured a search volume for this keyword. That is not a "
+            "reason to write less: it is the reason this page has to be the most "
+            "useful page on the topic, because usefulness is the whole of its "
+            "claim to a URL. Concretely, and all of it is checked mechanically:\n"
+            f"- at least {MIN_INTERNAL_LINKS + 1} distinct internal links, not "
+            f"{MIN_INTERNAL_LINKS}, from the list below.\n"
+            "- at least two tables, not one.\n"
+            "- at least TWO of the three proprietary elements, not one: a "
+            "threshold table whose every row names its canonical source; a worked "
+            "output table labelled `số liệu minh họa` shaped like the real SPSS or "
+            "SmartPLS output; a `cách viết vào luận văn` paragraph under its own "
+            "heading or bold lead, with the placeholders visible.\n"
+            "- nothing lifted from a sibling post. The whole bank is compared "
+            "sentence by sentence after the batch, and a page sharing a fifth of "
+            "its text with another is deleted, not repaired.")
     if row.secondary_keywords:
         parts.append("- **secondary keywords** (work them into H2s and prose, they do not "
                      "get their own pages): " +
@@ -221,7 +283,7 @@ def build_prompt(row, sibling_titles: dict[str, str] | None = None,
     return "\n\n".join([
         build_preamble(skills_dir),
         build_brief(row, sibling_titles, files["structure"], link_slugs),
-        OUTPUT_CONTRACT,
+        output_contract(row_is_unmeasured(row)),
     ])
 
 

@@ -4,6 +4,31 @@
 Every rule the skills declare, checked so a batch cannot ship on vibes. Exit
 code 1 if any file FAILs.
 
+`--corpus` adds the one check a single seed cannot make: is this page a refill
+of a page the bank already has. Measured on the 421 real seeds in
+`api/data/blog-seeds/vi/posts` on 2026-09-08, word 5-gram Jaccard over a
+1-in-16 sketch:
+
+- every one of the 88,410 possible pairs scores under **0.081**. p99 is 0.033,
+  p95 0.018, median 0.005. That ceiling is the shared skeleton, not shared
+  prose: the FAQ heading, the `Đọc thêm` line, the CTA sentence and the rows of
+  a threshold table that two posts legitimately quote from the same source.
+- a swapped-noun refill of a real post (`SPSS` -> `SmartPLS` throughout) scores
+  **0.88**. Rewriting a third of its blocks still scores 0.38, and half an
+  article pasted into another scores 0.48. The score tracks the fraction of the
+  body reused almost linearly, so a threshold reads as "how much of this page
+  may be someone else's sentences".
+- so the band from 0.081 to 0.38 is empty on real content, and the thresholds
+  below sit inside it with a factor of two of headroom on either side.
+
+The finding that matters more than the numbers: the top real pairs
+(`cronbach-alpha-trong-spss` / `phan-tich-cronbach-alpha-spss`, `ly-thuyet-tpb`
+/ `tpb-la-gi`) score 0.07 and 0.08 while sharing all eight H2 headings and the
+same subject. Independently written prose about one topic is invisible to a
+shingle gate. This check refuses *reused text*; two pages competing for one
+query is a different failure with a different tool, `app/blog/similarity.py`,
+which classifies intent first. Neither substitutes for the other.
+
 **Stdlib only, and no import of `app.blog.markdown`.** This module is also
 reached from `.claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py`,
 which runs under a bare `python3` with no virtualenv, on a seed directory
@@ -15,12 +40,15 @@ character of drift breaks every in-page anchor.
 """
 from __future__ import annotations
 
+import collections
 import csv
+import itertools
 import json
 import os
 import re
 import sys
 import unicodedata
+import zlib
 
 # --------------------------------------------------------------------- rules
 
@@ -30,10 +58,19 @@ WARN_PARAGRAPH_WORDS = 120
 MIN_H2 = 5
 MIN_FAQ_QUESTIONS = 4
 MIN_INTERNAL_LINKS = 4
+MIN_TABLES = 1
+MIN_PROPRIETARY = 1
 META_TITLE_MAX = 70
 META_DESC_MIN = 110
 META_DESC_MAX = 170
 SLUG_MAX = 120
+
+# A page with no measured search volume is allowed to exist, but volume is then
+# doing none of the work of justifying it: quality is the only thing between
+# this bank and Google's scaled-content-abuse policy, which covers human-written
+# pages too. So every "is this page worth its URL" bar is doubled for one.
+# `family-inferred` is the legacy spelling of the same state.
+UNMEASURED_STATUSES = frozenset({"unmeasured", "family-inferred"})
 
 SCHEMA = "dothesis-blog-seed/1"
 
@@ -262,6 +299,230 @@ def citations(body: str) -> list[tuple[str, int, str]]:
     return found
 
 
+# ------------------------------------------------------- proprietary elements
+
+# `structure.md`, "the three rules that apply to every archetype": a post that
+# carries none of these is a rewrite of a competitor page. The rule has been in
+# the skill from the start and was never mechanical, so it was aspirational;
+# these detectors make it checkable. Each one looks for the cheapest signal that
+# cannot be produced by accident, not for the whole element:
+#
+# - a threshold table is a table with a canonical citation *inside a row*, which
+#   is the "every row names its source" column and nothing else looks like it;
+# - a worked table is one labelled `số liệu minh họa`, which the skill requires
+#   verbatim, in the table or in the line either side of it;
+# - a `cách viết vào luận văn` paragraph announces itself as a heading or a
+#   bolded lead, because a bare mention inside prose is a cross-reference to
+#   another post's section, not the section itself.
+PROPRIETARY_ELEMENTS = ("threshold-table", "worked-table", "writing-paragraph")
+
+_WORKED_LABEL = "số liệu minh họa"
+_WRITING_LEAD_RE = re.compile(
+    r"^(?:\s{0,3}#{1,6}\s+|\s{0,3}\*\*)[^\n]*cách viết vào luận văn",
+    re.IGNORECASE | re.MULTILINE)
+
+
+def table_blocks(body: str) -> list[tuple[list[str], list[str]]]:
+    """Every GFM table as (its own lines, the lines around it).
+
+    The context is the up-to-three non-blank lines before the header and the
+    first after the table, because a caption sits on either side depending on
+    who wrote the post.
+    """
+    lines = (body or "").splitlines()
+    out: list[tuple[list[str], list[str]]] = []
+    i = 0
+    while i < len(lines):
+        if (_TABLE_DELIM_RE.match(lines[i]) and "|" in lines[i]
+                and i > 0 and "|" in lines[i - 1]):
+            end = i + 1
+            while end < len(lines) and "|" in lines[end] and lines[end].strip():
+                end += 1
+            before = [ln for ln in lines[max(0, i - 4):i - 1] if ln.strip()][-3:]
+            after = [ln for ln in lines[end:end + 3] if ln.strip()][:1]
+            out.append((lines[i - 1:end], before + after))
+            i = end
+            continue
+        i += 1
+    return out
+
+
+# A threshold table states a cut-off: its header names one, or its cells carry a
+# decimal, a ratio or a percentage. A procedure table ("Bước | Thao tác") does
+# neither, which is what keeps a citation beside one from counting as a source.
+_THRESHOLD_WORDS = ("ngưỡng", "tối thiểu", "tối đa", "tiêu chuẩn", "chấp nhận",
+                    "khuyến nghị", "mức", "giới hạn", "đạt", "threshold", "cut-off",
+                    "minimum")
+_THRESHOLD_NUMBER_RE = re.compile(r"\d+[.,]\d+|\d+\s*:\s*\d+|\d+\s*%")
+
+
+def _looks_like_thresholds(rows: list[str]) -> bool:
+    blob = "\n".join(rows).lower()
+    return (any(word in blob for word in _THRESHOLD_WORDS)
+            or bool(_THRESHOLD_NUMBER_RE.search(blob)))
+
+
+def proprietary_elements(body: str) -> list[str]:
+    """Which of the three the post actually carries, in `PROPRIETARY_ELEMENTS` order."""
+    found: set[str] = set()
+    for rows, context in table_blocks(body):
+        blob = "\n".join(rows + context).lower()
+        if _WORKED_LABEL in blob:
+            found.add("worked-table")
+        if "threshold-table" not in found:
+            # A citation inside the rows is a source column and always counts.
+            # A citation in the sentence that introduces the table counts too,
+            # but only when the table is actually a threshold table: measured on
+            # the first bank, 20 posts carried a real threshold table sourced in
+            # the paragraph above it, which is how the sentence is normally
+            # written ("theo Hair và cộng sự (2010), tỷ lệ 5:1"). Demanding a
+            # citation in every row pushes a writer to pad rows instead of
+            # sourcing the claim. The table test is what stops a citation next
+            # to an unrelated procedure table from buying the element.
+            sourced_rows = any(
+                (key, year) in ALLOWED_CITATIONS
+                for line in rows for key, year, _raw in citations(line))
+            sourced_context = any(
+                (key, year) in ALLOWED_CITATIONS
+                for line in context for key, year, _raw in citations(line))
+            if sourced_rows or (sourced_context and _looks_like_thresholds(rows)):
+                found.add("threshold-table")
+    if _WRITING_LEAD_RE.search(body or ""):
+        found.add("writing-paragraph")
+    return [name for name in PROPRIETARY_ELEMENTS if name in found]
+
+
+def is_unmeasured(post: dict) -> bool:
+    """Does this seed carry no measured search volume?
+
+    Read off `gate_status`, which the writer copies from the backlog row, so the
+    gate and the planner cannot disagree about which pages are on the hard bar.
+    """
+    return (post.get("gate_status") or "") in UNMEASURED_STATUSES
+
+
+# --------------------------------------------------- corpus near-duplication
+
+SHINGLE_WORDS = 5
+SKETCH_MODULUS = 16     # keep 1 shingle in 16; a 2,000-word post keeps ~180
+SKETCH_FLOOR = 64       # under this many, keep every shingle instead
+# A shingle this common is boilerplate (the FAQ heading, the CTA sentence). It
+# is still counted in the score; it is only skipped when *finding* candidates,
+# where one such posting list would cost 200*199/2 pair increments and name
+# every pair in the corpus anyway.
+_MAX_POSTING = 200
+
+# See the module docstring for the measurement. 0.35 of a body is roughly a
+# third of its sentences taken from a sibling; the real corpus never exceeds
+# 0.081, and a swapped-noun refill scores 0.88.
+NEAR_DUPLICATE = 0.35
+# Literally half, because the product rule is "twice as heavy for a page with no
+# measured search volume" and a reader of this file should be able to see that
+# rather than take two unrelated constants on trust.
+NEAR_DUPLICATE_UNMEASURED = NEAR_DUPLICATE / 2
+
+_SHINGLE_PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
+
+
+def shingle_hashes(body: str, n: int = SHINGLE_WORDS) -> set[int]:
+    """Hashed word n-grams over the plain text, lowercased, punctuation stripped.
+
+    `zlib.crc32` rather than the builtin `hash`: PYTHONHASHSEED salts str hashing
+    per process, so a sketch built in one run would not compare against one built
+    in the next. crc32 is stdlib (this module imports nothing else), and its 32
+    bits collide often enough to be worth a sentence: across a 3M-shingle corpus
+    a few hundred pairs of distinct 5-grams share a hash, which moves a pair
+    score by well under a thousandth. That is noise beneath every threshold here.
+    """
+    words = _SHINGLE_PUNCT_RE.sub(" ", plain_text(body).lower()).split()
+    if len(words) < n:
+        return set()
+    return {zlib.crc32(" ".join(words[i:i + n]).encode("utf-8"))
+            for i in range(len(words) - n + 1)}
+
+
+class Sketch:
+    """A sampled fingerprint of one document.
+
+    Sampling is on the hash value, never on the document, so any two sketches
+    are comparable. `dense` is the exception: a document with too few shingles
+    to sample keeps all of them, and is put back on the sampled plane before it
+    is compared with a sampled one. Down-sampling recovers exactly what the
+    sampled side kept, because a dense sketch is a superset of its own sample.
+    """
+
+    __slots__ = ("values", "dense", "shingles")
+
+    def __init__(self, values: frozenset[int], dense: bool, shingles: int):
+        self.values = values
+        self.dense = dense
+        self.shingles = shingles
+
+    def __len__(self) -> int:
+        return len(self.values)
+
+
+def _sample(values) -> frozenset[int]:
+    return frozenset(h for h in values if h % SKETCH_MODULUS == 0)
+
+
+def sketch(body: str) -> Sketch:
+    shingles = shingle_hashes(body)
+    sampled = _sample(shingles)
+    if len(sampled) < SKETCH_FLOOR:
+        return Sketch(frozenset(shingles), True, len(shingles))
+    return Sketch(sampled, False, len(shingles))
+
+
+def sketch_jaccard(a: Sketch, b: Sketch) -> float:
+    left, right = a.values, b.values
+    if a.dense != b.dense:
+        left = _sample(left) if a.dense else left
+        right = _sample(right) if b.dense else right
+    union = len(left | right)
+    return (len(left & right) / union) if union else 0.0
+
+
+def pair_threshold(unmeasured_a: bool, unmeasured_b: bool) -> float:
+    return NEAR_DUPLICATE_UNMEASURED if (unmeasured_a or unmeasured_b) else NEAR_DUPLICATE
+
+
+def near_duplicates(docs: list[dict]) -> list[dict]:
+    """Every pair scoring at or above its threshold, worst first.
+
+    `docs` are `{"key", "unmeasured", "sketch"}`. Pairs are found through an
+    inverted index from sketch value to document, so the full O(n^2) cross
+    product is never built; only pairs sharing at least one sampled shingle are
+    scored, and those are scored exactly from the stored sketches rather than
+    from the index's approximate share count.
+    """
+    index: dict[int, list[int]] = collections.defaultdict(list)
+    for i, doc in enumerate(docs):
+        # A dense sketch goes in whole rather than down-sampled: its sampled
+        # plane can be empty, and a document in no posting list can never become
+        # a candidate. Indexing a value the other side never samples only costs
+        # a candidate pair, which is then scored properly.
+        for value in doc["sketch"].values:
+            index[value].append(i)
+
+    candidates: set[tuple[int, int]] = set()
+    for ids in index.values():
+        if len(ids) < 2 or len(ids) > _MAX_POSTING:
+            continue
+        candidates.update(itertools.combinations(ids, 2))
+
+    hits = []
+    for i, j in candidates:
+        a, b = docs[i], docs[j]
+        limit = pair_threshold(a["unmeasured"], b["unmeasured"])
+        score = sketch_jaccard(a["sketch"], b["sketch"])
+        if score >= limit:
+            hits.append({"a": a["key"], "b": b["key"], "score": score, "limit": limit,
+                         "unmeasured": a["unmeasured"] or b["unmeasured"]})
+    hits.sort(key=lambda h: (-h["score"], h["a"], h["b"]))
+    return hits
+
+
 # ---------------------------------------------------------------- known links
 
 
@@ -333,6 +594,16 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
 
     body = post["body"]
 
+    # Volume no longer decides whether a page may exist, it only orders the
+    # queue. What it still decides is how hard this page has to work: with no
+    # measured query behind it, being the most useful page on the topic is the
+    # whole of its claim to a URL, so every bar below that measures usefulness
+    # is doubled. See `UNMEASURED_STATUSES`.
+    unmeasured = is_unmeasured(post)
+    min_links = MIN_INTERNAL_LINKS + (1 if unmeasured else 0)
+    min_tables = MIN_TABLES + (1 if unmeasured else 0)
+    min_elements = MIN_PROPRIETARY * (2 if unmeasured else 1)
+
     if post.get("schema") != SCHEMA:
         fails.append(f"schema is {post.get('schema')!r}, must be {SCHEMA!r}")
     if post.get("locale") != "vi":
@@ -384,8 +655,19 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
                      f"{MIN_FAQ_QUESTIONS}")
 
     tables, rows = table_rows(body)
-    if tables < 1:
-        fails.append("no table, every post needs a threshold or worked-output table")
+    if tables < min_tables:
+        if min_tables == 1:
+            fails.append("no table, every post needs a threshold or worked-output table")
+        else:
+            fails.append(f"{tables} table(s), a page with no measured search volume "
+                         f"needs at least {min_tables}")
+
+    elements = proprietary_elements(body)
+    if len(elements) < min_elements:
+        have = ", ".join(elements) if elements else "none"
+        fails.append(f"{len(elements)} of the three proprietary elements ({have}), "
+                     f"needs at least {min_elements}"
+                     + (" because it has no measured search volume" if unmeasured else ""))
 
     if "—" in body or "—" in (post.get("title") or ""):
         fails.append("contains an em dash")
@@ -414,9 +696,10 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
             fails.append(f"body references {{{{img:{ref}}}}} with no images[] entry")
 
     links = internal_links(body)
-    if len(links) < MIN_INTERNAL_LINKS:
+    if len(links) < min_links:
         fails.append(f"{len(links)} distinct internal links, need at least "
-                     f"{MIN_INTERNAL_LINKS}")
+                     f"{min_links}"
+                     + (" because it has no measured search volume" if unmeasured else ""))
     unknown = [href for href in links if not link_is_known(href, slugs)]
     if unknown:
         fails.append(f"internal link(s) resolve to nothing known: {', '.join(unknown[:4])}")
@@ -441,7 +724,8 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
             break
 
     stats = {"words": words, "h2": len(h2s), "tables": tables, "rows": rows,
-             "links": len(links), "faq": len(questions)}
+             "links": len(links), "faq": len(questions),
+             "elements": len(elements), "unmeasured": unmeasured}
     return fails, warns, stats
 
 
@@ -496,9 +780,14 @@ def main(argv: list[str] | None = None) -> int:
     # without it this behaves exactly as it did.
     extra: set[str] = set()
     positional: list[str] = []
+    corpus = False
     i = 0
     while i < len(argv):
         arg = argv[i]
+        if arg == "--corpus":
+            corpus = True
+            i += 1
+            continue
         if arg == "--known-slugs":
             if i + 1 >= len(argv):
                 print("--known-slugs needs a file path")
@@ -551,8 +840,47 @@ def main(argv: list[str] | None = None) -> int:
             for x in warns:
                 print(f"    warn {x}")
 
-    print(f"\n{len(files)} file(s), {total_fail} failing")
-    return 1 if total_fail else 0
+    duplicate_pairs = 0
+    if corpus:
+        duplicate_pairs = _report_corpus(seed_dir, files)
+
+    print(f"\n{len(files)} file(s), {total_fail} failing"
+          + (f", {duplicate_pairs} near-duplicate pair(s)" if corpus else ""))
+    return 1 if (total_fail or duplicate_pairs) else 0
+
+
+def build_corpus(seed_dir: str, files: list[str]) -> list[dict]:
+    """One `near_duplicates` entry per readable seed in the directory."""
+    docs = []
+    for name in files:
+        try:
+            with open(os.path.join(seed_dir, name), encoding="utf-8") as fh:
+                post = json.load(fh)
+        except Exception:  # a broken seed already FAILed on its own line
+            continue
+        if not isinstance(post, dict) or not (post.get("body") or ""):
+            continue
+        docs.append({"key": post.get("slug") or name,
+                     "unmeasured": is_unmeasured(post),
+                     "sketch": sketch(post["body"])})
+    return docs
+
+
+def _report_corpus(seed_dir: str, files: list[str]) -> int:
+    docs = build_corpus(seed_dir, files)
+    hits = near_duplicates(docs)
+    print(f"\nCorpus: {len(docs)} bodies, word {SHINGLE_WORDS}-gram Jaccard over a "
+          f"1-in-{SKETCH_MODULUS} sketch")
+    print(f"        limit {NEAR_DUPLICATE:.3f} between two measured pages, "
+          f"{NEAR_DUPLICATE_UNMEASURED:.3f} when either has no measured volume")
+    if not hits:
+        print("        no pair is a near duplicate of another")
+        return 0
+    for hit in hits:
+        why = "unmeasured" if hit["unmeasured"] else "measured"
+        print(f"  FAIL {hit['score']:.3f} >= {hit['limit']:.3f} ({why})  "
+              f"{hit['a']}  <->  {hit['b']}")
+    return len(hits)
 
 
 if __name__ == "__main__":
