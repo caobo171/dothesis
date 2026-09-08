@@ -1,180 +1,180 @@
 keyword	search_volume	verdict	reason
 cách chạy thống kê mô tả trong spss	40	pass	volume 40
-phân tích thống kê mô tả spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-thống kê mô tả trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-cách chạy bảng tần số trong spss		drop	no volume returned
-phân tích bảng tần số spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-bảng tần số trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-cách chạy bảng chéo crosstabs trong spss		drop	no volume returned
-phân tích bảng chéo crosstabs spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-bảng chéo crosstabs trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-cách chạy thống kê nhân khẩu học trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-phân tích thống kê nhân khẩu học spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-thống kê nhân khẩu học trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-cách chạy biểu đồ histogram trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-phân tích biểu đồ histogram spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-biểu đồ histogram trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-cách chạy biểu đồ boxplot trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-phân tích biểu đồ boxplot spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-biểu đồ boxplot trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-cách chạy biểu đồ scatter trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-phân tích biểu đồ scatter spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-biểu đồ scatter trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-cách chạy biểu đồ p p plot trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-phân tích biểu đồ p p plot spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-biểu đồ p p plot trong spss		pass	unmeasured; family 'descriptive' sample 7/9 pass, aggregate 11,880
-cách chạy cronbach alpha trong spss		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
-phân tích cronbach alpha spss		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
-cronbach alpha trong spss		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
-cách chạy kiểm định độ tin cậy thang đo trong spss		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
-phân tích kiểm định độ tin cậy thang đo spss		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
-kiểm định độ tin cậy thang đo trong spss		pass	unmeasured; family 'reliability' sample 2/3 pass, aggregate 530
-cách chạy efa trong spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-phân tích efa spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-efa trong spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-cách chạy phân tích nhân tố khám phá trong spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-phân tích nhân tố khám phá spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-phân tích nhân tố khám phá trong spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-cách chạy ma trận xoay trong spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-phân tích ma trận xoay spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-ma trận xoay trong spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-cách chạy tạo biến đại diện trong spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-phân tích tạo biến đại diện spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-tạo biến đại diện trong spss		drop	unmeasured; family 'efa' sample 2/6 pass, aggregate 3,990
-cách chạy tương quan pearson trong spss		drop	unmeasured; family 'correlation' sample 0/0 pass, aggregate 0
-phân tích tương quan pearson spss		drop	unmeasured; family 'correlation' sample 0/0 pass, aggregate 0
-tương quan pearson trong spss		drop	unmeasured; family 'correlation' sample 0/0 pass, aggregate 0
-cách chạy tương quan riêng phần trong spss		drop	unmeasured; family 'correlation' sample 0/0 pass, aggregate 0
-phân tích tương quan riêng phần spss		drop	unmeasured; family 'correlation' sample 0/0 pass, aggregate 0
-tương quan riêng phần trong spss		drop	unmeasured; family 'correlation' sample 0/0 pass, aggregate 0
-cách chạy hồi quy tuyến tính trong spss		drop	no volume returned
-phân tích hồi quy tuyến tính spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-hồi quy tuyến tính trong spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-cách chạy hồi quy bội trong spss		drop	no volume returned
-phân tích hồi quy bội spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-hồi quy bội trong spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-cách chạy hồi quy logistic trong spss		drop	no volume returned
-phân tích hồi quy logistic spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-hồi quy logistic trong spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-cách chạy kiểm định giả định hồi quy trong spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-phân tích kiểm định giả định hồi quy spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-kiểm định giả định hồi quy trong spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-cách chạy kiểm tra đa cộng tuyến trong spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-phân tích kiểm tra đa cộng tuyến spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-kiểm tra đa cộng tuyến trong spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-cách chạy kiểm định durbin watson trong spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-phân tích kiểm định durbin watson spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-kiểm định durbin watson trong spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-cách chạy hồi quy với biến giả trong spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-phân tích hồi quy với biến giả spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-hồi quy với biến giả trong spss		drop	unmeasured; family 'regression' sample 3/9 pass, aggregate 900
-cách chạy t test một mẫu trong spss		drop	no volume returned
-phân tích t test một mẫu spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-t test một mẫu trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy independent samples t test trong spss		drop	no volume returned
-phân tích independent samples t test spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-independent samples t test trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy paired samples t test trong spss		drop	no volume returned
-phân tích paired samples t test spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-paired samples t test trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy anova một chiều trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích anova một chiều spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-anova một chiều trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy anova hai chiều trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích anova hai chiều spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-anova hai chiều trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy ancova trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích ancova spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-ancova trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy manova trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích manova spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-manova trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy anova lặp lại trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích anova lặp lại spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-anova lặp lại trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy kiểm định chi bình phương trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích kiểm định chi bình phương spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-kiểm định chi bình phương trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy kiểm định phân phối chuẩn trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích kiểm định phân phối chuẩn spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-kiểm định phân phối chuẩn trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy mann whitney trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích mann whitney spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-mann whitney trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy kruskal wallis trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích kruskal wallis spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-kruskal wallis trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy wilcoxon trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích wilcoxon spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-wilcoxon trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy kiểm định levene trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích kiểm định levene spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-kiểm định levene trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy post hoc tukey trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích post hoc tukey spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-post hoc tukey trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy kiểm định sự khác biệt trung bình trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-phân tích kiểm định sự khác biệt trung bình spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-kiểm định sự khác biệt trung bình trong spss		drop	unmeasured; family 'test' sample 0/3 pass, aggregate 0
-cách chạy process macro trung gian trong spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-phân tích process macro trung gian spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-process macro trung gian trong spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-cách chạy process macro điều tiết trong spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-phân tích process macro điều tiết spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-process macro điều tiết trong spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-cách chạy sobel test trong spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-phân tích sobel test spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-sobel test trong spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-cách chạy bootstrap trung gian trong spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-phân tích bootstrap trung gian spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-bootstrap trung gian trong spss		pass	unmeasured; family 'mediation' sample 3/3 pass, aggregate 860
-cách chạy nhập liệu trong spss		drop	no volume returned
-phân tích nhập liệu spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-nhập liệu trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy mã hóa lại biến recode trong spss		drop	no volume returned
-phân tích mã hóa lại biến recode spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-mã hóa lại biến recode trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy compute variable trong spss		drop	no volume returned
-phân tích compute variable spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-compute variable trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy select cases trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-phân tích select cases spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-select cases trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy split file trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-phân tích split file spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-split file trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy weight cases trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-phân tích weight cases spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-weight cases trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy xử lý missing value trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-phân tích xử lý missing value spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-xử lý missing value trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy gộp file dữ liệu trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-phân tích gộp file dữ liệu spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-gộp file dữ liệu trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy sắp xếp dữ liệu trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-phân tích sắp xếp dữ liệu spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-sắp xếp dữ liệu trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy khai báo biến trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-phân tích khai báo biến spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-khai báo biến trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy gán nhãn giá trị trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-phân tích gán nhãn giá trị spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-gán nhãn giá trị trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy nhập dữ liệu từ excel trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-phân tích nhập dữ liệu từ excel spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-nhập dữ liệu từ excel trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy mở file csv trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-phân tích mở file csv spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-mở file csv trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy xuất kết quả ra word trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-phân tích xuất kết quả ra word spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-xuất kết quả ra word trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy syntax trong spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-chạy syntax spss		drop	unmeasured; family 'data' sample 2/9 pass, aggregate 2,020
-cách chạy phân tích cụm trong spss		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
-phân tích cụm spss		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
-phân tích cụm trong spss		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
-cách chạy phân tích biệt số trong spss		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
-phân tích biệt số spss		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
-phân tích biệt số trong spss		drop	unmeasured; family 'advanced' sample 1/3 pass, aggregate 10
+phân tích thống kê mô tả spss		pass	no volume returned; quality gates decide
+thống kê mô tả trong spss		pass	no volume returned; quality gates decide
+cách chạy bảng tần số trong spss		pass	no volume returned; quality gates decide
+phân tích bảng tần số spss		pass	no volume returned; quality gates decide
+bảng tần số trong spss		pass	no volume returned; quality gates decide
+cách chạy bảng chéo crosstabs trong spss		pass	no volume returned; quality gates decide
+phân tích bảng chéo crosstabs spss		pass	no volume returned; quality gates decide
+bảng chéo crosstabs trong spss		pass	no volume returned; quality gates decide
+cách chạy thống kê nhân khẩu học trong spss		pass	no volume returned; quality gates decide
+phân tích thống kê nhân khẩu học spss		pass	no volume returned; quality gates decide
+thống kê nhân khẩu học trong spss		pass	no volume returned; quality gates decide
+cách chạy biểu đồ histogram trong spss		pass	no volume returned; quality gates decide
+phân tích biểu đồ histogram spss		pass	no volume returned; quality gates decide
+biểu đồ histogram trong spss		pass	no volume returned; quality gates decide
+cách chạy biểu đồ boxplot trong spss		pass	no volume returned; quality gates decide
+phân tích biểu đồ boxplot spss		pass	no volume returned; quality gates decide
+biểu đồ boxplot trong spss		pass	no volume returned; quality gates decide
+cách chạy biểu đồ scatter trong spss		pass	no volume returned; quality gates decide
+phân tích biểu đồ scatter spss		pass	no volume returned; quality gates decide
+biểu đồ scatter trong spss		pass	no volume returned; quality gates decide
+cách chạy biểu đồ p p plot trong spss		pass	no volume returned; quality gates decide
+phân tích biểu đồ p p plot spss		pass	no volume returned; quality gates decide
+biểu đồ p p plot trong spss		pass	no volume returned; quality gates decide
+cách chạy cronbach alpha trong spss		pass	no volume returned; quality gates decide
+phân tích cronbach alpha spss		pass	no volume returned; quality gates decide
+cronbach alpha trong spss		pass	no volume returned; quality gates decide
+cách chạy kiểm định độ tin cậy thang đo trong spss		pass	no volume returned; quality gates decide
+phân tích kiểm định độ tin cậy thang đo spss		pass	no volume returned; quality gates decide
+kiểm định độ tin cậy thang đo trong spss		pass	no volume returned; quality gates decide
+cách chạy efa trong spss		pass	no volume returned; quality gates decide
+phân tích efa spss		pass	no volume returned; quality gates decide
+efa trong spss		pass	no volume returned; quality gates decide
+cách chạy phân tích nhân tố khám phá trong spss		pass	no volume returned; quality gates decide
+phân tích nhân tố khám phá spss		pass	no volume returned; quality gates decide
+phân tích nhân tố khám phá trong spss		pass	no volume returned; quality gates decide
+cách chạy ma trận xoay trong spss		pass	no volume returned; quality gates decide
+phân tích ma trận xoay spss		pass	no volume returned; quality gates decide
+ma trận xoay trong spss		pass	no volume returned; quality gates decide
+cách chạy tạo biến đại diện trong spss		pass	no volume returned; quality gates decide
+phân tích tạo biến đại diện spss		pass	no volume returned; quality gates decide
+tạo biến đại diện trong spss		pass	no volume returned; quality gates decide
+cách chạy tương quan pearson trong spss		pass	no volume returned; quality gates decide
+phân tích tương quan pearson spss		pass	no volume returned; quality gates decide
+tương quan pearson trong spss		pass	no volume returned; quality gates decide
+cách chạy tương quan riêng phần trong spss		pass	no volume returned; quality gates decide
+phân tích tương quan riêng phần spss		pass	no volume returned; quality gates decide
+tương quan riêng phần trong spss		pass	no volume returned; quality gates decide
+cách chạy hồi quy tuyến tính trong spss		pass	no volume returned; quality gates decide
+phân tích hồi quy tuyến tính spss		pass	no volume returned; quality gates decide
+hồi quy tuyến tính trong spss		pass	no volume returned; quality gates decide
+cách chạy hồi quy bội trong spss		pass	no volume returned; quality gates decide
+phân tích hồi quy bội spss		pass	no volume returned; quality gates decide
+hồi quy bội trong spss		pass	no volume returned; quality gates decide
+cách chạy hồi quy logistic trong spss		pass	no volume returned; quality gates decide
+phân tích hồi quy logistic spss		pass	no volume returned; quality gates decide
+hồi quy logistic trong spss		pass	no volume returned; quality gates decide
+cách chạy kiểm định giả định hồi quy trong spss		pass	no volume returned; quality gates decide
+phân tích kiểm định giả định hồi quy spss		pass	no volume returned; quality gates decide
+kiểm định giả định hồi quy trong spss		pass	no volume returned; quality gates decide
+cách chạy kiểm tra đa cộng tuyến trong spss		pass	no volume returned; quality gates decide
+phân tích kiểm tra đa cộng tuyến spss		pass	no volume returned; quality gates decide
+kiểm tra đa cộng tuyến trong spss		pass	no volume returned; quality gates decide
+cách chạy kiểm định durbin watson trong spss		pass	no volume returned; quality gates decide
+phân tích kiểm định durbin watson spss		pass	no volume returned; quality gates decide
+kiểm định durbin watson trong spss		pass	no volume returned; quality gates decide
+cách chạy hồi quy với biến giả trong spss		pass	no volume returned; quality gates decide
+phân tích hồi quy với biến giả spss		pass	no volume returned; quality gates decide
+hồi quy với biến giả trong spss		pass	no volume returned; quality gates decide
+cách chạy t test một mẫu trong spss		pass	no volume returned; quality gates decide
+phân tích t test một mẫu spss		pass	no volume returned; quality gates decide
+t test một mẫu trong spss		pass	no volume returned; quality gates decide
+cách chạy independent samples t test trong spss		pass	no volume returned; quality gates decide
+phân tích independent samples t test spss		pass	no volume returned; quality gates decide
+independent samples t test trong spss		pass	no volume returned; quality gates decide
+cách chạy paired samples t test trong spss		pass	no volume returned; quality gates decide
+phân tích paired samples t test spss		pass	no volume returned; quality gates decide
+paired samples t test trong spss		pass	no volume returned; quality gates decide
+cách chạy anova một chiều trong spss		pass	no volume returned; quality gates decide
+phân tích anova một chiều spss		pass	no volume returned; quality gates decide
+anova một chiều trong spss		pass	no volume returned; quality gates decide
+cách chạy anova hai chiều trong spss		pass	no volume returned; quality gates decide
+phân tích anova hai chiều spss		pass	no volume returned; quality gates decide
+anova hai chiều trong spss		pass	no volume returned; quality gates decide
+cách chạy ancova trong spss		pass	no volume returned; quality gates decide
+phân tích ancova spss		pass	no volume returned; quality gates decide
+ancova trong spss		pass	no volume returned; quality gates decide
+cách chạy manova trong spss		pass	no volume returned; quality gates decide
+phân tích manova spss		pass	no volume returned; quality gates decide
+manova trong spss		pass	no volume returned; quality gates decide
+cách chạy anova lặp lại trong spss		pass	no volume returned; quality gates decide
+phân tích anova lặp lại spss		pass	no volume returned; quality gates decide
+anova lặp lại trong spss		pass	no volume returned; quality gates decide
+cách chạy kiểm định chi bình phương trong spss		pass	no volume returned; quality gates decide
+phân tích kiểm định chi bình phương spss		pass	no volume returned; quality gates decide
+kiểm định chi bình phương trong spss		pass	no volume returned; quality gates decide
+cách chạy kiểm định phân phối chuẩn trong spss		pass	no volume returned; quality gates decide
+phân tích kiểm định phân phối chuẩn spss		pass	no volume returned; quality gates decide
+kiểm định phân phối chuẩn trong spss		pass	no volume returned; quality gates decide
+cách chạy mann whitney trong spss		pass	no volume returned; quality gates decide
+phân tích mann whitney spss		pass	no volume returned; quality gates decide
+mann whitney trong spss		pass	no volume returned; quality gates decide
+cách chạy kruskal wallis trong spss		pass	no volume returned; quality gates decide
+phân tích kruskal wallis spss		pass	no volume returned; quality gates decide
+kruskal wallis trong spss		pass	no volume returned; quality gates decide
+cách chạy wilcoxon trong spss		pass	no volume returned; quality gates decide
+phân tích wilcoxon spss		pass	no volume returned; quality gates decide
+wilcoxon trong spss		pass	no volume returned; quality gates decide
+cách chạy kiểm định levene trong spss		pass	no volume returned; quality gates decide
+phân tích kiểm định levene spss		pass	no volume returned; quality gates decide
+kiểm định levene trong spss		pass	no volume returned; quality gates decide
+cách chạy post hoc tukey trong spss		pass	no volume returned; quality gates decide
+phân tích post hoc tukey spss		pass	no volume returned; quality gates decide
+post hoc tukey trong spss		pass	no volume returned; quality gates decide
+cách chạy kiểm định sự khác biệt trung bình trong spss		pass	no volume returned; quality gates decide
+phân tích kiểm định sự khác biệt trung bình spss		pass	no volume returned; quality gates decide
+kiểm định sự khác biệt trung bình trong spss		pass	no volume returned; quality gates decide
+cách chạy process macro trung gian trong spss		pass	no volume returned; quality gates decide
+phân tích process macro trung gian spss		pass	no volume returned; quality gates decide
+process macro trung gian trong spss		pass	no volume returned; quality gates decide
+cách chạy process macro điều tiết trong spss		pass	no volume returned; quality gates decide
+phân tích process macro điều tiết spss		pass	no volume returned; quality gates decide
+process macro điều tiết trong spss		pass	no volume returned; quality gates decide
+cách chạy sobel test trong spss		pass	no volume returned; quality gates decide
+phân tích sobel test spss		pass	no volume returned; quality gates decide
+sobel test trong spss		pass	no volume returned; quality gates decide
+cách chạy bootstrap trung gian trong spss		pass	no volume returned; quality gates decide
+phân tích bootstrap trung gian spss		pass	no volume returned; quality gates decide
+bootstrap trung gian trong spss		pass	no volume returned; quality gates decide
+cách chạy nhập liệu trong spss		pass	no volume returned; quality gates decide
+phân tích nhập liệu spss		pass	no volume returned; quality gates decide
+nhập liệu trong spss		pass	no volume returned; quality gates decide
+cách chạy mã hóa lại biến recode trong spss		pass	no volume returned; quality gates decide
+phân tích mã hóa lại biến recode spss		pass	no volume returned; quality gates decide
+mã hóa lại biến recode trong spss		pass	no volume returned; quality gates decide
+cách chạy compute variable trong spss		pass	no volume returned; quality gates decide
+phân tích compute variable spss		pass	no volume returned; quality gates decide
+compute variable trong spss		pass	no volume returned; quality gates decide
+cách chạy select cases trong spss		pass	no volume returned; quality gates decide
+phân tích select cases spss		pass	no volume returned; quality gates decide
+select cases trong spss		pass	no volume returned; quality gates decide
+cách chạy split file trong spss		pass	no volume returned; quality gates decide
+phân tích split file spss		pass	no volume returned; quality gates decide
+split file trong spss		pass	no volume returned; quality gates decide
+cách chạy weight cases trong spss		pass	no volume returned; quality gates decide
+phân tích weight cases spss		pass	no volume returned; quality gates decide
+weight cases trong spss		pass	no volume returned; quality gates decide
+cách chạy xử lý missing value trong spss		pass	no volume returned; quality gates decide
+phân tích xử lý missing value spss		pass	no volume returned; quality gates decide
+xử lý missing value trong spss		pass	no volume returned; quality gates decide
+cách chạy gộp file dữ liệu trong spss		pass	no volume returned; quality gates decide
+phân tích gộp file dữ liệu spss		pass	no volume returned; quality gates decide
+gộp file dữ liệu trong spss		pass	no volume returned; quality gates decide
+cách chạy sắp xếp dữ liệu trong spss		pass	no volume returned; quality gates decide
+phân tích sắp xếp dữ liệu spss		pass	no volume returned; quality gates decide
+sắp xếp dữ liệu trong spss		pass	no volume returned; quality gates decide
+cách chạy khai báo biến trong spss		pass	no volume returned; quality gates decide
+phân tích khai báo biến spss		pass	no volume returned; quality gates decide
+khai báo biến trong spss		pass	no volume returned; quality gates decide
+cách chạy gán nhãn giá trị trong spss		pass	no volume returned; quality gates decide
+phân tích gán nhãn giá trị spss		pass	no volume returned; quality gates decide
+gán nhãn giá trị trong spss		pass	no volume returned; quality gates decide
+cách chạy nhập dữ liệu từ excel trong spss		pass	no volume returned; quality gates decide
+phân tích nhập dữ liệu từ excel spss		pass	no volume returned; quality gates decide
+nhập dữ liệu từ excel trong spss		pass	no volume returned; quality gates decide
+cách chạy mở file csv trong spss		pass	no volume returned; quality gates decide
+phân tích mở file csv spss		pass	no volume returned; quality gates decide
+mở file csv trong spss		pass	no volume returned; quality gates decide
+cách chạy xuất kết quả ra word trong spss		pass	no volume returned; quality gates decide
+phân tích xuất kết quả ra word spss		pass	no volume returned; quality gates decide
+xuất kết quả ra word trong spss		pass	no volume returned; quality gates decide
+cách chạy syntax trong spss		pass	no volume returned; quality gates decide
+chạy syntax spss		pass	no volume returned; quality gates decide
+cách chạy phân tích cụm trong spss		pass	no volume returned; quality gates decide
+phân tích cụm spss		pass	no volume returned; quality gates decide
+phân tích cụm trong spss		pass	no volume returned; quality gates decide
+cách chạy phân tích biệt số trong spss		pass	no volume returned; quality gates decide
+phân tích biệt số spss		pass	no volume returned; quality gates decide
+phân tích biệt số trong spss		pass	no volume returned; quality gates decide

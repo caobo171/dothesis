@@ -1,194 +1,194 @@
 keyword	search_volume	verdict	reason
 mô hình tam	1000	pass	volume 1000
-lý thuyết tam		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-tam là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+lý thuyết tam		pass	no volume returned; quality gates decide
+tam là gì		pass	no volume returned; quality gates decide
 mô hình chấp nhận công nghệ tam	320	pass	volume 320
-lý thuyết chấp nhận công nghệ tam		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-chấp nhận công nghệ tam là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-mô hình tam 2		drop	no volume returned
-lý thuyết tam 2		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-tam 2 là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-mô hình tam 3		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-lý thuyết tam 3		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-tam 3 là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-mô hình utaut		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-lý thuyết utaut		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-utaut là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-mô hình utaut2		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-lý thuyết utaut2		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-utaut2 là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-mô hình toe		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-lý thuyết toe		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-toe là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-mô hình task technology fit		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-lý thuyết task technology fit		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-task technology fit là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-mô hình is success delone mclean		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-lý thuyết is success delone mclean		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-is success delone mclean là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-mô hình khuếch tán đổi mới		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-lý thuyết khuếch tán đổi mới		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-khuếch tán đổi mới là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-mô hình kỳ vọng xác nhận ecm		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-lý thuyết kỳ vọng xác nhận ecm		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-kỳ vọng xác nhận ecm là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-mô hình nhận thức rủi ro tpr		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-lý thuyết nhận thức rủi ro tpr		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
-nhận thức rủi ro tpr là gì		pass	unmeasured; family 'technology' sample 2/3 pass, aggregate 1,320
+lý thuyết chấp nhận công nghệ tam		pass	no volume returned; quality gates decide
+chấp nhận công nghệ tam là gì		pass	no volume returned; quality gates decide
+mô hình tam 2		pass	no volume returned; quality gates decide
+lý thuyết tam 2		pass	no volume returned; quality gates decide
+tam 2 là gì		pass	no volume returned; quality gates decide
+mô hình tam 3		pass	no volume returned; quality gates decide
+lý thuyết tam 3		pass	no volume returned; quality gates decide
+tam 3 là gì		pass	no volume returned; quality gates decide
+mô hình utaut		pass	no volume returned; quality gates decide
+lý thuyết utaut		pass	no volume returned; quality gates decide
+utaut là gì		pass	no volume returned; quality gates decide
+mô hình utaut2		pass	no volume returned; quality gates decide
+lý thuyết utaut2		pass	no volume returned; quality gates decide
+utaut2 là gì		pass	no volume returned; quality gates decide
+mô hình toe		pass	no volume returned; quality gates decide
+lý thuyết toe		pass	no volume returned; quality gates decide
+toe là gì		pass	no volume returned; quality gates decide
+mô hình task technology fit		pass	no volume returned; quality gates decide
+lý thuyết task technology fit		pass	no volume returned; quality gates decide
+task technology fit là gì		pass	no volume returned; quality gates decide
+mô hình is success delone mclean		pass	no volume returned; quality gates decide
+lý thuyết is success delone mclean		pass	no volume returned; quality gates decide
+is success delone mclean là gì		pass	no volume returned; quality gates decide
+mô hình khuếch tán đổi mới		pass	no volume returned; quality gates decide
+lý thuyết khuếch tán đổi mới		pass	no volume returned; quality gates decide
+khuếch tán đổi mới là gì		pass	no volume returned; quality gates decide
+mô hình kỳ vọng xác nhận ecm		pass	no volume returned; quality gates decide
+lý thuyết kỳ vọng xác nhận ecm		pass	no volume returned; quality gates decide
+kỳ vọng xác nhận ecm là gì		pass	no volume returned; quality gates decide
+mô hình nhận thức rủi ro tpr		pass	no volume returned; quality gates decide
+lý thuyết nhận thức rủi ro tpr		pass	no volume returned; quality gates decide
+nhận thức rủi ro tpr là gì		pass	no volume returned; quality gates decide
 mô hình tra	260	pass	volume 260
-lý thuyết tra		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-tra là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-mô hình hành động hợp lý		drop	no volume returned
-lý thuyết hành động hợp lý		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-hành động hợp lý là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+lý thuyết tra		pass	no volume returned; quality gates decide
+tra là gì		pass	no volume returned; quality gates decide
+mô hình hành động hợp lý		pass	no volume returned; quality gates decide
+lý thuyết hành động hợp lý		pass	no volume returned; quality gates decide
+hành động hợp lý là gì		pass	no volume returned; quality gates decide
 mô hình tpb	590	pass	volume 590
-lý thuyết tpb		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-tpb là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-mô hình hành vi dự định		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-lý thuyết hành vi dự định		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-hành vi dự định là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-mô hình hành vi người tiêu dùng		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-lý thuyết hành vi người tiêu dùng		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-hành vi người tiêu dùng là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-mô hình niềm tin sức khỏe		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-lý thuyết niềm tin sức khỏe		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-niềm tin sức khỏe là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-mô hình trao đổi xã hội		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-lý thuyết trao đổi xã hội		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-trao đổi xã hội là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-mô hình giá trị tiêu dùng		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-lý thuyết giá trị tiêu dùng		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-giá trị tiêu dùng là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-mô hình tự quyết		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-lý thuyết tự quyết		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
-tự quyết là gì		pass	unmeasured; family 'behavior' sample 2/3 pass, aggregate 850
+lý thuyết tpb		pass	no volume returned; quality gates decide
+tpb là gì		pass	no volume returned; quality gates decide
+mô hình hành vi dự định		pass	no volume returned; quality gates decide
+lý thuyết hành vi dự định		pass	no volume returned; quality gates decide
+hành vi dự định là gì		pass	no volume returned; quality gates decide
+mô hình hành vi người tiêu dùng		pass	no volume returned; quality gates decide
+lý thuyết hành vi người tiêu dùng		pass	no volume returned; quality gates decide
+hành vi người tiêu dùng là gì		pass	no volume returned; quality gates decide
+mô hình niềm tin sức khỏe		pass	no volume returned; quality gates decide
+lý thuyết niềm tin sức khỏe		pass	no volume returned; quality gates decide
+niềm tin sức khỏe là gì		pass	no volume returned; quality gates decide
+mô hình trao đổi xã hội		pass	no volume returned; quality gates decide
+lý thuyết trao đổi xã hội		pass	no volume returned; quality gates decide
+trao đổi xã hội là gì		pass	no volume returned; quality gates decide
+mô hình giá trị tiêu dùng		pass	no volume returned; quality gates decide
+lý thuyết giá trị tiêu dùng		pass	no volume returned; quality gates decide
+giá trị tiêu dùng là gì		pass	no volume returned; quality gates decide
+mô hình tự quyết		pass	no volume returned; quality gates decide
+lý thuyết tự quyết		pass	no volume returned; quality gates decide
+tự quyết là gì		pass	no volume returned; quality gates decide
 mô hình servqual	1300	pass	volume 1300
-lý thuyết servqual		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-servqual là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+lý thuyết servqual		pass	no volume returned; quality gates decide
+servqual là gì		pass	no volume returned; quality gates decide
 mô hình servperf	320	pass	volume 320
-lý thuyết servperf		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-servperf là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+lý thuyết servperf		pass	no volume returned; quality gates decide
+servperf là gì		pass	no volume returned; quality gates decide
 mô hình 5 khoảng cách chất lượng dịch vụ	40	pass	volume 40
-lý thuyết 5 khoảng cách chất lượng dịch vụ		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-5 khoảng cách chất lượng dịch vụ là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-mô hình chất lượng dịch vụ gronroos		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-lý thuyết chất lượng dịch vụ gronroos		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-chất lượng dịch vụ gronroos là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-mô hình e servqual		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-lý thuyết e servqual		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-e servqual là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-mô hình acsi		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-lý thuyết acsi		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-acsi là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-mô hình ecsi		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-lý thuyết ecsi		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-ecsi là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-mô hình kano		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-lý thuyết kano		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-kano là gì		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-mô hình sự hài lòng khách hàng		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
-lý thuyết sự hài lòng khách hàng		pass	unmeasured; family 'service' sample 3/3 pass, aggregate 1,660
+lý thuyết 5 khoảng cách chất lượng dịch vụ		pass	no volume returned; quality gates decide
+5 khoảng cách chất lượng dịch vụ là gì		pass	no volume returned; quality gates decide
+mô hình chất lượng dịch vụ gronroos		pass	no volume returned; quality gates decide
+lý thuyết chất lượng dịch vụ gronroos		pass	no volume returned; quality gates decide
+chất lượng dịch vụ gronroos là gì		pass	no volume returned; quality gates decide
+mô hình e servqual		pass	no volume returned; quality gates decide
+lý thuyết e servqual		pass	no volume returned; quality gates decide
+e servqual là gì		pass	no volume returned; quality gates decide
+mô hình acsi		pass	no volume returned; quality gates decide
+lý thuyết acsi		pass	no volume returned; quality gates decide
+acsi là gì		pass	no volume returned; quality gates decide
+mô hình ecsi		pass	no volume returned; quality gates decide
+lý thuyết ecsi		pass	no volume returned; quality gates decide
+ecsi là gì		pass	no volume returned; quality gates decide
+mô hình kano		pass	no volume returned; quality gates decide
+lý thuyết kano		pass	no volume returned; quality gates decide
+kano là gì		pass	no volume returned; quality gates decide
+mô hình sự hài lòng khách hàng		pass	no volume returned; quality gates decide
+lý thuyết sự hài lòng khách hàng		pass	no volume returned; quality gates decide
 mô hình maslow	210	pass	volume 210
-lý thuyết maslow		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-maslow là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-mô hình hai nhân tố herzberg		drop	no volume returned
-lý thuyết hai nhân tố herzberg		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-hai nhân tố herzberg là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-mô hình kỳ vọng vroom		drop	no volume returned
-lý thuyết kỳ vọng vroom		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-kỳ vọng vroom là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-mô hình công bằng adams		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-lý thuyết công bằng adams		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-công bằng adams là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-lý thuyết x và thuyết y		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-thuyết x thuyết y là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-thuyết x và thuyết y của mcgregor		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-mô hình cam kết tổ chức meyer allen		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-lý thuyết cam kết tổ chức meyer allen		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-cam kết tổ chức meyer allen là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-mô hình jdi		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-lý thuyết jdi		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-jdi là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-mô hình hành vi công dân tổ chức		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-lý thuyết hành vi công dân tổ chức		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-mô hình năm yếu tố tính cách		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-lý thuyết năm yếu tố tính cách		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-năm yếu tố tính cách là gì		drop	unmeasured; family 'hrm' sample 1/6 pass, aggregate 210
-mô hình 5 áp lực cạnh tranh porter		drop	no volume returned
-lý thuyết 5 áp lực cạnh tranh porter		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-5 áp lực cạnh tranh porter là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+lý thuyết maslow		pass	no volume returned; quality gates decide
+maslow là gì		pass	no volume returned; quality gates decide
+mô hình hai nhân tố herzberg		pass	no volume returned; quality gates decide
+lý thuyết hai nhân tố herzberg		pass	no volume returned; quality gates decide
+hai nhân tố herzberg là gì		pass	no volume returned; quality gates decide
+mô hình kỳ vọng vroom		pass	no volume returned; quality gates decide
+lý thuyết kỳ vọng vroom		pass	no volume returned; quality gates decide
+kỳ vọng vroom là gì		pass	no volume returned; quality gates decide
+mô hình công bằng adams		pass	no volume returned; quality gates decide
+lý thuyết công bằng adams		pass	no volume returned; quality gates decide
+công bằng adams là gì		pass	no volume returned; quality gates decide
+lý thuyết x và thuyết y		pass	no volume returned; quality gates decide
+thuyết x và thuyết y là gì		pass	no volume returned; quality gates decide
+thuyết x và thuyết y của mcgregor		pass	no volume returned; quality gates decide
+mô hình cam kết tổ chức meyer allen		pass	no volume returned; quality gates decide
+lý thuyết cam kết tổ chức meyer allen		pass	no volume returned; quality gates decide
+cam kết tổ chức meyer allen là gì		pass	no volume returned; quality gates decide
+mô hình jdi		pass	no volume returned; quality gates decide
+lý thuyết jdi		pass	no volume returned; quality gates decide
+jdi là gì		pass	no volume returned; quality gates decide
+mô hình hành vi công dân tổ chức		pass	no volume returned; quality gates decide
+lý thuyết hành vi công dân tổ chức		pass	no volume returned; quality gates decide
+mô hình năm yếu tố tính cách		pass	no volume returned; quality gates decide
+lý thuyết năm yếu tố tính cách		pass	no volume returned; quality gates decide
+năm yếu tố tính cách là gì		pass	no volume returned; quality gates decide
+mô hình 5 áp lực cạnh tranh porter		pass	no volume returned; quality gates decide
+lý thuyết 5 áp lực cạnh tranh porter		pass	no volume returned; quality gates decide
+5 áp lực cạnh tranh porter là gì		pass	no volume returned; quality gates decide
 mô hình chuỗi giá trị porter	10	pass	volume 10
-lý thuyết chuỗi giá trị porter		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-chuỗi giá trị porter là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
+lý thuyết chuỗi giá trị porter		pass	no volume returned; quality gates decide
+chuỗi giá trị porter là gì		pass	no volume returned; quality gates decide
 mô hình swot	3600	pass	volume 3600
-lý thuyết swot		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-swot là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-mô hình bcg		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-lý thuyết bcg		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-bcg là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-mô hình balanced scorecard		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-lý thuyết balanced scorecard		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-balanced scorecard là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-mô hình nguồn lực rbv		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-lý thuyết nguồn lực rbv		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-nguồn lực rbv là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-mô hình thể chế		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-lý thuyết thể chế		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-thể chế là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-mô hình các bên liên quan		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-lý thuyết các bên liên quan		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-các bên liên quan là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-mô hình đại diện		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-lý thuyết đại diện		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-đại diện là gì		pass	unmeasured; family 'strategy' sample 2/3 pass, aggregate 3,610
-mô hình 4p marketing mix		drop	no volume returned
-lý thuyết 4p marketing mix		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-4p marketing mix là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-mô hình 7p marketing mix		drop	no volume returned
-lý thuyết 7p marketing mix		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-7p marketing mix là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
+lý thuyết swot		pass	no volume returned; quality gates decide
+swot là gì		pass	no volume returned; quality gates decide
+mô hình bcg		pass	no volume returned; quality gates decide
+lý thuyết bcg		pass	no volume returned; quality gates decide
+bcg là gì		pass	no volume returned; quality gates decide
+mô hình balanced scorecard		pass	no volume returned; quality gates decide
+lý thuyết balanced scorecard		pass	no volume returned; quality gates decide
+balanced scorecard là gì		pass	no volume returned; quality gates decide
+mô hình nguồn lực rbv		pass	no volume returned; quality gates decide
+lý thuyết nguồn lực rbv		pass	no volume returned; quality gates decide
+nguồn lực rbv là gì		pass	no volume returned; quality gates decide
+mô hình thể chế		pass	no volume returned; quality gates decide
+lý thuyết thể chế		pass	no volume returned; quality gates decide
+thể chế là gì		pass	no volume returned; quality gates decide
+mô hình các bên liên quan		pass	no volume returned; quality gates decide
+lý thuyết các bên liên quan		pass	no volume returned; quality gates decide
+các bên liên quan là gì		pass	no volume returned; quality gates decide
+mô hình đại diện		pass	no volume returned; quality gates decide
+lý thuyết đại diện		pass	no volume returned; quality gates decide
+đại diện là gì		pass	no volume returned; quality gates decide
+mô hình 4p marketing mix		pass	no volume returned; quality gates decide
+lý thuyết 4p marketing mix		pass	no volume returned; quality gates decide
+4p marketing mix là gì		pass	no volume returned; quality gates decide
+mô hình 7p marketing mix		pass	no volume returned; quality gates decide
+lý thuyết 7p marketing mix		pass	no volume returned; quality gates decide
+7p marketing mix là gì		pass	no volume returned; quality gates decide
 mô hình aida	1600	pass	volume 1600
-lý thuyết aida		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-aida là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-mô hình rfm		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-lý thuyết rfm		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-rfm là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-mô hình tài sản thương hiệu aaker		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-lý thuyết tài sản thương hiệu aaker		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-tài sản thương hiệu aaker là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-mô hình tài sản thương hiệu keller		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-lý thuyết tài sản thương hiệu keller		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-tài sản thương hiệu keller là gì		drop	unmeasured; family 'marketing' sample 1/3 pass, aggregate 1,600
-mô hình trật tự phân hạng		drop	no volume returned
-lý thuyết trật tự phân hạng		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-trật tự phân hạng là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-mô hình đánh đổi cấu trúc vốn		drop	no volume returned
-lý thuyết đánh đổi cấu trúc vốn		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-đánh đổi cấu trúc vốn là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-mô hình tín hiệu		drop	no volume returned
-lý thuyết tín hiệu		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-tín hiệu là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-mô hình capm		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-lý thuyết capm		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-capm là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-mô hình fama french		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-lý thuyết fama french		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-fama french là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-mô hình z score altman		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-lý thuyết z score altman		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-z score altman là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-mô hình camel		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-lý thuyết camel		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-camel là gì		drop	unmeasured; family 'finance' sample 0/3 pass, aggregate 0
-mô hình ardl		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
-lý thuyết ardl		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
-ardl là gì		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
-mô hình fem rem dữ liệu bảng		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
-lý thuyết fem rem dữ liệu bảng		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
-fem rem dữ liệu bảng là gì		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
-mô hình var		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
-lý thuyết var		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
-var là gì		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
-mô hình arima		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
-lý thuyết arima		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
-arima là gì		drop	unmeasured; family 'econometrics' sample 0/0 pass, aggregate 0
+lý thuyết aida		pass	no volume returned; quality gates decide
+aida là gì		pass	no volume returned; quality gates decide
+mô hình rfm		pass	no volume returned; quality gates decide
+lý thuyết rfm		pass	no volume returned; quality gates decide
+rfm là gì		pass	no volume returned; quality gates decide
+mô hình tài sản thương hiệu aaker		pass	no volume returned; quality gates decide
+lý thuyết tài sản thương hiệu aaker		pass	no volume returned; quality gates decide
+tài sản thương hiệu aaker là gì		pass	no volume returned; quality gates decide
+mô hình tài sản thương hiệu keller		pass	no volume returned; quality gates decide
+lý thuyết tài sản thương hiệu keller		pass	no volume returned; quality gates decide
+tài sản thương hiệu keller là gì		pass	no volume returned; quality gates decide
+mô hình trật tự phân hạng		pass	no volume returned; quality gates decide
+lý thuyết trật tự phân hạng		pass	no volume returned; quality gates decide
+trật tự phân hạng là gì		pass	no volume returned; quality gates decide
+mô hình đánh đổi cấu trúc vốn		pass	no volume returned; quality gates decide
+lý thuyết đánh đổi cấu trúc vốn		pass	no volume returned; quality gates decide
+đánh đổi cấu trúc vốn là gì		pass	no volume returned; quality gates decide
+mô hình tín hiệu		pass	no volume returned; quality gates decide
+lý thuyết tín hiệu		pass	no volume returned; quality gates decide
+tín hiệu là gì		pass	no volume returned; quality gates decide
+mô hình capm		pass	no volume returned; quality gates decide
+lý thuyết capm		pass	no volume returned; quality gates decide
+capm là gì		pass	no volume returned; quality gates decide
+mô hình fama french		pass	no volume returned; quality gates decide
+lý thuyết fama french		pass	no volume returned; quality gates decide
+fama french là gì		pass	no volume returned; quality gates decide
+mô hình z score altman		pass	no volume returned; quality gates decide
+lý thuyết z score altman		pass	no volume returned; quality gates decide
+z score altman là gì		pass	no volume returned; quality gates decide
+mô hình camel		pass	no volume returned; quality gates decide
+lý thuyết camel		pass	no volume returned; quality gates decide
+camel là gì		pass	no volume returned; quality gates decide
+mô hình ardl		pass	no volume returned; quality gates decide
+lý thuyết ardl		pass	no volume returned; quality gates decide
+ardl là gì		pass	no volume returned; quality gates decide
+mô hình fem rem dữ liệu bảng		pass	no volume returned; quality gates decide
+lý thuyết fem rem dữ liệu bảng		pass	no volume returned; quality gates decide
+fem rem dữ liệu bảng là gì		pass	no volume returned; quality gates decide
+mô hình var		pass	no volume returned; quality gates decide
+lý thuyết var		pass	no volume returned; quality gates decide
+var là gì		pass	no volume returned; quality gates decide
+mô hình arima		pass	no volume returned; quality gates decide
+lý thuyết arima		pass	no volume returned; quality gates decide
+arima là gì		pass	no volume returned; quality gates decide
