@@ -2,9 +2,9 @@
 name: dothesis-content-pipeline
 description: >
   Use when scaling the DoThesis blog in batches rather than writing one article:
-  harvesting competitor topics, expanding a methodological unit into a family of
-  pages, gating candidates on measured search volume, planning a backlog, running
-  the scripted writer, and publishing in tranches. Triggers on "scale the blog",
+  researching what actually ranks, expanding a methodological unit into a family
+  of pages, attaching measured volume where it exists, planning a backlog in
+  payback order, running the scripted writer, and publishing in tranches. Triggers on "scale the blog",
   "content bank", "nhân bản content", "batch bài viết", "content engine",
   "expand axis", "chạy demand gate", or any request to produce many DoThesis
   articles at once. For a single article use `dothesis-blog-content`; this skill
@@ -16,28 +16,59 @@ description: >
 ## What this skill is for
 
 `dothesis-blog-content` produces one good article. This skill decides **which
-articles exist at all**, proves each one has demand before it is written, and stops
-the batch from becoming a liability.
+articles exist at all**, proves each one is worth a reader's time before it is
+written, and stops the batch from becoming a liability.
 
 Read `dothesis-blog-content` too. Every post this pipeline queues is written to
 that skill's structure, voice and citation rules; the writer's prompt is literally
 built from those files at run time, so editing them changes the next batch.
 
-## The one rule that makes this safe
+## The rule that makes this safe
 
-> **No page gets written without measured search volume for its own primary query.**
+> **A page exists when three things hold: it has real content, it is genuinely
+> useful to a student standing at this step, and it does not duplicate anything
+> already in the bank. Measured search volume sets the order pages go out in. It
+> has no veto.**
 
-This is not caution. Publishing hundreds of pages nobody searches for is what
-Google's spam policy calls **scaled content abuse**, the policy covers
-human-written pages as well as generated ones, and the penalty is domain-wide. A
-thousand measured pages is an asset. A thousand pages of which four hundred have no
-query is a manual action waiting for a reviewer.
+This replaced "no page without measured volume for its own primary query" on
+2026-09-08. The trade is worth stating plainly. Volume was a cheap mechanical
+proxy for "somebody wants this", and its whole virtue was that a script could
+check it without an argument. Three judgements now stand where one number stood.
+The risk that number was managing has not moved: publishing hundreds of pages that
+say nothing is what Google's spam policy calls **scaled content abuse**, the
+policy covers human-written pages as well as generated ones, and the penalty is
+domain-wide.
 
-The engine enforces it. `gate` refuses to pass a keyword with no volume, `plan`
-only reads gate survivors and the harvest, and a row that cleared on its family
-rather than on itself — the thin-keyword aggregate rule, or `--fill-unmeasured` —
-is stamped `gate_status = family-inferred`, inserted as DRAFT and never scheduled
-until it is measured on its own.
+So the weight lands on the third judgement, and it lands harder where the evidence
+is thinner. **For a page with no measured volume the distinctness bar is twice as
+heavy**, because for that page quality is the only thing between this bank and a
+reviewer reading it as scaled content. An unmeasured page carries two of the three
+proprietary elements rather than one, one more internal link and one more table
+than a measured page, and it fails the corpus duplicate check at a stricter
+threshold. The calibrated numbers are in `api/app/blog/content/qa.py`. Read them
+there; a number copied into a doc drifts.
+
+Measured volume still decides **order**, and the reason is payback rather than
+safety. A page whose query carries a number is a page whose demand is known before
+a word is written, so it earns impressions on a schedule instead of on a hope. A
+page written on judgement may well be right, but it proves itself only after it
+is live. Publishing the first kind first means the bank returns value soonest and
+the pages taken on judgement ride behind traffic that already exists.
+
+How the engine enforces it:
+
+- `gate` drops nothing. It attaches measured volume where a measurement exists and
+  stamps the rest `gate_status = unmeasured`; the older value `family-inferred` is
+  a deprecated alias meaning exactly the same thing. Its summary prints measured
+  against unmeasured, so the split is never buried inside a total.
+- `plan` orders every measured row ahead of every unmeasured one. The vocabulary
+  whitelist, the exclusions, the clustering and the category folds are unchanged.
+- `create` schedules an unmeasured seed like any other page. Nothing is parked as
+  a draft for want of a number.
+- `qa` carries what the gate used to. Its corpus mode compares every seed body
+  against every other body in the seed directory on word-5-gram shingles and fails
+  near-duplicates, at a stricter threshold when either side is unmeasured, and its
+  per-post rules apply the doubled proprietary requirement above.
 
 ## The market, measured 2026-09-07
 
@@ -86,11 +117,25 @@ output block and the `cách viết vào luận văn` paragraph earn their keep. 
 competitor URL in a backlog row is a *question hint*, nothing else. Never fetch it
 into the writer's context.
 
+Research now happens in a browser (step 1), which puts a competitor's sentences on
+your screen where a TSV of keywords never did. That makes this rule harder to keep
+and more important to keep. Close the tab, then write. What crosses from the
+research note into the brief is the outline and the gap, never a phrasing.
+
 ## Realistic scale
 
 The harvest yields roughly 250 on-topic pages after clustering. The axes yield
-another 400 to 700 after the gate. **The run targets 1,000 posts and stops at the
-gate's ceiling if that is lower.** It never pads to hit a round number.
+another 400 to 700 phrasings that survive clustering and the exclusions. **The run
+targets 1,000 posts, and the ceiling is now the candidate set the axes and the
+harvest supply rather than the count of rows that came back with a volume.**
+
+Under the old rule the gate answered 421 (§19 of the design spec). That number
+measured what DataForSEO and OpenSEO could price on the day, not what a student
+needs. It stands as history and no longer as a limit.
+
+The run still does not pad. The ceiling that binds is the third judgement: a
+candidate that cannot be made genuinely distinct is not a page, and the QA corpus
+check is where that is settled rather than argued.
 
 Crawl budget is the constraint on the far side, not writing capacity. Publishing
 faster than Google crawls converts effort into "Discovered, currently not indexed".
@@ -99,21 +144,31 @@ whether the next tranche goes out at all.
 
 ## Workflow
 
-### 1. Harvest (already done, redo per quarter)
+### 1. Competitor research, in a browser
 
-Through OpenSEO MCP, one call per competitor:
+**Do not pay to measure a competitor's SEO.** From 2026-09-08 the research method
+for this project is a browser. `get_ranked_keywords` and `get_keyword_metrics`
+bill credits per keyword to buy a number that no longer decides whether a page
+exists, so neither is the required path any more.
 
-```
-get_ranked_keywords(projectId, target: "<domain>", locationCode: 2704,
-                    languageCode: "vi", limit: 100, sortBy: "search_volume",
-                    resultTypes: ["organic"])
-```
+Search the query on Google in Vietnamese, phrased the way a student in Vietnam
+would type it, and read the top few results. For each one, record:
 
-The response exceeds the token limit and is auto-saved to a file. Aggregate it with
-`jq` or a subagent per competitor, and land it as a TSV under
-`docs/seo/topic-bank/` so the batch is reproducible. Never hand-edit the harvest:
-add exclusions to `exclusions.txt` instead, so the reason a row was dropped is
-committed.
+| What to record | Why it is worth recording |
+|---|---|
+| Who ranks | one of the four domains, a thesis-service page, a forum, or a university PDF. It tells you what kind of answer Google currently thinks the query wants |
+| The shape of the page | definition, procedure, troubleshooting, or list. It picks the archetype |
+| How deep it goes | word count, whether a threshold is stated, whether it is sourced, whether real SPSS or SmartPLS output appears |
+| What it fails to answer | the brief. This is the column the article is written against |
+
+The last row is the output of this step. The rest is context for it.
+
+The harvest committed under `docs/seo/topic-bank/` stays where it is, and it is
+exactly one thing: a snapshot of what these domains ranked for on 2026-09-07 and
+2026-09-08. Its volumes are real measurements, so it remains the best ordering
+input in the repo. It is not a gate and it is not re-bought on a schedule. Never
+hand-edit it: add exclusions to `exclusions.txt` instead, so the reason a row was
+dropped stays in version control.
 
 ### 2. Expand along an axis
 
@@ -126,46 +181,51 @@ crossing each unit with its phrasing templates. Adding a unit to an axis file is
 how the pipeline grows. Read `references/expansion-axes.md` before adding an axis;
 the three tests there are what keep this from becoming a doorway-page farm.
 
-### 3. Gate. Mandatory.
+### 3. Gate. It measures. It does not cut.
 
 ```bash
-# five known keywords first, and read the printed cost before anything bulk
+# optional, and worth doing. Five known keywords first, and read the printed cost
 cd api && ./run.sh python -m app.blog.content.cli gate --source dataforseo --probe
 cd api && ./run.sh python -m app.blog.content.cli gate --source dataforseo
 ```
 
-DataForSEO's Google Ads search-volume endpoint, up to 1,000 keywords per request,
-`location_code 2704`, `language_code vi`. Every response's `cost` field is printed
-and totalled. OpenSEO is the fallback for small lists at about 1.7 credits a
-keyword, not the bulk tool.
+`gate` attaches a monthly volume to every candidate it can measure and stamps
+every candidate it cannot as `gate_status = unmeasured`. It drops nothing. The
+summary prints measured against unmeasured, and that split is the number to read
+before writing: it says how much of the batch is running on judgement rather than
+on evidence, which is how much of the batch the QA corpus check has to carry.
 
-**Check the probe first.** On 2026-09-08 it returned `HTTP 402`, body
-`status_code 40200, "Payment Required"`: the credentials are valid and the
-account has no balance. Until it is topped up, measure through OpenSEO and feed
-the result in with `gate --source tsv --file measured.tsv`, or work from the
-harvest, whose volumes are already measured. Do not write pages while the gate
-cannot answer.
+Where measurement comes from, when it runs: DataForSEO's Google Ads search-volume
+endpoint, up to 1,000 keywords per request, `location_code 2704`,
+`language_code vi`, with every response's `cost` field printed and totalled.
+OpenSEO is the fallback for short lists at about 1.7 credits a keyword, not the
+bulk tool.
 
-Cut rules:
+On 2026-09-08 the probe returned `HTTP 402`, body `status_code 40200, "Payment
+Required"`: valid credentials, no balance. That used to stop the run. It no longer
+does. Measure what is cheap to measure and feed it in with
+`gate --source tsv --file measured.tsv`, or run on the harvest's committed
+volumes, and let the rest through as `unmeasured`. What an empty balance costs is
+publishing order, not permission.
 
-- **No volume returned, drop.** Not "write it anyway, it is cheap". Drop.
-- **Under 10 a month, drop**, unless the family aggregate clears 500 and each page
-  is genuinely distinct. Survivors on that rule are `family-inferred`.
-- **Difficulty above 40, defer.** Google Ads volume carries no difficulty, so this
-  applies only to rows measured through OpenSEO.
+What survives of the old cut rules:
+
+- **Difficulty above 40, defer.** Still a real signal about how long a page takes
+  to earn anything. Google Ads volume carries no difficulty, so this applies only
+  to rows measured through OpenSEO.
+- **No volume returned, and under 10 a month.** Neither drops any more. Both become
+  `unmeasured`, and `plan` puts them behind every measured row.
 
 Output is `gate-{axis}.tsv` with `keyword`, `search_volume`, `verdict`, `reason`.
-Commit it. The gate file is the evidence that a page was allowed to exist.
+Commit it. It is no longer the evidence that a page was allowed to exist. It is
+the evidence for the order the pages went out in.
 
-When the budget only stretches to a sample of the candidates, add
-`--fill-unmeasured` to `gate --source tsv`. A candidate absent from the measured
-TSV is then judged on its family: it needs at least three measured siblings, at
-least half of them passing on their own, and a family aggregate over 500, or it
-drops. Survivors are `family-inferred` like the thin-keyword ones, and the summary
-counts measured, family-inferred and unmeasured-filled passes separately so you
-can see how much of the bank is inference. Without the flag an unmeasured
-candidate is still a plain drop — reach for it only when measurement is genuinely
-blocked, not to make a thin axis look bigger.
+`--fill-unmeasured` on `gate --source tsv` predates the rule change. It existed to
+let a candidate missing from the measured TSV pass on its family aggregate instead
+of dropping for no volume. Nothing drops now, so the flag only changes a label: it
+stamps a family-backed candidate `family-inferred`, the deprecated alias for
+`unmeasured`, kept so that TSVs written before 2026-09-08 still load. Prefer plain
+`gate --source tsv` and let unmeasured rows be called what they are.
 
 ### 4. Plan
 
@@ -173,16 +233,21 @@ blocked, not to make a thin axis look bigger.
 cd api && ./run.sh python -m app.blog.content.cli plan
 ```
 
-Merges the harvest with the gate survivors. A harvest row is kept only if it hits
-an axis unit or a whole-word entry in `vocabulary.txt` (a whitelist, because a
-blacklist alone let a thesis-service site's generic Q&A pages through); every
-drop is written to `plan-rejected.tsv` with its reason, so read that file for
-false rejections. `category-folds.tsv` then folds any category that cannot clear
-ten posts into a broader one. It clusters
-phrasings of one intent into a single page and keeps the losers as
+Merges the harvest with the gated candidates, measured and unmeasured alike. A
+harvest row is kept only if it hits an axis unit or a whole-word entry in
+`vocabulary.txt` (a whitelist, because a blacklist alone let a thesis-service
+site's generic Q&A pages through); every drop is written to `plan-rejected.tsv`
+with its reason, so read that file for false rejections. `category-folds.tsv`
+then folds any category that cannot clear ten posts into a broader one. It
+clusters phrasings of one intent into a single page and keeps the losers as
 `secondary_keywords`; assigns category and archetype; picks 3 to 5 siblings;
-orders category round-robin by volume so the first tranche is the best page of
-every category; writes `backlog.tsv`.
+**orders every measured row ahead of every unmeasured one**, then category
+round-robin by volume inside each band, so the first tranche is the highest-volume
+measured page of every category; writes `backlog.tsv`.
+
+The rule change moved the ordering key and nothing else here. The vocabulary
+whitelist, the exclusions, the clustering and the category folds behave exactly as
+before.
 
 **Read the top 30 rows by hand before writing anything.** The clustering is
 mechanical and it will occasionally merge two intents that deserve separate pages,
@@ -197,7 +262,9 @@ cd api && ./run.sh python -m app.blog.cli audit-seo --locale vi
 
 A topic the audit lists as covered is a post to improve, not to write again. The
 admin upsert route enforces the same rule at 0.6 overlap within one intent class,
-so a duplicate that gets past the plan still gets refused at insert.
+so a duplicate that gets past the plan still gets refused at insert. This audit
+compares focus keywords and intent; the QA corpus check in step 7 compares
+bodies. Both run, because a batch can duplicate on either.
 
 ### 6. Write
 
@@ -236,14 +303,29 @@ Exit 0 required. The rule list is in `dothesis-blog-content/references/voice.md`
 and `seed-schema.md`; the implementation is `api/app/blog/content/qa.py`. The shim
 runs on plain `python3`, no venv, because it is also the pre-publish check.
 
+This gate carries the weight the volume gate used to carry. Two of its checks are
+the reason the new rule is safe to hold:
+
+- **Corpus mode.** Every seed body is compared against every other body in the
+  seed directory on word-5-gram shingles, and a near-duplicate pair fails. The
+  threshold is stricter when either page is unmeasured. Point it at the whole seed
+  directory, never at a single new file, or the check has nothing to compare
+  against.
+- **The doubled per-post bar for unmeasured pages.** Two of the three proprietary
+  elements instead of one, one more internal link, one more table. The calibrated
+  numbers are in `qa.py`.
+
 Link resolution uses the seed directory plus `backlog.tsv`. When that file is not
 on disk, or the batch links to pages that are already live and no longer in the
 backlog, pass `--known-slugs <file>`, one slug per line.
 
 Then read ten posts by hand, chosen across archetypes, specifically for
 **swapped-noun sameness**: two pages in one family that differ only by the term.
-The QA script cannot see that and it is the failure that gets a domain classified
-as scaled content abuse.
+Shingle overlap catches two bodies that share sentences. It does not catch two
+bodies that say nothing, differently, and that is the failure that gets a domain
+classified as scaled content abuse. Weight the sample towards unmeasured pages.
+Those are the ones where no measured search behaviour is standing behind the
+decision to publish.
 
 ### 8. Publish in tranches
 
@@ -254,18 +336,16 @@ cd api && ./run.sh python -m app.blog.cli export-index
 cd api && ./run.sh python -m app.blog.content.cli report
 ```
 
-Backlog priority order, so the highest-volume page of every category is in the
-first tranche. The nine category pages go live with it, or the posts have nothing
-to link up to.
+Backlog priority order, so the highest-volume measured page of every category is
+in the first tranche and the unmeasured pages follow behind them. The nine
+category pages go live with it, or the posts have nothing to link up to.
 
-A seed whose `gate_status` is `family-inferred` is inserted as a DRAFT — status 0,
-no `published_at`, no `scheduled_at` — and does not consume a publishing slot; the
-slot counter advances for measured seeds only, so a tranche of 40 is 40 real
-pages rather than however many survived the mix. `create --reschedule` walks
-status 2 and leaves the drafts where they are. `plan` already orders every
-inferred row after every measured one for the same reason. A draft leaves this
-state one way: measure its keyword, set `gate_status` to `measured`, and re-run
-`update-from-seed`. It is written and waiting, not published on a guess.
+Every seed schedules, whatever its `gate_status`. The loader no longer forces an
+unmeasured seed to DRAFT and no longer skips it in the slot counter, so a tranche
+of 40 is 40 pages in backlog order with mixed status. `create --reschedule` walks
+status 2 as before. What keeps a weak page out of the bank is the QA gate, not the
+loader: an unmeasured page that cannot clear the doubled distinctness bar never
+reaches `create` at all.
 
 ### 9. Measure before enlarging
 
@@ -293,21 +373,32 @@ that is exactly why the cadence has to be enforced somewhere else.
 `gpt-5.6-luna` at $0.20 in and $1.20 out per million tokens. A 2,000-word
 Vietnamese post is roughly 3,500 output tokens against a 3,000-token prompt, so
 about $0.005 a post, plus a repair call on a fifth of them. **$12 to $20 for 1,000
-posts.** DataForSEO adds a few dollars for the gate. The budget flag exists because
-a runaway loop, not the unit price, is the risk.
+posts.** DataForSEO adds a few dollars when the gate measures, which is now
+optional. Competitor research costs nothing: it is a browser. The budget flag
+exists because a runaway loop, not the unit price, is the risk.
 
 ## Hard rules
 
-- **Measured volume or no page.** No exceptions for "it is cheap to generate".
+- **Real content, genuinely useful, not a duplicate.** All three, per page. No
+  exceptions for "it is cheap to generate". Measured volume orders the queue and
+  vetoes nothing.
+- **An unmeasured page clears twice the distinctness bar.** Two of the three
+  proprietary elements, an extra internal link, an extra table, a stricter
+  near-duplicate threshold. Numbers in `api/app/blog/content/qa.py`.
 - **Take the question, never the answer.** Competitor text is research input and
-  never source material. Do not fetch competitor pages into the writer.
+  never source material. Read competitor pages in a browser, write from DoThesis's
+  own material, and never fetch a competitor page into the writer.
+- **Never pay to measure a competitor.** The browser is the research method. Paid
+  rank and volume endpoints buy ordering information, nothing more.
 - **Expand by methodological unit, never by audience.** See
   `references/expansion-axes.md` for what that means and what it excludes.
 - **A dimension multiplies once.** `cách chạy hồi quy trong spss` is a page.
   `cách chạy hồi quy trong spss cho sinh viên marketing` is not.
 - **Every post carries something proprietary**: a cited threshold table, a worked
-  `số liệu minh họa` block, or a `cách viết vào luận văn` paragraph.
-- **The dedupe audit runs before every batch**, not after.
+  `số liệu minh họa` block, or a `cách viết vào luận văn` paragraph. One for a
+  measured page, two of the three for an unmeasured one.
+- **The dedupe audit runs before every batch**, not after, and the QA corpus check
+  runs over the whole seed directory rather than the new files.
 - **Never publish faster than Google crawls.** Check indexation between tranches.
 - **Read `rejected/` and spot-read 10% of every batch.** The mechanical gate cannot
   see sameness, a wrong threshold, or a citation attached to the wrong claim.
