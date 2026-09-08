@@ -291,7 +291,7 @@ describe("/blog/[locale]/[slug]", () => {
 });
 
 describe("sitemap and robots", () => {
-  test("lists the landing page, the listing, every category and every post", async () => {
+  test("lists the marketing home, the listing, every category and every post", async () => {
     server.use(
       http.post("*/api/v1/blog/categories", () => HttpResponse.json({ categories: CATEGORIES })),
       http.post("*/api/v1/blog/sitemap", () =>
@@ -304,7 +304,7 @@ describe("sitemap and robots", () => {
     );
     const rows = await sitemap();
     const urls = rows.map((r) => r.url);
-    expect(urls).toContain("http://localhost:3006/landing");
+    expect(urls).toContain("http://localhost:3006/");
     expect(urls).toContain("http://localhost:3006/blog/vi");
     expect(urls).toContain("http://localhost:3006/blog/vi/chu-de/spss");
     expect(urls).toContain("http://localhost:3006/blog/vi/chu-de/smartpls");
@@ -319,7 +319,7 @@ describe("sitemap and robots", () => {
       http.post("*/api/v1/blog/categories", () => HttpResponse.json({}, { status: 500 })),
     );
     const urls = (await sitemap()).map((r) => r.url);
-    expect(urls).toEqual(["http://localhost:3006/landing", "http://localhost:3006/blog/vi"]);
+    expect(urls).toEqual(["http://localhost:3006/", "http://localhost:3006/blog/vi"]);
   });
 
   test("robots opens the public surfaces and closes the auth-gated ones", async () => {
