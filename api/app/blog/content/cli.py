@@ -103,6 +103,16 @@ def _cmd_images(args) -> int:
     return 1 if stats.missing else 0
 
 
+def _cmd_relink(args) -> int:
+    from .relink import run  # noqa: PLC0415
+    from .writer import default_out_dir  # noqa: PLC0415
+
+    stats = run(args.dir or default_out_dir(), dry_run=args.dry_run)
+    # Thin posts are a writing problem, so they fail the command rather than
+    # being quietly left for the QA gate to find later.
+    return 1 if stats.thin else 0
+
+
 def _cmd_report(args) -> int:
     from .report import run  # noqa: PLC0415
 
@@ -185,6 +195,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true",
                    help="report what is missing and what it would cost, write nothing")
     p.set_defaults(func=_cmd_images)
+
+    p = sub.add_parser("relink",
+                       help="unlink internal links that stopped resolving after a re-plan")
+    p.add_argument("--dir", default=None, help="seed directory (default: the write output dir)")
+    p.add_argument("--dry-run", action="store_true", help="report only, write nothing")
+    p.set_defaults(func=_cmd_relink)
 
     p = sub.add_parser("report", help="counts, volume, spend and the shortfall against 1,000")
     p.add_argument("--backlog", default=None)
