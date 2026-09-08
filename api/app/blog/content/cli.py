@@ -5,6 +5,7 @@
     plan     harvest + gate survivors    -> backlog.tsv
     write    backlog.tsv + the model     -> seed JSON + write-log.tsv
     qa       seed dir                    -> pass/fail report, exit 1 on any FAIL
+    images   seed dir + the library      -> hero per seed, one picture per scene
     report   everything above            -> counts, volume, spend, shortfall
 
 Run it through the arch wrapper: `cd api && ./run.sh python -m app.blog.content.cli ...`.
@@ -82,6 +83,19 @@ def _cmd_qa(args) -> int:
     return main(argv)
 
 
+def _cmd_images(args) -> int:
+    load_env()
+    from .images import run  # noqa: PLC0415
+    from .writer import default_out_dir  # noqa: PLC0415
+
+    stats = run(seed_dir=args.dir or default_out_dir(), do_assign=args.assign,
+                do_generate=args.generate, force=args.force,
+                use_openai=args.openai, dry_run=args.dry_run)
+    # A missing key is a mapping bug worth an exit code: the seed points at a
+    # scene nobody wrote a prompt for, and that post ships with no hero.
+    return 1 if stats.missing else 0
+
+
 def _cmd_report(args) -> int:
     from .report import run  # noqa: PLC0415
 
@@ -146,6 +160,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--known-slugs", default=None,
                    help="file of slugs that internal links may point at, one per line")
     p.set_defaults(func=_cmd_qa)
+
+    p = sub.add_parser("images",
+                       help="point seeds at the shared illustration library and "
+                            "fill the keys that have no picture yet")
+    p.add_argument("--dir", default=None, help="seed directory (default: the write output dir)")
+    p.add_argument("--assign", action="store_true",
+                   help="give every seed a hero pointing at a library key")
+    p.add_argument("--generate", action="store_true",
+                   help="generate the keys that have no image yet, and only those")
+    p.add_argument("--force", action="store_true",
+                   help="regenerate keys that already have an image (once per run, not once per post)")
+    p.add_argument("--openai", action="store_true",
+                   help="use gpt-image-2 instead of the cheaper gemini-2.5-flash-image")
+    p.add_argument("--dry-run", action="store_true",
+                   help="report what is missing and what it would cost, write nothing")
+    p.set_defaults(func=_cmd_images)
 
     p = sub.add_parser("report", help="counts, volume, spend and the shortfall against 1,000")
     p.add_argument("--backlog", default=None)

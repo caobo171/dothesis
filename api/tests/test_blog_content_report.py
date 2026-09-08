@@ -103,4 +103,5 @@ def test_cli_report_runs(tmp_path, capsys):
 def test_cli_exposes_every_command():
     parser = cli.build_parser()
     actions = [a for a in parser._actions if a.dest == "command"]
-    assert set(actions[0].choices) == {"expand", "gate", "plan", "write", "qa", "report"}
+    assert set(actions[0].choices) == {"expand", "gate", "plan", "write", "qa",
+                                       "images", "report"}
