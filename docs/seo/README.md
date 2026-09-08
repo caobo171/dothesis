@@ -105,12 +105,12 @@ cd api
     --backlog ../docs/seo/topic-bank/backlog.tsv \
     --out data/blog-seeds/vi/posts --limit 5
 
-# 5. mechanical QA over the WHOLE seed dir, never one file: the corpus check
-#    compares every body against every other. Exit 0 required before publishing.
-./run.sh python -m app.blog.content.cli qa data/blog-seeds/vi/posts
+# 5. mechanical QA. `--corpus` compares every body against every other, so give
+#    it the WHOLE seed dir, never one file. Exit 0 required before publishing.
+./run.sh python -m app.blog.content.cli qa data/blog-seeds/vi/posts --corpus
 #    the same gate without the venv:
 python3 ../.claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py \
-    data/blog-seeds/vi/posts
+    data/blog-seeds/vi/posts --corpus
 
 # 6. counts, measured against unmeasured, volume totals, spend, shortfall
 ./run.sh python -m app.blog.content.cli report

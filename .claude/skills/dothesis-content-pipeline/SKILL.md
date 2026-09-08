@@ -298,7 +298,8 @@ model.
 ### 7. Gate the batch mechanically
 
 ```bash
-python3 .claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py api/data/blog-seeds/vi/posts
+python3 .claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py \
+  api/data/blog-seeds/vi/posts --corpus
 ```
 
 Exit 0 required. The rule list is in `dothesis-blog-content/references/voice.md`
@@ -308,11 +309,12 @@ runs on plain `python3`, no venv, because it is also the pre-publish check.
 This gate carries the weight the volume gate used to carry. Two of its checks are
 the reason the new rule is safe to hold:
 
-- **Corpus mode.** Every seed body is compared against every other body in the
-  seed directory on word-5-gram shingles, and a near-duplicate pair fails. The
-  threshold is stricter when either page is unmeasured. Point it at the whole seed
-  directory, never at a single new file, or the check has nothing to compare
-  against.
+- **Corpus mode, behind `--corpus`.** Every seed body is compared against every
+  other body in the seed directory on word-5-gram shingles, and a near-duplicate
+  pair fails, at a stricter threshold when either page is unmeasured. Pass the
+  flag and point it at the whole seed directory. Without the flag, or aimed at a
+  single new file, the check has nothing to compare against and the batch's one
+  real defence against sameness never runs.
 - **The doubled per-post bar for unmeasured pages.** Two of the three proprietary
   elements instead of one, one more internal link, one more table. The calibrated
   numbers are in `qa.py`.

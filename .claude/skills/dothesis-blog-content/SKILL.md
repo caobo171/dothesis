@@ -159,7 +159,7 @@ Seed JSON goes to `api/data/blog-seeds/vi/posts/NNNN-{slug}.json`. Schema in
 `references/seed-schema.md`. Gate it first, then insert:
 
 ```bash
-python3 .claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py api/data/blog-seeds/vi/posts
+python3 .claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py api/data/blog-seeds/vi/posts --corpus
 cd api && ./run.sh python -m app.blog.cli create --dir ../api/data/blog-seeds/vi/posts --dry-run
 cd api && ./run.sh python -m app.blog.cli create --dir ../api/data/blog-seeds/vi/posts
 ```

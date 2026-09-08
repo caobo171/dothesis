@@ -10,7 +10,12 @@ stdlib-only for exactly this reason, and the seed dir is usually inspected by
 someone who has not activated `api/.venv`.
 
     python3 .claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py [seed-dir] \
-        [--known-slugs FILE]
+        [--corpus] [--known-slugs FILE]
+
+`--corpus` adds the cross-post near-duplicate check: every body against every
+other body in the seed dir, on word-5-gram shingles, at a stricter threshold when
+either page is unmeasured. It is the check a single seed cannot make, so pass it
+before publishing a batch and give it the whole directory.
 
 `--known-slugs` is a file of slugs, one per line, that internal links may resolve
 to on top of the seed dir and `backlog.tsv`. Without it nothing changes.
