@@ -356,6 +356,71 @@ def test_the_cli_dry_run_reaches_the_library_and_calls_nothing(tmp_path, capsys)
 
 
 # --------------------------------------------------------------------------
+# Provider, quality tier and the estimate
+# --------------------------------------------------------------------------
+
+
+def test_the_default_provider_is_gpt_image_2_and_gemini_is_the_override(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("GEMINI_API_KEY", "y")
+
+    assert images.provider() == "openai"
+    assert images.provider(use_gemini=True) == "gemini"
+
+
+def test_gemini_is_the_fallback_when_there_is_no_openai_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert images.provider() == "gemini"
+
+
+def test_the_quality_tier_defaults_to_medium_and_ignores_a_value_off_the_list(monkeypatch):
+    monkeypatch.delenv("BLOG_IMAGE_QUALITY", raising=False)
+    assert images.openai_quality() == "medium"
+
+    monkeypatch.setenv("BLOG_IMAGE_QUALITY", "low")
+    assert images.openai_quality() == "low"
+
+    monkeypatch.setenv("BLOG_IMAGE_QUALITY", "ultra")
+    assert images.openai_quality() == "medium"
+
+
+def test_the_estimate_follows_the_provider_and_the_tier(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("BLOG_IMAGE_QUALITY", "low")
+    assert images.estimated_cost(10) == pytest.approx(10 * 0.012)
+
+    monkeypatch.setenv("BLOG_IMAGE_QUALITY", "medium")
+    assert images.estimated_cost(10) == pytest.approx(10 * 0.042)
+    # The tier is a gpt-image-2 idea; Gemini has one flat price.
+    assert images.estimated_cost(10, use_gemini=True) == pytest.approx(10 * 0.039)
+
+
+def test_the_quality_flag_and_the_environment_variable_are_one_setting(tmp_path, monkeypatch):
+    monkeypatch.delenv("BLOG_IMAGE_QUALITY", raising=False)
+    posts = tmp_path / "posts"
+    _seed(posts, "0001-cronbach-alpha.json", slug="cronbach-alpha")
+
+    cli.main(["images", "--dir", str(posts), "--assign", "--dry-run", "--quality", "high"])
+
+    assert os.environ["BLOG_IMAGE_QUALITY"] == "high"
+    assert images.openai_quality() == "high"
+
+
+def test_the_cost_line_names_the_provider_and_the_unit_price(monkeypatch, capsys):
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("BLOG_IMAGE_QUALITY", "medium")
+    stats = images.Stats(generated=["a", "b"])
+
+    lines = images.cost_lines(stats, posts=900, library_size=37)
+
+    joined = "\n".join(lines)
+    assert "openai medium" in joined
+    assert "0.042" in joined
+    # 900 heroes against 37 scenes is the comparison the feature exists to win.
+    assert "whole library" in joined and "per-post would" in joined
+
+
+# --------------------------------------------------------------------------
 # The committed library itself
 # --------------------------------------------------------------------------
 

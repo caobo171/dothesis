@@ -126,8 +126,9 @@ cd api
 ```
 
 `--dir` picks a different seed directory, `--force` regenerates a key that
-already has an image (once per run, not once per post), `BLOG_IMAGE_QUALITY`
-picks the gpt-image-2 tier (default `medium`), and `--gemini` swaps in
+already has an image (once per run, not once per post), `--quality` (or
+`BLOG_IMAGE_QUALITY`, two spellings of one setting) picks the gpt-image-2 tier
+between `low`, `medium` and `high`, and `--gemini` swaps in
 gemini-2.5-flash-image. `OPENAI_API_KEY` and `GEMINI_API_KEY` live in the repo
 `.env`. Never print them.
 
