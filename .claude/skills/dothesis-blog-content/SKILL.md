@@ -76,6 +76,13 @@ Rules that follow:
   refusal needs a written `duplicate_override_reason` of at least 25 characters,
   which is stored and printed in `docs/blog-index.md`. Write it for a human, or
   re-angle the post.
+- **What counts as "the same page" is head position, not word count.** Vietnamese
+  is head-initial. A keyword that appends a specifier to the same head is one page
+  (`thang đo likert 5 mức độ` is the `thang đo likert` page); a keyword that puts a
+  new head in FRONT is a different page (`đề cương nghiên cứu khoa học` is a
+  proposal, not research). One qualifier in front is still the same page (`gg form
+  khảo sát`). If you are picking a focus keyword and cannot decide, ask which word
+  the phrase is *about* — in Vietnamese that is the first one.
 
 ### 1. Ground the topic
 

@@ -273,7 +273,21 @@ Errors follow the repo shape `{"detail": {"error": {"code", "message"}}}`.
 - `similarity.py`: port of WELE's `tokens()`, `classify()` (intent buckets
   comparison | tool | how-to | definition | troubleshooting | informational,
   regexes for Vietnamese and English), `overlap()`, `find_clashes()` at
-  threshold 0.6 within a locale and intent class.
+  threshold 0.6 within a locale and intent class. `same_page(a, b)` is the one
+  test for "these are one page", and both `plan` and the guard call it —
+  **the head rule** (2026-09-08): `tokens()` strips page-family phrases, so one
+  keyword can end up a token subset of another and the overlap coefficient
+  (`shared / min`) then reports 100%. Vietnamese is head-initial, so the
+  position of the extra words decides. Extra words AFTER the shared span narrow
+  the same head and are one page (`thang đo likert 5 mức độ` / `thang đo
+  likert`); at most one extra word in FRONT is a qualifier and still one page
+  (`gg form khảo sát` / `form khảo sát`); two or more in front name a new head
+  that takes the rest as its complement, and are two pages (`đề cương nghiên
+  cứu khoa học` is a proposal, `nghiên cứu khoa học` is research). And family
+  stripping may EQUATE two keywords but never nest one inside another: every
+  word of the broader keyword, family words included, must survive in the
+  narrower one, or the containment is an artefact of the stripper. Calibrated
+  by replaying the 979-seed load: of 342 refusals, 89 now pass and 253 stand.
 - `guard.py`: `assert_no_duplicate(session, seed, exclude_id=None)`; candidates
   are visible posts with a non-empty `focus_keyword` (WELE's calibration
   finding: title fallback produces false clashes on template-title families).
@@ -357,7 +371,13 @@ Commands under `python -m app.blog.content.cli`:
 3. `plan` merges the harvest (`harvest-2026-09-07.tsv` minus exclusion
    regexes) with gate survivors, clusters phrasings into one page per intent
    (same slug stem, or identical volume and shared head token as WELE's
-   morphological merge), picks the highest-volume phrasing as
+   morphological merge), then runs `similarity.same_page` over the clustered
+   rows in priority order and absorbs any row an earlier row would be refused
+   against into that earlier row — its keyword joins the winner's
+   `secondary_keywords` and its competitor URLs join the winner's, so the
+   backlog holds only rows that can actually be published (2026-09-08: the
+   979-seed load refused 342 written pages because plan and the guard disagreed
+   about what one page is). It picks the highest-volume phrasing as
    `focus_keyword` and keeps the rest as `secondary_keywords`, assigns
    category and archetype, computes 3 to 5 `sibling_slugs` per row (same
    family, then same category by volume), orders rows category round-robin by
