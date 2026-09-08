@@ -165,6 +165,15 @@ def test_a_stubbed_translation_produces_a_seed_that_passes_the_gate(tmp_path):
     assert stats["locale"] == "en"
 
 
+def test_a_string_where_a_list_belongs_does_not_become_a_list_of_letters(tmp_path):
+    """`"tags": "spss, alpha"` is a shape the model reaches for now and then."""
+    summary, _model, out, _src = _run(
+        tmp_path, [_payload(tags="spss, alpha", secondary_keywords="alpha")], limit=1)
+    assert summary["written"] == 1
+    seed = _load(str(next(out.glob("*.json"))))
+    assert seed["tags"] == [] and seed["secondary_keywords"] == []
+
+
 def test_the_gate_rejects_a_translation_that_dropped_the_faq(tmp_path):
     """A half-translated post fails here for the reason it would fail QA."""
     broken = _payload(body=_payload()["body"].replace(

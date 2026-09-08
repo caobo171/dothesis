@@ -230,7 +230,15 @@ def target_filename(prefix: str, slug: str) -> str:
 
 
 def _strings(value) -> list[str]:
-    return [v.strip() for v in (value or []) if isinstance(v, str) and v.strip()]
+    """A list-of-strings field, or nothing.
+
+    The `isinstance` guard is not defensive noise: a model that returns
+    `"tags": "spss, alpha"` instead of a list would otherwise be iterated
+    character by character, and the seed would ship with twelve one-letter tags.
+    """
+    if not isinstance(value, list):
+        return []
+    return [v.strip() for v in value if isinstance(v, str) and v.strip()]
 
 
 def translated_seed(source: dict, produced: dict, slug: str) -> dict:
