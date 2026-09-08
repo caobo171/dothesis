@@ -220,7 +220,24 @@ def page_overlap(a: str, b: str) -> float:
         return score if _narrows(a, b) else 0.0
     if tb < ta:
         return score if _narrows(b, a) else 0.0
-    return score
+    # Partial overlap, where each keyword holds a word the other lacks, is not
+    # something this coefficient can judge. Measured over the 125 partial pairs
+    # the loader refused on 2026-09-08: what separates "cách trích dẫn tài liệu
+    # tham khảo" from "cách ghi tài liệu tham khảo" (one page) is that the
+    # differing words are synonyms, and what separates "khoảng tin cậy" from
+    # "độ tin cậy" (two pages) is that they are not. The coefficient sees the
+    # same number either way, and raising the bar does not help: at 75% and
+    # above the split was still roughly six one-page pairs against twenty-two
+    # genuinely different ones, including "độ tin cậy tổng hợp" against "độ tin
+    # cậy 95" and "nghiện mạng xã hội" against "quảng cáo trên mạng xã hội".
+    #
+    # So partial overlap is not a block. The costs are not symmetric: a false
+    # refusal deletes a real page for good, because `plan` absorbs its keyword
+    # into the winner and never commissions it, while a false pass ships two
+    # pages a human can merge later without rewriting either. `audit.py`
+    # deliberately keeps using the raw coefficient so these pairs still surface
+    # for review; they are simply no longer refused at the door.
+    return 0.0
 
 
 def same_page(a: str, b: str, threshold: float = CLASH_THRESHOLD) -> bool:

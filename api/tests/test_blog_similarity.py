@@ -190,12 +190,30 @@ def test_stripping_may_equate_two_keywords_but_not_nest_one_inside_the_other():
     assert same_page("công thức tính phương sai", "cách tính phương sai")
 
 
-def test_a_partial_overlap_is_left_to_the_coefficient():
-    # Neither token set contains the other, so there is no containment artefact
-    # to correct and the head rule stays out of it.
-    a, b = "lời nói đầu", "lời mở đầu"
-    assert not (tokens(a) < tokens(b) or tokens(b) < tokens(a))
-    assert page_overlap(a, b) == overlap(tokens(a), tokens(b)) >= CLASH_THRESHOLD
+def test_a_partial_overlap_never_blocks():
+    """Measured on the 125 partial pairs the loader refused on 2026-09-08.
+
+    Each side holds a word the other lacks, and whether that makes one page or
+    two turns on synonymy, which this coefficient cannot see. Raising the bar
+    did not separate them: at 75% and above the split was still about six
+    one-page pairs against twenty-two genuinely different ones. Refusing costs
+    more than passing, because plan absorbs a refused keyword and the page is
+    never commissioned, so partial overlap is reported by the audit and blocked
+    by nobody.
+    """
+    # Two pages that would have been merged, and are not close to the same page.
+    for a, b in (("khoảng tin cậy", "độ tin cậy"),
+                 ("ordinary least squares là gì", "partial least squares là gì"),
+                 ("phần mềm spss", "phần mềm stata"),
+                 ("lỗi ave nhỏ hơn 0 5 spss", "lỗi kmo nhỏ hơn 0 5 spss")):
+        assert not (tokens(a) < tokens(b) or tokens(b) < tokens(a)), "partial, not containment"
+        assert overlap(tokens(a), tokens(b)) >= CLASH_THRESHOLD, "the raw coefficient still fires"
+        assert page_overlap(a, b) == 0.0
+        assert not same_page(a, b)
+
+    # The price of the rule, stated rather than hidden: a synonym pair now ships
+    # as two pages and is left to the audit and a human to consolidate.
+    assert not same_page("lời nói đầu", "lời mở đầu")
 
 
 def test_same_page_needs_the_intent_to_agree_as_well():

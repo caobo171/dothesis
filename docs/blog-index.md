@@ -7,9 +7,16 @@ Snapshot taken 2026-09-08. The database is the source of truth; this goes
 stale as soon as anyone publishes. For live data run
 `./run.sh python -m app.blog.cli audit-seo`.
 
-637 post(s).
+839 post(s).
 
-## vi — 637 post(s), 0 published, 637 scheduled
+## vi — 839 post(s), 0 published, 839 scheduled
+
+### yeu-cau-kiem-soat-karasek-la-gi
+**Yêu cầu kiểm soát Karasek là gì? Cách đo và kiểm định** · vi · scheduled 2027-02-26 · 3423 words
+Keyword: `yêu cầu kiểm soát karasek là gì`
+Tags: Karasek, yêu cầu kiểm soát, job demand control, JD-R, mô hình nghiên cứu
+> Hướng dẫn đọc đúng yêu cầu kiểm soát trong mô hình Karasek, xây dựng thang đo và đưa biến này vào mô hình nghiên cứu định lượng.
+/blog/vi/yeu-cau-kiem-soat-karasek-la-gi
 
 ### y-dinh-chia-se-thong-tin-la-gi
 **Ý định chia sẻ thông tin là gì? Cách xây dựng thang đo** · vi · scheduled 2027-02-26 · 2890 words
@@ -31,6 +38,20 @@ Keyword: `xung đột công việc gia đình là gì`
 Tags: xung đột công việc gia đình, thang đo, Cronbach's Alpha, EFA, SmartPLS
 > Bạn sẽ biết cách định nghĩa, điều chỉnh biến quan sát và kiểm định thang đo xung đột công việc gia đình trên dữ liệu khảo sát của mình.
 /blog/vi/xung-dot-cong-viec-gia-dinh-la-gi
+
+### von-xa-hoi-la-gi
+**Vốn xã hội là gì? Cách xây dựng mô hình và thang đo** · vi · scheduled 2027-02-26 · 3564 words
+Keyword: `vốn xã hội là gì`
+Tags: vốn xã hội, mô hình nghiên cứu, thang đo, SPSS, SmartPLS
+> Hướng dẫn biến khái niệm vốn xã hội thành mô hình nghiên cứu, giả thuyết, thang đo và kết quả kiểm định có thể trình bày trong luận văn.
+/blog/vi/von-xa-hoi-la-gi
+
+### von-tam-ly-la-gi
+**Vốn tâm lý là gì? Cách đo lường và kiểm định thang đo** · vi · scheduled 2027-02-25 · 3078 words
+Keyword: `vốn tâm lý là gì`
+Tags: vốn tâm lý, Psychological Capital, thang đo, SPSS, SmartPLS
+> Bạn có thể dùng hướng dẫn này để xác định cấu trúc vốn tâm lý, điều chỉnh bảng hỏi và kiểm định thang đo trước khi đưa vào mô hình nghiên cứu.
+/blog/vi/von-tam-ly-la-gi
 
 ### vecm-la-gi
 **VECM là gì? Cách hiểu, xây dựng và kiểm định mô hình** · vi · scheduled 2027-02-25 · 3275 words
@@ -109,6 +130,13 @@ Tags: thang đo vốn tâm lý, tâm lý tích cực, Cronbach's Alpha, EFA, SPS
 > Bạn có thể bắt đầu xây dựng thang đo vốn tâm lý từ bốn thành phần, sau đó điều chỉnh bảng hỏi và kiểm định bằng SPSS trước khi đưa vào mô hình.
 /blog/vi/thang-do-von-tam-ly
 
+### thang-do-su-hai-long-dich-vu-cong
+**Thang đo sự hài lòng dịch vụ công: biến quan sát và cách kiểm định** · vi · scheduled 2027-02-23 · 2796 words
+Keyword: `thang đo sự hài lòng dịch vụ công`
+Tags: thang đo, sự hài lòng, dịch vụ công, SPSS, SERVQUAL
+> Từ thang đo gốc đến bảng hỏi tiếng Việt, bạn có thể dùng quy trình này để xây dựng và kiểm định thang đo sự hài lòng dịch vụ công.
+/blog/vi/thang-do-su-hai-long-dich-vu-cong
+
 ### thang-do-so-that-bai
 **Thang đo sợ thất bại: cách xây dựng và kiểm định** · vi · scheduled 2027-02-23 · 2897 words
 Keyword: `thang đo sợ thất bại`
@@ -144,19 +172,26 @@ Tags: thang đo DASS 21, SPSS, Cronbach's Alpha, EFA, sức khỏe tâm thần
 > Bạn có thể dùng hướng dẫn này để đưa DASS 21 vào bảng hỏi, kiểm tra dữ liệu và trình bày kết quả trong luận văn định lượng.
 /blog/vi/thang-do-dass-21
 
-### tam-giac-gian-lan-la-gi
-**Tam giác gian lận là gì? Mô hình, thành phần và cách áp dụng** · vi · scheduled 2027-02-22 · 3251 words
-Keyword: `tam giác gian lận là gì`
-Tags: tam giác gian lận, fraud triangle, mô hình nghiên cứu, SPSS, SmartPLS
-> Tam giác gian lận giúp bạn phân tích mối liên hệ giữa áp lực, cơ hội và hợp lý hóa trong một mô hình nghiên cứu định lượng.
-/blog/vi/tam-giac-gian-lan-la-gi
-
 ### tai-chinh-hanh-vi-la-gi
 **Tài chính hành vi là gì? Mô hình, thang đo và cách kiểm định** · vi · scheduled 2027-02-22 · 3254 words
 Keyword: `tài chính hành vi là gì`
 Tags: tài chính hành vi, behavioral finance, mô hình nghiên cứu, SPSS, SmartPLS
 > Tài chính hành vi giúp bạn xây dựng mô hình nghiên cứu về cách cảm xúc, nhận thức và hành vi ảnh hưởng đến quyết định tài chính.
 /blog/vi/tai-chinh-hanh-vi-la-gi
+
+### su-hai-long-nguoi-benh-la-gi
+**Sự hài lòng người bệnh là gì và đo bằng thang đo nào** · vi · scheduled 2027-02-22 · 3105 words
+Keyword: `sự hài lòng người bệnh là gì`
+Tags: sự hài lòng người bệnh, thang đo, Cronbach's Alpha, EFA, SPSS
+> Bạn có thể dùng hướng dẫn này để xây dựng thang đo sự hài lòng người bệnh và kiểm tra dữ liệu trước khi đưa vào luận văn định lượng.
+/blog/vi/su-hai-long-nguoi-benh-la-gi
+
+### su-hai-long-dich-vu-cong-la-gi
+**Sự hài lòng dịch vụ công là gì? Cách xây dựng thang đo** · vi · scheduled 2027-02-22 · 3115 words
+Keyword: `sự hài lòng dịch vụ công là gì`
+Tags: sự hài lòng dịch vụ công, thang đo, SPSS, Cronbach's Alpha, EFA
+> Bạn sẽ biết cách định nghĩa sự hài lòng dịch vụ công, chọn biến quan sát và kiểm định thang đo trước khi đưa vào mô hình định lượng.
+/blog/vi/su-hai-long-dich-vu-cong-la-gi
 
 ### su-gan-bo-voi-diem-den-la-gi
 **Sự gắn bó với điểm đến là gì? Cách xây dựng thang đo** · vi · scheduled 2027-02-22 · 3382 words
@@ -249,6 +284,13 @@ Tags: PPM, Push-Pull-Mooring, mô hình nghiên cứu, SmartPLS, SPSS
 > PPM là mô hình giúp giải thích vì sao một cá nhân rời bỏ lựa chọn hiện tại và chuyển sang một lựa chọn thay thế.
 /blog/vi/ppm-la-gi
 
+### phu-thuoc-nguon-luc-la-gi
+**Phụ thuộc nguồn lực là gì? Cách xây dựng mô hình nghiên cứu** · vi · scheduled 2027-02-19 · 3084 words
+Keyword: `phụ thuộc nguồn lực là gì`
+Tags: phụ thuộc nguồn lực, resource dependence theory, mô hình nghiên cứu, SmartPLS, SPSS
+> Bạn sẽ chuyển khái niệm phụ thuộc nguồn lực thành mô hình, giả thuyết và biến quan sát có thể kiểm định bằng dữ liệu định lượng.
+/blog/vi/phu-thuoc-nguon-luc-la-gi
+
 ### phan-tich-duong-dan-la-gi
 **Phân tích đường dẫn là gì? Cách đọc kết quả và ngưỡng đánh giá** · vi · scheduled 2027-02-19 · 3002 words
 Keyword: `phân tích đường dẫn là gì`
@@ -262,13 +304,6 @@ Keyword: `pestel là gì`
 Tags: PESTEL, mô hình nghiên cứu, môi trường vĩ mô, SPSS, SmartPLS
 > PESTEL giúp bạn hệ thống hóa các yếu tố bên ngoài doanh nghiệp và chuyển chúng thành mô hình, biến quan sát có thể kiểm định trong luận văn định lượng.
 /blog/vi/pestel-la-gi
-
-### niem-tin-vao-lanh-dao-la-gi
-**Niềm tin vào lãnh đạo là gì? Cách xây dựng và kiểm định thang đo** · vi · scheduled 2027-02-19 · 3178 words
-Keyword: `niềm tin vào lãnh đạo là gì`
-Tags: niềm tin vào lãnh đạo, thang đo, Cronbach's Alpha, EFA, SPSS
-> Hướng dẫn xác định khái niệm, xây dựng biến quan sát và kiểm định thang đo niềm tin vào lãnh đạo bằng dữ liệu định lượng.
-/blog/vi/niem-tin-vao-lanh-dao-la-gi
 
 ### nhu-cau-thanh-dat-mcclelland-la-gi
 **Nhu cầu thành đạt McClelland là gì và cách áp dụng vào luận văn** · vi · scheduled 2027-02-19 · 3267 words
@@ -284,6 +319,20 @@ Tags: nhận thức xã hội Bandura, mô hình nghiên cứu, self-efficacy, S
 > Nhận thức xã hội Bandura giúp bạn giải thích cách cá nhân học hỏi, hình thành niềm tin và thay đổi hành vi trong một mô hình định lượng.
 /blog/vi/nhan-thuc-xa-hoi-bandura-la-gi
 
+### nghien-mang-xa-hoi-la-gi
+**Nghiện mạng xã hội là gì và đo bằng thang đo nào** · vi · scheduled 2027-02-18 · 2931 words
+Keyword: `nghiện mạng xã hội là gì`
+Tags: nghiện mạng xã hội, thang đo, Cronbach's Alpha, EFA, SPSS
+> Bạn sẽ biết cách chuyển khái niệm nghiện mạng xã hội thành thang đo có thể kiểm định trong luận văn định lượng.
+/blog/vi/nghien-mang-xa-hoi-la-gi
+
+### ngau-nhien-contingency-la-gi
+**Ngẫu nhiên contingency là gì trong nghiên cứu định lượng** · vi · scheduled 2027-02-18 · 2923 words
+Keyword: `ngẫu nhiên contingency là gì`
+Tags: ngẫu nhiên contingency, contingency theory, mô hình nghiên cứu, SPSS, SmartPLS
+> Hiểu đúng mô hình ngẫu nhiên contingency để xây dựng giả thuyết, chọn biến điều kiện và kiểm định dữ liệu định lượng.
+/blog/vi/ngau-nhien-contingency-la-gi
+
 ### nang-luc-tu-hoc-la-gi
 **Năng lực tự học là gì? Cách xây dựng thang đo trong luận văn** · vi · scheduled 2027-02-18 · 3252 words
 Keyword: `năng lực tự học là gì`
@@ -291,33 +340,12 @@ Tags: năng lực tự học, thang đo, Cronbach's Alpha, EFA, nghiên cứu đ
 > Từ khái niệm năng lực tự học đến bộ biến quan sát, cách điều chỉnh bảng hỏi và kiểm định thang đo bằng dữ liệu của bạn.
 /blog/vi/nang-luc-tu-hoc-la-gi
 
-### mo-hinh-ppm
-**Mô hình PPM là gì? Cách xây dựng và kiểm định mô hình** · vi · scheduled 2027-02-18 · 3130 words
-Keyword: `mô hình ppm`
-Tags: mô hình PPM, Push Pull Mooring, mô hình nghiên cứu, SPSS, SmartPLS
-> Hướng dẫn dùng mô hình PPM để phân tích lực đẩy, lực kéo và yếu tố neo trong hành vi chuyển đổi của người dùng.
-/blog/vi/mo-hinh-ppm
-
-### mo-hinh-ipa
-**Mô hình IPA là gì? Cách xây dựng và kiểm định trong luận văn** · vi · scheduled 2027-02-17 · 3537 words
-Keyword: `mô hình ipa`
-Tags: mô hình IPA, Importance Performance Analysis, chất lượng dịch vụ, sự hài lòng khách hàng, SPSS
-> Mô hình IPA giúp bạn xác định thuộc tính nào cần ưu tiên cải thiện bằng cách đối chiếu mức độ quan trọng với mức độ thực hiện trong dữ liệu khảo sát.
-/blog/vi/mo-hinh-ipa
-
-### mo-hinh-ekb
-**Mô hình EKB là gì và cách áp dụng trong nghiên cứu định lượng** · vi · scheduled 2027-02-17 · 3211 words
-Keyword: `mô hình ekb`
-Tags: mô hình EKB, hành vi người tiêu dùng, mô hình nghiên cứu, SPSS, SmartPLS
-> Mô hình EKB giúp bạn mô tả cách người tiêu dùng nhận biết nhu cầu, tìm kiếm thông tin, đánh giá lựa chọn và ra quyết định mua.
-/blog/vi/mo-hinh-ekb
-
-### mo-hinh-amo
-**Mô hình AMO: Thành phần, thang đo và cách kiểm định** · vi · scheduled 2027-02-17 · 3241 words
-Keyword: `mô hình amo`
-Tags: mô hình AMO, mô hình nghiên cứu, quản trị nhân sự, SPSS, SmartPLS
-> Hướng dẫn dùng mô hình AMO để xây dựng mô hình nghiên cứu, giả thuyết, thang đo và kế hoạch phân tích dữ liệu.
-/blog/vi/mo-hinh-amo
+### nang-luc-dong-la-gi
+**Năng lực động là gì? Mô hình, thành phần và cách nghiên cứu** · vi · scheduled 2027-02-18 · 3351 words
+Keyword: `năng lực động là gì`
+Tags: năng lực động, dynamic capabilities, mô hình nghiên cứu, SmartPLS, SPSS
+> Nắm được mô hình năng lực động, cách xây dựng giả thuyết và lựa chọn thang đo để đưa vào đề tài định lượng.
+/blog/vi/nang-luc-dong-la-gi
 
 ### ma-tran-qspm-la-gi
 **Ma trận QSPM là gì? Cách lập và phân tích trong luận văn** · vi · scheduled 2027-02-17 · 3152 words
@@ -326,12 +354,47 @@ Tags: ma trận QSPM, ma trận IFE, ma trận EFE, hoạch định chiến lư�
 > Bạn sẽ biết ma trận QSPM dùng để so sánh các chiến lược như thế nào, cần lấy dữ liệu từ đâu và viết kết quả ra sao trong luận văn.
 /blog/vi/ma-tran-qspm-la-gi
 
+### ly-thuyet-ppm
+**Lý thuyết PPM là gì? Mô hình Push, Pull, Mooring trong nghiên cứu** · vi · scheduled 2027-02-17 · 3555 words
+Keyword: `lý thuyết ppm`
+Tags: lý thuyết PPM, Push Pull Mooring, mô hình nghiên cứu, ý định chuyển đổi, SmartPLS
+> Hướng dẫn dùng lý thuyết PPM để xây mô hình nghiên cứu về ý định chuyển đổi, rời bỏ hoặc chấp nhận một dịch vụ, nền tảng.
+/blog/vi/ly-thuyet-ppm
+
+### ly-thuyet-ipa
+**Lý thuyết IPA: Cách xây dựng mô hình Importance Performance Analysis** · vi · scheduled 2027-02-16 · 3448 words
+Keyword: `lý thuyết ipa`
+Tags: lý thuyết IPA, Importance Performance Analysis, chất lượng dịch vụ, SPSS, mô hình nghiên cứu
+> Hướng dẫn dùng lý thuyết IPA để so sánh mức độ quan trọng và mức độ thực hiện của các thuộc tính dịch vụ trong luận văn.
+/blog/vi/ly-thuyet-ipa
+
+### ly-thuyet-ekb
+**Lý thuyết EKB là gì? Mô hình hành vi người tiêu dùng** · vi · scheduled 2027-02-16 · 3288 words
+Keyword: `lý thuyết ekb`
+Tags: lý thuyết EKB, hành vi người tiêu dùng, mô hình nghiên cứu, SPSS, SmartPLS
+> Hướng dẫn dùng lý thuyết EKB để xây dựng mô hình nghiên cứu hành vi người tiêu dùng và chuyển mô hình thành giả thuyết có thể kiểm định.
+/blog/vi/ly-thuyet-ekb
+
+### ly-thuyet-amo
+**Lý thuyết AMO: Mô hình năng lực, động lực và cơ hội** · vi · scheduled 2027-02-16 · 3380 words
+Keyword: `lý thuyết amo`
+Tags: lý thuyết AMO, AMO model, mô hình nghiên cứu, năng lực, động lực làm việc, cơ hội tham gia
+> Hướng dẫn dùng lý thuyết AMO để xây dựng mô hình nghiên cứu định lượng về năng lực, động lực và cơ hội của người lao động.
+/blog/vi/ly-thuyet-amo
+
 ### lo-au-thi-cu-la-gi
 **Lo âu thi cử là gì và đo bằng thang đo nào** · vi · scheduled 2027-02-16 · 3069 words
 Keyword: `lo âu thi cử là gì`
 Tags: lo âu thi cử, thang đo, Cronbach's Alpha, EFA, SPSS
 > Hướng dẫn xác định khái niệm, xây dựng biến quan sát và kiểm định thang đo lo âu thi cử bằng SPSS.
 /blog/vi/lo-au-thi-cu-la-gi
+
+### lanh-dao-dao-duc-la-gi
+**Lãnh đạo đạo đức là gì? Cách xây dựng thang đo** · vi · scheduled 2027-02-16 · 3241 words
+Keyword: `lãnh đạo đạo đức là gì`
+Tags: lãnh đạo đạo đức, thang đo, lãnh đạo, SPSS, Cronbach's Alpha, EFA
+> Hướng dẫn xác định khái niệm lãnh đạo đạo đức, xây dựng biến quan sát và kiểm định thang đo trước khi đưa vào luận văn định lượng.
+/blog/vi/lanh-dao-dao-duc-la-gi
 
 ### kirkpatrick-la-gi
 **Kirkpatrick là gì? Cách áp dụng mô hình đánh giá đào tạo** · vi · scheduled 2027-02-15 · 3251 words
@@ -347,6 +410,20 @@ Tags: kim cương Porter, mô hình nghiên cứu, lợi thế cạnh tranh, SPS
 > Hướng dẫn đọc mô hình kim cương Porter, chuyển 4 nhóm yếu tố thành biến nghiên cứu và trình bày kết quả định lượng trong luận văn.
 /blog/vi/kim-cuong-porter-la-gi
 
+### trung-tam-hoa-bien-la-gi
+**Trung tâm hóa biến là gì? Cách làm và đọc kết quả trong SPSS** · vi · scheduled 2027-02-15 · 2683 words
+Keyword: `trung tâm hóa biến là gì`
+Tags: trung tâm hóa biến, SPSS, hồi quy tuyến tính, đa cộng tuyến, biến tương tác
+> Bạn sẽ biết trung tâm hóa biến dùng để làm gì, thao tác trong SPSS ra sao và xử lý thế nào khi kết quả hồi quy thay đổi.
+/blog/vi/trung-tam-hoa-bien-la-gi
+
+### kien-thuc-thai-do-thuc-hanh-la-gi
+**Kiến thức thái độ thực hành là gì? Cách xây dựng thang đo KAP** · vi · scheduled 2027-02-15 · 3082 words
+Keyword: `kiến thức thái độ thực hành là gì`
+Tags: KAP, kiến thức thái độ thực hành, thang đo, SPSS, nghiên cứu định lượng
+> KAP gồm kiến thức, thái độ và thực hành, nhưng mỗi thành phần cần được thiết kế và kiểm định như một thang đo riêng.
+/blog/vi/kien-thuc-thai-do-thuc-hanh-la-gi
+
 ### kich-hoat-chuan-muc-nam-la-gi
 **Kích hoạt chuẩn mực nam là gì? Cách xây dựng mô hình nghiên cứu** · vi · scheduled 2027-02-15 · 3411 words
 Keyword: `kích hoạt chuẩn mực nam là gì`
@@ -360,6 +437,13 @@ Keyword: `tính dừng của chuỗi thời gian là gì`
 Tags: tính dừng, chuỗi thời gian, kiểm định ADF, SPSS, hồi quy
 > Bạn sẽ biết chuỗi thời gian dừng là gì, đọc kết quả ADF ra sao và cần làm gì trước khi chạy hồi quy.
 /blog/vi/tinh-dung-cua-chuoi-thoi-gian-la-gi
+
+### thay-the-gia-tri-khuyet-bang-trung-binh-la-gi
+**Thay thế giá trị khuyết bằng trung bình là gì? Cách làm trong SPSS** · vi · scheduled 2027-02-14 · 2806 words
+Keyword: `thay thế giá trị khuyết bằng trung bình là gì`
+Tags: giá trị khuyết, missing value, SPSS, dữ liệu định lượng, imputation
+> Bạn sẽ biết cách thay thế giá trị khuyết bằng trung bình trong SPSS, giới hạn áp dụng và cách giải trình để không làm sai kết quả phân tích.
+/blog/vi/thay-the-gia-tri-khuyet-bang-trung-binh-la-gi
 
 ### khang-cu-doi-moi-irt-la-gi
 **Kháng cự đổi mới IRT là gì? Mô hình, thang đo và cách kiểm định** · vi · scheduled 2027-02-14 · 3180 words
@@ -424,6 +508,13 @@ Tags: hợp đồng tâm lý, psychological contract, mô hình nghiên cứu, S
 > Hướng dẫn dùng khái niệm hợp đồng tâm lý để xây dựng mô hình, chọn thang đo và kiểm định dữ liệu định lượng.
 /blog/vi/hop-dong-tam-ly-la-gi
 
+### sai-so-chuan-cua-trung-binh-la-gi
+**Sai số chuẩn của trung bình là gì? Cách đọc trong SPSS** · vi · scheduled 2027-02-13 · 2900 words
+Keyword: `sai số chuẩn của trung bình là gì`
+Tags: sai số chuẩn, standard error, SPSS, thống kê mô tả, mean
+> Bạn sẽ biết sai số chuẩn của trung bình đo điều gì, đọc ở đâu trong SPSS và diễn giải thế nào trong luận văn.
+/blog/vi/sai-so-chuan-cua-trung-binh-la-gi
+
 ### holsat-la-gi
 **HOLSAT là gì? Cách áp dụng vào mô hình nghiên cứu** · vi · scheduled 2027-02-12 · 3336 words
 Keyword: `holsat là gì`
@@ -444,6 +535,13 @@ Keyword: `học hỏi tổ chức là gì`
 Tags: học hỏi tổ chức, organizational learning, thang đo, Cronbach's Alpha, EFA, SPSS
 > Hướng dẫn xây dựng và kiểm định thang đo học hỏi tổ chức cho luận văn định lượng, từ biến quan sát đến cách đọc output SPSS.
 /blog/vi/hoc-hoi-to-chuc-la-gi
+
+### y-thuc-moi-truong-la-gi
+**Ý thức môi trường là gì? Cách xây dựng thang đo trong luận văn** · vi · scheduled 2027-02-12 · 3158 words
+Keyword: `ý thức môi trường là gì`
+Tags: ý thức môi trường, thang đo, SPSS, nghiên cứu định lượng, biến quan sát
+> Bạn có thể dùng hướng dẫn này để chuyển khái niệm ý thức môi trường thành thang đo, bảng hỏi và kết quả kiểm định trong luận văn.
+/blog/vi/y-thuc-moi-truong-la-gi
 
 ### y-dinh-quay-lai-la-gi
 **Ý định quay lại là gì? Cách xây dựng và kiểm định thang đo** · vi · scheduled 2027-02-12 · 3216 words
@@ -529,6 +627,13 @@ Tags: trách nhiệm xã hội doanh nghiệp, CSR, thang đo, Cronbach's Alpha,
 > Hướng dẫn xây dựng và kiểm định thang đo trách nhiệm xã hội doanh nghiệp từ khái niệm đến bảng biến quan sát dùng trong luận văn định lượng.
 /blog/vi/trach-nhiem-xa-hoi-doanh-nghiep-la-gi
 
+### hanh-vi-tiet-kiem-nang-luong-la-gi
+**Hành vi tiết kiệm năng lượng là gì? Cách xây dựng thang đo** · vi · scheduled 2027-02-09 · 3099 words
+Keyword: `hành vi tiết kiệm năng lượng là gì`
+Tags: hành vi tiết kiệm năng lượng, thang đo, SPSS, nghiên cứu định lượng, ý thức môi trường
+> Hướng dẫn xác định khái niệm, xây dựng biến quan sát và kiểm định thang đo hành vi tiết kiệm năng lượng cho luận văn định lượng.
+/blog/vi/hanh-vi-tiet-kiem-nang-luong-la-gi
+
 ### vuot-gioi-han-vong-lap-phai-lam-sao
 **Vượt giới hạn vòng lặp phải làm sao trong SPSS** · vi · scheduled 2027-02-09 · 2995 words
 Keyword: `vượt giới hạn vòng lặp phải làm sao`
@@ -556,6 +661,13 @@ Keyword: `toe là gì`
 Tags: TOE, mô hình TOE, mô hình nghiên cứu, chuyển đổi số, SPSS, SmartPLS
 > TOE giúp bạn phân tích vì sao một tổ chức chấp nhận hoặc chưa chấp nhận công nghệ dựa trên ba nhóm yếu tố: Công nghệ, Tổ chức và Môi trường.
 /blog/vi/toe-la-gi
+
+### visual-binning-spss
+**Visual Binning SPSS: Cách chạy và đọc kết quả từng bước** · vi · scheduled 2027-02-08 · 2896 words
+Keyword: `visual binning spss`
+Tags: visual binning SPSS, SPSS, phân nhóm biến, biến định lượng, hồi quy
+> Bạn sẽ biết cách dùng Visual Binning trong SPSS để chia biến số thành nhóm, tạo biến mới và kiểm tra kết quả trước khi phân tích.
+/blog/vi/visual-binning-spss
 
 ### tinh-yeu-thuong-hieu-la-gi
 **Tình yêu thương hiệu là gì? Cách xây dựng thang đo** · vi · scheduled 2027-02-08 · 3338 words
@@ -591,6 +703,20 @@ Keyword: `tín hiệu là gì`
 Tags: tín hiệu, mô hình nghiên cứu, tín hiệu thị trường, SPSS, SmartPLS
 > Từ khái niệm tín hiệu đến mô hình nghiên cứu, bài viết hướng dẫn bạn chọn biến, xây giả thuyết và kiểm định bằng dữ liệu định lượng.
 /blog/vi/tin-hieu-la-gi
+
+### tieu-dung-xanh-la-gi
+**Tiêu dùng xanh là gì và đo lường bằng thang đo nào** · vi · scheduled 2027-02-07 · 3369 words
+Keyword: `tiêu dùng xanh là gì`
+Tags: tiêu dùng xanh, thang đo, biến quan sát, SPSS, nghiên cứu định lượng
+> Bạn sẽ có khung khái niệm, bộ biến quan sát tham khảo và quy trình kiểm định thang đo tiêu dùng xanh trong dữ liệu khảo sát.
+/blog/vi/tieu-dung-xanh-la-gi
+
+### transpose-du-lieu-spss
+**Cách chạy transpose dữ liệu trong SPSS từ hàng sang cột** · vi · scheduled 2027-02-07 · 2892 words
+Keyword: `transpose dữ liệu spss`
+Tags: transpose dữ liệu SPSS, SPSS, chuyển vị dữ liệu, cách chạy transpose, xử lý dữ liệu
+> Hướng dẫn chuyển vị dữ liệu trong SPSS từ hàng sang cột, kèm cách kiểm tra file và xử lý các lỗi thường gặp.
+/blog/vi/transpose-du-lieu-spss
 
 ### thoi-quen-la-gi
 **Thói quen là gì? Cách xây dựng thang đo thói quen trong luận văn** · vi · scheduled 2027-02-07 · 3366 words
@@ -655,6 +781,13 @@ Tags: thang đo thanh khoản, thang đo doanh nghiệp, SPSS, Cronbach's Alpha,
 > Bạn có thể dùng hướng dẫn này để biến khái niệm thanh khoản thành thang đo rõ ràng, có căn cứ và kiểm định được trong dữ liệu doanh nghiệp.
 /blog/vi/thang-do-thanh-khoan
 
+### thang-do-su-tin-cay
+**Thang đo sự tin cậy: nguồn, biến quan sát và cách kiểm định** · vi · scheduled 2027-02-05 · 3269 words
+Keyword: `thang đo sự tin cậy`
+Tags: thang đo sự tin cậy, Cronbach's Alpha, EFA, thang đo, SPSS, SmartPLS
+> Bạn có thể dùng hướng dẫn này để xây dựng, điều chỉnh và kiểm định thang đo sự tin cậy cho đề tài định lượng.
+/blog/vi/thang-do-su-tin-cay
+
 ### thang-do-su-hai-long-dien-tu
 **Thang đo sự hài lòng điện tử: biến quan sát và cách kiểm định** · vi · scheduled 2027-02-05 · 3484 words
 Keyword: `thang đo sự hài lòng điện tử`
@@ -676,12 +809,26 @@ Tags: thang đo marketing nội dung, content marketing, Cronbach's Alpha, EFA, 
 > Bạn có thể dùng hướng dẫn này để xây dựng, điều chỉnh và kiểm định thang đo marketing nội dung trước khi đưa vào mô hình nghiên cứu.
 /blog/vi/thang-do-marketing-noi-dung
 
+### tap-hop-da-phan-hoi-spss
+**Cách chạy tập hợp đa phản hồi trong SPSS từ dữ liệu đến output** · vi · scheduled 2027-02-04 · 2772 words
+Keyword: `tập hợp đa phản hồi spss`
+Tags: tập hợp đa phản hồi SPSS, SPSS, Multiple Response, phân tích dữ liệu, bảng tần số
+> Bạn sẽ biết cách khai báo, chạy và trình bày tập hợp đa phản hồi trong SPSS khi một người trả lời được chọn nhiều phương án.
+/blog/vi/tap-hop-da-phan-hoi-spss
+
 ### thang-do-khuyen-mai
 **Thang đo khuyến mãi: biến quan sát và cách kiểm định** · vi · scheduled 2027-02-04 · 3315 words
 Keyword: `thang đo khuyến mãi`
 Tags: thang đo khuyến mãi, biến quan sát, Cronbach's Alpha, EFA, SPSS
 > Một khung tham khảo để bạn xây dựng, điều chỉnh và kiểm định thang đo khuyến mãi trên dữ liệu khảo sát thực tế.
 /blog/vi/thang-do-khuyen-mai
+
+### gia-tri-quang-cao-cam-nhan-la-gi
+**Giá trị quảng cáo cảm nhận là gì và đo bằng thang đo nào** · vi · scheduled 2027-02-04 · 3518 words
+Keyword: `giá trị quảng cáo cảm nhận là gì`
+Tags: giá trị quảng cáo cảm nhận, perceived advertising value, thang đo, SPSS, EFA
+> Hướng dẫn xây dựng và kiểm định thang đo giá trị quảng cáo cảm nhận cho luận văn định lượng, từ biến quan sát đến cách đọc output SPSS.
+/blog/vi/gia-tri-quang-cao-cam-nhan-la-gi
 
 ### thang-do-ket-qua-hoc-tap
 **Thang đo kết quả học tập: nguồn, biến quan sát và cách kiểm định** · vi · scheduled 2027-02-04 · 3503 words
@@ -746,6 +893,13 @@ Tags: SWOT, mô hình nghiên cứu, phân tích chiến lược, SPSS, SmartPLS
 > SWOT giúp bạn hệ thống hóa điểm mạnh, điểm yếu, cơ hội và thách thức trước khi xây dựng mô hình nghiên cứu định lượng.
 /blog/vi/swot-la-gi
 
+### su-tin-cay-la-gi
+**Sự tin cậy là gì và cách xây dựng thang đo sự tin cậy** · vi · scheduled 2027-02-02 · 2919 words
+Keyword: `sự tin cậy là gì`
+Tags: sự tin cậy, thang đo, Cronbach's Alpha, EFA, SPSS
+> Hướng dẫn xây dựng và kiểm định thang đo sự tin cậy từ biến quan sát đến Cronbach's Alpha và EFA trong luận văn định lượng.
+/blog/vi/su-tin-cay-la-gi
+
 ### su-thuan-tien-la-gi
 **Sự thuận tiện là gì? Cách xây dựng thang đo trong luận văn** · vi · scheduled 2027-02-02 · 3118 words
 Keyword: `sự thuận tiện là gì`
@@ -759,6 +913,13 @@ Keyword: `sự hoài nghi là gì`
 Tags: sự hoài nghi, thang đo, biến quan sát, SPSS, nghiên cứu định lượng
 > Bạn sẽ biết cách chuyển khái niệm sự hoài nghi thành biến quan sát có thể đo lường và kiểm định trong dữ liệu khảo sát.
 /blog/vi/su-hoai-nghi-la-gi
+
+### omega-binh-phuong-la-gi
+**Omega bình phương là gì? Cách tính và đọc kết quả** · vi · scheduled 2027-02-02 · 2955 words
+Keyword: `omega bình phương là gì`
+Tags: omega bình phương, omega squared, SPSS, ANOVA, effect size
+> Omega bình phương giúp bạn ước lượng mức độ ảnh hưởng của biến độc lập trong ANOVA, nhưng SPSS thường không hiển thị chỉ số này trực tiếp.
+/blog/vi/omega-binh-phuong-la-gi
 
 ### su-hai-long-dien-tu-la-gi
 **Sự hài lòng điện tử là gì? Cách xây dựng và kiểm định thang đo** · vi · scheduled 2027-02-01 · 3148 words
@@ -780,6 +941,13 @@ Keyword: `ghép cặp điểm xu hướng psm là gì`
 Tags: PSM, propensity score matching, ghép cặp điểm xu hướng, Stata, SPSS, nghiên cứu định lượng
 > Hướng dẫn đọc và áp dụng ghép cặp điểm xu hướng PSM khi dữ liệu quan sát có khác biệt giữa nhóm xử lý và nhóm đối chứng.
 /blog/vi/ghep-cap-diem-xu-huong-psm-la-gi
+
+### su-gan-ket-hoc-tap-la-gi
+**Sự gắn kết học tập là gì? Cách xây dựng thang đo** · vi · scheduled 2027-02-01 · 3036 words
+Keyword: `sự gắn kết học tập là gì`
+Tags: sự gắn kết học tập, thang đo, Cronbach's Alpha, EFA, nghiên cứu định lượng
+> Bạn sẽ biết cách phân biệt sự gắn kết học tập với động lực và kết quả học tập, đồng thời xây dựng thang đo phù hợp cho bảng hỏi.
+/blog/vi/su-gan-ket-hoc-tap-la-gi
 
 ### su-doi-moi-ca-nhan-la-gi
 **Sự đổi mới cá nhân là gì và đo lường bằng thang đo nào** · vi · scheduled 2027-01-31 · 2940 words
@@ -809,12 +977,26 @@ Tags: rủi ro tín dụng, thang đo, SPSS, SmartPLS, ngân hàng
 > Bạn có thể dùng hướng dẫn này để chuyển khái niệm rủi ro tín dụng thành biến quan sát và kiểm định trong một luận văn định lượng.
 /blog/vi/rui-ro-tin-dung-la-gi
 
+### rui-ro-cam-nhan-la-gi
+**Rủi ro cảm nhận là gì? Cách xây dựng và kiểm định thang đo** · vi · scheduled 2027-01-31 · 3051 words
+Keyword: `rủi ro cảm nhận là gì`
+Tags: rủi ro cảm nhận, thang đo, SPSS, SmartPLS, nghiên cứu định lượng
+> Hướng dẫn xác định khái niệm, điều chỉnh biến quan sát và kiểm định thang đo rủi ro cảm nhận trong nghiên cứu định lượng.
+/blog/vi/rui-ro-cam-nhan-la-gi
+
 ### noi-sinh-la-gi
 **Nội sinh là gì? Cách nhận biết và xử lý trong nghiên cứu định lượng** · vi · scheduled 2027-01-31 · 2812 words
 Keyword: `nội sinh là gì`
 Tags: nội sinh, endogeneity, hồi quy, biến công cụ, GMM
 > Bạn sẽ biết một biến bị nội sinh khi nào, vì sao OLS có thể sai và cần đọc kết quả hồi quy ra sao.
 /blog/vi/noi-sinh-la-gi
+
+### so-nhan-to-khac-voi-mo-hinh-phai-lam-sao
+**Số nhân tố khác với mô hình phải làm sao** · vi · scheduled 2027-01-30 · 3244 words
+Keyword: `số nhân tố khác với mô hình phải làm sao`
+Tags: EFA, SPSS, số nhân tố, ma trận xoay, phân tích nhân tố
+> Hướng dẫn xử lý khi EFA cho ra số nhân tố khác với mô hình nghiên cứu, từ kiểm tra dữ liệu đến cách viết kết quả vào luận văn.
+/blog/vi/so-nhan-to-khac-voi-mo-hinh-phai-lam-sao
 
 ### rfm-la-gi
 **RFM là gì? Cách xây dựng và kiểm định mô hình RFM** · vi · scheduled 2027-01-30 · 3230 words
@@ -893,6 +1075,13 @@ Tags: phương tiện hữu hình, SERVQUAL, thang đo, Cronbach's Alpha, EFA
 > Bạn sẽ biết phương tiện hữu hình được đo bằng những biến quan sát nào và cách kiểm định thang đo trước khi đưa vào mô hình nghiên cứu.
 /blog/vi/phuong-tien-huu-hinh-la-gi
 
+### phuong-phap-giang-day-la-gi
+**Phương pháp giảng dạy là gì và đo lường thế nào?** · vi · scheduled 2027-01-28 · 3440 words
+Keyword: `phương pháp giảng dạy là gì`
+Tags: phương pháp giảng dạy, thang đo, SPSS, EFA, Cronbach's Alpha
+> Bạn sẽ biết cách chuyển khái niệm phương pháp giảng dạy thành thang đo, biến quan sát và quy trình kiểm định có thể đưa vào luận văn.
+/blog/vi/phuong-phap-giang-day-la-gi
+
 ### phat-trien-ben-vung-la-gi
 **Phát triển bền vững là gì và đo lường thế nào** · vi · scheduled 2027-01-28 · 3531 words
 Keyword: `phát triển bền vững là gì`
@@ -900,12 +1089,12 @@ Tags: phát triển bền vững, thang đo, biến quan sát, SPSS, nghiên c�
 > Từ khái niệm phát triển bền vững, bạn có thể xây dựng bộ biến quan sát, điều chỉnh bảng hỏi và kiểm định thang đo bằng SPSS.
 /blog/vi/phat-trien-ben-vung-la-gi
 
-### niem-tin-suc-khoe-la-gi
-**Niềm tin sức khỏe là gì? Mô hình, thang đo và cách kiểm định** · vi · scheduled 2027-01-28 · 3177 words
-Keyword: `niềm tin sức khỏe là gì`
-Tags: niềm tin sức khỏe, Health Belief Model, mô hình nghiên cứu, thang đo, SPSS, SmartPLS
-> Hiểu đúng niềm tin sức khỏe để xây dựng mô hình, giả thuyết và thang đo có thể kiểm định bằng dữ liệu khảo sát.
-/blog/vi/niem-tin-suc-khoe-la-gi
+### niem-tin-la-gi
+**Niềm tin là gì trong nghiên cứu định lượng?** · vi · scheduled 2027-01-28 · 2949 words
+Keyword: `niềm tin là gì`
+Tags: niềm tin, thang đo niềm tin, Cronbach's Alpha, EFA, SmartPLS
+> Hướng dẫn biến khái niệm niềm tin thành thang đo có thể kiểm định trong luận văn định lượng.
+/blog/vi/niem-tin-la-gi
 
 ### nhan-thuc-ve-gia-la-gi
 **Nhận thức về giá là gì? Gợi ý thang đo và cách kiểm định** · vi · scheduled 2027-01-28 · 3178 words
@@ -921,12 +1110,33 @@ Tags: ERG Alderfer, mô hình nghiên cứu, nhu cầu nhân viên, SPSS, SmartP
 > ERG Alderfer giúp bạn rút gọn nhu cầu con người thành ba nhóm để xây dựng mô hình, giả thuyết và thang đo cho nghiên cứu định lượng.
 /blog/vi/erg-alderfer-la-gi
 
+### nhan-thuc-rui-ro-tpr-la-gi
+**Nhận thức rủi ro TPR là gì? Thành phần, thang đo và cách kiểm định** · vi · scheduled 2027-01-27 · 3218 words
+Keyword: `nhận thức rủi ro tpr là gì`
+Tags: nhận thức rủi ro, TPR, mô hình nghiên cứu, SPSS, SmartPLS
+> Hướng dẫn dùng TPR trong đề tài định lượng, từ xác định biến thành phần đến xây dựng giả thuyết và đọc kết quả kiểm định.
+/blog/vi/nhan-thuc-rui-ro-tpr-la-gi
+
+### nhan-thuc-kiem-soat-hanh-vi-la-gi
+**Nhận thức kiểm soát hành vi là gì và đo bằng thang đo nào** · vi · scheduled 2027-01-27 · 3035 words
+Keyword: `nhận thức kiểm soát hành vi là gì`
+Tags: nhận thức kiểm soát hành vi, TPB, thang đo, biến quan sát, Cronbach's Alpha
+> Hướng dẫn chọn, điều chỉnh và kiểm định thang đo nhận thức kiểm soát hành vi trong nghiên cứu định lượng.
+/blog/vi/nhan-thuc-kiem-soat-hanh-vi-la-gi
+
 ### multiple-imputation-la-gi
 **Multiple imputation là gì? Cách đọc và xử lý dữ liệu khuyết trong SPSS** · vi · scheduled 2027-01-27 · 3217 words
 Keyword: `multiple imputation là gì`
 Tags: multiple imputation, dữ liệu khuyết, SPSS, phân tích định lượng, missing data
 > Hướng dẫn multiple imputation từ lúc kiểm tra dữ liệu khuyết đến khi đọc kết quả và báo cáo trong luận văn.
 /blog/vi/multiple-imputation-la-gi
+
+### rmsea-lon-hon-0-08-phai-lam-sao
+**RMSEA lớn hơn 0.08 phải làm sao?** · vi · scheduled 2027-01-27 · 2902 words
+Keyword: `rmsea lớn hơn 0 08 phải làm sao`
+Tags: RMSEA, AMOS, CB-SEM, chỉ số độ phù hợp, SPSS
+> Bạn sẽ biết RMSEA lớn hơn 0.08 xuất phát từ đâu, nên kiểm tra gì trước và khi nào cần điều chỉnh mô hình hoặc thu thập thêm dữ liệu.
+/blog/vi/rmsea-lon-hon-0-08-phai-lam-sao
 
 ### nhan-biet-thuong-hieu-la-gi
 **Nhận biết thương hiệu là gì? Thang đo và cách kiểm định** · vi · scheduled 2027-01-27 · 3069 words
@@ -948,6 +1158,20 @@ Keyword: `năng lực phục vụ là gì`
 Tags: năng lực phục vụ, SERVQUAL, thang đo, Cronbach's Alpha, EFA
 > Hướng dẫn xác định biến quan sát, điều chỉnh bảng hỏi và kiểm định thang đo năng lực phục vụ bằng SPSS.
 /blog/vi/nang-luc-phuc-vu-la-gi
+
+### nang-luc-canh-tranh-la-gi
+**Năng lực cạnh tranh là gì? Cách xây dựng thang đo** · vi · scheduled 2027-01-26 · 3033 words
+Keyword: `năng lực cạnh tranh là gì`
+Tags: năng lực cạnh tranh, thang đo, SPSS, Cronbach's Alpha, EFA
+> Bạn có thể dùng hướng dẫn này để chuyển khái niệm năng lực cạnh tranh thành thang đo, bảng hỏi và các bước kiểm định phù hợp.
+/blog/vi/nang-luc-canh-tranh-la-gi
+
+### restructure-du-lieu-spss
+**Cách chạy restructure dữ liệu trong SPSS từ A đến Z** · vi · scheduled 2027-01-26 · 3060 words
+Keyword: `restructure dữ liệu spss`
+Tags: restructure dữ liệu SPSS, SPSS, Wide format, Long format, Data Restructure
+> Bạn sẽ biết khi nào cần restructure dữ liệu SPSS, chọn đúng kiểu chuyển đổi và kiểm tra file trước khi chạy phân tích.
+/blog/vi/restructure-du-lieu-spss
 
 ### nam-yeu-to-tinh-cach-la-gi
 **Năm yếu tố tính cách là gì? Mô hình Big Five và cách áp dụng** · vi · scheduled 2027-01-26 · 3239 words
@@ -991,40 +1215,12 @@ Tags: mô hình tự quyết, mô hình nghiên cứu, Self-Determination Theory
 > Hướng dẫn dùng mô hình tự quyết để xây mô hình nghiên cứu, chọn biến, đặt giả thuyết và kiểm định dữ liệu định lượng.
 /blog/vi/mo-hinh-tu-quyet
 
-### mo-hinh-rfm
-**Mô hình RFM là gì? Cách áp dụng vào luận văn định lượng** · vi · scheduled 2027-01-24 · 3276 words
-Keyword: `mô hình rfm`
-Tags: mô hình RFM, Recency Frequency Monetary, phân khúc khách hàng, SPSS, SmartPLS
-> Mô hình RFM giúp bạn phân nhóm khách hàng theo thời gian mua gần nhất, tần suất mua và giá trị chi tiêu để xây dựng đề tài định lượng có dữ liệu rõ ràng.
-/blog/vi/mo-hinh-rfm
-
-### mo-hinh-jdi
-**Mô hình JDI: Thành phần, thang đo và cách áp dụng** · vi · scheduled 2027-01-24 · 3196 words
-Keyword: `mô hình jdi`
-Tags: mô hình JDI, sự hài lòng công việc, thang đo JDI, SPSS, SmartPLS
-> Mô hình JDI giúp bạn phân tích sự hài lòng công việc qua năm khía cạnh: công việc, lương, thăng tiến, cấp trên và đồng nghiệp.
-/blog/vi/mo-hinh-jdi
-
-### mo-hinh-capm
-**Mô hình CAPM: cấu trúc, biến số và cách kiểm định** · vi · scheduled 2027-01-24 · 3200 words
-Keyword: `mô hình capm`
-Tags: mô hình CAPM, tài chính, beta, SPSS, mô hình nghiên cứu
-> Bạn sẽ biết mô hình CAPM gồm những biến nào, dùng ra sao trong đề tài tài chính và đọc kết quả hồi quy như thế nào.
-/blog/vi/mo-hinh-capm
-
-### mo-hinh-bcg
-**Mô hình BCG: Cách phân tích danh mục sản phẩm và áp dụng vào luận văn** · vi · scheduled 2027-01-24 · 3215 words
-Keyword: `mô hình bcg`
-Tags: mô hình BCG, ma trận BCG, mô hình nghiên cứu, quản trị chiến lược, luận văn định lượng
-> Hướng dẫn dùng mô hình BCG để phân tích danh mục sản phẩm, xây mô hình nghiên cứu và trình bày trong luận văn định lượng.
-/blog/vi/mo-hinh-bcg
-
-### mo-hinh-acsi
-**Mô hình ACSI là gì? Cấu trúc, thang đo và cách kiểm định** · vi · scheduled 2027-01-23 · 3313 words
-Keyword: `mô hình acsi`
-Tags: mô hình ACSI, sự hài lòng khách hàng, lòng trung thành, SPSS, SmartPLS
-> Hướng dẫn xây dựng mô hình ACSI cho đề tài đo lường sự hài lòng và lòng trung thành của khách hàng bằng dữ liệu định lượng.
-/blog/vi/mo-hinh-acsi
+### rank-cases-spss
+**Cách chạy Rank Cases trong SPSS để xếp hạng dữ liệu** · vi · scheduled 2027-01-25 · 2929 words
+Keyword: `rank cases spss`
+Tags: rank cases SPSS, cách chạy SPSS, xếp hạng dữ liệu, SPSS Transform, thứ hạng
+> Bạn sẽ biết khi nào nên dùng Rank Cases, cách tạo biến thứ hạng trong SPSS và cách kiểm tra kết quả trước khi đưa vào luận văn.
+/blog/vi/rank-cases-spss
 
 ### wilcoxon-la-gi
 **Wilcoxon là gì? Cách đọc kết quả và chạy trong SPSS** · vi · scheduled 2027-01-23 · 2149 words
@@ -1047,6 +1243,20 @@ Tags: Maslow, tháp nhu cầu Maslow, mô hình nghiên cứu, giả thuyết ng
 > Hiểu đúng tháp nhu cầu Maslow và chuyển nó thành mô hình, biến quan sát, giả thuyết có thể kiểm định trong luận văn định lượng.
 /blog/vi/maslow-la-gi
 
+### vif-trong-spss
+**VIF trong SPSS là gì? Cách đọc và xử lý VIF cao** · vi · scheduled 2027-01-23 · 2058 words
+Keyword: `vif trong spss`
+Tags: VIF trong SPSS, đa cộng tuyến, hồi quy tuyến tính, SPSS, VIF cao
+> Bạn sẽ biết VIF trong SPSS nằm ở đâu, bao nhiêu là đạt và cần làm gì khi mô hình có VIF cao.
+/blog/vi/vif-trong-spss
+
+### dong-tien-tu-do-jensen-la-gi
+**Dòng tiền tự do Jensen là gì? Cách xây dựng mô hình nghiên cứu** · vi · scheduled 2027-01-23 · 3578 words
+Keyword: `dòng tiền tự do jensen là gì`
+Tags: dòng tiền tự do, Jensen, mô hình nghiên cứu, quản trị doanh nghiệp, SPSS, SmartPLS
+> Hướng dẫn biến dòng tiền tự do Jensen thành mô hình nghiên cứu có giả thuyết, thang đo và cách kiểm định rõ ràng.
+/blog/vi/dong-tien-tu-do-jensen-la-gi
+
 ### marketing-noi-dung-la-gi
 **Marketing nội dung là gì và đo bằng thang đo nào** · vi · scheduled 2027-01-22 · 3566 words
 Keyword: `marketing nội dung là gì`
@@ -1068,12 +1278,33 @@ Tags: rho_A, SmartPLS, PLS-SEM, độ tin cậy thang đo, SmartPLS 4
 > Bạn sẽ biết rho_A là gì, tìm chỉ số ở đâu trong SmartPLS 4 và báo cáo cùng Cronbach's Alpha, CR đúng cách.
 /blog/vi/rho-a-trong-smartpls
 
+### y-nghia-cua-de-tai-trong-luan-van-la-gi
+**Ý nghĩa của đề tài trong luận văn là gì? Cách viết đúng** · vi · scheduled 2027-01-21 · 3359 words
+Keyword: `ý nghĩa của đề tài trong luận văn là gì`
+Tags: ý nghĩa đề tài, viết luận văn, khóa luận tốt nghiệp, mục tiêu nghiên cứu, phương pháp nghiên cứu
+> Bạn sẽ biết cách trình bày ý nghĩa đề tài bằng lập luận cụ thể, có thể kiểm tra và gắn trực tiếp với dữ liệu nghiên cứu.
+/blog/vi/y-nghia-cua-de-tai-trong-luan-van-la-gi
+
+### ly-thuyet-rfm
+**Lý thuyết RFM: thành phần, cách xây dựng mô hình và kiểm định** · vi · scheduled 2027-01-21 · 3230 words
+Keyword: `lý thuyết rfm`
+Tags: lý thuyết RFM, mô hình RFM, marketing, phân khúc khách hàng, SPSS, SmartPLS
+> Hướng dẫn dùng lý thuyết RFM để phân nhóm khách hàng, xây dựng mô hình nghiên cứu và trình bày kết quả định lượng.
+/blog/vi/ly-thuyet-rfm
+
 ### total-variance-explained-la-gi
 **Total Variance Explained là gì? Cách đọc trong SPSS** · vi · scheduled 2027-01-21 · 2905 words
 Keyword: `total variance explained là gì`
 Tags: Total Variance Explained, SPSS, EFA, phân tích nhân tố, tổng phương sai trích
 > Bạn sẽ biết Total Variance Explained là gì, đọc bảng này trong SPSS ra sao và viết kết quả EFA vào luận văn như thế nào.
 /blog/vi/total-variance-explained-la-gi
+
+### ly-thuyet-jdi
+**Lý thuyết JDI là gì và cách áp dụng trong nghiên cứu định lượng** · vi · scheduled 2027-01-21 · 3136 words
+Keyword: `lý thuyết jdi`
+Tags: lý thuyết JDI, sự hài lòng công việc, thang đo JDI, mô hình nghiên cứu, SPSS, SmartPLS
+> Hướng dẫn dùng JDI để nghiên cứu sự hài lòng công việc, từ mô hình khái niệm đến thang đo và cách đọc kết quả định lượng.
+/blog/vi/ly-thuyet-jdi
 
 ### tolerance-la-gi
 **Tolerance là gì? Cách đọc Tolerance trong SPSS và xử lý khi thấp** · vi · scheduled 2027-01-21 · 2720 words
@@ -1082,12 +1313,40 @@ Tags: Tolerance, tolerance trong SPSS, đa cộng tuyến, hồi quy tuyến tí
 > Bạn sẽ biết Tolerance là gì, đọc chỉ số này ở bảng Coefficients trong SPSS ra sao và cần làm gì khi Tolerance thấp.
 /blog/vi/tolerance-la-gi
 
+### ly-thuyet-capm
+**Lý thuyết CAPM: mô hình, thành phần và cách kiểm định** · vi · scheduled 2027-01-20 · 2914 words
+Keyword: `lý thuyết capm`
+Tags: lý thuyết CAPM, CAPM, tài chính, SPSS, SmartPLS
+> Hướng dẫn đọc và áp dụng lý thuyết CAPM vào đề tài tài chính định lượng, từ công thức đến mô hình hồi quy và cách viết kết quả.
+/blog/vi/ly-thuyet-capm
+
 ### thien-lech-khong-phan-hoi-la-gi
 **Thiên lệch không phản hồi là gì? Cách kiểm tra trong SPSS** · vi · scheduled 2027-01-20 · 3208 words
 Keyword: `thiên lệch không phản hồi là gì`
 Tags: thiên lệch không phản hồi, nonresponse bias, SPSS, khảo sát, nghiên cứu định lượng
 > Bạn sẽ biết cách nhận diện, kiểm tra và giải trình thiên lệch không phản hồi khi dữ liệu khảo sát đã thu xong.
 /blog/vi/thien-lech-khong-phan-hoi-la-gi
+
+### ly-thuyet-bcg
+**Lý thuyết BCG: mô hình, cách áp dụng và kiểm định trong luận văn** · vi · scheduled 2027-01-20 · 3539 words
+Keyword: `lý thuyết bcg`
+Tags: lý thuyết BCG, ma trận BCG, mô hình nghiên cứu, chiến lược kinh doanh, luận văn định lượng
+> Hướng dẫn dùng lý thuyết BCG để phân tích danh mục kinh doanh, xây dựng giả thuyết và trình bày mô hình trong luận văn định lượng.
+/blog/vi/ly-thuyet-bcg
+
+### trinh-bay-bang-bieu-luan-van
+**Trình bày bảng biểu luận văn đúng chuẩn, dễ đọc và dễ bảo vệ** · vi · scheduled 2027-01-20 · 2928 words
+Keyword: `trình bày bảng biểu luận văn`
+Tags: trình bày bảng biểu luận văn, bảng biểu luận văn, viết luận văn, SPSS, khóa luận tốt nghiệp
+> Cách trình bày bảng biểu luận văn định lượng từ lúc tạo bảng đến khi viết nhận xét, kèm mẫu bảng kết quả SPSS để bạn áp dụng ngay.
+/blog/vi/trinh-bay-bang-bieu-luan-van
+
+### ly-thuyet-acsi
+**Lý thuyết ACSI: Mô hình đo lường sự hài lòng khách hàng** · vi · scheduled 2027-01-20 · 3167 words
+Keyword: `lý thuyết acsi`
+Tags: lý thuyết ACSI, sự hài lòng khách hàng, mô hình nghiên cứu, SPSS, SmartPLS
+> Hướng dẫn dùng lý thuyết ACSI để xây dựng mô hình nghiên cứu sự hài lòng và lòng trung thành của khách hàng.
+/blog/vi/ly-thuyet-acsi
 
 ### listwise-va-pairwise-deletion-la-gi
 **Listwise và pairwise deletion là gì? Cách đọc và chọn trong SPSS** · vi · scheduled 2027-01-20 · 3143 words
@@ -1152,6 +1411,13 @@ Tags: kỳ vọng xác nhận ECM, Expectation-Confirmation Model, mô hình ngh
 > Hiểu ECM từ các biến kỳ vọng, xác nhận, hài lòng đến ý định tiếp tục sử dụng và chuyển thành mô hình nghiên cứu có thể kiểm định.
 /blog/vi/ky-vong-xac-nhan-ecm-la-gi
 
+### ky-vong-vroom-la-gi
+**Kỳ vọng Vroom là gì? Mô hình và cách áp dụng vào luận văn** · vi · scheduled 2027-01-17 · 3375 words
+Keyword: `kỳ vọng vroom là gì`
+Tags: kỳ vọng Vroom, Vroom expectancy theory, mô hình nghiên cứu, động lực làm việc, SPSS, SmartPLS
+> Hướng dẫn dùng mô hình kỳ vọng Vroom để xây dựng mô hình nghiên cứu, thang đo và giả thuyết trong luận văn định lượng.
+/blog/vi/ky-vong-vroom-la-gi
+
 ### ky-vong-no-luc-la-gi
 **Kỳ vọng nỗ lực là gì? Cách xây dựng và kiểm định thang đo** · vi · scheduled 2027-01-17 · 3126 words
 Keyword: `kỳ vọng nỗ lực là gì`
@@ -1166,12 +1432,33 @@ Tags: Shapiro Wilk, SPSS, kiểm định phân phối chuẩn, p-value, thống 
 > Bạn sẽ biết Shapiro Wilk kiểm tra điều gì, đọc Sig. trong SPSS ra sao và cần làm gì khi dữ liệu không đạt giả định phân phối chuẩn.
 /blog/vi/shapiro-wilk-la-gi
 
+### q-square-am-phai-lam-sao
+**Q Square âm phải làm sao trong SmartPLS** · vi · scheduled 2027-01-17 · 2862 words
+Keyword: `q square âm phải làm sao`
+Tags: Q Square, SmartPLS, PLS-SEM, blindfolding, Q² âm
+> Bạn thấy Q² âm trong SmartPLS và chưa biết nên sửa mô hình, kiểm tra dữ liệu hay thu thêm mẫu, bài viết này đưa ra thứ tự xử lý cụ thể.
+/blog/vi/q-square-am-phai-lam-sao
+
+### tra-loi-cau-hoi-hoi-dong-luan-van
+**Cách trả lời câu hỏi hội đồng luận văn rõ ràng, có căn cứ** · vi · scheduled 2027-01-17 · 3525 words
+Keyword: `trả lời câu hỏi hội đồng luận văn`
+Tags: trả lời câu hỏi hội đồng luận văn, bảo vệ luận văn, khóa luận tốt nghiệp, SPSS, SmartPLS
+> Hướng dẫn chuẩn bị và trả lời câu hỏi hội đồng luận văn dựa trên chính mô hình, phương pháp, dữ liệu và kết quả trong bài của bạn.
+/blog/vi/tra-loi-cau-hoi-hoi-dong-luan-van
+
 ### kinh-nghiem-su-dung-la-gi
 **Kinh nghiệm sử dụng là gì? Cách xây dựng thang đo** · vi · scheduled 2027-01-16 · 3354 words
 Keyword: `kinh nghiệm sử dụng là gì`
 Tags: kinh nghiệm sử dụng, thang đo, biến quan sát, Cronbach's Alpha, EFA, SmartPLS
 > Hướng dẫn xác định đúng khái niệm kinh nghiệm sử dụng và xây dựng thang đo có thể kiểm định trong nghiên cứu định lượng.
 /blog/vi/kinh-nghiem-su-dung-la-gi
+
+### phan-tich-cau-truc-da-nhom-trong-amos
+**Phân tích cấu trúc đa nhóm trong AMOS: Cách chạy và đọc kết quả** · vi · scheduled 2027-01-16 · 2943 words
+Keyword: `phân tích cấu trúc đa nhóm trong amos`
+Tags: AMOS, phân tích đa nhóm, CFA, SEM, kiểm định bất biến
+> Hướng dẫn thực hành để bạn chạy và giải thích phân tích cấu trúc đa nhóm trong AMOS khi muốn so sánh mô hình giữa các nhóm nghiên cứu.
+/blog/vi/phan-tich-cau-truc-da-nhom-trong-amos
 
 ### kiet-suc-nghe-nghiep-la-gi
 **Kiệt sức nghề nghiệp là gì và đo bằng thang đo nào** · vi · scheduled 2027-01-16 · 3365 words
@@ -1208,6 +1495,13 @@ Tags: kết quả học tập, thang đo, Cronbach's Alpha, EFA, SPSS, SmartPLS
 > Bạn sẽ biết cách định nghĩa kết quả học tập, chọn cách đo phù hợp và trình bày thang đo có căn cứ trong luận văn định lượng.
 /blog/vi/ket-qua-hoc-tap-la-gi
 
+### do-tin-cay-cua-nguoi-anh-huong-la-gi
+**Độ tin cậy của người ảnh hưởng là gì? Cách đo và kiểm định** · vi · scheduled 2027-01-15 · 2960 words
+Keyword: `độ tin cậy của người ảnh hưởng là gì`
+Tags: độ tin cậy của người ảnh hưởng, influencer credibility, thang đo, Cronbach's Alpha, EFA
+> Bạn sẽ biết độ tin cậy của người ảnh hưởng được đo thế nào, cần chuẩn bị biến quan sát ra sao và đọc kết quả SPSS trước khi đưa vào luận văn.
+/blog/vi/do-tin-cay-cua-nguoi-anh-huong-la-gi
+
 ### jdi-la-gi
 **JDI là gì? Cách hiểu và áp dụng trong nghiên cứu định lượng** · vi · scheduled 2027-01-15 · 3237 words
 Keyword: `jdi là gì`
@@ -1229,12 +1523,19 @@ Tags: IS Success, DeLone và McLean, mô hình nghiên cứu, thang đo, SmartPL
 > Hiểu mô hình IS Success để xây dựng mô hình nghiên cứu, chọn thang đo và kiểm định dữ liệu định lượng cho đề tài của bạn.
 /blog/vi/is-success-delone-mclean-la-gi
 
-### phuong-sai-trich-la-gi
-**Phương sai trích là gì? Cách đọc và xử lý khi dưới 50%** · vi · scheduled 2027-01-14 · 2646 words
-Keyword: `phương sai trích là gì`
-Tags: phương sai trích, EFA, SPSS, Total Variance Explained, phân tích nhân tố
-> Bạn sẽ biết phương sai trích nằm ở đâu trong output EFA, đọc cột nào và cần làm gì khi kết quả chưa đạt.
-/blog/vi/phuong-sai-trich-la-gi
+### xuat-ket-qua-ra-excel-trong-smartpls
+**Xuất kết quả ra Excel trong SmartPLS 4: Cách làm và đọc bảng** · vi · scheduled 2027-01-14 · 2953 words
+Keyword: `xuất kết quả ra excel trong smartpls`
+Tags: SmartPLS 4, xuất Excel, PLS-SEM, Path Coefficients, chương 4
+> Bạn sẽ biết cách xuất các bảng kết quả từ SmartPLS 4 sang Excel, kiểm tra dữ liệu và chọn chỉ số cần đưa vào chương 4.
+/blog/vi/xuat-ket-qua-ra-excel-trong-smartpls
+
+### tinh-moi-cua-de-tai-trong-luan-van-la-gi
+**Tính mới của đề tài trong luận văn là gì? Cách xác định và viết** · vi · scheduled 2027-01-14 · 3204 words
+Keyword: `tính mới của đề tài trong luận văn là gì`
+Tags: tính mới của đề tài, luận văn, khóa luận tốt nghiệp, khoảng trống nghiên cứu, nghiên cứu định lượng
+> Bạn sẽ biết cách phân biệt tính mới với đóng góp, kiểm tra khoảng trống nghiên cứu và viết một đoạn có thể đưa vào luận văn.
+/blog/vi/tinh-moi-cua-de-tai-trong-luan-van-la-gi
 
 ### kiem-dinh-little-mcar-la-gi
 **Kiểm định Little MCAR là gì? Cách đọc và xử lý trong SPSS** · vi · scheduled 2027-01-14 · 2088 words
@@ -1271,12 +1572,26 @@ Tags: hình ảnh thương hiệu, brand image, thang đo, Cronbach's Alpha, EFA
 > Hướng dẫn phân biệt hình ảnh thương hiệu với giá trị thương hiệu và xây dựng thang đo có thể kiểm định trong luận văn định lượng.
 /blog/vi/hinh-anh-thuong-hieu-la-gi
 
+### phuong-phap-enter-la-gi
+**Phương pháp Enter là gì? Cách đọc và xử lý hồi quy trong SPSS** · vi · scheduled 2027-01-12 · 1898 words
+Keyword: `phương pháp enter là gì`
+Tags: phương pháp Enter, hồi quy tuyến tính, SPSS, Stepwise, phương sai sai số thay đổi
+> Bạn sẽ biết phương pháp Enter trong SPSS dùng khi nào, đọc output ra sao và phân biệt nó với Stepwise trong hồi quy tuyến tính.
+/blog/vi/phuong-phap-enter-la-gi
+
 ### dineserv-la-gi
 **DINESERV là gì? Cách áp dụng vào mô hình nghiên cứu** · vi · scheduled 2027-01-12 · 3774 words
 Keyword: `dineserv là gì`
 Tags: DINESERV, chất lượng dịch vụ, nhà hàng, thang đo, SPSS, SmartPLS
 > DINESERV giúp bạn đo chất lượng dịch vụ nhà hàng bằng một mô hình phù hợp hơn với trải nghiệm ăn uống thực tế.
 /blog/vi/dineserv-la-gi
+
+### xu-ly-missing-value-trong-spss
+**Xử lý missing value trong SPSS: Cách chạy và đọc kết quả** · vi · scheduled 2027-01-12 · 3052 words
+Keyword: `xử lý missing value trong spss`
+Tags: missing value, SPSS, làm sạch dữ liệu, xử lý dữ liệu, quantitative research
+> Bạn sẽ biết cách kiểm tra, quyết định và xử lý missing value trong SPSS mà không làm sai cỡ mẫu hoặc kết quả phân tích.
+/blog/vi/xu-ly-missing-value-trong-spss
 
 ### hinh-anh-diem-den-la-gi
 **Hình ảnh điểm đến là gì? Cách xây dựng thang đo** · vi · scheduled 2027-01-12 · 3192 words
@@ -1355,6 +1670,13 @@ Tags: SmartPLS, thang đo bậc hai, thang đo cấu tạo, thang đo phản án
 > Hướng dẫn thực hành thang đo bậc hai trong SmartPLS 4, từ chuẩn bị dữ liệu đến đánh giá outer model và structural model.
 /blog/vi/thang-do-bac-hai-trong-smartpls
 
+### tai-lieu-tham-khao-trong-luan-van-la-gi
+**Tài liệu tham khảo trong luận văn là gì? Cách lập danh mục đúng** · vi · scheduled 2027-01-10 · 3215 words
+Keyword: `tài liệu tham khảo trong luận văn là gì`
+Tags: tài liệu tham khảo, luận văn, trích dẫn tài liệu, khóa luận tốt nghiệp, APA
+> Bạn sẽ biết tài liệu tham khảo dùng để làm gì, sắp xếp danh mục ra sao và kiểm tra sự khớp nhau giữa trích dẫn với luận văn.
+/blog/vi/tai-lieu-tham-khao-trong-luan-van-la-gi
+
 ### tra-loi-cung-mot-dap-an-phai-lam-sao
 **Trả lời cùng một đáp án phải làm sao khi làm sạch dữ liệu SPSS** · vi · scheduled 2027-01-10 · 3462 words
 Keyword: `trả lời cùng một đáp án phải làm sao`
@@ -1368,6 +1690,13 @@ Keyword: `kiểm định adf là gì`
 Tags: kiểm định ADF, stationarity test, dữ liệu chuỗi thời gian, SPSS, dữ liệu bảng
 > Bạn sẽ biết kiểm định ADF dùng để làm gì, đọc p-value ra sao và nên xử lý thế nào khi chuỗi dữ liệu chưa dừng.
 /blog/vi/kiem-dinh-adf-la-gi
+
+### mo-hinh-khong-duoc-nhan-dang-phai-lam-sao
+**Mô hình không được nhận dạng phải làm sao trong AMOS** · vi · scheduled 2027-01-09 · 3023 words
+Keyword: `mô hình không được nhận dạng phải làm sao`
+Tags: AMOS, SEM, mô hình không được nhận dạng, CB-SEM, SPSS
+> Bạn sẽ biết cách xác định nguyên nhân mô hình AMOS không được nhận dạng và xử lý theo thứ tự ít rủi ro nhất.
+/blog/vi/mo-hinh-khong-duoc-nhan-dang-phai-lam-sao
 
 ### hanh-vi-mua-ngau-hung-la-gi
 **Hành vi mua ngẫu hứng là gì? Cách xây dựng thang đo** · vi · scheduled 2027-01-09 · 3095 words
@@ -1404,6 +1733,13 @@ Tags: Pattern Matrix, SPSS, EFA, phân tích nhân tố, ma trận xoay
 > Bạn sẽ biết Pattern Matrix là gì, đọc cột nào trong SPSS và xử lý ra sao khi biến quan sát tải sai nhân tố.
 /blog/vi/pattern-matrix-la-gi
 
+### danh-muc-markowitz-la-gi
+**Danh mục Markowitz là gì? Mô hình, công thức và cách áp dụng** · vi · scheduled 2027-01-08 · 3442 words
+Keyword: `danh mục markowitz là gì`
+Tags: danh mục Markowitz, danh mục đầu tư, đánh đổi cấu trúc vốn, quản trị tài chính, mô hình nghiên cứu
+> Hướng dẫn đọc danh mục Markowitz từ lợi suất, phương sai, hiệp phương sai đến đường biên hiệu quả trong một đề tài định lượng.
+/blog/vi/danh-muc-markowitz-la-gi
+
 ### hanh-vi-cong-dan-to-chuc-la-gi
 **Hành vi công dân tổ chức là gì? Cách chọn thang đo** · vi · scheduled 2027-01-08 · 3426 words
 Keyword: `hành vi công dân tổ chức là gì`
@@ -1439,12 +1775,26 @@ Tags: hai nhân tố Herzberg, động lực làm việc, mô hình nghiên cứ
 > Hiểu đúng nhóm nhân tố duy trì và động lực của Herzberg để xây mô hình nghiên cứu, thang đo và giả thuyết có thể kiểm định.
 /blog/vi/hai-nhan-to-herzberg-la-gi
 
+### t-test-mot-mau-trong-spss
+**T test một mẫu trong SPSS: Cách chạy và đọc kết quả** · vi · scheduled 2027-01-07 · 1926 words
+Keyword: `t test một mẫu trong spss`
+Tags: t test một mẫu, SPSS, One-Sample T Test, kiểm định giả thuyết, phân tích định lượng
+> Bạn sẽ biết khi nào dùng One-Sample T Test, chạy ở đâu trong SPSS và kết luận từ bảng One-Sample Test.
+/blog/vi/t-test-mot-mau-trong-spss
+
 ### giao-duc-khoi-nghiep-la-gi
 **Giáo dục khởi nghiệp là gì và đo bằng thang đo nào** · vi · scheduled 2027-01-07 · 3407 words
 Keyword: `giáo dục khởi nghiệp là gì`
 Tags: giáo dục khởi nghiệp, thang đo, biến quan sát, SPSS, mô hình nghiên cứu
 > Bạn sẽ biết cách khái niệm hóa giáo dục khởi nghiệp, xây dựng biến quan sát và kiểm định thang đo trước khi đưa vào mô hình nghiên cứu.
 /blog/vi/giao-duc-khoi-nghiep-la-gi
+
+### quy-dinh-trinh-bay-luan-van
+**Quy định trình bày luận văn: hướng dẫn chi tiết từ A đến Z** · vi · scheduled 2027-01-07 · 3310 words
+Keyword: `quy định trình bày luận văn`
+Tags: quy định trình bày luận văn, viết luận văn, khóa luận tốt nghiệp, định dạng luận văn, SPSS
+> Hướng dẫn sắp xếp bố cục, định dạng trang, bảng biểu, trích dẫn và kiểm tra luận văn định lượng trước khi nộp.
+/blog/vi/quy-dinh-trinh-bay-luan-van
 
 ### odds-ratio-la-gi
 **Odds ratio là gì? Cách đọc Odds Ratio trong SPSS** · vi · scheduled 2027-01-06 · 2640 words
@@ -1481,6 +1831,13 @@ Tags: NFI, SmartPLS, PLS-SEM, Model Fit, mô hình SEM
 > Bạn đang thấy NFI trong bảng Model Fit của SmartPLS và chưa biết có nên kết luận mô hình đạt hay không.
 /blog/vi/nfi-la-gi
 
+### xay-dung-thang-do-trong-luan-van-la-gi
+**Xây dựng thang đo trong luận văn là gì? Cách viết đúng** · vi · scheduled 2027-01-06 · 3162 words
+Keyword: `xây dựng thang đo trong luận văn là gì`
+Tags: xây dựng thang đo, luận văn, Cronbach's Alpha, EFA, biến quan sát
+> Hướng dẫn xây dựng thang đo từ khái niệm nghiên cứu đến bộ biến quan sát, kiểm định và cách trình bày có thể bảo vệ trước hội đồng.
+/blog/vi/xay-dung-thang-do-trong-luan-van-la-gi
+
 ### split-file-trong-spss
 **Cách chạy Split File trong SPSS: chia nhóm và đọc output đúng** · vi · scheduled 2027-01-05 · 2309 words
 Keyword: `split file trong spss`
@@ -1502,6 +1859,13 @@ Tags: củng cố Skinner, hành vi người tiêu dùng, mô hình nghiên cứ
 > Củng cố Skinner giúp bạn giải thích cách phần thưởng và hệ quả làm thay đổi hành vi, đồng thời chuyển lý thuyết thành mô hình định lượng có thể kiểm định.
 /blog/vi/cung-co-skinner-la-gi
 
+### trang-bia-trong-luan-van-la-gi
+**Trang bìa trong luận văn là gì? Cách trình bày đúng chuẩn** · vi · scheduled 2027-01-05 · 2992 words
+Keyword: `trang bìa trong luận văn là gì`
+Tags: trang bìa luận văn, luận văn tốt nghiệp, trình bày luận văn, khóa luận tốt nghiệp, viết luận văn
+> Hướng dẫn kiểm tra và trình bày trang bìa luận văn từ tên trường đến tên đề tài, giảng viên hướng dẫn và thời gian nộp.
+/blog/vi/trang-bia-trong-luan-van-la-gi
+
 ### select-cases-trong-spss
 **Select Cases trong SPSS: cách lọc mẫu đúng trước khi phân tích** · vi · scheduled 2027-01-04 · 2678 words
 Keyword: `select cases trong spss`
@@ -1516,12 +1880,33 @@ Tags: giá trị mối quan hệ, thang đo, Cronbach's Alpha, EFA, SPSS, SmartP
 > Bạn sẽ biết cách biến khái niệm giá trị mối quan hệ thành thang đo có thể kiểm định bằng SPSS hoặc SmartPLS.
 /blog/vi/gia-tri-moi-quan-he-la-gi
 
+### nhan-xet-cua-don-vi-thuc-tap-trong-luan-van-la-gi
+**Nhận xét của đơn vị thực tập trong luận văn là gì?** · vi · scheduled 2027-01-03 · 2932 words
+Keyword: `nhận xét của đơn vị thực tập trong luận văn là gì`
+Tags: khóa luận tốt nghiệp, nhận xét đơn vị thực tập, viết luận văn, nhận xét giảng viên hướng dẫn, báo cáo thực tập
+> Hướng dẫn viết phần nhận xét của đơn vị thực tập trong luận văn rõ ràng, đúng vai trò và dễ bảo vệ.
+/blog/vi/nhan-xet-cua-don-vi-thuc-tap-trong-luan-van-la-gi
+
 ### sap-xep-du-lieu-trong-spss
 **Cách sắp xếp dữ liệu trong SPSS từ A đến Z** · vi · scheduled 2027-01-03 · 3013 words
 Keyword: `sắp xếp dữ liệu trong spss`
 Tags: SPSS, sắp xếp dữ liệu, làm sạch dữ liệu, mã hóa biến, phân tích định lượng
 > Bạn sẽ biết cách chuẩn bị, sắp xếp và kiểm tra file dữ liệu SPSS trước khi chạy Cronbach's Alpha, EFA hoặc hồi quy.
 /blog/vi/sap-xep-du-lieu-trong-spss
+
+### gia-tri-gia-ca-la-gi
+**Giá trị giá cả là gì? Cách xây dựng thang đo trong nghiên cứu định lượng** · vi · scheduled 2027-01-03 · 3033 words
+Keyword: `giá trị giá cả là gì`
+Tags: giá trị giá cả, thang đo, biến quan sát, SPSS, SmartPLS
+> Hướng dẫn xác định, điều chỉnh và kiểm định thang đo giá trị giá cả từ bảng hỏi đến chương kết quả.
+/blog/vi/gia-tri-gia-ca-la-gi
+
+### tom-tat-trong-luan-van-la-gi
+**Tóm tắt trong luận văn là gì? Cách viết và ví dụ** · vi · scheduled 2027-01-03 · 3199 words
+Keyword: `tóm tắt trong luận văn là gì`
+Tags: tóm tắt luận văn, viết luận văn, khóa luận tốt nghiệp, abstract, phương pháp nghiên cứu
+> Hướng dẫn viết phần tóm tắt luận văn ngắn gọn, đủ mục tiêu, phương pháp, kết quả và kết luận, kèm câu mẫu có thể điều chỉnh.
+/blog/vi/tom-tat-trong-luan-van-la-gi
 
 ### sai-so-chuan-qua-lon-phai-lam-sao
 **Sai số chuẩn quá lớn phải làm sao trong SPSS** · vi · scheduled 2027-01-02 · 2794 words
@@ -1544,6 +1929,20 @@ Tags: CIPP, mô hình CIPP, đánh giá chương trình, nghiên cứu định l
 > CIPP giúp bạn đánh giá một chương trình, chính sách hoặc dự án theo bốn mặt: bối cảnh, đầu vào, quá trình và kết quả.
 /blog/vi/cipp-la-gi
 
+### thong-ke-mo-ta-mau-trong-luan-van-la-gi
+**Thống kê mô tả mẫu trong luận văn là gì và cách viết** · vi · scheduled 2027-01-02 · 3330 words
+Keyword: `thống kê mô tả mẫu trong luận văn là gì`
+Tags: thống kê mô tả, mô tả mẫu, SPSS, chương 4, luận văn định lượng
+> Hướng dẫn đọc và trình bày thống kê mô tả mẫu từ bảng dữ liệu SPSS đến đoạn viết có thể đưa vào chương 4.
+/blog/vi/thong-ke-mo-ta-mau-trong-luan-van-la-gi
+
+### muc-tieu-nghien-cuu-trong-luan-van-la-gi
+**Mục tiêu nghiên cứu trong luận văn là gì? Cách viết đúng** · vi · scheduled 2027-01-02 · 3468 words
+Keyword: `mục tiêu nghiên cứu trong luận văn là gì`
+Tags: mục tiêu nghiên cứu, luận văn, khóa luận tốt nghiệp, phương pháp nghiên cứu, nghiên cứu định lượng
+> Hướng dẫn xác định và viết mục tiêu nghiên cứu trong luận văn bằng câu rõ ràng, đo lường được và phù hợp với dữ liệu bạn có.
+/blog/vi/muc-tieu-nghien-cuu-trong-luan-van-la-gi
+
 ### post-hoc-tukey-trong-spss
 **Post hoc Tukey trong SPSS: Cách chạy và đọc kết quả** · vi · scheduled 2027-01-02 · 3090 words
 Keyword: `post hoc tukey trong spss`
@@ -1564,6 +1963,20 @@ Keyword: `plspredict trong smartpls`
 Tags: PLSpredict, SmartPLS 4, PLS-SEM, Q²predict, RMSE, MAE
 > Bạn sẽ biết PLSpredict trong SmartPLS dùng để làm gì, chạy ở đâu và trình bày kết quả dự báo trong luận văn ra sao.
 /blog/vi/plspredict-trong-smartpls
+
+### micom-khong-dat-phai-lam-sao
+**MICOM không đạt phải làm sao? Cách kiểm tra và xử lý trong SmartPLS** · vi · scheduled 2027-01-01 · 3049 words
+Keyword: `micom không đạt phải làm sao`
+Tags: MICOM, SmartPLS, measurement invariance, PLS-SEM, permutation test
+> Bạn đang thấy MICOM không đạt trong SmartPLS, hãy kiểm tra đúng bước trước khi loại biến hoặc chạy lại mô hình.
+/blog/vi/micom-khong-dat-phai-lam-sao
+
+### thiet-ke-nghien-cuu-trong-luan-van-la-gi
+**Thiết kế nghiên cứu trong luận văn là gì? Cách viết từ A đến Z** · vi · scheduled 2027-01-01 · 3735 words
+Keyword: `thiết kế nghiên cứu trong luận văn là gì`
+Tags: thiết kế nghiên cứu, luận văn, phương pháp nghiên cứu, nghiên cứu định lượng, chương phương pháp
+> Hướng dẫn xác định thiết kế nghiên cứu, phương pháp, mẫu, công cụ và quy trình phân tích để viết chương phương pháp có thể bảo vệ được.
+/blog/vi/thiet-ke-nghien-cuu-trong-luan-van-la-gi
 
 ### mann-whitney-la-gi
 **Mann Whitney là gì? Cách đọc kết quả và kết luận trong SPSS** · vi · scheduled 2027-01-01 · 2549 words
@@ -1593,6 +2006,27 @@ Tags: SmartPLS, singular matrix, ma trận suy biến, PLS-SEM, lỗi SmartPLS
 > Bạn đang chạy SmartPLS và gặp lỗi singular matrix, hãy kiểm tra dữ liệu, biến chỉ báo và mô hình theo đúng thứ tự trước khi xóa biến.
 /blog/vi/ma-tran-suy-bien-singular-matrix-phai-lam-sao
 
+### mo-hinh-nghien-cuu-de-xuat-trong-luan-van-la-gi
+**Mô hình nghiên cứu đề xuất trong luận văn là gì?** · vi · scheduled 2026-12-31 · 3161 words
+Keyword: `mô hình nghiên cứu đề xuất trong luận văn là gì`
+Tags: mô hình nghiên cứu, luận văn, giả thuyết nghiên cứu, biến độc lập, SmartPLS, SPSS
+> Hướng dẫn xây dựng mô hình nghiên cứu đề xuất trong luận văn từ cơ sở lý thuyết, nghiên cứu trước đến biến, giả thuyết và sơ đồ mô hình.
+/blog/vi/mo-hinh-nghien-cuu-de-xuat-trong-luan-van-la-gi
+
+### ma-tran-tuong-quan-la-gi
+**Ma trận tương quan là gì? Cách đọc và xử lý trong SPSS** · vi · scheduled 2026-12-31 · 2685 words
+Keyword: `ma trận tương quan là gì`
+Tags: ma trận tương quan, SPSS, tương quan Pearson, nghiên cứu định lượng, phân tích dữ liệu
+> Bạn sẽ biết cách đọc từng ô trong ma trận tương quan, kiểm tra Sig. và trình bày kết quả phù hợp với mô hình nghiên cứu.
+/blog/vi/ma-tran-tuong-quan-la-gi
+
+### he-so-phi-la-gi
+**Hệ số phi là gì? Cách đọc và chạy trong SPSS** · vi · scheduled 2026-12-30 · 2275 words
+Keyword: `hệ số phi là gì`
+Tags: hệ số phi, Phi coefficient, SPSS, Cramer V, Kappa
+> Bạn sẽ biết hệ số phi đo điều gì, đọc ở đâu trong SPSS và xử lý thế nào khi kết quả không đạt.
+/blog/vi/he-so-phi-la-gi
+
 ### fama-french-la-gi
 **Fama-French là gì? Mô hình 3 nhân tố và cách áp dụng** · vi · scheduled 2026-12-30 · 3279 words
 Keyword: `fama french là gì`
@@ -1606,6 +2040,20 @@ Keyword: `pls algorithm trong smartpls`
 Tags: PLS Algorithm, SmartPLS, PLS-SEM, Outer Loadings, R², AVE
 > Bạn sẽ biết PLS Algorithm trong SmartPLS 4 dùng để làm gì, chạy ở đâu và đọc các bảng kết quả phục vụ chương 4.
 /blog/vi/pls-algorithm-trong-smartpls
+
+### mo-dau-trong-luan-van-la-gi
+**Mở đầu trong luận văn là gì? Cấu trúc và cách viết** · vi · scheduled 2026-12-30 · 3742 words
+Keyword: `mở đầu trong luận văn là gì`
+Tags: mở đầu luận văn, cách viết luận văn, khóa luận tốt nghiệp, mục tiêu nghiên cứu, câu hỏi nghiên cứu
+> Hướng dẫn viết phần mở đầu luận văn theo đúng mạch vấn đề, mục tiêu, câu hỏi và phạm vi nghiên cứu.
+/blog/vi/mo-dau-trong-luan-van-la-gi
+
+### he-so-mardia-la-gi
+**Hệ số Mardia là gì? Cách đọc và xử lý trong SEM** · vi · scheduled 2026-12-30 · 2923 words
+Keyword: `hệ số mardia là gì`
+Tags: hệ số Mardia, SEM, CB-SEM, SmartPLS, SPSS
+> Bạn đang thấy hệ số Mardia trong output SEM và chưa biết số nào cần đọc, bài này đi từ ý nghĩa đến cách giải trình trong luận văn.
+/blog/vi/he-so-mardia-la-gi
 
 ### ecsi-la-gi
 **ECSI là gì? Thành phần, mô hình và cách kiểm định** · vi · scheduled 2026-12-29 · 3390 words
@@ -1635,12 +2083,33 @@ Tags: SmartPLS, permutation test, PLS-SEM, MGA, so sánh nhóm
 > Bạn sẽ biết khi nào dùng permutation test, chạy ở đâu trong SmartPLS 4 và đọc kết quả khác biệt giữa các nhóm.
 /blog/vi/kiem-dinh-hoan-vi-permutation-trong-smartpls
 
+### slide-bao-ve-trong-luan-van-la-gi
+**Slide bảo vệ trong luận văn là gì? Cấu trúc và cách viết** · vi · scheduled 2026-12-29 · 3090 words
+Keyword: `slide bảo vệ trong luận văn là gì`
+Tags: slide bảo vệ luận văn, bảo vệ khóa luận, thuyết trình luận văn, SPSS, SmartPLS
+> Hướng dẫn làm slide bảo vệ luận văn có cấu trúc rõ, số liệu nhất quán và đủ căn cứ để trả lời câu hỏi của hội đồng.
+/blog/vi/slide-bao-ve-trong-luan-van-la-gi
+
+### ly-do-chon-de-tai-trong-luan-van-la-gi
+**Lý do chọn đề tài trong luận văn là gì? Cách viết có căn cứ** · vi · scheduled 2026-12-29 · 3622 words
+Keyword: `lý do chọn đề tài trong luận văn là gì`
+Tags: lý do chọn đề tài, luận văn, khóa luận tốt nghiệp, viết luận văn, nghiên cứu định lượng
+> Hướng dẫn viết lý do chọn đề tài trong luận văn bằng lập luận cụ thể, câu mẫu, bảng kiểm tra và ví dụ để đưa vào chương mở đầu.
+/blog/vi/ly-do-chon-de-tai-trong-luan-van-la-gi
+
 ### kruskal-wallis-la-gi
 **Kruskal Wallis là gì? Cách đọc và kết luận trong SPSS** · vi · scheduled 2026-12-28 · 2742 words
 Keyword: `kruskal wallis là gì`
 Tags: Kruskal Wallis, SPSS, kiểm định phi tham số, p-value, thống kê
 > Bạn sẽ biết khi nào dùng Kruskal Wallis thay cho One-way ANOVA và cách viết kết quả kiểm định vào luận văn.
 /blog/vi/kruskal-wallis-la-gi
+
+### he-so-icc-la-gi
+**Hệ số ICC là gì? Cách đọc và chạy trong SPSS** · vi · scheduled 2026-12-28 · 1634 words
+Keyword: `hệ số icc là gì`
+Tags: hệ số ICC, Intraclass Correlation Coefficient, SPSS, độ tin cậy, thống kê
+> Bạn sẽ biết hệ số ICC đo điều gì, chọn đúng mô hình trong SPSS và viết kết quả vào luận văn mà không nhầm với Cronbach's Alpha.
+/blog/vi/he-so-icc-la-gi
 
 ### loi-kiem-dinh-levene-co-y-nghia-spss
 **Lỗi kiểm định Levene có ý nghĩa trong SPSS phải làm sao** · vi · scheduled 2026-12-28 · 2271 words
@@ -1655,6 +2124,27 @@ Keyword: `chia sẻ tri thức là gì`
 Tags: chia sẻ tri thức, thang đo, Cronbach's Alpha, EFA, SPSS
 > Hướng dẫn xác định khái niệm chia sẻ tri thức, xây dựng biến quan sát và kiểm định thang đo trước khi đưa vào mô hình nghiên cứu.
 /blog/vi/chia-se-tri-thuc-la-gi
+
+### khong-nhap-duoc-file-csv-phai-lam-sao
+**Không nhập được file CSV vào SmartPLS phải làm sao** · vi · scheduled 2026-12-27 · 3200 words
+Keyword: `không nhập được file csv phải làm sao`
+Tags: SmartPLS, file CSV, lỗi nhập dữ liệu, SmartPLS 4, PLS-SEM
+> Bạn mở SmartPLS 4 nhưng file CSV không được nhận, bị báo lỗi hoặc hiện sai cột, hãy kiểm tra theo đúng thứ tự trong hướng dẫn này.
+/blog/vi/khong-nhap-duoc-file-csv-phai-lam-sao
+
+### quy-trinh-nghien-cuu-trong-luan-van-la-gi
+**Quy trình nghiên cứu trong luận văn là gì? Các bước viết từ A đến Z** · vi · scheduled 2026-12-27 · 3093 words
+Keyword: `quy trình nghiên cứu trong luận văn là gì`
+Tags: quy trình nghiên cứu, luận văn, khóa luận tốt nghiệp, phương pháp nghiên cứu, nghiên cứu định lượng
+> Nắm được quy trình nghiên cứu trong luận văn để đi từ câu hỏi nghiên cứu, mô hình, bảng hỏi đến phân tích dữ liệu và viết kết quả.
+/blog/vi/quy-trinh-nghien-cuu-trong-luan-van-la-gi
+
+### loi-cam-on-trong-luan-van-la-gi
+**Lời cảm ơn trong luận văn là gì? Cách viết đúng và chân thành** · vi · scheduled 2026-12-27 · 3388 words
+Keyword: `lời cảm ơn trong luận văn là gì`
+Tags: lời cảm ơn luận văn, cách viết luận văn, khóa luận tốt nghiệp, lời cam đoan, viết luận văn
+> Hướng dẫn viết lời cảm ơn trong luận văn với cấu trúc rõ ràng, câu mẫu có thể thay thế và những lỗi thường khiến hội đồng hỏi lại.
+/blog/vi/loi-cam-on-trong-luan-van-la-gi
 
 ### phan-tich-cum-spss
 **Cách chạy phân tích cụm trong SPSS từ A đến Z** · vi · scheduled 2026-12-27 · 2993 words
@@ -1677,12 +2167,40 @@ Tags: chi phí giao dịch, transaction cost, mô hình nghiên cứu, SPSS, Sma
 > Hướng dẫn xây dựng mô hình chi phí giao dịch, chọn thang đo và kiểm định dữ liệu bằng SPSS hoặc SmartPLS.
 /blog/vi/chi-phi-giao-dich-la-gi
 
+### p-value-bootstrap-trong-smartpls
+**P value bootstrap trong SmartPLS: cách đọc và báo cáo** · vi · scheduled 2026-12-26 · 2367 words
+Keyword: `p value bootstrap trong smartpls`
+Tags: SmartPLS, P value, Bootstrapping, PLS-SEM, kiểm định giả thuyết
+> Bạn sẽ biết P Values trong bảng Path Coefficients được tạo ra thế nào, đọc ra sao và báo cáo kết quả bootstrap mà không nhầm với p-value của SPSS.
+/blog/vi/p-value-bootstrap-trong-smartpls
+
+### khoang-tin-cay-htmt-trong-smartpls
+**Khoảng tin cậy HTMT trong SmartPLS: cách đọc và đánh giá** · vi · scheduled 2026-12-26 · 2748 words
+Keyword: `khoảng tin cậy htmt trong smartpls`
+Tags: SmartPLS, HTMT, khoảng tin cậy HTMT, giá trị phân biệt, PLS-SEM
+> Bạn sẽ biết cách chạy HTMT, bootstrapping và kết luận giá trị phân biệt từ khoảng tin cậy trong SmartPLS 4.
+/blog/vi/khoang-tin-cay-htmt-trong-smartpls
+
+### phuong-phap-nghien-cuu-trong-luan-van-la-gi
+**Phương pháp nghiên cứu trong luận văn là gì? Cách viết đúng** · vi · scheduled 2026-12-26 · 3001 words
+Keyword: `phương pháp nghiên cứu trong luận văn là gì`
+Tags: phương pháp nghiên cứu, luận văn, khóa luận tốt nghiệp, nghiên cứu định lượng, SPSS
+> Hướng dẫn viết phần phương pháp nghiên cứu trong luận văn định lượng, từ thiết kế nghiên cứu đến mẫu, bảng hỏi và cách trình bày kết quả.
+/blog/vi/phuong-phap-nghien-cuu-trong-luan-van-la-gi
+
 ### kmo-trong-spss
 **KMO trong SPSS là gì? Cách đọc và xử lý khi KMO nhỏ hơn 0,5** · vi · scheduled 2026-12-26 · 2538 words
 Keyword: `kmo trong spss`
 Tags: KMO trong SPSS, EFA, SPSS, KMO nhỏ hơn 0,5, phân tích nhân tố
 > Bạn sẽ biết KMO trong SPSS đo gì, đọc bảng KMO and Bartlett's Test ra sao và xử lý thế nào khi chỉ số chưa đạt.
 /blog/vi/kmo-trong-spss
+
+### he-so-bien-thien-la-gi
+**Hệ số biến thiên là gì? Cách tính và đọc trong SPSS** · vi · scheduled 2026-12-26 · 2794 words
+Keyword: `hệ số biến thiên là gì`
+Tags: hệ số biến thiên, coefficient of variation, SPSS, thống kê mô tả, độ phân tán
+> Bạn sẽ biết cách tính, đọc và diễn giải hệ số biến thiên khi so sánh độ phân tán của các biến trong bộ dữ liệu định lượng.
+/blog/vi/he-so-bien-thien-la-gi
 
 ### dong-luc-huong-thu-la-gi
 **Động lực hưởng thụ là gì? Cách xây dựng thang đo** · vi · scheduled 2026-12-26 · 3036 words
@@ -1705,6 +2223,13 @@ Tags: SmartPLS, bootstrapping, PLS-SEM, bootstrap seed, phân tích dữ liệu
 > Bạn có thể xác định vì sao kết quả bootstrapping trong SmartPLS thay đổi và biết khi nào đó là dao động bình thường, khi nào cần sửa dữ liệu hoặc mô hình.
 /blog/vi/ket-qua-bootstrapping-thay-doi-moi-lan-chay-phai-lam-sao
 
+### loi-cfi-nho-hon-0-9-amos
+**Lỗi CFI nhỏ hơn 0.9 trong AMOS: cách xử lý đúng** · vi · scheduled 2026-12-24 · 2883 words
+Keyword: `lỗi cfi nhỏ hơn 0 9 amos`
+Tags: AMOS, CFI, SEM, chỉ số độ phù hợp, lỗi AMOS
+> Bạn sẽ biết CFI dưới 0.9 xuất phát từ dữ liệu, mô hình đo lường hay cấu trúc AMOS, và cách xử lý trước khi chạy lại.
+/blog/vi/loi-cfi-nho-hon-0-9-amos
+
 ### dong-luc-hoc-tap-la-gi
 **Động lực học tập là gì? Cách xây dựng thang đo** · vi · scheduled 2026-12-24 · 3168 words
 Keyword: `động lực học tập là gì`
@@ -1718,6 +2243,20 @@ Keyword: `chất lượng kiểm toán là gì`
 Tags: chất lượng kiểm toán, thang đo, SPSS, kiểm toán, nghiên cứu định lượng
 > Bạn có thể dùng hướng dẫn này để chuyển khái niệm chất lượng kiểm toán thành thang đo khảo sát có thể kiểm định bằng SPSS.
 /blog/vi/chat-luong-kiem-toan-la-gi
+
+### nghien-cuu-so-bo-trong-luan-van-la-gi
+**Nghiên cứu sơ bộ trong luận văn là gì? Cách viết và ví dụ** · vi · scheduled 2026-12-24 · 3283 words
+Keyword: `nghiên cứu sơ bộ trong luận văn là gì`
+Tags: nghiên cứu sơ bộ, luận văn, phương pháp nghiên cứu, SPSS, bảng hỏi
+> Hướng dẫn phân biệt nghiên cứu sơ bộ với nghiên cứu chính thức, trình bày kết quả và viết phần nghiên cứu sơ bộ trong luận văn.
+/blog/vi/nghien-cuu-so-bo-trong-luan-van-la-gi
+
+### paired-samples-t-test-trong-spss
+**Paired Samples T Test trong SPSS: Cách Chạy và Đọc Kết Quả** · vi · scheduled 2026-12-24 · 2174 words
+Keyword: `paired samples t test trong spss`
+Tags: Paired Samples T Test, SPSS, kiểm định t cặp, kiểm định giả thuyết, phân tích định lượng
+> Hướng dẫn thực hành Paired Samples T Test trong SPSS từ chuẩn bị dữ liệu đến đọc bảng Paired Samples Test và viết kết quả.
+/blog/vi/paired-samples-t-test-trong-spss
 
 ### dong-co-du-lich-la-gi
 **Động cơ du lịch là gì? Cách xây dựng thang đo và kiểm định** · vi · scheduled 2026-12-23 · 2839 words
@@ -1740,6 +2279,13 @@ Tags: kiểm định Bartlett, SPSS, EFA, KMO, phân tích nhân tố
 > Bạn sẽ biết kiểm định Bartlett trong SPSS kiểm tra điều gì, đọc p-value ra sao và cần làm gì khi kết quả không đạt.
 /blog/vi/kiem-dinh-bartlett-la-gi
 
+### nhap-lieu-trong-spss
+**Nhập liệu trong SPSS: Cách nhập dữ liệu từ Excel đúng cách** · vi · scheduled 2026-12-23 · 3199 words
+Keyword: `nhập liệu trong spss`
+Tags: nhập liệu trong SPSS, nhập dữ liệu từ Excel trong SPSS, SPSS, Variable View, Data View
+> Bạn có thể nhập dữ liệu trực tiếp hoặc đưa file Excel vào SPSS, nhưng cần kiểm tra mã biến, kiểu dữ liệu và các ô trống trước khi chạy phân tích.
+/blog/vi/nhap-lieu-trong-spss
+
 ### don-bay-tai-chinh-la-gi
 **Đòn bẩy tài chính là gì? Cách đo và kiểm định trong luận văn** · vi · scheduled 2026-12-23 · 2844 words
 Keyword: `đòn bẩy tài chính là gì`
@@ -1753,6 +2299,13 @@ Keyword: `nhập dữ liệu csv trong smartpls`
 Tags: SmartPLS, nhập dữ liệu CSV, SmartPLS 4, PLS-SEM, phân tích định lượng
 > Bạn có thể làm theo từng bước để đưa file CSV vào SmartPLS 4 mà không mất biến, sai kiểu dữ liệu hoặc lệch cấu trúc mô hình.
 /blog/vi/nhap-du-lieu-csv-trong-smartpls
+
+### muc-luc-trong-luan-van-la-gi
+**Mục lục trong luận văn là gì? Cách làm đúng và dễ cập nhật** · vi · scheduled 2026-12-22 · 3400 words
+Keyword: `mục lục trong luận văn là gì`
+Tags: mục lục luận văn, viết luận văn, Microsoft Word, khóa luận tốt nghiệp, định dạng luận văn
+> Bạn sẽ biết mục lục luận văn cần có gì, sắp xếp ra sao và cách cập nhật số trang mà không phải sửa thủ công từng dòng.
+/blog/vi/muc-luc-trong-luan-van-la-gi
 
 ### nghien-cuu-cat-ngang-la-gi
 **Nghiên cứu cắt ngang là gì? Cách chọn mẫu và phân tích SPSS** · vi · scheduled 2026-12-22 · 2914 words
@@ -1789,6 +2342,20 @@ Tags: chất lượng cuộc sống, thang đo, SPSS, Cronbach's Alpha, EFA
 > Bạn sẽ biết cách khái niệm hóa, xây dựng và kiểm định thang đo chất lượng cuộc sống từ bảng hỏi đến output SPSS.
 /blog/vi/chat-luong-cuoc-song-la-gi
 
+### mo-hinh-khong-hoi-tu-phai-lam-sao
+**Mô hình không hội tụ phải làm sao trong SmartPLS** · vi · scheduled 2026-12-21 · 2952 words
+Keyword: `mô hình không hội tụ phải làm sao`
+Tags: SmartPLS, mô hình không hội tụ, outer loading, AVE, HTMT
+> Bạn mở SmartPLS và mô hình không hội tụ, hãy kiểm tra theo đúng thứ tự từ dữ liệu, thang đo đến mô hình cấu trúc trước khi xóa biến.
+/blog/vi/mo-hinh-khong-hoi-tu-phai-lam-sao
+
+### mau-qua-nho-phai-lam-sao
+**Mẫu quá nhỏ phải làm sao khi phân tích SPSS** · vi · scheduled 2026-12-21 · 3083 words
+Keyword: `mẫu quá nhỏ phải làm sao`
+Tags: mẫu quá nhỏ, cỡ mẫu, SPSS, EFA, hồi quy
+> Bạn đang có ít quan sát hơn dự kiến, hãy kiểm tra đúng nguyên nhân trước khi quyết định chạy tiếp, gộp nhóm hay thu thêm dữ liệu.
+/blog/vi/mau-qua-nho-phai-lam-sao
+
 ### dao-tao-va-phat-trien-la-gi
 **Đào tạo và phát triển là gì? Cách xây dựng thang đo** · vi · scheduled 2026-12-21 · 3162 words
 Keyword: `đào tạo và phát triển là gì`
@@ -1796,12 +2363,26 @@ Tags: đào tạo và phát triển, thang đo, SPSS, quản trị nhân sự, n
 > Bạn sẽ biết cách biến khái niệm đào tạo và phát triển thành thang đo có thể kiểm định trong SPSS và trình bày ở chương 3.
 /blog/vi/dao-tao-va-phat-trien-la-gi
 
+### ke-hoach-tien-do-luan-van
+**Kế hoạch tiến độ luận văn: Mẫu chi tiết từ chọn đề tài đến bảo vệ** · vi · scheduled 2026-12-20 · 2986 words
+Keyword: `kế hoạch tiến độ luận văn`
+Tags: kế hoạch tiến độ luận văn, luận văn tốt nghiệp, tiến độ nghiên cứu, SPSS, bảo vệ luận văn
+> Mẫu kế hoạch tiến độ luận văn thực tế, chia theo tuần và gắn với đầu việc định lượng từ chốt đề tài đến nộp bản cuối.
+/blog/vi/ke-hoach-tien-do-luan-van
+
 ### fisher-exact-test-la-gi
 **Fisher Exact Test là gì? Cách đọc và chạy trong SPSS** · vi · scheduled 2026-12-20 · 2070 words
 Keyword: `fisher exact test là gì`
 Tags: Fisher Exact Test, SPSS, kiểm định độc lập, bảng chéo, p-value
 > Fisher Exact Test giúp bạn kiểm tra mối liên hệ giữa hai biến phân loại khi bảng chéo có tần số kỳ vọng nhỏ.
 /blog/vi/fisher-exact-test-la-gi
+
+### mat-du-lieu-khi-recode-phai-lam-sao
+**Mất dữ liệu khi recode phải làm sao? Cách khôi phục và kiểm tra trong SPSS** · vi · scheduled 2026-12-20 · 2951 words
+Keyword: `mất dữ liệu khi recode phải làm sao`
+Tags: SPSS, recode, missing value, làm sạch dữ liệu, dữ liệu định lượng
+> Bạn bị mất dữ liệu sau khi recode trong SPSS? Làm theo thứ tự kiểm tra này để xác định nguyên nhân, khôi phục biến và tránh sửa nhầm file gốc.
+/blog/vi/mat-du-lieu-khi-recode-phai-lam-sao
 
 ### kiem-dinh-split-half-trong-spss
 **Cách chạy kiểm định Split-Half trong SPSS** · vi · scheduled 2026-12-20 · 2721 words
@@ -1831,6 +2412,13 @@ Tags: Gaussian Copula, SmartPLS, PLS-SEM, nội sinh, endogeneity
 > Hướng dẫn thực hành Gaussian Copula trong SmartPLS 4 để kiểm tra nội sinh, từ chuẩn bị file CSV đến đọc và viết kết quả.
 /blog/vi/gaussian-copula-trong-smartpls
 
+### huong-nghien-cuu-tiep-theo-trong-luan-van-la-gi
+**Hướng nghiên cứu tiếp theo trong luận văn là gì? Cách viết có căn cứ** · vi · scheduled 2026-12-19 · 3254 words
+Keyword: `hướng nghiên cứu tiếp theo trong luận văn là gì`
+Tags: hướng nghiên cứu tiếp theo, viết luận văn, khóa luận tốt nghiệp, hạn chế nghiên cứu, đề xuất nghiên cứu
+> Bạn sẽ biết cách biến hạn chế, kết quả và khoảng trống của đề tài thành các hướng nghiên cứu tiếp theo có thể triển khai.
+/blog/vi/huong-nghien-cuu-tiep-theo-trong-luan-van-la-gi
+
 ### manova-trong-spss
 **MANOVA trong SPSS: Cách chạy, đọc kết quả và kết luận** · vi · scheduled 2026-12-19 · 2730 words
 Keyword: `manova trong spss`
@@ -1845,12 +2433,47 @@ Tags: kiểm định dấu, SPSS, kiểm định phi tham số, Sign Test, p-val
 > Bạn có thể chạy kiểm định dấu trong SPSS để so sánh trung vị của hai phép đo liên quan khi dữ liệu không đáp ứng giả định phân phối chuẩn.
 /blog/vi/kiem-dinh-dau-trong-spss
 
+### danh-doi-cau-truc-von-la-gi
+**Đánh đổi cấu trúc vốn là gì? Cách xây dựng mô hình nghiên cứu** · vi · scheduled 2026-12-19 · 3610 words
+Keyword: `đánh đổi cấu trúc vốn là gì`
+Tags: đánh đổi cấu trúc vốn, cấu trúc vốn, tài chính doanh nghiệp, mô hình nghiên cứu, SPSS, SmartPLS
+> Hiểu lý thuyết đánh đổi cấu trúc vốn và chuyển nó thành mô hình, giả thuyết, thang đo cùng quy trình kiểm định trong luận văn.
+/blog/vi/danh-doi-cau-truc-von-la-gi
+
+### loi-ave-nho-hon-0-5-spss
+**Lỗi AVE nhỏ hơn 0.5 trong SPSS phải làm sao** · vi · scheduled 2026-12-18 · 2735 words
+Keyword: `lỗi ave nhỏ hơn 0 5 spss`
+Tags: AVE, SmartPLS, SPSS, giá trị hội tụ, outer loading
+> Bạn đang thấy AVE dưới 0.5 trong bảng kết quả và chưa biết nên loại biến hay chạy lại mô hình, bài viết này đưa ra thứ tự xử lý cụ thể.
+/blog/vi/loi-ave-nho-hon-0-5-spss
+
+### kien-nghi-trong-luan-van-la-gi
+**Kiến nghị trong luận văn là gì? Cách viết có căn cứ** · vi · scheduled 2026-12-18 · 3118 words
+Keyword: `kiến nghị trong luận văn là gì`
+Tags: kiến nghị trong luận văn, viết luận văn, khóa luận tốt nghiệp, hàm ý quản trị, kết quả nghiên cứu
+> Hướng dẫn viết phần kiến nghị trong luận văn từ kết quả nghiên cứu, với cấu trúc, câu mẫu và ví dụ có thể điều chỉnh cho đề tài của bạn.
+/blog/vi/kien-nghi-trong-luan-van-la-gi
+
+### han-che-cua-de-tai-trong-luan-van-la-gi
+**Hạn chế của đề tài trong luận văn là gì? Cách viết đúng** · vi · scheduled 2026-12-18 · 3152 words
+Keyword: `hạn chế của đề tài trong luận văn là gì`
+Tags: hạn chế của đề tài, viết luận văn, khóa luận tốt nghiệp, phương pháp nghiên cứu, nghiên cứu định lượng
+> Hướng dẫn xác định, sắp xếp và viết phần hạn chế của đề tài trong luận văn sao cho trung thực, cụ thể và có thể bảo vệ trước hội đồng.
+/blog/vi/han-che-cua-de-tai-trong-luan-van-la-gi
+
 ### hieu-chinh-bonferroni-la-gi
 **Hiệu chỉnh Bonferroni là gì và đọc kết quả trong SPSS** · vi · scheduled 2026-12-18 · 1629 words
 Keyword: `hiệu chỉnh bonferroni là gì`
 Tags: hiệu chỉnh Bonferroni, SPSS, ANOVA, p-value, kiểm định giả thuyết
 > Bạn sẽ biết khi nào cần hiệu chỉnh Bonferroni, đọc cột Sig. trong SPSS và viết kết quả so sánh nhiều nhóm vào luận văn.
 /blog/vi/hieu-chinh-bonferroni-la-gi
+
+### eta-binh-phuong-la-gi
+**Eta bình phương là gì? Cách đọc eta bình phương trong SPSS** · vi · scheduled 2026-12-18 · 2841 words
+Keyword: `eta bình phương là gì`
+Tags: eta bình phương, eta squared, SPSS, effect size, kích thước ảnh hưởng
+> Bạn có thể xác định eta bình phương đang đo kích thước ảnh hưởng nào, đọc đúng bảng SPSS và trình bày kết quả mà không nhầm với partial eta squared.
+/blog/vi/eta-binh-phuong-la-gi
 
 ### mann-whitney-trong-spss
 **Mann Whitney trong SPSS: Cách chạy, đọc kết quả và viết luận văn** · vi · scheduled 2026-12-17 · 2826 words
@@ -1859,12 +2482,26 @@ Tags: Mann Whitney, SPSS, kiểm định phi tham số, p-value, thống kê đ�
 > Bạn có thể chạy Mann Whitney trong SPSS từ hai nhóm độc lập đến phần kết luận bằng quy trình và bảng output minh họa dưới đây.
 /blog/vi/mann-whitney-trong-spss
 
+### he-so-xac-dinh-la-gi
+**Hệ số xác định là gì? Cách đọc R² trong SPSS** · vi · scheduled 2026-12-17 · 2885 words
+Keyword: `hệ số xác định là gì`
+Tags: hệ số xác định, R², SPSS, hồi quy tuyến tính, thống kê
+> Bạn sẽ hiểu R² đo điều gì, đọc đúng hệ số xác định trong SPSS và biết cách giải thích khi chỉ số này thấp hoặc cao.
+/blog/vi/he-so-xac-dinh-la-gi
+
 ### ma-tran-xoay-trong-spss
 **Cách chạy ma trận xoay trong SPSS và đọc kết quả EFA** · vi · scheduled 2026-12-17 · 2667 words
 Keyword: `ma trận xoay trong spss`
 Tags: ma trận xoay, SPSS, EFA, phân tích nhân tố, Rotated Component Matrix
 > Bạn sẽ biết cách chạy ma trận xoay trong SPSS, nhận diện biến tải sai nhân tố và trình bày kết quả EFA có căn cứ.
 /blog/vi/ma-tran-xoay-trong-spss
+
+### khoang-tin-cay-bootstrap-chua-0-phai-lam-sao
+**Khoảng tin cậy bootstrap chứa 0 phải làm sao** · vi · scheduled 2026-12-16 · 3091 words
+Keyword: `khoảng tin cậy bootstrap chứa 0 phải làm sao`
+Tags: bootstrap, SPSS, khoảng tin cậy, biến trung gian, phân tích định lượng
+> Bạn sẽ biết khoảng tin cậy bootstrap chứa 0 nói lên điều gì, nên kiểm tra bảng nào trong SPSS và khi nào cần chạy lại mô hình.
+/blog/vi/khoang-tin-cay-bootstrap-chua-0-phai-lam-sao
 
 ### cong-bang-adams-la-gi
 **Công bằng Adams là gì? Cách xây dựng mô hình và kiểm định** · vi · scheduled 2026-12-16 · 3505 words
@@ -1880,6 +2517,20 @@ Tags: HTMT, SmartPLS, PLS-SEM, giá trị phân biệt, Discriminant Validity
 > Bạn sẽ biết HTMT nằm ở đâu trong SmartPLS 4, đọc từng giá trị thế nào và xử lý khi giá trị HTMT vượt ngưỡng.
 /blog/vi/htmt-trong-smartpls
 
+### giai-trinh-chinh-sua-sau-bao-ve-luan-van
+**Cách viết giải trình chỉnh sửa sau bảo vệ luận văn** · vi · scheduled 2026-12-16 · 2904 words
+Keyword: `giải trình chỉnh sửa sau bảo vệ luận văn`
+Tags: giải trình luận văn, chỉnh sửa sau bảo vệ, viết luận văn, khóa luận tốt nghiệp, bảo vệ luận văn
+> Hướng dẫn lập bản giải trình chỉnh sửa sau bảo vệ luận văn bằng bảng đối chiếu rõ góp ý, nội dung đã sửa, vị trí và lý do xử lý.
+/blog/vi/giai-trinh-chinh-sua-sau-bao-ve-luan-van
+
+### he-so-tai-nhan-to-la-gi
+**Hệ số tải nhân tố là gì? Cách đọc và xử lý trong SPSS** · vi · scheduled 2026-12-16 · 2619 words
+Keyword: `hệ số tải nhân tố là gì`
+Tags: hệ số tải nhân tố, EFA, SPSS, ma trận xoay, phân tích nhân tố
+> Bạn sẽ biết cách đọc hệ số tải nhân tố trên ma trận xoay SPSS và quyết định biến quan sát nào cần giữ hoặc loại.
+/blog/vi/he-so-tai-nhan-to-la-gi
+
 ### ma-hoa-lai-bien-recode-trong-spss
 **Cách mã hóa lại biến Recode trong SPSS đúng cách** · vi · scheduled 2026-12-16 · 3065 words
 Keyword: `mã hóa lại biến recode trong spss`
@@ -1894,12 +2545,33 @@ Tags: cơ hội thăng tiến, thang đo, biến quan sát, SPSS, mô hình nghi
 > Bạn có thể biến khái niệm cơ hội thăng tiến thành một thang đo rõ ràng để đưa vào bảng hỏi và kiểm định trong luận văn định lượng.
 /blog/vi/co-hoi-thang-tien-la-gi
 
+### htmt-lon-hon-0-9-phai-lam-sao
+**HTMT lớn hơn 0,9 phải làm sao? Cách xử lý trong SmartPLS** · vi · scheduled 2026-12-15 · 2971 words
+Keyword: `htmt lớn hơn 0 9 phải làm sao`
+Tags: HTMT, SmartPLS, giá trị phân biệt, PLS-SEM, discriminant validity
+> Hướng dẫn kiểm tra và xử lý HTMT lớn hơn 0,9 trong SmartPLS mà không loại biến một cách máy móc.
+/blog/vi/htmt-lon-hon-0-9-phai-lam-sao
+
+### ket-qua-efa-trong-luan-van-la-gi
+**Kết quả EFA trong luận văn là gì? Cách trình bày và đọc output** · vi · scheduled 2026-12-15 · 3096 words
+Keyword: `kết quả efa trong luận văn là gì`
+Tags: EFA, SPSS, luận văn, phân tích nhân tố khám phá, kết quả nghiên cứu
+> Bạn sẽ biết kết quả EFA gồm những bảng nào, đọc chỉ số ra sao và chuyển output SPSS thành đoạn viết có thể dùng trong chương 4.
+/blog/vi/ket-qua-efa-trong-luan-van-la-gi
+
 ### he-so-chan-la-gi
 **Hệ số chặn là gì? Cách đọc hệ số chặn trong SPSS** · vi · scheduled 2026-12-15 · 2724 words
 Keyword: `hệ số chặn là gì`
 Tags: hệ số chặn, hồi quy tuyến tính, SPSS, hệ số hồi quy, thống kê
 > Bạn sẽ biết hệ số chặn trong SPSS nằm ở đâu, có ý nghĩa gì và cách viết kết quả hồi quy vào luận văn.
 /blog/vi/he-so-chan-la-gi
+
+### trong-so-mau-la-gi
+**Trọng số mẫu là gì? Cách hiểu và xử lý trong SPSS** · vi · scheduled 2026-12-15 · 3106 words
+Keyword: `trọng số mẫu là gì`
+Tags: trọng số mẫu, trọng số mẫu trong SPSS, khảo sát, SPSS, sampling weight
+> Hiểu đúng trọng số mẫu giúp bạn biết khi nào cần điều chỉnh dữ liệu khảo sát và khi nào không nên bật Weight Cases trong SPSS.
+/blog/vi/trong-so-mau-la-gi
 
 ### loi-vif-cao-spss
 **Lỗi VIF cao SPSS: nguyên nhân và cách xử lý đúng** · vi · scheduled 2026-12-14 · 3221 words
@@ -1922,6 +2594,13 @@ Tags: giá trị phân biệt, SmartPLS, HTMT, Fornell-Larcker, PLS-SEM
 > Bạn đang thấy HTMT vượt ngưỡng hoặc Fornell-Larcker không đạt, hãy kiểm tra đúng nguyên nhân trước khi xóa biến trong SmartPLS.
 /blog/vi/gia-tri-phan-biet-khong-dat-phai-lam-sao
 
+### ket-luan-trong-luan-van-la-gi
+**Kết luận trong luận văn là gì? Cấu trúc và cách viết** · vi · scheduled 2026-12-14 · 3125 words
+Keyword: `kết luận trong luận văn là gì`
+Tags: kết luận luận văn, viết luận văn, khóa luận tốt nghiệp, SPSS, SmartPLS
+> Bạn sẽ biết kết luận luận văn cần trả lời câu hỏi nghiên cứu ra sao và cách chuyển kết quả SPSS hoặc SmartPLS thành đoạn viết có căn cứ.
+/blog/vi/ket-luan-trong-luan-van-la-gi
+
 ### camel-la-gi
 **CAMEL là gì? Cách xây dựng và kiểm định mô hình CAMEL** · vi · scheduled 2026-12-14 · 3532 words
 Keyword: `camel là gì`
@@ -1935,6 +2614,20 @@ Keyword: `harman single factor là gì`
 Tags: Harman Single Factor, SPSS, common method bias, phân tích nhân tố, nghiên cứu định lượng
 > Hướng dẫn đọc Harman Single Factor trong SPSS để kiểm tra sơ bộ common method bias và trình bày kết quả có căn cứ trong luận văn.
 /blog/vi/harman-single-factor-la-gi
+
+### loi-spss-bi-treo-khi-chay-spss
+**Lỗi SPSS bị treo khi chạy SPSS: cách xử lý theo thứ tự** · vi · scheduled 2026-12-13 · 2874 words
+Keyword: `lỗi spss bị treo khi chạy spss`
+Tags: SPSS, lỗi SPSS, dữ liệu SAV, nhập Excel, phân tích định lượng
+> Bạn đang có dữ liệu mở sẵn nhưng SPSS đứng im, hiện Not Responding hoặc treo khi chạy phân tích. Đây là cách kiểm tra mà không làm hỏng file.
+/blog/vi/loi-spss-bi-treo-khi-chay-spss
+
+### dong-gop-cua-nghien-cuu-trong-luan-van-la-gi
+**Đóng góp của nghiên cứu trong luận văn là gì?** · vi · scheduled 2026-12-13 · 3523 words
+Keyword: `đóng góp của nghiên cứu trong luận văn là gì`
+Tags: đóng góp của nghiên cứu, viết luận văn, khóa luận tốt nghiệp, đóng góp lý thuyết, đóng góp thực tiễn
+> Bạn sẽ biết cách xác định, chứng minh và viết phần đóng góp của nghiên cứu bằng những câu có thể điều chỉnh cho đề tài của mình.
+/blog/vi/dong-gop-cua-nghien-cuu-trong-luan-van-la-gi
 
 ### chuan-muc-xa-hoi-la-gi
 **Chuẩn mực xã hội là gì và đo bằng thang đo nào** · vi · scheduled 2026-12-13 · 3145 words
@@ -1956,6 +2649,27 @@ Keyword: `đường cong roc là gì`
 Tags: đường cong ROC, AUC, SPSS, phân loại, thống kê
 > Bạn đang nhìn thấy ROC và AUC trong output SPSS nhưng chưa biết kết luận mô hình phân loại ra sao.
 /blog/vi/duong-cong-roc-la-gi
+
+### ket-cau-trong-luan-van-la-gi
+**Kết cấu trong luận văn là gì? Cách sắp xếp từng phần** · vi · scheduled 2026-12-12 · 3486 words
+Keyword: `kết cấu trong luận văn là gì`
+Tags: kết cấu luận văn, viết luận văn, khóa luận tốt nghiệp, nghiên cứu định lượng, cấu trúc luận văn
+> Kết cấu luận văn là bản đồ giúp bạn biết mỗi chương cần trả lời câu hỏi nào và liên kết với dữ liệu nghiên cứu ra sao.
+/blog/vi/ket-cau-trong-luan-van-la-gi
+
+### loi-mau-qua-nho-spss
+**Lỗi mẫu quá nhỏ SPSS: cách kiểm tra và xử lý đúng** · vi · scheduled 2026-12-12 · 3280 words
+Keyword: `lỗi mẫu quá nhỏ spss`
+Tags: SPSS, cỡ mẫu, dữ liệu thiếu, outlier, hồi quy
+> Hướng dẫn kiểm tra nguyên nhân mẫu quá nhỏ trong SPSS, xử lý dữ liệu có vấn đề và biết lúc nào cần thu thập thêm quan sát.
+/blog/vi/loi-mau-qua-nho-spss
+
+### doi-tuong-va-pham-vi-nghien-cuu-trong-luan-van-la-gi
+**Đối tượng và phạm vi nghiên cứu trong luận văn là gì?** · vi · scheduled 2026-12-12 · 2921 words
+Keyword: `đối tượng và phạm vi nghiên cứu trong luận văn là gì`
+Tags: đối tượng nghiên cứu, phạm vi nghiên cứu, luận văn, khóa luận tốt nghiệp, phương pháp nghiên cứu
+> Bạn có thể xác định đúng đối tượng, phạm vi nghiên cứu và viết thành một đoạn rõ ràng trong chương mở đầu bằng quy trình dưới đây.
+/blog/vi/doi-tuong-va-pham-vi-nghien-cuu-trong-luan-van-la-gi
 
 ### chuan-chu-quan-la-gi
 **Chuẩn chủ quan là gì? Cách xây dựng và kiểm định thang đo** · vi · scheduled 2026-12-12 · 3192 words
@@ -2020,6 +2734,13 @@ Tags: Fornell Larcker, SmartPLS, giá trị phân biệt, PLS-SEM, AVE
 > Bạn sẽ biết cách mở bảng Fornell-Larcker Criterion trong SmartPLS 4, đối chiếu căn bậc hai AVE và xử lý khi giá trị phân biệt chưa đạt.
 /blog/vi/fornell-larcker-trong-smartpls
 
+### dinh-nghia-khai-niem-nghien-cuu-trong-luan-van-la-gi
+**Định nghĩa khái niệm nghiên cứu trong luận văn là gì?** · vi · scheduled 2026-12-10 · 3220 words
+Keyword: `định nghĩa khái niệm nghiên cứu trong luận văn là gì`
+Tags: khái niệm nghiên cứu, luận văn, định nghĩa thao tác, biến quan sát, nghiên cứu định lượng
+> Bạn sẽ biết cách định nghĩa khái niệm nghiên cứu, gắn khái niệm với biến quan sát và viết thành đoạn có thể dùng trong luận văn.
+/blog/vi/dinh-nghia-khai-niem-nghien-cuu-trong-luan-van-la-gi
+
 ### do-tre-toi-uu-la-gi
 **Độ trễ tối ưu là gì? Cách chọn và đọc kết quả trong SPSS** · vi · scheduled 2026-12-10 · 2965 words
 Keyword: `độ trễ tối ưu là gì`
@@ -2048,6 +2769,13 @@ Tags: CTA PLS, SmartPLS 4, PLS-SEM, bootstrapping, path coefficient
 > Hướng dẫn thực hành CTA PLS trong SmartPLS 4 từ chuẩn bị mô hình, chạy bootstrapping đến đọc path coefficient và đánh giá kết quả.
 /blog/vi/cta-pls-trong-smartpls
 
+### ham-y-quan-tri-trong-luan-van-la-gi
+**Hàm ý quản trị trong luận văn là gì và cách viết** · vi · scheduled 2026-12-09 · 3017 words
+Keyword: `hàm ý quản trị trong luận văn là gì`
+Tags: hàm ý quản trị, viết luận văn, khóa luận tốt nghiệp, SPSS, SmartPLS
+> Hướng dẫn viết hàm ý quản trị có căn cứ từ kết quả nghiên cứu định lượng, kèm cấu trúc, câu mẫu và ví dụ rút gọn.
+/blog/vi/ham-y-quan-tri-trong-luan-van-la-gi
+
 ### thoi-gian-tra-loi-qua-nhanh
 **Thời gian trả lời quá nhanh: Có nên loại phiếu khảo sát không** · vi · scheduled 2026-12-09 · 2903 words
 Keyword: `thời gian trả lời quá nhanh`
@@ -2055,12 +2783,47 @@ Tags: khảo sát, làm sạch dữ liệu, SPSS, bảng hỏi, thời gian tr�
 > Hướng dẫn nhận diện, kiểm tra và xử lý phiếu có thời gian trả lời quá nhanh trong khảo sát định lượng.
 /blog/vi/thoi-gian-tra-loi-qua-nhanh
 
+### gia-dinh-hoi-quy-la-gi
+**Giả định hồi quy là gì? Cách kiểm tra trong SPSS** · vi · scheduled 2026-12-09 · 2974 words
+Keyword: `giả định hồi quy là gì`
+Tags: giả định hồi quy, hồi quy tuyến tính, SPSS, đa cộng tuyến, phân tích dữ liệu
+> Bạn có thể kiểm tra từng giả định hồi quy trong SPSS, biết chỉ số nào cần đọc và xử lý ra sao trước khi kết luận mô hình.
+/blog/vi/gia-dinh-hoi-quy-la-gi
+
 ### lam-sach-du-lieu-trong-spss
 **Làm sạch dữ liệu trong SPSS: quy trình và cách xử lý lỗi** · vi · scheduled 2026-12-09 · 2813 words
 Keyword: `làm sạch dữ liệu trong spss`
 Tags: làm sạch dữ liệu SPSS, SPSS, dữ liệu thiếu, outlier, dữ liệu định lượng
 > Quy trình làm sạch dữ liệu trong SPSS giúp bạn phát hiện bản ghi lỗi trước khi chạy Cronbach's Alpha, EFA và hồi quy.
 /blog/vi/lam-sach-du-lieu-trong-spss
+
+### chat-luong-dich-vu-gronroos-la-gi
+**Chất lượng dịch vụ Gronroos là gì? Mô hình và cách áp dụng** · vi · scheduled 2026-12-09 · 3176 words
+Keyword: `chất lượng dịch vụ gronroos là gì`
+Tags: chất lượng dịch vụ Gronroos, mô hình Gronroos, chất lượng dịch vụ, thang đo, SPSS, SmartPLS
+> Hướng dẫn dùng mô hình Gronroos để xây dựng mô hình nghiên cứu chất lượng dịch vụ và kiểm định dữ liệu định lượng.
+/blog/vi/chat-luong-dich-vu-gronroos-la-gi
+
+### trung-vi-trong-spss
+**Trung vị trong SPSS là gì? Cách đọc và diễn giải đúng** · vi · scheduled 2026-12-08 · 2889 words
+Keyword: `trung vị trong spss`
+Tags: trung vị trong SPSS, SPSS, Median, thống kê mô tả, phân tích dữ liệu
+> Bạn sẽ biết cách tìm, đọc và trình bày trung vị trong SPSS khi dữ liệu không phân phối đối xứng.
+/blog/vi/trung-vi-trong-spss
+
+### test-retest-reliability-la-gi
+**Test-retest reliability là gì? Cách đọc và đánh giá trong SPSS** · vi · scheduled 2026-12-08 · 2780 words
+Keyword: `test retest reliability là gì`
+Tags: test-retest reliability, độ tin cậy, SPSS, kiểm định thang đo, nghiên cứu định lượng
+> Test-retest reliability cho biết thang đo có cho kết quả ổn định khi đo cùng một đối tượng ở hai thời điểm hay không.
+/blog/vi/test-retest-reliability-la-gi
+
+### de-tai-luan-van-thue
+**Đề tài luận văn thuế: 24 hướng nghiên cứu có thể làm được** · vi · scheduled 2026-12-08 · 3725 words
+Keyword: `đề tài luận văn thuế`
+Tags: đề tài luận văn thuế, nghiên cứu thuế, tài chính ngân hàng, kế toán, kiểm toán
+> Danh sách đề tài luận văn thuế được sắp xếp theo dữ liệu, biến nghiên cứu và phương pháp để bạn chọn một hướng vừa sức.
+/blog/vi/de-tai-luan-van-thue
 
 ### kruskal-wallis-trong-spss
 **Kruskal Wallis trong SPSS: Cách chạy, đọc kết quả và viết luận văn** · vi · scheduled 2026-12-08 · 2971 words
@@ -2097,6 +2860,20 @@ Tags: UTAUT, mô hình nghiên cứu, chấp nhận công nghệ, SmartPLS, SPSS
 > UTAUT giúp bạn giải thích vì sao người dùng chấp nhận và sử dụng một công nghệ, từ đó xây dựng mô hình, giả thuyết và thang đo cho đề tài.
 /blog/vi/utaut-la-gi
 
+### cr-lon-hon-0-95-phai-lam-sao
+**CR lớn hơn 0,95 phải làm sao trong SmartPLS** · vi · scheduled 2026-12-07 · 3140 words
+Keyword: `cr lớn hơn 0 95 phải làm sao`
+Tags: SmartPLS, Composite Reliability, CR, PLS-SEM, thang đo
+> CR lớn hơn 0,95 không nên xử lý bằng cách xóa biến tùy ý, mà cần kiểm tra nội dung thang đo, outer loading và giá trị phân biệt.
+/blog/vi/cr-lon-hon-0-95-phai-lam-sao
+
+### split-half-reliability-la-gi
+**Split Half Reliability là gì? Cách đọc và chạy trong SPSS** · vi · scheduled 2026-12-07 · 2640 words
+Keyword: `split half reliability là gì`
+Tags: Split Half Reliability, SPSS, độ tin cậy thang đo, nghiên cứu định lượng, Cronbach's Alpha
+> Bạn đang thấy Split-Half Reliability trong output SPSS và chưa biết con số đó có đủ tốt hay chưa, bài viết này hướng dẫn cách đọc và xử lý.
+/blog/vi/split-half-reliability-la-gi
+
 ### factor-loading-la-gi
 **Factor loading là gì? Cách đọc và đánh giá trong SPSS** · vi · scheduled 2026-12-06 · 2582 words
 Keyword: `factor loading là gì`
@@ -2131,6 +2908,20 @@ Keyword: `chấp nhận rủi ro là gì`
 Tags: chấp nhận rủi ro, thang đo, Cronbach's Alpha, EFA, SmartPLS
 > Bạn sẽ biết cách chuyển khái niệm chấp nhận rủi ro thành biến quan sát có thể kiểm định trong dữ liệu định lượng.
 /blog/vi/chap-nhan-rui-ro-la-gi
+
+### trung-gian-mot-phan-la-gi
+**Trung gian một phần là gì? Cách đọc kết quả trung gian trong SPSS** · vi · scheduled 2026-12-05 · 3027 words
+Keyword: `trung gian một phần là gì`
+Tags: trung gian một phần, biến trung gian, SPSS, bootstrap, mô hình nghiên cứu
+> Bạn sẽ biết trung gian một phần là gì, đọc các đường tác động trong SPSS và kết luận đúng khi kiểm định mô hình trung gian.
+/blog/vi/trung-gian-mot-phan-la-gi
+
+### de-tai-luan-van-xay-dung
+**Đề tài luận văn xây dựng: 24 gợi ý có mô hình và dữ liệu** · vi · scheduled 2026-12-05 · 4159 words
+Keyword: `đề tài luận văn xây dựng`
+Tags: đề tài luận văn xây dựng, xây dựng, nghiên cứu định lượng, đề tài nghiên cứu khoa học, khóa luận tốt nghiệp
+> Danh sách đề tài luận văn xây dựng được sắp theo nhóm nghiên cứu, có biến độc lập, biến phụ thuộc và hướng thu thập dữ liệu cụ thể.
+/blog/vi/de-tai-luan-van-xay-dung
 
 ### beneish-m-score-la-gi
 **Beneish M Score là gì? Cách đọc và áp dụng trong luận văn** · vi · scheduled 2026-12-05 · 3219 words
@@ -2174,12 +2965,40 @@ Tags: rho A, rho_A, SmartPLS, độ tin cậy thang đo, PLS-SEM
 > Bạn đang thấy rho_A trong bảng kết quả SmartPLS và chưa biết đọc thế nào, bài viết này giúp bạn kiểm tra đúng chỉ số và trình bày vào luận văn.
 /blog/vi/rho-a-la-gi
 
+### f-co-y-nghia-nhung-khong-bien-nao-co-y-nghia-phai-lam-sao
+**F có ý nghĩa nhưng không biến nào có ý nghĩa phải làm sao** · vi · scheduled 2026-12-04 · 3492 words
+Keyword: `f có ý nghĩa nhưng không biến nào có ý nghĩa phải làm sao`
+Tags: SPSS, hồi quy tuyến tính, kiểm định F, p-value, đa cộng tuyến
+> Bạn sẽ biết cách đọc hiện tượng mô hình hồi quy có F có ý nghĩa nhưng không biến độc lập nào có p-value đạt, cùng thứ tự kiểm tra và cách giải trình.
+/blog/vi/f-co-y-nghia-nhung-khong-bien-nao-co-y-nghia-phai-lam-sao
+
+### do-tin-cay-tong-hop-trong-smartpls
+**Độ tin cậy tổng hợp trong SmartPLS: cách đọc và đánh giá** · vi · scheduled 2026-12-04 · 2587 words
+Keyword: `độ tin cậy tổng hợp trong smartpls`
+Tags: SmartPLS, độ tin cậy tổng hợp, Composite Reliability, PLS-SEM, CR
+> Bạn sẽ biết Composite Reliability nằm ở đâu trong SmartPLS 4, bao nhiêu là đạt và cách báo cáo chỉ số này trong chương 4.
+/blog/vi/do-tin-cay-tong-hop-trong-smartpls
+
 ### power-cua-kiem-dinh-la-gi
 **Power của kiểm định là gì? Cách đọc và đánh giá trong nghiên cứu định lượng** · vi · scheduled 2026-12-03 · 3168 words
 Keyword: `power của kiểm định là gì`
 Tags: power của kiểm định, statistical power, SPSS, cỡ mẫu, kiểm định giả thuyết
 > Bạn sẽ hiểu power của kiểm định đo điều gì, vì sao power thấp làm tăng nguy cơ bỏ sót hiệu ứng và cách kiểm tra trong kế hoạch nghiên cứu.
 /blog/vi/power-cua-kiem-dinh-la-gi
+
+### de-tai-luan-van-su-pham
+**Đề tài luận văn sư phạm: 20 hướng nghiên cứu có thể làm bằng SPSS** · vi · scheduled 2026-12-03 · 3416 words
+Keyword: `đề tài luận văn sư phạm`
+Tags: đề tài luận văn sư phạm, nghiên cứu khoa học giáo dục, SPSS, giáo dục mầm non, quản lý giáo dục
+> Danh sách đề tài luận văn sư phạm được sắp theo nhóm biến, khả năng thu thập dữ liệu và công cụ phân tích định lượng.
+/blog/vi/de-tai-luan-van-su-pham
+
+### tong-tac-dong-la-gi
+**Tổng tác động là gì? Cách đọc và báo cáo trong SPSS** · vi · scheduled 2026-12-03 · 3100 words
+Keyword: `tổng tác động là gì`
+Tags: tổng tác động, total effect, SPSS, biến trung gian, bootstrap
+> Tổng tác động cho biết biến độc lập ảnh hưởng đến biến phụ thuộc bao nhiêu khi tính cả tác động trực tiếp và gián tiếp.
+/blog/vi/tong-tac-dong-la-gi
 
 ### post-hoc-la-gi
 **Post hoc là gì? Cách đọc và chạy post hoc trong SPSS** · vi · scheduled 2026-12-03 · 2219 words
@@ -2188,12 +3007,40 @@ Tags: post hoc, ANOVA, SPSS, Multiple Comparisons, thống kê
 > Bạn sẽ biết post hoc dùng để so sánh cặp nhóm nào sau ANOVA và cách trình bày kết quả trong luận văn.
 /blog/vi/post-hoc-la-gi
 
+### phuong-sai-trong-spss
+**Phương sai trong SPSS là gì và đọc kết quả thế nào** · vi · scheduled 2026-12-03 · 2926 words
+Keyword: `phương sai trong spss`
+Tags: phương sai trong SPSS, SPSS, variance, thống kê mô tả, độ lệch chuẩn
+> Bạn sẽ biết phương sai trong SPSS được tính từ đâu, đọc ở bảng nào và diễn giải ra sao trong luận văn định lượng.
+/blog/vi/phuong-sai-trong-spss
+
+### cau-truc-von-la-gi
+**Cấu trúc vốn là gì và đo bằng thang đo nào** · vi · scheduled 2026-12-02 · 3091 words
+Keyword: `cấu trúc vốn là gì`
+Tags: cấu trúc vốn, thang đo, SPSS, tài chính doanh nghiệp, nghiên cứu định lượng
+> Bạn sẽ biết cách khái niệm hóa cấu trúc vốn, xây dựng biến quan sát và kiểm định thang đo trước khi đưa vào mô hình nghiên cứu.
+/blog/vi/cau-truc-von-la-gi
+
 ### cross-loading-trong-smartpls
 **Cross loading trong SmartPLS: cách đọc và xử lý** · vi · scheduled 2026-12-02 · 2762 words
 Keyword: `cross loading trong smartpls`
 Tags: cross loading, SmartPLS, giá trị phân biệt, PLS-SEM, outer loading
 > Bạn sẽ biết cross loading nằm ở đâu trong SmartPLS 4, đọc thế nào và xử lý biến có tải chéo trước khi báo cáo mô hình.
 /blog/vi/cross-loading-trong-smartpls
+
+### phuong-sai-trich-ave-la-gi
+**Phương sai trích AVE là gì? Cách đọc và đánh giá** · vi · scheduled 2026-12-02 · 2547 words
+Keyword: `phương sai trích ave là gì`
+Tags: phương sai trích AVE, AVE, giá trị hội tụ, SPSS, SmartPLS
+> Bạn sẽ biết AVE đo điều gì, bao nhiêu là đạt và cần xử lý thế nào khi chỉ số này không đạt.
+/blog/vi/phuong-sai-trich-ave-la-gi
+
+### de-tai-luan-van-quan-ly-cong
+**Gợi ý đề tài luận văn quản lý công dễ làm và có dữ liệu** · vi · scheduled 2026-12-02 · 3270 words
+Keyword: `đề tài luận văn quản lý công`
+Tags: đề tài luận văn quản lý công, quản lý công, nghiên cứu định lượng, luận văn, SPSS
+> Danh sách đề tài quản lý công được sắp theo mô hình, biến nghiên cứu và khả năng thu thập dữ liệu thực tế.
+/blog/vi/de-tai-luan-van-quan-ly-cong
 
 ### bau-khong-khi-an-toan-lao-dong-la-gi
 **Bầu không khí an toàn lao động là gì? Cách xây dựng thang đo** · vi · scheduled 2026-12-02 · 3377 words
@@ -2215,6 +3062,13 @@ Keyword: `durbin watson là gì`
 Tags: Durbin-Watson, SPSS, hồi quy tuyến tính, tự tương quan, kiểm định phần dư
 > Bạn sẽ biết Durbin-Watson đo điều gì, đọc con số nào trên bảng Model Summary và xử lý ra sao khi kết quả nằm ngoài khoảng chấp nhận.
 /blog/vi/durbin-watson-la-gi
+
+### tam-la-gi
+**TAM là gì? Mô hình chấp nhận công nghệ và cách áp dụng** · vi · scheduled 2026-12-01 · 3229 words
+Keyword: `tam là gì`
+Tags: TAM, mô hình chấp nhận công nghệ, TAM 2, TAM 3, mô hình nghiên cứu
+> Giải thích mô hình TAM, TAM 2, TAM 3 và cách đưa mô hình chấp nhận công nghệ vào đề tài định lượng.
+/blog/vi/tam-la-gi
 
 ### khong-mo-duoc-file-sav-phai-lam-sao
 **Không mở được file SAV phải làm sao? Cách xử lý trong SPSS** · vi · scheduled 2026-12-01 · 2881 words
@@ -2258,6 +3112,13 @@ Tags: p value trong SPSS, p-value, Sig. SPSS, kiểm định giả thuyết, th�
 > Bạn sẽ biết p value trong SPSS nằm ở đâu, đọc thế nào và kết luận giả thuyết ra sao mà không nhầm với mức ý nghĩa.
 /blog/vi/p-value-trong-spss
 
+### de-tai-luan-van-marketing
+**Đề tài luận văn marketing: 20 hướng nghiên cứu có thể triển khai** · vi · scheduled 2026-11-30 · 3363 words
+Keyword: `đề tài luận văn marketing`
+Tags: đề tài luận văn marketing, nghiên cứu marketing, SPSS, SmartPLS, khóa luận tốt nghiệp
+> Danh sách đề tài luận văn marketing được sắp theo mô hình, biến nghiên cứu và khả năng thu thập dữ liệu của một sinh viên.
+/blog/vi/de-tai-luan-van-marketing
+
 ### bat-nat-noi-lam-viec-la-gi
 **Bắt nạt nơi làm việc là gì và xây dựng thang đo** · vi · scheduled 2026-11-29 · 3385 words
 Keyword: `bắt nạt nơi làm việc là gì`
@@ -2286,6 +3147,13 @@ Tags: Sobel test, biến trung gian, SPSS, mediation, kiểm định trung gian
 > Sobel test dùng để kiểm tra tác động gián tiếp của biến độc lập lên biến phụ thuộc thông qua biến trung gian.
 /blog/vi/sobel-test-la-gi
 
+### phieu-tra-loi-trung-lap
+**Phiếu trả lời trùng lặp: Cách phát hiện và xử lý trước khi chạy SPSS** · vi · scheduled 2026-11-29 · 3404 words
+Keyword: `phiếu trả lời trùng lặp`
+Tags: phiếu trả lời trùng lặp, phiếu trả lời không hợp lệ, làm sạch dữ liệu, khảo sát online, SPSS
+> Bạn sẽ biết cách nhận diện phiếu trả lời trùng lặp, ghi nhận tiêu chí loại và bảo vệ quyết định làm sạch dữ liệu trong luận văn.
+/blog/vi/phieu-tra-loi-trung-lap
+
 ### khai-bao-bien-trong-spss
 **Khai báo biến trong SPSS: Cách đặt tên, mã hóa và nhập dữ liệu đúng** · vi · scheduled 2026-11-29 · 3028 words
 Keyword: `khai báo biến trong spss`
@@ -2299,6 +3167,34 @@ Keyword: `căng thẳng công việc là gì`
 Tags: căng thẳng công việc, thang đo, Cronbach's Alpha, EFA, SPSS
 > Hướng dẫn chọn và kiểm định thang đo căng thẳng công việc bằng SPSS, từ biến quan sát đến cách trình bày trong luận văn.
 /blog/vi/cang-thang-cong-viec-la-gi
+
+### do-luong-da-chieu-mds-spss
+**Cách chạy đo lường đa chiều MDS trong SPSS** · vi · scheduled 2026-11-28 · 3294 words
+Keyword: `đo lường đa chiều mds spss`
+Tags: MDS, SPSS, đo lường đa chiều, Multidimensional Scaling, phân tích dữ liệu
+> Bạn sẽ biết khi nào dùng MDS, chạy đúng hộp thoại SPSS và đọc Stress, RSQ từ output minh họa.
+/blog/vi/do-luong-da-chieu-mds-spss
+
+### co-mau-toi-thieu-trong-smartpls
+**Cỡ mẫu tối thiểu trong SmartPLS: cách xác định đúng** · vi · scheduled 2026-11-28 · 3088 words
+Keyword: `cỡ mẫu tối thiểu trong smartpls`
+Tags: cỡ mẫu SmartPLS, SmartPLS 4, PLS-SEM, cỡ mẫu tối thiểu, phân tích định lượng
+> Bạn có thể xác định cỡ mẫu tối thiểu trong SmartPLS bằng cấu trúc mô hình, số mũi tên hướng vào biến phụ thuộc và kiểm định power.
+/blog/vi/co-mau-toi-thieu-trong-smartpls
+
+### mode-trong-thong-ke-la-gi
+**Mode trong thống kê là gì? Cách đọc trên SPSS** · vi · scheduled 2026-11-28 · 2762 words
+Keyword: `mode trong thống kê là gì`
+Tags: mode, thống kê mô tả, SPSS, statistics, phân tích dữ liệu
+> Mode là giá trị xuất hiện nhiều nhất trong bộ dữ liệu, nhưng không phải lúc nào cũng là chỉ số phù hợp để đại diện cho mẫu.
+/blog/vi/mode-trong-thong-ke-la-gi
+
+### de-tai-luan-van-logistics
+**Đề tài luận văn logistics: 25 gợi ý có mô hình và dữ liệu** · vi · scheduled 2026-11-28 · 3833 words
+Keyword: `đề tài luận văn logistics`
+Tags: đề tài luận văn logistics, đề tài nghiên cứu khoa học logistics, chuỗi cung ứng, khóa luận tốt nghiệp, nghiên cứu định lượng
+> Danh sách đề tài luận văn logistics được sắp theo nhóm nghiên cứu, có biến độc lập, biến phụ thuộc và hướng lấy dữ liệu thực tế.
+/blog/vi/de-tai-luan-van-logistics
 
 ### bat-hoa-nhan-thuc-la-gi
 **Bất hòa nhận thức là gì? Mô hình và cách kiểm định** · vi · scheduled 2026-11-28 · 3322 words
@@ -2321,6 +3217,20 @@ Tags: missing value, SPSS, làm sạch dữ liệu, dữ liệu định lượng
 > Missing value là ô dữ liệu bị thiếu, nhưng cách xử lý đúng còn phụ thuộc vào nguyên nhân, tỷ lệ thiếu và loại phân tích bạn sắp chạy.
 /blog/vi/missing-value-la-gi
 
+### de-tai-luan-van-khoa-hoc-du-lieu
+**50 đề tài luận văn khoa học dữ liệu có thể làm với SPSS và SmartPLS** · vi · scheduled 2026-11-27 · 3884 words
+Keyword: `đề tài luận văn khoa học dữ liệu`
+Tags: đề tài luận văn, khoa học dữ liệu, công nghệ thông tin, hệ thống thông tin quản lý, SPSS, SmartPLS
+> Danh sách đề tài khoa học dữ liệu được sắp theo nhóm, có biến độc lập, biến phụ thuộc, nguồn dữ liệu và hướng phân tích định lượng.
+/blog/vi/de-tai-luan-van-khoa-hoc-du-lieu
+
+### item-total-correlation-nho-hon-0-3-phai-lam-sao
+**Item Total Correlation nhỏ hơn 0.3 phải làm sao?** · vi · scheduled 2026-11-27 · 2588 words
+Keyword: `item total correlation nhỏ hơn 0 3 phải làm sao`
+Tags: Item Total Correlation, Corrected Item-Total Correlation, Cronbach's Alpha, SPSS, độ tin cậy thang đo
+> Bạn thấy Corrected Item-Total Correlation dưới 0.3 trong SPSS và chưa biết nên giữ hay loại biến, hãy xử lý theo quy trình này.
+/blog/vi/item-total-correlation-nho-hon-0-3-phai-lam-sao
+
 ### manova-la-gi
 **MANOVA là gì? Cách đọc kết quả MANOVA trong SPSS** · vi · scheduled 2026-11-26 · 2664 words
 Keyword: `manova là gì`
@@ -2342,6 +3252,20 @@ Tags: SPSS, dấu thập phân, nhập dữ liệu, Excel, CSV
 > Bạn có thể xác định lỗi dấu chấm, dấu phẩy đang làm sai giá trị trong SPSS và sửa dữ liệu theo cách an toàn trước khi phân tích.
 /blog/vi/dau-thap-phan-sai-khi-nhap-du-lieu-phai-lam-sao
 
+### de-tai-luan-van-kinh-te
+**Đề tài luận văn kinh tế: 24 hướng nghiên cứu có thể triển khai** · vi · scheduled 2026-11-26 · 3439 words
+Keyword: `đề tài luận văn kinh tế`
+Tags: đề tài luận văn kinh tế, đề tài nghiên cứu khoa học kinh tế, kinh tế phát triển, kinh tế đầu tư, xuất nhập khẩu
+> Danh sách đề tài luận văn kinh tế được sắp theo nhóm biến, mô hình, dữ liệu và cỡ mẫu để bạn tránh chọn một đề tài hay nhưng không thể làm.
+/blog/vi/de-tai-luan-van-kinh-te
+
+### bao-toan-nguon-luc-cor-la-gi
+**Bảo toàn nguồn lực COR là gì? Cách áp dụng vào luận văn** · vi · scheduled 2026-11-26 · 3088 words
+Keyword: `bảo toàn nguồn lực cor là gì`
+Tags: bảo toàn nguồn lực COR, Conservation of Resources, mô hình nghiên cứu, stress, SmartPLS
+> Hiểu lý thuyết bảo toàn nguồn lực COR từ khái niệm cốt lõi đến cách xây dựng mô hình, giả thuyết và kiểm định trong luận văn định lượng.
+/blog/vi/bao-toan-nguon-luc-cor-la-gi
+
 ### nguon-luc-rbv-la-gi
 **Nguồn lực RBV là gì? Cách xây dựng mô hình nghiên cứu** · vi · scheduled 2026-11-26 · 3429 words
 Keyword: `nguồn lực rbv là gì`
@@ -2356,6 +3280,13 @@ Tags: kurtosis trong SPSS, kurtosis, SPSS, độ nhọn, kiểm tra phân phối
 > Bạn sẽ biết kurtosis trong SPSS biểu thị điều gì, đọc ở cột nào và xử lý ra sao trước khi chạy hồi quy hoặc EFA.
 /blog/vi/kurtosis-trong-spss
 
+### independent-samples-t-test-trong-spss
+**Independent Samples T Test trong SPSS: Cách chạy và đọc kết quả** · vi · scheduled 2026-11-25 · 1539 words
+Keyword: `independent samples t test trong spss`
+Tags: independent samples t test, SPSS, kiểm định t, kiểm định Levene, phân tích định lượng
+> Bạn sẽ biết khi nào dùng Independent Samples T Test, chạy ở đâu trong SPSS và chọn đúng dòng kết quả để kết luận.
+/blog/vi/independent-samples-t-test-trong-spss
+
 ### mo-hinh-toe
 **Mô hình TOE là gì? Cách xây dựng và kiểm định mô hình nghiên cứu** · vi · scheduled 2026-11-25 · 3621 words
 Keyword: `mô hình toe`
@@ -2369,6 +3300,13 @@ Keyword: `kolmogorov smirnov là gì`
 Tags: Kolmogorov Smirnov, SPSS, kiểm định phân phối chuẩn, p-value, thống kê
 > Bạn đang nhìn thấy bảng One-Sample Kolmogorov-Smirnov Test trong SPSS và chưa biết Sig. bao nhiêu mới được xem là đạt.
 /blog/vi/kolmogorov-smirnov-la-gi
+
+### de-tai-luan-van-ke-toan
+**Đề tài luận văn kế toán: 20 hướng nghiên cứu có thể làm bằng dữ liệu thật** · vi · scheduled 2026-11-25 · 3827 words
+Keyword: `đề tài luận văn kế toán`
+Tags: đề tài luận văn kế toán, nghiên cứu khoa học kế toán, tài chính doanh nghiệp, kiểm toán, khóa luận tốt nghiệp
+> Danh sách đề tài luận văn kế toán được sắp theo nhóm biến, mô hình và khả năng thu thập dữ liệu để bạn chốt đề tài có thể làm đến cùng.
+/blog/vi/de-tai-luan-van-ke-toan
 
 ### ban-sac-xa-hoi-la-gi
 **Bản sắc xã hội là gì? Cách xây dựng mô hình và thang đo** · vi · scheduled 2026-11-25 · 3236 words
@@ -2404,6 +3342,20 @@ Keyword: `cam kết tổ chức là gì`
 Tags: cam kết tổ chức, Meyer và Allen, thang đo, Cronbach's Alpha, EFA
 > Hướng dẫn xây dựng và kiểm định thang đo cam kết tổ chức để bạn có thể đưa biến này vào mô hình nghiên cứu định lượng.
 /blog/vi/cam-ket-to-chuc-la-gi
+
+### khoang-tin-cay-trong-spss
+**Khoảng tin cậy trong SPSS là gì? Cách đọc và diễn giải** · vi · scheduled 2026-11-24 · 2877 words
+Keyword: `khoảng tin cậy trong spss`
+Tags: khoảng tin cậy, SPSS, confidence interval, p-value, thống kê định lượng
+> Bạn sẽ biết khoảng tin cậy trong SPSS nằm ở đâu, đọc thế nào và xử lý ra sao khi khoảng này chứa giá trị 0.
+/blog/vi/khoang-tin-cay-trong-spss
+
+### de-tai-luan-van-duoc
+**Đề tài luận văn dược: 25 hướng nghiên cứu có thể làm bằng dữ liệu định lượng** · vi · scheduled 2026-11-23 · 3347 words
+Keyword: `đề tài luận văn dược`
+Tags: đề tài luận văn dược, nghiên cứu dược, khóa luận tốt nghiệp, SPSS, SmartPLS
+> Danh sách đề tài luận văn dược được sắp theo nhóm nghiên cứu, kèm biến số, mô hình, thang đo và cách kiểm tra khả năng thu thập dữ liệu.
+/blog/vi/de-tai-luan-van-duoc
 
 ### phieu-tra-loi-khong-hop-le
 **Phiếu trả lời không hợp lệ: cách nhận diện và làm sạch dữ liệu khảo sát** · vi · scheduled 2026-11-23 · 3279 words
@@ -2468,6 +3420,13 @@ Tags: TLI, SEM, CB-SEM, SmartPLS, SPSS
 > TLI là chỉ số đánh giá độ phù hợp của mô hình SEM, nhưng cách đọc sẽ khác tùy bạn dùng CB-SEM hay SmartPLS.
 /blog/vi/tli-la-gi
 
+### de-tai-luan-van-du-lich
+**Đề tài luận văn du lịch: 24 hướng nghiên cứu có thể khảo sát** · vi · scheduled 2026-11-21 · 3533 words
+Keyword: `đề tài luận văn du lịch`
+Tags: đề tài luận văn du lịch, nghiên cứu khoa học du lịch, luận văn khách sạn, luận văn nhà hàng, SPSS
+> Danh sách đề tài luận văn du lịch được chia theo nhóm, kèm biến độc lập, biến phụ thuộc, mô hình gợi ý và cách kiểm tra khả năng thu thập dữ liệu.
+/blog/vi/de-tai-luan-van-du-lich
+
 ### histogram-la-gi
 **Histogram là gì? Cách đọc histogram trong SPSS** · vi · scheduled 2026-11-21 · 2941 words
 Keyword: `histogram là gì`
@@ -2510,6 +3469,13 @@ Tags: SRMR, SmartPLS, PLS-SEM, SEM, phân tích định lượng
 > Bạn đang thấy SRMR trong kết quả SmartPLS và chưa biết nên kết luận thế nào, bài viết này hướng dẫn cách đọc, đánh giá và trình bày chỉ số.
 /blog/vi/srmr-la-gi
 
+### de-tai-luan-van-cong-nghe-thong-tin
+**Đề tài luận văn công nghệ thông tin: 24 hướng chọn được và có dữ liệu** · vi · scheduled 2026-11-20 · 3687 words
+Keyword: `đề tài luận văn công nghệ thông tin`
+Tags: đề tài luận văn công nghệ thông tin, nghiên cứu định lượng, hệ thống thông tin quản lý, khóa luận tốt nghiệp, SPSS
+> Danh sách đề tài luận văn công nghệ thông tin được sắp theo nhóm, kèm biến nghiên cứu, mô hình gợi ý và cách kiểm tra khả năng thu thập dữ liệu.
+/blog/vi/de-tai-luan-van-cong-nghe-thong-tin
+
 ### ma-hoa-bien-la-gi
 **Mã hóa biến là gì? Cách mã hóa biến trong SPSS đúng cách** · vi · scheduled 2026-11-20 · 2645 words
 Keyword: `mã hóa biến là gì`
@@ -2517,12 +3483,26 @@ Tags: mã hóa biến, mã hóa biến trong SPSS, SPSS, bảng hỏi, nghiên c
 > Bạn sẽ biết cách đặt mã cho biến, nhập dữ liệu vào SPSS và tránh những lỗi khiến kết quả phân tích bị sai.
 /blog/vi/ma-hoa-bien-la-gi
 
+### gia-tri-trung-binh-la-gi
+**Giá trị trung bình là gì? Cách đọc và diễn giải trong SPSS** · vi · scheduled 2026-11-20 · 2668 words
+Keyword: `giá trị trung bình là gì`
+Tags: giá trị trung bình, Mean, SPSS, thống kê mô tả, nghiên cứu định lượng
+> Bạn sẽ biết giá trị trung bình được tính thế nào, đọc Mean ở đâu trong SPSS và vì sao một con số đẹp chưa đủ để kết luận.
+/blog/vi/gia-tri-trung-binh-la-gi
+
 ### kano-la-gi
 **Kano là gì? Cách áp dụng mô hình Kano trong nghiên cứu định lượng** · vi · scheduled 2026-11-19 · 4128 words
 Keyword: `kano là gì`
 Tags: Kano, mô hình Kano, nghiên cứu định lượng, SPSS, SmartPLS
 > Kano giúp bạn phân loại thuộc tính sản phẩm, dịch vụ theo cách chúng ảnh hưởng đến mức độ hài lòng của khách hàng.
 /blog/vi/kano-la-gi
+
+### co-so-ly-thuyet-trong-luan-van-la-gi
+**Cơ sở lý thuyết trong luận văn là gì? Cách viết và ví dụ** · vi · scheduled 2026-11-19 · 3266 words
+Keyword: `cơ sở lý thuyết trong luận văn là gì`
+Tags: cơ sở lý thuyết, luận văn, khóa luận tốt nghiệp, mô hình nghiên cứu, giả thuyết nghiên cứu
+> Hướng dẫn viết cơ sở lý thuyết trong luận văn từ khái niệm, lý thuyết nền đến mô hình nghiên cứu và giả thuyết.
+/blog/vi/co-so-ly-thuyet-trong-luan-van-la-gi
 
 ### efa-trong-spss
 **EFA trong SPSS: Cách chạy và đọc kết quả đúng** · vi · scheduled 2026-11-19 · 2839 words
@@ -2573,6 +3553,27 @@ Tags: RMSEA, RMSEA là gì, SPSS, CB-SEM, SEM
 > Bạn đang thấy RMSEA trong bảng Model Fit của AMOS hoặc SPSS và chưa biết diễn giải thế nào trong luận văn.
 /blog/vi/rmsea-la-gi
 
+### ma-hoa-bang-hoi-la-gi
+**Mã hóa bảng hỏi là gì? Cách mã hóa khảo sát để nhập SPSS** · vi · scheduled 2026-11-18 · 3030 words
+Keyword: `mã hóa bảng hỏi là gì`
+Tags: mã hóa bảng hỏi, mã hóa bảng hỏi khảo sát, SPSS, bảng hỏi, khảo sát định lượng
+> Bạn sẽ biết cách chuyển từng câu trả lời trong bảng hỏi thành mã biến nhất quán để nhập SPSS và tránh lỗi khi phân tích.
+/blog/vi/ma-hoa-bang-hoi-la-gi
+
+### tong-the-nghien-cuu-la-gi
+**Tổng thể nghiên cứu là gì? Cách xác định và phân biệt với mẫu** · vi · scheduled 2026-11-17 · 3009 words
+Keyword: `tổng thể nghiên cứu là gì`
+Tags: tổng thể nghiên cứu, nghiên cứu định lượng, cỡ mẫu, khảo sát, SPSS
+> Bạn sẽ biết cách xác định tổng thể nghiên cứu, ghi vào chương 3 và tránh nhầm tổng thể với mẫu khảo sát.
+/blog/vi/tong-the-nghien-cuu-la-gi
+
+### du-lieu-bang-la-gi
+**Dữ liệu bảng là gì? Cách nhận biết và xử lý trong SPSS** · vi · scheduled 2026-11-17 · 2914 words
+Keyword: `dữ liệu bảng là gì`
+Tags: dữ liệu bảng, SPSS, dữ liệu sơ cấp, dữ liệu thứ cấp, phân tích dữ liệu
+> Bạn sẽ biết dữ liệu bảng là gì, phân biệt các dạng dữ liệu thường gặp và kiểm tra file trước khi chạy phân tích định lượng.
+/blog/vi/du-lieu-bang-la-gi
+
 ### hanh-vi-du-dinh-la-gi
 **Hành vi dự định là gì? Giải thích mô hình TPB và cách áp dụng** · vi · scheduled 2026-11-17 · 3754 words
 Keyword: `hành vi dự định là gì`
@@ -2600,6 +3601,13 @@ Keyword: `r square trong spss`
 Tags: R Square, SPSS, hồi quy tuyến tính, Model Summary, nghiên cứu định lượng
 > Bạn sẽ biết R Square trong bảng Model Summary cho biết điều gì, bao nhiêu là hợp lý và xử lý ra sao khi giá trị thấp.
 /blog/vi/r-square-trong-spss
+
+### chart-builder-spss
+**Cách chạy Chart Builder trong SPSS để tạo biểu đồ đúng** · vi · scheduled 2026-11-16 · 2938 words
+Keyword: `chart builder spss`
+Tags: chart builder SPSS, cách chạy SPSS, biểu đồ SPSS, phân tích dữ liệu, SPSS
+> Hướng dẫn thực hành Chart Builder trong SPSS từ chuẩn bị dữ liệu đến xuất biểu đồ có thể dùng trong chương kết quả.
+/blog/vi/chart-builder-spss
 
 ### cach-chay-fimix-smartpls-4
 **Cách chạy FIMIX SmartPLS 4 từ chuẩn bị đến đọc kết quả** · vi · scheduled 2026-11-16 · 2812 words
@@ -2650,6 +3658,13 @@ Tags: effect size, SPSS, thống kê, Cohen's d, f², luận văn định lượ
 > Effect size giúp bạn biết một mối quan hệ hoặc khác biệt có ý nghĩa thực tế đến mức nào, bên cạnh kết luận p-value.
 /blog/vi/effect-size-la-gi
 
+### cfi-nho-hon-0-9-phai-lam-sao
+**CFI nhỏ hơn 0.9 phải làm sao? Cách xử lý trong AMOS** · vi · scheduled 2026-11-15 · 2699 words
+Keyword: `cfi nhỏ hơn 0 9 phải làm sao`
+Tags: CFI, AMOS, SEM, độ phù hợp mô hình, SPSS
+> Bạn đang thấy CFI dưới 0.9 trong AMOS, hãy kiểm tra mô hình theo đúng thứ tự trước khi xóa biến hoặc thêm mũi tên.
+/blog/vi/cfi-nho-hon-0-9-phai-lam-sao
+
 ### cach-chay-doc-bao-cao-html-smartpls-4
 **Cách chạy và đọc báo cáo HTML SmartPLS 4** · vi · scheduled 2026-11-14 · 3126 words
 Keyword: `cách chạy đọc báo cáo html smartpls 4`
@@ -2677,6 +3692,20 @@ Keyword: `communality trong spss`
 Tags: communality, SPSS, EFA, phân tích nhân tố, thống kê
 > Bạn sẽ biết communality trong SPSS đo gì, đọc cột Initial và Extraction ra sao, cùng cách xử lý biến có communality thấp.
 /blog/vi/communality-trong-spss
+
+### cach-viet-muc-luc-luan-van
+**Cách viết mục lục luận văn đúng chuẩn, dễ cập nhật** · vi · scheduled 2026-11-14 · 3250 words
+Keyword: `cách viết mục lục luận văn`
+Tags: mục lục luận văn, cách viết luận văn, Microsoft Word, khóa luận tốt nghiệp, trình bày luận văn
+> Bạn có thể tự tạo mục lục luận văn rõ ràng, đúng cấp độ và cập nhật nhanh sau mỗi lần chỉnh sửa bằng hướng dẫn thực tế này.
+/blog/vi/cach-viet-muc-luc-luan-van
+
+### do-tin-cay-tong-hop-la-gi
+**Độ tin cậy tổng hợp là gì? Cách đọc và đánh giá** · vi · scheduled 2026-11-14 · 2785 words
+Keyword: `độ tin cậy tổng hợp là gì`
+Tags: độ tin cậy tổng hợp, composite reliability, SmartPLS, độ tin cậy thang đo, PLS-SEM
+> Bạn sẽ biết độ tin cậy tổng hợp là gì, đọc CR ở đâu trong SmartPLS và trình bày kết quả thang đo thế nào.
+/blog/vi/do-tin-cay-tong-hop-la-gi
 
 ### compute-variable-trong-spss
 **Cách chạy Compute Variable trong SPSS từ A đến Z** · vi · scheduled 2026-11-13 · 2813 words
@@ -2706,6 +3735,20 @@ Tags: số quan sát, biến quan sát, cỡ mẫu, SPSS, khảo sát
 > Bạn sẽ biết cách tính số quan sát trên một biến quan sát, đọc đúng ngưỡng cỡ mẫu và xử lý trường hợp dữ liệu SPSS chưa đạt.
 /blog/vi/so-quan-sat-tren-mot-bien-quan-sat-la-gi
 
+### cau-hoi-nghien-cuu-trong-luan-van-la-gi
+**Câu hỏi nghiên cứu trong luận văn là gì? Cách viết đúng** · vi · scheduled 2026-11-12 · 3260 words
+Keyword: `câu hỏi nghiên cứu trong luận văn là gì`
+Tags: câu hỏi nghiên cứu, luận văn, khóa luận tốt nghiệp, nghiên cứu định lượng, mục tiêu nghiên cứu
+> Bạn sẽ biết câu hỏi nghiên cứu dùng để làm gì, viết thế nào cho đo lường được và kiểm tra ra sao trước khi đưa vào đề cương.
+/blog/vi/cau-hoi-nghien-cuu-trong-luan-van-la-gi
+
+### khao-sat-thu
+**Khảo sát thử: cách làm, chọn mẫu và làm sạch dữ liệu** · vi · scheduled 2026-11-12 · 3217 words
+Keyword: `khảo sát thử`
+Tags: khảo sát thử, bảng hỏi, nghiên cứu định lượng, SPSS, cỡ mẫu
+> Bạn có thể dùng khảo sát thử để phát hiện câu hỏi khó hiểu, lỗi bảng hỏi và vấn đề dữ liệu trước khi thu mẫu chính thức.
+/blog/vi/khao-sat-thu
+
 ### do-tin-cay-95-la-gi
 **Độ tin cậy 95 là gì? Cách đọc trong SPSS và luận văn** · vi · scheduled 2026-11-12 · 2336 words
 Keyword: `độ tin cậy 95 là gì`
@@ -2719,6 +3762,13 @@ Keyword: `common method bias là gì`
 Tags: Common Method Bias, SPSS, Harman Single Factor, thiên lệch phương pháp chung, nghiên cứu định lượng
 > Bạn sẽ biết Common Method Bias là gì, kiểm tra ra sao trong SPSS và xử lý thế nào khi kết quả Harman Single Factor không đạt.
 /blog/vi/common-method-bias-la-gi
+
+### cach-viet-mo-dau-luan-van
+**Cách viết mở đầu luận văn từ A đến Z, có câu mẫu** · vi · scheduled 2026-11-12 · 3704 words
+Keyword: `cách viết mở đầu luận văn`
+Tags: mở đầu luận văn, cách viết luận văn, lý do chọn đề tài, mục tiêu nghiên cứu, khóa luận tốt nghiệp
+> Bạn có thể viết phần mở đầu luận văn mạch lạc hơn bằng cách đi từ vấn đề thực tế đến mục tiêu, câu hỏi, phạm vi và kết cấu nghiên cứu.
+/blog/vi/cach-viet-mo-dau-luan-van
 
 ### outer-weight-la-gi
 **Outer weight là gì? Cách đọc và đánh giá trong SmartPLS** · vi · scheduled 2026-11-11 · 2611 words
@@ -2762,6 +3812,13 @@ Tags: SPSS, thống kê nhân khẩu học, tần số, bảng hỏi, luận vă
 > Bạn sẽ biết cách chạy, đọc và trình bày thống kê nhân khẩu học trong SPSS từ file dữ liệu thực tế của mình.
 /blog/vi/thong-ke-nhan-khau-hoc-trong-spss
 
+### cach-viet-nghien-cuu-so-bo-luan-van
+**Cách viết nghiên cứu sơ bộ luận văn định lượng** · vi · scheduled 2026-11-10 · 3354 words
+Keyword: `cách viết nghiên cứu sơ bộ luận văn`
+Tags: nghiên cứu sơ bộ, luận văn định lượng, phương pháp nghiên cứu, thang đo, bảng hỏi
+> Một khung viết nghiên cứu sơ bộ rõ ràng để bạn trình bày việc thử thang đo, chỉnh bảng hỏi và chuẩn bị cho nghiên cứu chính thức.
+/blog/vi/cach-viet-nghien-cuu-so-bo-luan-van
+
 ### google-form
 **Google Form khảo sát: Cách tạo bảng hỏi và thu dữ liệu định lượng** · vi · scheduled 2026-11-10 · 2998 words
 Keyword: `google form`
@@ -2782,6 +3839,20 @@ Keyword: `cfa trong spss`
 Tags: CFA, SPSS, AMOS, phân tích nhân tố khẳng định, thang đo
 > Bạn sẽ biết CFA trong SPSS thực chất chạy bằng công cụ nào, đọc output ra sao và xử lý thế nào khi mô hình đo lường chưa đạt.
 /blog/vi/cfa-trong-spss
+
+### ty-le-dao-van-cao-thi-lam-gi
+**Tỷ lệ đạo văn cao thì làm gì để sửa đúng cách** · vi · scheduled 2026-11-09 · 3194 words
+Keyword: `tỷ lệ đạo văn cao thì làm gì`
+Tags: đạo văn, luận văn, Turnitin, nghiên cứu khoa học, trích dẫn
+> Bạn sẽ biết cách đọc báo cáo tương đồng, xử lý từng loại nội dung trùng và giải trình với giảng viên khi tỷ lệ đạo văn cao.
+/blog/vi/ty-le-dao-van-cao-thi-lam-gi
+
+### mau-nghien-cuu-la-gi
+**Mẫu nghiên cứu là gì? Cách xác định và đọc kết quả trong SPSS** · vi · scheduled 2026-11-09 · 3041 words
+Keyword: `mẫu nghiên cứu là gì`
+Tags: mẫu nghiên cứu, cỡ mẫu, SPSS, khảo sát, nghiên cứu định lượng
+> Hiểu đúng mẫu nghiên cứu giúp bạn xác định ai được khảo sát, bao nhiêu người cần trả lời và giải thích dữ liệu rõ ràng trong luận văn.
+/blog/vi/mau-nghien-cuu-la-gi
 
 ### chay-syntax-spss
 **Cách chạy syntax SPSS từ đầu đến cuối, kèm ví dụ dễ làm theo** · vi · scheduled 2026-11-09 · 3127 words
@@ -2839,6 +3910,13 @@ Tags: cross loading, SmartPLS, PLS-SEM, giá trị phân biệt, thang đo
 > Bạn sẽ biết cross loading phản ánh điều gì, đọc bảng kết quả ra sao và nên xử lý thế nào khi một biến quan sát tải lên nhiều construct.
 /blog/vi/cross-loading-la-gi
 
+### phan-tich-sobel-test-spss
+**Phân tích Sobel test SPSS: Cách chạy và đọc kết quả** · vi · scheduled 2026-11-08 · 3299 words
+Keyword: `phân tích sobel test spss`
+Tags: Sobel test, SPSS, biến trung gian, PROCESS Macro, bootstrap trung gian
+> Hướng dẫn từng bước chạy Sobel test trong SPSS để kiểm tra biến trung gian và trình bày kết quả trong luận văn định lượng.
+/blog/vi/phan-tich-sobel-test-spss
+
 ### aida-la-gi
 **AIDA là gì? Cách áp dụng vào mô hình nghiên cứu định lượng** · vi · scheduled 2026-11-07 · 3197 words
 Keyword: `aida là gì`
@@ -2852,6 +3930,13 @@ Keyword: `chấp nhận công nghệ tam là gì`
 Tags: TAM, chấp nhận công nghệ, mô hình nghiên cứu, SPSS, SmartPLS
 > TAM giúp bạn giải thích vì sao người dùng chấp nhận hoặc từ chối một công nghệ qua nhận thức hữu ích và nhận thức dễ sử dụng.
 /blog/vi/chap-nhan-cong-nghe-tam-la-gi
+
+### bootstrapping-bi-loi-phai-lam-sao
+**Bootstrapping bị lỗi phải làm sao trong SmartPLS 4** · vi · scheduled 2026-11-07 · 2998 words
+Keyword: `bootstrapping bị lỗi phải làm sao`
+Tags: bootstrapping, SmartPLS, PLS-SEM, lỗi SmartPLS, phân tích định lượng
+> Bạn đang chạy bootstrapping trong SmartPLS nhưng báo lỗi, không có kết quả hoặc đường dẫn không hội tụ, hãy kiểm tra theo đúng thứ tự dưới đây.
+/blog/vi/bootstrapping-bi-loi-phai-lam-sao
 
 ### gfi-la-gi
 **GFI là gì? Cách đọc chỉ số GFI trong SEM** · vi · scheduled 2026-11-07 · 2846 words
@@ -2881,6 +3966,13 @@ Tags: SPSS, biến String, biến Numeric, làm sạch dữ liệu, nhập dữ 
 > Bạn mở file SPSS nhưng biến số bị nhận là chuỗi ký tự, không chạy được Cronbach's Alpha, EFA hoặc hồi quy. Đây là cách kiểm tra và sửa đúng.
 /blog/vi/bien-so-bi-nhan-la-chuoi-ky-tu-phai-lam-sao
 
+### corrected-item-total-correlation-la-gi
+**Corrected Item Total Correlation là gì? Cách đọc trong SPSS** · vi · scheduled 2026-11-06 · 2786 words
+Keyword: `corrected item total correlation là gì`
+Tags: Corrected Item Total Correlation, Cronbach's Alpha, SPSS, độ tin cậy thang đo, biến quan sát
+> Bạn sẽ biết Corrected Item Total Correlation đo điều gì, bao nhiêu là đạt và nên xử lý thế nào khi một biến quan sát có kết quả thấp.
+/blog/vi/corrected-item-total-correlation-la-gi
+
 ### bien-gia-la-gi
 **Biến giả là gì? Cách tạo và sử dụng biến giả trong SPSS** · vi · scheduled 2026-11-06 · 2376 words
 Keyword: `biến giả là gì`
@@ -2908,6 +4000,13 @@ Keyword: `blindfolding trong smartpls`
 Tags: blindfolding trong SmartPLS, SmartPLS 4, Q², PLS-SEM, phân tích dữ liệu
 > Bạn sẽ biết Blindfolding trong SmartPLS dùng để đánh giá Q² như thế nào, chạy ở đâu và diễn giải kết quả mà không trộn với các chỉ số của CB-SEM.
 /blog/vi/blindfolding-trong-smartpls
+
+### co-mau-efa
+**Cỡ mẫu EFA là bao nhiêu để chạy SPSS?** · vi · scheduled 2026-11-05 · 3153 words
+Keyword: `cỡ mẫu efa`
+Tags: cỡ mẫu EFA, EFA, SPSS, cỡ mẫu tối thiểu, khảo sát định lượng
+> Hướng dẫn chọn cỡ mẫu EFA có căn cứ, từ số biến quan sát đến cách thu thập và làm sạch dữ liệu trước khi chạy SPSS.
+/blog/vi/co-mau-efa
 
 ### loi-cronbach-alpha-am-spss
 **Lỗi Cronbach Alpha âm SPSS phải làm sao** · vi · scheduled 2026-11-04 · 2921 words
@@ -2944,6 +4043,34 @@ Tags: biến giả, SmartPLS, biến kiểm soát, biến trung gian, biến tư
 > Hướng dẫn thực hành biến giả trong SmartPLS 4, gồm cách mã hóa dữ liệu, vẽ mô hình, chạy bootstrapping và trình bày kết quả.
 /blog/vi/bien-gia-trong-smartpls
 
+### 7p-marketing-mix-la-gi
+**7P Marketing Mix là gì? Cách xây dựng mô hình nghiên cứu** · vi · scheduled 2026-11-03 · 3377 words
+Keyword: `7p marketing mix là gì`
+Tags: 7P Marketing Mix, marketing mix, mô hình nghiên cứu, thang đo, SPSS, SmartPLS
+> Hướng dẫn dùng 7P Marketing Mix để xây dựng mô hình nghiên cứu định lượng, chọn thang đo và kiểm định dữ liệu bằng SPSS hoặc SmartPLS.
+/blog/vi/7p-marketing-mix-la-gi
+
+### cach-viet-co-so-ly-thuyet-luan-van
+**Cách viết cơ sở lý thuyết luận văn từ A đến Z** · vi · scheduled 2026-11-03 · 3157 words
+Keyword: `cách viết cơ sở lý thuyết luận văn`
+Tags: cơ sở lý thuyết, luận văn, tổng quan tài liệu, mô hình nghiên cứu, giả thuyết nghiên cứu
+> Hướng dẫn viết cơ sở lý thuyết có cấu trúc, có bảng tổng hợp và câu mẫu để bạn triển khai trực tiếp trong luận văn định lượng.
+/blog/vi/cach-viet-co-so-ly-thuyet-luan-van
+
+### cach-viet-ket-luan-luan-van
+**Cách viết kết luận luận văn rõ ràng, đúng số liệu** · vi · scheduled 2026-11-03 · 2965 words
+Keyword: `cách viết kết luận luận văn`
+Tags: kết luận luận văn, viết luận văn, khóa luận tốt nghiệp, cách viết thảo luận, hàm ý quản trị
+> Bạn có thể viết phần kết luận luận văn theo một quy trình cụ thể, bám vào câu hỏi nghiên cứu và kết quả phân tích thay vì lặp lại chương 4.
+/blog/vi/cach-viet-ket-luan-luan-van
+
+### loi-hoi-dong-hoi-ve-co-mau-spss
+**Lỗi hội đồng hỏi về cỡ mẫu SPSS: xử lý và giải trình** · vi · scheduled 2026-11-03 · 2873 words
+Keyword: `lỗi hội đồng hỏi về cỡ mẫu spss`
+Tags: cỡ mẫu SPSS, luận văn định lượng, hội đồng hỏi, phương pháp nghiên cứu, kiểm tra dữ liệu
+> Bạn sẽ biết cần kiểm tra gì trong file SPSS, khi nào phải thu thêm dữ liệu và cách giải trình cỡ mẫu trước hội đồng.
+/blog/vi/loi-hoi-dong-hoi-ve-co-mau-spss
+
 ### kiem-dinh-do-tin-cay-thang-do-trong-spss
 **Cách kiểm định độ tin cậy thang đo trong SPSS** · vi · scheduled 2026-11-03 · 2977 words
 Keyword: `kiểm định độ tin cậy thang đo trong spss`
@@ -2965,6 +4092,13 @@ Tags: CFI, CB-SEM, SPSS, SmartPLS, SEM
 > CFI là chỉ số đánh giá độ phù hợp mô hình, nhưng cách đọc còn phụ thuộc bạn đang chạy CB-SEM hay SmartPLS.
 /blog/vi/cfi-la-gi
 
+### co-mau-trong-spss
+**Cỡ mẫu trong SPSS là gì và bao nhiêu là đủ** · vi · scheduled 2026-11-02 · 2610 words
+Keyword: `cỡ mẫu trong spss`
+Tags: cỡ mẫu trong SPSS, cỡ mẫu tối thiểu, SPSS, nghiên cứu định lượng, khảo sát
+> Bạn có thể xác định cỡ mẫu tối thiểu trong SPSS theo mục tiêu phân tích, số biến quan sát và quy mô tổng thể thay vì chọn một con số tùy ý.
+/blog/vi/co-mau-trong-spss
+
 ### bien-dinh-tinh-chay-hoi-quy-phai-lam-sao
 **Biến định tính chạy hồi quy phải làm sao trong SPSS** · vi · scheduled 2026-11-02 · 1770 words
 Keyword: `biến định tính chạy hồi quy phải làm sao`
@@ -2985,6 +4119,13 @@ Keyword: `bất biến cấu hình là gì`
 Tags: bất biến cấu hình, bất biến đo lường, SmartPLS, PLS-SEM, measurement invariance
 > Bất biến cấu hình cho biết các nhóm trong nghiên cứu có cùng cấu trúc khái niệm và cùng cách tổ chức biến quan sát hay không.
 /blog/vi/bat-bien-cau-hinh-la-gi
+
+### cac-nghien-cuu-trong-nuoc-va-ngoai-nuoc-trong-luan-van-la-gi
+**Các nghiên cứu trong nước và ngoài nước trong luận văn là gì?** · vi · scheduled 2026-11-01 · 3275 words
+Keyword: `các nghiên cứu trong nước và ngoài nước trong luận văn là gì`
+Tags: nghiên cứu trong nước, nghiên cứu ngoài nước, tổng quan tài liệu, luận văn, khóa luận tốt nghiệp
+> Hướng dẫn viết phần nghiên cứu trong nước và ngoài nước, từ cách tìm tài liệu đến cách tổng hợp kết quả và xác định khoảng trống nghiên cứu.
+/blog/vi/cac-nghien-cuu-trong-nuoc-va-ngoai-nuoc-trong-luan-van-la-gi
 
 ### bien-tuong-tac-trong-smartpls
 **Biến tương tác trong SmartPLS: Cách tạo, chạy và đọc kết quả** · vi · scheduled 2026-11-01 · 3338 words
@@ -3063,6 +4204,20 @@ Tags: bootstrapping, SmartPLS, SPSS, PLS-SEM, p-value
 > Bạn sẽ biết bootstrapping dùng để làm gì, đọc bảng kết quả ra sao và xử lý thế nào khi p-value hoặc khoảng tin cậy không đạt.
 /blog/vi/bootstrapping-la-gi
 
+### bang-tong-hop-nghien-cuu-truoc-trong-luan-van-la-gi
+**Bảng tổng hợp nghiên cứu trước trong luận văn là gì?** · vi · scheduled 2026-10-30 · 3272 words
+Keyword: `bảng tổng hợp nghiên cứu trước trong luận văn là gì`
+Tags: bảng tổng hợp nghiên cứu, tổng quan tài liệu, luận văn, nghiên cứu định lượng, khoảng trống nghiên cứu
+> Hướng dẫn lập bảng tổng hợp nghiên cứu trước từ dữ liệu bài báo, biến nghiên cứu và khoảng trống để dùng được trong luận văn định lượng.
+/blog/vi/bang-tong-hop-nghien-cuu-truoc-trong-luan-van-la-gi
+
+### de-tai-bi-trung-thi-lam-gi
+**Đề tài bị trùng thì làm gì để vẫn giữ hướng nghiên cứu** · vi · scheduled 2026-10-30 · 2902 words
+Keyword: `đề tài bị trùng thì làm gì`
+Tags: đề tài luận văn, đề tài bị trùng, nghiên cứu khoa học, mô hình nghiên cứu, luận văn định lượng
+> Bạn phát hiện đề tài giống người khác có thể kiểm tra mức độ trùng, điều chỉnh phạm vi và bảo vệ hướng nghiên cứu mà không phải làm lại từ đầu.
+/blog/vi/de-tai-bi-trung-thi-lam-gi
+
 ### hoi-dong-hoi-ve-co-mau-phai-lam-sao
 **Hội đồng hỏi về cỡ mẫu phải làm sao: cách giải trình và xử lý** · vi · scheduled 2026-10-30 · 3231 words
 Keyword: `hội đồng hỏi về cỡ mẫu phải làm sao`
@@ -3140,6 +4295,13 @@ Tags: abstract, luận văn, khóa luận tốt nghiệp, cách viết luận v�
 > Bạn sẽ biết abstract trong luận văn cần có gì, viết theo thứ tự nào và kiểm tra ra sao trước khi nộp bản thảo.
 /blog/vi/abstract-trong-luan-van-la-gi
 
+### bi-hoi-vi-sao-chon-pls-sem-thi-lam-gi
+**Bị hỏi vì sao chọn PLS-SEM thì làm gì?** · vi · scheduled 2026-10-28 · 3409 words
+Keyword: `bị hỏi vì sao chọn pls sem thì làm gì`
+Tags: PLS-SEM, SmartPLS, bảo vệ luận văn, phương pháp nghiên cứu, nghiên cứu định lượng
+> Bạn có thể trả lời câu hỏi về việc chọn PLS-SEM bằng lập luận gắn với mục tiêu nghiên cứu, mô hình, dữ liệu và quy trình kiểm định cụ thể.
+/blog/vi/bi-hoi-vi-sao-chon-pls-sem-thi-lam-gi
+
 ### bi-nghi-ngo-so-lieu-khong-that-phai-lam-sao
 **Bị nghi ngờ số liệu không thật phải làm sao?** · vi · scheduled 2026-10-27 · 3159 words
 Keyword: `bị nghi ngờ số liệu không thật phải làm sao`
@@ -3161,6 +4323,13 @@ Tags: biến tiềm ẩn, biến quan sát, SmartPLS, SPSS, PLS-SEM
 > Hiểu đúng biến tiềm ẩn giúp bạn xây mô hình, đặt tên construct và đọc đúng kết quả đo lường trong SPSS hoặc SmartPLS.
 /blog/vi/bien-tiem-an-la-gi
 
+### aggregate-du-lieu-spss
+**Cách chạy Aggregate dữ liệu trong SPSS từng bước** · vi · scheduled 2026-10-27 · 2868 words
+Keyword: `aggregate dữ liệu spss`
+Tags: aggregate dữ liệu SPSS, SPSS, Breakdowns, tổng hợp dữ liệu, phân tích định lượng
+> Bạn sẽ biết khi nào nên dùng Aggregate, cách chọn biến trong SPSS và cách kiểm tra kết quả trước khi đưa vào mô hình.
+/blog/vi/aggregate-du-lieu-spss
+
 ### ancova-trong-spss
 **ANCOVA trong SPSS: Cách chạy, đọc kết quả và viết luận văn** · vi · scheduled 2026-10-27 · 3117 words
 Keyword: `ancova trong spss`
@@ -3174,6 +4343,13 @@ Keyword: `ancova là gì`
 Tags: ANCOVA, SPSS, phân tích phương sai, kiểm định giả thuyết, quantitative research
 > Giải thích ANCOVA bằng tình huống nghiên cứu cụ thể, kèm bảng output SPSS minh họa và cách kết luận trong luận văn.
 /blog/vi/ancova-la-gi
+
+### bang-tan-so-trong-spss
+**Cách chạy bảng tần số trong SPSS và đọc kết quả đúng** · vi · scheduled 2026-10-26 · 2790 words
+Keyword: `bảng tần số trong spss`
+Tags: bảng tần số trong SPSS, SPSS, Frequencies, Crosstabs, phân tích dữ liệu
+> Bạn sẽ biết cách chạy bảng tần số trong SPSS, kiểm tra dữ liệu thiếu và trình bày kết quả khảo sát bằng bảng rõ ràng.
+/blog/vi/bang-tan-so-trong-spss
 
 ### gia-tri-hoi-tu-la-gi
 **Giá trị hội tụ là gì? Cách đọc AVE, outer loading và CR** · vi · scheduled 2026-10-26 · 2816 words
@@ -3216,6 +4392,13 @@ Keyword: `phân vị là gì`
 Tags: phân vị, percentile, SPSS, thống kê mô tả, tứ phân vị
 > Bạn sẽ hiểu phân vị, biết cách đọc Percentiles trong SPSS và phân biệt chỉ số này với trung bình, trung vị và tứ phân vị.
 /blog/vi/phan-vi-la-gi
+
+### one-factor-anova
+**One factor ANOVA là gì? Cách đọc kết quả trong SPSS** · vi · scheduled 2026-10-25 · 2979 words
+Keyword: `one factor anova`
+Tags: one factor ANOVA, one-way ANOVA, SPSS, phân tích phương sai, kiểm định giả thuyết
+> Bạn đang thấy bảng ANOVA trong SPSS nhưng chưa biết p-value nói gì về sự khác biệt giữa các nhóm, bài này sẽ chỉ rõ từng bước đọc.
+/blog/vi/one-factor-anova
 
 ### mean-la-gi-trong-thong-ke
 **Mean là gì trong thống kê và cách đọc trên SPSS** · vi · scheduled 2026-10-24 · 3071 words
@@ -3265,6 +4448,13 @@ Keyword: `linear regression là gì`
 Tags: linear regression, hồi quy tuyến tính, SPSS, p-value, R²
 > Bạn sẽ hiểu linear regression là gì, mô hình trả lời câu hỏi nào và cách đọc từng bảng hồi quy tuyến tính trong SPSS.
 /blog/vi/linear-regression-la-gi
+
+### khoang-tin-cay
+**Khoảng tin cậy là gì? Cách đọc và diễn giải trong SPSS** · vi · scheduled 2026-10-23 · 2845 words
+Keyword: `khoảng tin cậy`
+Tags: khoảng tin cậy, confidence interval, SPSS, p-value, thống kê
+> Bạn sẽ biết cách đọc khoảng tin cậy, liên hệ với mức ý nghĩa và diễn giải kết quả đúng trong luận văn định lượng.
+/blog/vi/khoang-tin-cay
 
 ### do-tin-cay
 **Độ tin cậy là gì? Cách đọc Cronbach's Alpha và Composite Reliability** · vi · scheduled 2026-10-23 · 2754 words
@@ -3357,12 +4547,26 @@ Tags: KMO, EFA, SPSS, phân tích nhân tố, KMO and Bartlett's Test
 > Bạn đang nhìn thấy chỉ số KMO trong output SPSS và chưa biết có thể chạy EFA hay chưa, bài viết này chỉ rõ cách đọc và xử lý từng trường hợp.
 /blog/vi/kmo
 
+### du-lieu-so
+**Dữ liệu số là gì trong nghiên cứu định lượng** · vi · scheduled 2026-10-20 · 3136 words
+Keyword: `dữ liệu số`
+Tags: dữ liệu số, SPSS, nghiên cứu định lượng, dữ liệu định lượng, thống kê
+> Dữ liệu số trong nghiên cứu định lượng cần được hiểu đúng từ lúc thiết kế bảng hỏi đến khi nhập và phân tích trên SPSS.
+/blog/vi/du-lieu-so
+
 ### discriminant
 **Discriminant là gì? Cách đọc giá trị phân biệt trong SmartPLS** · vi · scheduled 2026-10-20 · 2464 words
 Keyword: `discriminant`
 Tags: discriminant, giá trị phân biệt, HTMT, SmartPLS, PLS-SEM
 > Bạn có thể kiểm tra giá trị phân biệt của thang đo bằng HTMT, Fornell-Larcker và cross-loadings trước khi đọc mô hình cấu trúc.
 /blog/vi/discriminant
+
+### dinh-ly-gia-tri-trung-binh
+**Định lý giá trị trung bình là gì? Công thức và cách áp dụng** · vi · scheduled 2026-10-20 · 2730 words
+Keyword: `định lý giá trị trung bình`
+Tags: định lý giá trị trung bình, giải tích, đạo hàm, giá trị trung bình, nghiên cứu định lượng
+> Định lý giá trị trung bình giúp bạn liên hệ tốc độ thay đổi tức thời của hàm số với tốc độ thay đổi trung bình trên một khoảng.
+/blog/vi/dinh-ly-gia-tri-trung-binh
 
 ### da-cong-tuyen-la-gi
 **Đa cộng tuyến là gì? Cách phát hiện và xử lý trong SPSS** · vi · scheduled 2026-10-20 · 1587 words
@@ -3413,6 +4617,20 @@ Tags: residual, phần dư, SPSS, hồi quy tuyến tính, standardized residual
 > Giải thích residual, standardized residual và studentized residual bằng chính các bảng output hồi quy SPSS mà bạn đang mở.
 /blog/vi/residual-la-gi
 
+### phuong-trinh-hoi-quy
+**Phương trình hồi quy là gì? Cách đọc và viết trong SPSS** · vi · scheduled 2026-10-18 · 2671 words
+Keyword: `phương trình hồi quy`
+Tags: phương trình hồi quy, hồi quy tuyến tính, SPSS, Coefficients, phân tích định lượng
+> Hướng dẫn đọc bảng Coefficients, xác định biến có ý nghĩa và viết phương trình hồi quy tuyến tính từ output SPSS.
+/blog/vi/phuong-trinh-hoi-quy
+
+### ordinary-least-squares-la-gi
+**Ordinary Least Squares là gì? Cách đọc và đánh giá hồi quy OLS** · vi · scheduled 2026-10-18 · 3015 words
+Keyword: `ordinary least squares là gì`
+Tags: Ordinary Least Squares, OLS, hồi quy tuyến tính, SPSS, phân tích định lượng
+> Bạn sẽ hiểu OLS ước lượng hệ số hồi quy ra sao, đọc bảng Coefficients thế nào và cần kiểm tra gì trước khi kết luận giả thuyết.
+/blog/vi/ordinary-least-squares-la-gi
+
 ### nhan-to
 **Nhân tố là gì trong phân tích dữ liệu và EFA** · vi · scheduled 2026-10-18 · 2825 words
 Keyword: `nhân tố`
@@ -3427,12 +4645,33 @@ Tags: Exploratory Factor Analysis, EFA, phân tích nhân tố khám phá, SPSS,
 > Bạn sẽ biết EFA dùng để làm gì, đọc bảng Rotated Component Matrix ra sao và xử lý thế nào khi kết quả không đạt.
 /blog/vi/exploratory-factor-analysis-la-gi
 
+### cong-thuc-he-so-tuong-quan
+**Công thức hệ số tương quan: Cách tính và đọc Pearson trong SPSS** · vi · scheduled 2026-10-17 · 2380 words
+Keyword: `công thức hệ số tương quan`
+Tags: hệ số tương quan, Pearson correlation, SPSS, phân tích tương quan, thống kê
+> Bạn sẽ biết công thức hệ số tương quan Pearson, cách đọc r và Sig. trên output SPSS, cùng cách giải thích kết quả trong luận văn.
+/blog/vi/cong-thuc-he-so-tuong-quan
+
 ### chuan-hoa-la-gi
 **Chuẩn hóa là gì? Phân biệt hệ số Beta chuẩn hóa và chưa chuẩn hóa** · vi · scheduled 2026-10-17 · 1786 words
 Keyword: `chuẩn hóa là gì`
 Tags: chuẩn hóa, hệ số Beta, SPSS, hồi quy, nghiên cứu định lượng
 > Hiểu đúng chuẩn hóa giúp bạn đọc hệ số Beta trong bảng Coefficients và tránh kết luận sai khi so sánh các biến độc lập.
 /blog/vi/chuan-hoa-la-gi
+
+### chi-phi-trung-binh
+**Chi phí trung bình là gì? Cách tính và đọc kết quả trong SPSS** · vi · scheduled 2026-10-16 · 3014 words
+Keyword: `chi phí trung bình`
+Tags: chi phí trung bình, giá trị trung bình, Mean, SPSS, thống kê mô tả
+> Bạn sẽ biết cách tính, đọc và trình bày chi phí trung bình từ bảng dữ liệu khảo sát hoặc output SPSS.
+/blog/vi/chi-phi-trung-binh
+
+### bieu-do-hop
+**Biểu đồ hộp là gì? Cách đọc Boxplot và nhận biết Outlier** · vi · scheduled 2026-10-16 · 2980 words
+Keyword: `biểu đồ hộp`
+Tags: biểu đồ hộp, boxplot, SPSS, outlier, thống kê mô tả
+> Biểu đồ hộp giúp bạn nhìn nhanh trung vị, độ phân tán, độ lệch và các giá trị bất thường trong bộ dữ liệu định lượng.
+/blog/vi/bieu-do-hop
 
 ### kiem-dinh-t-test
 **Kiểm định t test: Cách chạy và đọc kết quả trong SPSS** · vi · scheduled 2026-10-16 · 2688 words
@@ -3476,12 +4715,26 @@ Tags: OLS, hồi quy tuyến tính, SPSS, phân tích định lượng, regressi
 > OLS là phương pháp ước lượng thường dùng trong hồi quy tuyến tính, nhưng bạn cần đọc đúng hệ số, p-value và các giả định đi kèm.
 /blog/vi/ols
 
+### ky-hieu-do-lech-chuan
+**Ký hiệu độ lệch chuẩn là gì và cách đọc trong SPSS** · vi · scheduled 2026-10-14 · 2785 words
+Keyword: `ký hiệu độ lệch chuẩn`
+Tags: độ lệch chuẩn, ký hiệu độ lệch chuẩn, SPSS, thống kê mô tả, phân tích dữ liệu
+> Bạn sẽ biết ký hiệu độ lệch chuẩn là gì, đọc ở đâu trong SPSS và nên giải thích chỉ số này thế nào trong luận văn định lượng.
+/blog/vi/ky-hieu-do-lech-chuan
+
 ### construct-la-gi
 **Construct là gì trong nghiên cứu định lượng** · vi · scheduled 2026-10-14 · 3169 words
 Keyword: `construct là gì`
 Tags: construct, nghiên cứu định lượng, thang đo, SPSS, SmartPLS
 > Hiểu construct là gì để xây dựng mô hình, chọn thang đo và đọc đúng kết quả SPSS, SmartPLS hoặc AMOS.
 /blog/vi/construct-la-gi
+
+### bieu-do-tan-suat
+**Biểu đồ tần suất là gì? Cách đọc và phân tích trong SPSS** · vi · scheduled 2026-10-14 · 2618 words
+Keyword: `biểu đồ tần suất`
+Tags: biểu đồ tần suất, SPSS, thống kê mô tả, Frequency, phân tích dữ liệu
+> Hướng dẫn đọc biểu đồ tần suất trong SPSS, phân biệt các loại phần trăm và xử lý những trường hợp biểu đồ không phản ánh đúng dữ liệu.
+/blog/vi/bieu-do-tan-suat
 
 ### tan-so-tich-luy-la-gi
 **Tần số tích lũy là gì? Cách đọc và tính trong thống kê** · vi · scheduled 2026-10-14 · 2846 words
@@ -3588,6 +4841,13 @@ Tags: DF, bậc tự do, SPSS, thống kê, p-value
 > Giải thích DF là gì, df bao nhiêu là tốt và cách dùng bậc tự do để đọc kết quả kiểm định trong SPSS.
 /blog/vi/df-la-gi
 
+### quy-trinh-nghien-cuu-khoa-hoc
+**Quy trình nghiên cứu khoa học chuẩn cho khóa luận định lượng** · vi · scheduled 2026-10-11 · 3544 words
+Keyword: `quy trình nghiên cứu khoa học`
+Tags: quy trình nghiên cứu khoa học, khóa luận tốt nghiệp, nghiên cứu định lượng, phương pháp nghiên cứu, SPSS
+> Nắm từng bước của quy trình nghiên cứu khoa học và biết mỗi bước cần tạo ra tài liệu, dữ liệu hoặc kết quả gì cho khóa luận.
+/blog/vi/quy-trinh-nghien-cuu-khoa-hoc
+
 ### mendeley-la-gi
 **Mendeley là gì? Cách trích dẫn tài liệu tự động** · vi · scheduled 2026-10-11 · 3211 words
 Keyword: `mendeley là gì`
@@ -3616,6 +4876,13 @@ Tags: khoảng trống nghiên cứu, khóa luận tốt nghiệp, câu hỏi ng
 > Bạn sẽ biết cách biến một nhận xét còn bỏ ngỏ trong tài liệu thành khoảng trống nghiên cứu, câu hỏi, giả thuyết và đoạn viết dùng được trong khóa luận.
 /blog/vi/khoang-trong-nghien-cuu-la-gi
 
+### phan-mem-spss
+**Phần mềm SPSS là gì? Cách đọc output và dùng cho luận văn** · vi · scheduled 2026-10-10 · 2612 words
+Keyword: `phần mềm spss`
+Tags: phần mềm SPSS, SPSS, phân tích dữ liệu, luận văn định lượng, output SPSS
+> Bạn sẽ biết phần mềm SPSS dùng ở bước nào, đọc bảng output ra sao và cần kiểm tra gì trước khi đưa kết quả vào luận văn.
+/blog/vi/phan-mem-spss
+
 ### dat-van-de
 **Cách viết đặt vấn đề cho khóa luận tốt nghiệp** · vi · scheduled 2026-10-10 · 3308 words
 Keyword: `đặt vấn đề`
@@ -3630,12 +4897,40 @@ Tags: p-value, p value, SPSS, Sig., kiểm định giả thuyết
 > Bạn đang thấy một giá trị Sig. trên output SPSS nhưng chưa biết có thể kết luận giả thuyết hay chưa.
 /blog/vi/p-value
 
+### cach-trich-nguon-tai-lieu-tham-khao
+**Cách trích nguồn tài liệu tham khảo trong luận văn đúng cách** · vi · scheduled 2026-10-09 · 3117 words
+Keyword: `cách trích nguồn tài liệu tham khảo`
+Tags: trích nguồn tài liệu, tài liệu tham khảo, luận văn, khóa luận tốt nghiệp, trích dẫn APA
+> Bạn sẽ biết cách trích nguồn tài liệu tham khảo trong luận văn, phân biệt trích dẫn trực tiếp và gián tiếp, đồng thời đối chiếu nguồn trước khi nộp.
+/blog/vi/cach-trich-nguon-tai-lieu-tham-khao
+
+### ki-hieu-phuong-sai
+**Kí hiệu phương sai là gì? Cách đọc và tính trên SPSS** · vi · scheduled 2026-10-09 · 3035 words
+Keyword: `kí hiệu phương sai`
+Tags: kí hiệu phương sai, phương sai, Variance, SPSS, thống kê mô tả
+> Bạn sẽ biết kí hiệu phương sai nằm ở đâu trong output, được tính thế nào và nên diễn giải ra sao trong luận văn định lượng.
+/blog/vi/ki-hieu-phuong-sai
+
 ### correlation-la-gi
 **Correlation là gì? Cách đọc hệ số tương quan trong SPSS** · vi · scheduled 2026-10-09 · 2626 words
 Keyword: `correlation là gì`
 Tags: correlation, tương quan Pearson, SPSS, p-value, phân tích định lượng
 > Bạn có thể đọc đúng hệ số tương quan Pearson trong output SPSS, biết ý nghĩa của p-value và tránh kết luận nhầm giữa tương quan với quan hệ nhân quả.
 /blog/vi/correlation-la-gi
+
+### cach-trinh-bay-tai-lieu-tham-khao
+**Cách trình bày tài liệu tham khảo trong khóa luận đúng chuẩn** · vi · scheduled 2026-10-08 · 3002 words
+Keyword: `cách trình bày tài liệu tham khảo`
+Tags: tài liệu tham khảo, khóa luận tốt nghiệp, trích dẫn tài liệu, APA, viết khóa luận
+> Bạn có thể dùng cấu trúc dưới đây để lập danh mục tài liệu tham khảo rõ ràng, thống nhất và khớp với phần trích dẫn trong khóa luận.
+/blog/vi/cach-trinh-bay-tai-lieu-tham-khao
+
+### cac-de-tai-nghien-cuu-khoa-hoc-cho-sinh-vien
+**Các đề tài nghiên cứu khoa học cho sinh viên dễ triển khai** · vi · scheduled 2026-10-08 · 3649 words
+Keyword: `các đề tài nghiên cứu khoa học cho sinh viên`
+Tags: đề tài nghiên cứu khoa học, sinh viên, khóa luận tốt nghiệp, nghiên cứu định lượng, SPSS
+> Danh sách đề tài nghiên cứu khoa học cho sinh viên được sắp theo nhóm biến số, mô hình và khả năng thu thập dữ liệu thực tế.
+/blog/vi/cac-de-tai-nghien-cuu-khoa-hoc-cho-sinh-vien
 
 ### trung-binh-nhan
 **Trung bình nhân là gì? Cách tính, đọc và diễn giải trong SPSS** · vi · scheduled 2026-10-08 · 2855 words
@@ -3651,12 +4946,26 @@ Tags: robustness, robust standard errors, SPSS, hồi quy, nghiên cứu định
 > Robustness giúp bạn đánh giá liệu kết luận của mô hình có còn đáng tin khi dữ liệu vi phạm một số giả định thống kê hay không.
 /blog/vi/robustness-la-gi
 
+### loi-noi-dau
+**Cách viết lời nói đầu khóa luận tốt nghiệp đúng chuẩn** · vi · scheduled 2026-10-07 · 3695 words
+Keyword: `lời nói đầu`
+Tags: lời nói đầu, khóa luận tốt nghiệp, cách viết luận văn, câu mẫu học thuật, viết khóa luận
+> Bạn có thể hoàn thiện lời nói đầu khóa luận theo một bố cục rõ ràng, có câu mẫu và ví dụ để thay bằng thông tin đề tài của mình.
+/blog/vi/loi-noi-dau
+
 ### paired-la-gi
 **Paired là gì? Cách đọc và chạy Paired Samples t-test trong SPSS** · vi · scheduled 2026-10-07 · 1964 words
 Keyword: `paired là gì`
 Tags: paired là gì, Paired Samples t-test, SPSS, kiểm định giả thuyết, thống kê
 > Bạn sẽ biết paired là gì, cách chạy Paired Samples t-test trên SPSS và cách kết luận từ bảng Paired Samples Test.
 /blog/vi/paired-la-gi
+
+### giao-trinh-phuong-phap-nghien-cuu-khoa-hoc-pdf
+**Giáo trình phương pháp nghiên cứu khoa học PDF: cách đọc và áp dụng vào luận văn** · vi · scheduled 2026-10-07 · 3863 words
+Keyword: `giáo trình phương pháp nghiên cứu khoa học pdf`
+Tags: giáo trình phương pháp nghiên cứu khoa học pdf, phương pháp nghiên cứu, khóa luận tốt nghiệp, nghiên cứu định lượng, viết luận văn
+> Một hướng dẫn thực tế để bạn dùng giáo trình phương pháp nghiên cứu khoa học PDF đúng cách, từ đọc tài liệu đến viết phần phương pháp trong khóa luận.
+/blog/vi/giao-trinh-phuong-phap-nghien-cuu-khoa-hoc-pdf
 
 ### co-so-ly-thuyet
 **Cơ sở lý thuyết là gì? Cách viết trong luận văn** · vi · scheduled 2026-10-07 · 3075 words
@@ -3777,6 +5086,13 @@ Tags: phương pháp định lượng, nghiên cứu định lượng, SPSS, Sma
 > Hướng dẫn nhận diện, lựa chọn và áp dụng phương pháp định lượng từ câu hỏi nghiên cứu đến dữ liệu SPSS hoặc SmartPLS.
 /blog/vi/phuong-phap-dinh-luong
 
+### tao-gg-form-khao-sat
+**Tạo gg form khảo sát từ A đến Z cho luận văn định lượng** · vi · scheduled 2026-10-03 · 3110 words
+Keyword: `tạo gg form khảo sát`
+Tags: tạo gg form khảo sát, Google Forms, bảng hỏi online, khảo sát định lượng, SPSS
+> Hướng dẫn từng bước tạo Google Form khảo sát đúng mục tiêu nghiên cứu, dễ thu thập và sẵn sàng xử lý bằng SPSS.
+/blog/vi/tao-gg-form-khao-sat
+
 ### communality
 **Communality là gì trong phân tích nhân tố EFA** · vi · scheduled 2026-10-03 · 2956 words
 Keyword: `communality`
@@ -3812,6 +5128,13 @@ Tags: độ lệch chuẩn, tính độ lệch chuẩn, SPSS, thống kê mô t�
 > Bạn sẽ biết cách tính độ lệch chuẩn bằng công thức, Excel và SPSS, sau đó đọc đúng ý nghĩa của con số trong bảng kết quả.
 /blog/vi/cach-tinh-do-lech-chuan
 
+### mo-hinh-maslow
+**Mô hình Maslow: Cấu trúc, thang đo và cách áp dụng vào luận văn** · vi · scheduled 2026-10-02 · 3923 words
+Keyword: `mô hình maslow`
+Tags: mô hình Maslow, tháp nhu cầu Maslow, mô hình nghiên cứu, SPSS, SmartPLS
+> Hướng dẫn dùng mô hình Maslow trong nghiên cứu định lượng, từ năm nhóm nhu cầu đến mô hình khái niệm và cách kiểm định dữ liệu.
+/blog/vi/mo-hinh-maslow
+
 ### bien-trung-gian-la-gi
 **Biến trung gian là gì? Cách đọc và kiểm định trong SPSS** · vi · scheduled 2026-10-01 · 2959 words
 Keyword: `biến trung gian là gì`
@@ -3825,6 +5148,13 @@ Keyword: `trích dẫn`
 Tags: trích dẫn, cách trích dẫn, khóa luận tốt nghiệp, tài liệu tham khảo, đạo văn
 > Hướng dẫn trích dẫn nguồn trong khóa luận định lượng, từ chọn tài liệu, ghi trong bài đến lập danh mục tài liệu tham khảo.
 /blog/vi/trich-dan
+
+### chu-de-nghien-cuu-khoa-hoc
+**Chủ đề nghiên cứu khoa học là gì? Cách chọn và kiểm tra tính khả thi** · vi · scheduled 2026-09-30 · 2943 words
+Keyword: `chủ đề nghiên cứu khoa học`
+Tags: chủ đề nghiên cứu khoa học, đề tài nghiên cứu, nghiên cứu định lượng, câu hỏi nghiên cứu, thang đo
+> Hướng dẫn chọn chủ đề nghiên cứu khoa học có câu hỏi rõ, biến đo được và dữ liệu đủ để chạy phân tích định lượng.
+/blog/vi/chu-de-nghien-cuu-khoa-hoc
 
 ### thiet-ke-bang-hoi
 **Thiết kế bảng hỏi: quy trình từ mục tiêu đến dữ liệu SPSS** · vi · scheduled 2026-09-30 · 3027 words
@@ -3847,6 +5177,13 @@ Tags: lời mở đầu, khóa luận tốt nghiệp, cách viết luận văn, 
 > Mẫu cấu trúc và cách viết lời mở đầu khóa luận tốt nghiệp để dẫn dắt vấn đề, nêu mục tiêu và giới hạn nghiên cứu một cách thuyết phục.
 /blog/vi/loi-mo-dau
 
+### phuong-phap-dinh-tinh
+**Phương pháp định tính là gì? Phân biệt với định lượng** · vi · scheduled 2026-09-30 · 2822 words
+Keyword: `phương pháp định tính`
+Tags: phương pháp định tính, nghiên cứu định tính, nghiên cứu định lượng, phương pháp nghiên cứu, luận văn
+> Phương pháp định tính giúp bạn hiểu sâu ý nghĩa, trải nghiệm và bối cảnh của vấn đề nghiên cứu trước khi lựa chọn cách thu thập dữ liệu.
+/blog/vi/phuong-phap-dinh-tinh
+
 ### khao-sat-muc-do-hai-long-cua-khach-hang
 **Khảo sát mức độ hài lòng của khách hàng: cách làm và xử lý dữ liệu** · vi · scheduled 2026-09-29 · 3461 words
 Keyword: `khảo sát mức độ hài lòng của khách hàng`
@@ -3860,6 +5197,13 @@ Keyword: `mô hình servperf`
 Tags: mô hình SERVPERF, chất lượng dịch vụ, SERVQUAL, thang đo, SPSS, SmartPLS
 > Mô hình SERVPERF giúp bạn đo chất lượng dịch vụ dựa trên cảm nhận thực tế của khách hàng và chuyển thành mô hình định lượng để kiểm định.
 /blog/vi/mo-hinh-servperf
+
+### loi-cam-doan-khoa-luan
+**Cách viết lời cam đoan khóa luận đúng chuẩn, có mẫu tham khảo** · vi · scheduled 2026-09-29 · 3139 words
+Keyword: `lời cam đoan khóa luận`
+Tags: lời cam đoan khóa luận, khóa luận tốt nghiệp, cách viết khóa luận, mẫu lời cam đoan
+> Bạn có thể hoàn thiện lời cam đoan khóa luận trong vài phút nếu nêu đúng tính độc lập, nguồn tài liệu và trách nhiệm về nội dung.
+/blog/vi/loi-cam-doan-khoa-luan
 
 ### nghien-cuu-dinh-luong
 **Nghiên cứu định lượng là gì? Cách áp dụng và đọc kết quả** · vi · scheduled 2026-09-29 · 2424 words
@@ -3924,6 +5268,20 @@ Tags: xử lý dữ liệu, SPSS, dữ liệu định lượng, làm sạch dữ
 > Nắm quy trình xử lý dữ liệu định lượng bằng SPSS, từ file khảo sát thô đến bảng kết quả có thể đưa vào luận văn.
 /blog/vi/xu-ly-du-lieu
 
+### mo-hinh-hoi-quy-tong-the
+**Mô hình hồi quy tổng thể là gì và cách áp dụng trong luận văn** · vi · scheduled 2026-09-26 · 3387 words
+Keyword: `mô hình hồi quy tổng thể`
+Tags: mô hình hồi quy tổng thể, hồi quy tuyến tính, SPSS, SmartPLS, mô hình nghiên cứu
+> Hiểu đúng mô hình hồi quy tổng thể giúp bạn xác định biến độc lập, biến phụ thuộc và cách kiểm định các giả thuyết trong dữ liệu thực tế.
+/blog/vi/mo-hinh-hoi-quy-tong-the
+
+### ly-do-chon-de-tai
+**Lý do chọn đề tài: cách chọn đề tài nghiên cứu có thể làm được** · vi · scheduled 2026-09-26 · 3194 words
+Keyword: `lý do chọn đề tài`
+Tags: lý do chọn đề tài, chọn đề tài nghiên cứu, khóa luận tốt nghiệp, mô hình nghiên cứu, cỡ mẫu
+> Một lý do chọn đề tài tốt phải gắn với vấn đề thực tế, khoảng trống nghiên cứu và dữ liệu mà bạn thật sự thu thập được.
+/blog/vi/ly-do-chon-de-tai
+
 ### khach-the-nghien-cuu-la-gi
 **Khách thể nghiên cứu là gì? Cách xác định và lấy mẫu đúng** · vi · scheduled 2026-09-26 · 2799 words
 Keyword: `khách thể nghiên cứu là gì`
@@ -3945,12 +5303,26 @@ Tags: median, trung vị, SPSS, thống kê mô tả, outliers
 > Median là trung vị, một chỉ số mô tả giúp bạn đọc vị trí trung tâm của dữ liệu khi giá trị ngoại lệ làm mean bị kéo lệch.
 /blog/vi/median
 
+### phuong-trinh-hoi-quy-tuyen-tinh
+**Cách chạy và viết phương trình hồi quy tuyến tính trong SPSS** · vi · scheduled 2026-09-25 · 2946 words
+Keyword: `phương trình hồi quy tuyến tính`
+Tags: phương trình hồi quy tuyến tính, hồi quy tuyến tính, SPSS, Coefficients, phân tích dữ liệu
+> Bạn sẽ biết khi nào dùng hồi quy tuyến tính, cách chạy trong SPSS, đọc từng bảng output và viết phương trình theo đúng số liệu của mình.
+/blog/vi/phuong-trinh-hoi-quy-tuyen-tinh
+
 ### bien-kiem-soat-la-gi
 **Biến kiểm soát là gì? Cách chọn và đưa vào mô hình nghiên cứu** · vi · scheduled 2026-09-25 · 3018 words
 Keyword: `biến kiểm soát là gì`
 Tags: biến kiểm soát, mô hình nghiên cứu, SPSS, SmartPLS, hồi quy
 > Bạn sẽ biết biến kiểm soát dùng để làm gì, chọn biến nào và xử lý ra sao khi hệ số hoặc p-value không như kỳ vọng.
 /blog/vi/bien-kiem-soat-la-gi
+
+### du-lieu-dinh-luong-la-gi
+**Dữ liệu định lượng là gì? Cách nhận biết và phân tích** · vi · scheduled 2026-09-25 · 2794 words
+Keyword: `dữ liệu định lượng là gì`
+Tags: dữ liệu định lượng, nghiên cứu định lượng, SPSS, dữ liệu định tính, phân tích dữ liệu
+> Hiểu đúng dữ liệu định lượng giúp bạn chọn bảng hỏi, cỡ mẫu và phương pháp phân tích phù hợp cho luận văn.
+/blog/vi/du-lieu-dinh-luong-la-gi
 
 ### cong-thuc-tinh-co-mau
 **Công thức tính cỡ mẫu cho nghiên cứu định lượng** · vi · scheduled 2026-09-24 · 3125 words
@@ -3972,13 +5344,6 @@ Keyword: `mô hình là gì`
 Tags: mô hình nghiên cứu, mô hình là gì, lý thuyết, giả thuyết, SPSS, SmartPLS
 > Hiểu đúng mô hình nghiên cứu giúp bạn nối lý thuyết, biến số, giả thuyết và dữ liệu thành một thiết kế định lượng có thể kiểm định.
 /blog/vi/mo-hinh-la-gi
-
-### phuong-phap-nghien-cuu
-**Phương pháp nghiên cứu: Cách viết trong luận văn định lượng** · vi · scheduled 2026-09-24 · 3078 words
-Keyword: `phương pháp nghiên cứu`
-Tags: phương pháp nghiên cứu, các phương pháp nghiên cứu, luận văn định lượng, SPSS, SmartPLS
-> Bạn có thể dùng khung này để viết chương phương pháp nghiên cứu rõ ràng, kiểm tra được và khớp với dữ liệu định lượng của mình.
-/blog/vi/phuong-phap-nghien-cuu
 
 ### vi-du-ve-cau-hoi-dinh-luong
 **Ví dụ về câu hỏi định lượng: cách đặt câu hỏi và dùng trong bảng hỏi** · vi · scheduled 2026-09-24 · 2765 words
@@ -4014,6 +5379,13 @@ Keyword: `biến điều tiết trong smartpls`
 Tags: biến điều tiết, SmartPLS, PLS-SEM, moderation, bootstrapping
 > Hướng dẫn từng bước kiểm định biến điều tiết trong SmartPLS 4, từ chuẩn bị mô hình đến đọc interaction effect và trình bày trong luận văn.
 /blog/vi/bien-dieu-tiet-trong-smartpls
+
+### de-cuong-nghien-cuu-khoa-hoc
+**Đề cương nghiên cứu khoa học: Cấu trúc và cách viết chi tiết** · vi · scheduled 2026-09-23 · 3456 words
+Keyword: `đề cương nghiên cứu khoa học`
+Tags: đề cương nghiên cứu khoa học, phương pháp nghiên cứu, khóa luận tốt nghiệp, cách viết đề cương, nghiên cứu định lượng
+> Mẫu khung đề cương nghiên cứu khoa học giúp bạn biến một ý tưởng thành kế hoạch nghiên cứu định lượng có thể triển khai và bảo vệ.
+/blog/vi/de-cuong-nghien-cuu-khoa-hoc
 
 ### du-lieu-so-cap
 **Dữ liệu sơ cấp là gì? Cách thu thập và sử dụng trong luận văn** · vi · scheduled 2026-09-22 · 2596 words
@@ -4057,13 +5429,6 @@ Tags: đạo văn, khóa luận tốt nghiệp, Turnitin, trích dẫn tài li�
 > Hướng dẫn nhận diện đạo văn, viết lại có trích dẫn và kiểm tra bản thảo trước khi nộp khóa luận tốt nghiệp.
 /blog/vi/dao-van
 
-### gg-form-khao-sat
-**GG Form khảo sát: cách tạo bảng hỏi và thu dữ liệu đúng chuẩn** · vi · scheduled 2026-09-21 · 3187 words
-Keyword: `gg form khảo sát`
-Tags: gg form khảo sát, Google Forms, bảng hỏi khảo sát, cỡ mẫu, SPSS
-> Bạn có thể dùng Google Forms để tạo bảng hỏi, nhưng cần thiết kế biến đo, kiểm soát mẫu và làm sạch dữ liệu trước khi chạy SPSS.
-/blog/vi/gg-form-khao-sat
-
 ### gia-thiet-hay-gia-thuyet
 **Giả thiết hay giả thuyết: Phân biệt và cách dùng trong luận văn** · vi · scheduled 2026-09-20 · 3338 words
 Keyword: `giả thiết hay giả thuyết`
@@ -4085,6 +5450,13 @@ Tags: phương pháp luận, nghiên cứu khoa học, nghiên cứu định lư
 > Phương pháp luận giúp bạn giải thích vì sao chọn cách tiếp cận, thiết kế nghiên cứu và kỹ thuật phân tích đó cho đề tài.
 /blog/vi/phuong-phap-luan-la-gi
 
+### phieu-khao-sat
+**Phiếu khảo sát là gì và cách làm bảng hỏi định lượng** · vi · scheduled 2026-09-20 · 3342 words
+Keyword: `phiếu khảo sát`
+Tags: phiếu khảo sát, bảng hỏi, nghiên cứu định lượng, Google Forms, SPSS
+> Quy trình làm phiếu khảo sát định lượng từ xác định mục tiêu, chọn cỡ mẫu đến làm sạch dữ liệu trước khi nhập SPSS.
+/blog/vi/phieu-khao-sat
+
 ### hoi-quy-logistic
 **Cách chạy hồi quy logistic trong SPSS từ A đến Z** · vi · scheduled 2026-09-19 · 2982 words
 Keyword: `hồi quy logistic`
@@ -4092,12 +5464,26 @@ Tags: hồi quy logistic, binary logistic regression, SPSS, Variables in the Equ
 > Bạn sẽ biết khi nào dùng hồi quy logistic, chạy mô hình ở đâu trong SPSS và đọc đúng bảng Variables in the Equation.
 /blog/vi/hoi-quy-logistic
 
+### mo-hinh-nghien-cuu
+**Mô hình nghiên cứu là gì và cách xây dựng cho luận văn định lượng** · vi · scheduled 2026-09-19 · 3170 words
+Keyword: `mô hình nghiên cứu`
+Tags: mô hình nghiên cứu, nghiên cứu định lượng, giả thuyết nghiên cứu, SPSS, SmartPLS
+> Hướng dẫn xây dựng mô hình nghiên cứu định lượng từ lý thuyết, biến nghiên cứu, thang đo đến giả thuyết và kiểm định.
+/blog/vi/mo-hinh-nghien-cuu
+
 ### vif-la-gi
 **VIF là gì trong SmartPLS và cách xử lý đa cộng tuyến** · vi · scheduled 2026-09-19 · 2692 words
 Keyword: `vif là gì`
 Tags: VIF, SmartPLS, đa cộng tuyến, PLS-SEM, phân tích định lượng
 > Bạn sẽ biết VIF trong SmartPLS nằm ở bảng nào, bao nhiêu là đạt và nên xử lý ra sao khi chỉ số vượt ngưỡng.
 /blog/vi/vif-la-gi
+
+### phuong-phap-nghien-cuu-khoa-hoc
+**Phương pháp nghiên cứu khoa học: Cách viết phần phương pháp** · vi · scheduled 2026-09-19 · 2933 words
+Keyword: `phương pháp nghiên cứu khoa học`
+Tags: phương pháp nghiên cứu khoa học, khóa luận tốt nghiệp, nghiên cứu định lượng, phương pháp luận, SPSS
+> Khung viết phần phương pháp nghiên cứu khoa học giúp bạn nối mô hình, bảng hỏi, dữ liệu và kỹ thuật phân tích thành một chương có thể bảo vệ.
+/blog/vi/phuong-phap-nghien-cuu-khoa-hoc
 
 ### trung-vi
 **Trung vị là gì? Cách tính, đọc kết quả và phân biệt với trung bình** · vi · scheduled 2026-09-18 · 2868 words
@@ -4204,6 +5590,13 @@ Tags: giả thuyết nghiên cứu, giả thuyết là gì, mô hình nghiên c�
 > Bạn sẽ biết cách biến một câu hỏi nghiên cứu thành giả thuyết có biến, hướng tác động và cách kiểm định rõ ràng.
 /blog/vi/gia-thuyet-la-gi
 
+### mo-hinh-sem
+**Mô hình SEM là gì? Cách đọc và đánh giá SEM trong SmartPLS** · vi · scheduled 2026-09-15 · 2627 words
+Keyword: `mô hình sem`
+Tags: mô hình SEM, SmartPLS, PLS-SEM, CB-SEM, phân tích định lượng
+> Hướng dẫn đọc mô hình SEM từ biến tiềm ẩn, thang đo đến các đường dẫn trong SmartPLS và cách trình bày kết quả trong luận văn.
+/blog/vi/mo-hinh-sem
+
 ### phu-luc-la-gi
 **Phụ lục là gì? Cách làm và trình bày phụ lục luận văn** · vi · scheduled 2026-09-15 · 3143 words
 Keyword: `phụ lục là gì`
@@ -4217,6 +5610,13 @@ Keyword: `định lượng là gì`
 Tags: định lượng là gì, nghiên cứu định lượng, SPSS, SmartPLS, định tính và định lượng
 > Giải thích nghiên cứu định lượng bằng ngôn ngữ dễ áp dụng, từ bảng hỏi và dữ liệu số đến SPSS, SmartPLS và cách viết kết quả.
 /blog/vi/dinh-luong-la-gi
+
+### khao-sat-google
+**Khảo sát Google: cách tạo form và thu thập dữ liệu luận văn** · vi · scheduled 2026-09-15 · 3047 words
+Keyword: `khảo sát google`
+Tags: khảo sát Google, Google Forms, bảng hỏi, cỡ mẫu, SPSS
+> Hướng dẫn tạo khảo sát Google có cấu trúc, đủ cỡ mẫu và sẵn sàng để xử lý bằng SPSS trong luận văn định lượng.
+/blog/vi/khao-sat-google
 
 ### cong-thuc-tinh-phuong-sai
 **Công thức tính phương sai và cách đọc kết quả trong SPSS** · vi · scheduled 2026-09-15 · 2719 words
@@ -4365,6 +5765,13 @@ Tags: định tính, nghiên cứu khoa học, phương pháp nghiên cứu, đ�
 > Định tính là cách nghiên cứu đi sâu vào ý nghĩa, trải nghiệm và lý do phía sau một hiện tượng, khác với việc đo lường bằng số của nghiên cứu định lượng.
 /blog/vi/dinh-tinh-la-gi
 
+### form-khao-sat
+**Form khảo sát: Cách làm bảng hỏi và thu thập dữ liệu định lượng** · vi · scheduled 2026-09-11 · 3247 words
+Keyword: `form khảo sát`
+Tags: form khảo sát, bảng hỏi, khảo sát online, Google Forms, SPSS
+> Bạn có thể đi từ mục tiêu nghiên cứu đến một form khảo sát dùng được cho SPSS bằng quy trình thiết kế, thu thập và làm sạch dữ liệu rõ ràng.
+/blog/vi/form-khao-sat
+
 ### phuong-sai
 **Phương sai là gì? Cách tính, đọc kết quả và phân biệt với độ lệch chuẩn** · vi · scheduled 2026-09-11 · 2639 words
 Keyword: `phương sai`
@@ -4392,6 +5799,13 @@ Keyword: `sem là gì`
 Tags: SEM, PLS-SEM, SmartPLS, mô hình cấu trúc tuyến tính, luận văn định lượng
 > Bạn sẽ biết SEM là gì, chọn PLS-SEM hay CB-SEM và đọc các chỉ số chính trên output SmartPLS.
 /blog/vi/sem-la-gi
+
+### cach-trich-dan-tai-lieu-tham-khao
+**Cách trích dẫn tài liệu tham khảo trong khóa luận đúng chuẩn** · vi · scheduled 2026-09-10 · 3251 words
+Keyword: `cách trích dẫn tài liệu tham khảo`
+Tags: trích dẫn tài liệu tham khảo, khóa luận tốt nghiệp, viết luận văn, tài liệu tham khảo, APA
+> Hướng dẫn thực hành để bạn trích dẫn tài liệu tham khảo nhất quán, kiểm tra được nguồn và trình bày khóa luận rõ ràng hơn.
+/blog/vi/cach-trich-dan-tai-lieu-tham-khao
 
 ### nckh-la-gi
 **NCKH là gì? Quy trình nghiên cứu khoa học từ A đến Z** · vi · scheduled 2026-09-10 · 3136 words
@@ -4479,10 +5893,12 @@ are two pages splitting one ranking.
 - `4p marketing mix là gì` — 4p-marketing-mix-la-gi [vi]
 - `5 khoảng cách chất lượng dịch vụ là gì` — 5-khoang-cach-chat-luong-dich-vu-la-gi [vi]
 - `5 áp lực cạnh tranh porter là gì` — 5-ap-luc-canh-tranh-porter-la-gi [vi]
+- `7p marketing mix là gì` — 7p-marketing-mix-la-gi [vi]
 - `7s mckinsey là gì` — 7s-mckinsey-la-gi [vi]
 - `abstract trong luận văn là gì` — abstract-trong-luan-van-la-gi [vi]
 - `abstract` — abstract [vi]
 - `acsi là gì` — acsi-la-gi [vi]
+- `aggregate dữ liệu spss` — aggregate-du-lieu-spss [vi]
 - `aida là gì` — aida-la-gi [vi]
 - `amo là gì` — amo-la-gi [vi]
 - `amos` — amos [vi]
@@ -4515,10 +5931,13 @@ are two pages splitting one ranking.
 - `biến độc lập là gì` — bien-doc-lap-la-gi [vi]
 - `biểu mẫu khảo sát` — bieu-mau-khao-sat [vi]
 - `biểu đồ boxplot` — bieu-do-boxplot [vi]
+- `biểu đồ hộp` — bieu-do-hop [vi]
+- `biểu đồ tần suất` — bieu-do-tan-suat [vi]
 - `biểu đồ đường là gì` — bieu-do-duong-la-gi [vi]
 - `blindfolding là gì` — blindfolding-la-gi [vi]
 - `blindfolding trong smartpls` — blindfolding-trong-smartpls [vi]
 - `bootstrap trung gian trong spss` — bootstrap-trung-gian-trong-spss [vi]
+- `bootstrapping bị lỗi phải làm sao` — bootstrapping-bi-loi-phai-lam-sao [vi]
 - `bootstrapping là gì` — bootstrapping-la-gi [vi]
 - `bootstrapping trong smartpls` — bootstrapping-trong-smartpls [vi]
 - `boxplot trong spss` — boxplot-trong-spss [vi]
@@ -4526,12 +5945,16 @@ are two pages splitting one ranking.
 - `bảng câu hỏi khảo sát khách hàng` — bang-cau-hoi-khao-sat-khach-hang [vi]
 - `bảng hỏi là gì` — bang-hoi-la-gi [vi]
 - `bảng krejcie morgan` — bang-krejcie-morgan [vi]
+- `bảng tần số trong spss` — bang-tan-so-trong-spss [vi]
 - `bảng tổng hợp kết quả trong smartpls` — bang-tong-hop-ket-qua-trong-smartpls [vi]
+- `bảng tổng hợp nghiên cứu trước trong luận văn là gì` — bang-tong-hop-nghien-cuu-truoc-trong-luan-van-la-gi [vi]
+- `bảo toàn nguồn lực cor là gì` — bao-toan-nguon-luc-cor-la-gi [vi]
 - `bất biến cấu hình là gì` — bat-bien-cau-hinh-la-gi [vi]
 - `bất hòa nhận thức là gì` — bat-hoa-nhan-thuc-la-gi [vi]
 - `bầu không khí an toàn lao động là gì` — bau-khong-khi-an-toan-lao-dong-la-gi [vi]
 - `bậc tự do là gì` — bac-tu-do-la-gi [vi]
 - `bắt nạt nơi làm việc là gì` — bat-nat-noi-lam-viec-la-gi [vi]
+- `bị hỏi vì sao chọn pls sem thì làm gì` — bi-hoi-vi-sao-chon-pls-sem-thi-lam-gi [vi]
 - `bị nghi ngờ số liệu không thật phải làm sao` — bi-nghi-ngo-so-lieu-khong-that-phai-lam-sao [vi]
 - `cam kết niềm tin là gì` — cam-ket-niem-tin-la-gi [vi]
 - `cam kết tổ chức là gì` — cam-ket-to-chuc-la-gi [vi]
@@ -4541,9 +5964,12 @@ are two pages splitting one ranking.
 - `cfa trong spss` — cfa-trong-spss [vi]
 - `cfa` — cfa [vi]
 - `cfi là gì` — cfi-la-gi [vi]
+- `cfi nhỏ hơn 0 9 phải làm sao` — cfi-nho-hon-0-9-phai-lam-sao [vi]
+- `chart builder spss` — chart-builder-spss [vi]
 - `check turnitin` — check-turnitin [vi]
 - `chi phí chuyển đổi là gì` — chi-phi-chuyen-doi-la-gi [vi]
 - `chi phí giao dịch là gì` — chi-phi-giao-dich-la-gi [vi]
+- `chi phí trung bình` — chi-phi-trung-binh [vi]
 - `chia sẻ tri thức là gì` — chia-se-tri-thuc-la-gi [vi]
 - `chiết khấu dòng tiền dcf là gì` — chiet-khau-dong-tien-dcf-la-gi [vi]
 - `chuẩn chủ quan là gì` — chuan-chu-quan-la-gi [vi]
@@ -4554,6 +5980,7 @@ are two pages splitting one ranking.
 - `chấp nhận công nghệ tam là gì` — chap-nhan-cong-nghe-tam-la-gi [vi]
 - `chấp nhận rủi ro là gì` — chap-nhan-rui-ro-la-gi [vi]
 - `chất lượng cuộc sống là gì` — chat-luong-cuoc-song-la-gi [vi]
+- `chất lượng dịch vụ gronroos là gì` — chat-luong-dich-vu-gronroos-la-gi [vi]
 - `chất lượng kiểm toán là gì` — chat-luong-kiem-toan-la-gi [vi]
 - `chất lượng điểm đến là gì` — chat-luong-diem-den-la-gi [vi]
 - `chất lượng đào tạo là gì` — chat-luong-dao-tao-la-gi [vi]
@@ -4562,6 +5989,7 @@ are two pages splitting one ranking.
 - `chỉ số phù hợp mô hình là gì` — chi-so-phu-hop-mo-hinh-la-gi [vi]
 - `chỉ số độ phù hợp mô hình trong amos` — chi-so-do-phu-hop-mo-hinh-trong-amos [vi]
 - `chọn mẫu ngẫu nhiên` — chon-mau-ngau-nhien [vi]
+- `chủ đề nghiên cứu khoa học` — chu-de-nghien-cuu-khoa-hoc [vi]
 - `cipp là gì` — cipp-la-gi [vi]
 - `coef là gì` — coef-la-gi [vi]
 - `coefficient là gì` — coefficient-la-gi [vi]
@@ -4574,10 +6002,12 @@ are two pages splitting one ranking.
 - `compute variable trong spss` — compute-variable-trong-spss [vi]
 - `consistent pls trong smartpls` — consistent-pls-trong-smartpls [vi]
 - `construct là gì` — construct-la-gi [vi]
+- `corrected item total correlation là gì` — corrected-item-total-correlation-la-gi [vi]
 - `correlate là gì` — correlate-la-gi [vi]
 - `correlated là gì` — correlated-la-gi [vi]
 - `correlation là gì` — correlation-la-gi [vi]
 - `covariance` — covariance [vi]
+- `cr lớn hơn 0 95 phải làm sao` — cr-lon-hon-0-95-phai-lam-sao [vi]
 - `cronbach alpha trong spss` — cronbach-alpha-trong-spss [vi]
 - `cronbach alpha` — cronbach-alpha [vi]
 - `cross loading là gì` — cross-loading-la-gi [vi]
@@ -4585,6 +6015,8 @@ are two pages splitting one ranking.
 - `cta pls trong smartpls` — cta-pls-trong-smartpls [vi]
 - `các bên liên quan là gì` — cac-ben-lien-quan-la-gi [vi]
 - `các giai đoạn thay đổi hành vi là gì` — cac-giai-doan-thay-doi-hanh-vi-la-gi [vi]
+- `các nghiên cứu trong nước và ngoài nước trong luận văn là gì` — cac-nghien-cuu-trong-nuoc-va-ngoai-nuoc-trong-luan-van-la-gi [vi]
+- `các đề tài nghiên cứu khoa học cho sinh viên` — cac-de-tai-nghien-cuu-khoa-hoc-cho-sinh-vien [vi]
 - `cách chạy fimix smartpls 4` — cach-chay-fimix-smartpls-4 [vi]
 - `cách chạy ipma smartpls 4` — cach-chay-ipma-smartpls-4 [vi]
 - `cách chạy nfi smartpls 4` — cach-chay-nfi-smartpls-4 [vi]
@@ -4596,15 +6028,25 @@ are two pages splitting one ranking.
 - `cách ghi tài liệu tham khảo` — cach-ghi-tai-lieu-tham-khao [vi]
 - `cách lấy số liệu tư tổng cục thống kê` — cach-lay-so-lieu-tu-tong-cuc-thong-ke [vi]
 - `cách nhận xét bảng tần số` — cach-nhan-xet-bang-tan-so [vi]
+- `cách trình bày tài liệu tham khảo` — cach-trinh-bay-tai-lieu-tham-khao [vi]
+- `cách trích dẫn tài liệu tham khảo` — cach-trich-dan-tai-lieu-tham-khao [vi]
+- `cách trích nguồn tài liệu tham khảo` — cach-trich-nguon-tai-lieu-tham-khao [vi]
 - `cách tính số trung bình của mẫu số liệu` — cach-tinh-so-trung-binh-cua-mau-so-lieu [vi]
 - `cách tính tần số tích lũy` — cach-tinh-tan-so-tich-luy [vi]
 - `cách tính độ lệch chuẩn` — cach-tinh-do-lech-chuan [vi]
+- `cách viết cơ sở lý thuyết luận văn` — cach-viet-co-so-ly-thuyet-luan-van [vi]
+- `cách viết kết luận luận văn` — cach-viet-ket-luan-luan-van [vi]
+- `cách viết mở đầu luận văn` — cach-viet-mo-dau-luan-van [vi]
+- `cách viết mục lục luận văn` — cach-viet-muc-luc-luan-van [vi]
+- `cách viết nghiên cứu sơ bộ luận văn` — cach-viet-nghien-cuu-so-bo-luan-van [vi]
 - `cách viết đề cương luận văn` — cach-viet-de-cuong-luan-van [vi]
 - `cách xác định đề tài` — cach-xac-dinh-de-tai [vi]
 - `cân bằng công việc cuộc sống là gì` — can-bang-cong-viec-cuoc-song-la-gi [vi]
+- `câu hỏi nghiên cứu trong luận văn là gì` — cau-hoi-nghien-cuu-trong-luan-van-la-gi [vi]
 - `câu hỏi nghiên cứu` — cau-hoi-nghien-cuu [vi]
 - `câu hỏi sàng lọc là gì` — cau-hoi-sang-loc-la-gi [vi]
 - `công bằng adams là gì` — cong-bang-adams-la-gi [vi]
+- `công thức hệ số tương quan` — cong-thuc-he-so-tuong-quan [vi]
 - `công thức slovin` — cong-thuc-slovin [vi]
 - `công thức tính beta` — cong-thuc-tinh-beta [vi]
 - `công thức tính cỡ mẫu` — cong-thuc-tinh-co-mau [vi]
@@ -4613,10 +6055,16 @@ are two pages splitting one ranking.
 - `cơ chế dữ liệu khuyết là gì` — co-che-du-lieu-khuyet-la-gi [vi]
 - `cơ hội thăng tiến là gì` — co-hoi-thang-tien-la-gi [vi]
 - `cơ sở lý luận là gì` — co-so-ly-luan-la-gi [vi]
+- `cơ sở lý thuyết trong luận văn là gì` — co-so-ly-thuyet-trong-luan-van-la-gi [vi]
 - `cơ sở lý thuyết` — co-so-ly-thuyet [vi]
+- `cấu trúc vốn là gì` — cau-truc-von-la-gi [vi]
+- `cỡ mẫu efa` — co-mau-efa [vi]
 - `cỡ mẫu là gì` — co-mau-la-gi [vi]
+- `cỡ mẫu trong spss` — co-mau-trong-spss [vi]
+- `cỡ mẫu tối thiểu trong smartpls` — co-mau-toi-thieu-trong-smartpls [vi]
 - `củng cố skinner là gì` — cung-co-skinner-la-gi [vi]
 - `danh mục bảng biểu là gì` — danh-muc-bang-bieu-la-gi [vi]
+- `danh mục markowitz là gì` — danh-muc-markowitz-la-gi [vi]
 - `dass 21 là gì` — dass-21-la-gi [vi]
 - `dea` — dea [vi]
 - `descriptive statistics là gì` — descriptive-statistics-la-gi [vi]
@@ -4628,10 +6076,14 @@ are two pages splitting one ranking.
 - `dummy là gì` — dummy-la-gi [vi]
 - `durbin watson là gì` — durbin-watson-la-gi [vi]
 - `dòng chảy flow là gì` — dong-chay-flow-la-gi [vi]
+- `dòng tiền tự do jensen là gì` — dong-tien-tu-do-jensen-la-gi [vi]
 - `dấu thập phân sai khi nhập dữ liệu phải làm sao` — dau-thap-phan-sai-khi-nhap-du-lieu-phai-lam-sao [vi]
 - `dịch ngược bảng hỏi` — dich-nguoc-bang-hoi [vi]
+- `dữ liệu bảng là gì` — du-lieu-bang-la-gi [vi]
 - `dữ liệu sơ cấp` — du-lieu-so-cap [vi]
+- `dữ liệu số` — du-lieu-so [vi]
 - `dữ liệu thứ cấp là gì` — du-lieu-thu-cap-la-gi [vi]
+- `dữ liệu định lượng là gì` — du-lieu-dinh-luong-la-gi [vi]
 - `e servqual là gì` — e-servqual-la-gi [vi]
 - `ecsi là gì` — ecsi-la-gi [vi]
 - `efa trong spss` — efa-trong-spss [vi]
@@ -4643,7 +6095,9 @@ are two pages splitting one ranking.
 - `ekb là gì` — ekb-la-gi [vi]
 - `elm là gì` — elm-la-gi [vi]
 - `erg alderfer là gì` — erg-alderfer-la-gi [vi]
+- `eta bình phương là gì` — eta-binh-phuong-la-gi [vi]
 - `exploratory factor analysis là gì` — exploratory-factor-analysis-la-gi [vi]
+- `f có ý nghĩa nhưng không biến nào có ý nghĩa phải làm sao` — f-co-y-nghia-nhung-khong-bien-nao-co-y-nghia-phai-lam-sao [vi]
 - `f square là gì` — f-square-la-gi [vi]
 - `factor loading là gì` — factor-loading-la-gi [vi]
 - `fama french là gì` — fama-french-la-gi [vi]
@@ -4651,24 +6105,30 @@ are two pages splitting one ranking.
 - `file sav là gì` — file-sav-la-gi [vi]
 - `fisher exact test là gì` — fisher-exact-test-la-gi [vi]
 - `font tiếng việt bị lỗi spss` — font-tieng-viet-bi-loi-spss [vi]
+- `form khảo sát` — form-khao-sat [vi]
 - `fornell larcker là gì` — fornell-larcker-la-gi [vi]
 - `fornell larcker trong smartpls` — fornell-larcker-trong-smartpls [vi]
 - `garch là gì` — garch-la-gi [vi]
 - `gaussian copula trong smartpls` — gaussian-copula-trong-smartpls [vi]
 - `gfi là gì` — gfi-la-gi [vi]
-- `gg form khảo sát` — gg-form-khao-sat [vi]
 - `ghép cặp điểm xu hướng psm là gì` — ghep-cap-diem-xu-huong-psm-la-gi [vi]
 - `giá cả cảm nhận là gì` — gia-ca-cam-nhan-la-gi [vi]
 - `giá trị bề mặt là gì` — gia-tri-be-mat-la-gi [vi]
+- `giá trị giá cả là gì` — gia-tri-gia-ca-la-gi [vi]
 - `giá trị hội tụ là gì` — gia-tri-hoi-tu-la-gi [vi]
 - `giá trị hội tụ trong smartpls` — gia-tri-hoi-tu-trong-smartpls [vi]
 - `giá trị mối quan hệ là gì` — gia-tri-moi-quan-he-la-gi [vi]
 - `giá trị phân biệt không đạt phải làm sao` — gia-tri-phan-biet-khong-dat-phai-lam-sao [vi]
+- `giá trị quảng cáo cảm nhận là gì` — gia-tri-quang-cao-cam-nhan-la-gi [vi]
 - `giá trị thương hiệu là gì` — gia-tri-thuong-hieu-la-gi [vi]
 - `giá trị tiêu dùng là gì` — gia-tri-tieu-dung-la-gi [vi]
+- `giá trị trung bình là gì` — gia-tri-trung-binh-la-gi [vi]
 - `giáo dục khởi nghiệp là gì` — giao-duc-khoi-nghiep-la-gi [vi]
+- `giáo trình phương pháp nghiên cứu khoa học pdf` — giao-trinh-phuong-phap-nghien-cuu-khoa-hoc-pdf [vi]
 - `giả thiết hay giả thuyết` — gia-thiet-hay-gia-thuyet [vi]
 - `giả thuyết là gì` — gia-thuyet-la-gi [vi]
+- `giả định hồi quy là gì` — gia-dinh-hoi-quy-la-gi [vi]
+- `giải trình chỉnh sửa sau bảo vệ luận văn` — giai-trinh-chinh-sua-sau-bao-ve-luan-van [vi]
 - `giảng viên yêu cầu đổi mô hình thì làm gì` — giang-vien-yeu-cau-doi-mo-hinh-thi-lam-gi [vi]
 - `google form` — google-form [vi]
 - `gán nhãn giá trị trong spss` — gan-nhan-gia-tri-trong-spss [vi]
@@ -4684,14 +6144,25 @@ are two pages splitting one ranking.
 - `hiệu quả tài chính là gì` — hieu-qua-tai-chinh-la-gi [vi]
 - `holsat là gì` — holsat-la-gi [vi]
 - `htmt là gì` — htmt-la-gi [vi]
+- `htmt lớn hơn 0 9 phải làm sao` — htmt-lon-hon-0-9-phai-lam-sao [vi]
 - `htmt trong smartpls` — htmt-trong-smartpls [vi]
+- `hàm ý quản trị trong luận văn là gì` — ham-y-quan-tri-trong-luan-van-la-gi [vi]
 - `hành vi công dân tổ chức là gì` — hanh-vi-cong-dan-to-chuc-la-gi [vi]
 - `hành vi dự định là gì` — hanh-vi-du-dinh-la-gi [vi]
 - `hành vi mua ngẫu hứng là gì` — hanh-vi-mua-ngau-hung-la-gi [vi]
 - `hành vi phản năng suất là gì` — hanh-vi-phan-nang-suat-la-gi [vi]
+- `hành vi tiết kiệm năng lượng là gì` — hanh-vi-tiet-kiem-nang-luong-la-gi [vi]
 - `hình ảnh thương hiệu là gì` — hinh-anh-thuong-hieu-la-gi [vi]
 - `hình ảnh điểm đến là gì` — hinh-anh-diem-den-la-gi [vi]
+- `hướng nghiên cứu tiếp theo trong luận văn là gì` — huong-nghien-cuu-tiep-theo-trong-luan-van-la-gi [vi]
+- `hạn chế của đề tài trong luận văn là gì` — han-che-cua-de-tai-trong-luan-van-la-gi [vi]
+- `hệ số biến thiên là gì` — he-so-bien-thien-la-gi [vi]
 - `hệ số chặn là gì` — he-so-chan-la-gi [vi]
+- `hệ số icc là gì` — he-so-icc-la-gi [vi]
+- `hệ số mardia là gì` — he-so-mardia-la-gi [vi]
+- `hệ số phi là gì` — he-so-phi-la-gi [vi]
+- `hệ số tải nhân tố là gì` — he-so-tai-nhan-to-la-gi [vi]
+- `hệ số xác định là gì` — he-so-xac-dinh-la-gi [vi]
 - `học hỏi tổ chức là gì` — hoc-hoi-to-chuc-la-gi [vi]
 - `hồi quy logistic` — hoi-quy-logistic [vi]
 - `hồi quy là gì` — hoi-quy-la-gi [vi]
@@ -4701,14 +6172,20 @@ are two pages splitting one ranking.
 - `hợp đồng tâm lý là gì` — hop-dong-tam-ly-la-gi [vi]
 - `iam là gì` — iam-la-gi [vi]
 - `im lặng tổ chức là gì` — im-lang-to-chuc-la-gi [vi]
+- `independent samples t test trong spss` — independent-samples-t-test-trong-spss [vi]
 - `ipa là gì` — ipa-la-gi [vi]
 - `is success delone mclean là gì` — is-success-delone-mclean-la-gi [vi]
+- `item total correlation nhỏ hơn 0 3 phải làm sao` — item-total-correlation-nho-hon-0-3-phai-lam-sao [vi]
 - `jdi là gì` — jdi-la-gi [vi]
 - `jones là gì` — jones-la-gi [vi]
 - `kano là gì` — kano-la-gi [vi]
 - `khai báo biến trong spss` — khai-bao-bien-trong-spss [vi]
 - `khoảng biến thiên là gì` — khoang-bien-thien-la-gi [vi]
 - `khoảng cách cook là gì` — khoang-cach-cook-la-gi [vi]
+- `khoảng tin cậy bootstrap chứa 0 phải làm sao` — khoang-tin-cay-bootstrap-chua-0-phai-lam-sao [vi]
+- `khoảng tin cậy htmt trong smartpls` — khoang-tin-cay-htmt-trong-smartpls [vi]
+- `khoảng tin cậy trong spss` — khoang-tin-cay-trong-spss [vi]
+- `khoảng tin cậy` — khoang-tin-cay [vi]
 - `khoảng trống nghiên cứu là gì` — khoang-trong-nghien-cuu-la-gi [vi]
 - `khung mẫu là gì` — khung-mau-la-gi [vi]
 - `khuyến mãi là gì` — khuyen-mai-la-gi [vi]
@@ -4719,11 +6196,16 @@ are two pages splitting one ranking.
 - `khóa luận là gì` — khoa-luan-la-gi [vi]
 - `khóa luận tốt nghiệp` — khoa-luan-tot-nghiep [vi]
 - `không mở được file sav phải làm sao` — khong-mo-duoc-file-sav-phai-lam-sao [vi]
+- `không nhập được file csv phải làm sao` — khong-nhap-duoc-file-csv-phai-lam-sao [vi]
+- `khảo sát google` — khao-sat-google [vi]
 - `khảo sát là gì` — khao-sat-la-gi [vi]
 - `khảo sát mức độ hài lòng của khách hàng` — khao-sat-muc-do-hai-long-cua-khach-hang [vi]
+- `khảo sát thử` — khao-sat-thu [vi]
 - `kim cương porter là gì` — kim-cuong-porter-la-gi [vi]
 - `kinh nghiệm sử dụng là gì` — kinh-nghiem-su-dung-la-gi [vi]
 - `kirkpatrick là gì` — kirkpatrick-la-gi [vi]
+- `kiến nghị trong luận văn là gì` — kien-nghi-trong-luan-van-la-gi [vi]
+- `kiến thức thái độ thực hành là gì` — kien-thuc-thai-do-thuc-hanh-la-gi [vi]
 - `kiểm định adf là gì` — kiem-dinh-adf-la-gi [vi]
 - `kiểm định bartlett là gì` — kiem-dinh-bartlett-la-gi [vi]
 - `kiểm định chi bình phương là gì` — kiem-dinh-chi-binh-phuong-la-gi [vi]
@@ -4745,12 +6227,19 @@ are two pages splitting one ranking.
 - `kruskal wallis trong spss` — kruskal-wallis-trong-spss [vi]
 - `kurtosis trong spss` — kurtosis-trong-spss [vi]
 - `kurtosis` — kurtosis [vi]
+- `kí hiệu phương sai` — ki-hieu-phuong-sai [vi]
 - `kích hoạt chuẩn mực nam là gì` — kich-hoat-chuan-muc-nam-la-gi [vi]
+- `ký hiệu độ lệch chuẩn` — ky-hieu-do-lech-chuan [vi]
+- `kế hoạch tiến độ luận văn` — ke-hoach-tien-do-luan-van [vi]
+- `kết cấu trong luận văn là gì` — ket-cau-trong-luan-van-la-gi [vi]
+- `kết luận trong luận văn là gì` — ket-luan-trong-luan-van-la-gi [vi]
 - `kết quả bootstrapping thay đổi mỗi lần chạy phải làm sao` — ket-qua-bootstrapping-thay-doi-moi-lan-chay-phai-lam-sao [vi]
+- `kết quả efa trong luận văn là gì` — ket-qua-efa-trong-luan-van-la-gi [vi]
 - `kết quả học tập là gì` — ket-qua-hoc-tap-la-gi [vi]
 - `kết quả khác với bài báo gốc phải làm sao` — ket-qua-khac-voi-bai-bao-goc-phai-lam-sao [vi]
 - `kết quả trái với giả thuyết thì làm gì` — ket-qua-trai-voi-gia-thuyet-thi-lam-gi [vi]
 - `kỳ vọng nỗ lực là gì` — ky-vong-no-luc-la-gi [vi]
+- `kỳ vọng vroom là gì` — ky-vong-vroom-la-gi [vi]
 - `kỳ vọng xác nhận ecm là gì` — ky-vong-xac-nhan-ecm-la-gi [vi]
 - `kỹ thuật johnson neyman là gì` — ky-thuat-johnson-neyman-la-gi [vi]
 - `likert scale là gì` — likert-scale-la-gi [vi]
@@ -4763,18 +6252,39 @@ are two pages splitting one ranking.
 - `làm sạch dữ liệu trong spss` — lam-sach-du-lieu-trong-spss [vi]
 - `làm sạch dữ liệu` — lam-sach-du-lieu [vi]
 - `lãnh đạo chuyển đổi là gì` — lanh-dao-chuyen-doi-la-gi [vi]
+- `lãnh đạo đạo đức là gì` — lanh-dao-dao-duc-la-gi [vi]
 - `lòng trung thành khách hàng là gì` — long-trung-thanh-khach-hang-la-gi [vi]
+- `lý do chọn đề tài trong luận văn là gì` — ly-do-chon-de-tai-trong-luan-van-la-gi [vi]
+- `lý do chọn đề tài` — ly-do-chon-de-tai [vi]
+- `lý thuyết acsi` — ly-thuyet-acsi [vi]
+- `lý thuyết amo` — ly-thuyet-amo [vi]
+- `lý thuyết bcg` — ly-thuyet-bcg [vi]
+- `lý thuyết capm` — ly-thuyet-capm [vi]
+- `lý thuyết ekb` — ly-thuyet-ekb [vi]
+- `lý thuyết ipa` — ly-thuyet-ipa [vi]
+- `lý thuyết jdi` — ly-thuyet-jdi [vi]
 - `lý thuyết là gì` — ly-thuyet-la-gi [vi]
+- `lý thuyết ppm` — ly-thuyet-ppm [vi]
+- `lý thuyết rfm` — ly-thuyet-rfm [vi]
 - `lĩnh vực nghiên cứu` — linh-vuc-nghien-cuu [vi]
 - `lương thưởng phúc lợi là gì` — luong-thuong-phuc-loi-la-gi [vi]
+- `lỗi ave nhỏ hơn 0 5 spss` — loi-ave-nho-hon-0-5-spss [vi]
+- `lỗi cfi nhỏ hơn 0 9 amos` — loi-cfi-nho-hon-0-9-amos [vi]
 - `lỗi cronbach alpha âm spss` — loi-cronbach-alpha-am-spss [vi]
+- `lỗi hội đồng hỏi về cỡ mẫu spss` — loi-hoi-dong-hoi-ve-co-mau-spss [vi]
 - `lỗi khoảng tin cậy bootstrap chứa 0 spss` — loi-khoang-tin-cay-bootstrap-chua-0-spss [vi]
 - `lỗi kiểm định levene có ý nghĩa spss` — loi-kiem-dinh-levene-co-y-nghia-spss [vi]
 - `lỗi kmo nhỏ hơn 0 5 spss` — loi-kmo-nho-hon-0-5-spss [vi]
+- `lỗi mẫu quá nhỏ spss` — loi-mau-qua-nho-spss [vi]
+- `lỗi spss bị treo khi chạy spss` — loi-spss-bi-treo-khi-chay-spss [vi]
 - `lỗi vif cao spss` — loi-vif-cao-spss [vi]
+- `lời cam đoan khóa luận` — loi-cam-doan-khoa-luan [vi]
+- `lời cảm ơn trong luận văn là gì` — loi-cam-on-trong-luan-van-la-gi [vi]
 - `lời mở đầu` — loi-mo-dau [vi]
+- `lời nói đầu` — loi-noi-dau [vi]
 - `ma trận qspm là gì` — ma-tran-qspm-la-gi [vi]
 - `ma trận suy biến singular matrix phải làm sao` — ma-tran-suy-bien-singular-matrix-phai-lam-sao [vi]
+- `ma trận tương quan là gì` — ma-tran-tuong-quan-la-gi [vi]
 - `ma trận xoay trong spss` — ma-tran-xoay-trong-spss [vi]
 - `ma trận xoay` — ma-tran-xoay [vi]
 - `mann whitney là gì` — mann-whitney-la-gi [vi]
@@ -4789,8 +6299,10 @@ are two pages splitting one ranking.
 - `mediator` — mediator [vi]
 - `mediators là gì` — mediators-la-gi [vi]
 - `mendeley là gì` — mendeley-la-gi [vi]
+- `micom không đạt phải làm sao` — micom-khong-dat-phai-lam-sao [vi]
 - `micom trong smartpls` — micom-trong-smartpls [vi]
 - `missing value là gì` — missing-value-la-gi [vi]
+- `mode trong thống kê là gì` — mode-trong-thong-ke-la-gi [vi]
 - `moderating` — moderating [vi]
 - `moderation là gì` — moderation-la-gi [vi]
 - `moderator` — moderator [vi]
@@ -4799,22 +6311,21 @@ are two pages splitting one ranking.
 - `multicollinearity` — multicollinearity [vi]
 - `multiple imputation là gì` — multiple-imputation-la-gi [vi]
 - `mã hóa biến là gì` — ma-hoa-bien-la-gi [vi]
+- `mã hóa bảng hỏi là gì` — ma-hoa-bang-hoi-la-gi [vi]
 - `mã hóa lại biến recode trong spss` — ma-hoa-lai-bien-recode-trong-spss [vi]
 - `mô hình 5 khoảng cách chất lượng dịch vụ` — mo-hinh-5-khoang-cach-chat-luong-dich-vu [vi]
-- `mô hình acsi` — mo-hinh-acsi [vi]
 - `mô hình aida` — mo-hinh-aida [vi]
-- `mô hình amo` — mo-hinh-amo [vi]
-- `mô hình bcg` — mo-hinh-bcg [vi]
-- `mô hình capm` — mo-hinh-capm [vi]
 - `mô hình chuỗi giá trị porter` — mo-hinh-chuoi-gia-tri-porter [vi]
 - `mô hình cấu trúc là gì` — mo-hinh-cau-truc-la-gi [vi]
-- `mô hình ekb` — mo-hinh-ekb [vi]
+- `mô hình hồi quy tổng thể` — mo-hinh-hoi-quy-tong-the [vi]
 - `mô hình hỗn hợp mixed models trong spss` — mo-hinh-hon-hop-mixed-models-trong-spss [vi]
-- `mô hình ipa` — mo-hinh-ipa [vi]
-- `mô hình jdi` — mo-hinh-jdi [vi]
+- `mô hình không hội tụ phải làm sao` — mo-hinh-khong-hoi-tu-phai-lam-sao [vi]
+- `mô hình không được nhận dạng phải làm sao` — mo-hinh-khong-duoc-nhan-dang-phai-lam-sao [vi]
 - `mô hình là gì` — mo-hinh-la-gi [vi]
-- `mô hình ppm` — mo-hinh-ppm [vi]
-- `mô hình rfm` — mo-hinh-rfm [vi]
+- `mô hình maslow` — mo-hinh-maslow [vi]
+- `mô hình nghiên cứu đề xuất trong luận văn là gì` — mo-hinh-nghien-cuu-de-xuat-trong-luan-van-la-gi [vi]
+- `mô hình nghiên cứu` — mo-hinh-nghien-cuu [vi]
+- `mô hình sem` — mo-hinh-sem [vi]
 - `mô hình servperf` — mo-hinh-servperf [vi]
 - `mô hình servqual` — mo-hinh-servqual [vi]
 - `mô hình swot` — mo-hinh-swot [vi]
@@ -4825,42 +6336,61 @@ are two pages splitting one ranking.
 - `mô hình tự quyết` — mo-hinh-tu-quyet [vi]
 - `mô hình var` — mo-hinh-var [vi]
 - `môi trường làm việc là gì` — moi-truong-lam-viec-la-gi [vi]
+- `mất dữ liệu khi recode phải làm sao` — mat-du-lieu-khi-recode-phai-lam-sao [vi]
+- `mẫu nghiên cứu là gì` — mau-nghien-cuu-la-gi [vi]
+- `mẫu quá nhỏ phải làm sao` — mau-qua-nho-phai-lam-sao [vi]
 - `mở file csv trong spss` — mo-file-csv-trong-spss [vi]
+- `mở đầu trong luận văn là gì` — mo-dau-trong-luan-van-la-gi [vi]
 - `mục lục tiểu luận` — muc-luc-tieu-luan [vi]
+- `mục lục trong luận văn là gì` — muc-luc-trong-luan-van-la-gi [vi]
+- `mục tiêu nghiên cứu trong luận văn là gì` — muc-tieu-nghien-cuu-trong-luan-van-la-gi [vi]
 - `mục tiêu nghiên cứu` — muc-tieu-nghien-cuu [vi]
 - `mức ý nghĩa là gì` — muc-y-nghia-la-gi [vi]
 - `nckh là gì` — nckh-la-gi [vi]
 - `nfi là gì` — nfi-la-gi [vi]
 - `nghiên cứu cắt ngang là gì` — nghien-cuu-cat-ngang-la-gi [vi]
 - `nghiên cứu khoa học` — nghien-cuu-khoa-hoc [vi]
+- `nghiên cứu sơ bộ trong luận văn là gì` — nghien-cuu-so-bo-trong-luan-van-la-gi [vi]
 - `nghiên cứu định lượng` — nghien-cuu-dinh-luong [vi]
+- `nghiện mạng xã hội là gì` — nghien-mang-xa-hoi-la-gi [vi]
 - `nguy cơ tương đối là gì` — nguy-co-tuong-doi-la-gi [vi]
 - `nguồn lực rbv là gì` — nguon-luc-rbv-la-gi [vi]
+- `ngẫu nhiên contingency là gì` — ngau-nhien-contingency-la-gi [vi]
 - `nhu cầu thành đạt mcclelland là gì` — nhu-cau-thanh-dat-mcclelland-la-gi [vi]
 - `nhân quả granger là gì` — nhan-qua-granger-la-gi [vi]
 - `nhân tố` — nhan-to [vi]
 - `nhận biết thương hiệu là gì` — nhan-biet-thuong-hieu-la-gi [vi]
+- `nhận thức kiểm soát hành vi là gì` — nhan-thuc-kiem-soat-hanh-vi-la-gi [vi]
+- `nhận thức rủi ro tpr là gì` — nhan-thuc-rui-ro-tpr-la-gi [vi]
 - `nhận thức về giá là gì` — nhan-thuc-ve-gia-la-gi [vi]
 - `nhận thức xã hội bandura là gì` — nhan-thuc-xa-hoi-bandura-la-gi [vi]
+- `nhận xét của đơn vị thực tập trong luận văn là gì` — nhan-xet-cua-don-vi-thuc-tap-trong-luan-van-la-gi [vi]
 - `nhập dữ liệu csv trong smartpls` — nhap-du-lieu-csv-trong-smartpls [vi]
-- `niềm tin sức khỏe là gì` — niem-tin-suc-khoe-la-gi [vi]
-- `niềm tin vào lãnh đạo là gì` — niem-tin-vao-lanh-dao-la-gi [vi]
+- `nhập liệu trong spss` — nhap-lieu-trong-spss [vi]
+- `niềm tin là gì` — niem-tin-la-gi [vi]
 - `năm yếu tố tính cách là gì` — nam-yeu-to-tinh-cach-la-gi [vi]
+- `năng lực cạnh tranh là gì` — nang-luc-canh-tranh-la-gi [vi]
 - `năng lực phục vụ là gì` — nang-luc-phuc-vu-la-gi [vi]
 - `năng lực tự học là gì` — nang-luc-tu-hoc-la-gi [vi]
+- `năng lực động là gì` — nang-luc-dong-la-gi [vi]
 - `nội sinh là gì` — noi-sinh-la-gi [vi]
 - `odds ratio là gì` — odds-ratio-la-gi [vi]
 - `ols` — ols [vi]
+- `omega bình phương là gì` — omega-binh-phuong-la-gi [vi]
 - `omega mcdonald là gì` — omega-mcdonald-la-gi [vi]
+- `one factor anova` — one-factor-anova [vi]
+- `ordinary least squares là gì` — ordinary-least-squares-la-gi [vi]
 - `outer loading thấp phải làm sao` — outer-loading-thap-phai-lam-sao [vi]
 - `outer weight là gì` — outer-weight-la-gi [vi]
 - `outer weight trong smartpls` — outer-weight-trong-smartpls [vi]
 - `outlier trong spss` — outlier-trong-spss [vi]
 - `outlier` — outlier [vi]
 - `outliers` — outliers [vi]
+- `p value bootstrap trong smartpls` — p-value-bootstrap-trong-smartpls [vi]
 - `p value trong spss` — p-value-trong-spss [vi]
 - `p-value` — p-value [vi]
 - `paired là gì` — paired-la-gi [vi]
+- `paired samples t test trong spss` — paired-samples-t-test-trong-spss [vi]
 - `partial least squares là gì` — partial-least-squares-la-gi [vi]
 - `path coefficient trong smartpls` — path-coefficient-trong-smartpls [vi]
 - `pattern matrix là gì` — pattern-matrix-la-gi [vi]
@@ -4869,28 +6399,41 @@ are two pages splitting one ranking.
 - `pearson là gì` — pearson-la-gi [vi]
 - `pestel là gì` — pestel-la-gi [vi]
 - `phiếu khảo sát online` — phieu-khao-sat-online [vi]
+- `phiếu khảo sát` — phieu-khao-sat [vi]
 - `phiếu trả lời không hợp lệ` — phieu-tra-loi-khong-hop-le [vi]
+- `phiếu trả lời trùng lặp` — phieu-tra-loi-trung-lap [vi]
 - `phát triển bền vững là gì` — phat-trien-ben-vung-la-gi [vi]
 - `phân phối chuẩn là gì` — phan-phoi-chuan-la-gi [vi]
+- `phân tích cấu trúc đa nhóm trong amos` — phan-tich-cau-truc-da-nhom-trong-amos [vi]
 - `phân tích cụm spss` — phan-tich-cum-spss [vi]
 - `phân tích giá trị ngoại lai là gì` — phan-tich-gia-tri-ngoai-lai-la-gi [vi]
 - `phân tích hệ số icc spss` — phan-tich-he-so-icc-spss [vi]
+- `phân tích sobel test spss` — phan-tich-sobel-test-spss [vi]
 - `phân tích tương quan pearson spss` — phan-tich-tuong-quan-pearson-spss [vi]
 - `phân tích đường dẫn là gì` — phan-tich-duong-dan-la-gi [vi]
 - `phân vị là gì` — phan-vi-la-gi [vi]
 - `phép xoay promax là gì` — phep-xoay-promax-la-gi [vi]
 - `phương pháp chọn mẫu` — phuong-phap-chon-mau [vi]
+- `phương pháp enter là gì` — phuong-phap-enter-la-gi [vi]
+- `phương pháp giảng dạy là gì` — phuong-phap-giang-day-la-gi [vi]
 - `phương pháp luận là gì` — phuong-phap-luan-la-gi [vi]
-- `phương pháp nghiên cứu` — phuong-phap-nghien-cuu [vi]
+- `phương pháp nghiên cứu khoa học` — phuong-phap-nghien-cuu-khoa-hoc [vi]
+- `phương pháp nghiên cứu trong luận văn là gì` — phuong-phap-nghien-cuu-trong-luan-van-la-gi [vi]
 - `phương pháp định lượng` — phuong-phap-dinh-luong [vi]
-- `phương sai trích là gì` — phuong-sai-trich-la-gi [vi]
+- `phương pháp định tính` — phuong-phap-dinh-tinh [vi]
+- `phương sai trong spss` — phuong-sai-trong-spss [vi]
+- `phương sai trích ave là gì` — phuong-sai-trich-ave-la-gi [vi]
 - `phương sai âm heywood phải làm sao` — phuong-sai-am-heywood-phai-lam-sao [vi]
 - `phương sai` — phuong-sai [vi]
 - `phương tiện hữu hình là gì` — phuong-tien-huu-hinh-la-gi [vi]
+- `phương trình hồi quy tuyến tính` — phuong-trinh-hoi-quy-tuyen-tinh [vi]
+- `phương trình hồi quy` — phuong-trinh-hoi-quy [vi]
 - `phạm vi nghiên cứu` — pham-vi-nghien-cuu [vi]
 - `phần dư là gì` — phan-du-la-gi [vi]
+- `phần mềm spss` — phan-mem-spss [vi]
 - `phần mềm stata` — phan-mem-stata [vi]
 - `phụ lục là gì` — phu-luc-la-gi [vi]
+- `phụ thuộc nguồn lực là gì` — phu-thuoc-nguon-luc-la-gi [vi]
 - `pls algorithm trong smartpls` — pls-algorithm-trong-smartpls [vi]
 - `pls predict là gì` — pls-predict-la-gi [vi]
 - `pls-sem` — pls-sem [vi]
@@ -4904,8 +6447,12 @@ are two pages splitting one ranking.
 - `principal component analysis trong spss` — principal-component-analysis-trong-spss [vi]
 - `principal component analysis` — principal-component-analysis [vi]
 - `process macro là gì` — process-macro-la-gi [vi]
+- `q square âm phải làm sao` — q-square-am-phai-lam-sao [vi]
 - `quan hệ đồng nghiệp là gì` — quan-he-dong-nghiep-la-gi [vi]
 - `quy kết weiner là gì` — quy-ket-weiner-la-gi [vi]
+- `quy trình nghiên cứu khoa học` — quy-trinh-nghien-cuu-khoa-hoc [vi]
+- `quy trình nghiên cứu trong luận văn là gì` — quy-trinh-nghien-cuu-trong-luan-van-la-gi [vi]
+- `quy định trình bày luận văn` — quy-dinh-trinh-bay-luan-van [vi]
 - `quyết định mua là gì` — quyet-dinh-mua-la-gi [vi]
 - `quyền riêng tư là gì` — quyen-rieng-tu-la-gi [vi]
 - `quản trị công ty là gì` — quan-tri-cong-ty-la-gi [vi]
@@ -4913,18 +6460,23 @@ are two pages splitting one ranking.
 - `quảng cáo trên mạng xã hội là gì` — quang-cao-tren-mang-xa-hoi-la-gi [vi]
 - `r square trong spss` — r-square-trong-spss [vi]
 - `r square` — r-square [vi]
+- `rank cases spss` — rank-cases-spss [vi]
 - `regression` — regression [vi]
 - `reliability là gì` — reliability-la-gi [vi]
 - `residual là gì` — residual-la-gi [vi]
 - `residuals là gì` — residuals-la-gi [vi]
+- `restructure dữ liệu spss` — restructure-du-lieu-spss [vi]
 - `rfm là gì` — rfm-la-gi [vi]
 - `rho a là gì` — rho-a-la-gi [vi]
 - `rho a trong smartpls` — rho-a-trong-smartpls [vi]
 - `rmsea là gì` — rmsea-la-gi [vi]
+- `rmsea lớn hơn 0 08 phải làm sao` — rmsea-lon-hon-0-08-phai-lam-sao [vi]
 - `robustness là gì` — robustness-la-gi [vi]
 - `rào cản chuyển đổi là gì` — rao-can-chuyen-doi-la-gi [vi]
+- `rủi ro cảm nhận là gì` — rui-ro-cam-nhan-la-gi [vi]
 - `rủi ro tín dụng là gì` — rui-ro-tin-dung-la-gi [vi]
 - `sai lầm loại 1 là gì` — sai-lam-loai-1-la-gi [vi]
+- `sai số chuẩn của trung bình là gì` — sai-so-chuan-cua-trung-binh-la-gi [vi]
 - `sai số chuẩn quá lớn phải làm sao` — sai-so-chuan-qua-lon-phai-lam-sao [vi]
 - `sai số chuẩn vững là gì` — sai-so-chuan-vung-la-gi [vi]
 - `sai số chọn mẫu là gì` — sai-so-chon-mau-la-gi [vi]
@@ -4939,12 +6491,14 @@ are two pages splitting one ranking.
 - `skewed là gì` — skewed-la-gi [vi]
 - `skewness là gì` — skewness-la-gi [vi]
 - `skewness trong spss` — skewness-trong-spss [vi]
+- `slide bảo vệ trong luận văn là gì` — slide-bao-ve-trong-luan-van-la-gi [vi]
 - `smart pls` — smart-pls [vi]
 - `so sánh với nghiên cứu trước trong luận văn là gì` — so-sanh-voi-nghien-cuu-truoc-trong-luan-van-la-gi [vi]
 - `so sánh xã hội là gì` — so-sanh-xa-hoi-la-gi [vi]
 - `sobel test là gì` — sobel-test-la-gi [vi]
 - `sor là gì` — sor-la-gi [vi]
 - `split file trong spss` — split-file-trong-spss [vi]
+- `split half reliability là gì` — split-half-reliability-la-gi [vi]
 - `spss bị treo khi chạy phải làm sao` — spss-bi-treo-khi-chay-phai-lam-sao [vi]
 - `spss cách dùng` — spss-cach-dung [vi]
 - `spss` — spss [vi]
@@ -4956,19 +6510,26 @@ are two pages splitting one ranking.
 - `swot là gì` — swot-la-gi [vi]
 - `syntax báo lỗi spss` — syntax-bao-loi-spss [vi]
 - `sắp xếp dữ liệu trong spss` — sap-xep-du-lieu-trong-spss [vi]
+- `số nhân tố khác với mô hình phải làm sao` — so-nhan-to-khac-voi-mo-hinh-phai-lam-sao [vi]
 - `số quan sát trên một biến quan sát là gì` — so-quan-sat-tren-mot-bien-quan-sat-la-gi [vi]
 - `sợ bỏ lỡ fomo là gì` — so-bo-lo-fomo-la-gi [vi]
 - `sợ thất bại là gì` — so-that-bai-la-gi [vi]
 - `sử dụng và hài lòng là gì` — su-dung-va-hai-long-la-gi [vi]
 - `sự gắn bó với điểm đến là gì` — su-gan-bo-voi-diem-den-la-gi [vi]
+- `sự gắn kết học tập là gì` — su-gan-ket-hoc-tap-la-gi [vi]
 - `sự gắn kết khách hàng là gì` — su-gan-ket-khach-hang-la-gi [vi]
 - `sự hoài nghi là gì` — su-hoai-nghi-la-gi [vi]
+- `sự hài lòng dịch vụ công là gì` — su-hai-long-dich-vu-cong-la-gi [vi]
+- `sự hài lòng người bệnh là gì` — su-hai-long-nguoi-benh-la-gi [vi]
 - `sự hài lòng điện tử là gì` — su-hai-long-dien-tu-la-gi [vi]
 - `sự thuận tiện là gì` — su-thuan-tien-la-gi [vi]
+- `sự tin cậy là gì` — su-tin-cay-la-gi [vi]
 - `sự đổi mới cá nhân là gì` — su-doi-moi-ca-nhan-la-gi [vi]
+- `t test một mẫu trong spss` — t-test-mot-mau-trong-spss [vi]
 - `t test` — t-test [vi]
-- `tam giác gian lận là gì` — tam-giac-gian-lan-la-gi [vi]
+- `tam là gì` — tam-la-gi [vi]
 - `task technology fit là gì` — task-technology-fit-la-gi [vi]
+- `test retest reliability là gì` — test-retest-reliability-la-gi [vi]
 - `thang đo bậc hai là gì` — thang-do-bac-hai-la-gi [vi]
 - `thang đo bậc hai trong smartpls` — thang-do-bac-hai-trong-smartpls [vi]
 - `thang đo cam kết tổ chức` — thang-do-cam-ket-to-chuc [vi]
@@ -4984,7 +6545,9 @@ are two pages splitting one ranking.
 - `thang đo niềm tin` — thang-do-niem-tin [vi]
 - `thang đo sợ bỏ lỡ fomo` — thang-do-so-bo-lo-fomo [vi]
 - `thang đo sợ thất bại` — thang-do-so-that-bai [vi]
+- `thang đo sự hài lòng dịch vụ công` — thang-do-su-hai-long-dich-vu-cong [vi]
 - `thang đo sự hài lòng điện tử` — thang-do-su-hai-long-dien-tu [vi]
+- `thang đo sự tin cậy` — thang-do-su-tin-cay [vi]
 - `thang đo thanh khoản` — thang-do-thanh-khoan [vi]
 - `thang đo thái độ` — thang-do-thai-do [vi]
 - `thang đo thói quen` — thang-do-thoi-quen [vi]
@@ -4997,8 +6560,10 @@ are two pages splitting one ranking.
 - `thang đo định danh là gì` — thang-do-dinh-danh-la-gi [vi]
 - `thang đo động cơ du lịch` — thang-do-dong-co-du-lich [vi]
 - `thanh khoản là gì` — thanh-khoan-la-gi [vi]
+- `thay thế giá trị khuyết bằng trung bình là gì` — thay-the-gia-tri-khuyet-bang-trung-binh-la-gi [vi]
 - `thiên lệch không phản hồi là gì` — thien-lech-khong-phan-hoi-la-gi [vi]
 - `thiết kế bảng hỏi` — thiet-ke-bang-hoi [vi]
+- `thiết kế nghiên cứu trong luận văn là gì` — thiet-ke-nghien-cuu-trong-luan-van-la-gi [vi]
 - `thiết kế nghiên cứu` — thiet-ke-nghien-cuu [vi]
 - `thiết lập mục tiêu locke là gì` — thiet-lap-muc-tieu-locke-la-gi [vi]
 - `thu thập dữ liệu` — thu-thap-du-lieu [vi]
@@ -5009,10 +6574,12 @@ are two pages splitting one ranking.
 - `thạc sĩ` — thac-si [vi]
 - `thể chế là gì` — the-che-la-gi [vi]
 - `thị trường hiệu quả emh là gì` — thi-truong-hieu-qua-emh-la-gi [vi]
+- `thống kê mô tả mẫu trong luận văn là gì` — thong-ke-mo-ta-mau-trong-luan-van-la-gi [vi]
 - `thống kê mô tả` — thong-ke-mo-ta [vi]
 - `thống kê nhân khẩu học trong spss` — thong-ke-nhan-khau-hoc-trong-spss [vi]
 - `thời gian trả lời quá nhanh` — thoi-gian-tra-loi-qua-nhanh [vi]
 - `thứ tự câu hỏi là gì` — thu-tu-cau-hoi-la-gi [vi]
+- `tiêu dùng xanh là gì` — tieu-dung-xanh-la-gi [vi]
 - `tiếng nói của nhân viên là gì` — tieng-noi-cua-nhan-vien-la-gi [vi]
 - `tiếp cận hai giai đoạn trong smartpls` — tiep-can-hai-giai-doan-trong-smartpls [vi]
 - `tli là gì` — tli-la-gi [vi]
@@ -5021,21 +6588,30 @@ are two pages splitting one ranking.
 - `total variance explained là gì` — total-variance-explained-la-gi [vi]
 - `tpb là gì` — tpb-la-gi [vi]
 - `tra là gì` — tra-la-gi [vi]
+- `trang bìa trong luận văn là gì` — trang-bia-trong-luan-van-la-gi [vi]
+- `transpose dữ liệu spss` — transpose-du-lieu-spss [vi]
 - `trao quyền tâm lý là gì` — trao-quyen-tam-ly-la-gi [vi]
 - `trao đổi xã hội là gì` — trao-doi-xa-hoi-la-gi [vi]
 - `trung bình là gì` — trung-binh-la-gi [vi]
 - `trung bình nhân` — trung-binh-nhan [vi]
+- `trung gian một phần là gì` — trung-gian-mot-phan-la-gi [vi]
+- `trung tâm hóa biến là gì` — trung-tam-hoa-bien-la-gi [vi]
+- `trung vị trong spss` — trung-vi-trong-spss [vi]
 - `trung vị` — trung-vi [vi]
 - `truyền miệng điện tử là gì` — truyen-mieng-dien-tu-la-gi [vi]
 - `trách nhiệm xã hội doanh nghiệp là gì` — trach-nhiem-xa-hoi-doanh-nghiep-la-gi [vi]
+- `trình bày bảng biểu luận văn` — trinh-bay-bang-bieu-luan-van [vi]
 - `trích dẫn` — trich-dan [vi]
+- `trả lời câu hỏi hội đồng luận văn` — tra-loi-cau-hoi-hoi-dong-luan-van [vi]
 - `trả lời cùng một đáp án phải làm sao` — tra-loi-cung-mot-dap-an-phai-lam-sao [vi]
 - `trải nghiệm du lịch đáng nhớ là gì` — trai-nghiem-du-lich-dang-nho-la-gi [vi]
 - `trải nghiệm khách hàng là gì` — trai-nghiem-khach-hang-la-gi [vi]
 - `trật tự phân hạng là gì` — trat-tu-phan-hang-la-gi [vi]
 - `trọng lực là gì` — trong-luc-la-gi [vi]
+- `trọng số mẫu là gì` — trong-so-mau-la-gi [vi]
 - `tuân thủ điều trị là gì` — tuan-thu-dieu-tri-la-gi [vi]
 - `tài chính hành vi là gì` — tai-chinh-hanh-vi-la-gi [vi]
+- `tài liệu tham khảo trong luận văn là gì` — tai-lieu-tham-khao-trong-luan-van-la-gi [vi]
 - `tài sản thương hiệu aaker là gì` — tai-san-thuong-hieu-aaker-la-gi [vi]
 - `tác động gián tiếp là gì` — tac-dong-gian-tiep-la-gi [vi]
 - `tác động tổng trong smartpls` — tac-dong-tong-trong-smartpls [vi]
@@ -5044,19 +6620,26 @@ are two pages splitting one ranking.
 - `tính cá nhân hóa là gì` — tinh-ca-nhan-hoa-la-gi [vi]
 - `tính dễ dùng của website là gì` — tinh-de-dung-cua-website-la-gi [vi]
 - `tính dừng của chuỗi thời gian là gì` — tinh-dung-cua-chuoi-thoi-gian-la-gi [vi]
+- `tính mới của đề tài trong luận văn là gì` — tinh-moi-cua-de-tai-trong-luan-van-la-gi [vi]
 - `tính trung vị` — tinh-trung-vi [vi]
 - `tính tương thích là gì` — tinh-tuong-thich-la-gi [vi]
 - `tính xác thực cảm nhận là gì` — tinh-xac-thuc-cam-nhan-la-gi [vi]
+- `tóm tắt trong luận văn là gì` — tom-tat-trong-luan-van-la-gi [vi]
 - `tương quan là gì` — tuong-quan-la-gi [vi]
 - `tương quan pearson` — tuong-quan-pearson [vi]
 - `tạo biến đại diện trong spss` — tao-bien-dai-dien-trong-spss [vi]
+- `tạo gg form khảo sát` — tao-gg-form-khao-sat [vi]
 - `tần suất là gì` — tan-suat-la-gi [vi]
 - `tần số tích lũy là gì` — tan-so-tich-luy-la-gi [vi]
+- `tập hợp đa phản hồi spss` — tap-hop-da-phan-hoi-spss [vi]
 - `tổng quan là gì` — tong-quan-la-gi [vi]
 - `tổng quan nghiên cứu` — tong-quan-nghien-cuu [vi]
+- `tổng thể nghiên cứu là gì` — tong-the-nghien-cuu-la-gi [vi]
+- `tổng tác động là gì` — tong-tac-dong-la-gi [vi]
 - `tự quyết là gì` — tu-quyet-la-gi [vi]
 - `tự tin khởi nghiệp là gì` — tu-tin-khoi-nghiep-la-gi [vi]
 - `tỷ lệ phản hồi` — ty-le-phan-hoi [vi]
+- `tỷ lệ đạo văn cao thì làm gì` — ty-le-dao-van-cao-thi-lam-gi [vi]
 - `utaut là gì` — utaut-la-gi [vi]
 - `utaut2 là gì` — utaut2-la-gi [vi]
 - `vaf là gì` — vaf-la-gi [vi]
@@ -5064,18 +6647,28 @@ are two pages splitting one ranking.
 - `variance` — variance [vi]
 - `vecm là gì` — vecm-la-gi [vi]
 - `vif là gì` — vif-la-gi [vi]
+- `vif trong spss` — vif-trong-spss [vi]
+- `visual binning spss` — visual-binning-spss [vi]
 - `ví dụ về câu hỏi định lượng` — vi-du-ve-cau-hoi-dinh-luong [vi]
 - `văn hóa tổ chức là gì` — van-hoa-to-chuc-la-gi [vi]
 - `vượt giới hạn vòng lặp phải làm sao` — vuot-gioi-han-vong-lap-phai-lam-sao [vi]
 - `vẽ mô hình cấu trúc trong smartpls` — ve-mo-hinh-cau-truc-trong-smartpls [vi]
 - `vẽ sơ đồ đường dẫn trong amos` — ve-so-do-duong-dan-trong-amos [vi]
+- `vốn tâm lý là gì` — von-tam-ly-la-gi [vi]
+- `vốn xã hội là gì` — von-xa-hoi-la-gi [vi]
 - `weight cases trong spss` — weight-cases-trong-spss [vi]
 - `wilcoxon là gì` — wilcoxon-la-gi [vi]
 - `wilcoxon trong spss` — wilcoxon-trong-spss [vi]
 - `xung đột công việc gia đình là gì` — xung-dot-cong-viec-gia-dinh-la-gi [vi]
+- `xuất kết quả ra excel trong smartpls` — xuat-ket-qua-ra-excel-trong-smartpls [vi]
 - `xuất kết quả ra word trong spss` — xuat-ket-qua-ra-word-trong-spss [vi]
+- `xây dựng thang đo trong luận văn là gì` — xay-dung-thang-do-trong-luan-van-la-gi [vi]
 - `xử lý dữ liệu` — xu-ly-du-lieu [vi]
+- `xử lý missing value trong spss` — xu-ly-missing-value-trong-spss [vi]
+- `yêu cầu kiểm soát karasek là gì` — yeu-cau-kiem-soat-karasek-la-gi [vi]
 - `z score altman là gì` — z-score-altman-la-gi [vi]
+- `ý nghĩa của đề tài trong luận văn là gì` — y-nghia-cua-de-tai-trong-luan-van-la-gi [vi]
+- `ý thức môi trường là gì` — y-thuc-moi-truong-la-gi [vi]
 - `ý định bỏ học là gì` — y-dinh-bo-hoc-la-gi [vi]
 - `ý định chia sẻ thông tin là gì` — y-dinh-chia-se-thong-tin-la-gi [vi]
 - `ý định nghỉ việc là gì` — y-dinh-nghi-viec-la-gi [vi]
@@ -5084,27 +6677,50 @@ are two pages splitting one ranking.
 - `đa cộng tuyến trong spss` — da-cong-tuyen-trong-spss [vi]
 - `điều kiện thuận lợi là gì` — dieu-kien-thuan-loi-la-gi [vi]
 - `điểm biến tiềm ẩn trong smartpls` — diem-bien-tiem-an-trong-smartpls [vi]
+- `đo lường đa chiều mds spss` — do-luong-da-chieu-mds-spss [vi]
 - `đào tạo và phát triển là gì` — dao-tao-va-phat-trien-la-gi [vi]
 - `đánh giá thành tích là gì` — danh-gia-thanh-tich-la-gi [vi]
+- `đánh đổi cấu trúc vốn là gì` — danh-doi-cau-truc-von-la-gi [vi]
 - `đòn bẩy tài chính là gì` — don-bay-tai-chinh-la-gi [vi]
+- `đóng góp của nghiên cứu trong luận văn là gì` — dong-gop-cua-nghien-cuu-trong-luan-van-la-gi [vi]
 - `đường cong roc là gì` — duong-cong-roc-la-gi [vi]
 - `đạo văn` — dao-van [vi]
 - `đạo đức nghiên cứu` — dao-duc-nghien-cuu [vi]
 - `đặc điểm công việc jcm là gì` — dac-diem-cong-viec-jcm-la-gi [vi]
 - `đặt vấn đề` — dat-van-de [vi]
 - `đề cương là gì` — de-cuong-la-gi [vi]
+- `đề cương nghiên cứu khoa học` — de-cuong-nghien-cuu-khoa-hoc [vi]
+- `đề tài bị trùng thì làm gì` — de-tai-bi-trung-thi-lam-gi [vi]
+- `đề tài luận văn công nghệ thông tin` — de-tai-luan-van-cong-nghe-thong-tin [vi]
+- `đề tài luận văn du lịch` — de-tai-luan-van-du-lich [vi]
+- `đề tài luận văn dược` — de-tai-luan-van-duoc [vi]
+- `đề tài luận văn khoa học dữ liệu` — de-tai-luan-van-khoa-hoc-du-lieu [vi]
+- `đề tài luận văn kinh tế` — de-tai-luan-van-kinh-te [vi]
+- `đề tài luận văn kế toán` — de-tai-luan-van-ke-toan [vi]
+- `đề tài luận văn logistics` — de-tai-luan-van-logistics [vi]
+- `đề tài luận văn marketing` — de-tai-luan-van-marketing [vi]
+- `đề tài luận văn quản lý công` — de-tai-luan-van-quan-ly-cong [vi]
+- `đề tài luận văn sư phạm` — de-tai-luan-van-su-pham [vi]
+- `đề tài luận văn thuế` — de-tai-luan-van-thue [vi]
+- `đề tài luận văn xây dựng` — de-tai-luan-van-xay-dung [vi]
 - `đề tài nckh` — de-tai-nckh [vi]
 - `định giá ngẫu nhiên cvm là gì` — dinh-gia-ngau-nhien-cvm-la-gi [vi]
 - `định hướng khởi nghiệp là gì` — dinh-huong-khoi-nghiep-la-gi [vi]
+- `định lý giá trị trung bình` — dinh-ly-gia-tri-trung-binh [vi]
 - `định lượng là gì` — dinh-luong-la-gi [vi]
+- `định nghĩa khái niệm nghiên cứu trong luận văn là gì` — dinh-nghia-khai-niem-nghien-cuu-trong-luan-van-la-gi [vi]
 - `định tính là gì` — dinh-tinh-la-gi [vi]
 - `đối tượng nghiên cứu` — doi-tuong-nghien-cuu [vi]
+- `đối tượng và phạm vi nghiên cứu trong luận văn là gì` — doi-tuong-va-pham-vi-nghien-cuu-trong-luan-van-la-gi [vi]
 - `đồng liên kết là gì` — dong-lien-ket-la-gi [vi]
 - `đổi mới sáng tạo là gì` — doi-moi-sang-tao-la-gi [vi]
 - `độ lệch chuẩn kí hiệu là gì trong máy tính` — do-lech-chuan-ki-hieu-la-gi-trong-may-tinh [vi]
 - `độ lệch chuẩn` — do-lech-chuan [vi]
 - `độ nhạy và độ đặc hiệu là gì` — do-nhay-va-do-dac-hieu-la-gi [vi]
 - `độ tin cậy 95 là gì` — do-tin-cay-95-la-gi [vi]
+- `độ tin cậy của người ảnh hưởng là gì` — do-tin-cay-cua-nguoi-anh-huong-la-gi [vi]
+- `độ tin cậy tổng hợp là gì` — do-tin-cay-tong-hop-la-gi [vi]
+- `độ tin cậy tổng hợp trong smartpls` — do-tin-cay-tong-hop-trong-smartpls [vi]
 - `độ tin cậy` — do-tin-cay [vi]
 - `độ trễ tối ưu là gì` — do-tre-toi-uu-la-gi [vi]
 - `động cơ du lịch là gì` — dong-co-du-lich-la-gi [vi]
