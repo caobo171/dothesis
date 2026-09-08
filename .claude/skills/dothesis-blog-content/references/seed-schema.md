@@ -55,7 +55,8 @@ source of truth and `docs/blog-index.md` is the committed snapshot.
 | `source_batch` | no | Which run produced this post, for example `harvest-2026-09-07` or `axis-spss-procedure` |
 | `gate_status` | no | `measured` when the focus keyword has its own volume reading, `unmeasured` when it does not (`family-inferred` is the pre-2026-09-08 name, still read as `unmeasured`). Both schedule normally. An `unmeasured` post is ordered behind the measured ones and must clear the doubled proprietary bar in `structure.md` |
 | `sibling_slugs` | no | 3 to 5 slugs this post links to. `plan` fills them from the same family, then the same category by volume |
-| `images` | no | Always `[]` today. See `images.md` |
+| `images` | no | Written by `cli images --assign`, not by hand: one entry, `{"id": "hero", "source": "library:<key>", "alt": "..."}`. See `images.md` |
+| `image_url` | no | Written by `cli images` once the key has a picture. Root-relative (`/img/blog/<key>.webp`) — an absolute origin would pin the environment |
 | `body` | yes | Markdown. See below |
 
 ## Body rules

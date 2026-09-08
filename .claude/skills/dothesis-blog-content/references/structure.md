@@ -16,7 +16,7 @@ worked output. The target below is what beats them without padding.
 | Tables | at least 1, at least 2 when the page is unmeasured. A threshold table or a worked output table, never a decorative one |
 | Internal links | 4 or more distinct, 5 or more when the page is unmeasured: the category route, 2 to 3 siblings, `/landing` |
 | FAQ | `## Câu hỏi thường gặp` with 4 to 6 `###` questions |
-| Images | none by default. See `images.md` |
+| Images | one hero from the shared library, assigned by the pipeline. Never an in-body figure. See `images.md` |
 | CTA | exactly one, in the closing paragraph |
 
 ## The three rules that apply to every archetype

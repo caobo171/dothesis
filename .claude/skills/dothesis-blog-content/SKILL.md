@@ -144,11 +144,14 @@ not a DoThesis topic.
 
 ### 4. Images
 
-DoThesis has no public image hosting today, so **posts ship with no images by
-default** and the hero plus Open Graph card are rendered from the title and
-category by `web/app/blog/[locale]/[slug]/opengraph-image.tsx` at zero cost.
-See `references/images.md` before adding any image; the `images[]` block stays in
-the schema for later and is empty in every current post.
+**A post carries one hero and nothing else**, taken from the shared library in
+`docs/blog-image-library.json` — about 35 illustrations covering the seven
+categories and three variants of each archetype, generated once and committed to
+`web/public/img/blog/`. Do not write `images[]` by hand: `python -m
+app.blog.content.cli images --assign` fills it, and `--generate` fills the keys
+that have no picture yet. The Open Graph card still falls back to
+`web/app/blog/[locale]/[slug]/opengraph-image.tsx` for a post with no hero.
+See `references/images.md` for the cost argument and the prompt rules.
 
 Carry the information in **tables** instead. A threshold table and a worked output
 table do more for this reader than any illustration would.
@@ -213,7 +216,7 @@ single CTA to `/landing`. The category intro links back to its strongest posts.
 - `references/voice.md` — voice, the slop blacklist, the hard prose rules
 - `references/canonical-sources.md` — the citation allowlist, verbatim strings
 - `references/seed-schema.md` — seed JSON fields and body rules
-- `references/images.md` — why posts have no images, and the rules if that changes
+- `references/images.md` — the shared illustration library, its cost argument and its prompt rules
 
 The worked exemplar is
 `api/tests/fixtures/blog/content/passing/0001-cronbach-alpha-la-gi.json`. It is

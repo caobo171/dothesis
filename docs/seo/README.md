@@ -112,10 +112,16 @@ cd api
 python3 ../.claude/skills/dothesis-content-pipeline/scripts/qa_seeds.py \
     data/blog-seeds/vi/posts --corpus
 
-# 6. counts, measured against unmeasured, volume totals, spend, shortfall
+# 6. one hero per seed out of the shared illustration library, generating
+#    only the keys that have no picture yet. --dry-run first: it prints what
+#    is missing and what it would cost, and calls nothing.
+./run.sh python -m app.blog.content.cli images --assign --generate --dry-run
+./run.sh python -m app.blog.content.cli images --assign --generate
+
+# 7. counts, measured against unmeasured, volume totals, spend, shortfall
 ./run.sh python -m app.blog.content.cli report
 
-# 7. publish (Package A's CLI)
+# 8. publish (Package A's CLI)
 ./run.sh python -m app.blog.cli create --dir data/blog-seeds/vi/posts \
     --schedule-start 2026-09-09 --per-week 40
 ./run.sh python -m app.blog.cli export-index
@@ -183,3 +189,27 @@ near-duplicate check at a stricter threshold. The calibrated numbers are in
 ## categories.json
 
 `docs/seo/categories.json` is a JSON array of the live blog categories (`slug`, `name`, `display_name`, `intro_md`, `target_keyword`, `search_volume`, `sort_order`). A category exists only if its name has measured search volume, a real route (`/blog/vi/chu-de/{slug}`), a hand-written intro, and at least ten posts; `phan-tich-du-lieu` and `luan-van-thac-si` were folded on 2026-09-08 (see `topic-bank/category-folds.tsv`). The run copies the file to `api/data/blog-seeds/vi/categories.json`, which `python -m app.blog.cli create --dir` upserts before the posts. Intros are written by hand on purpose: a category that reads as a filtered list does not rank. The measured-volume requirement on a category name survives the 2026-09-08 rule change on purpose: a category is a hub whose whole job is to catch a query the reader already types, and there are nine of them, so measuring each one costs almost nothing.
+
+## blog-image-library.json
+
+`docs/blog-image-library.json` is the shared illustration library: one entry per
+scene, `{"prompt": "...", "url": "..."}`, with the `url` absent until that key
+has been generated. Seven keys for the categories and three variants of each of
+the ten archetypes, about 35 in all, and that count does not grow with the
+corpus — every post belongs to one category and one archetype, so the same three
+dozen pictures cover a thousand posts as easily as a hundred. WELE measured the
+same effect first: 489 image slots over 64 distinct scenes, generating per
+article costing roughly twenty-five times generating per scene.
+
+`python -m app.blog.content.cli images --assign` gives every seed one hero
+pointing at a key; `--generate` fills only the keys that have no picture yet,
+writes the file to `web/public/img/blog/<key>.webp` and the url back into the
+JSON, so a key is never billed twice. Every run ends with the per-scene against
+per-post cost comparison. The `.webp` files are committed — unlike the seeds,
+they are not gitignored, and a generated file outside version control is a bill
+waiting to be paid again. The prompt rules, the hosting decision and the
+"no text, no numbers" rule are in
+`.claude/skills/dothesis-blog-content/references/images.md`.
+
+`GEMINI_API_KEY` (gemini-2.5-flash-image, about $0.039 an image) and
+`OPENAI_API_KEY` (gpt-image-2, behind `--openai`) are both in the repo `.env`.
