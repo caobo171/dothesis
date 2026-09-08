@@ -13,6 +13,9 @@ vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
   },
+  permanentRedirect: (url: string) => {
+    throw new Error(`NEXT_PERMANENT_REDIRECT:${url}`);
+  },
 }));
 
 import BlogRootPage from "./page";
@@ -20,6 +23,9 @@ import BlogListingPage, { generateMetadata as listingMetadata } from "./[locale]
 import BlogCategoryPage, {
   generateMetadata as categoryMetadata,
 } from "./[locale]/chu-de/[category]/page";
+import BlogTopicPage, {
+  generateMetadata as topicMetadata,
+} from "./[locale]/topic/[category]/page";
 import BlogPostPage, { generateMetadata as postMetadata } from "./[locale]/[slug]/page";
 import robots from "../robots";
 import sitemap from "../sitemap";
@@ -277,6 +283,67 @@ describe("/blog/[locale]/chu-de/[category]", () => {
         searchParams: Promise.resolve({}),
       }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+});
+
+describe("the category segment is the reader's own word for it", () => {
+  test("the live Vietnamese URL keeps resolving, chips and pager included", async () => {
+    stubApi({ total: 40 });
+    const { container } = render(
+      await BlogCategoryPage({
+        params: Promise.resolve({ locale: "vi", category: "spss" }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("SPSS");
+    expect(
+      Array.from(container.querySelectorAll(".blog-hero .blog-chip")).map((c) =>
+        c.getAttribute("href"),
+      ),
+    ).toEqual(["/blog/vi", "/blog/vi/chu-de/spss", "/blog/vi/chu-de/smartpls"]);
+    const pager = screen.getByRole("navigation", { name: "Phân trang" });
+    expect(within(pager).getByRole("link", { name: "Trang sau" }).getAttribute("href")).toBe(
+      "/blog/vi/chu-de/spss?page=2",
+    );
+  });
+
+  test("the English hub is served from /topic/ and links its own segment", async () => {
+    stubApi();
+    const { container } = render(
+      await BlogTopicPage({
+        params: Promise.resolve({ locale: "en", category: "spss" }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("SPSS");
+    expect(
+      Array.from(container.querySelectorAll(".blog-hero .blog-chip")).map((c) =>
+        c.getAttribute("href"),
+      ),
+    ).toEqual(["/blog/en", "/blog/en/topic/spss", "/blog/en/topic/smartpls"]);
+    const meta = await topicMetadata({ params: Promise.resolve({ locale: "en", category: "spss" }) });
+    expect(meta.alternates?.canonical).toBe("http://localhost:3006/blog/en/topic/spss");
+  });
+
+  test("a hub reached through the other locale's segment 308s to its own", async () => {
+    stubApi();
+    await expect(
+      BlogTopicPage({
+        params: Promise.resolve({ locale: "vi", category: "spss" }),
+        searchParams: Promise.resolve({}),
+      }),
+    ).rejects.toThrow("NEXT_PERMANENT_REDIRECT:/blog/vi/chu-de/spss");
+    await expect(
+      BlogCategoryPage({
+        params: Promise.resolve({ locale: "en", category: "spss" }),
+        searchParams: Promise.resolve({}),
+      }),
+    ).rejects.toThrow("NEXT_PERMANENT_REDIRECT:/blog/en/topic/spss");
+    // No canonical for a URL that redirects — it would advertise the one URL
+    // of the pair we are retiring.
+    expect(
+      await categoryMetadata({ params: Promise.resolve({ locale: "en", category: "spss" }) }),
+    ).toEqual({});
   });
 });
 

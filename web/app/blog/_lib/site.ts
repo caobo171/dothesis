@@ -25,9 +25,31 @@ export function postPath(locale: string, slug: string): string {
   return `/blog/${locale}/${slug}`;
 }
 
-/** `chu-de` (Vietnamese for "topic") is the public category segment, per spec §6. */
+/**
+ * The category URL segment, per locale.
+ *
+ * `chu-de` is Vietnamese for "topic" (spec §6). It is the right word in a
+ * Vietnamese URL and the wrong one in an English URL, which a reader sees in
+ * the SERP breadcrumb and in every link they share — so the English edition
+ * gets `topic`.
+ *
+ * This map is the single source of truth. `categoryPath()` below reads it, and
+ * so does each `page.tsx` under the two route folders: a request that arrives
+ * through the other locale's segment is redirected here rather than served, so
+ * one category hub never has two working URLs.
+ *
+ * An unrecognised locale falls back to `chu-de` rather than to the English
+ * segment: every category URL this site has ever published carries it, and a
+ * fallback that changed them would 404 links that are live today.
+ */
+export const CATEGORY_SEGMENTS: Record<string, string> = { vi: "chu-de", en: "topic" };
+
+export function categorySegment(locale: string): string {
+  return CATEGORY_SEGMENTS[locale] ?? CATEGORY_SEGMENTS.vi;
+}
+
 export function categoryPath(locale: string, slug: string): string {
-  return `/blog/${locale}/chu-de/${slug}`;
+  return `/blog/${locale}/${categorySegment(locale)}/${slug}`;
 }
 
 /**
