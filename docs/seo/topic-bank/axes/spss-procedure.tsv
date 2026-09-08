@@ -59,3 +59,39 @@ xuat-ket-qua-ra-word	xuất kết quả ra word	cách chạy {display} trong sps
 chay-syntax	chạy syntax	cách {display} trong spss;{display} spss	spss	spss-howto	data
 phan-tich-cum	phân tích cụm	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	advanced
 phan-tich-biet-so	phân tích biệt số	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	advanced
+tap-hop-da-phan-hoi	tập hợp đa phản hồi	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	data
+bang-tuy-chinh-custom-tables	bảng tùy chỉnh custom tables	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	descriptive
+chart-builder	chart builder	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	descriptive
+hoi-quy-thu-bac	hồi quy thứ bậc	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	regression
+hoi-quy-probit	hồi quy probit	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	regression
+phan-tich-duong-cong-roc	phân tích đường cong roc	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	test
+mo-hinh-hon-hop-mixed-models	mô hình hỗn hợp mixed models	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	advanced
+phan-tich-tuong-ung	phân tích tương ứng	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	advanced
+do-luong-da-chieu-mds	đo lường đa chiều mds	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	advanced
+phan-tich-conjoint	phân tích conjoint	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	advanced
+kiem-dinh-friedman	kiểm định friedman	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+kiem-dinh-mcnemar	kiểm định mcnemar	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+kiem-dinh-cochran-q	kiểm định cochran q	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+kiem-dinh-dau	kiểm định dấu	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+kiem-dinh-binomial	kiểm định binomial	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+kiem-dinh-runs	kiểm định runs	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	test	test
+tuong-quan-kendall-tau	tương quan kendall tau	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	correlation
+kiem-dinh-split-half	kiểm định split half	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	reliability
+he-so-icc	hệ số icc	cách chạy {display} trong spss;phân tích {display} spss;{display} trong spss	spss	spss-howto	reliability
+transpose-du-lieu	transpose dữ liệu	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	data
+restructure-du-lieu	restructure dữ liệu	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	data
+aggregate-du-lieu	aggregate dữ liệu	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	data
+visual-binning	visual binning	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	data
+rank-cases	rank cases	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	data
+loc-phieu-tra-loi-trung-lap	lọc phiếu trả lời trùng lặp	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	data
+process-macro-da-trung-gian	process macro đa trung gian	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	mediation
+process-macro-trung-gian-co-dieu-tiet	process macro trung gian có điều tiết	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	mediation
+process-macro-johnson-neyman	process macro johnson neyman	cách chạy {display} trong spss;{display} spss;{display} trong spss	spss	spss-howto	mediation
+amos-cfa	phân tích nhân tố khẳng định cfa	{display} trong amos;cách chạy {display} trong amos	spss	spss-howto	amos
+amos-sem	mô hình cấu trúc tuyến tính sem	{display} trong amos;cách chạy {display} trong amos	spss	spss-howto	amos
+amos-ve-so-do-duong-dan	vẽ sơ đồ đường dẫn	{display} trong amos;cách chạy {display} trong amos	spss	spss-howto	amos
+amos-nhap-du-lieu-tu-spss	nhập dữ liệu từ spss	{display} trong amos;cách chạy {display} trong amos	spss	spss-howto	amos
+amos-chi-so-do-phu-hop	chỉ số độ phù hợp mô hình	{display} trong amos;cách chạy {display} trong amos	spss	spss-howto	amos
+amos-modification-indices	modification indices	{display} trong amos;cách chạy {display} trong amos	spss	spss-howto	amos
+amos-bootstrap-trung-gian	kiểm định trung gian bằng bootstrap	{display} trong amos;cách chạy {display} trong amos	spss	spss-howto	amos
+amos-phan-tich-da-nhom	phân tích cấu trúc đa nhóm	{display} trong amos;cách chạy {display} trong amos	spss	spss-howto	amos
