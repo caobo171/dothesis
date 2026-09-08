@@ -134,6 +134,11 @@ ALLOWED_CITATIONS = frozenset({
     ("cochran", 1977), ("yamane", 1967), ("likert", 1932), ("davis", 1989),
     ("ajzen", 1991), ("venkatesh", 2003), ("venkatesh", 2012),
     ("parasuraman", 1988), ("nguyen", 2011), ("hoang", 2008),
+    # Econometrics, added 2026-09-08 when the axes gained panel and time-series
+    # units (Hausman, Tobit, cointegration, unit root). Four classics only, each
+    # one the paper the method is named after; a citation nobody can check is
+    # worse than a dropped number, so the bar for adding here is certainty.
+    ("engle", 1987), ("granger", 1969), ("dickey", 1979), ("hausman", 1978),
 })
 
 # ------------------------------------------------------- vendored markdown bits

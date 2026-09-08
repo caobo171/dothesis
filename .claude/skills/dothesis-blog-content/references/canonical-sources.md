@@ -102,3 +102,15 @@ CB-SEM only and must never appear in a SmartPLS post. The Vietnamese textbooks,
 `(Hoàng Trọng và Chu Nguyễn Mộng Ngọc, 2008)` and `(Nguyễn Đình Thọ, 2011)`, are the
 citations a Vietnamese supervisor recognises fastest, so pair the international
 source with the Vietnamese one where both apply.
+
+## Kinh tế lượng
+
+Thêm 2026-09-08, khi trục chủ đề có thêm dữ liệu bảng và chuỗi thời gian. Chỉ
+bốn kinh điển, mỗi cái là chính bài báo mà phương pháp mang tên.
+
+| Trích dẫn | Nguồn |
+|---|---|
+| `(Engle và Granger, 1987)` | Engle, R. F., & Granger, C. W. J. (1987). Co-integration and error correction: representation, estimation, and testing. *Econometrica*, 55(2), 251-276. |
+| `(Granger, 1969)` | Granger, C. W. J. (1969). Investigating causal relations by econometric models and cross-spectral methods. *Econometrica*, 37(3), 424-438. |
+| `(Dickey và Fuller, 1979)` | Dickey, D. A., & Fuller, W. A. (1979). Distribution of the estimators for autoregressive time series with a unit root. *Journal of the American Statistical Association*, 74(366), 427-431. |
+| `(Hausman, 1978)` | Hausman, J. A. (1978). Specification tests in econometrics. *Econometrica*, 46(6), 1251-1271. |
