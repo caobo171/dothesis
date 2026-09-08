@@ -119,3 +119,44 @@ kinh-nghiem-su-dung	kinh nghiệm sử dụng	thang đo {display};{display} là 
 su-hai-long-dien-tu	sự hài lòng điện tử	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	satisfaction
 y-dinh-gioi-thieu	ý định giới thiệu	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	loyalty
 hinh-anh-doanh-nghiep	hình ảnh doanh nghiệp	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	brand
+hanh-vi-doi-moi-cua-nhan-vien	hành vi đổi mới của nhân viên	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+tieng-noi-cua-nhan-vien	tiếng nói của nhân viên	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+im-lang-to-chuc	im lặng tổ chức	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+hanh-vi-phan-nang-suat	hành vi phản năng suất	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+bat-nat-noi-lam-viec	bắt nạt nơi làm việc	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+xung-dot-cong-viec-gia-dinh	xung đột công việc gia đình	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+niem-tin-vao-lanh-dao	niềm tin vào lãnh đạo	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+lanh-dao-phuc-vu	lãnh đạo phục vụ	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+lanh-dao-dao-duc	lãnh đạo đạo đức	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+lanh-dao-lam-quyen	lãnh đạo lạm quyền	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+von-tam-ly	vốn tâm lý	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+trao-quyen-tam-ly	trao quyền tâm lý	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+bau-khong-khi-an-toan-lao-dong	bầu không khí an toàn lao động	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+chia-se-tri-thuc	chia sẻ tri thức	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+hoc-hoi-to-chuc	học hỏi tổ chức	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	hrm
+nang-luc-tu-hoc	năng lực tự học	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	education
+lo-au-thi-cu	lo âu thi cử	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	education
+nang-luc-ban-than-hoc-tap	năng lực bản thân học tập	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	education
+y-dinh-bo-hoc	ý định bỏ học	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	education
+chat-luong-cuoc-song	chất lượng cuộc sống	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	health
+su-hai-long-nguoi-benh	sự hài lòng người bệnh	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	health
+kien-thuc-thai-do-thuc-hanh	kiến thức thái độ thực hành	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	health
+tuan-thu-dieu-tri	tuân thủ điều trị	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	health
+dass-21	dass 21	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	health
+trai-nghiem-du-lich-dang-nho	trải nghiệm du lịch đáng nhớ	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	tourism
+su-gan-bo-voi-diem-den	sự gắn bó với điểm đến	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	tourism
+tinh-xac-thuc-cam-nhan	tính xác thực cảm nhận	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	tourism
+tinh-tuong-tac-cam-nhan	tính tương tác cảm nhận	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	digital
+tinh-ca-nhan-hoa	tính cá nhân hóa	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	digital
+gia-tri-quang-cao-cam-nhan	giá trị quảng cáo cảm nhận	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	digital
+do-tin-cay-cua-nguoi-anh-huong	độ tin cậy của người ảnh hưởng	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	digital
+so-bo-lo-fomo	sợ bỏ lỡ fomo	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	digital
+nghien-mang-xa-hoi	nghiện mạng xã hội	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	digital
+y-dinh-chia-se-thong-tin	ý định chia sẻ thông tin	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	digital
+chat-luong-cong-bo-thong-tin	chất lượng công bố thông tin	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	firm
+chat-luong-kiem-toan	chất lượng kiểm toán	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	firm
+quan-tri-cong-ty	quản trị công ty	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	firm
+dinh-huong-khoi-nghiep	định hướng khởi nghiệp	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	entrepreneurship
+so-that-bai	sợ thất bại	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	entrepreneurship
+hanh-vi-tiet-kiem-nang-luong	hành vi tiết kiệm năng lượng	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	sustainability
+su-hai-long-dich-vu-cong	sự hài lòng dịch vụ công	thang đo {display};{display} là gì	mo-hinh-nghien-cuu	scale	public
