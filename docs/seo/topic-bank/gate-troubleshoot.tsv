@@ -83,3 +83,75 @@ hội đồng hỏi về cỡ mẫu phải làm sao		pass	no volume returned; qu
 lỗi hội đồng hỏi về cỡ mẫu spss		pass	no volume returned; quality gates decide
 bị nghi ngờ số liệu không thật phải làm sao		pass	no volume returned; quality gates decide
 lỗi bị nghi ngờ số liệu không thật spss		pass	no volume returned; quality gates decide
+số nhân tố khác với mô hình phải làm sao		pass	no volume returned; quality gates decide
+lỗi số nhân tố khác với mô hình spss		pass	no volume returned; quality gates decide
+biến chạy sang nhân tố khác phải làm sao		pass	no volume returned; quality gates decide
+lỗi biến chạy sang nhân tố khác spss		pass	no volume returned; quality gates decide
+ma trận không xác định dương phải làm sao		pass	no volume returned; quality gates decide
+lỗi ma trận không xác định dương spss		pass	no volume returned; quality gates decide
+anova có ý nghĩa nhưng post hoc không khác phải làm sao		pass	no volume returned; quality gates decide
+lỗi anova có ý nghĩa nhưng post hoc không khác spss		pass	no volume returned; quality gates decide
+kiểm định levene có ý nghĩa phải làm sao		pass	no volume returned; quality gates decide
+lỗi kiểm định levene có ý nghĩa spss		pass	no volume returned; quality gates decide
+hệ số beta lớn hơn 1 phải làm sao		pass	no volume returned; quality gates decide
+lỗi hệ số beta lớn hơn 1 spss		pass	no volume returned; quality gates decide
+durbin watson không đạt phải làm sao		pass	no volume returned; quality gates decide
+lỗi durbin watson không đạt spss		pass	no volume returned; quality gates decide
+r bình phương hiệu chỉnh âm phải làm sao		pass	no volume returned; quality gates decide
+lỗi r bình phương hiệu chỉnh âm spss		pass	no volume returned; quality gates decide
+f có ý nghĩa nhưng không biến nào có ý nghĩa phải làm sao		pass	no volume returned; quality gates decide
+lỗi f có ý nghĩa nhưng không biến nào có ý nghĩa spss		pass	no volume returned; quality gates decide
+process macro không hiện trong spss spss		pass	no volume returned; quality gates decide
+process macro không hiện trong spss phải làm sao		pass	no volume returned; quality gates decide
+khoảng tin cậy bootstrap chứa 0 phải làm sao		pass	no volume returned; quality gates decide
+lỗi khoảng tin cậy bootstrap chứa 0 spss		pass	no volume returned; quality gates decide
+biến điều tiết không có ý nghĩa phải làm sao		pass	no volume returned; quality gates decide
+lỗi biến điều tiết không có ý nghĩa spss		pass	no volume returned; quality gates decide
+biến trung gian không có ý nghĩa phải làm sao		pass	no volume returned; quality gates decide
+lỗi biến trung gian không có ý nghĩa spss		pass	no volume returned; quality gates decide
+spss báo no valid cases spss		pass	no volume returned; quality gates decide
+spss báo no valid cases phải làm sao		pass	no volume returned; quality gates decide
+syntax báo lỗi spss		pass	no volume returned; quality gates decide
+syntax báo lỗi phải làm sao		pass	no volume returned; quality gates decide
+biến số bị nhận là chuỗi ký tự phải làm sao		pass	no volume returned; quality gates decide
+lỗi biến số bị nhận là chuỗi ký tự spss		pass	no volume returned; quality gates decide
+dấu thập phân sai khi nhập dữ liệu phải làm sao		pass	no volume returned; quality gates decide
+lỗi dấu thập phân sai khi nhập dữ liệu spss		pass	no volume returned; quality gates decide
+font tiếng việt bị lỗi spss		pass	no volume returned; quality gates decide
+font tiếng việt bị lỗi phải làm sao		pass	no volume returned; quality gates decide
+hai biến tương quan quá cao phải làm sao		pass	no volume returned; quality gates decide
+lỗi hai biến tương quan quá cao spss		pass	no volume returned; quality gates decide
+cr lớn hơn 0 95 phải làm sao		pass	no volume returned; quality gates decide
+lỗi cr lớn hơn 0 95 smartpls		pass	no volume returned; quality gates decide
+q square âm phải làm sao		pass	no volume returned; quality gates decide
+lỗi q square âm smartpls		pass	no volume returned; quality gates decide
+ma trận suy biến singular matrix phải làm sao		pass	no volume returned; quality gates decide
+lỗi ma trận suy biến singular matrix smartpls		pass	no volume returned; quality gates decide
+không nhập được file csv phải làm sao		pass	no volume returned; quality gates decide
+lỗi không nhập được file csv smartpls		pass	no volume returned; quality gates decide
+kết quả bootstrapping thay đổi mỗi lần chạy phải làm sao		pass	no volume returned; quality gates decide
+lỗi kết quả bootstrapping thay đổi mỗi lần chạy smartpls		pass	no volume returned; quality gates decide
+micom không đạt phải làm sao		pass	no volume returned; quality gates decide
+lỗi micom không đạt smartpls		pass	no volume returned; quality gates decide
+mô hình không được nhận dạng phải làm sao		pass	no volume returned; quality gates decide
+lỗi mô hình không được nhận dạng amos		pass	no volume returned; quality gates decide
+cfi nhỏ hơn 0 9 phải làm sao		pass	no volume returned; quality gates decide
+lỗi cfi nhỏ hơn 0 9 amos		pass	no volume returned; quality gates decide
+rmsea lớn hơn 0 08 phải làm sao		pass	no volume returned; quality gates decide
+lỗi rmsea lớn hơn 0 08 amos		pass	no volume returned; quality gates decide
+chi square trên df quá lớn phải làm sao		pass	no volume returned; quality gates decide
+lỗi chi square trên df quá lớn amos		pass	no volume returned; quality gates decide
+phương sai âm heywood phải làm sao		pass	no volume returned; quality gates decide
+lỗi phương sai âm heywood amos		pass	no volume returned; quality gates decide
+vượt giới hạn vòng lặp phải làm sao		pass	no volume returned; quality gates decide
+lỗi vượt giới hạn vòng lặp amos		pass	no volume returned; quality gates decide
+kết quả trái với giả thuyết phải làm sao		pass	no volume returned; quality gates decide
+kết quả trái với giả thuyết thì làm gì		pass	no volume returned; quality gates decide
+giảng viên yêu cầu đổi mô hình phải làm sao		pass	no volume returned; quality gates decide
+giảng viên yêu cầu đổi mô hình thì làm gì		pass	no volume returned; quality gates decide
+đề tài bị trùng phải làm sao		pass	no volume returned; quality gates decide
+đề tài bị trùng thì làm gì		pass	no volume returned; quality gates decide
+tỷ lệ đạo văn cao phải làm sao		pass	no volume returned; quality gates decide
+tỷ lệ đạo văn cao thì làm gì		pass	no volume returned; quality gates decide
+bị hỏi vì sao chọn pls sem phải làm sao		pass	no volume returned; quality gates decide
+bị hỏi vì sao chọn pls sem thì làm gì		pass	no volume returned; quality gates decide
