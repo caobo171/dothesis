@@ -40,7 +40,9 @@ export async function generateMetadata({
   // Always emit an og:image. A link preview with no image is a grey box in
   // every chat app a student would share this in, and the generated card costs
   // nothing to point at.
-  const image = post.image_url || absoluteUrl(ogImagePath(locale, post.slug));
+  // absoluteUrl() either way: a library hero is stored root-relative, and a
+  // crawler reading og:image has no page to resolve that against.
+  const image = absoluteUrl(post.image_url || ogImagePath(locale, post.slug));
 
   return {
     // metadataBase so any relative URL Next resolves here lands on the public
@@ -91,6 +93,24 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
           <div className="blog-meta" style={{ marginBottom: 20 }}>
             <Link href={blogPath(locale)}>{copy.back}</Link>
           </div>
+
+          {/* The hero, when the post has one. Decorative by design, so the alt
+              is empty: the seed carries a Vietnamese description of the scene for
+              whoever wires an alt column through the API, but a screen reader
+              reading a paraphrase of the H1 that follows it is noise, not help.
+              `eager` because this is above the fold and the only image on the
+              page — lazy-loading it just delays the largest paint. */}
+          {post.image_url && (
+            <img
+              className="blog-article__hero"
+              src={post.image_url}
+              alt=""
+              width={1200}
+              height={800}
+              loading="eager"
+              decoding="async"
+            />
+          )}
 
           <h1 className="blog-article__title">{post.title}</h1>
 

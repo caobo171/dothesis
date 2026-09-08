@@ -61,6 +61,20 @@ describe("blogPostingJsonLd", () => {
     expect(ld2.url).toBe("https://dothesis.io/blog/vi/x");
   });
 
+  test("makes a root-relative image absolute, and leaves an absolute one alone", () => {
+    const relative = blogPostingJsonLd({
+      ...POST,
+      image_url: "/img/blog/term-la-gi-2.webp",
+    }) as Record<string, any>;
+    expect(relative.image).toEqual(["http://localhost:3006/img/blog/term-la-gi-2.webp"]);
+
+    const absolute = blogPostingJsonLd({
+      ...POST,
+      image_url: "https://cdn.example.com/a.webp",
+    }) as Record<string, any>;
+    expect(absolute.image).toEqual(["https://cdn.example.com/a.webp"]);
+  });
+
   test("emits no empty keys for the fields a post may not have", () => {
     const bare = blogPostingJsonLd({
       ...POST,

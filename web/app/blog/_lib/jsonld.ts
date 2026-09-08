@@ -65,7 +65,11 @@ export function blogPostingJsonLd(post: FullPost): Record<string, unknown> {
     // An unedited post still needs dateModified: leaving it out makes Google
     // guess, and it usually guesses the crawl date.
     dateModified: isoOrUndefined(post.updated_at) ?? published,
-    image: post.image_url ? [post.image_url] : undefined,
+    // `image_url` is stored root-relative (`/img/blog/x.webp`) because an
+    // absolute origin in the database bakes in the environment. Structured
+    // data has no page to resolve a relative url against, so it goes through
+    // absoluteUrl(), which passes an already-absolute url through untouched.
+    image: post.image_url ? [absoluteUrl(post.image_url)] : undefined,
     articleSection: post.category?.display_name || undefined,
     keywords: post.tags?.length ? post.tags.join(", ") : undefined,
     timeRequired: post.reading_time ? `PT${post.reading_time}M` : undefined,

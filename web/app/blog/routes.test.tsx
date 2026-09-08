@@ -274,6 +274,57 @@ describe("/blog/[locale]/[slug]", () => {
     expect((meta.twitter as { card?: string })?.card).toBe("summary_large_image");
   });
 
+  test("renders no hero when the post has no image", async () => {
+    stubApi();
+    const { container } = render(
+      await BlogPostPage({ params: Promise.resolve({ locale: "vi", slug: FULL.slug }) }),
+    );
+    expect(container.querySelector(".blog-article__hero")).toBeNull();
+  });
+
+  test("renders the library hero from the root-relative path the seed stores", async () => {
+    stubApi({
+      detail: {
+        post: { ...FULL, image_url: "/img/blog/term-la-gi-2.webp" },
+        related: [],
+        category: CATEGORIES[0],
+      },
+    });
+    const { container } = render(
+      await BlogPostPage({ params: Promise.resolve({ locale: "vi", slug: FULL.slug }) }),
+    );
+    const hero = container.querySelector("img.blog-article__hero") as HTMLImageElement | null;
+    // Root-relative in the <img> src: the browser has a page to resolve it
+    // against, so baking an origin into the row would only pin the environment.
+    expect(hero?.getAttribute("src")).toBe("/img/blog/term-la-gi-2.webp");
+    expect(hero?.getAttribute("loading")).toBe("eager");
+    expect(hero?.getAttribute("alt")).toBe("");
+  });
+
+  test("a root-relative hero reaches og:image and JSON-LD as an absolute url", async () => {
+    stubApi({
+      detail: {
+        post: { ...FULL, image_url: "/img/blog/term-la-gi-2.webp" },
+        related: [],
+        category: CATEGORIES[0],
+      },
+    });
+    const meta = await postMetadata({
+      params: Promise.resolve({ locale: "vi", slug: FULL.slug }),
+    });
+    expect(JSON.stringify(meta.openGraph)).toContain(
+      "http://localhost:3006/img/blog/term-la-gi-2.webp",
+    );
+
+    const { container } = render(
+      await BlogPostPage({ params: Promise.resolve({ locale: "vi", slug: FULL.slug }) }),
+    );
+    const ld = JSON.parse(
+      container.querySelector('script[type="application/ld+json"]')?.innerHTML ?? "{}",
+    );
+    expect(ld.image).toEqual(["http://localhost:3006/img/blog/term-la-gi-2.webp"]);
+  });
+
   test("an unknown slug is a 404 and its metadata is noindex", async () => {
     server.use(
       http.post("*/api/v1/blog/get", () =>

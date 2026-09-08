@@ -187,6 +187,22 @@
 }
 
 /* ------------------------------- Article -------------------------------- */
+/* Hero illustration, only on posts that have one. Cropped to a 16/9 band from
+   the library's 3/2 originals rather than shown full height: a reference
+   article's reader came for a threshold table, and a 480px picture between them
+   and the first heading is a magazine's priority, not theirs. Same border and
+   radius as the listing card so the two read as one surface. */
+.lp-root .blog-article__hero {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--ink-100);
+  background: var(--ink-50);
+  margin-bottom: 28px;
+}
 .lp-root .blog-article__title {
   font-family: var(--font-sans);
   font-weight: 600;
