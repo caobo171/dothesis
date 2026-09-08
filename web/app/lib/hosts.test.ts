@@ -55,7 +55,16 @@ describe("marketing host", () => {
 
   it("serves the blog and the crawler files", async () => {
     const { routeForHost } = await load(SPLIT);
-    for (const path of ["/blog", "/blog/vi", "/blog/vi/cfa", "/sitemap.xml", "/robots.txt"]) {
+    for (const path of [
+      "/blog",
+      "/blog/vi",
+      "/blog/vi/cfa",
+      "/sitemap.xml",
+      "/robots.txt",
+      // The og:image the apex's own pages point at. Redirect it to the app
+      // host and every share of dothesis.com loses its card.
+      "/opengraph-image",
+    ]) {
       expect(routeForHost("dothesis.com", path)).toEqual({ action: "next" });
     }
   });
