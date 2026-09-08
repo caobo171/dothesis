@@ -610,3 +610,50 @@ set the axes and the harvest supply, about 1,000 pages.
 **What does not change:** the dedupe audit before every batch, the QA gate's
 existing rule list, the voice rules, the citation allowlist and the rule against
 inventing a source, a study or a statistic.
+
+## 21. Hosting: two hostnames, one deployment (2026-09-08)
+
+Decided by the owner while preparing the first deploy. The marketing site
+(landing page and blog, entirely public) lives on `dothesis.com`; the product
+(chat, papers, credit, admin, API, MCP, all auth-gated) lives on
+`app.dothesis.com`. Both are served by the same Next.js process on 3006 and the
+same FastAPI process on 7100.
+
+**Why one deployment.** A second build would double the ops surface for no
+gain: the two sites share the design system, the components and the API client,
+and the only thing that differs is which paths each hostname answers. The split
+is therefore a routing decision, taken in `web/proxy.js` from the `Host` header
+against the pure rules in `web/app/lib/hosts.js`, ahead of the auth gate.
+
+| Request | `dothesis.com` | `app.dothesis.com` |
+|---|---|---|
+| `/` | rewrite to `/landing`, 200 | auth gate, 307 to `/login` when signed out |
+| `/landing` | 301 to `/` | 301 to `https://dothesis.com/` |
+| `/blog/...` | served | 301 to `https://dothesis.com/blog/...` |
+| product paths | 308 to the app host, path intact | normal |
+| `/robots.txt` | allow `/blog` and `/landing` | `Disallow: /` |
+
+Three properties that had to hold, and how:
+
+- **One home for public content.** A post reachable on both hostnames is
+  duplicate content and the crawler, not us, picks the winner. The app host
+  301s `/blog` and `/landing` away, and its robots.txt closes the whole origin,
+  which is correct on its own terms too: every path there 307s a signed-out
+  crawler to `/login`.
+- **One URL for the landing page.** `/` renders it by rewrite so the canonical
+  marketing URL is the bare apex, and `/landing` 301s to `/`. The rewrite does
+  not re-enter the middleware, so the two rules do not loop.
+- **No cross-host hop for rendering.** The blog renders server-side on the
+  marketing host while the browser-facing API base points at the app host, so
+  `SERVER_API_BASE` sends server-side calls over loopback. Without it the apex
+  would round-trip to the other hostname for every post it renders and would
+  fail whenever that host's DNS or certificate did.
+
+Configuration is in `.env.example` under "Two hostnames, one deployment" and
+the vhosts are in `deploy/nginx/dothesis.conf`. Every `NEXT_PUBLIC_*` value is
+baked in at `next build`, so changing one means a rebuild, not a restart. With
+the two host variables unset the rules return "serve it" for everything, which
+is the single-host behaviour `dev.sh` has on localhost:3006.
+
+Verified against a running dev server before merge, both hostnames, six paths
+each; the table above is what it answered.
