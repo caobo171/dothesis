@@ -25,8 +25,8 @@ def db():
         yield s
 
 
-def _category(db, slug="spss", name="SPSS", order=0):
-    c = BlogCategory(slug=slug, name=name, display_name=name,
+def _category(db, slug="spss", name="SPSS", order=0, locale="vi"):
+    c = BlogCategory(locale=locale, slug=slug, name=name, display_name=name,
                      intro_md=f"Giới thiệu {name}.", sort_order=order)
     db.add(c)
     db.commit()
@@ -94,6 +94,34 @@ def test_list_filters_by_category(client, db):
     r = client.post("/api/v1/blog/list", json={"category": "spss"}).json()
     assert [p["slug"] for p in r["posts"]] == ["in-spss"]
     assert r["posts"][0]["category"]["display_name"] == "SPSS"
+
+
+def test_list_filters_by_the_category_of_the_requested_locale(client, db):
+    vi_spss = _category(db, "spss", "SPSS", locale="vi")
+    en_spss = _category(db, "spss", "SPSS", locale="en")
+    _post(db, "vi-post", category=vi_spss, locale="vi")
+    _post(db, "en-post", category=en_spss, locale="en")
+
+    r = client.post("/api/v1/blog/list", json={"locale": "en", "category": "spss"}).json()
+    assert [p["slug"] for p in r["posts"]] == ["en-post"]
+    r = client.post("/api/v1/blog/list", json={"locale": "vi", "category": "spss"}).json()
+    assert [p["slug"] for p in r["posts"]] == ["vi-post"]
+
+
+def test_a_category_that_exists_only_in_another_locale_is_an_empty_page(client, db):
+    en_spss = _category(db, "spss", "SPSS", locale="en")
+    _post(db, "en-post", category=en_spss, locale="en")
+    r = client.post("/api/v1/blog/list", json={"locale": "vi", "category": "spss"}).json()
+    assert r == {"posts": [], "total": 0, "page": 1, "page_size": 12}
+
+
+def test_a_post_carries_its_own_locales_category(client, db):
+    _category(db, "spss", "SPSS", locale="vi")
+    en_spss = _category(db, "spss", "Quantitative software", locale="en")
+    _post(db, "en-post", category=en_spss, locale="en")
+
+    r = client.post("/api/v1/blog/get", json={"locale": "en", "slug": "en-post"}).json()
+    assert r["category"]["display_name"] == "Quantitative software"
 
 
 def test_an_unknown_category_is_an_empty_page_not_an_error(client, db):
@@ -175,6 +203,41 @@ def test_categories_count_only_visible_posts(client, db):
     assert counts == {"spss": 1, "smartpls": 0}
     assert [c["slug"] for c in rows] == ["spss", "smartpls"]  # sort_order
     assert rows[0]["intro_md"]
+
+
+def test_categories_returns_only_the_requested_locales_rows(client, db):
+    _category(db, "spss", "SPSS", 0, locale="vi")
+    _category(db, "spss", "SPSS", 0, locale="en")
+    _category(db, "smartpls", "SmartPLS", 1, locale="vi")
+
+    en = client.post("/api/v1/blog/categories", json={"locale": "en"}).json()["categories"]
+    # One row, not three: the English hub list must not carry the Vietnamese
+    # copy, and `spss` exists once per locale under the same slug on purpose.
+    assert [c["slug"] for c in en] == ["spss"]
+
+    vi = client.post("/api/v1/blog/categories", json={}).json()["categories"]
+    assert [c["slug"] for c in vi] == ["spss", "smartpls"]
+
+
+def test_category_post_counts_do_not_leak_across_locales(client, db):
+    vi_spss = _category(db, "spss", "SPSS", 0, locale="vi")
+    en_spss = _category(db, "spss", "SPSS", 0, locale="en")
+    _post(db, "vi-a", category=vi_spss, locale="vi")
+    _post(db, "en-a", category=en_spss, locale="en")
+    _post(db, "en-b", category=en_spss, locale="en")
+
+    en = client.post("/api/v1/blog/categories", json={"locale": "en"}).json()["categories"]
+    assert {c["slug"]: c["post_count"] for c in en} == {"spss": 2}
+
+
+def test_a_category_response_keeps_its_shape(client, db):
+    _category(db)
+    row = client.post("/api/v1/blog/categories", json={}).json()["categories"][0]
+    # The web client reads exactly these keys. Adding `locale` here would be a
+    # response-shape change, and the column exists to pick the row, not to be
+    # rendered.
+    assert set(row) == {"slug", "name", "display_name", "intro_md", "sort_order",
+                        "post_count"}
 
 
 # --- sitemap ---------------------------------------------------------------

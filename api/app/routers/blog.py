@@ -105,6 +105,13 @@ def full(post: BlogPost, category: BlogCategory | None) -> dict:
 
 
 def _categories_by_id(db: Session) -> dict[uuid.UUID, BlogCategory]:
+    """Every category row, keyed by id.
+
+    Deliberately not filtered by locale even though categories are per-locale
+    now: this map is only ever indexed by a post's own `category_id`, so it
+    already returns that post's own language edition. Filtering here would only
+    turn a mislabelled row into a missing category on the card.
+    """
     return {c.id: c for c in db.scalars(select(BlogCategory)).all()}
 
 
@@ -113,7 +120,11 @@ def list_posts(body: ListBody, db: Session = Depends(db_session)):
     conditions = [BlogPost.locale == body.locale, visible_filter()]
 
     if body.category:
-        category = db.scalar(select(BlogCategory).where(BlogCategory.slug == body.category))
+        # Scoped to the requested locale: `spss` is one row per locale, and
+        # /blog/en/chu-de/spss must filter on the English row's id, not on
+        # whichever of the two the database happened to return first.
+        category = db.scalar(select(BlogCategory).where(
+            BlogCategory.locale == body.locale, BlogCategory.slug == body.category))
         if category is None:
             # An unknown category is an empty page, not an error: the route is
             # public and a 404 here would let anyone probe which slugs exist.
@@ -215,8 +226,12 @@ def list_categories(body: CategoriesBody, db: Session = Depends(db_session)):
         .group_by(BlogPost.category_id)
     ).all())
 
+    # One locale's categories, not every row: the whole point of the locale
+    # column is that /blog/en never renders the Vietnamese hub names.
     rows = db.scalars(
-        select(BlogCategory).order_by(BlogCategory.sort_order, BlogCategory.slug)).all()
+        select(BlogCategory)
+        .where(BlogCategory.locale == body.locale)
+        .order_by(BlogCategory.sort_order, BlogCategory.slug)).all()
     return {"categories": [
         {**category_dict(c), "post_count": counts.get(c.id, 0)} for c in rows]}
 
