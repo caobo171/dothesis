@@ -120,7 +120,18 @@ export function Footer() {
             color: "rgba(255,255,255,0.4)",
           }}
         >
-          <span>© 2026 DoThesis. All rights reserved.</span>
+          <span>
+            © 2026{" "}
+            <a
+              href="https://hiesolution.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "rgba(255,255,255,0.6)" }}
+            >
+              HIE Solution
+            </a>
+            . All rights reserved.
+          </span>
           <span>English · Tiếng Việt</span>
         </div>
       </div>
