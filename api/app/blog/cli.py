@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import asc, select
 from sqlalchemy.orm import Session
 
-from . import STATUS_SCHEDULED
+from . import STATUS_PUBLISHED, STATUS_SCHEDULED
 from .audit import DEFAULT_THIN, audit_links, audit_seo
 from .guard import assert_no_duplicate
 from .index import BANNER, export_index
@@ -200,6 +200,62 @@ def _reschedule(args) -> int:
 # update-from-seed
 # --------------------------------------------------------------------------
 
+def cmd_publish(args) -> int:
+    """Send the first N waiting posts out today, and re-spread the rest.
+
+    `--reschedule` can only move the queue through time, so bringing half the
+    bank forward with it means dating those posts weeks in the past, on a site
+    that had no blog then. That is false in the one field a reader and a crawler
+    both trust. This publishes them as what they are: live today, newest first
+    in backlog priority order, a minute apart so the listing has a stable order
+    instead of hundreds of rows sharing one timestamp.
+    """
+    from ..models import BlogPost  # noqa: PLC0415
+
+    now = datetime.now(timezone.utc)
+    with _session() as db:
+        waiting = db.scalars(
+            select(BlogPost).where(BlogPost.status == STATUS_SCHEDULED)
+            .order_by(asc(BlogPost.scheduled_at), asc(BlogPost.created_at))
+        ).all()
+        if not waiting:
+            print("Nothing is waiting: every post is already published or a draft.")
+            return 0
+
+        count = min(args.count, len(waiting))
+        going, rest = waiting[:count], waiting[count:]
+
+        for index, post in enumerate(going):
+            # Highest priority is newest, so the listing leads with the pages
+            # that earn the most.
+            stamp = now - timedelta(minutes=index)
+            if not args.dry_run:
+                post.status = STATUS_PUBLISHED
+                post.published_at = stamp
+                post.scheduled_at = None
+
+        moved = 0
+        if args.rest_from and rest:
+            start = parse_start_date(args.rest_from)
+            for index, post in enumerate(rest):
+                go_live = go_live_at(index, start, args.per_week)
+                if not args.dry_run:
+                    post.scheduled_at = go_live
+                    post.published_at = go_live
+                moved += 1
+
+        if not args.dry_run:
+            db.commit()
+
+    verb = "Would publish" if args.dry_run else "Published"
+    print(f"\n=== Summary ===\n{verb}: {count} post(s), live now")
+    if args.rest_from:
+        print(f"Rescheduled: {moved} post(s) at {args.per_week}/week from {args.rest_from}")
+    else:
+        print(f"Still waiting: {len(rest)} post(s), dates unchanged")
+    return 0
+
+
 def cmd_update_from_seed(args) -> int:
     if not args.dir and not args.file:
         print("update-from-seed needs --dir or --file", file=sys.stderr)
@@ -322,6 +378,15 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--reschedule", action="store_true",
                         help="re-spread posts still in status 2; ignores --dir/--file")
     create.set_defaults(func=cmd_create)
+
+    pub = sub.add_parser("publish",
+                         help="send the first N waiting posts out today and re-spread the rest")
+    pub.add_argument("--count", type=int, required=True, help="how many to publish now")
+    pub.add_argument("--rest-from", default=None,
+                     help="re-spread everything still waiting from this date (YYYY-MM-DD)")
+    pub.add_argument("--per-week", type=int, default=40, help="cadence for the remainder")
+    pub.add_argument("--dry-run", action="store_true")
+    pub.set_defaults(func=cmd_publish)
 
     update = sub.add_parser("update-from-seed", help="refresh live posts from seeds")
     update.add_argument("--dir")
