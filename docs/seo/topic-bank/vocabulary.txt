@@ -294,3 +294,206 @@ hàm ý quản trị
 turnitin
 mendeley
 endnote
+
+# --- effect size and agreement ---------------------------------------------
+# Added 2026-09-08 with the effect-size, missing-data, time-series, invariance
+# and diagnostic-accuracy families. Axis displays are whitelisted automatically
+# at load time, so only the forms a harvest row uses *instead* of the display
+# are listed here: bare author names, English equivalents and abbreviations.
+effect size
+cohen
+eta squared
+eta bình phương
+omega
+cramer
+kappa
+độ lớn tác động
+
+# --- missing data ----------------------------------------------------------
+imputation
+mcar
+mnar
+listwise
+pairwise
+dữ liệu khuyết
+giá trị khuyết
+
+# --- non-parametric --------------------------------------------------------
+friedman
+mcnemar
+binomial
+cochran
+fisher
+kendall
+phi tham số
+tham số
+nonparametric
+
+# --- time series, panel data and endogeneity -------------------------------
+chuỗi thời gian
+time series
+panel data
+kinh tế lượng
+econometrics
+tính dừng
+stationarity
+unit root
+nghiệm đơn vị
+adf
+cointegration
+granger
+hausman
+gmm
+fem
+rem
+pooled ols
+breusch
+wooldridge
+sargan
+robust
+endogeneity
+instrumental variable
+vecm
+garch
+difference in differences
+propensity score
+dea
+sfa
+
+# --- regression variants and diagnostics -----------------------------------
+probit
+tobit
+poisson
+quantile regression
+hierarchical regression
+mahalanobis
+centering
+trung tâm hóa
+multilevel
+hlm
+đa cấp
+
+# --- SEM, invariance and fit indices ---------------------------------------
+nfi
+aic
+bic
+mardia
+path analysis
+measurement invariance
+invariance
+bất biến
+đường dẫn
+heywood
+
+# --- reliability and diagnostic accuracy -----------------------------------
+mcdonald
+kr 20
+kr-20
+icc
+intraclass
+roc
+auc
+độ nhạy
+độ đặc hiệu
+sensitivity
+specificity
+
+# --- SmartPLS 4 procedures -------------------------------------------------
+nca
+cta
+copula
+permutation
+hoán vị
+higher order
+bậc cao
+repeated indicators
+chỉ báo
+
+# --- theories and models added to theory-model.tsv -------------------------
+sor
+elm
+iam
+ekb
+stp
+pestel
+qspm
+ife
+efe
+lmx
+jd-r
+jdr
+cor
+erg
+pmt
+vbn
+ppm
+mcclelland
+alderfer
+locke
+skinner
+bandura
+hackman
+karasek
+hobfoll
+tepper
+luthans
+spreitzer
+markowitz
+beneish
+cressey
+emh
+dcf
+kirkpatrick
+cipp
+hedperf
+dineserv
+holsat
+scor
+mckinsey
+williamson
+teece
+festinger
+weiner
+prochaska
+
+# --- constructs and published scales ---------------------------------------
+fomo
+dass
+whoqol
+sf-36
+morisky
+kap
+ohanian
+janssen
+psycap
+servant leadership
+lãnh đạo
+work family conflict
+xung đột công việc
+tri thức
+knowledge sharing
+self-efficacy
+năng lực bản thân
+chất lượng cuộc sống
+người bệnh
+tuân thủ điều trị
+
+# --- fields and defence mechanics ------------------------------------------
+fintech
+y tế
+hội đồng
+phản biện
+giảng viên hướng dẫn
+phụ lục
+mục lục
+lời cam đoan
+
+# --- named sample-size formulas --------------------------------------------
+slovin
+krejcie
+morgan
+g power
+gpower
+hayes
+dịch ngược
+back translation
