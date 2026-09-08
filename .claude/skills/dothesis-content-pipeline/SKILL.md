@@ -161,7 +161,8 @@ would type it, and read the top few results. For each one, record:
 | How deep it goes | word count, whether a threshold is stated, whether it is sourced, whether real SPSS or SmartPLS output appears |
 | What it fails to answer | the brief. This is the column the article is written against |
 
-The last row is the output of this step. The rest is context for it.
+The last row is the output of this step. The rest is context for it. The method
+and six worked examples are in `docs/seo/topic-bank/serp-observations-2026-09-08.md`.
 
 The harvest committed under `docs/seo/topic-bank/` stays where it is, and it is
 exactly one thing: a snapshot of what these domains ranked for on 2026-09-07 and
