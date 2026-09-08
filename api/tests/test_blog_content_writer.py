@@ -1,6 +1,7 @@
 """writer + prompts: the stubbed model, the repair path, the budget, resume."""
 import csv
 import json
+from dataclasses import replace
 import os
 
 import pytest
@@ -562,3 +563,33 @@ def test_ensure_read_more_fills_the_link_floor_before_the_faq():
                                   "[a](/blog/vi/a) [b](/blog/vi/b) [c](/blog/vi/c) [d](/blog/vi/d)")
     same, added = ensure_read_more(already_enough, row, ["x"], {})
     assert added == 0 and same == already_enough
+
+
+def test_a_reprioritised_row_is_recognised_and_not_rewritten(tmp_path):
+    """Priority is in the filename and moves on every re-plan. Matching the whole
+    filename reported 206 of 356 seeds as missing on 2026-09-08."""
+    out = tmp_path / "posts"
+    out.mkdir()
+    (out / "0007-cronbach-alpha-la-gi.json").write_text("{}", encoding="utf-8")
+
+    moved = replace(ROW, priority=412)
+    model = StubModel([model_payload()])
+    summary = writer.run(backlog_path=_backlog(tmp_path, rows=(moved,)), out_dir=str(out),
+                         client=model, workers=1)
+
+    assert summary["skipped"] == 1 and summary["written"] == 0
+    assert model.prompts == [], "no model call for a post already on disk"
+
+
+def test_forcing_a_rewrite_leaves_one_file_for_the_slug(tmp_path):
+    out = tmp_path / "posts"
+    out.mkdir()
+    (out / "0007-cronbach-alpha-la-gi.json").write_text("{}", encoding="utf-8")
+
+    moved = replace(ROW, priority=412)
+    model = StubModel([model_payload()])
+    writer.run(backlog_path=_backlog(tmp_path, rows=(moved,)), out_dir=str(out),
+               client=model, workers=1, force=True)
+
+    names = sorted(p.name for p in out.glob("*.json"))
+    assert names == ["0412-cronbach-alpha-la-gi.json"], names

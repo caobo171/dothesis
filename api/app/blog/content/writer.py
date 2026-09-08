@@ -65,6 +65,28 @@ def seed_filename(row) -> str:
     return f"{row.priority:04d}-{row.slug}.json"
 
 
+def existing_slugs(out_dir: str) -> dict[str, str]:
+    """Slug to path for every seed already written, whatever its priority.
+
+    The filename carries the priority so the directory sorts into publishing
+    order, but priority is assigned by `plan` and moves whenever the backlog is
+    regenerated. Matching on the whole filename therefore reports a post as
+    missing after any re-plan, which rewrites work already paid for and leaves
+    two files claiming one slug. Measured on 2026-09-08: 206 of 356 seeds went
+    unrecognised this way.
+    """
+    out: dict[str, str] = {}
+    if not os.path.isdir(out_dir):
+        return out
+    for name in os.listdir(out_dir):
+        if not name.endswith(".json"):
+            continue
+        slug = name[:-len(".json")]
+        head, _, rest = slug.partition("-")
+        out[rest if head.isdigit() and rest else slug] = os.path.join(out_dir, name)
+    return out
+
+
 def parse_model_json(text: str) -> dict:
     """The model returns a json object. Tolerate a code fence around it."""
     cleaned = _FENCE_RE.sub("", (text or "").strip())
@@ -283,8 +305,9 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
 
     todo = []
     skipped = 0
+    on_disk = existing_slugs(out_dir)
     for row in rows:
-        if os.path.isfile(os.path.join(out_dir, seed_filename(row))) and not force:
+        if row.slug in on_disk and not force:
             skipped += 1
             continue
         todo.append(row)
@@ -362,7 +385,13 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
                 seed = seed_from(row, produced)
                 failures, _warns, _stats = check_post(seed, known)
                 if not failures:
-                    _write_json(os.path.join(out_dir, seed_filename(row)), seed)
+                    target = os.path.join(out_dir, seed_filename(row))
+                    stale = on_disk.get(row.slug)
+                    _write_json(target, seed)
+                    # A rewrite under a new priority must not leave the old file
+                    # behind: two files, one slug, and `create` would load both.
+                    if stale and os.path.abspath(stale) != os.path.abspath(target):
+                        os.remove(stale)
                     with lock:
                         state["usd"] += spent
                         state["unlinked"] += unlinked
