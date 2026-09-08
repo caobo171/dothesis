@@ -494,3 +494,29 @@ no clashes, `report` showing counts and spend.
 AI-generated hero art and S3 public hosting; an admin UI for the blog (the
 admin API exists, the editor does not); an RSS feed; English-locale content;
 Search Console automation; comments; per-post analytics beyond `views`.
+
+## 19. Outcome of the first run (2026-09-08)
+
+Measured, not planned. Everything below is reproducible from
+`docs/seo/topic-bank/` and `docs/blog-index.md`.
+
+| Step | Result |
+|---|---|
+| Harvest | 1,152 competitor rows from 7 domains; 449 dropped by exclusions and the vocabulary whitelist |
+| Axis expansion | 638 units, 1,579 candidate phrasings |
+| Gate | DataForSEO unusable (HTTP 402, no balance). OpenSEO measured 259 phrasings: template phrasings (`cách chạy X trong spss`, `thang đo X`, `cách viết X luận văn`) return no data almost everywhere; bare terms and `X là gì` carry the demand |
+| Backlog | 421 pages, 7 categories (two folded), 272 measured at 386,330 searches a month, 149 family-inferred |
+| Writer | 421 of 421 seeds pass QA; gpt-5.6-luna, $4.20, about 2 hours with 6 workers; 88 needed one repair |
+| Load | 185 scheduled or live, 115 drafts, 121 refused by the duplicate guard as same-intent overlaps after calibration (§9 `similarity.py`) |
+
+**The 1,000 target is not supported by measured demand** in this market with
+this method, exactly as WELE's expansion-axes note predicts: the ceiling the
+gate returned is 421, and the honest way to raise it is to measure more units
+(a DataForSEO top-up makes bulk measurement cost about $0.05 per thousand
+keywords), not to pad. The 121 refused seeds are consolidation candidates: fold
+each into the page it clashes with as secondary keywords, or re-angle it, then
+load again.
+
+Publishing to production remains the owner's step: deploy the branch, then run
+`create --dir api/data/blog-seeds/vi --schedule-start <date> --per-week 40`
+against the production `DATABASE_URL`.
