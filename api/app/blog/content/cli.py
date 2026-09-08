@@ -1,7 +1,7 @@
 """`python -m app.blog.content.cli <command>` — the content engine's only entry point.
 
     expand   axes/*.tsv                  -> candidates.tsv
-    gate     candidates.tsv + DataForSEO -> gate-{axis}.tsv, prints the cost
+    gate     candidates.tsv + DataForSEO -> gate-{axis}.tsv, measured or not
     plan     harvest + gate survivors    -> backlog.tsv
     write    backlog.tsv + the model     -> seed JSON + write-log.tsv
     qa       seed dir                    -> pass/fail report, exit 1 on any FAIL
@@ -91,7 +91,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", default=None, help="candidates.tsv path")
     p.set_defaults(func=_cmd_expand)
 
-    p = sub.add_parser("gate", help="measure candidates and apply the cut rules")
+    p = sub.add_parser("gate",
+                       help="measure candidates and record what the source knows "
+                            "(nothing is cut; volume sets priority order)")
     p.add_argument("--source", default="dataforseo", choices=("dataforseo", "tsv"))
     p.add_argument("--file", default=None, help="measured rows TSV, for --source tsv")
     p.add_argument("--candidates", default=None)
