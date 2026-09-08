@@ -26,12 +26,14 @@ from .index import BANNER, export_index
 from .schedule import go_live_at, parse_start_date
 from .seeds import (
     SeedError,
+    category_index,
     create_from_seed,
     find_post,
     is_unmeasured,
     load_categories,
     load_dir,
     load_seed,
+    seeds_locale,
     upsert_categories,
     upsert_from_seed,
 )
@@ -48,35 +50,42 @@ def _session() -> Session:
 
 
 def _load_inputs(args) -> tuple[list[tuple[Path, dict]], list[dict]]:
-    """(seeds, categories) for `--dir` or `--file`."""
+    """(seeds, categories) for `--dir` or `--file`.
+
+    The categories are loaded at the locale the seeds in the same run carry, so
+    `create --dir data/blog-seeds/en` upserts seven English category rows rather
+    than rewriting the Vietnamese ones. A row naming its own `locale` still
+    wins; `seeds_locale` returns None for a mixed batch, and then
+    `load_categories` refuses instead of picking a language for the operator.
+    """
     if args.dir:
         directory = Path(args.dir)
-        return load_dir(directory), load_categories(directory)
+        seeds = load_dir(directory)
+        return seeds, load_categories(directory, default_locale=seeds_locale(seeds))
 
     path = Path(args.file)
     seeds = [(path, load_seed(path))]
+    locale = seeds_locale(seeds)
     # A single seed file still needs its categories. The canonical layout puts
     # categories.json beside `posts/`, so look one level up as well.
     for candidate in (path.parent, path.parent.parent):
-        categories = load_categories(candidate)
+        categories = load_categories(candidate, default_locale=locale)
         if categories:
             return seeds, categories
     return seeds, []
 
 
 def _category_ids(db: Session, categories: list[dict], *, dry_run: bool) -> dict:
-    from ..models import BlogCategory  # noqa: PLC0415
-
+    """`{(locale, slug): id}` for the seeds to bind against."""
     if dry_run:
         # A dry run must not write, so report against what the database already
         # has and say which categories a real run would create.
-        existing = {c.slug: c.id for c in db.scalars(select(BlogCategory)).all()}
+        existing = category_index(db)
         for row in categories:
-            if row["slug"] not in existing:
-                print(f"  WOULD CREATE category: {row['slug']}")
+            if (row["locale"], row["slug"]) not in existing:
+                print(f"  WOULD CREATE category: {row['slug']} [{row['locale']}]")
         return existing
-    return upsert_categories(db, categories) if categories else {
-        c.slug: c.id for c in db.scalars(select(BlogCategory)).all()}
+    return upsert_categories(db, categories) if categories else category_index(db)
 
 
 # --------------------------------------------------------------------------

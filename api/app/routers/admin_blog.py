@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from ..auth_admin import require_admin
 from ..blog.guard import assert_no_duplicate
-from ..blog.seeds import SeedError, upsert_from_seed, validate_seed
+from ..blog.seeds import SeedError, category_index, upsert_from_seed, validate_seed
 from ..db import db_session
 from ..jwt_auth import AuthedBody
 from ..models import BlogCategory, BlogPost
@@ -132,7 +132,9 @@ def admin_upsert(body: UpsertBody, db: Session = Depends(db_session)):
         raise HTTPException(409, detail={"error": {"code": "duplicate_intent",
                                                    "message": verdict.message}})
 
-    category_ids = {c.slug: c.id for c in db.scalars(select(BlogCategory)).all()}
+    # Keyed by (locale, slug): categories are per-locale, so a slug-keyed map
+    # here would bind an English seed to whichever hub the query returned first.
+    category_ids = category_index(db)
     action, post = upsert_from_seed(
         db, seed, category_ids, now=datetime.now(timezone.utc),
         status=status, published_at=published_at, scheduled_at=scheduled_at)

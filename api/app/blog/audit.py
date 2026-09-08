@@ -138,9 +138,13 @@ def audit_links(db: Session, extra_allowed: set[str] | None = None) -> LinkRepor
     for locale in locales:
         known.add(f"/blog/{locale}")
     from ..models import BlogCategory  # noqa: PLC0415
+    # A category hub exists at its OWN locale only. Crossing every category with
+    # every locale, which is what this did while categories were locale-less,
+    # would now green-light a Vietnamese post linking to an English-only hub.
+    # `chu-de` stays the segment in both languages: the web route is a static
+    # /blog/[locale]/chu-de/[category], so the two editions share the path.
     for category in db.scalars(select(BlogCategory)).all():
-        for locale in locales or {"vi"}:
-            known.add(f"/blog/{locale}/chu-de/{category.slug}")
+        known.add(f"/blog/{category.locale}/chu-de/{category.slug}")
 
     findings: dict[str, LinkFinding] = {}
     total = 0

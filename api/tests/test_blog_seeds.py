@@ -139,9 +139,75 @@ def test_upsert_categories_creates_then_updates(db):
 
     rows[0]["intro_md"] = "Bản giới thiệu mới."
     again = S.upsert_categories(db, rows)
-    assert again[rows[0]["slug"]] == ids[rows[0]["slug"]]  # same row, not a second one
+    key = ("vi", rows[0]["slug"])
+    assert again[key] == ids[key]  # same row, not a second one
     assert db.query(BlogCategory).count() == 9
-    assert db.get(BlogCategory, ids[rows[0]["slug"]]).intro_md == "Bản giới thiệu mới."
+    assert db.get(BlogCategory, ids[key]).intro_md == "Bản giới thiệu mới."
+
+
+def test_categories_default_to_the_locale_the_bank_launched_with(db):
+    rows = S.load_categories(FIXTURE_DIR)
+    assert {r["locale"] for r in rows} == {"vi"}
+
+
+def test_a_categories_file_can_be_loaded_at_another_locale():
+    rows = S.load_categories(FIXTURE_DIR, default_locale="en")
+    assert {r["locale"] for r in rows} == {"en"}
+
+
+def test_a_row_naming_its_own_locale_wins_over_the_default(tmp_path):
+    (tmp_path / "categories.json").write_text(json.dumps(
+        [{"slug": "spss", "name": "SPSS", "locale": "en"},
+         {"slug": "smartpls", "name": "SmartPLS"}]), encoding="utf-8")
+    rows = S.load_categories(tmp_path, default_locale="vi")
+    assert {r["slug"]: r["locale"] for r in rows} == {"spss": "en", "smartpls": "vi"}
+
+
+def test_a_categories_file_with_nothing_to_infer_from_is_refused(tmp_path):
+    """Nothing guesses a language here. A mixed batch has to say which it means."""
+    (tmp_path / "categories.json").write_text(
+        json.dumps([{"slug": "spss", "name": "SPSS"}]), encoding="utf-8")
+    with pytest.raises(S.SeedError) as e:
+        S.load_categories(tmp_path, default_locale=None)
+    assert "locale" in str(e.value)
+
+
+def test_a_locale_longer_than_the_column_is_refused(tmp_path):
+    (tmp_path / "categories.json").write_text(json.dumps(
+        [{"slug": "spss", "name": "SPSS", "locale": "vi-VN-x-toolong"}]), encoding="utf-8")
+    with pytest.raises(S.SeedError):
+        S.load_categories(tmp_path)
+
+
+def test_seeds_locale_reports_agreement_and_refuses_to_guess():
+    loaded = S.load_dir(FIXTURE_DIR)
+    assert S.seeds_locale(loaded) == "vi"
+
+    mixed = [(p, {**seed}) for p, seed in loaded]
+    mixed[0][1]["locale"] = "en"
+    assert S.seeds_locale(mixed) is None
+    assert S.seeds_locale([]) is None
+
+
+def test_the_same_slug_upserts_once_per_locale(db):
+    rows = S.load_categories(FIXTURE_DIR)
+    vi = S.upsert_categories(db, rows)
+    en = S.upsert_categories(db, [{**r, "locale": "en", "display_name": "Statistics",
+                                   "intro_md": "The English intro."} for r in rows])
+
+    assert db.query(BlogCategory).count() == 18
+    assert vi[("vi", "spss")] != en[("en", "spss")]
+    # The English run must not have rewritten the Vietnamese copy: that copy IS
+    # the Vietnamese hub page, and 420 live posts sit under it.
+    assert db.get(BlogCategory, vi[("vi", "spss")]).intro_md.startswith("SPSS là phần mềm")
+    assert db.get(BlogCategory, en[("en", "spss")]).intro_md == "The English intro."
+
+
+def test_category_index_keys_on_locale_and_slug(db):
+    S.upsert_categories(db, S.load_categories(FIXTURE_DIR))
+    index = S.category_index(db)
+    assert ("vi", "spss") in index
+    assert ("en", "spss") not in index
 
 
 # --- create ----------------------------------------------------------------
@@ -150,7 +216,7 @@ def test_create_from_seed_inserts_a_published_post(db, good_seed, categories):
     action, post = S.create_from_seed(db, good_seed, categories, now=NOW)
     assert action == "created"
     assert post.status == STATUS_PUBLISHED
-    assert post.category_id == categories["spss"]
+    assert post.category_id == categories[("vi", "spss")]
     assert post.reading_time >= 2  # computed from the body, not from the seed
     assert post.tags == good_seed["tags"]
     assert post.focus_keyword_volume == 1300
@@ -176,6 +242,26 @@ def test_the_same_slug_in_another_locale_is_a_different_post(db, good_seed, cate
     action, _ = S.create_from_seed(db, good_seed, categories, now=NOW)
     assert action == "created"
     assert db.query(BlogPost).count() == 2
+
+
+def test_a_post_never_binds_to_another_locales_category(db, good_seed, categories):
+    """`categories` here is the Vietnamese set, so the English seed gets nothing.
+
+    No category at all is the right answer: `category_id` is nullable, and a
+    post filed under a hub written in a language its reader is not reading is
+    worse than a post filed under none.
+    """
+    good_seed["locale"] = "en"
+    _, post = S.create_from_seed(db, good_seed, categories, now=NOW)
+    assert post.category_id is None
+
+
+def test_a_post_binds_to_its_own_locales_category(db, good_seed, categories):
+    english = S.upsert_categories(db, S.load_categories(FIXTURE_DIR, default_locale="en"))
+    good_seed["locale"] = "en"
+    _, post = S.create_from_seed(db, good_seed, {**categories, **english}, now=NOW)
+    assert post.category_id == english[("en", "spss")]
+    assert post.category_id != categories[("vi", "spss")]
 
 
 # --- update ----------------------------------------------------------------

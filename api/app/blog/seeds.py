@@ -28,6 +28,12 @@ from .schedule import plan_status
 
 SEED_SCHEMA = "dothesis-blog-seed/1"
 
+# The locale the bank launched with, and the fallback for anything that predates
+# categories being per-locale. Never used to bind a post: a seed always carries
+# its own `locale`, and that is what picks the category row.
+DEFAULT_LOCALE = "vi"
+MAX_LOCALE_LENGTH = 8  # blog_categories.locale / blog_posts.locale are String(8)
+
 # The nine categories of §6. A category exists only once its own name has
 # measured search volume, which is why this is a closed list and a seed
 # pointing outside it is an error rather than a new category.
@@ -202,8 +208,35 @@ def load_dir(directory: str | Path) -> list[tuple[Path, dict]]:
     return [(p, load_seed(p)) for p in _post_files(directory)]
 
 
-def load_categories(directory: str | Path) -> list[dict]:
-    """`categories.json` beside `posts/`, or an empty list if absent."""
+def seeds_locale(seeds: list[tuple[Path, dict]]) -> str | None:
+    """The one locale a batch of seeds agrees on, or None if it does not.
+
+    The seeds are the honest source for "what language is this directory".
+    The directory NAME is not: `--dir` also accepts a flat folder of repair
+    files (see `_post_files`) and `docs/seo/fixtures/seeds`, neither of which
+    is named after a locale. Nor is the loader's own default, which would
+    silently hand an English batch the Vietnamese categories.
+
+    None means the caller has to be told rather than guessed at.
+    """
+    locales = {seed["locale"] for _, seed in seeds}
+    return locales.pop() if len(locales) == 1 else None
+
+
+def load_categories(directory: str | Path, *,
+                    default_locale: str | None = DEFAULT_LOCALE) -> list[dict]:
+    """`categories.json` beside `posts/`, or an empty list if absent.
+
+    Every returned row carries a resolved `locale`, because a category row is
+    now one language edition of a hub and the wrong one renders Vietnamese
+    headings on an English page. A row may name its own `locale` (which is what
+    `docs/seo/categories.en.json` does, so the file is self-describing wherever
+    it is copied); otherwise it takes `default_locale`, which the CLI fills in
+    from the locale the seeds in the same run agree on.
+
+    `default_locale=None` means nothing could be inferred — a mixed or empty
+    batch — and then the file has to say so itself rather than be guessed at.
+    """
     path = Path(directory) / "categories.json"
     if not path.is_file():
         return []
@@ -213,42 +246,75 @@ def load_categories(directory: str | Path) -> list[dict]:
         raise SeedError(f"invalid JSON ({e.msg} at line {e.lineno})", source=path) from e
     if not isinstance(rows, list):
         raise SeedError("categories.json must be a JSON array", source=path)
+
+    out: list[dict] = []
     for row in rows:
         if not isinstance(row, Mapping) or not row.get("slug"):
             raise SeedError("every category needs a slug", source=path)
         if row["slug"] not in CATEGORY_SLUGS:
             raise SeedError(f"unknown category {row['slug']!r}", source=path)
-    return [dict(r) for r in rows]
+        locale = row.get("locale") or default_locale
+        if not locale or not isinstance(locale, str):
+            raise SeedError(
+                f"cannot tell which locale category {row['slug']!r} belongs to; "
+                'add "locale" to categories.json (the seeds beside it do not agree '
+                "on one)", field="locale", source=path)
+        if len(locale) > MAX_LOCALE_LENGTH:
+            raise SeedError(f"locale {locale!r} is longer than {MAX_LOCALE_LENGTH} characters",
+                            field="locale", source=path)
+        out.append({**row, "locale": locale})
+    return out
 
 
-def upsert_categories(db: Session, categories: list[dict]) -> dict[str, Any]:
-    """Create or refresh the category rows; return `{slug: id}`.
+def category_index(db: Session) -> dict[tuple[str, str], Any]:
+    """`{(locale, slug): id}` for every category row.
+
+    The key is a pair and not a slug on purpose: `spss` exists once per locale
+    now, so a mapping keyed on the slug alone cannot express the right answer
+    and would quietly bind an English post to the Vietnamese hub.
+    """
+    from ..models import BlogCategory  # noqa: PLC0415
+
+    return {(c.locale, c.slug): c.id for c in db.scalars(select(BlogCategory)).all()}
+
+
+def upsert_categories(db: Session, categories: list[dict]) -> dict[tuple[str, str], Any]:
+    """Create or refresh the category rows; return `{(locale, slug): id}`.
 
     Refresh rather than skip, unlike WELE's create.blog: the intro copy is the
     only content a category page has of its own, and it gets rewritten far more
     often than the category list changes.
+
+    Scoped by locale on both halves of that: the lookup that decides create-vs-
+    refresh matches `(locale, slug)`, so loading `data/blog-seeds/en` adds seven
+    English rows beside the Vietnamese seven instead of overwriting their copy.
     """
     from ..models import BlogCategory  # noqa: PLC0415
 
-    ids: dict[str, Any] = {}
+    ids: dict[tuple[str, str], Any] = {}
     for order, row in enumerate(categories):
         slug = row["slug"]
+        # `load_categories` always resolves this; the fallback is for a
+        # hand-built dict, and it points at the locale the bank launched with
+        # rather than at whatever happens to be first in the table.
+        locale = row.get("locale") or DEFAULT_LOCALE
         name = row.get("name") or row.get("display_name") or slug
-        existing = db.scalar(select(BlogCategory).where(BlogCategory.slug == slug))
+        existing = db.scalar(select(BlogCategory).where(
+            BlogCategory.locale == locale, BlogCategory.slug == slug))
         if existing is None:
-            existing = BlogCategory(slug=slug)
+            existing = BlogCategory(locale=locale, slug=slug)
             db.add(existing)
         existing.name = name
         existing.display_name = row.get("display_name") or name
         existing.intro_md = row.get("intro_md")
         existing.sort_order = int(row.get("sort_order", order))
         db.flush()
-        ids[slug] = existing.id
+        ids[(locale, slug)] = existing.id
     db.commit()
     return ids
 
 
-def _apply_content(post, seed: Mapping[str, Any], category_ids: Mapping[str, Any]) -> None:
+def _apply_content(post, seed: Mapping[str, Any], category_ids: Mapping[tuple[str, str], Any]) -> None:
     """Everything a seed owns. Status and dates are deliberately NOT here."""
     post.title = seed["title"]
     post.body = seed["body"].strip()
@@ -262,7 +328,10 @@ def _apply_content(post, seed: Mapping[str, Any], category_ids: Mapping[str, Any
     post.archetype = seed.get("archetype")
     post.source_batch = seed.get("source_batch")
     post.canonical_url = seed.get("canonical_url")
-    post.category_id = category_ids.get(seed.get("category"))
+    # Keyed by (locale, slug) — see `category_index`. A seed whose locale has no
+    # such category binds to nothing rather than to another language's hub;
+    # category_id is nullable and a wrong category is worse than none.
+    post.category_id = category_ids.get((seed["locale"], seed.get("category")))
     # `images` stays in the schema for the day there is public image hosting;
     # until then a seed may carry an explicit image_url and nothing else.
     post.image_url = seed.get("image_url")
@@ -282,7 +351,7 @@ def find_post(db: Session, locale: str, slug: str):
 def create_from_seed(
     db: Session,
     seed: Mapping[str, Any],
-    category_ids: Mapping[str, Any],
+    category_ids: Mapping[tuple[str, str], Any],
     *,
     go_live: datetime | None = None,
     now: datetime | None = None,
@@ -319,7 +388,7 @@ def create_from_seed(
 def upsert_from_seed(
     db: Session,
     seed: Mapping[str, Any],
-    category_ids: Mapping[str, Any],
+    category_ids: Mapping[tuple[str, str], Any],
     *,
     go_live: datetime | None = None,
     now: datetime | None = None,

@@ -55,6 +55,76 @@ def test_create_inserts_the_seeds_and_the_categories(capsys, db):
     assert post.category_id is not None
 
 
+def _english_dir(tmp_path, *, declare_locale: bool) -> str:
+    """The fixture seeds copied out at locale `en`, categories beside them.
+
+    `declare_locale` decides whether categories.json says `en` itself or leaves
+    the loader to take it from the seeds in the directory.
+    """
+    import json
+
+    posts = tmp_path / "posts"
+    posts.mkdir()
+    for src in sorted((Path(FIXTURE_DIR) / "posts").glob("*.json")):
+        seed = json.loads(src.read_text(encoding="utf-8"))
+        seed["locale"] = "en"
+        (posts / src.name).write_text(json.dumps(seed, ensure_ascii=False), encoding="utf-8")
+
+    rows = json.loads((Path(FIXTURE_DIR) / "categories.json").read_text(encoding="utf-8"))
+    for row in rows:
+        row["display_name"] = f"EN {row['slug']}"
+        row["intro_md"] = f"The English intro to {row['slug']}."
+        if declare_locale:
+            row["locale"] = "en"
+    (tmp_path / "categories.json").write_text(
+        json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+    return str(tmp_path)
+
+
+@pytest.mark.parametrize("declare_locale", [True, False])
+def test_create_upserts_the_english_categories_beside_the_vietnamese_ones(
+        capsys, db, tmp_path, declare_locale):
+    """`create --dir .../en` must add hubs, not rewrite the live Vietnamese copy.
+
+    Both spellings of the locale are exercised: declared in categories.json, and
+    inferred from the seeds in the directory. Neither reads the directory name.
+    """
+    assert cli.main(["create", "--dir", FIXTURE_DIR]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["create", "--dir", _english_dir(tmp_path, declare_locale=declare_locale)]) == 0
+
+    rows = {(c.locale, c.slug): c for c in db.query(BlogCategory).all()}
+    assert len(rows) == 18
+    assert rows[("en", "spss")].display_name == "EN spss"
+    assert rows[("vi", "spss")].display_name == "SPSS"
+
+    post = db.query(BlogPost).filter_by(slug="cronbach-alpha-la-gi", locale="en").one()
+    assert post.category_id == rows[("en", "spss")].id
+
+
+def test_create_refuses_a_mixed_batch_whose_categories_do_not_name_a_locale(db, tmp_path):
+    import json
+
+    directory = _english_dir(tmp_path, declare_locale=False)
+    stray = json.loads(
+        (Path(FIXTURE_DIR) / "posts" / "0001-cronbach-alpha-la-gi.json").read_text("utf-8"))
+    stray["slug"] = "bai-tieng-viet"
+    (tmp_path / "posts" / "0003-bai-tieng-viet.json").write_text(
+        json.dumps(stray, ensure_ascii=False), encoding="utf-8")
+
+    # `vi` and `en` in one directory and nothing saying which the categories are.
+    # Guessing would file half the posts under the wrong language's hub.
+    assert cli.main(["create", "--dir", directory]) == 1
+    assert db.query(BlogCategory).count() == 0
+
+
+def test_the_dry_run_names_the_locale_it_would_create_a_category_at(capsys, db, tmp_path):
+    directory = _english_dir(tmp_path, declare_locale=True)
+    assert cli.main(["create", "--dir", directory, "--dry-run"]) == 0
+    assert "WOULD CREATE category: spss [en]" in capsys.readouterr().out
+
+
 def test_a_second_create_run_skips_rather_than_accusing_itself(capsys, db):
     cli.main(["create", "--dir", FIXTURE_DIR])
     capsys.readouterr()
@@ -210,6 +280,17 @@ def test_audit_links_accepts_posts_categories_and_allow_listed_routes(capsys, db
                              "[c](/landing) [d](https://x.test) [e](#faq)"))
     assert cli.main(["audit-links"]) == 0
     assert "Every internal link resolves." in capsys.readouterr().out
+
+
+def test_a_category_hub_only_resolves_at_its_own_locale(capsys, db):
+    """An English-only hub does not make /blog/vi/chu-de/<slug> a real page."""
+    db.add(BlogCategory(locale="en", slug="khao-sat", name="Surveys",
+                        display_name="Surveys"))
+    db.commit()
+    _post(db, "nguon", body="[a](/blog/vi/chu-de/khao-sat)")
+
+    assert cli.main(["audit-links"]) == 1
+    assert "/blog/vi/chu-de/khao-sat" in capsys.readouterr().out
 
 
 # --- export-index ----------------------------------------------------------
