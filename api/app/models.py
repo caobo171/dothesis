@@ -729,19 +729,33 @@ class BlogCategory(Base):
     __tablename__ = "blog_categories"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
+    # One row per (locale, category): `name`, `display_name` and `intro_md` are
+    # all written in the category's own language, so an English blog needs its
+    # own row rather than a translation column bolted onto the Vietnamese one.
+    locale: Mapped[str] = mapped_column(String(8), nullable=False, default="vi", server_default="vi")
     # The nine slugs in §6 of the design. Kept as free text rather than an enum
     # because a category is only allowed to exist once its name has measured
     # search volume, and that list is expected to grow with the market, not
     # with a migration.
-    slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    #
+    # The slug is deliberately the SAME across locales: /blog/vi/chu-de/spss and
+    # /blog/en/chu-de/spss are the two language editions of one hub, so a reader
+    # switching language lands on the matching page. That is why the uniqueness
+    # is on (locale, slug) and not on slug alone.
+    slug: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     # Hand-written 300-500 words that give the category route something to rank
-    # with; a bare list of links is a thin page.
+    # with; a bare list of links is a thin page. Per locale, and written as that
+    # language rather than translated, for the same reason.
     intro_md: Mapped[str | None] = mapped_column(Text)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("locale", "slug", name="uq_blog_categories_locale_slug"),
+    )
 
 
 class BlogPost(Base):
