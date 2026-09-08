@@ -192,6 +192,23 @@ def _related(db: Session, post: BlogPost, categories: dict) -> list[dict]:
     return [compact(p, categories.get(p.category_id)) for p in picked]
 
 
+def _translations(db: Session, post: BlogPost) -> list[dict]:
+    """`[{locale, slug}]` for the other visible editions of this article.
+
+    Keyed on `translation_key`, which every row carries: an original holds its
+    own slug and a translation holds the original's, so one equality finds the
+    set. Visible only, because pointing hreflang at a page that is still
+    scheduled sends a crawler to a 404.
+    """
+    key = post.translation_key or post.slug
+    rows = db.execute(
+        select(BlogPost.locale, BlogPost.slug)
+        .where(BlogPost.translation_key == key, BlogPost.id != post.id, visible_filter())
+        .order_by(BlogPost.locale)
+    ).all()
+    return [{"locale": locale, "slug": slug} for locale, slug in rows]
+
+
 @router.post("/get")
 def get_post(body: GetBody, db: Session = Depends(db_session)):
     post = db.scalar(
@@ -207,6 +224,10 @@ def get_post(body: GetBody, db: Session = Depends(db_session)):
     categories = _categories_by_id(db)
     payload = full(post, categories.get(post.category_id))
     payload["related"] = _related(db, post, categories)
+    # Every other visible edition of this same article, so the page can declare
+    # hreflang. Without it the two language editions of one article are two
+    # pages competing for one query and the crawler, not us, picks the winner.
+    payload["translations"] = _translations(db, post)
 
     # Best effort: a view counter is not worth failing a page render over.
     try:

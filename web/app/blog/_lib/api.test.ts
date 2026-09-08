@@ -7,6 +7,7 @@ import {
   fetchPost,
   fetchPosts,
   fetchSitemap,
+  normalizePostDetail,
 } from "./api";
 
 const COMPACT = {
@@ -130,5 +131,29 @@ describe("fetchCategories and fetchSitemap", () => {
     expect(await fetchSitemap()).toEqual([row]);
     server.use(http.post("*/api/v1/blog/sitemap", () => HttpResponse.json([row])));
     expect(await fetchSitemap("vi")).toEqual([row]);
+  });
+});
+
+describe("translations on a post detail", () => {
+  test("passes through what the API verified", () => {
+    const detail = normalizePostDetail({
+      ...COMPACT,
+      body: "x",
+      translations: [{ locale: "en", slug: "what-is-cronbach-alpha" }],
+    } as never);
+    expect(detail?.translations).toEqual([{ locale: "en", slug: "what-is-cronbach-alpha" }]);
+  });
+
+  test("is empty when the API says nothing, so no hreflang is guessed", () => {
+    expect(normalizePostDetail({ ...COMPACT, body: "x" } as never)?.translations).toEqual([]);
+  });
+
+  test("drops a malformed entry rather than pointing hreflang at nothing", () => {
+    const detail = normalizePostDetail({
+      ...COMPACT,
+      body: "x",
+      translations: [{ locale: "en" }, null, { locale: "en", slug: "ok" }],
+    } as never);
+    expect(detail?.translations).toEqual([{ locale: "en", slug: "ok" }]);
   });
 });

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { alternateLanguages } from "../../_lib/hreflang";
+import type { TranslationRef } from "../../_lib/api";
 import { isLocale } from "../../../lib/i18n/locale";
 import { BlogShell } from "../../_components/BlogShell";
 import { ContentsBox } from "../../_components/ContentsBox";
@@ -50,18 +52,25 @@ export async function generateMetadata({
     metadataBase: new URL(absoluteUrl("/")),
     title,
     description,
-    // No `languages` here, deliberately. A post's English edition is a
-    // different row with a different slug (`uq_blog_posts_locale_slug`), and
-    // nothing on the row says which Vietnamese post it was translated from:
-    // `focus_keyword` is written in the post's own language, and `archetype`
-    // plus `category` describe hundreds of posts each. Every pairing this page
-    // could compute would be a guess, and an hreflang that 404s costs the whole
-    // annotation cluster — so the honest answer is to declare nothing until
-    // `/blog/get` returns the translations it knows about (a shared
-    // `translation_key` on `blog_posts`, or a `translations: [{locale, slug}]`
-    // list on the payload). The language switch in the shell sends the reader
-    // to the other edition's root meanwhile, which is a link, not a claim.
-    alternates: { canonical: url },
+    // hreflang, and only where the API said so. A post's other-language edition
+    // is a different row with a different slug, and nothing else on the row
+    // could pair them: the focus keyword is written in the post's own language
+    // and the archetype describes hundreds of posts. `/blog/get` answers off a
+    // shared `translation_key` and lists only editions that are visible, so a
+    // guess is never made here and an hreflang never points at a 404, which
+    // would cost the whole annotation cluster rather than the one URL.
+    alternates: {
+      canonical: url,
+      languages: alternateLanguages({
+        [locale]: url,
+        // Only editions `/blog/get` verified as visible; anything else is a guess.
+        ...Object.fromEntries(
+          data.translations
+            .filter((t: TranslationRef) => isLocale(t.locale))
+            .map((t: TranslationRef) => [t.locale, absoluteUrl(postPath(t.locale, t.slug))]),
+        ),
+      }),
+    },
     openGraph: {
       type: "article",
       title,

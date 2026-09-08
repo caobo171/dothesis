@@ -327,6 +327,11 @@ def _apply_content(post, seed: Mapping[str, Any], category_ids: Mapping[tuple[st
     post.tags = list(seed.get("tags") or [])
     post.archetype = seed.get("archetype")
     post.source_batch = seed.get("source_batch")
+    # A translated seed names the post it came from; an original names itself,
+    # so both editions of one article carry the same key and can point at each
+    # other. Falling back to the slug means a bank written in one language needs
+    # no new field to become translatable later.
+    post.translation_key = seed.get("translation_key") or seed.get("slug")
     post.canonical_url = seed.get("canonical_url")
     # Keyed by (locale, slug) — see `category_index`. A seed whose locale has no
     # such category binds to nothing rather than to another language's hub;

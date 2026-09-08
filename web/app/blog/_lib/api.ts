@@ -61,10 +61,15 @@ export type PostList = {
   page_size: number;
 };
 
+/** Where the same article lives in another language. */
+export type TranslationRef = { locale: string; slug: string };
+
 export type PostDetail = {
   post: FullPost;
   related: CompactPost[];
   category: BlogCategory | null;
+  /** Other visible editions of this article, for hreflang. Empty when none. */
+  translations: TranslationRef[];
 };
 
 export type SitemapEntry = { locale: string; slug: string; updated_at: string | null };
@@ -150,7 +155,14 @@ export function normalizePostDetail(res: Record<string, unknown> | null): PostDe
   const category = (res.category as BlogCategory | null | undefined)
     ?? (inner.category as BlogCategory | null | undefined)
     ?? null;
-  return { post: inner, related, category };
+  // `/blog/get` returns these off a shared `translation_key`; an older API that
+  // does not know the field simply sends none, and the page then declares no
+  // hreflang rather than guessing at one.
+  const raw = (res.translations as TranslationRef[] | undefined)
+    ?? ((inner as unknown as { translations?: TranslationRef[] }).translations ?? []);
+  const translations = raw.filter(
+    (t) => t && typeof t.locale === "string" && typeof t.slug === "string");
+  return { post: inner, related, category, translations };
 }
 
 export async function fetchCategories(locale: string): Promise<BlogCategory[]> {

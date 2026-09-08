@@ -256,3 +256,37 @@ def test_sitemap_can_be_scoped_to_a_locale(client, db):
     _post(db, "en-post", locale="en")
     rows = client.post("/api/v1/blog/sitemap", json={"locale": "en"}).json()
     assert [r["slug"] for r in rows] == ["en-post"]
+
+
+# --- translations, for hreflang -------------------------------------------
+
+
+def test_get_names_the_other_visible_editions_of_the_same_article(client, db):
+    """Slugs differ per locale and a translated keyword is in its own language,
+    so `translation_key` is the only thing that pairs two editions."""
+    from datetime import datetime, timezone
+    from app.blog import STATUS_PUBLISHED, STATUS_SCHEDULED
+    from app.models import BlogPost
+
+    now = datetime.now(timezone.utc)
+    later = now.replace(year=now.year + 1)
+    for locale, slug, status, when in (
+        ("vi", "cronbach-alpha-la-gi", STATUS_PUBLISHED, now),
+        ("en", "what-is-cronbach-alpha", STATUS_PUBLISHED, now),
+        ("fr", "quest-ce-que-cronbach", STATUS_SCHEDULED, later),
+    ):
+        db.add(BlogPost(locale=locale, slug=slug, title=slug, body="x", excerpt="x",
+                        status=status, published_at=when, scheduled_at=when,
+                        translation_key="cronbach-alpha-la-gi"))
+    db.add(BlogPost(locale="vi", slug="phuong-sai", title="Phương sai", body="x",
+                    excerpt="x", status=STATUS_PUBLISHED, published_at=now,
+                    translation_key="phuong-sai"))
+    db.commit()
+
+    body = client.post("/api/v1/blog/get",
+                       json={"locale": "vi", "slug": "cronbach-alpha-la-gi"}).json()
+    assert body["translations"] == [{"locale": "en", "slug": "what-is-cronbach-alpha"}], \
+        "the scheduled French edition is not visible, so hreflang must not point at it"
+
+    other = client.post("/api/v1/blog/get", json={"locale": "vi", "slug": "phuong-sai"}).json()
+    assert other["translations"] == [], "an untranslated post has no pair to declare"
