@@ -24,6 +24,12 @@ import BlogPostPage, { generateMetadata as postMetadata } from "./[locale]/[slug
 import robots from "../robots";
 import sitemap from "../sitemap";
 
+// `robots()` answers per hostname, so it reads the request headers. There is no
+// request in a unit test: this stands in for one.
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers({ host: "localhost:3006" }),
+}));
+
 const BODY = [
   "## Phân tích EFA",
   "",
@@ -316,8 +322,11 @@ describe("sitemap and robots", () => {
     expect(urls).toEqual(["http://localhost:3006/landing", "http://localhost:3006/blog/vi"]);
   });
 
-  test("robots opens the public surfaces and closes the auth-gated ones", () => {
-    const r = robots();
+  test("robots opens the public surfaces and closes the auth-gated ones", async () => {
+    // No split configured in the test environment, so every host gets the
+    // marketing answer. The app-host case lives in app/lib/hosts.test.ts,
+    // which owns the routing rules.
+    const r = await robots();
     const rule = Array.isArray(r.rules) ? r.rules[0] : r.rules;
     expect(rule.allow).toEqual(["/blog", "/landing"]);
     expect(rule.disallow).toEqual(["/chat", "/admin", "/api"]);

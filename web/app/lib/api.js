@@ -5,7 +5,18 @@
 // See web/app/lib/tokenStore.ts + api/app/jwt_auth.py for the design.
 import { tokenStore } from "./tokenStore";
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
+const PUBLIC_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
+
+// Server-side rendering talks to the API over loopback when told to. The blog
+// renders on the marketing host, whose public API base points at the app
+// hostname; without this the apex would make a round trip out to the internet
+// and back for every post it renders, and would go down whenever DNS or the
+// certificate for the other host did. Unset in development, where the public
+// base is already localhost.
+const BASE =
+  typeof window === "undefined"
+    ? process.env.SERVER_API_BASE || PUBLIC_BASE
+    : PUBLIC_BASE;
 
 class ApiError extends Error {
   constructor(status, body) {

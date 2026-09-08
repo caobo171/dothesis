@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { hostFromHeader, isMarketingHost, routeForHost } from "./app/lib/hosts";
+
 // Route gating happens server-side in this middleware. With JWT auth, the
 // real authoritative token lives in localStorage — which the middleware
 // CAN'T read (it runs on the edge runtime, no DOM). To keep the no-flash
@@ -36,6 +38,32 @@ const PUBLIC_FILE = /\.(png|jpe?g|gif|svg|webp|avif|ico|woff2?|txt|xml|json)$/i;
 export function proxy(request) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_FILE.test(pathname)) return NextResponse.next();
+
+  // One deployment answers on two hostnames: the marketing apex and the app
+  // subdomain. Which site this request belongs to is decided before the auth
+  // gate, because the marketing host has nothing to gate and the app host must
+  // not serve public content under a second URL. See app/lib/hosts.js.
+  const host = hostFromHeader(request.headers.get("host"));
+  const route = routeForHost(host, pathname);
+  if (route.action === "redirect") {
+    const target = route.external
+      ? new URL(`${route.to}${request.nextUrl.search}`)
+      : (() => {
+          const url = request.nextUrl.clone();
+          url.pathname = route.to;
+          return url;
+        })();
+    return NextResponse.redirect(target, route.status);
+  }
+  if (route.action === "rewrite") {
+    const url = request.nextUrl.clone();
+    url.pathname = route.to;
+    return NextResponse.rewrite(url);
+  }
+  // Nothing on the marketing host is behind a login, so the auth gate below
+  // would only ever misfire there.
+  if (isMarketingHost(host)) return NextResponse.next();
+
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
   const marker = request.cookies.get(AUTH_MARKER_COOKIE);

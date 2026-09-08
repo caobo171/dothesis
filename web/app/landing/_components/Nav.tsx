@@ -3,16 +3,16 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "./ds";
-import { BrandLockup, CTA_HREF, CTA_PRIMARY, LOGIN_HREF } from "./shared";
+import { BrandLockup, CTA_HREF, CTA_PRIMARY, LANDING_HREF, LOGIN_HREF } from "./shared";
 
 // Anchors carry the /landing path because this Nav is also the blog shell's
 // header: a bare "#features" is a dead link on /blog/vi/... and scrolls the
 // landing page exactly the same way with the path in front.
 const LINKS: Array<[string, string]> = [
-  ["Features", "/landing#features"],
-  ["Tools", "/landing#tools"],
-  ["Pricing", "/landing#pricing"],
-  ["FAQ", "/landing#faq"],
+  ["Features", `${LANDING_HREF}#features`],
+  ["Tools", `${LANDING_HREF}#tools`],
+  ["Pricing", `${LANDING_HREF}#pricing`],
+  ["FAQ", `${LANDING_HREF}#faq`],
   // The only entry that leaves the marketing page. Kept last so the anchors
   // still read as one group.
   ["Blog", "/blog/vi"],

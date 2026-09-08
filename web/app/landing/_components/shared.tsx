@@ -18,8 +18,18 @@ export const CTA_PRIMARY = "Start your thesis";
  * app those routes exist, so the marketing page points at them directly rather
  * than scrolling to a section that cannot sign anyone up.
  */
-export const CTA_HREF = "/signup";
-export const LOGIN_HREF = "/login";
+// The product lives on its own hostname in production, so a marketing CTA has
+// to be absolute or it lands on the apex, which serves no /signup. Unset in
+// development, where one host serves everything and a relative path is right.
+const APP_ORIGIN = (process.env.NEXT_PUBLIC_APP_ORIGIN || "").replace(/\/+$/, "");
+
+export const CTA_HREF = `${APP_ORIGIN}/signup`;
+export const LOGIN_HREF = `${APP_ORIGIN}/login`;
+
+// `/` on the marketing host is the landing page (app/lib/hosts.js rewrites it),
+// and `/landing` 301s there. Pointing in-page anchors at the canonical URL
+// keeps every nav click off that redirect.
+export const LANDING_HREF = process.env.NEXT_PUBLIC_MARKETING_HOST ? "/" : "/landing";
 
 // -- tiny functional icons, currentColor, matching the product's stroke weight --
 export function IconCheck({ size = 15 }: { size?: number }) {
@@ -101,7 +111,7 @@ export function BrandLockup({ light = false }: { light?: boolean }) {
       // The lockup is shared with the blog shell, where a bare "#top" is a
       // dead anchor. A full path scrolls the landing page the same way and
       // takes a blog reader back to the marketing page.
-      href="/landing#top"
+      href={`${LANDING_HREF}#top`}
       style={{
         display: "inline-flex",
         alignItems: "center",
