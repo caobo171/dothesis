@@ -11,6 +11,7 @@ import {
   plainText,
   readingTime,
   slugify,
+  splitLead,
   tableOfContents,
 } from "./markdown";
 
@@ -134,5 +135,83 @@ describe("plainText and readingTime", () => {
   test("readingTime rounds up at 200 words per minute and never returns 0", () => {
     expect(readingTime("một hai ba")).toBe(1);
     expect(readingTime(Array(401).fill("từ").join(" "))).toBe(3);
+  });
+});
+
+describe("splitLead", () => {
+  // The shape every one of the seven live category intros has: five plain
+  // paragraphs, blank line between them.
+  const INTRO = [
+    "Một bài luận văn định lượng chỉ dùng chừng hai chục khái niệm thống kê.",
+    "",
+    "Chuyên mục này giải thích từng khái niệm bằng ngôn ngữ người viết cần.",
+    "",
+    "Bắt đầu từ đâu. Đọc bài về thống kê mô tả trước.",
+    "",
+  ].join("\n");
+
+  test("leads with the first paragraph and keeps the rest", () => {
+    const { lead, rest } = splitLead(INTRO);
+    expect(lead).toBe("Một bài luận văn định lượng chỉ dùng chừng hai chục khái niệm thống kê.");
+    expect(rest).toContain("Chuyên mục này giải thích");
+    expect(rest).toContain("Bắt đầu từ đâu");
+    // Nothing is dropped on the floor: every word is on the page, somewhere.
+    expect(`${lead}\n\n${rest}`).toBe(INTRO.trim());
+  });
+
+  test("a paragraph hard-wrapped over several lines stays one lead", () => {
+    const { lead, rest } = splitLead(
+      "Câu thứ nhất của đoạn mở đầu,\nvà câu thứ hai xuống dòng.\n\nĐoạn hai.",
+    );
+    expect(lead).toBe("Câu thứ nhất của đoạn mở đầu,\nvà câu thứ hai xuống dòng.");
+    expect(rest).toBe("Đoạn hai.");
+  });
+
+  test("a one-paragraph intro is all lead and no remainder", () => {
+    expect(splitLead("Chỉ có một đoạn.\n")).toEqual({ lead: "Chỉ có một đoạn.", rest: "" });
+  });
+
+  test("leading blank lines belong to neither half", () => {
+    expect(splitLead("\n\n  \nĐoạn đầu.\n\nĐoạn hai.")).toEqual({
+      lead: "Đoạn đầu.",
+      rest: "Đoạn hai.",
+    });
+  });
+
+  test("empty input gives two empty halves", () => {
+    expect(splitLead("")).toEqual({ lead: "", rest: "" });
+    expect(splitLead("\n  \n")).toEqual({ lead: "", rest: "" });
+  });
+
+  // The whole point of the block scan: a lead that swallowed one of these
+  // would look worse than the wall of text it replaced, so there is no lead.
+  test.each([
+    ["a heading", "## Bắt đầu từ đâu\n\nĐoạn sau tiêu đề."],
+    ["a bullet list", "- Điểm một\n- Điểm hai\n\nĐoạn sau."],
+    ["an ordered list", "1. Điểm một\n2. Điểm hai\n\nĐoạn sau."],
+    ["a blockquote", "> Trích dẫn.\n\nĐoạn sau."],
+    ["a code fence", "```\nSPSS\n```\n\nĐoạn sau."],
+    ["a thematic break", "---\n\nĐoạn sau."],
+    ["indented code", "    alpha = 0.7\n\nĐoạn sau."],
+    ["raw HTML", "<div>Khối HTML</div>\n\nĐoạn sau."],
+    ["a table", "| Chỉ số | Ngưỡng |\n| --- | --- |\n| Alpha | 0.7 |\n\nĐoạn sau."],
+    ["a setext heading", "Bắt đầu từ đâu\n===\n\nĐoạn sau."],
+    ["a setext h2", "Bắt đầu từ đâu\n---\n\nĐoạn sau."],
+  ])("returns no lead when the intro opens with %s", (_name, md) => {
+    const { lead, rest } = splitLead(md);
+    expect(lead).toBe("");
+    expect(rest).toBe(md.trim());
+  });
+
+  test("stops the lead at a heading that follows with no blank line", () => {
+    const { lead, rest } = splitLead("Đoạn mở đầu.\n## Mục tiếp theo\n\nNội dung.");
+    expect(lead).toBe("Đoạn mở đầu.");
+    expect(rest).toBe("## Mục tiếp theo\n\nNội dung.");
+  });
+
+  test("a fence opened right under the lead is not pulled into it", () => {
+    const { lead, rest } = splitLead("Đoạn mở đầu.\n```\nalpha\n```");
+    expect(lead).toBe("Đoạn mở đầu.");
+    expect(rest).toBe("```\nalpha\n```");
   });
 });

@@ -257,3 +257,75 @@ export function excerpt(markdown: string, max = 180): string {
   const space = cut.lastIndexOf(" ");
   return `${(space > 40 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
+
+/* -------------------------- Category intro split -------------------------- */
+
+/** A line that opens a block which is not a paragraph. */
+const BLOCK_START =
+  /^ {0,3}(?:#{1,6}(?:\s|$)|>|[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)|`{3,}|~{3,}|<)/;
+
+/** `***`, `- - -`, `___` on a line of their own. */
+const THEMATIC_BREAK = /^ {0,3}([-*_])(?:\s*\1){2,}\s*$/;
+
+/** A GFM table's delimiter row: `| --- | :-: |`. */
+const TABLE_DELIMITER = /^ {0,3}\|?[\s:|-]*-[\s:|-]*\|[\s:|-]*$/;
+
+/** `===` or `---` under a run of text, which makes that run a setext heading. */
+const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)\s*$/;
+
+/**
+ * A category intro's opening paragraph, and everything after it.
+ *
+ * The category page sets the first paragraph as a lead above the post list and
+ * moves the remaining four below it, so the reader meets posts rather than 400
+ * words of orientation. Every word still ships; only the order changes.
+ *
+ * Splitting on the first blank line would be wrong twice over. An intro that
+ * opens with a heading, a table or a list would have that block torn out of
+ * context and set in lead type, which is worse than the wall of text it
+ * replaces. And a paragraph whose sentences are hard-wrapped across lines
+ * without a blank line between them is one paragraph, not several.
+ *
+ * So this is a block scan, and it is deliberately conservative: a lead comes
+ * back ONLY when the document opens with a real paragraph. Anything else —
+ * heading, list, quote, fence, table, thematic break, HTML, indented code, or
+ * a setext heading, which only reveals itself on the line AFTER the text it
+ * underlines — returns an empty lead and the whole document as `rest`. The
+ * page then renders the intro in one piece below the posts. No lead at all is
+ * a far smaller failure than half a table promoted into one.
+ */
+export function splitLead(markdown: string): { lead: string; rest: string } {
+  const lines = markdown.split(/\r?\n/);
+  let start = 0;
+  while (start < lines.length && !lines[start].trim()) start += 1;
+  if (start >= lines.length) return { lead: "", rest: "" };
+
+  const first = lines[start];
+  // Four spaces of indent is a code block, not a deeply indented sentence.
+  if (/^ {4,}/.test(first) || THEMATIC_BREAK.test(first) || BLOCK_START.test(first)) {
+    return { lead: "", rest: markdown.trim() };
+  }
+
+  // The paragraph ends at a blank line, or at the first line CommonMark lets
+  // interrupt a paragraph. Setext is tested before the thematic break because
+  // `---` under text is a heading underline, not a rule.
+  let end = start + 1;
+  while (end < lines.length) {
+    const line = lines[end];
+    if (!line.trim()) break;
+    if (SETEXT_UNDERLINE.test(line)) return { lead: "", rest: markdown.trim() };
+    if (THEMATIC_BREAK.test(line) || BLOCK_START.test(line)) break;
+    end += 1;
+  }
+
+  // `Chỉ số | Ngưỡng` reads exactly like a paragraph until the delimiter row
+  // on the next line reveals it as a table header.
+  if (end > start + 1 && TABLE_DELIMITER.test(lines[start + 1])) {
+    return { lead: "", rest: markdown.trim() };
+  }
+
+  return {
+    lead: lines.slice(start, end).join("\n").trim(),
+    rest: lines.slice(end).join("\n").trim(),
+  };
+}
