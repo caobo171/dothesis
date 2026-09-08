@@ -52,13 +52,20 @@ REQUIRED_FIELDS: tuple[str, ...] = (
 LIST_FIELDS: tuple[str, ...] = ("secondary_keywords", "tags", "sibling_slugs", "images")
 
 # How the page's demand was established (design §5). `measured` means the focus
-# keyword returned its own search volume. `family-inferred` means it did not and
-# the gate carried it on its family's evidence instead — either the thin-keyword
-# aggregate rule or the unmeasured fill. Both are real pages with unproven
-# demand, which is a different thing from a page we know people search for, so
-# `create` inserts them as drafts and never spends a slot on them.
-GATE_STATUSES: tuple[str, ...] = ("measured", "family-inferred")
+# keyword returned its own search volume; `unmeasured` means the measurement
+# source had nothing to say about it. Since 2026-09-08 both publish: volume sets
+# priority order, and the QA gate holds an unmeasured page to twice the
+# distinctness bar because quality is then the only thing keeping the bank clear
+# of Google's scaled-content-abuse policy.
+GATE_STATUSES: tuple[str, ...] = ("measured", "unmeasured")
 DEFAULT_GATE_STATUS = "measured"
+
+# `family-inferred` was what an unmeasured page was called until 2026-09-08, when
+# the gate stopped inferring demand from a keyword's family. 149 seed files on
+# disk carry it, and rewriting them all to change a word would touch every seed
+# in the bank for no gain, so the old spelling stays readable and normalises on
+# load. Nothing writes it any more.
+DEPRECATED_GATE_STATUSES: dict[str, str] = {"family-inferred": "unmeasured"}
 
 MAX_SLUG_LENGTH = 120
 
@@ -138,6 +145,7 @@ def validate_seed(data: Any, *, source: str | Path | None = None) -> dict:
     # decides whether the post publishes at all, and a `.get("gate_status")`
     # spelled out in three callers is three chances to drift from the list.
     gate_status = seed.get("gate_status") or DEFAULT_GATE_STATUS
+    gate_status = DEPRECATED_GATE_STATUSES.get(gate_status, gate_status)
     if gate_status not in GATE_STATUSES:
         raise SeedError(
             f"gate_status is {gate_status!r}, expected one of "
@@ -149,12 +157,9 @@ def validate_seed(data: Any, *, source: str | Path | None = None) -> dict:
 
 
 def is_family_inferred(seed: Mapping[str, Any]) -> bool:
-    """True when the gate carried this page on its family, not on its own volume.
-
-    The single spelling of the draft rule. `create_from_seed` reads it to force
-    status DRAFT, and `cli.cmd_create` reads it to skip the schedule slot.
-    """
-    return (seed.get("gate_status") or DEFAULT_GATE_STATUS) == "family-inferred"
+    """True when the measurement source returned no volume for the focus keyword."""
+    status = seed.get("gate_status") or DEFAULT_GATE_STATUS
+    return DEPRECATED_GATE_STATUSES.get(status, status) == "unmeasured"
 
 
 def load_seed(path: str | Path) -> dict:

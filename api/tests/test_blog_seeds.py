@@ -210,18 +210,36 @@ def test_gate_status_defaults_to_measured(good_seed):
     assert S.is_family_inferred(good_seed) is False
 
 
-def test_gate_status_accepts_family_inferred(good_seed):
-    good_seed["gate_status"] = "family-inferred"
+def test_gate_status_accepts_unmeasured(good_seed):
+    good_seed["gate_status"] = "unmeasured"
     clean = S.validate_seed(good_seed)
-    assert clean["gate_status"] == "family-inferred"
-    assert S.is_family_inferred(clean) is True
+    assert clean["gate_status"] == "unmeasured"
+
+
+def test_the_family_inferred_alias_normalises_to_unmeasured(good_seed):
+    """The word changed on 2026-09-08; 149 seed files on disk still say the old one.
+
+    They have to keep loading, and they have to load as the new value, or the
+    same page would be `family-inferred` in the bank and `unmeasured` everywhere
+    the engine writes about it.
+    """
+    good_seed["gate_status"] = "family-inferred"
+    assert S.validate_seed(good_seed)["gate_status"] == "unmeasured"
+
+
+def test_a_seed_file_written_before_the_rename_still_loads(tmp_path, good_seed):
+    """End to end through `load_seed`, which is what `create --dir` actually calls."""
+    good_seed["gate_status"] = "family-inferred"
+    path = tmp_path / "0001-old.json"
+    path.write_text(json.dumps(good_seed, ensure_ascii=False), encoding="utf-8")
+    assert S.load_seed(path)["gate_status"] == "unmeasured"
 
 
 def test_an_unknown_gate_status_is_refused_with_the_allowed_values(good_seed):
     good_seed["gate_status"] = "guessed"
     with pytest.raises(S.SeedError) as e:
         S.validate_seed(good_seed)
-    assert "gate_status" in str(e.value) and "family-inferred" in str(e.value)
+    assert "gate_status" in str(e.value) and "unmeasured" in str(e.value)
 
 
 def test_a_family_inferred_seed_inserts_as_a_dateless_draft(db, good_seed, categories):
