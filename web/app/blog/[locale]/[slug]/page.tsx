@@ -50,6 +50,17 @@ export async function generateMetadata({
     metadataBase: new URL(absoluteUrl("/")),
     title,
     description,
+    // No `languages` here, deliberately. A post's English edition is a
+    // different row with a different slug (`uq_blog_posts_locale_slug`), and
+    // nothing on the row says which Vietnamese post it was translated from:
+    // `focus_keyword` is written in the post's own language, and `archetype`
+    // plus `category` describe hundreds of posts each. Every pairing this page
+    // could compute would be a guess, and an hreflang that 404s costs the whole
+    // annotation cluster — so the honest answer is to declare nothing until
+    // `/blog/get` returns the translations it knows about (a shared
+    // `translation_key` on `blog_posts`, or a `translations: [{locale, slug}]`
+    // list on the payload). The language switch in the shell sends the reader
+    // to the other edition's root meanwhile, which is a link, not a claim.
     alternates: { canonical: url },
     openGraph: {
       type: "article",

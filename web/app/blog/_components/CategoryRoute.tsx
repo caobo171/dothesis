@@ -16,8 +16,9 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 
 import { isLocale } from "../../lib/i18n/locale";
-import { PAGE_SIZE, fetchCategory, fetchPosts } from "../_lib/api";
+import { PAGE_SIZE, fetchCategories, fetchCategory, fetchPosts } from "../_lib/api";
 import { formatDate, formatReadingTime } from "../_lib/format";
+import { alternateLanguages, otherLocale } from "../_lib/hreflang";
 import { plainText, splitLead } from "../_lib/markdown";
 import { absoluteUrl, categoryPath, categorySegment, postPath } from "../_lib/site";
 import { BlogShell } from "./BlogShell";
@@ -93,13 +94,31 @@ export async function categoryRouteMetadata(
   // whole intro is summarised instead.
   const { lead } = splitLead(cat.intro_md ?? "");
   const description = plainText(lead || cat.intro_md || "").slice(0, 300);
+
+  // The one pairing on this blog that is a fact rather than a guess: a category
+  // is one row per (locale, slug) and the slug is deliberately shared across
+  // locales, so `spss` in the English taxonomy IS this hub's English edition.
+  // Still checked against the API rather than assumed — the English rows are
+  // seeded separately, and `post_count` is scoped to the locale asked for, so
+  // this also declines to annotate a hub the other language has no posts in.
+  const other = otherLocale(locale);
+  const pairedElsewhere = (await fetchCategories(other).catch(() => [])).some(
+    (c) => c.slug === cat.slug && c.post_count > 0,
+  );
+
   return {
     // metadataBase so any relative URL Next resolves here lands on the public
     // origin rather than on the request host, which behind a proxy is internal.
     metadataBase: new URL(absoluteUrl("/")),
     title,
     description,
-    alternates: { canonical },
+    alternates: {
+      canonical,
+      languages: alternateLanguages({
+        [locale]: canonical,
+        ...(pairedElsewhere ? { [other]: absoluteUrl(categoryPath(other, cat.slug)) } : {}),
+      }),
+    },
     openGraph: { type: "website", title, description, url: canonical },
     twitter: { card: "summary_large_image", title, description },
   };

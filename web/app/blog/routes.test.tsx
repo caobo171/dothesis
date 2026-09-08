@@ -129,6 +129,35 @@ function stubApi(opts: { posts?: unknown[]; total?: number; detail?: unknown } =
   );
 }
 
+/**
+ * The API, answering per locale.
+ *
+ * `stubApi` returns the same payload whatever locale is asked for, which is
+ * exactly what a cross-locale check must not be tested against: it would make
+ * every pairing look real. These handlers read the locale out of the request
+ * body the way the real routes do.
+ */
+function stubApiByLocale(opts: {
+  posts?: Record<string, unknown[]>;
+  categories?: Record<string, unknown[]>;
+}) {
+  server.use(
+    http.post("*/api/v1/blog/list", async ({ request }) => {
+      const body = (await request.json()) as { locale: string };
+      const posts = opts.posts?.[body.locale] ?? [];
+      return HttpResponse.json({ posts, total: posts.length, page: 1, page_size: 12 });
+    }),
+    http.post("*/api/v1/blog/categories", async ({ request }) => {
+      const body = (await request.json()) as { locale: string };
+      return HttpResponse.json({ categories: opts.categories?.[body.locale] ?? [] });
+    }),
+  );
+}
+
+const EN_CATEGORIES = [
+  { slug: "spss", name: "SPSS", display_name: "SPSS", intro_md: "SPSS in a thesis.", post_count: 8 },
+];
+
 describe("/blog", () => {
   test("redirects to the Vietnamese listing", () => {
     expect(() => BlogRootPage()).toThrow("NEXT_REDIRECT:/blog/vi");
@@ -483,6 +512,79 @@ describe("/blog/[locale]/[slug]", () => {
       params: Promise.resolve({ locale: "vi", slug: "khong-co" }),
     });
     expect((meta.robots as { index?: boolean })?.index).toBe(false);
+  });
+});
+
+describe("hreflang", () => {
+  test("the listing declares the other edition once that edition has posts", async () => {
+    stubApiByLocale({ posts: { vi: [COMPACT], en: [{ ...COMPACT, locale: "en" }] } });
+    const meta = await listingMetadata({
+      params: Promise.resolve({ locale: "vi" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(meta.alternates?.languages).toEqual({
+      vi: "http://localhost:3006/blog/vi",
+      en: "http://localhost:3006/blog/en",
+      "x-default": "http://localhost:3006/blog/vi",
+    });
+  });
+
+  test("and declares nothing while the English listing is still empty", async () => {
+    stubApiByLocale({ posts: { vi: [COMPACT], en: [] } });
+    const meta = await listingMetadata({
+      params: Promise.resolve({ locale: "vi" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(meta.alternates?.languages).toBeUndefined();
+    // The canonical is untouched by any of this.
+    expect(meta.alternates?.canonical).toBe("http://localhost:3006/blog/vi");
+  });
+
+  test("a category pairs on its shared slug, at the other locale's own segment", async () => {
+    stubApiByLocale({
+      posts: { vi: [COMPACT] },
+      categories: { vi: CATEGORIES, en: EN_CATEGORIES },
+    });
+    const meta = await categoryMetadata({
+      params: Promise.resolve({ locale: "vi", category: "spss" }),
+    });
+    expect(meta.alternates?.languages).toEqual({
+      vi: "http://localhost:3006/blog/vi/chu-de/spss",
+      en: "http://localhost:3006/blog/en/topic/spss",
+      "x-default": "http://localhost:3006/blog/vi/chu-de/spss",
+    });
+  });
+
+  test("a category the other edition has no posts in is not declared", async () => {
+    stubApiByLocale({
+      posts: { vi: [COMPACT] },
+      categories: {
+        vi: CATEGORIES,
+        // The row exists in the English taxonomy but nothing is published in
+        // it: annotating that hub would point a reader at an empty list.
+        en: [{ ...EN_CATEGORIES[0], post_count: 0 }],
+      },
+    });
+    const withoutPosts = await categoryMetadata({
+      params: Promise.resolve({ locale: "vi", category: "spss" }),
+    });
+    expect(withoutPosts.alternates?.languages).toBeUndefined();
+
+    // Nor is one the other taxonomy does not carry at all.
+    stubApiByLocale({ posts: { vi: [COMPACT] }, categories: { vi: CATEGORIES, en: [] } });
+    const withoutCategory = await categoryMetadata({
+      params: Promise.resolve({ locale: "vi", category: "spss" }),
+    });
+    expect(withoutCategory.alternates?.languages).toBeUndefined();
+  });
+
+  test("a post declares no alternate: nothing on the row pairs the two editions", async () => {
+    stubApi();
+    const meta = await postMetadata({
+      params: Promise.resolve({ locale: "vi", slug: FULL.slug }),
+    });
+    expect(meta.alternates?.languages).toBeUndefined();
+    expect(meta.alternates?.canonical).toBe("http://localhost:3006/blog/vi/cronbach-alpha-la-gi");
   });
 });
 
