@@ -180,10 +180,12 @@ def test_run_writes_backlog_tsv_with_the_agreed_columns(tmp_path):
     _write_tsv(tmp_path / "gate-troubleshoot.tsv",
                ["keyword", "search_volume", "verdict", "reason"],
                [["ma trận xoay lộn xộn phải làm sao", "6600", "pass", "volume 6600"]])
+    # No volume came back for this one. Rule changed 2026-09-08: it is a page
+    # anyway, tagged `unmeasured` so the ordering can put it in a later tranche.
     _write_tsv(tmp_path / "gate-statistical-term.tsv",
                ["keyword", "search_volume", "verdict", "reason"],
-               [["biến hiếm là gì", "5", "pass",
-                 "volume 5 under 10, family 'misc' aggregate 900"]])
+               [["biến hiếm là gì", "", "pass",
+                 "no volume returned; quality gates decide"]])
     exclusions = tmp_path / "exclusions.txt"
     exclusions.write_text("\\btải\\b\n", encoding="utf-8")
 
@@ -201,7 +203,7 @@ def test_run_writes_backlog_tsv_with_the_agreed_columns(tmp_path):
     assert by_slug["cronbach-alpha"]["secondary_keywords"] == "cronbach alpha là gì"
     assert "phantichspss.com:/cronbach" in by_slug["cronbach-alpha"]["competitor_urls"]
     assert by_slug["cronbach-alpha"]["gate_status"] == "measured"
-    assert by_slug["bien-hiem-la-gi"]["gate_status"] == "family-inferred"
+    assert by_slug["bien-hiem-la-gi"]["gate_status"] == "unmeasured"
     assert summary["rows"] == 3
     assert summary["excluded"] == 1
 
@@ -225,37 +227,37 @@ def test_run_skips_slugs_already_in_the_blog_index(tmp_path):
     assert summary["already_covered"] == 1
 
 
-def test_family_inferred_rows_come_after_every_measured_row():
-    """Drafts must not consume early slots.
+def test_unmeasured_rows_come_after_every_measured_row():
+    """The tier split is the whole demand rule now.
 
-    `create` schedules in priority order and a family-inferred row is inserted
-    as DRAFT, never scheduled, so a low priority number spent on one would push
-    a measured page out of the first tranche.
+    Since 2026-09-08 an unmeasured row publishes like any other, so ordering is
+    all that measured volume buys: a page whose demand is known pays back sooner
+    and belongs in an earlier tranche. `create` schedules in priority order.
     """
     phrasings = [
         plan.Phrasing("spss alpha", 900, "f1", "spss", "term-la-gi"),
         plan.Phrasing("spss beta", 5, "f1", "spss", "term-la-gi",
-                      gate_status="family-inferred"),
+                      gate_status="unmeasured"),
         plan.Phrasing("pls gamma", 800, "f2", "smartpls", "smartpls-howto"),
         plan.Phrasing("pls delta", 700, "f2", "smartpls", "smartpls-howto"),
         plan.Phrasing("pls epsilon", 600, "f2", "smartpls", "smartpls-howto"),
     ]
     rows = plan.build(phrasings)
-    assert [r.gate_status for r in rows] == ["measured"] * 4 + ["family-inferred"]
+    assert [r.gate_status for r in rows] == ["measured"] * 4 + ["unmeasured"]
     assert [r.priority for r in rows] == [1, 2, 3, 4, 5]
     # the measured tier keeps the category round robin it had before
     assert [r.focus_keyword for r in rows][:2] == ["spss alpha", "pls gamma"]
 
 
-def test_family_inferred_rows_of_a_big_category_still_wait_for_small_categories():
+def test_unmeasured_rows_of_a_big_category_still_wait_for_small_categories():
     """The tier split beats the round robin, not the other way round."""
     phrasings = [plan.Phrasing(f"spss d{i}", 100 - i, "f1", "spss", "term-la-gi",
-                               gate_status="family-inferred") for i in range(3)]
+                               gate_status="unmeasured") for i in range(3)]
     phrasings.append(plan.Phrasing("luan van m", 40, "f2", "luan-van-thac-si",
                                    "thesis-writing"))
     rows = plan.build(phrasings)
     assert rows[0].focus_keyword == "luan van m"
-    assert all(r.gate_status == "family-inferred" for r in rows[1:])
+    assert all(r.gate_status == "unmeasured" for r in rows[1:])
 
 
 def test_a_candidate_measured_through_the_harvest_stays_measured(tmp_path):
@@ -271,7 +273,7 @@ def test_a_candidate_measured_through_the_harvest_stays_measured(tmp_path):
     _write_tsv(tmp_path / "gate-statistical-term.tsv",
                ["keyword", "search_volume", "verdict", "reason"],
                [["biến hiếm là gì", "", "pass",
-                 "unmeasured; family 'misc' sample 4/5 pass, aggregate 9,300"]])
+                 "no volume returned; quality gates decide"]])
 
     out = tmp_path / "backlog.tsv"
     summary = plan.run(harvest_path=harvest, candidates_path=candidates,
@@ -281,7 +283,7 @@ def test_a_candidate_measured_through_the_harvest_stays_measured(tmp_path):
     assert len(rows) == 1
     assert rows[0]["gate_status"] == "measured"
     assert rows[0]["search_volume"] == "880"
-    assert summary["family_inferred"] == 0
+    assert summary["unmeasured"] == 0
 
 
 # ------------------------------------------------------- the vocabulary gate

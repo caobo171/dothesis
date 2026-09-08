@@ -31,7 +31,7 @@ def _fixture_run(tmp_path):
                      "term-la-gi", "reliability", "", "", "measured"],
                     [2, "bootstrapping-smartpls", "bootstrapping smartpls", 90, "",
                      "smartpls", "smartpls-howto", "estimation", "", "",
-                     "family-inferred"]])
+                     "family-inferred"]])  # pre-2026-09-08 spelling of `unmeasured`
     seed_dir = tmp_path / "posts"
     (seed_dir / "rejected").mkdir(parents=True)
     (seed_dir / "0001-cronbach-alpha.json").write_text(
@@ -53,7 +53,8 @@ def test_report_counts_rows_seeds_spend_and_the_shortfall(tmp_path, capsys):
 
     assert summary["backlog_rows"] == 2
     assert summary["volume_total"] == 1390
-    assert summary["family_inferred"] == 1
+    # Read back through the alias: the backlog row above says `family-inferred`.
+    assert summary["unmeasured"] == 1
     assert summary["per_category"] == {"spss": 1, "smartpls": 1}
     assert summary["per_archetype"] == {"term-la-gi": 1, "smartpls-howto": 1}
     assert summary["seeds_written"] == 1
@@ -64,7 +65,7 @@ def test_report_counts_rows_seeds_spend_and_the_shortfall(tmp_path, capsys):
 
     out = capsys.readouterr().out
     assert "backlog:" in out and "spend:" in out and "target:" in out
-    assert "never pad with unmeasured pages" in out
+    assert "the gate stopped cutting" in out
 
 
 def test_report_survives_an_empty_run(tmp_path, capsys):

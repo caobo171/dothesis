@@ -1,8 +1,10 @@
 """What the run actually produced: counts, volume, spend, and the shortfall.
 
-The target is 1,000 posts and the instruction is to stop at the gate's ceiling
-rather than pad, so the two numbers that matter are printed side by side: how
-many pages the measured backlog can support, and how many exist on disk.
+The target is 1,000 posts, so the two numbers that matter are printed side by
+side: how many pages the backlog can support, and how many exist on disk. Since
+2026-09-08 the ceiling is the topic bank's, not the demand gate's — the gate
+cuts nothing now — so a shortfall means the axes need expanding, not that
+demand ran out.
 """
 from __future__ import annotations
 
@@ -60,7 +62,7 @@ def run(backlog_path: str | None = None, seed_dir: str | None = None,
     summary = {
         "backlog_rows": len(rows),
         "volume_total": sum(r.search_volume for r in rows),
-        "family_inferred": sum(1 for r in rows if r.gate_status == "family-inferred"),
+        "unmeasured": sum(1 for r in rows if r.gate_status == "unmeasured"),
         "per_category": per_category,
         "per_archetype": per_archetype,
         "seeds_written": written,
@@ -75,7 +77,7 @@ def run(backlog_path: str | None = None, seed_dir: str | None = None,
 
     print(f"backlog: {summary['backlog_rows']:,} rows, "
           f"{summary['volume_total']:,} searches/month, "
-          f"{summary['family_inferred']} family-inferred")
+          f"{summary['unmeasured']} unmeasured")
     if per_category:
         print("  by category")
         for c in sorted(per_category, key=lambda c: -per_category[c]):
@@ -95,6 +97,7 @@ def run(backlog_path: str | None = None, seed_dir: str | None = None,
           f"(short by {summary['ceiling_shortfall']:,}), "
           f"{summary['written_shortfall']:,} still to write.")
     if summary["ceiling_shortfall"]:
-        print("         The ceiling is the gate's answer. Measure more axis units to "
-              "raise it, never pad with unmeasured pages.")
+        print("         The ceiling is what the topic bank supplies. Expand another "
+              "axis to raise it; the gate stopped cutting on 2026-09-08, so the "
+              "shortfall is candidates, not demand.")
     return summary

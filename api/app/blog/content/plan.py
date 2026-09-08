@@ -556,15 +556,15 @@ def _round_robin_tier(rows: list[BacklogRow]) -> list[BacklogRow]:
 def _round_robin(rows: list[BacklogRow]) -> list[BacklogRow]:
     """Two tiers, measured first, each one a category round robin.
 
-    `create` schedules in priority order, and a family-inferred row is inserted
-    as a DRAFT that is never scheduled until it is measured on its own. Ordering
-    both kinds together would let a draft take priority 3 while a measured page
-    waits at 40, i.e. spend a publishing slot on a page that cannot publish. So
-    the tier split comes first and the round robin runs inside each tier.
+    This ordering carries the whole weight of demand since 2026-09-08: an
+    unmeasured row publishes like any other, so the only thing volume decides is
+    which tranche a page lands in. Measured pages go first because a page whose
+    demand is known pays back sooner, and `create` schedules in priority order,
+    so the tier split comes first and the round robin runs inside each tier.
     """
-    measured = [r for r in rows if r.gate_status != "family-inferred"]
-    inferred = [r for r in rows if r.gate_status == "family-inferred"]
-    out = _round_robin_tier(measured) + _round_robin_tier(inferred)
+    measured = [r for r in rows if r.gate_status != "unmeasured"]
+    unmeasured = [r for r in rows if r.gate_status == "unmeasured"]
+    out = _round_robin_tier(measured) + _round_robin_tier(unmeasured)
     for i, row in enumerate(out, 1):
         row.priority = i
     return out
@@ -642,10 +642,10 @@ def build(phrasings: list[Phrasing], exclude_slugs: set[str] | None = None,
             for u in p.competitor_urls:
                 if u not in urls:
                     urls.append(u)
-        # A cluster is family-inferred only when nothing in it was measured on
-        # its own; one measured phrasing is enough to schedule the page.
+        # A cluster counts as unmeasured only when nothing in it was measured on
+        # its own; one measured phrasing is enough to date the page by a number.
         status = "measured" if any(p.gate_status == "measured" for p in group) \
-            else "family-inferred"
+            else "unmeasured"
         rows.append(BacklogRow(priority=0, slug=slug, focus_keyword=lead.keyword,
                                search_volume=lead.search_volume, secondary_keywords=secondary,
                                category=lead.category, archetype=lead.archetype,
@@ -671,6 +671,10 @@ def write_backlog(rows: list[BacklogRow], path: str) -> None:
                              "; ".join(r.competitor_urls), r.gate_status])
 
 
+def _normalise_gate_status(value: str | None) -> str:
+    return "unmeasured" if value == "family-inferred" else (value or "measured")
+
+
 def read_backlog(path: str) -> list[BacklogRow]:
     rows: list[BacklogRow] = []
     with open(path, encoding="utf-8", newline="") as fh:
@@ -689,7 +693,10 @@ def read_backlog(path: str) -> list[BacklogRow]:
                 family=raw.get("family") or "",
                 sibling_slugs=split(raw.get("sibling_slugs")),
                 competitor_urls=split(raw.get("competitor_urls")),
-                gate_status=raw.get("gate_status") or "measured",
+                # `family-inferred` is what `unmeasured` was called before
+                # 2026-09-08; a backlog.tsv from before then would otherwise
+                # land its unmeasured rows in the measured tier.
+                gate_status=_normalise_gate_status(raw.get("gate_status")),
             ))
     return rows
 
@@ -750,7 +757,7 @@ def run(harvest_path: str | None = None, candidates_path: str | None = None,
         "blacklisted": sum(1 for _, _, r in dropped if r.startswith("exclusion:")),
         "rejected_path": rejected_path,
         "already_covered": len(all_rows) - len(kept),
-        "family_inferred": sum(1 for r in kept if r.gate_status == "family-inferred"),
+        "unmeasured": sum(1 for r in kept if r.gate_status == "unmeasured"),
         "volume_total": sum(r.search_volume for r in kept),
         "per_category": per_category,
     }
@@ -760,7 +767,9 @@ def run(harvest_path: str | None = None, candidates_path: str | None = None,
           f"({summary['blacklisted']} by exclusions.txt, "
           f"{off_vocabulary} off-vocabulary) -> {rejected_path}")
     print(f"      {summary['already_covered']} already covered")
-    print(f"      {summary['family_inferred']} family-inferred (insert as draft, never scheduled)")
+    print(f"      {summary['unmeasured']} unmeasured "
+          f"({summary['rows'] - summary['unmeasured']} measured), scheduled after the "
+          f"measured rows")
     print(f"      total volume {summary['volume_total']:,}/month")
     for category in sorted(per_category, key=lambda c: -per_category[c]):
         print(f"        {category:24} {per_category[category]:5d}")
