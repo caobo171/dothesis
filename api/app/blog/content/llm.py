@@ -21,7 +21,26 @@ import time
 from dataclasses import dataclass
 
 DEFAULT_MODEL = "gpt-5.6-luna"
-MAX_OUTPUT_TOKENS = 16000
+# Reasoning tokens count against this ceiling on gpt-5.6-*, so it bounds the
+# model's thinking and its visible answer together. Measured 2026-09-09: at
+# 16,000 the ten longest Vietnamese posts (2,560 to 3,802 words) came back as
+# summaries at 0.37 to 0.57 of their source length, against a median of 0.84
+# across the other 969, and repeating the call reproduced it. Everything that
+# fit shipped faithfully, so the ceiling was the whole defect. 32,000 matches
+# what `engine/utils/openai_adapter.py` gives a chapter draft, and a ceiling
+# costs nothing until it is used.
+MAX_OUTPUT_TOKENS = 32000
+
+
+def max_output_tokens() -> int:
+    """The ceiling, overridable per run with BLOG_MAX_OUTPUT_TOKENS.
+
+    A handful of the longest posts still truncate at 32,000 because reasoning
+    and answer share the budget, and raising the default for all thousand of
+    them to serve five would spend thinking on posts that never needed it.
+    """
+    raw = (os.getenv("BLOG_MAX_OUTPUT_TOKENS") or "").strip()
+    return int(raw) if raw.isdigit() and int(raw) > 0 else MAX_OUTPUT_TOKENS
 TIMEOUT_S = 900          # a 2,400-word Vietnamese post with reasoning is slow, not stuck
 MAX_ATTEMPTS = 5
 BACKOFF_BASE_S = 2.0
@@ -82,7 +101,7 @@ class LunaClient:
         request = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
-            "max_completion_tokens": MAX_OUTPUT_TOKENS,
+            "max_completion_tokens": max_output_tokens(),
             "response_format": {"type": "json_object"},
         }
         if self.reasoning_effort:
