@@ -118,30 +118,69 @@ The depth budget from WELE applies: a dimension multiplies once. `cách chạy
 hồi quy trong spss` is a page; `cách chạy hồi quy trong spss cho sinh viên
 marketing` is not.
 
-## 5. Demand gate and the honest number
+## 5. Content gates, and what measured volume is still for
 
-The rule is WELE's: **no page without measured volume for its own primary
-query.** Two measurement sources:
+Rewritten 2026-09-08 for the rule change recorded in §20. The rule:
 
-1. **OpenSEO** (MCP). 393 credits remain. Metrics cost about 1.7 credits per
-   keyword, so it is the fallback, not the bulk tool.
-2. **DataForSEO direct.** `DATAFORSEO_LOGIN` and `DATAFORSEO_PASSWORD` are set
-   in the repo `.env`. The engine's `gate` command calls the Google Ads search
-   volume endpoint (up to 1,000 keywords per request) and records the `cost`
-   field from every response. The first call is a 5-keyword probe that must
-   print its cost before any bulk call.
+> **A page exists when three things hold: it has real content, it is genuinely
+> useful to a student standing at this step, and it does not duplicate anything
+> already in the corpus. Measured search volume sets the order pages publish in.
+> It has no veto.**
 
-Cut rules (unchanged from WELE): no volume, drop; under 10, drop unless the
-family aggregate clears 500 and each page is distinct; difficulty above 40,
-defer (Google Ads volume carries no difficulty, so this rule applies only to
-OpenSEO-measured rows).
+The trade is worth stating rather than glossing. Volume was a cheap mechanical
+proxy for "somebody wants this", and its virtue was that a script could check it
+without an argument. Three judgements now stand where one number stood. The risk
+that number was defending against has not moved: a bank of a thousand pages that
+say nothing is what Google's spam policy calls scaled content abuse, the policy
+covers human-written pages as well as generated ones, and the penalty is
+domain-wide. So the distinctness judgement carries what the volume gate carried,
+and it carries double where the evidence is thinner. **For a page with no measured
+volume the distinctness bar is twice as heavy**, because for that page the article
+itself is the entire case for its existence.
 
-Expected yield: about 250 on-topic pages from the harvest after clustering,
-plus 400 to 700 from the axes after the gate. **The run targets 1,000 posts and
-stops at the gate's ceiling if it is lower.** It never pads with unmeasured
-pages. If DataForSEO is unusable, the top 200 candidates are measured through
-OpenSEO and the remainder are written with `gate_status = family-inferred`
-and inserted as DRAFT, never scheduled, until measured.
+Measured volume still decides order, for payback rather than for safety: a page
+whose query carries a number has known demand before it is written, so it earns
+impressions on a schedule instead of on a hope. Publishing those first means the
+bank returns value soonest and the judgement calls ride behind traffic that
+already exists.
+
+`gate` therefore measures and never cuts. It attaches a monthly volume to every
+candidate it can price and stamps every candidate it cannot as
+`gate_status = unmeasured`; `family-inferred` survives as a deprecated alias for
+that same state so pre-2026-09-08 TSVs still load. The summary prints measured
+against unmeasured, because that split is the size of the batch standing on
+judgement. Measurement is optional and worth doing, from two sources:
+
+1. **DataForSEO direct.** `DATAFORSEO_LOGIN` and `DATAFORSEO_PASSWORD` are set
+   in the repo `.env`. `gate` calls the Google Ads search volume endpoint (up to
+   1,000 keywords per request) and records the `cost` field from every response.
+   The first call is a 5-keyword probe that must print its cost before any bulk
+   call.
+2. **OpenSEO** (MCP), about 1.7 credits per keyword: the fallback for short
+   lists, not the bulk tool.
+
+Neither is spent on competitor research any more (§20).
+
+What became of the cut rules:
+
+- **No volume returned, or under 10 a month.** Neither drops. Both are stamped
+  `unmeasured` and ordered behind every measured row by `plan`.
+- **Difficulty above 40, defer.** Kept. It is a statement about how long a page
+  takes to earn anything, not about whether anyone wants it. Google Ads volume
+  carries no difficulty, so it applies only to OpenSEO-measured rows.
+- **The load-bearing check moved into `qa.py`** (§14): a corpus pass comparing
+  every seed body against every other on word-5-gram shingles, at a stricter
+  threshold when either page is unmeasured, plus a per-post rule that an
+  unmeasured page carries two of the three proprietary elements, one more
+  internal link and one more table than a measured one. The calibrated
+  thresholds live in `qa.py` and are deliberately not restated here.
+
+Expected yield: about 250 on-topic pages from the harvest after clustering, plus
+400 to 700 phrasings from the axes. **The ceiling is now the candidate set the
+axes and the harvest supply, about 1,000 pages, not the count of rows that came
+back with a price.** The run still does not pad: a candidate that cannot be made
+genuinely distinct is not a page, and the QA corpus check is where that is
+settled.
 
 ## 6. Categories
 
@@ -509,6 +548,10 @@ Measured, not planned. Everything below is reproducible from
 | Writer | 421 of 421 seeds pass QA; gpt-5.6-luna, $4.20, about 2 hours with 6 workers; 88 needed one repair |
 | Load | 185 scheduled or live, 115 drafts, 121 refused by the duplicate guard as same-intent overlaps after calibration (§9 `similarity.py`) |
 
+The 421 ceiling below was measured under the demand rule superseded on
+2026-09-08 (§20); it records what the gate could price that day, not a limit that
+still binds.
+
 **The 1,000 target is not supported by measured demand** in this market with
 this method, exactly as WELE's expansion-axes note predicts: the ceiling the
 gate returned is 421, and the honest way to raise it is to measure more units
@@ -520,3 +563,49 @@ load again.
 Publishing to production remains the owner's step: deploy the branch, then run
 `create --dir api/data/blog-seeds/vi --schedule-start <date> --per-week 40`
 against the production `DATABASE_URL`.
+
+## 20. The demand rule changes (2026-09-08)
+
+Decided by the product owner on 2026-09-08, matching a change made in the WELE
+project the same day.
+
+**The veto goes.** "No page without measured search volume for its own primary
+query" is replaced. Measured volume now orders the backlog and vetoes nothing.
+Three gates decide whether an article exists at all: it has real content, it is
+genuinely useful to the reader, and it does not duplicate the corpus. In
+exchange, the "genuinely distinct" bar is **twice as heavy for an article with no
+measured volume**, because for such an article quality is the only thing that
+stops the bank reading as scaled content abuse to Google.
+
+**Stop paying to measure competitors' SEO.** Competitor research is a browser:
+search the query on Google in Vietnamese and read what ranks on page one,
+recording per result who ranks, what shape the page is (definition, procedure,
+troubleshooting, list), how deep it goes, and what it fails to answer.
+`get_ranked_keywords` and `get_keyword_metrics` are no longer the required path.
+The harvest committed under `docs/seo/topic-bank/` stays as historical evidence:
+a snapshot of 2026-09-07 and 2026-09-08, still the best ordering input in the
+repo because its volumes are real readings, and no longer a gate.
+
+**What it unlocks.** The 421-page ceiling in §19 was the gate's answer under the
+old rule, which is to say a measurement of what DataForSEO and OpenSEO could
+price on the day the DataForSEO balance ran out. The new ceiling is the candidate
+set the axes and the harvest supply, about 1,000 pages.
+
+**What it supersedes in this document:**
+
+- §5, rewritten in place.
+- §12 and §15: `gate_status = family-inferred` no longer inserts as DRAFT, and no
+  seed is held out of the schedule for want of a volume. `plan` orders measured
+  rows ahead of unmeasured ones, then category round-robin by volume inside each
+  band.
+- §14: the QA gate gains corpus near-duplicate detection over word-5-gram body
+  shingles across the whole seed directory, and the doubled per-post bar for
+  unmeasured pages.
+- §16: the pipeline skill's manual harvest step is browser research rather than
+  an OpenSEO ranked-keywords pull.
+- §19 stands as history. Its 421 is a measurement taken under the superseded
+  rule.
+
+**What does not change:** the dedupe audit before every batch, the QA gate's
+existing rule list, the voice rules, the citation allowlist and the rule against
+inventing a source, a study or a statistic.
