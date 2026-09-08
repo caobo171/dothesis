@@ -66,6 +66,16 @@
   line-height: 1.6;
   color: var(--ink-600);
 }
+@media (max-width: 640px) {
+  /* 19px over a 320px measure is eight lines, and eight lines of lead is the
+     wall of text again in miniature. */
+  .lp-root .blog-lead {
+    margin-top: 14px;
+  }
+  .lp-root .blog-lead .blog-prose {
+    font-size: 17px;
+  }
+}
 
 /* ------------------------------- Chips ---------------------------------- */
 .lp-root .blog-chips {
@@ -184,17 +194,18 @@
 
    What the old bare <ul> was missing is hierarchy, not information: every row
    was one weight, one size, one colour, thirty deep. */
+/* The bleed lives on the list, not the row, so the rule above the first title
+   is exactly as wide as every divider under it. */
 .lp-root .blog-rows {
-  margin-top: 32px;
+  margin: 32px -12px 0;
   border-top: 1px solid var(--ink-100);
 }
 .lp-root .blog-row {
   position: relative;
   border-bottom: 1px solid var(--ink-100);
-  /* Bled 12px past the measure so the hover tint has air around the text
-     instead of stopping flush against the first and last character. */
+  /* 12px of side padding so the hover tint has air around the text instead of
+     stopping flush against the first and last character. */
   padding: 15px 12px;
-  margin: 0 -12px;
   transition: background-color var(--duration-fast);
 }
 .lp-root .blog-row:hover {
@@ -242,6 +253,9 @@
   /* One line at 320px of measure is half a sentence, so the phone gets two. */
   .lp-root .blog-row__excerpt {
     -webkit-line-clamp: 2;
+  }
+  .lp-root .blog-rows {
+    margin-top: 24px;
   }
 }
 
