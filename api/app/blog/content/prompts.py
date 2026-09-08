@@ -1,4 +1,4 @@
-"""The writer's prompt, built from the skill files on disk.
+"""The writer's prompt and the translator's, built from the skill files on disk.
 
 The skills are the source of truth for structure, voice and citations, so the
 preamble is read from them at run time rather than copied here. Editing
@@ -6,6 +6,12 @@ preamble is read from them at run time rather than copied here. Editing
 keeping a human-readable skill next to a scripted writer.
 
 The prompt is one JSON-mode call: preamble (rules) plus brief (this row).
+
+The translation prompt lives here too, and for the same reason: it reads the
+same `voice.md` and the same `canonical-sources.md`, and the three things it
+has to get exactly right (the FAQ heading, the worked-table label, the
+writing-paragraph lead) are quoted out of `qa.LOCALE_RULES` rather than typed
+again, so the prompt and the gate cannot drift apart.
 """
 from __future__ import annotations
 
@@ -18,7 +24,8 @@ from . import skills_dir as default_skills_dir
 # The one definition of "this row has no measured search volume", shared with
 # the gate. A prompt that asked for a different bar than the gate enforces would
 # spend a repair call on every unmeasured row in the batch.
-from .qa import MIN_INTERNAL_LINKS, UNMEASURED_STATUSES
+from .qa import (BLACKLIST_EN, MIN_INTERNAL_LINKS, MIN_WORDS, META_DESC_MAX,
+                 META_DESC_MIN, META_TITLE_MAX, UNMEASURED_STATUSES, rules_for)
 
 BLOG_SKILL = "dothesis-blog-content"
 WORD_TARGET_MIN = 1800
@@ -328,6 +335,216 @@ def build_repair_prompt(row, previous: dict, failures: list[str],
         "## The draft to repair\n\n```json\n"
         + json.dumps({k: previous.get(k) for k in
                       ("title", "meta_title", "meta_description", "excerpt", "tags", "body")},
+                     ensure_ascii=False, indent=2)
+        + "\n```",
+    ])
+
+
+# ---------------------------------------------------------------- translation
+
+# The English edition is a translation of a bank that already passed the gate,
+# so the translator is not asked to make editorial choices: the structure, the
+# numbers, the tables and the citations are decided, and its whole job is to say
+# the same things in English a graduate student would actually write.
+TRANSLATE_ROLE = """\
+You are producing the English edition of an article that already exists on the
+DoThesis blog in Vietnamese. The reader is a graduate student writing a
+quantitative thesis in English, with their data file open and a deadline.
+
+This is a translation into idiomatic English, not a gloss. Every sentence has to
+read as though it had been written in English by someone who has run the
+analysis. Do not translate word by word, do not keep Vietnamese sentence shapes,
+and do not leave a Vietnamese word in an English sentence.
+
+What you may not do is change the article. The structure, the numbers, the
+tables, the citations, the menu paths and the links are decided and stay put.
+You are not rewriting, expanding, shortening, improving or updating anything."""
+
+# Vietnamese is written in syllables, so the gate's whitespace word count reads
+# high on the source and low on a faithful translation: the 979 seeds run a
+# median of 3,025 Vietnamese tokens, and 27 of them sit under 2,000. Those are
+# the ones that can land under the 1,500-word English floor, and the answer is
+# never padding, it is that something was dropped.
+_TRANSLATE_LENGTH = """\
+The English body must be at least %(min_words)d words. A full translation of one
+of these articles normally lands between 1,500 and 2,300 English words: the
+Vietnamese count looks higher because Vietnamese writes each syllable as a
+separate word. If your draft comes out short, the cause is something you left
+out, not the language. Translate every paragraph, every table row, every FAQ
+answer, every menu path and every caption. Do not add a section, do not pad a
+paragraph, and do not repeat a point to make a length."""
+
+
+def english_rules_block() -> str:
+    """The three strings the gate matches on, quoted from the gate itself."""
+    rules = rules_for("en")
+    return """\
+# Three strings the checker matches literally
+
+These are not stylistic suggestions. A mechanical checker looks for them, and a
+post missing one is rejected before anyone reads it.
+
+1. The FAQ section is an H2 reading exactly `## %(faq)s`, with its `### `
+   questions kept as `### ` questions, one per question, each still answered in
+   one to three paragraphs. Translate the question text; keep the count.
+2. The worked output table, the one showing what the software prints, is
+   labelled `%(worked)s` in its caption, in the sentence right before the table
+   or the one right after it. The Vietnamese label `số liệu minh họa` is where
+   it is now; the English label replaces it.
+3. The writing paragraph opens with a heading or a bold lead reading
+   `%(writing)s`, and keeps its bracketed placeholders visible.""" % {
+        "faq": rules.faq_heading,
+        "worked": rules.worked_label,
+        "writing": rules.writing_lead.capitalize(),
+    }
+
+
+def english_voice_block() -> str:
+    """What `voice.md` means once the sentence around the term is English."""
+    return """\
+## The voice rules in English
+
+Everything under Do and Do not in the voice guide above applies unchanged. No em
+dash, no exclamation mark, no `Not X. It is Y.` reversal, no motivational close,
+no `## Conclusion` heading, no listicle padding, no fake precision, no promise
+about the reader's own numbers, no invented source, and never a qualitative
+method offered as a step: the English checker rejects `in-depth interview` and
+`qualitative coding` the way the Vietnamese one rejects `phỏng vấn sâu`.
+
+The section headed "Vietnamese specifics" is the one thing that changes shape.
+Its rule was: keep the English technical vocabulary in English and write the
+surrounding sentence in Vietnamese. In English the technical vocabulary is
+already English, so keep it exactly as the source has it (`Cronbach's Alpha`,
+`outer loading`, `AVE`, `HTMT`, `VIF`, `p-value`, `Rotated Component Matrix`)
+and translate the sentence around it. `chạy` becomes `run`. `biến quan sát`
+becomes `item`, or `indicator` in a PLS model, never `question`. `thang đo` is
+`scale`, `cỡ mẫu` is `sample size`, `bảng hỏi` is `questionnaire`, `luận văn` is
+`thesis`, and `hội đồng` is `the committee`. Second person, direct, short
+paragraphs of two to four sentences.
+
+Write for a student who will submit in English. Do not explain Vietnamese
+academic conventions to them and do not mention Vietnam unless the source
+sentence is specifically about it.
+
+## Phrases that fail the English post
+
+The checker rejects a body containing any of these, case-insensitively. They are
+the English half of the slop blacklist:
+
+%(blacklist)s""" % {
+        "blacklist": "\n".join(f"- `{p}`" for p in BLACKLIST_EN),
+    }
+
+
+TRANSLATE_CONTRACT = """\
+## Output
+
+Return exactly one json object, no prose around it, with these keys:
+
+```
+{
+  "title": "the H1 in English, no brand suffix",
+  "meta_title": "max %(meta_title_max)d characters, may end with ' | DoThesis'",
+  "meta_description": "%(desc_min)d to %(desc_max)d characters, says what the reader gets",
+  "excerpt": "one sentence for the listing card, not the meta description again",
+  "focus_keyword": "the English query a student would type for this page",
+  "secondary_keywords": ["2 to 4 English variants of that query"],
+  "tags": ["3 to 6 English terms"],
+  "body": "the whole article in English markdown"
+}
+```
+
+`meta_title` and `meta_description` are written to fit, not translated to
+length: the character limits are checked, and a literal translation of the
+Vietnamese one usually misses them. `focus_keyword` is what the page should rank
+for in English, and it is also what the slug is built from, so give the plain
+search phrase and not a sentence.
+
+Carried over untouched, character for character, and you do not get to change
+any of them:
+
+- **Every number.** Thresholds, coefficients, p-values, sample sizes, years,
+  version numbers, the cells of every table. Do not convert, round, reformat or
+  re-derive one. `0.7` stays `0.7`, `5,000` stays `5,000`.
+- **Every table.** Same tables, same number of rows, same order, same cells.
+  Translate the header labels and the wording inside a text cell; a cell that is
+  a number or a citation is copied.
+- **Every code identifier and menu path.** `Analyze > Scale > Reliability
+  Analysis`, `Transform > Recode into Different Variables`, `.sav`, `.csv`,
+  variable names like `SAT1`, and anything inside backticks or a fenced block.
+- **Every citation.** The surname and the year are copied exactly. The only
+  thing that changes is the connector: `và cộng sự` becomes `et al.`, and `và`
+  between two surnames becomes `and`. `(Hair và cộng sự, 2010)` becomes
+  `(Hair et al., 2010)`. Never add a citation, never drop one, never move one to
+  a different sentence, and never cite a source that is not already in the
+  Vietnamese body.
+- **Every markdown link target.** Copy the part inside the parentheses exactly
+  as it is, including `/blog/vi/...` targets. A later pass rewrites those to
+  their English equivalents, and a target you edited is a target that pass
+  cannot find. Translate the anchor text, never the href. There is exactly one
+  `/landing` link and it stays in the closing paragraph.
+- **Every `{{img:...}}` token**, spelled exactly as it appears.
+
+%(length)s
+
+No em dash and no exclamation mark anywhere in the output.
+""" % {"meta_title_max": META_TITLE_MAX, "desc_min": META_DESC_MIN,
+       "desc_max": META_DESC_MAX,
+       "length": _TRANSLATE_LENGTH % {"min_words": MIN_WORDS}}
+
+_SOURCE_FIELDS = ("title", "meta_title", "meta_description", "excerpt",
+                  "focus_keyword", "secondary_keywords", "tags")
+
+
+def build_translate_preamble(skills_dir: str | None = None) -> str:
+    files = load_skill_files(skills_dir)
+    return "\n\n".join([
+        TRANSLATE_ROLE,
+        "# Voice\n\n" + files["voice"],
+        english_voice_block(),
+        "# Citation allowlist\n\n" + files["canonical-sources"],
+        "# Product\n\n" + PRODUCT_BLOCK,
+        english_rules_block(),
+    ])
+
+
+def build_translate_brief(seed: dict) -> str:
+    """The source article, whole, as the thing to translate."""
+    head = {k: seed.get(k) for k in _SOURCE_FIELDS}
+    return "\n\n".join([
+        "# The Vietnamese article to translate",
+        "Its metadata, for context. Produce the English counterpart of each, "
+        "written to the limits in the contract rather than translated to "
+        "length:\n\n```json\n"
+        + json.dumps(head, ensure_ascii=False, indent=2) + "\n```",
+        "Its body. Translate all of it:\n\n<article>\n"
+        + (seed.get("body") or "") + "\n</article>",
+    ])
+
+
+def build_translate_prompt(seed: dict, skills_dir: str | None = None) -> str:
+    return "\n\n".join([
+        build_translate_preamble(skills_dir),
+        build_translate_brief(seed),
+        TRANSLATE_CONTRACT,
+    ])
+
+
+def build_translate_repair_prompt(seed: dict, previous: dict, failures: list[str],
+                                  skills_dir: str | None = None) -> str:
+    """The one retry: the same rules, the draft, and what the checker rejected."""
+    return "\n\n".join([
+        build_translate_prompt(seed, skills_dir),
+        "# Your previous translation failed the checker\n\n"
+        "Fix every item below and return the corrected json object. Keep "
+        "everything that was already fine: do not translate the article again, "
+        "repair the draft. A word-count failure means you dropped something, so "
+        "find the paragraph you skipped rather than writing a new one.\n\n"
+        + "\n".join(f"- {f}" for f in failures),
+        "## The draft to repair\n\n```json\n"
+        + json.dumps({k: previous.get(k) for k in
+                      ("title", "meta_title", "meta_description", "excerpt",
+                       "focus_keyword", "secondary_keywords", "tags", "body")},
                      ensure_ascii=False, indent=2)
         + "\n```",
     ])

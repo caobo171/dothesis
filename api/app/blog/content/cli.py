@@ -4,6 +4,7 @@
     gate     candidates.tsv + DataForSEO -> gate-{axis}.tsv, measured or not
     plan     harvest + gate survivors    -> backlog.tsv
     write    backlog.tsv + the model     -> seed JSON + write-log.tsv
+    translate vi seed dir + the model    -> en seed JSON + translate-log.tsv
     qa       seed dir                    -> pass/fail report, exit 1 on any FAIL
     images   seed dir + the library      -> hero per seed, one picture per scene
     report   everything above            -> counts, volume, spend, shortfall
@@ -65,6 +66,26 @@ def _cmd_write(args) -> int:
     from .writer import run  # noqa: PLC0415
 
     summary = run(backlog_path=args.backlog, out_dir=args.out, limit=args.limit,
+                  workers=args.workers, model=args.model, budget_usd=args.budget_usd,
+                  dry_run=args.dry_run, force=args.force)
+    return 0 if summary["failed"] == 0 else 1
+
+
+def _cmd_translate(args) -> int:
+    load_env()
+    from .translate import rewrite_links, run  # noqa: PLC0415
+
+    # The link pass is a separate mode rather than a tail on every run: the
+    # vi -> en map is only complete once the last post is translated, so a
+    # rewrite in the middle of a batch would map into a half-built bank.
+    if args.rewrite_links:
+        stats = rewrite_links(args.out, dry_run=args.dry_run)
+        thin = stats.relink.thin if stats.relink else []
+        # A post left under the internal-link floor needs a writer, not a
+        # script, so it fails the command the way `relink` fails it.
+        return 1 if thin else 0
+
+    summary = run(src_dir=args.src, out_dir=args.out, limit=args.limit,
                   workers=args.workers, model=args.model, budget_usd=args.budget_usd,
                   dry_run=args.dry_run, force=args.force)
     return 0 if summary["failed"] == 0 else 1
@@ -169,6 +190,25 @@ def build_parser() -> argparse.ArgumentParser:
                    help="build every prompt and report the estimate, call nothing")
     p.add_argument("--force", action="store_true", help="rewrite rows whose seed exists")
     p.set_defaults(func=_cmd_write)
+
+    p = sub.add_parser("translate",
+                       help="translate the Vietnamese bank into the English edition")
+    p.add_argument("--src", default=None,
+                   help="Vietnamese seed directory (default: data/blog-seeds/vi/posts)")
+    p.add_argument("--out", default=None,
+                   help="English seed directory (default: data/blog-seeds/en/posts)")
+    p.add_argument("--limit", type=int, default=None)
+    p.add_argument("--workers", type=int, default=6)
+    p.add_argument("--model", default=None)
+    p.add_argument("--budget-usd", type=float, default=40.0)
+    p.add_argument("--dry-run", action="store_true",
+                   help="build every prompt and report the estimate, call nothing")
+    p.add_argument("--force", action="store_true",
+                   help="retranslate posts whose English seed exists")
+    p.add_argument("--rewrite-links", action="store_true",
+                   help="translate nothing: point the finished English bodies at their "
+                        "English targets and hand what will not map to relink")
+    p.set_defaults(func=_cmd_translate)
 
     p = sub.add_parser("qa", help="run the mechanical gate over a seed directory")
     p.add_argument("seed_dir")
