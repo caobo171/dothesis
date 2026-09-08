@@ -436,3 +436,20 @@ def test_both_editions_load_side_by_side(db):
     # The Vietnamese hub the live bank sits under is untouched by the English run.
     assert db.get(BlogCategory, vi[("vi", "spss")]).display_name == "SPSS"
     assert db.get(BlogCategory, en[("en", "thong-ke")]).display_name == "Statistics"
+
+
+def test_a_translated_seed_pairs_with_the_post_it_came_from(db, good_seed, categories):
+    """The translator writes `source_slug`; the pairing has to survive the load
+    or the two editions declare no hreflang and compete for one query."""
+    original = copy.deepcopy(good_seed)
+    _, first = S.create_from_seed(db, original, categories, now=NOW)
+
+    translated = copy.deepcopy(good_seed)
+    translated["locale"] = "en"
+    translated["slug"] = f"english-{original['slug']}"
+    translated["source_slug"] = original["slug"]
+    _, second = S.create_from_seed(db, translated, categories, now=NOW)
+    db.commit()
+
+    assert first.translation_key == original["slug"], "an original names itself"
+    assert second.translation_key == original["slug"], "a translation names its source"
