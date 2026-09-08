@@ -41,3 +41,39 @@ spss-het-han-dung-thu	spss hết hạn dùng thử	{display} phải làm sao;l�
 ket-qua-khac-voi-bai-bao-goc	kết quả khác với bài báo gốc	{display} phải làm sao;lỗi {display} spss	nghien-cuu-khoa-hoc	troubleshoot	defence
 hoi-dong-hoi-ve-co-mau	hội đồng hỏi về cỡ mẫu	{display} phải làm sao;lỗi {display} spss	nghien-cuu-khoa-hoc	troubleshoot	defence
 bi-nghi-ngo-so-lieu-khong-that	bị nghi ngờ số liệu không thật	{display} phải làm sao;lỗi {display} spss	nghien-cuu-khoa-hoc	troubleshoot	defence
+so-nhan-to-khac-voi-mo-hinh	số nhân tố khác với mô hình	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+bien-chay-sang-nhan-to-khac	biến chạy sang nhân tố khác	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+ma-tran-khong-xac-dinh-duong	ma trận không xác định dương	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	efa
+anova-co-y-nghia-nhung-post-hoc-khong-khac	anova có ý nghĩa nhưng post hoc không khác	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	test
+kiem-dinh-levene-co-y-nghia	kiểm định levene có ý nghĩa	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	test
+he-so-beta-lon-hon-1	hệ số beta lớn hơn 1	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+durbin-watson-khong-dat	durbin watson không đạt	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+r-binh-phuong-hieu-chinh-am	r bình phương hiệu chỉnh âm	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+f-co-y-nghia-nhung-khong-bien-nao-co-y-nghia	f có ý nghĩa nhưng không biến nào có ý nghĩa	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	regression
+process-macro-khong-hien-trong-spss	process macro không hiện trong spss	{display} spss;{display} phải làm sao	spss	troubleshoot	mediation
+khoang-tin-cay-bootstrap-chua-0	khoảng tin cậy bootstrap chứa 0	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	mediation
+bien-dieu-tiet-khong-co-y-nghia	biến điều tiết không có ý nghĩa	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	mediation
+bien-trung-gian-khong-co-y-nghia	biến trung gian không có ý nghĩa	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	mediation
+spss-bao-no-valid-cases	spss báo no valid cases	{display} spss;{display} phải làm sao	spss	troubleshoot	software
+syntax-bao-loi	syntax báo lỗi	{display} spss;{display} phải làm sao	spss	troubleshoot	software
+bien-so-bi-nhan-la-chuoi-ky-tu	biến số bị nhận là chuỗi ký tự	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	software
+dau-thap-phan-sai-khi-nhap-du-lieu	dấu thập phân sai khi nhập dữ liệu	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	software
+font-tieng-viet-bi-loi	font tiếng việt bị lỗi	{display} spss;{display} phải làm sao	spss	troubleshoot	software
+hai-bien-tuong-quan-qua-cao	hai biến tương quan quá cao	{display} phải làm sao;lỗi {display} spss	spss	troubleshoot	data
+cr-lon-hon-0-95	cr lớn hơn 0 95	{display} phải làm sao;lỗi {display} smartpls	smartpls	troubleshoot	pls
+q-square-am	q square âm	{display} phải làm sao;lỗi {display} smartpls	smartpls	troubleshoot	pls
+ma-tran-suy-bien-singular-matrix	ma trận suy biến singular matrix	{display} phải làm sao;lỗi {display} smartpls	smartpls	troubleshoot	pls
+khong-nhap-duoc-file-csv	không nhập được file csv	{display} phải làm sao;lỗi {display} smartpls	smartpls	troubleshoot	pls
+ket-qua-bootstrapping-thay-doi-moi-lan-chay	kết quả bootstrapping thay đổi mỗi lần chạy	{display} phải làm sao;lỗi {display} smartpls	smartpls	troubleshoot	pls
+micom-khong-dat	micom không đạt	{display} phải làm sao;lỗi {display} smartpls	smartpls	troubleshoot	pls
+mo-hinh-khong-duoc-nhan-dang	mô hình không được nhận dạng	{display} phải làm sao;lỗi {display} amos	spss	troubleshoot	amos
+cfi-nho-hon-0-9	cfi nhỏ hơn 0 9	{display} phải làm sao;lỗi {display} amos	spss	troubleshoot	amos
+rmsea-lon-hon-0-08	rmsea lớn hơn 0 08	{display} phải làm sao;lỗi {display} amos	spss	troubleshoot	amos
+chi-square-tren-df-qua-lon	chi square trên df quá lớn	{display} phải làm sao;lỗi {display} amos	spss	troubleshoot	amos
+phuong-sai-am-heywood	phương sai âm heywood	{display} phải làm sao;lỗi {display} amos	spss	troubleshoot	amos
+vuot-gioi-han-vong-lap	vượt giới hạn vòng lặp	{display} phải làm sao;lỗi {display} amos	spss	troubleshoot	amos
+ket-qua-trai-voi-gia-thuyet	kết quả trái với giả thuyết	{display} phải làm sao;{display} thì làm gì	nghien-cuu-khoa-hoc	troubleshoot	defence
+giang-vien-yeu-cau-doi-mo-hinh	giảng viên yêu cầu đổi mô hình	{display} phải làm sao;{display} thì làm gì	nghien-cuu-khoa-hoc	troubleshoot	defence
+de-tai-bi-trung	đề tài bị trùng	{display} phải làm sao;{display} thì làm gì	nghien-cuu-khoa-hoc	troubleshoot	defence
+ty-le-dao-van-cao	tỷ lệ đạo văn cao	{display} phải làm sao;{display} thì làm gì	nghien-cuu-khoa-hoc	troubleshoot	defence
+bi-hoi-vi-sao-chon-pls-sem	bị hỏi vì sao chọn pls sem	{display} phải làm sao;{display} thì làm gì	nghien-cuu-khoa-hoc	troubleshoot	defence
