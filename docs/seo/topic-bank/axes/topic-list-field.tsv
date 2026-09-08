@@ -36,3 +36,17 @@ quan-he-cong-chung	quan hệ công chúng	đề tài luận văn {display};đề
 moi-truong	môi trường	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	social
 nong-nghiep	nông nghiệp	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	social
 xay-dung	xây dựng	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	social
+kinh-te-quoc-te	kinh tế quốc tế	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	economics
+kinh-te-doi-ngoai	kinh tế đối ngoại	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	economics
+thong-ke-kinh-te	thống kê kinh tế	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	economics
+thue	thuế	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	finance
+hai-quan	hải quan	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	finance
+cong-nghe-tai-chinh-fintech	công nghệ tài chính fintech	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	finance
+khoa-hoc-du-lieu	khoa học dữ liệu	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	tech
+marketing-so	marketing số	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	business
+quan-ly-dat-dai	quản lý đất đai	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	social
+xa-hoi-hoc	xã hội học	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	social
+ngon-ngu-anh	ngôn ngữ anh	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	education
+giao-duc-tieu-hoc	giáo dục tiểu học	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	education
+dinh-duong	dinh dưỡng	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	health
+quan-ly-benh-vien	quản lý bệnh viện	đề tài luận văn {display};đề tài nghiên cứu khoa học {display}	khoa-luan-tot-nghiep	topic-list	health
