@@ -2,12 +2,13 @@
 name: dothesis-blog-content
 description: >
   Use when writing, planning, or improving one blog post for DoThesis (Vietnamese
-  students writing a quantitative thesis with SPSS and SmartPLS). Covers keyword
-  grounding against the measured topic bank, the ten article archetypes that rank
-  in this market, the editorial voice, the citation allowlist, the seed-JSON
-  schema and publishing. Triggers on "viết bài blog cho DoThesis", "write a blog
-  post", "bài viết SEO về SPSS", "blog content", "improve the blog", or any
-  request to produce one DoThesis article.
+  students writing a quantitative thesis with SPSS and SmartPLS). Covers
+  grounding the topic in the measured topic bank or in what actually ranks
+  today, the ten article archetypes that rank in this market, the editorial
+  voice, the citation allowlist, the seed-JSON schema and publishing. Triggers
+  on "viết bài blog cho DoThesis", "write a blog post", "bài viết SEO về SPSS",
+  "blog content", "improve the blog", or any request to produce one DoThesis
+  article.
 ---
 
 # DoThesis blog content
@@ -32,9 +33,9 @@ student can adapt straight into the thesis.
 Any request to produce or improve one DoThesis article.
 
 **Writing many at once?** Use `dothesis-content-pipeline` first. It decides which
-articles should exist, measures demand before anything is written, and drives the
-scripted writer that applies this skill's rules per post. Skipping it is how a
-batch of zero-volume pages ships.
+articles should exist, orders them by measured payback, and drives the scripted
+writer that applies this skill's rules per post. Skipping it is how a batch of
+near-identical pages ships.
 
 ## Workflow
 
@@ -76,9 +77,13 @@ Rules that follow:
   which is stored and printed in `docs/blog-index.md`. Write it for a human, or
   re-angle the post.
 
-### 1. Ground the topic in measured demand
+### 1. Ground the topic
 
-Never pick a topic from intuition. The measured bank is committed:
+Never pick a topic from intuition. There are two grounds and they are not
+interchangeable, so check the first before reaching for the second.
+
+**If the topic is in the bank, read the bank.** It is committed and measured
+2026-09-07:
 
 - `docs/seo/topic-bank/harvest-2026-09-07.tsv`, 752 competitor rows with volume,
   difficulty, intent, rank and URL.
@@ -87,21 +92,30 @@ Never pick a topic from intuition. The measured bank is committed:
 - `docs/seo/topic-bank/related-spss-2026-09-07.tsv` and
   `serp-head-terms-2026-09-07.tsv`, the related-query and SERP sweeps.
 
-For a keyword that is not in the bank, measure it before writing:
+Record the focus keyword, its volume, and two or three secondary phrasings. The
+secondaries shape the H2 list; they do not become their own pages. The volume is
+worth having because it decides when the post publishes, not whether it does.
 
-```bash
-cd api && ./run.sh python -m app.blog.content.cli gate --source dataforseo --probe
-```
+**If the topic is not in the bank, do not buy a number for it.** Open a browser,
+search the query on Google in Vietnamese the way a student in Vietnam would type
+it, and read the first page of results. For each of the top few, note who ranks,
+what shape the page is (definition, procedure, troubleshooting, list), how deep it
+goes, and what it fails to answer. That last note is the outline brief, and step 2
+is written against it.
 
-or, for a handful of terms, OpenSEO's `get_keyword_metrics` with
-`locationCode: 2704, languageCode: "vi"`. Record the focus keyword, its volume,
-and two or three secondary phrasings. The secondaries shape the H2 list; they do
-not become their own pages.
+The post then carries `gate_status = unmeasured`. That changes nothing about
+whether it exists and two things about how it is written: it clears the doubled
+proprietary bar in `references/structure.md`, and it publishes behind the measured
+pages. An unmeasured page is not a lesser page. It is a page whose only defence is
+that it is good, so it has to be.
 
 ### 2. Outline against what already ranks
 
-Open the two or three competitor URLs the harvest lists for the keyword and take
-their **heading outline**, never their text. You are matching the depth a reader
+Open the two or three competitor URLs, from the harvest when the keyword is in it
+and from the search you just ran when it is not, and take their **heading
+outline**, never their text. Reading a competitor in a browser puts their
+sentences in front of you, which makes this rule harder to keep and more important
+to keep. You are matching the depth a reader
 expects, and then going past it on the axis they are weak on: the threshold with
 a source, the actual output table, the sentence to paste into the thesis.
 
@@ -164,8 +178,9 @@ single CTA to `/landing`. The category intro links back to its strongest posts.
 
 ## Hard rules
 
-- **Measured volume or no page.** The focus keyword has a number, or the post does
-  not get written.
+- **Real content, genuinely useful, not a duplicate.** Those three decide whether
+  the post exists. A measured focus keyword decides when it publishes, never
+  whether.
 - **Never invent a study, a statistic or a citation.** Cite only from
   `references/canonical-sources.md`, as the exact string given there.
 - **Quantitative only.** No interviews, no transcripts, no coding, no thematic
@@ -182,7 +197,9 @@ single CTA to `/landing`. The category intro links back to its strongest posts.
 - **Every post carries something proprietary.** A threshold table with its source,
   a worked example table labelled `số liệu minh họa`, or a
   "cách viết vào luận văn" paragraph with a sentence the student can adapt. A post
-  with none of those is a rewrite of a competitor page.
+  with none of those is a rewrite of a competitor page. **A post with no measured
+  volume carries two of the three**, plus an extra table and an extra internal
+  link. See `references/structure.md`.
 - **One CTA.** One link to `/landing`, naming the DoThesis module that does this
   step. No second sales paragraph.
 - **fillform.info for survey and data-collection posts**, when writing in

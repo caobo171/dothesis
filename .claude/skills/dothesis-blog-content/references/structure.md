@@ -13,8 +13,8 @@ worked output. The target below is what beats them without padding.
 | Word count | 1,800 to 2,400. Under 1,500 fails QA |
 | H2 sections | 6 to 9, taken from the archetype skeleton |
 | H3 | one per step inside a procedure section, one per group inside a list |
-| Tables | at least 1. A threshold table or a worked output table, never a decorative one |
-| Internal links | 4 or more distinct: the category route, 2 to 3 siblings, `/landing` |
+| Tables | at least 1, at least 2 when the page is unmeasured. A threshold table or a worked output table, never a decorative one |
+| Internal links | 4 or more distinct, 5 or more when the page is unmeasured: the category route, 2 to 3 siblings, `/landing` |
 | FAQ | `## Câu hỏi thường gặp` with 4 to 6 `###` questions |
 | Images | none by default. See `images.md` |
 | CTA | exactly one, in the closing paragraph |
@@ -32,6 +32,15 @@ worked output. The target below is what beats them without padding.
   Vietnamese that the student can adapt directly, with the placeholders visible.
 
 A post with none of those is a rewrite of a competitor page and does not ship.
+
+**A post with no measured search volume carries two of the three, not one.** Its
+`gate_status` is `unmeasured`, meaning no measurement stands behind the decision
+to publish it, so the article itself is the entire case for its existence. The two
+rows above double the same way: one more table and one more internal link than a
+measured page. The QA gate also holds an unmeasured page to a stricter
+near-duplicate threshold against every other body in the corpus. The calibrated
+numbers are in `api/app/blog/content/qa.py`; read them there rather than from
+here.
 
 **2. The FAQ section.** Always `## Câu hỏi thường gặp`, always four to six `###`
 questions, each answered in one to three paragraphs. Take the questions from what

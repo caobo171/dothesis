@@ -44,16 +44,16 @@ source of truth and `docs/blog-index.md` is the committed snapshot.
 | `locale` | yes | `vi` |
 | `meta_title` | yes | Used verbatim in `<title>`. May carry ` \| DoThesis`. 70 chars max |
 | `meta_description` | yes | 110 to 170 characters. Unique across the corpus |
-| `focus_keyword` | yes | The measured query this page targets. The duplicate guard reads it |
-| `secondary_keywords` | no | Other measured phrasings of the same intent, clustered into this page by `plan`. They shape H2s, they do not become pages |
-| `focus_keyword_volume` | no | Monthly volume from the gate. Recorded so the corpus can be audited against demand later |
+| `focus_keyword` | yes | The query this page targets, measured or not. The duplicate guard reads it |
+| `secondary_keywords` | no | Other phrasings of the same intent, clustered into this page by `plan`. They shape H2s, they do not become pages |
+| `focus_keyword_volume` | no | Monthly volume from the gate, absent when the keyword was never measured. Sets publishing order and lets the corpus be audited against demand later |
 | `excerpt` | yes | One sentence for the listing card. Not a copy of the meta description |
 | `category` | yes | One of the nine slugs: `spss`, `thong-ke`, `khao-sat`, `nghien-cuu-khoa-hoc`, `khoa-luan-tot-nghiep`, `smartpls`, `phan-tich-du-lieu`, `luan-van-thac-si`, `mo-hinh-nghien-cuu`. Any other value fails QA |
 | `tags` | no | Strings. Used for related-post fallback when the category has nothing closer |
 | `archetype` | yes | One of the ten in `structure.md`. Recorded so the corpus can be audited per skeleton |
 | `family` | no | The unit family from the axis file (`reliability`, `efa`, `mediation`, ...). Drives sibling selection |
 | `source_batch` | no | Which run produced this post, for example `harvest-2026-09-07` or `axis-spss-procedure` |
-| `gate_status` | no | `measured` when the focus keyword has its own volume reading, `family-inferred` when only the family aggregate cleared. A `family-inferred` post inserts as DRAFT and is never scheduled |
+| `gate_status` | no | `measured` when the focus keyword has its own volume reading, `unmeasured` when it does not (`family-inferred` is a deprecated alias for `unmeasured`). Both schedule normally. An `unmeasured` post is ordered behind the measured ones and must clear the doubled proprietary bar in `structure.md` |
 | `sibling_slugs` | no | 3 to 5 slugs this post links to. `plan` fills them from the same family, then the same category by volume |
 | `images` | no | Always `[]` today. See `images.md` |
 | `body` | yes | Markdown. See below |
