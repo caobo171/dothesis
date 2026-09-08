@@ -99,9 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=None, help="measure only the first N candidates")
     p.add_argument("--probe", action="store_true",
                    help="measure five known head terms and print the cost, write nothing")
+    # Deprecated 2026-09-08, kept so a committed script or doc that passes it
+    # does not break. It asked for what the gate now does by default.
     p.add_argument("--fill-unmeasured", action="store_true",
-                   help="judge candidates missing from the measured set on their family's "
-                        "sample; survivors are family-inferred, drafted, never scheduled")
+                   help="deprecated no-op: an unmeasured candidate passes on its own")
     p.set_defaults(func=_cmd_gate)
 
     p = sub.add_parser("plan", help="merge harvest and gate survivors into backlog.tsv")
