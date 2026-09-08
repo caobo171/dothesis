@@ -515,6 +515,64 @@ describe("/blog/[locale]/[slug]", () => {
   });
 });
 
+describe("the English edition renders as English", () => {
+  const EN_BODY = [
+    "## Reading the output",
+    "",
+    "Some prose.",
+    "",
+    "## Frequently asked questions",
+    "",
+    "### What alpha is high enough?",
+    "",
+    "0.7 and up.",
+    "",
+  ].join("\n");
+
+  const EN_POST = {
+    ...FULL,
+    locale: "en",
+    slug: "what-is-cronbachs-alpha",
+    title: "What Cronbach's alpha is",
+    body: EN_BODY,
+  };
+
+  test("dates, reading time, back link and FAQ markup all speak English", async () => {
+    server.use(
+      http.post("*/api/v1/blog/get", () =>
+        HttpResponse.json({ post: EN_POST, related: [], category: CATEGORIES[0] }),
+      ),
+    );
+    const { container } = render(
+      await BlogPostPage({ params: Promise.resolve({ locale: "en", slug: EN_POST.slug }) }),
+    );
+    expect(screen.getByText("September 1, 2026")).toBeTruthy();
+    expect(screen.getByText("9 min read")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Back to the blog" }).getAttribute("href")).toBe(
+      "/blog/en",
+    );
+    // The FAQ heading is prose, so it is per-language: this block was missing
+    // entirely while the extractor only knew the Vietnamese heading.
+    const blocks = Array.from(container.querySelectorAll('script[type="application/ld+json"]')).map(
+      (script) => JSON.parse(script.innerHTML),
+    );
+    expect(blocks.map((b) => b["@type"])).toEqual(["BlogPosting", "FAQPage"]);
+    expect(blocks[1].mainEntity.map((q: { name: string }) => q.name)).toEqual([
+      "What alpha is high enough?",
+    ]);
+    expect(blocks[0].inLanguage).toBe("en-US");
+  });
+
+  test("the listing numbers its pages in English", async () => {
+    stubApiByLocale({ posts: { en: [{ ...COMPACT, locale: "en" }] } });
+    const meta = await listingMetadata({
+      params: Promise.resolve({ locale: "en" }),
+      searchParams: Promise.resolve({ page: "3" }),
+    });
+    expect(meta.title).toBe("Blog — SPSS, SmartPLS and quantitative theses | DoThesis — page 3");
+  });
+});
+
 describe("the language switch", () => {
   test("a category hub with a counterpart switches straight to it", async () => {
     stubApiByLocale({
@@ -655,6 +713,32 @@ describe("sitemap and robots", () => {
     expect(urls).toContain("http://localhost:3006/blog/vi/cronbach-alpha-la-gi");
     const post = rows.find((r) => r.url.endsWith("cronbach-alpha-la-gi"));
     expect((post?.lastModified as Date).toISOString()).toBe("2026-09-05T00:00:00.000Z");
+  });
+
+  test("each locale's categories are listed under that locale's own segment", async () => {
+    server.use(
+      http.post("*/api/v1/blog/categories", async ({ request }) => {
+        const body = (await request.json()) as { locale: string };
+        return HttpResponse.json({
+          categories: body.locale === "en" ? EN_CATEGORIES : CATEGORIES,
+        });
+      }),
+      http.post("*/api/v1/blog/sitemap", () =>
+        HttpResponse.json({
+          posts: [
+            { locale: "vi", slug: "cronbach-alpha-la-gi", updated_at: "2026-09-05T00:00:00Z" },
+            { locale: "en", slug: "what-is-cronbachs-alpha", updated_at: "2026-09-06T00:00:00Z" },
+          ],
+        }),
+      ),
+    );
+    const urls = (await sitemap()).map((r) => r.url);
+    expect(urls).toContain("http://localhost:3006/blog/vi/chu-de/spss");
+    expect(urls).toContain("http://localhost:3006/blog/en/topic/spss");
+    expect(urls).toContain("http://localhost:3006/blog/en/what-is-cronbachs-alpha");
+    // Nothing is listed twice, and no English URL carries the Vietnamese word.
+    expect(urls.filter((u) => u.includes("/blog/en/chu-de/"))).toEqual([]);
+    expect(new Set(urls).size).toBe(urls.length);
   });
 
   test("a dead API still yields the static pages instead of a broken sitemap", async () => {

@@ -11,7 +11,7 @@ import { Markdown } from "../../_components/Markdown";
 import { fetchPost } from "../../_lib/api";
 import { formatDate, formatReadingTime } from "../../_lib/format";
 import { blogPostingJsonLd, faqJsonLd, postUrl } from "../../_lib/jsonld";
-import { extractFaq, tableOfContents } from "../../_lib/markdown";
+import { extractFaq, faqHeadings, tableOfContents } from "../../_lib/markdown";
 import { absoluteUrl, blogPath, categoryPath, ogImagePath, postPath } from "../../_lib/site";
 
 export const dynamic = "force-dynamic";
@@ -88,7 +88,9 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
   const { post, related, category } = data;
   const copy = COPY[locale] ?? COPY.en;
   const headings = tableOfContents(post.body);
-  const faq = extractFaq(post.body);
+  // The FAQ heading is prose, and prose is per-language: an English post's
+  // "Frequently asked questions" is invisible to the Vietnamese default.
+  const faq = extractFaq(post.body, faqHeadings(locale));
   const date = formatDate(post.published_at, locale);
   const read = formatReadingTime(post.reading_time, locale);
   const categorySlug = category?.slug ?? post.category?.slug ?? null;

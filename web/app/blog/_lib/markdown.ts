@@ -21,10 +21,35 @@ export type Heading = { level: number; text: string; id: string };
 export type FaqItem = { question: string; answer: string };
 
 /**
- * The FAQ section's H2. Matched on its slug rather than its literal text so a
- * stray double space or a different capitalisation still finds the section.
+ * The FAQ section's H2, per locale. Matched on its slug rather than its literal
+ * text so a stray double space or a different capitalisation still finds the
+ * section.
+ *
+ * Locale-keyed because the heading is prose: an English post writes
+ * "Frequently asked questions", and matching only the Vietnamese heading meant
+ * the English edition would render an FAQ section on the page and emit no
+ * FAQPage markup for it — the rich result silently lost, with no visual symptom
+ * on either side.
+ *
+ * Several candidates per language, because the heading is written by whoever
+ * writes the post rather than chosen from a list. Extra candidates can only
+ * find a section that is really there; the cost of a miss is the whole rich
+ * result. If the English bank settles on wording that is not here, add it —
+ * an unlisted heading reads as "this post has no FAQ", which is a perfectly
+ * ordinary state and therefore not an error anyone would notice.
  */
-export const FAQ_HEADING = "Câu hỏi thường gặp";
+export const FAQ_HEADINGS: Record<string, string[]> = {
+  vi: ["Câu hỏi thường gặp"],
+  en: ["Frequently asked questions", "FAQ", "Common questions"],
+};
+
+/** The Vietnamese heading, kept as the parameterless default `extractFaq` uses. */
+export const FAQ_HEADING = FAQ_HEADINGS.vi[0];
+
+/** The headings to look for in a post of this locale. */
+export function faqHeadings(locale: string): string[] {
+  return FAQ_HEADINGS[locale] ?? FAQ_HEADINGS.vi;
+}
 
 /**
  * Slug for one heading, no collision handling.
@@ -166,8 +191,13 @@ export function tableOfContents(markdown: string): Heading[] {
  * `acceptedAnswer.text` wants — markdown syntax in there is scraped verbatim
  * into the search result.
  */
-export function extractFaq(markdown: string, headingText = FAQ_HEADING): FaqItem[] {
-  const target = slugify(headingText);
+export function extractFaq(
+  markdown: string,
+  headingText: string | string[] = FAQ_HEADING,
+): FaqItem[] {
+  const targets = new Set(
+    (Array.isArray(headingText) ? headingText : [headingText]).map((h) => slugify(h)),
+  );
   const items: FaqItem[] = [];
   let inSection = false;
   let question: string | null = null;
@@ -190,7 +220,7 @@ export function extractFaq(markdown: string, headingText = FAQ_HEADING): FaqItem
       const text = stripInline((h[2] ?? "").replace(/\s+#+\s*$/, ""));
       if (level <= 2) {
         flush();
-        inSection = slugify(text) === target;
+        inSection = targets.has(slugify(text));
         return;
       }
       if (inSection && level === 3) {

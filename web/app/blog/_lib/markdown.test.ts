@@ -7,6 +7,7 @@ import { describe, expect, test } from "vitest";
 import {
   HeadingSlugger,
   extractFaq,
+  faqHeadings,
   extractHeadings,
   plainText,
   readingTime,
@@ -123,6 +124,37 @@ describe("extractFaq", () => {
 
   test("returns nothing when the post has no FAQ section", () => {
     expect(extractFaq("## Mở đầu\n\nNội dung.\n")).toEqual([]);
+  });
+
+  test("finds the English edition's heading, which the Vietnamese default misses", () => {
+    const body = [
+      "## Reading the output",
+      "",
+      "Some prose.",
+      "",
+      "## Frequently asked questions",
+      "",
+      "### What alpha is high enough?",
+      "",
+      "0.7 and up.",
+      "",
+    ].join("\n");
+    // The bug this closes: an English post rendered its FAQ section on the page
+    // and emitted no FAQPage markup for it.
+    expect(extractFaq(body)).toEqual([]);
+    const faq = extractFaq(body, faqHeadings("en"));
+    expect(faq.map((f) => f.question)).toEqual(["What alpha is high enough?"]);
+    expect(faq[0].answer).toBe("0.7 and up.");
+  });
+
+  test("accepts the short English heading too", () => {
+    const body = "## FAQ\n\n### Why?\n\nBecause.\n";
+    expect(extractFaq(body, faqHeadings("en")).map((f) => f.question)).toEqual(["Why?"]);
+  });
+
+  test("an unknown locale keeps looking for the Vietnamese heading", () => {
+    expect(faqHeadings("vi")).toEqual(faqHeadings("de"));
+    expect(extractFaq(FIXTURE_MD, faqHeadings("vi"))).toHaveLength(4);
   });
 });
 
