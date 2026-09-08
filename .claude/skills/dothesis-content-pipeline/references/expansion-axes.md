@@ -207,19 +207,30 @@ per family, with a comment saying why.
 
 ## Total addressable page count
 
-| Source | Pages | Basis |
-|---|---:|---|
-| Harvest after exclusions and clustering | about 250 | 407 distinct keywords, minus off-topic, clustered by intent |
-| Statistical term | 120 to 180 | of about 200 units |
-| SPSS procedure | 45 to 60 | of about 60 |
-| SmartPLS procedure | 25 to 40 | of about 40 |
-| Theory or model | 35 to 55 | of about 60 |
-| Construct and scale | 60 to 100 | of about 120, after merging same-source scales |
-| Thesis section | 30 to 40 | of about 40 |
-| Survey | 20 to 30 | of about 30 |
-| Troubleshooting | 30 to 40 | of about 40 |
-| Topic list | 20 to 30 | of about 30 |
-| **Total** | **about 650 to 1,050** | before the gate cuts |
+Sized 2026-09-07, then re-counted on 2026-09-08 after the axes were extended.
+The right-hand column is what the files actually hold today, not an estimate.
 
-Which is why the target is 1,000 and the instruction is to **stop at the gate's
-ceiling** rather than pad. If the gate returns 780 survivors, the bank is 780 posts.
+| Source | Pages | Units on 2026-09-08 |
+|---|---:|---:|
+| Harvest after exclusions and clustering | about 250 | 407 distinct keywords, minus off-topic, clustered by intent |
+| Statistical term | 200 to 260 | 268 |
+| SPSS procedure | 70 to 96 | 96 |
+| SmartPLS procedure | 40 to 56 | 56 |
+| Theory or model | 80 to 130 | 130 |
+| Construct and scale | 90 to 161 | 161 |
+| Thesis section | 50 to 64 | 64 |
+| Survey | 30 to 42 | 42 |
+| Troubleshooting | 55 to 78 | 78 |
+| Topic list | 40 to 51 | 51 |
+| **Total** | **about 900 to 1,300** | 946 axis units |
+
+The field axis carries 51 entries against the 30 this table first estimated.
+The estimate was a guess at how many fields are taught in Vietnam, not a limit,
+and the rule that governs the axis is the one below it: a field earns a page
+when its vocabulary and its topic list are its own. Kế toán and điều dưỡng pass
+that test. A second page for the same field under a synonym does not.
+
+The target is 1,000 and the instruction is to **stop at the honest ceiling**
+rather than pad. Under the rule in force since 2026-09-08 that ceiling is the
+number of genuine units the domain supplies, not the number a keyword tool can
+price. If the axes and the harvest yield 780 distinct pages, the bank is 780.
