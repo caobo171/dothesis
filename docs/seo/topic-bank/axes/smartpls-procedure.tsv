@@ -39,3 +39,19 @@ micom	micom	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	
 fimix	fimix	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
 xuat-ket-qua-ra-excel	xuất kết quả ra excel	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	reporting
 doc-bao-cao-html	đọc báo cáo html	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	reporting
+tiep-can-hai-giai-doan	tiếp cận hai giai đoạn	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+chi-bao-lap-lai	chỉ báo lặp lại	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+gaussian-copula	gaussian copula	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+cta-pls	cta pls	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+kiem-dinh-hoan-vi-permutation	kiểm định hoán vị permutation	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+phan-tich-dieu-kien-can-nca	phân tích điều kiện cần nca	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+bien-kiem-soat	biến kiểm soát	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+bien-gia	biến giả	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	advanced
+rho-a	rho a	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+vif-cua-chi-bao	vif của chỉ báo	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+khoang-tin-cay-htmt	khoảng tin cậy htmt	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	measurement-model
+srmr	srmr	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	estimation
+nfi	nfi	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	estimation
+diem-bien-tiem-an	điểm biến tiềm ẩn	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	estimation
+xuat-mo-hinh-ra-hinh-anh	xuất mô hình ra hình ảnh	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	reporting
+bang-tong-hop-ket-qua	bảng tổng hợp kết quả	{display} trong smartpls;cách chạy {display} smartpls 4	smartpls	smartpls-howto	reporting
