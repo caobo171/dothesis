@@ -25,10 +25,11 @@ export function buildBlogSitemap(input: {
   const locales = Object.keys(input.categoriesByLocale);
 
   const rows: MetadataRoute.Sitemap = [
-    // The marketing page, not `/`: `/` is auth-gated and 307s to /login, so
-    // listing it only asks Google to crawl a redirect.
+    // The home of the marketing host, not `/landing`: on dothesis.com `/`
+    // renders the landing page and `/landing` 301s to it, so listing the old
+    // path would only ask Google to crawl a redirect.
     {
-      url: `${SITE_ORIGIN}/landing`,
+      url: `${SITE_ORIGIN}/`,
       lastModified: now,
       changeFrequency: "monthly",
       priority: 1,

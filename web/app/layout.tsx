@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { Inter, JetBrains_Mono } from "next/font/google";
 
+import { SITE_ORIGIN } from "./blog/_lib/site";
 import { AuthProvider } from "./lib/auth-context";
 import { LocaleProvider } from "./lib/i18n/LocaleProvider";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale } from "./lib/i18n/locale";
@@ -31,11 +32,33 @@ const fontMono = JetBrains_Mono({
   display: "swap",
 });
 
+const DESCRIPTION =
+  "Draft master's theses and PhD dissertations with 19 specialized AI agents and 100% verified citations.";
+
 export const metadata = {
+  // Absolute base for every relative URL in metadata — without it Next emits a
+  // RELATIVE og:image, and a relative og:image is no og:image at all: the
+  // crawlers that read the tag never resolve it against the page URL.
+  metadataBase: new URL(SITE_ORIGIN),
   title: "DoThesis — AI Thesis Agent",
-  description:
-    "Draft master's theses and PhD dissertations with 19 specialized AI agents and 100% verified citations.",
+  description: DESCRIPTION,
   icons: { icon: "/favicon.png" },
+  // og:image itself is not listed here: app/opengraph-image.tsx is a Next file
+  // convention, so Next generates the tag (and the size/type tags with it) for
+  // this segment and every segment below that does not define its own. Blog
+  // posts define their own; everything else inherits this card.
+  openGraph: {
+    type: "website",
+    siteName: "DoThesis",
+    title: "DoThesis — AI Thesis Agent",
+    description: DESCRIPTION,
+    url: SITE_ORIGIN,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "DoThesis — AI Thesis Agent",
+    description: DESCRIPTION,
+  },
 };
 
 export const viewport = {

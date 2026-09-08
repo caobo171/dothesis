@@ -33,8 +33,13 @@ export const MARKETING_ORIGIN =
 /** Both names must be configured, or there is no split to enforce. */
 export const SPLIT_ENABLED = Boolean(MARKETING_HOST && APP_HOST);
 
-/** Everything the marketing host serves itself. Anything else belongs to the app. */
-const MARKETING_PREFIXES = ["/blog", "/_next", "/sitemap.xml", "/robots.txt"];
+/** Everything the marketing host serves itself. Anything else belongs to the app.
+ *
+ * `/opengraph-image` is the site-wide share card (app/opengraph-image.tsx). It
+ * has no file extension, so it is not spared by the static-file rule in
+ * proxy.js — without it here the apex would 308 its own og:image over to the
+ * app host, which is exactly the origin robots.txt closes to crawlers. */
+const MARKETING_PREFIXES = ["/blog", "/_next", "/sitemap.xml", "/robots.txt", "/opengraph-image"];
 
 /** Public content, wherever it is asked for, has one home: the marketing host. */
 const PUBLIC_CONTENT_PREFIXES = ["/blog", "/landing"];
