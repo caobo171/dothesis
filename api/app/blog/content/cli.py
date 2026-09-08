@@ -16,6 +16,7 @@ Every handler imports its module lazily so that a command needing `openai` or
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from . import load_env
@@ -88,9 +89,15 @@ def _cmd_images(args) -> int:
     from .images import run  # noqa: PLC0415
     from .writer import default_out_dir  # noqa: PLC0415
 
+    # `--quality` and BLOG_IMAGE_QUALITY are two spellings of one setting, so
+    # the flag writes the variable rather than threading a second argument
+    # through generate/resolve/run that would mean the same thing.
+    if args.quality:
+        os.environ["BLOG_IMAGE_QUALITY"] = args.quality
+
     stats = run(seed_dir=args.dir or default_out_dir(), do_assign=args.assign,
                 do_generate=args.generate, force=args.force,
-                use_openai=args.openai, dry_run=args.dry_run)
+                use_gemini=args.gemini, dry_run=args.dry_run)
     # A missing key is a mapping bug worth an exit code: the seed points at a
     # scene nobody wrote a prompt for, and that post ships with no hero.
     return 1 if stats.missing else 0
@@ -171,8 +178,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="generate the keys that have no image yet, and only those")
     p.add_argument("--force", action="store_true",
                    help="regenerate keys that already have an image (once per run, not once per post)")
-    p.add_argument("--openai", action="store_true",
-                   help="use gpt-image-2 instead of the cheaper gemini-2.5-flash-image")
+    p.add_argument("--gemini", action="store_true",
+                   help="generate with gemini-2.5-flash-image instead of gpt-image-2")
+    p.add_argument("--quality", default=None, choices=("low", "medium", "high"),
+                   help="gpt-image-2 quality tier (default: medium)")
     p.add_argument("--dry-run", action="store_true",
                    help="report what is missing and what it would cost, write nothing")
     p.set_defaults(func=_cmd_images)

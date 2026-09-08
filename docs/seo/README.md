@@ -211,5 +211,9 @@ waiting to be paid again. The prompt rules, the hosting decision and the
 "no text, no numbers" rule are in
 `.claude/skills/dothesis-blog-content/references/images.md`.
 
-`GEMINI_API_KEY` (gemini-2.5-flash-image, about $0.039 an image) and
-`OPENAI_API_KEY` (gpt-image-2, behind `--openai`) are both in the repo `.env`.
+The default generator is `gpt-image-2` at `medium`, about $0.042 an image:
+with only thirty-seven scenes to buy, the gap between providers across the
+whole library is under two dollars, so quality decides rather than price.
+`BLOG_IMAGE_QUALITY` picks the tier and `--gemini` swaps in
+gemini-2.5-flash-image. `OPENAI_API_KEY` and `GEMINI_API_KEY` are both in the
+repo `.env`.

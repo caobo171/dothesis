@@ -29,14 +29,25 @@ uniform. Every post belongs to one of seven categories and one of the ten
 archetypes in `structure.md`, so the bank needs about three dozen pictures no
 matter how many posts it grows to:
 
-| | Images | At $0.039 each |
+| | Images | At about $0.042 each |
 |---|---:|---:|
-| One hero generated per post, at the 854 seeds on disk 2026-09-08 | 854 | **$33.31** |
-| The library, once, ever | 37 | **$1.44** |
+| One hero generated per post, at the 918 seeds on disk 2026-09-08 | 918 | **$38.56** |
+| The library, once, ever | 37 | **$1.55** |
 
-Twenty-three times cheaper today, and the gap widens with every post written —
+Twenty-five times cheaper today, and the gap widens with every post written:
 the library cost is fixed, the per-post cost is not. That comparison is printed
 at the end of every `images` run, so it stays a measured claim.
+
+**Which generator, and why the cheap one stopped being the answer.** WELE picks
+the cheaper model per image because they pay per article. The library changes
+that arithmetic: thirty-seven scenes serve nine hundred posts, so the whole
+difference between the two providers across the entire library is under two
+dollars, while the difference in the picture shows on every page of an
+archetype for as long as the bank exists. So quality decides, and the default
+is **gpt-image-2 at `medium`**, 1536x1024. `high` is four times the price for a
+difference the blog measure cannot show; `low` looks it. Set
+`BLOG_IMAGE_QUALITY` to override, and pass `--gemini` for
+gemini-2.5-flash-image when a run has no OpenAI key.
 
 `docs/blog-image-library.json` is the library: `{"<key>": {"prompt": "...",
 "url": "..."}}`, with the `url` absent until the key has been generated. A key
@@ -115,9 +126,10 @@ cd api
 ```
 
 `--dir` picks a different seed directory, `--force` regenerates a key that
-already has an image (once per run, not once per post), and `--openai` swaps
-gemini-2.5-flash-image for gpt-image-2, which is several times dearer per image.
-`GEMINI_API_KEY` and `OPENAI_API_KEY` live in the repo `.env`. Never print them.
+already has an image (once per run, not once per post), `BLOG_IMAGE_QUALITY`
+picks the gpt-image-2 tier (default `medium`), and `--gemini` swaps in
+gemini-2.5-flash-image. `OPENAI_API_KEY` and `GEMINI_API_KEY` live in the repo
+`.env`. Never print them.
 
 **Commit the `.webp` files.** A generated file that is not in version control is
 a bill waiting to be paid a second time.

@@ -75,9 +75,24 @@ OPENAI_MODEL = "gpt-image-2"
 OPENAI_ENDPOINT = "https://api.openai.com/v1/images/generations"
 OPENAI_SIZE = "1536x1024"
 
-#: Google's list price for gemini-2.5-flash-image, read 2026-09-08. Only ever
-#: used to print an estimate — nothing here bills anything by itself.
-IMAGE_COST_USD = 0.039
+#: Quality tier for gpt-image-2. Medium at 1536x1024 is the default because the
+#: library made the per-image price stop mattering: 37 scenes cover 900+ posts,
+#: so the whole library costs about as much as one bad afternoon of per-post
+#: generation, and the picture is looked at by every reader of every article in
+#: its archetype. Override with --quality or BLOG_IMAGE_QUALITY.
+OPENAI_QUALITY_DEFAULT = "medium"
+OPENAI_QUALITIES = ("low", "medium", "high")
+
+#: Estimates, printed in the report and nothing else. Nothing here bills by
+#: itself and the invoice is the authority. The gpt-image-2 medium figure is
+#: taken from WELE's measurement that medium at 1536x1024 prices close to
+#: Gemini's flat rate (their generate.blog.images.ts, commit 77f325d6).
+IMAGE_COST_USD = {
+    ("openai", "low"): 0.012,
+    ("openai", "medium"): 0.042,
+    ("openai", "high"): 0.167,
+    ("gemini", "medium"): 0.039,
+}
 
 #: 1200px is the widest the blog measure can use (the article column is 720px
 #: and the listing card is 1200x630), so anything larger is bytes the reader
@@ -149,7 +164,7 @@ def _generate_openai(prompt: str) -> bytes:
         OPENAI_ENDPOINT,
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         payload={"model": OPENAI_MODEL, "prompt": prompt, "n": 1,
-                 "size": OPENAI_SIZE, "quality": "high"},
+                 "size": OPENAI_SIZE, "quality": openai_quality()},
     )
     data = body.get("data") or []
     b64 = data[0].get("b64_json") if data else None
@@ -158,17 +173,41 @@ def _generate_openai(prompt: str) -> bytes:
     return base64.b64decode(b64)
 
 
-def generate(prompt: str, *, use_openai: bool = False) -> bytes:
-    """Raw image bytes from the cheaper capable generator.
+def openai_quality() -> str:
+    """`low` | `medium` | `high`, from BLOG_IMAGE_QUALITY, defaulting to medium."""
+    value = (os.getenv("BLOG_IMAGE_QUALITY") or "").strip().lower()
+    return value if value in OPENAI_QUALITIES else OPENAI_QUALITY_DEFAULT
 
-    Gemini unless told otherwise, exactly as WELE settled it (commit 77f325d6):
-    both produced usable flat vector art on the same brand prompt, so price
-    decides. `--openai` forces gpt-image-2, and it is also the fallback when no
-    Gemini key is present.
+
+def provider(*, use_gemini: bool = False) -> str:
+    """Which generator this run uses.
+
+    gpt-image-2 by default. WELE picked the cheaper generator per image because
+    they were paying per article; the library changed the arithmetic. Thirty-seven
+    scenes serve nine hundred posts, so the difference between the two providers
+    across the whole library is under two dollars, while the difference in the
+    picture is on every page of an archetype forever. Quality decides, and
+    gpt-image-2 at medium is the better hero.
+
+    `--gemini` forces the other one, and it is also the fallback when there is
+    no OpenAI key.
     """
-    if use_openai or not os.getenv("GEMINI_API_KEY"):
-        return _generate_openai(prompt)
-    return _generate_gemini(prompt)
+    if use_gemini or not os.getenv("OPENAI_API_KEY"):
+        return "gemini"
+    return "openai"
+
+
+def estimated_cost(count: int, *, use_gemini: bool = False) -> float:
+    name = provider(use_gemini=use_gemini)
+    tier = openai_quality() if name == "openai" else "medium"
+    return count * IMAGE_COST_USD.get((name, tier), 0.042)
+
+
+def generate(prompt: str, *, use_gemini: bool = False) -> bytes:
+    """Raw image bytes from the configured generator."""
+    if provider(use_gemini=use_gemini) == "gemini":
+        return _generate_gemini(prompt)
+    return _generate_openai(prompt)
 
 
 def to_webp(raw: bytes) -> tuple[bytes, int, int]:
@@ -438,7 +477,7 @@ def resolve(key: str, *, lib_path: str | Path | None = None,
             out_dir: str | Path | None = None,
             generator: Callable[[str], bytes] | None = None,
             force: bool = False, dry_run: bool = False,
-            use_openai: bool = False, stats: Stats | None = None) -> str | None:
+            use_gemini: bool = False, stats: Stats | None = None) -> str | None:
     """The url for one library key, generating it once if it has none.
 
     This is the whole feature. A key with a url is handed back without touching
@@ -472,7 +511,7 @@ def resolve(key: str, *, lib_path: str | Path | None = None,
         print(f"  would generate {key}")
         return None
 
-    raw = (generator or (lambda p: generate(p, use_openai=use_openai)))(entry["prompt"])
+    raw = (generator or (lambda p: generate(p, use_gemini=use_gemini)))(entry["prompt"])
     data, width, height = to_webp(raw)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / f"{key}.webp").write_bytes(data)
@@ -494,32 +533,38 @@ def resolve(key: str, *, lib_path: str | Path | None = None,
 # --------------------------------------------------------------------------
 
 
-def cost_lines(stats: Stats, *, posts: int, library_size: int) -> list[str]:
+def cost_lines(stats: Stats, *, posts: int, library_size: int,
+               use_gemini: bool = False) -> list[str]:
     """The comparison this feature exists to win. Always printed.
 
     Per-scene against per-post is the whole argument for a library, and a
-    number nobody prints is a number nobody checks.
+    number nobody prints is a number nobody checks. The unit price is an
+    estimate; the invoice is the authority.
     """
-    spent = len(stats.generated) * IMAGE_COST_USD
-    whole_library = library_size * IMAGE_COST_USD
-    per_post = posts * IMAGE_COST_USD
+    name = provider(use_gemini=use_gemini)
+    tier = openai_quality() if name == "openai" else "medium"
+    unit = IMAGE_COST_USD.get((name, tier), 0.042)
+    spent = len(stats.generated) * unit
+    whole_library = library_size * unit
+    per_post = posts * unit
     lines = [
         f"  generated {len(stats.generated)}, reused {len(stats.reused)}, "
         f"missing {len(stats.missing)}"
         + (f", would generate {len(stats.would_generate)}" if stats.would_generate else ""),
-        f"  spent this run  ${spent:.2f}  ({len(stats.generated)} x ${IMAGE_COST_USD})",
+        f"  provider        {name} {tier} (about ${unit:.3f} an image)",
+        f"  spent this run  ${spent:.2f}",
         f"  whole library   ${whole_library:.2f}  ({library_size} scenes, once, ever)",
     ]
     if posts:
         ratio = (per_post / whole_library) if whole_library else 0
         lines.append(
-            f"  per-post would  ${per_post:.2f}  ({posts} posts x ${IMAGE_COST_USD})"
-            + (f" — {ratio:.0f}x the library" if ratio else ""))
+            f"  per-post would  ${per_post:.2f}  ({posts} posts)"
+            + (f", {ratio:.0f}x the library" if ratio else ""))
     return lines
 
 
 def run(*, seed_dir: str | Path | None = None, do_assign: bool = False,
-        do_generate: bool = False, force: bool = False, use_openai: bool = False,
+        do_generate: bool = False, force: bool = False, use_gemini: bool = False,
         dry_run: bool = False, lib_path: str | Path | None = None,
         out_dir: str | Path | None = None,
         generator: Callable[[str], bytes] | None = None) -> Stats:
@@ -553,14 +598,14 @@ def run(*, seed_dir: str | Path | None = None, do_assign: bool = False,
     if do_generate:
         for key in keys:
             resolve(key, lib_path=lib_path, out_dir=out_dir, generator=generator,
-                    force=force, dry_run=dry_run, use_openai=use_openai, stats=stats)
+                    force=force, dry_run=dry_run, use_gemini=use_gemini, stats=stats)
 
     if chosen and not dry_run:
         changed = sync_image_urls(chosen, load_library(lib_path))
         if changed:
             print(f"  set image_url on {changed} seed(s)")
 
-    for line in cost_lines(stats, posts=posts, library_size=len(library)):
+    for line in cost_lines(stats, posts=posts, library_size=len(library), use_gemini=use_gemini):
         print(line)
     return stats
 
