@@ -53,7 +53,7 @@ source of truth and `docs/blog-index.md` is the committed snapshot.
 | `archetype` | yes | One of the ten in `structure.md`. Recorded so the corpus can be audited per skeleton |
 | `family` | no | The unit family from the axis file (`reliability`, `efa`, `mediation`, ...). Drives sibling selection |
 | `source_batch` | no | Which run produced this post, for example `harvest-2026-09-07` or `axis-spss-procedure` |
-| `gate_status` | no | `measured` when the focus keyword has its own volume reading, `unmeasured` when it does not (`family-inferred` is a deprecated alias for `unmeasured`). Both schedule normally. An `unmeasured` post is ordered behind the measured ones and must clear the doubled proprietary bar in `structure.md` |
+| `gate_status` | no | `measured` when the focus keyword has its own volume reading, `unmeasured` when it does not (`family-inferred` is the pre-2026-09-08 name, still read as `unmeasured`). Both schedule normally. An `unmeasured` post is ordered behind the measured ones and must clear the doubled proprietary bar in `structure.md` |
 | `sibling_slugs` | no | 3 to 5 slugs this post links to. `plan` fills them from the same family, then the same category by volume |
 | `images` | no | Always `[]` today. See `images.md` |
 | `body` | yes | Markdown. See below |

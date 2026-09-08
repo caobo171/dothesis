@@ -223,10 +223,11 @@ the evidence for the order the pages went out in.
 
 `--fill-unmeasured` on `gate --source tsv` predates the rule change. It existed to
 let a candidate missing from the measured TSV pass on its family aggregate instead
-of dropping for no volume. Nothing drops now, so the flag only changes a label: it
-stamps a family-backed candidate `family-inferred`, the deprecated alias for
-`unmeasured`, kept so that TSVs written before 2026-09-08 still load. Prefer plain
-`gate --source tsv` and let unmeasured rows be called what they are.
+of dropping for no volume. Nothing drops now, so it is **a deprecated no-op**: the
+flag is still accepted, prints a line saying so, and changes nothing. Drop it from
+your commands. `family-inferred` survives only as a value the loader still reads,
+mapped to `unmeasured`, so that seeds written before 2026-09-08 still load
+(`GATE_STATUSES` and `DEPRECATED_GATE_STATUSES` in `api/app/blog/seeds.py`).
 
 ### 4. Plan
 

@@ -138,15 +138,13 @@ publish. The two working measurement paths in the meantime are `--source tsv`
 with volumes read through OpenSEO, and the harvest, whose volumes are already
 measured and committed.
 
-**`--fill-unmeasured` is a leftover.** It was written when an unmeasured
-candidate was dropped, and it let one pass on its family aggregate instead: at
-least three of its family's keywords in the measured TSV, at least half of those
-passing on their own, and a family aggregate over 500. Nothing drops now, so the
-flag only changes a label. It stamps a family-backed candidate `family-inferred`,
-which is a deprecated alias for `unmeasured` kept so that TSVs written before
-2026-09-08 still load, and the reason still records the sample
-(`unmeasured; family 'efa' sample 4/5 pass, aggregate 9,300`). Prefer plain
-`gate --source tsv`.
+**`--fill-unmeasured` is a deprecated no-op.** It was written when an unmeasured
+candidate was dropped, and it let one pass on its family aggregate instead.
+Nothing drops now, so the flag is accepted, prints a line saying it does nothing,
+and changes no verdict. Drop it from your commands. The old value it used to
+write, `family-inferred`, survives only on the read side: the loader maps it to
+`unmeasured` so seeds written before 2026-09-08 still load (`GATE_STATUSES` and
+`DEPRECATED_GATE_STATUSES` in `api/app/blog/seeds.py`).
 
 The gate summary counts measured against unmeasured passes separately, so the
 honest number is never buried inside the total. Read that split before writing:

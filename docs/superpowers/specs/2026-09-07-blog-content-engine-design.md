@@ -146,8 +146,9 @@ already exists.
 
 `gate` therefore measures and never cuts. It attaches a monthly volume to every
 candidate it can price and stamps every candidate it cannot as
-`gate_status = unmeasured`; `family-inferred` survives as a deprecated alias for
-that same state so pre-2026-09-08 TSVs still load. The summary prints measured
+`gate_status = unmeasured`. `family-inferred` survives on the read side only: the
+loader maps it to `unmeasured` so pre-2026-09-08 seeds still load, and
+`--fill-unmeasured` is now a no-op that prints a deprecation line. The summary prints measured
 against unmeasured, because that split is the size of the batch standing on
 judgement. Measurement is optional and worth doing, from two sources:
 
