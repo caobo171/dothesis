@@ -169,7 +169,7 @@ describe("JsonLd", () => {
 describe("BlogShell", () => {
   test("wraps the page in the landing design scope with its nav and footer", () => {
     const { container } = render(
-      <BlogShell>
+      <BlogShell locale="vi">
         <p>bài viết</p>
       </BlogShell>,
     );
@@ -177,5 +177,39 @@ describe("BlogShell", () => {
     expect(screen.getByRole("banner")).toBeTruthy();
     expect(screen.getByRole("contentinfo")).toBeTruthy();
     expect(screen.getByText("bài viết")).toBeTruthy();
+  });
+
+  test("offers the other edition, named in its own language", () => {
+    render(
+      <BlogShell locale="vi">
+        <p>bài viết</p>
+      </BlogShell>,
+    );
+    const link = screen.getByRole("link", { name: "English" });
+    // No counterpart passed, so it goes to the English blog root rather than
+    // guessing a slug that would 404.
+    expect(link.getAttribute("href")).toBe("/blog/en");
+    expect(link.getAttribute("hreflang")).toBe("en");
+    expect(link.getAttribute("lang")).toBe("en");
+  });
+
+  test("reads the other way round from the English edition", () => {
+    render(
+      <BlogShell locale="en">
+        <p>a post</p>
+      </BlogShell>,
+    );
+    expect(screen.getByRole("link", { name: "Tiếng Việt" }).getAttribute("href")).toBe("/blog/vi");
+  });
+
+  test("uses the counterpart page when the caller has verified one", () => {
+    render(
+      <BlogShell locale="vi" alternate="/blog/en/topic/spss">
+        <p>bài viết</p>
+      </BlogShell>,
+    );
+    expect(screen.getByRole("link", { name: "English" }).getAttribute("href")).toBe(
+      "/blog/en/topic/spss",
+    );
   });
 });

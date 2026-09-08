@@ -16,6 +16,8 @@
  * annotation at all.
  */
 import { type Locale } from "../../lib/i18n/locale";
+import { fetchCategories } from "./api";
+import { categoryPath } from "./site";
 
 /**
  * Language-only tags, no region.
@@ -56,4 +58,28 @@ export function alternateLanguages(
   for (const [locale, url] of entries) languages[HREFLANG[locale]] = url;
   languages["x-default"] = urlByLocale.vi ?? entries[0][1];
   return languages;
+}
+
+/** The reader-facing name of each edition, written in its own language. */
+export const LANGUAGE_NAME: Record<Locale, string> = { vi: "Tiếng Việt", en: "English" };
+
+/**
+ * The other edition's path for this category hub, or null when there isn't one.
+ *
+ * One rule in one place because two features read it: the hreflang annotation
+ * and the language switch in the shell. If they disagreed, the page would tell
+ * Google the English hub is the counterpart while sending the reader who clicks
+ * the switch somewhere else.
+ *
+ * The check is the taxonomy itself — a category is one row per (locale, slug)
+ * with the slug deliberately shared — plus a non-zero `post_count`, which
+ * `/blog/categories` scopes to the locale asked for. A hub with no posts in it
+ * is a dead end for a reader and an empty page for a crawler, so it does not
+ * count as a counterpart.
+ */
+export async function pairedCategoryPath(locale: Locale, slug: string): Promise<string | null> {
+  const other = otherLocale(locale);
+  const categories = await fetchCategories(other).catch(() => []);
+  const paired = categories.some((c) => c.slug === slug && c.post_count > 0);
+  return paired ? categoryPath(other, slug) : null;
 }

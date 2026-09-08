@@ -16,9 +16,9 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 
 import { isLocale } from "../../lib/i18n/locale";
-import { PAGE_SIZE, fetchCategories, fetchCategory, fetchPosts } from "../_lib/api";
+import { PAGE_SIZE, fetchCategory, fetchPosts } from "../_lib/api";
 import { formatDate, formatReadingTime } from "../_lib/format";
-import { alternateLanguages, otherLocale } from "../_lib/hreflang";
+import { alternateLanguages, otherLocale, pairedCategoryPath } from "../_lib/hreflang";
 import { plainText, splitLead } from "../_lib/markdown";
 import { absoluteUrl, categoryPath, categorySegment, postPath } from "../_lib/site";
 import { BlogShell } from "./BlogShell";
@@ -102,9 +102,7 @@ export async function categoryRouteMetadata(
   // seeded separately, and `post_count` is scoped to the locale asked for, so
   // this also declines to annotate a hub the other language has no posts in.
   const other = otherLocale(locale);
-  const pairedElsewhere = (await fetchCategories(other).catch(() => [])).some(
-    (c) => c.slug === cat.slug && c.post_count > 0,
-  );
+  const paired = await pairedCategoryPath(locale, cat.slug);
 
   return {
     // metadataBase so any relative URL Next resolves here lands on the public
@@ -116,7 +114,7 @@ export async function categoryRouteMetadata(
       canonical,
       languages: alternateLanguages({
         [locale]: canonical,
-        ...(pairedElsewhere ? { [other]: absoluteUrl(categoryPath(other, cat.slug)) } : {}),
+        ...(paired ? { [other]: absoluteUrl(paired) } : {}),
       }),
     },
     openGraph: { type: "website", title, description, url: canonical },
@@ -158,8 +156,14 @@ export async function CategoryRoute(
   // for — are on the first screen instead of five paragraphs down.
   const { lead, rest } = splitLead(cat.intro_md ?? "");
 
+  // The switch in the shell goes to this hub's English (or Vietnamese) edition
+  // when there is one, and to that edition's blog root when there is not — the
+  // same verified pairing the hreflang annotation above uses, so the two can
+  // never point different ways.
+  const paired = await pairedCategoryPath(locale, cat.slug);
+
   return (
-    <BlogShell>
+    <BlogShell locale={locale} alternate={paired ?? undefined}>
       <header className="blog-hero">
         <div className="lp-wrap">
           {/* Same measure as the body below. The hero used to run the full

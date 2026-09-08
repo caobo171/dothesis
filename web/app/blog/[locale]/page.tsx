@@ -108,7 +108,7 @@ export default async function BlogListingPage({
   ]);
 
   return (
-    <BlogShell>
+    <BlogShell locale={locale}>
       <header className="blog-hero">
         <div className="lp-wrap">
           <h1 className="blog-hero__title">{copy.title}</h1>

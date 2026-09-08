@@ -515,6 +515,52 @@ describe("/blog/[locale]/[slug]", () => {
   });
 });
 
+describe("the language switch", () => {
+  test("a category hub with a counterpart switches straight to it", async () => {
+    stubApiByLocale({
+      posts: { vi: [COMPACT] },
+      categories: { vi: CATEGORIES, en: EN_CATEGORIES },
+    });
+    render(
+      await BlogCategoryPage({
+        params: Promise.resolve({ locale: "vi", category: "spss" }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+    expect(screen.getByRole("link", { name: "English" }).getAttribute("href")).toBe(
+      "/blog/en/topic/spss",
+    );
+  });
+
+  test("without one it falls back to the other edition's root, not a guessed slug", async () => {
+    stubApiByLocale({ posts: { vi: [COMPACT] }, categories: { vi: CATEGORIES, en: [] } });
+    render(
+      await BlogCategoryPage({
+        params: Promise.resolve({ locale: "vi", category: "spss" }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+    expect(screen.getByRole("link", { name: "English" }).getAttribute("href")).toBe("/blog/en");
+  });
+
+  test("a post — where no pairing is known at all — offers the English blog", async () => {
+    stubApi();
+    render(await BlogPostPage({ params: Promise.resolve({ locale: "vi", slug: FULL.slug }) }));
+    expect(screen.getByRole("link", { name: "English" }).getAttribute("href")).toBe("/blog/en");
+  });
+
+  test("the listing switches to the other listing", async () => {
+    stubApi();
+    render(
+      await BlogListingPage({
+        params: Promise.resolve({ locale: "vi" }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+    expect(screen.getByRole("link", { name: "English" }).getAttribute("href")).toBe("/blog/en");
+  });
+});
+
 describe("hreflang", () => {
   test("the listing declares the other edition once that edition has posts", async () => {
     stubApiByLocale({ posts: { vi: [COMPACT], en: [{ ...COMPACT, locale: "en" }] } });

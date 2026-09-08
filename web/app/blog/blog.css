@@ -22,6 +22,26 @@
   margin: 0 auto;
 }
 
+/* The switch between language editions. Deliberately the quietest thing on the
+   page: it is furniture for the minority of readers who want the other
+   language, and it must not compete with the H1 under it. One line of 13px ink
+   at the top of the wrap, no bar and no border: it reads as part of the page's
+   existing top whitespace rather than as a second header. */
+.lp-root .blog-langbar {
+  display: flex;
+  justify-content: flex-end;
+}
+.lp-root .blog-langswitch {
+  color: var(--ink-500);
+  font-size: 13px;
+  line-height: 1.2;
+  text-decoration: none;
+}
+.lp-root .blog-langswitch:hover {
+  color: var(--ink-900);
+  text-decoration: underline;
+}
+
 /* -------------------------------- Hero ---------------------------------- */
 .lp-root .blog-hero {
   border-bottom: 1px solid var(--ink-100);

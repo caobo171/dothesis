@@ -95,7 +95,7 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
   const categoryName = category?.display_name ?? post.category?.display_name ?? null;
 
   return (
-    <BlogShell>
+    <BlogShell locale={locale}>
       <JsonLd data={blogPostingJsonLd(post)} />
       <JsonLd data={faqJsonLd(faq, post)} />
 
