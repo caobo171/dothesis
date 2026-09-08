@@ -202,18 +202,24 @@ def test_upsert_from_seed_creates_when_nothing_is_there(db, good_seed, categorie
     assert post.status == STATUS_PUBLISHED
 
 
-# --- the draft rule for family-inferred seeds (design §5) -------------------
+# --- gate_status, and why it no longer decides publication ------------------
+#
+# Until 2026-09-08 an unmeasured seed was forced to DRAFT with no dates. The
+# product owner replaced that rule: measured volume sets priority order only,
+# and the three quality gates decide whether a page exists at all. So these
+# tests assert the opposite of what they asserted before that date.
 
 def test_gate_status_defaults_to_measured(good_seed):
     good_seed.pop("gate_status", None)
     assert S.validate_seed(good_seed)["gate_status"] == "measured"
-    assert S.is_family_inferred(good_seed) is False
+    assert S.is_unmeasured(good_seed) is False
 
 
 def test_gate_status_accepts_unmeasured(good_seed):
     good_seed["gate_status"] = "unmeasured"
     clean = S.validate_seed(good_seed)
     assert clean["gate_status"] == "unmeasured"
+    assert S.is_unmeasured(clean) is True
 
 
 def test_the_family_inferred_alias_normalises_to_unmeasured(good_seed):
@@ -242,29 +248,35 @@ def test_an_unknown_gate_status_is_refused_with_the_allowed_values(good_seed):
     assert "gate_status" in str(e.value) and "unmeasured" in str(e.value)
 
 
-def test_a_family_inferred_seed_inserts_as_a_dateless_draft(db, good_seed, categories):
-    """Unproven demand is stored, never published, whatever go_live says."""
-    good_seed["gate_status"] = "family-inferred"
+def test_an_unmeasured_seed_publishes_on_its_go_live_date(db, good_seed, categories):
+    """Rule changed 2026-09-08: this used to insert as a dateless DRAFT."""
+    good_seed["gate_status"] = "unmeasured"
     action, post = S.create_from_seed(db, good_seed, categories,
                                       go_live=NOW - timedelta(days=30), now=NOW)
     assert action == "created"
-    assert post.status == STATUS_DRAFT
-    assert post.published_at is None
-    assert post.scheduled_at is None
-    # The body still landed: the page is ready for the day it is measured.
-    assert post.body
+    assert post.status == STATUS_PUBLISHED
+    assert post.published_at is not None
 
 
-def test_upsert_also_drafts_a_new_family_inferred_seed(db, good_seed, categories):
-    good_seed["gate_status"] = "family-inferred"
+def test_an_unmeasured_seed_dated_ahead_schedules_like_any_other(db, good_seed, categories):
+    good_seed["gate_status"] = "unmeasured"
+    _, post = S.create_from_seed(db, good_seed, categories,
+                                 go_live=NOW + timedelta(days=10), now=NOW)
+    assert post.status == STATUS_SCHEDULED
+    assert post.scheduled_at == NOW + timedelta(days=10)
+
+
+def test_upsert_also_publishes_a_new_unmeasured_seed(db, good_seed, categories):
+    """The two inserts have to agree, or one command would publish and the other not."""
+    good_seed["gate_status"] = "unmeasured"
     action, post = S.upsert_from_seed(db, good_seed, categories, now=NOW)
     assert action == "created"
-    assert post.status == STATUS_DRAFT
-
-
-def test_an_explicit_status_still_overrides_the_draft_rule(db, good_seed, categories):
-    """The admin route deliberately publishing an inferred page must still win."""
-    good_seed["gate_status"] = "family-inferred"
-    _, post = S.upsert_from_seed(db, good_seed, categories, now=NOW,
-                                 status=STATUS_PUBLISHED, published_at=NOW)
     assert post.status == STATUS_PUBLISHED
+
+
+def test_an_explicit_status_still_wins_over_the_planned_one(db, good_seed, categories):
+    """The admin route deliberately drafting a page must still win."""
+    good_seed["gate_status"] = "unmeasured"
+    _, post = S.upsert_from_seed(db, good_seed, categories, now=NOW,
+                                 status=STATUS_DRAFT)
+    assert post.status == STATUS_DRAFT

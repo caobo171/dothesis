@@ -245,10 +245,19 @@ def test_export_index_defaults_to_the_repo_docs_directory():
     assert (path.parents[1] / "api").is_dir()  # found the checkout root, not /
 
 
-# --- family-inferred seeds insert as drafts (design §5) ---------------------
+# --- unmeasured seeds publish like any other (rule changed 2026-09-08) ------
+#
+# Before that date an unmeasured seed inserted as a dateless DRAFT and consumed
+# no schedule slot, and these three tests asserted exactly that. The product
+# owner replaced the rule: volume orders the backlog, the quality gates decide
+# what exists, so every seed takes a slot in backlog order.
 
 def _mixed_dir(tmp_path):
-    """Four seeds, alternating measured and family-inferred.
+    """Four seeds, alternating measured and unmeasured.
+
+    The two unmeasured ones are written with the pre-rename `family-inferred`
+    spelling on purpose: 149 seed files on disk still carry it, and `create`
+    has to schedule them like anything else.
 
     Distinct focus keywords throughout so the duplicate guard has nothing to
     say and the test is only about scheduling.
@@ -274,40 +283,39 @@ def _mixed_dir(tmp_path):
     return str(tmp_path)
 
 
-def test_inferred_seeds_draft_while_measured_ones_take_consecutive_slots(capsys, db, tmp_path):
+def test_every_seed_takes_a_slot_in_backlog_order(capsys, db, tmp_path):
+    """Rule changed 2026-09-08: the unmeasured seeds used to be skipped here."""
     start = (NOW + timedelta(days=3)).date().isoformat()
     assert cli.main(["create", "--dir", _mixed_dir(tmp_path),
                      "--schedule-start", start, "--per-week", "1"]) == 0
 
     posts = {p.slug: p for p in db.query(BlogPost).all()}
     assert len(posts) == 4
+    assert {p.status for p in posts.values()} == {STATUS_SCHEDULED}
 
-    for slug in ("bien-hiem-la-gi", "chi-so-hiem-gap"):
-        assert posts[slug].status == STATUS_DRAFT
-        assert posts[slug].scheduled_at is None
-        assert posts[slug].published_at is None
-
-    # The two measured posts hold slots 0 and 1, so one week apart. If the
-    # drafts had consumed slots they would be three weeks apart instead.
-    a, b = posts["do-tin-cay-thang-do"], posts["phan-tich-efa"]
-    assert a.status == b.status == STATUS_SCHEDULED
-    assert b.scheduled_at - a.scheduled_at == timedelta(days=7)
-    assert a.scheduled_at == datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=VN_TZ)
+    # Slots 0..3, one a week, in the order the seed filenames give: nothing
+    # steps over an unmeasured page any more.
+    ordered = ["do-tin-cay-thang-do", "bien-hiem-la-gi", "phan-tich-efa",
+               "chi-so-hiem-gap"]
+    first = datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=VN_TZ)
+    for week, slug in enumerate(ordered):
+        assert posts[slug].scheduled_at == first + timedelta(days=7 * week)
 
     out = capsys.readouterr().out
-    assert "DRAFT, demand family-inferred" in out
-    assert "Drafts (family-inferred, no schedule slot): 2" in out
+    assert "demand unmeasured" in out
+    assert "unmeasured (scheduled anyway, quality gates decided): 2" in out
 
 
-def test_create_dry_run_reports_the_draft_count(capsys, db, tmp_path):
+def test_create_dry_run_reports_the_unmeasured_count(capsys, db, tmp_path):
     assert cli.main(["create", "--dir", _mixed_dir(tmp_path), "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "Posts would create: 4" in out
-    assert "Drafts (family-inferred, no schedule slot): 2" in out
+    assert "unmeasured (scheduled anyway, quality gates decided): 2" in out
     assert db.query(BlogPost).count() == 0
 
 
-def test_reschedule_leaves_family_inferred_drafts_alone(capsys, db, tmp_path):
+def test_reschedule_respreads_the_unmeasured_posts_too(capsys, db, tmp_path):
+    """They are ordinary scheduled posts now, so they move with the rest."""
     start = (NOW + timedelta(days=3)).date().isoformat()
     cli.main(["create", "--dir", _mixed_dir(tmp_path), "--schedule-start", start,
               "--per-week", "1"])
@@ -317,9 +325,7 @@ def test_reschedule_leaves_family_inferred_drafts_alone(capsys, db, tmp_path):
     assert cli.main(["create", "--reschedule", "--schedule-start", later,
                      "--per-week", "2"]) == 0
     out = capsys.readouterr().out
-    assert "Rescheduled: 2 post(s)" in out
-    assert "bien-hiem-la-gi" not in out
+    assert "Rescheduled: 4 post(s)" in out
+    assert "bien-hiem-la-gi" in out
 
-    drafts = db.query(BlogPost).filter_by(status=STATUS_DRAFT).all()
-    assert {d.slug for d in drafts} == {"bien-hiem-la-gi", "chi-so-hiem-gap"}
-    assert all(d.scheduled_at is None for d in drafts)
+    assert db.query(BlogPost).filter_by(status=STATUS_DRAFT).count() == 0

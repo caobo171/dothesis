@@ -23,7 +23,6 @@ from typing import Any, Mapping
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import STATUS_DRAFT
 from .markdown import reading_time
 from .schedule import plan_status
 
@@ -156,8 +155,13 @@ def validate_seed(data: Any, *, source: str | Path | None = None) -> dict:
     return seed
 
 
-def is_family_inferred(seed: Mapping[str, Any]) -> bool:
-    """True when the measurement source returned no volume for the focus keyword."""
+def is_unmeasured(seed: Mapping[str, Any]) -> bool:
+    """True when the measurement source returned no volume for the focus keyword.
+
+    Reporting only, since 2026-09-08. It used to force the post to DRAFT; now it
+    tells the operator how much of a tranche is publishing on the quality gates'
+    word rather than on a number.
+    """
     status = seed.get("gate_status") or DEFAULT_GATE_STATUS
     return DEPRECATED_GATE_STATUSES.get(status, status) == "unmeasured"
 
@@ -297,15 +301,12 @@ def create_from_seed(
     if existing is not None:
         return "skipped", existing
 
-    if is_family_inferred(seed):
-        # Unproven demand never publishes itself. The page is stored so it is
-        # ready the day its keyword is measured, but it goes in as a DRAFT with
-        # no dates: `visible_filter()` hides status 0 and `--reschedule` only
-        # walks status 2, so nothing promotes it by accident. Measuring the
-        # keyword and re-running `update-from-seed` is the only way out.
-        status, published_at, scheduled_at = STATUS_DRAFT, None, None
-    else:
-        status, published_at, scheduled_at = plan_status(go_live or moment, now=moment)
+    # Every seed publishes on its schedule, unmeasured ones included (rule
+    # changed 2026-09-08). An unmeasured page used to be forced to DRAFT here on
+    # the theory that unproven demand must not go live; the three quality gates
+    # decide that now, and a page that cleared them is worth publishing whether
+    # or not Google Ads has a number for its keyword.
+    status, published_at, scheduled_at = plan_status(go_live or moment, now=moment)
     post = BlogPost(locale=seed["locale"], slug=seed["slug"], status=status,
                     published_at=published_at, scheduled_at=scheduled_at,
                     created_at=moment, updated_at=moment)
@@ -340,12 +341,9 @@ def upsert_from_seed(
     if existing is None:
         planned_status, planned_published, planned_scheduled = plan_status(
             go_live or moment, now=moment)
-        # Same draft rule as `create_from_seed`: this branch is an insert too,
-        # and `update-from-seed` over a fresh inferred seed must not publish
-        # what `create` would have drafted. An explicit `status` still wins —
-        # that is the admin route deliberately overriding the gate.
-        if status is None and is_family_inferred(seed):
-            planned_status, planned_published, planned_scheduled = STATUS_DRAFT, None, None
+        # No draft branch here either, for the same reason as `create_from_seed`:
+        # the two inserts have to agree, or the same seed would publish through
+        # one command and not the other.
         existing = BlogPost(
             locale=seed["locale"], slug=seed["slug"],
             status=status if status is not None else planned_status,
