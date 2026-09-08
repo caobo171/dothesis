@@ -79,16 +79,30 @@ const FULL = {
   archetype: "term-la-gi",
 };
 
+// Five paragraphs, the shape every live category intro has (spec §6). The
+// category page leads with the first and parks the other four below the posts,
+// so a single-paragraph fixture would not exercise the split at all.
+const INTRO = [
+  "SPSS là phần mềm thống kê phổ biến nhất trong luận văn định lượng.",
+  "",
+  "Chuyên mục này đi theo đúng thứ tự bạn sẽ gặp trong một bài phân tích.",
+  "",
+  "Bạn sẽ thấy nhiều bài xử lý tình huống hỏng: hệ số tải thấp, ma trận xoay lộn xộn.",
+  "",
+  "Nếu mô hình có biến trung gian, hãy xem thêm chuyên mục SmartPLS.",
+  "",
+  "Bắt đầu từ đâu. Đọc bài về làm sạch dữ liệu và mã hóa biến trước.",
+].join("\n");
+
 const CATEGORIES = [
-  {
-    slug: "spss",
-    name: "SPSS",
-    display_name: "SPSS",
-    intro_md: "SPSS là phần mềm thống kê phổ biến nhất trong luận văn định lượng.",
-    post_count: 20,
-  },
+  { slug: "spss", name: "SPSS", display_name: "SPSS", intro_md: INTRO, post_count: 20 },
   { slug: "smartpls", name: "SmartPLS", display_name: "SmartPLS", intro_md: "", post_count: 12 },
 ];
+
+/** True when `a` comes before `b` in document order. */
+function precedes(a: Element, b: Element): boolean {
+  return Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
 
 function stubApi(opts: { posts?: unknown[]; total?: number; detail?: unknown } = {}) {
   server.use(
@@ -164,22 +178,86 @@ describe("/blog/[locale]", () => {
 });
 
 describe("/blog/[locale]/chu-de/[category]", () => {
-  test("leads with the display name, renders the intro and lists posts as anchors", async () => {
-    stubApi();
-    render(
+  async function renderCategory(opts: Parameters<typeof stubApi>[0] = {}, page?: string) {
+    stubApi(opts);
+    return render(
       await BlogCategoryPage({
         params: Promise.resolve({ locale: "vi", category: "spss" }),
-        searchParams: Promise.resolve({}),
+        searchParams: Promise.resolve(page ? { page } : {}),
       }),
     );
+  }
+
+  test("leads with the display name and lists posts as rows, not a bare list", async () => {
+    const { container } = await renderCategory();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("SPSS");
-    expect(screen.getByText(/phần mềm thống kê phổ biến nhất/)).toBeTruthy();
+    const row = container.querySelector(".blog-row");
+    expect(row).toBeTruthy();
     expect(
-      screen.getByRole("link", { name: "Cronbach's Alpha là gì" }).getAttribute("href"),
+      within(row as HTMLElement)
+        .getByRole("link", { name: "Cronbach's Alpha là gì" })
+        .getAttribute("href"),
     ).toBe("/blog/vi/cronbach-alpha-la-gi");
-    // Sibling categories keep the nine pages linked to each other.
+    // A row carries the same three facts a listing card does, so the two pages
+    // of the same site look related.
+    expect(row?.querySelector(".blog-row__excerpt")?.textContent).toBe(
+      "Một dòng cho trang danh sách.",
+    );
+    expect(row?.querySelector("time")?.getAttribute("datetime")).toBe(COMPACT.published_at);
+    expect(row?.textContent).toContain("9 phút đọc");
+  });
+
+  test("sets only the intro's first paragraph as the lead, above the posts", async () => {
+    const { container } = await renderCategory();
+    const lead = container.querySelector(".blog-lead") as HTMLElement;
+    expect(lead.textContent).toBe(
+      "SPSS là phần mềm thống kê phổ biến nhất trong luận văn định lượng.",
+    );
+    expect(precedes(lead, container.querySelector(".blog-rows") as HTMLElement)).toBe(true);
+    // The other four paragraphs are NOT in the hero — that wall of text under
+    // the H1 is the whole reason this page was rebuilt.
+    const hero = container.querySelector(".blog-hero") as HTMLElement;
+    expect(hero.textContent).not.toContain("Bắt đầu từ đâu");
+    expect(hero.textContent).not.toContain("tình huống hỏng");
+  });
+
+  test("keeps the rest of the intro under its own heading below the posts", async () => {
+    const { container } = await renderCategory();
+    const about = screen.getByRole("heading", { name: "Về chuyên mục này" });
+    expect(precedes(container.querySelector(".blog-rows") as HTMLElement, about)).toBe(true);
+    // Every word of the intro is still on the page, just further down.
+    const section = container.querySelector(".blog-about") as HTMLElement;
+    for (const paragraph of INTRO.split("\n\n").slice(1)) {
+      expect(section.textContent).toContain(paragraph);
+    }
+  });
+
+  test("states how many posts the category holds", async () => {
+    const { container } = await renderCategory({ total: 41 });
+    expect(container.querySelector(".blog-hero__count")?.textContent).toBe("41 bài viết");
+  });
+
+  test("an empty category says so instead of rendering an empty region", async () => {
+    const { container } = await renderCategory({ posts: [], total: 0 });
+    expect(screen.getByText("Chưa có bài viết trong chủ đề này.")).toBeTruthy();
+    expect(container.querySelector(".blog-rows")).toBeNull();
+    // "0 bài viết" over the empty message would say the same thing twice.
+    expect(container.querySelector(".blog-hero__count")).toBeNull();
+    // The orientation copy still ships: an empty hub is the one that needs it.
+    expect(screen.getByRole("heading", { name: "Về chuyên mục này" })).toBeTruthy();
+  });
+
+  test("offers the sibling topics as chips rather than a stack of links", async () => {
+    const { container } = await renderCategory();
     expect(screen.getByRole("heading", { name: "Chủ đề khác" })).toBeTruthy();
-    expect(screen.getAllByRole("link", { name: /SmartPLS/ }).length).toBeGreaterThan(0);
+    const chips = Array.from(container.querySelectorAll(".blog-siblings .blog-chip"));
+    expect(chips.map((c) => c.getAttribute("href"))).toEqual([
+      "/blog/vi",
+      "/blog/vi/chu-de/smartpls",
+    ]);
+    // Nothing in the footer row is the current page, so no chip is marked so.
+    expect(chips.some((c) => c.getAttribute("aria-current"))).toBe(false);
+    expect(container.querySelector(".blog-siblings .blog-linklist")).toBeNull();
   });
 
   test("self-canonicalises", async () => {
