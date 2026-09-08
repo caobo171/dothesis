@@ -14,6 +14,7 @@ from app.db import get_session_factory
 from app.models import BlogCategory, BlogPost
 
 FIXTURE_DIR = Path(__file__).resolve().parents[2] / "docs" / "seo" / "fixtures" / "seeds"
+SEO_DIR = Path(__file__).resolve().parents[2] / "docs" / "seo"
 NOW = datetime(2026, 9, 10, tzinfo=timezone.utc)
 
 
@@ -366,3 +367,72 @@ def test_an_explicit_status_still_wins_over_the_planned_one(db, good_seed, categ
     _, post = S.upsert_from_seed(db, good_seed, categories, now=NOW,
                                  status=STATUS_DRAFT)
     assert post.status == STATUS_DRAFT
+
+
+# --- the shipped category files --------------------------------------------
+#
+# docs/seo/categories.json and categories.en.json are the two language editions
+# of the live hubs. They are content, not fixtures, and these guard the few
+# properties that break a hub page silently rather than loudly.
+
+def _seo_categories(name: str) -> list[dict]:
+    return json.loads((SEO_DIR / name).read_text(encoding="utf-8"))
+
+
+def test_the_english_hubs_mirror_the_vietnamese_ones():
+    """Same slugs, same order, so switching language lands on the matching hub."""
+    vi = _seo_categories("categories.json")
+    en = _seo_categories("categories.en.json")
+    assert [r["slug"] for r in en] == [r["slug"] for r in vi]
+    assert [r["sort_order"] for r in en] == [r["sort_order"] for r in vi]
+    assert {r["slug"] for r in en} <= set(S.CATEGORY_SLUGS)
+
+
+def test_the_english_file_says_which_locale_it_is(tmp_path):
+    """Self-describing, so it loads correctly wherever it is copied to."""
+    rows = _seo_categories("categories.en.json")
+    assert {r["locale"] for r in rows} == {"en"}
+
+    (tmp_path / "categories.json").write_text(
+        json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+    loaded = S.load_categories(tmp_path, default_locale=None)
+    assert {r["locale"] for r in loaded} == {"en"}
+
+
+def test_every_english_hub_has_an_intro_long_enough_to_rank():
+    """The intro is the only content a category route has of its own."""
+    for row in _seo_categories("categories.en.json"):
+        words = len(row["intro_md"].split())
+        assert 300 <= words <= 500, f'{row["slug"]}: {words} words'
+        assert "Where to start" in row["intro_md"], row["slug"]
+        # House style, and the tells of copy nobody wrote by hand.
+        assert "\u2014" not in row["intro_md"], row["slug"]
+        assert "!" not in row["intro_md"], row["slug"]
+
+
+def test_english_hubs_only_cross_reference_hubs_that_exist():
+    """A named hub that is not in the file is a dead end for the reader.
+
+    The Vietnamese file points at a "Luận văn thạc sĩ" hub that was never part
+    of the live seven. That mistake is invisible until someone goes looking for
+    the page, so the English file is checked for it here.
+    """
+    rows = _seo_categories("categories.en.json")
+    names = {r["display_name"] for r in rows}
+    for row in rows:
+        referenced = {n for n in names if n != row["display_name"] and n in row["intro_md"]}
+        assert referenced, f'{row["slug"]} sends the reader nowhere else'
+    for row in rows:
+        for absent in ("Master's thesis", "Data analysis"):
+            assert absent not in row["intro_md"], f'{row["slug"]} names a hub that does not exist'
+
+
+def test_both_editions_load_side_by_side(db):
+    vi = S.upsert_categories(db, S.load_categories(SEO_DIR / "fixtures" / "seeds"))
+    en = S.upsert_categories(db, _seo_categories("categories.en.json"))
+
+    assert len(en) == 7
+    assert db.query(BlogCategory).filter_by(locale="en").count() == 7
+    # The Vietnamese hub the live bank sits under is untouched by the English run.
+    assert db.get(BlogCategory, vi[("vi", "spss")]).display_name == "SPSS"
+    assert db.get(BlogCategory, en[("en", "thong-ke")]).display_name == "Statistics"
