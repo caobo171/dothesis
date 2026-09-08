@@ -9,7 +9,10 @@ Three jobs, in order:
   2. **Cluster.** Several phrasings of one intent are one page. The biggest
      becomes `focus_keyword` and the rest ride along as `secondary_keywords`,
      because two URLs chasing one query is the failure that multiplies fastest
-     at a thousand posts.
+     at a thousand posts. `cluster_key` catches the phrasings; `absorb_clashes`
+     then re-asks the loader's own question, `similarity.same_page`, over the
+     rows that survived, because a backlog row the loader will refuse is a page
+     that gets written and paid for and can never ship.
   3. **Order and link.** Category round-robin by volume, so the first tranche is
      the best page of every category rather than 40 SPSS pages; 3 to 5 siblings
      per row so no post ships as a dead end.
@@ -24,6 +27,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 from . import topic_bank_dir, repo_root
+from ..similarity import same_page
 from .expand import normalise_keyword, read_candidates
 from .gate import read_gate_files
 
@@ -518,6 +522,47 @@ def _merge_clusters(clusters: dict[str, list[Phrasing]]) -> dict[str, list[Phras
     return merged
 
 
+def absorb_clashes(rows: list[BacklogRow]) -> list[tuple[BacklogRow, BacklogRow]]:
+    """Fold every row an earlier row would refuse into that earlier row.
+
+    `cluster_key` is a sorted token set, so it only ever merges rephrasings of
+    one query. The loader's guard asks a harder question — `similarity.
+    same_page`, which strips page families, splits on search intent and reads
+    the head position — and on the 2026-09-08 load it answered "duplicate" for
+    342 of 979 written pages. Two answers to "is this the same page" means a
+    third of the writing budget buys pages that can never be published, so the
+    plan now asks the loader's question before anything is commissioned.
+
+    `rows` arrives in priority order and the earlier row always wins: it is the
+    higher-volume page, and it is the one the tranche schedule already dated.
+    The loser is not dropped — its keyword and its competitor URLs move onto
+    the winner, because that intent still has demand behind it and the writer
+    has to cover it. Mutates `rows` in place and returns the (winner, absorbed)
+    pairs.
+    """
+    kept: list[BacklogRow] = []
+    absorbed: list[tuple[BacklogRow, BacklogRow]] = []
+    for row in rows:
+        winner = next((k for k in kept
+                       if same_page(k.focus_keyword, row.focus_keyword)), None)
+        if winner is None:
+            kept.append(row)
+            continue
+        # The absorbed FOCUS keyword goes first and is never trimmed away:
+        # MAX_SECONDARY caps how many phrasings of one query reach the brief,
+        # but an absorbed row is a whole page's worth of intent, and dropping
+        # it here would put the waste back where it was.
+        for keyword in [row.focus_keyword] + row.secondary_keywords:
+            if keyword != winner.focus_keyword and keyword not in winner.secondary_keywords:
+                winner.secondary_keywords.append(keyword)
+        for url in row.competitor_urls:
+            if url not in winner.competitor_urls:
+                winner.competitor_urls.append(url)
+        absorbed.append((winner, row))
+    rows[:] = kept
+    return absorbed
+
+
 def _assign_siblings(rows: list[BacklogRow]) -> None:
     by_family: dict[str, list[BacklogRow]] = {}
     by_category: dict[str, list[BacklogRow]] = {}
@@ -612,7 +657,14 @@ def apply_folds(rows: list[BacklogRow], folds) -> int:
 
 
 def build(phrasings: list[Phrasing], exclude_slugs: set[str] | None = None,
-          folds=None) -> list[BacklogRow]:
+          folds=None, absorbed: list | None = None) -> list[BacklogRow]:
+    """One row per page that will exist — and can be published.
+
+    `absorbed` is an out-parameter: pass a list and `absorb_clashes`' (winner,
+    loser) pairs are appended to it, so the caller can report how many rows the
+    loader would have refused. The row count is what it changes, so the number
+    belongs in the summary rather than in a log line nobody reads.
+    """
     exclude_slugs = exclude_slugs or set()
     clusters: dict[str, list[Phrasing]] = {}
     for p in phrasings:
@@ -655,6 +707,14 @@ def build(phrasings: list[Phrasing], exclude_slugs: set[str] | None = None,
     if folds:
         apply_folds(rows, folds)  # before ordering: round-robin is per category
     ordered = _round_robin(rows)
+    # Absorption reads the rows in priority order, so it has to run after the
+    # round robin — and the priorities have to be renumbered afterwards, or the
+    # backlog ships with holes in the sequence `create` schedules on.
+    merged = absorb_clashes(ordered)
+    if absorbed is not None:
+        absorbed.extend(merged)
+    if merged:
+        ordered = _round_robin(ordered)
     _assign_siblings(ordered)
     return ordered
 
@@ -737,7 +797,8 @@ def run(harvest_path: str | None = None, candidates_path: str | None = None,
     covered = read_covered_slugs(index_path)
 
     folds = load_folds(folds_path)
-    all_rows = build(harvest_rows + gate_rows, folds=folds)
+    absorbed: list[tuple[BacklogRow, BacklogRow]] = []
+    all_rows = build(harvest_rows + gate_rows, folds=folds, absorbed=absorbed)
     kept = [r for r in all_rows if r.slug not in covered]
     if len(kept) != len(all_rows):
         kept = _round_robin(kept)
@@ -757,6 +818,7 @@ def run(harvest_path: str | None = None, candidates_path: str | None = None,
         "blacklisted": sum(1 for _, _, r in dropped if r.startswith("exclusion:")),
         "rejected_path": rejected_path,
         "already_covered": len(all_rows) - len(kept),
+        "absorbed": len(absorbed),
         "unmeasured": sum(1 for r in kept if r.gate_status == "unmeasured"),
         "volume_total": sum(r.search_volume for r in kept),
         "per_category": per_category,
@@ -767,6 +829,8 @@ def run(harvest_path: str | None = None, candidates_path: str | None = None,
           f"({summary['blacklisted']} by exclusions.txt, "
           f"{off_vocabulary} off-vocabulary) -> {rejected_path}")
     print(f"      {summary['already_covered']} already covered")
+    print(f"      {summary['absorbed']} rows absorbed into an earlier row the loader's "
+          f"guard would have refused them against")
     print(f"      {summary['unmeasured']} unmeasured "
           f"({summary['rows'] - summary['unmeasured']} measured), scheduled after the "
           f"measured rows")

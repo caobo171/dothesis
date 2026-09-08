@@ -265,8 +265,15 @@ def build_brief(row, sibling_titles: dict[str, str] | None = None,
             "sentence by sentence after the batch, and a page sharing a fifth of "
             "its text with another is deleted, not repaired.")
     if row.secondary_keywords:
-        parts.append("- **secondary keywords** (work them into H2s and prose, they do not "
-                     "get their own pages): " +
+        # These do not get their own pages — `plan` absorbs a row the loader's
+        # duplicate guard would refuse into the row that beat it, and this line
+        # is the only place that intent survives. So it has to reach the title
+        # and the metas, not just an H2: a page that never names the absorbed
+        # query does not rank for it, and nothing else will.
+        parts.append("- **secondary keywords** (these queries get no page of their own, so "
+                     "this page has to answer them: work the closest one into the title and "
+                     "the meta description, and give each of the others an H2 or a named "
+                     "paragraph): " +
                      ", ".join(f"`{k}`" for k in row.secondary_keywords))
     hints = _competitor_hints(row.competitor_urls)
     if hints:

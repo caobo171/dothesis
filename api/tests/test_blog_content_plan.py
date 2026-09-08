@@ -53,17 +53,95 @@ def test_clustering_keeps_the_biggest_phrasing_and_demotes_the_rest():
 
 def test_identical_volume_and_a_shared_head_token_merge_as_one_page():
     """WELE's morphological merge: close-variant grouping shows up as one number."""
+    clusters = {
+        plan.cluster_key(k): [plan.Phrasing(k, v, "measurement", "khao-sat", "term-la-gi")]
+        for k, v in (("thang đo likert", 1600),
+                     ("thang đo likert 5 mức độ", 1600),
+                     ("thang đo likert 7 mức độ", 90))
+    }
+    merged = plan._merge_clusters(clusters)
+    keywords = {p.keyword for group in merged.values() for p in group}
+    assert keywords == {"thang đo likert", "thang đo likert 5 mức độ",
+                        "thang đo likert 7 mức độ"}
+    # The 1600s land in one cluster; the 90 does not, because this merge keys on
+    # the number Google reported and 90 is a different number.
+    assert len(merged) == 2
+
+
+def test_a_row_the_loader_would_refuse_is_absorbed_rather_than_emitted():
+    """The 2026-09-08 finding: 342 of 979 written pages could never be published.
+
+    `_merge_clusters` groups on the reported volume, so "thang đo likert 7 mức
+    độ" at 90/month survived it as its own row — and then the loader's guard
+    refused the page after it had been written and paid for. `absorb_clashes`
+    asks the guard's own question here instead, and both specifiers ride into
+    the winning page's brief.
+    """
     phrasings = [
         plan.Phrasing("thang đo likert", 1600, "measurement", "khao-sat", "term-la-gi"),
-        plan.Phrasing("thang đo likert 5 mức độ", 1600, "measurement", "khao-sat", "term-la-gi"),
-        plan.Phrasing("thang đo likert 7 mức độ", 90, "measurement", "khao-sat", "term-la-gi"),
+        plan.Phrasing("thang đo likert 5 mức độ", 1600, "measurement", "khao-sat",
+                      "term-la-gi"),
+        plan.Phrasing("thang đo likert 7 mức độ", 90, "measurement", "khao-sat",
+                      "term-la-gi"),
+    ]
+    absorbed: list = []
+    rows = plan.build(phrasings, absorbed=absorbed)
+    assert [r.slug for r in rows] == ["thang-do-likert"]
+    assert [r.priority for r in rows] == [1], "priorities renumbered, no holes"
+    assert len(absorbed) == 1
+    assert set(rows[0].secondary_keywords) == {"thang đo likert 5 mức độ",
+                                               "thang đo likert 7 mức độ"}
+
+
+def test_a_different_head_is_not_absorbed():
+    """The other half of the calibration: a proposal and a method are not research.
+
+    Both of these were refused against "nghiên cứu khoa học" on the 979-seed
+    load, and both are real pages. They are tested one at a time against the
+    head term because they still collide with EACH OTHER at 0.67 — a partial
+    overlap, which the head rule deliberately leaves to the coefficient.
+    """
+    head = plan.Phrasing("nghiên cứu khoa học", 6600, "nckh", "nghien-cuu-khoa-hoc",
+                         "term-la-gi")
+    for keyword in ("đề cương nghiên cứu khoa học", "phương pháp nghiên cứu khoa học",
+                    "mô hình nghiên cứu"):
+        absorbed: list = []
+        rows = plan.build([head, plan.Phrasing(keyword, 2400, "nckh",
+                                               "nghien-cuu-khoa-hoc", "term-la-gi")],
+                          absorbed=absorbed)
+        assert absorbed == [], keyword
+        assert len(rows) == 2, keyword
+
+
+def test_an_absorbed_row_hands_over_its_competitor_urls():
+    """The losing row's research is not thrown away — the winner inherits it."""
+    phrasings = [
+        plan.Phrasing("mô hình servqual", 1000, "servqual", "mo-hinh-nghien-cuu",
+                      "model-theory", competitor_urls=["a:/servqual"]),
+        plan.Phrasing("servqual", 900, "servqual", "mo-hinh-nghien-cuu",
+                      "model-theory", competitor_urls=["b:/what-is-servqual"]),
     ]
     rows = plan.build(phrasings)
-    slugs = {r.slug for r in rows}
-    assert "thang-do-likert" in slugs
-    assert "thang-do-likert-7-muc-do" in slugs, "a genuinely different volume stays its own page"
-    merged = next(r for r in rows if r.slug == "thang-do-likert")
-    assert "thang đo likert 5 mức độ" in merged.secondary_keywords
+    assert len(rows) == 1
+    assert rows[0].competitor_urls == ["a:/servqual", "b:/what-is-servqual"]
+    assert rows[0].secondary_keywords == ["servqual"]
+
+
+def test_absorption_never_trims_an_absorbed_intent_off_the_brief():
+    """MAX_SECONDARY caps phrasings of one query, not whole pages folded in.
+
+    A trimmed absorbed keyword is the waste put straight back: no page names
+    that query and no page ever will.
+    """
+    winner = plan.Phrasing("hồi quy tuyến tính", 5000, "regression", "thong-ke",
+                           "term-la-gi")
+    losers = [plan.Phrasing(f"mô hình hồi quy tuyến tính {n}", 100, "regression",
+                            "thong-ke", "term-la-gi")
+              for n in ("bội", "đa biến", "chuẩn hóa", "mẫu", "tổng thể",
+                        "mở rộng", "rút gọn", "hai biến", "ba biến")]
+    rows = plan.build([winner] + losers)
+    assert len(rows) == 1
+    assert len(rows[0].secondary_keywords) == len(losers) > plan.MAX_SECONDARY
 
 
 # ------------------------------------------------------------------ exclusions
@@ -123,20 +201,27 @@ def test_harvest_rows_get_a_category_and_an_archetype():
 
 
 def test_every_row_gets_three_to_five_siblings_family_first():
-    phrasings = [plan.Phrasing(f"kw efa {i}", 1000 - i, "efa", "spss", "term-la-gi")
-                 for i in range(6)]
-    phrasings += [plan.Phrasing(f"kw reg {i}", 500 - i, "regression", "spss", "term-la-gi")
-                  for i in range(3)]
+    # Distinct topics, not "kw efa 1..6": since 2026-09-08 `build` absorbs rows
+    # the loader would refuse, and six phrasings differing by a digit are one
+    # page by that test — which is the whole point of it.
+    efa = ["efa kmo", "efa bartlett", "efa varimax", "efa promax", "efa eigenvalue",
+           "efa communality"]
+    reg = ["reg durbin", "reg tolerance", "reg residual"]
+    phrasings = [plan.Phrasing(k, 1000 - i, "efa", "spss", "term-la-gi")
+                 for i, k in enumerate(efa)]
+    phrasings += [plan.Phrasing(k, 500 - i, "regression", "spss", "term-la-gi")
+                  for i, k in enumerate(reg)]
     rows = {r.focus_keyword: r for r in plan.build(phrasings)}
+    assert len(rows) == len(efa) + len(reg), "none of these is a duplicate of another"
 
-    efa_row = rows["kw efa 0"]
+    efa_row = rows["efa kmo"]
     assert 3 <= len(efa_row.sibling_slugs) <= 5
-    assert all(s.startswith("kw-efa") for s in efa_row.sibling_slugs), "family first"
+    assert all(s.startswith("efa-") for s in efa_row.sibling_slugs), "family first"
     assert efa_row.slug not in efa_row.sibling_slugs, "never links to itself"
 
-    reg_row = rows["kw reg 0"]
+    reg_row = rows["reg durbin"]
     assert len(reg_row.sibling_slugs) >= 3, "a thin family is topped up from the category"
-    assert any(s.startswith("kw-efa") for s in reg_row.sibling_slugs)
+    assert any(s.startswith("efa-") for s in reg_row.sibling_slugs)
 
 
 def test_siblings_are_empty_when_there_is_nothing_to_link_to():
@@ -149,17 +234,18 @@ def test_siblings_are_empty_when_there_is_nothing_to_link_to():
 
 def test_rows_are_ordered_category_round_robin_by_volume():
     phrasings = [
-        plan.Phrasing("spss a", 900, "f1", "spss", "term-la-gi"),
-        plan.Phrasing("spss b", 800, "f1", "spss", "term-la-gi"),
-        plan.Phrasing("spss c", 700, "f1", "spss", "term-la-gi"),
-        plan.Phrasing("pls a", 600, "f2", "smartpls", "smartpls-howto"),
-        plan.Phrasing("pls b", 500, "f2", "smartpls", "smartpls-howto"),
+        plan.Phrasing("spss alpha", 900, "f1", "spss", "term-la-gi"),
+        plan.Phrasing("spss beta", 800, "f1", "spss", "term-la-gi"),
+        plan.Phrasing("spss gamma", 700, "f1", "spss", "term-la-gi"),
+        plan.Phrasing("pls delta", 600, "f2", "smartpls", "smartpls-howto"),
+        plan.Phrasing("pls epsilon", 500, "f2", "smartpls", "smartpls-howto"),
     ]
     rows = plan.build(phrasings)
     assert [r.priority for r in rows] == [1, 2, 3, 4, 5]
     categories = [r.category for r in rows]
     assert categories[:4] == ["spss", "smartpls", "spss", "smartpls"]
-    assert [r.focus_keyword for r in rows][:2] == ["spss a", "pls a"], "best of each first"
+    assert [r.focus_keyword for r in rows][:2] == ["spss alpha", "pls delta"], \
+        "best of each first"
 
 
 # -------------------------------------------------------------- the whole run

@@ -101,6 +101,19 @@ def test_preamble_fails_loudly_when_the_skill_is_missing(tmp_path):
     assert "the writer's rules come from the skill" in str(err.value)
 
 
+def test_the_brief_sends_secondary_keywords_to_the_title_and_the_metas():
+    """`plan` absorbs a row the loader would refuse into the row that beat it,
+    and `secondary_keywords` is the only place that intent survives. WELE's
+    rule: an absorbed intent has to show in the winning page's title and metas,
+    because a page that never names the query does not rank for it and no other
+    page will ever be written for it.
+    """
+    brief = prompts.build_brief(ROW, {}, prompts.load_skill_files()["structure"])
+    line = next(ln for ln in brief.splitlines() if "**secondary keywords**" in ln)
+    assert "no page of their own" in line
+    assert "title" in line and "meta description" in line
+
+
 def test_brief_carries_the_row_and_the_right_skeleton():
     text = prompts.load_skill_files()["structure"]
     brief = prompts.build_brief(ROW, {"do-tin-cay-thang-do": "Độ tin cậy thang đo"}, text)
