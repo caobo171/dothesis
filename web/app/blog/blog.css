@@ -43,6 +43,30 @@
   max-width: 620px;
 }
 
+/* Category hub hero. The count answers the one question the old page never
+   did — a hub with 141 posts looked exactly like one with 27 — and it sits on
+   the title rather than in the list so it is read as a property of the topic. */
+.lp-root .blog-hero__count {
+  color: var(--ink-500);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 10px;
+}
+
+/* The intro's first paragraph, and only that. It is written to stand alone —
+   the page metadata already uses it as the description — so it carries the
+   orientation on its own while the remaining four paragraphs wait below the
+   posts. Larger than body copy and in ink-600, so it reads as a subtitle
+   rather than as the first of five paragraphs the reader has to wade through. */
+.lp-root .blog-lead {
+  margin-top: 18px;
+}
+.lp-root .blog-lead .blog-prose {
+  font-size: 19px;
+  line-height: 1.6;
+  color: var(--ink-600);
+}
+
 /* ------------------------------- Chips ---------------------------------- */
 .lp-root .blog-chips {
   display: flex;
@@ -149,6 +173,76 @@
 .lp-root .blog-meta a {
   color: var(--ink-500);
   font-weight: 500;
+}
+
+/* ------------------------------- Hub rows -------------------------------- */
+/* The category page is a link hub, not a magazine: it lists 30 posts a page on
+   purpose, and the card grid next door would make that four screens of
+   generated thumbnails before the pager. Rows carry the same three facts a
+   card does — title, one line of excerpt, a light meta line — at a third of
+   the height, on the card's own type scale so the two pages read as one site.
+
+   What the old bare <ul> was missing is hierarchy, not information: every row
+   was one weight, one size, one colour, thirty deep. */
+.lp-root .blog-rows {
+  margin-top: 32px;
+  border-top: 1px solid var(--ink-100);
+}
+.lp-root .blog-row {
+  position: relative;
+  border-bottom: 1px solid var(--ink-100);
+  /* Bled 12px past the measure so the hover tint has air around the text
+     instead of stopping flush against the first and last character. */
+  padding: 15px 12px;
+  margin: 0 -12px;
+  transition: background-color var(--duration-fast);
+}
+.lp-root .blog-row:hover {
+  background: var(--ink-50);
+}
+.lp-root .blog-row__title {
+  font-size: var(--text-prose);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  color: var(--ink-900);
+  text-wrap: pretty;
+}
+.lp-root .blog-row__title a {
+  color: inherit;
+}
+/* One anchor per post and its text is the title alone — a crawler on a hub
+   page should not read the excerpt and the date as part of the link. The
+   pseudo-element makes the whole row the click target anyway, which is what
+   a thumb wants on a 30-row list. */
+.lp-root .blog-row__title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.lp-root .blog-row:hover .blog-row__title {
+  color: var(--primary-600);
+}
+.lp-root .blog-row__excerpt {
+  color: var(--ink-500);
+  font-size: 14px;
+  line-height: 1.55;
+  margin-top: 4px;
+  /* Clamped rather than truncated by the API: the excerpt is a hint about the
+     row, and a second line of it would push the next title off the screen. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+}
+.lp-root .blog-row .blog-meta {
+  margin-top: 6px;
+}
+@media (max-width: 640px) {
+  /* One line at 320px of measure is half a sentence, so the phone gets two. */
+  .lp-root .blog-row__excerpt {
+    -webkit-line-clamp: 2;
+  }
 }
 
 /* ------------------------------ Pagination ------------------------------ */
@@ -433,4 +527,34 @@
   color: var(--ink-500);
   font-size: 15.5px;
   margin-top: 40px;
+}
+
+/* The four paragraphs of the intro the lead did not take, parked under their
+   own heading below the posts. Quieter than an article body — this is
+   orientation for the reader who scrolled past everything they came for. */
+.lp-root .blog-about {
+  margin-top: 16px;
+}
+.lp-root .blog-about .blog-prose {
+  font-size: var(--text-prose);
+  color: var(--ink-600);
+}
+
+/* Sibling topics as chips, not a stacked list. The same seven links are
+   already chips at the top of the page; rendering them a second time as a
+   column of bordered rows made the foot of the page look unfinished. */
+.lp-root .blog-siblings {
+  border-top: 1px solid var(--ink-100);
+  margin-top: 64px;
+  padding-top: 36px;
+}
+/* Directly under the intro's remainder the two are one closing block, and a
+   second rule 44px below the first reads as a mistake. */
+.lp-root .blog-related + .blog-siblings {
+  border-top: none;
+  margin-top: 44px;
+  padding-top: 0;
+}
+.lp-root .blog-siblings .blog-chips {
+  margin-top: 14px;
 }

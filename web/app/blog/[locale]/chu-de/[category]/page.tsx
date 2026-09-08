@@ -8,7 +8,8 @@ import { CategoryChips } from "../../../_components/CategoryChips";
 import { Markdown } from "../../../_components/Markdown";
 import { Pagination } from "../../../_components/Pagination";
 import { PAGE_SIZE, fetchCategory, fetchPosts } from "../../../_lib/api";
-import { formatDate } from "../../../_lib/format";
+import { formatDate, formatReadingTime } from "../../../_lib/format";
+import { plainText, splitLead } from "../../../_lib/markdown";
 import { absoluteUrl, categoryPath, postPath } from "../../../_lib/site";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +21,24 @@ type Search = { page?: string | string[] };
  *  its whole job is to put as many crawlable anchors on one page as it can. */
 const CATEGORY_PAGE_SIZE = 30;
 
-const COPY: Record<string, { empty: string; siblings: string; all: string }> = {
-  vi: { empty: "Chưa có bài viết trong chủ đề này.", siblings: "Chủ đề khác", all: "Tất cả bài viết" },
-  en: { empty: "No posts in this topic yet.", siblings: "Other topics", all: "All posts" },
+const COPY: Record<
+  string,
+  { empty: string; siblings: string; all: string; about: string; count: (n: number) => string }
+> = {
+  vi: {
+    empty: "Chưa có bài viết trong chủ đề này.",
+    siblings: "Chủ đề khác",
+    all: "Tất cả bài viết",
+    about: "Về chuyên mục này",
+    count: (n) => `${n} bài viết`,
+  },
+  en: {
+    empty: "No posts in this topic yet.",
+    siblings: "Other topics",
+    all: "All posts",
+    about: "About this topic",
+    count: (n) => `${n} ${n === 1 ? "post" : "posts"}`,
+  },
 };
 
 function readPage(search: Search | undefined): number {
@@ -42,9 +58,13 @@ export async function generateMetadata({
   if (!cat) return {};
   const canonical = absoluteUrl(categoryPath(locale, cat.slug));
   const title = `${cat.display_name} | DoThesis`;
-  // The intro is hand-written per category (spec §6) and doubles as the meta
-  // description; its first sentence is written to stand alone for that reason.
-  const description = cat.intro_md.replace(/[#*_`>\[\]]/g, "").split(/\n+/)[0]?.slice(0, 300) ?? "";
+  // The intro is hand-written per category (spec §6) and its first paragraph
+  // doubles as the meta description — which is exactly why the page can set
+  // that paragraph as its lead. Both read it through `splitLead` so the two
+  // can never drift; an intro that opens with a heading has no lead, and the
+  // whole intro is summarised instead.
+  const { lead } = splitLead(cat.intro_md ?? "");
+  const description = plainText(lead || cat.intro_md || "").slice(0, 300);
   return {
     // metadataBase so any relative URL Next resolves here lands on the public
     // origin rather than on the request host, which behind a proxy is internal.
@@ -81,34 +101,61 @@ export default async function BlogCategoryPage({
     pageSize: CATEGORY_PAGE_SIZE,
   });
 
+  // Every word of the intro still ships; only the order changes. The opening
+  // paragraph orients the reader above the list, and the remaining four wait
+  // under their own heading below it, so the posts — the thing the reader came
+  // for — are on the first screen instead of five paragraphs down.
+  const { lead, rest } = splitLead(cat.intro_md ?? "");
+
   return (
     <BlogShell>
       <header className="blog-hero">
         <div className="lp-wrap">
-          <h1 className="blog-hero__title">{cat.display_name}</h1>
-          <CategoryChips categories={[cat, ...siblings]} locale={locale} active={cat.slug} />
+          {/* Same measure as the body below. The hero used to run the full
+              1160px wrap while the posts sat in a centred 720px column, so the
+              H1 and the text under it did not share a left edge. */}
+          <div className="blog-measure">
+            <h1 className="blog-hero__title">{cat.display_name}</h1>
+            {/* `list.total` rather than `cat.post_count`: this is the number of
+                posts the pager below actually walks through, and it is the
+                count sitting directly above that list. */}
+            {list.total > 0 && <p className="blog-hero__count">{copy.count(list.total)}</p>}
+            {lead && (
+              <div className="blog-lead">
+                <Markdown>{lead}</Markdown>
+              </div>
+            )}
+            <CategoryChips categories={[cat, ...siblings]} locale={locale} active={cat.slug} />
+          </div>
         </div>
       </header>
       <div className="lp-wrap">
         <div className="blog-measure">
-          {cat.intro_md && <Markdown>{cat.intro_md}</Markdown>}
-
           {list.posts.length === 0 ? (
             <p className="blog-empty">{copy.empty}</p>
           ) : (
-            <ul className="blog-linklist" style={{ marginTop: 36 }}>
-              {list.posts.map((post) => (
-                <li key={post.slug}>
-                  <Link href={postPath(post.locale, post.slug)}>{post.title}</Link>
-                  <div className="blog-meta">
-                    {post.published_at && (
-                      <time dateTime={post.published_at}>
-                        {formatDate(post.published_at, post.locale)}
-                      </time>
+            <ul className="blog-rows">
+              {list.posts.map((post) => {
+                const date = formatDate(post.published_at, post.locale);
+                const read = formatReadingTime(post.reading_time, post.locale);
+                return (
+                  <li key={post.slug} className="blog-row">
+                    <h2 className="blog-row__title">
+                      <Link href={postPath(post.locale, post.slug)}>{post.title}</Link>
+                    </h2>
+                    {post.excerpt && <p className="blog-row__excerpt">{post.excerpt}</p>}
+                    {(date || read) && (
+                      <div className="blog-meta">
+                        {date && (
+                          <time dateTime={post.published_at ?? undefined}>{date}</time>
+                        )}
+                        {date && read && <span className="blog-meta__sep">·</span>}
+                        {read && <span>{read}</span>}
+                      </div>
                     )}
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
 
@@ -122,16 +169,22 @@ export default async function BlogCategoryPage({
             }
           />
 
-          {siblings.length > 0 && (
+          {rest && (
             <section className="blog-related">
+              <h2 className="blog-section-title">{copy.about}</h2>
+              <div className="blog-about">
+                <Markdown>{rest}</Markdown>
+              </div>
+            </section>
+          )}
+
+          {siblings.length > 0 && (
+            <section className="blog-siblings">
               <h2 className="blog-section-title">{copy.siblings}</h2>
-              <ul className="blog-linklist">
-                {siblings.map((s) => (
-                  <li key={s.slug}>
-                    <Link href={categoryPath(locale, s.slug)}>{s.display_name}</Link>
-                  </li>
-                ))}
-              </ul>
+              {/* Chips, not a stacked list of links. `active` is this page's own
+                  slug, which no sibling carries, so nothing here is marked
+                  current and the "all posts" chip stays a plain link. */}
+              <CategoryChips categories={siblings} locale={locale} active={cat.slug} />
             </section>
           )}
         </div>
