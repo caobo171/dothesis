@@ -61,9 +61,13 @@ INTENT_MARKERS: tuple[tuple[Intent, re.Pattern[str]], ...] = tuple(
                        r"định nghĩa|dinh nghia|ý nghĩa|y nghia|\bwhat is\b|definition)"),
         ("tool", r"(phần mềm|phan mem|download|crack|miễn phí|mien phi|\bfree\b|"
                  r"online|\bapp\b|website|trang web|công cụ|cong cu)"),
+        # "X trong SPSS" is a procedure page even without a verb; the same X
+        # without the software is the definition page, and the two do not
+        # compete for one SERP (calibration finding, 2026-09-08).
         ("how-to", r"(cách|\bcach\b|hướng dẫn|huong dan|làm sao|lam sao|các bước|cac buoc|"
                    r"chạy|\bchay\b|thực hiện|thuc hien|\bhow to\b|kiểm định|kiem dinh|"
-                   r"phân tích|phan tich|viết|\bviet\b|tính|\btinh\b)"),
+                   r"phân tích|phan tich|viết|\bviet\b|tính|\btinh\b|"
+                   r"trong spss|trong smartpls|trong amos|trong stata)"),
     )
 )
 
@@ -74,9 +78,27 @@ CLASH_THRESHOLD = 0.6
 
 _NON_WORD = re.compile(r"[^\w\s]", re.UNICODE)
 
+# Page-family phrases: they say what KIND of page this is, not what it is
+# about. Calibrated on the 2026-09-08 load, where 156 of 421 seeds were refused
+# and 49 of those were pairs like "mô hình tam" vs "mô hình swot" (2 of 3
+# syllables shared, so 0.67 on the overlap coefficient) and "ave trong spss" vs
+# "spss". Removed as PHRASES, not syllables: dropping "định" alone would gut
+# "định tính" and "định lượng", which are topics.
+FAMILY_PHRASES: tuple[str, ...] = (
+    "mô hình", "mo hinh", "thang đo", "thang do", "kiểm định", "kiem dinh",
+    "phân tích", "phan tich", "công thức", "cong thuc", "bài tập", "bai tap",
+    "có lời giải", "co loi giai", "các loại", "cac loai", "cách tính", "cach tinh",
+    "cách chạy", "cach chay", "trong spss", "trong smartpls", "trong amos",
+    "trong stata", "hướng dẫn", "huong dan",
+)
+_FAMILY_RE = re.compile(
+    r"(?<!\w)(" + "|".join(re.escape(p) for p in FAMILY_PHRASES) + r")(?!\w)",
+    re.IGNORECASE)
+
 
 def tokens(text: str) -> set[str]:
-    cleaned = _NON_WORD.sub(" ", (text or "").lower())
+    cleaned = _FAMILY_RE.sub(" ", (text or "").lower())
+    cleaned = _NON_WORD.sub(" ", cleaned)
     return {t for t in cleaned.split() if len(t) > 1 and t not in STOP}
 
 

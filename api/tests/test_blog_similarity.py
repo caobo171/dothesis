@@ -30,7 +30,9 @@ def test_tokens_drop_single_characters_and_empty_input():
 
 
 def test_tokens_keep_the_words_that_carry_the_topic():
-    assert tokens("cách chạy hồi quy trong spss") >= {"hồi", "quy", "spss"}
+    # "trong spss" is a page-family phrase (see FAMILY_PHRASES): the software
+    # names the kind of page, the topic is the regression.
+    assert tokens("cách chạy hồi quy trong spss") == {"hồi", "quy"}
     assert "trong" not in tokens("cách chạy hồi quy trong spss")
 
 
@@ -107,3 +109,26 @@ def test_find_clashes_is_sorted_by_score_descending():
 
 def test_find_clashes_ignores_a_subject_with_no_usable_tokens():
     assert find_clashes(_c("new", "là gì"), [_c("other", "là gì")]) == []
+
+
+# ---- calibration on the 2026-09-08 load (156 refusals reviewed by hand) ----
+
+
+def test_family_phrases_do_not_count_as_shared_topic():
+    from app.blog.similarity import tokens, overlap
+
+    assert tokens("mô hình tam") == {"tam"}
+    assert overlap(tokens("mô hình tam"), tokens("mô hình swot")) == 0.0
+    assert overlap(tokens("ave trong spss"), tokens("spss")) == 0.0
+    # a longer phrasing of the same page still clashes
+    assert overlap(tokens("thang đo likert 5 mức độ"), tokens("thang đo likert")) == 1.0
+    # syllables inside a topic survive: "kiểm định" goes, "định tính" stays
+    assert tokens("định tính là gì") == {"định", "tính"}
+
+
+def test_a_procedure_page_and_its_definition_page_are_different_intents():
+    from app.blog.similarity import classify
+
+    assert classify("biến điều tiết trong smartpls") == "how-to"
+    assert classify("biến điều tiết") == "informational"
+    assert classify("cronbach alpha trong spss") == "how-to"

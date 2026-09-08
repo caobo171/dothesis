@@ -127,8 +127,14 @@ def audit_links(db: Session, extra_allowed: set[str] | None = None) -> LinkRepor
 
     known: set[str] = set(ALLOWED_ROUTES) | set(extra_allowed or ())
     locales = {p.locale for p in posts}
-    for p in posts:
-        known.add(f"/blog/{p.locale}/{p.slug}")
+    # A link to a post that is scheduled but not yet live is not broken: the
+    # linking post is on the same schedule, and a scheduled bank would otherwise
+    # report every forward link as a 404 until the last tranche lands.
+    from . import LIVE_OR_PENDING  # noqa: PLC0415
+    for locale, slug in db.execute(
+            select(BlogPost.locale, BlogPost.slug)
+            .where(BlogPost.status.in_(LIVE_OR_PENDING))).all():
+        known.add(f"/blog/{locale}/{slug}")
     for locale in locales:
         known.add(f"/blog/{locale}")
     from ..models import BlogCategory  # noqa: PLC0415
