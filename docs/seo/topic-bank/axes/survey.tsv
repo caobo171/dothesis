@@ -31,3 +31,13 @@ chon-mau-phi-xac-suat	chọn mẫu phi xác suất	{display};{display} là gì	k
 lam-sach-du-lieu	làm sạch dữ liệu	{display};{display} là gì	khao-sat	survey	cleaning
 phieu-tra-loi-khong-hop-le	phiếu trả lời không hợp lệ	{display};{display} là gì	khao-sat	survey	cleaning
 dao-duc-nghien-cuu	đạo đức nghiên cứu	{display};{display} là gì	khao-sat	survey	cleaning
+cong-thuc-slovin	công thức slovin	{display};{display} là bao nhiêu	khao-sat	survey	sample-size
+cong-thuc-cochran	công thức cochran	{display};{display} là bao nhiêu	khao-sat	survey	sample-size
+bang-krejcie-morgan	bảng krejcie morgan	{display};{display} là gì	khao-sat	survey	sample-size
+co-mau-bang-g-power	cỡ mẫu bằng g power	{display};{display} là bao nhiêu	khao-sat	survey	sample-size
+thu-tu-cau-hoi	thứ tự câu hỏi	{display} khảo sát;{display} là gì	khao-sat	survey	instrument
+dich-nguoc-bang-hoi	dịch ngược bảng hỏi	{display};cách làm {display}	khao-sat	survey	instrument
+thu-moi-khao-sat	thư mời khảo sát	{display};cách làm {display}	khao-sat	survey	collection
+khao-sat-doanh-nghiep	khảo sát doanh nghiệp	{display};cách làm {display}	khao-sat	survey	collection
+phieu-tra-loi-trung-lap	phiếu trả lời trùng lặp	{display};{display} là gì	khao-sat	survey	cleaning
+thoi-gian-tra-loi-qua-nhanh	thời gian trả lời quá nhanh	{display};{display} là gì	khao-sat	survey	cleaning
