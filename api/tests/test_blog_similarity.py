@@ -14,6 +14,7 @@ from app.blog.similarity import (
     overlap,
     page_overlap,
     same_page,
+    singular,
     tokens,
 )
 
@@ -226,3 +227,76 @@ def test_same_page_needs_the_intent_to_agree_as_well():
 def test_find_clashes_uses_the_head_rule():
     subject = _c("new", "đề cương nghiên cứu khoa học")
     assert find_clashes(subject, [_c("old", "nghiên cứu khoa học")]) == []
+
+
+# ---- the plural, found in production on 2026-09-09 --------------------------
+#
+# `outlier` and `outliers` shipped as two posts: the same 6,600-volume keyword,
+# the same title after the plural, both scheduled in the same week, and both in
+# each other's "Bài liên quan" list, which is where a reader saw it. Nothing
+# refused the second one, because the two keywords share NO token, so the
+# overlap coefficient scored the most obvious duplicate in the bank 0.0.
+#
+# The corpus near-duplicate check in `content/qa.py` is not the gate that
+# missed this and could not have caught it: it compares prose, and the two
+# posts were written independently. They score 0.03 against a 0.35 threshold.
+# The keyword is the only thing they share, so the keyword is where it belongs.
+
+
+def test_a_bare_plural_is_the_same_page_as_its_singular():
+    # The pair that produced this rule.
+    assert tokens("outlier") == tokens("outliers") == {"outlier"}
+    assert page_overlap("outlier", "outliers") == 1.0
+    assert same_page("outlier", "outliers")
+    # The other two the same scan named, both live in the vi bank.
+    assert same_page("residual là gì", "residuals là gì")
+    assert same_page("coefficient là gì", "coefficients là gì")
+    # ... and the en bank's own version of it.
+    assert same_page("Google Form survey", "Google Forms survey")
+
+
+def test_the_plural_fold_leaves_a_stem_s_alone():
+    # A trailing `s` that belongs to the word. Folding these would invent
+    # `analysi` and `bia`, and would quietly rewrite `spss` to `sps` — the
+    # software this whole bank is about.
+    for word in ("analysis", "hypothesis", "thesis", "kurtosis", "skewness",
+                 "process", "bias", "spss", "bonus"):
+        assert singular(word) == word, word
+    assert tokens("spss là gì") == {"spss"}
+    assert same_page("spss là gì", "spss là gì")
+
+
+def test_a_word_that_only_looks_like_a_plural_is_not_folded():
+    # AMOS is the SEM software, AMO is the Ability-Motivation-Opportunity
+    # theory, and the bank has live posts on both. Same for the logistics
+    # industry against logistic regression. These are the only two the
+    # 2026-09-09 scan of both banks got wrong, so they are named rather than
+    # inferred.
+    assert singular("amos") == "amos"
+    assert singular("logistics") == "logistics"
+    assert not same_page("amos là gì", "amo là gì")
+    assert not same_page("logistics là gì", "logistic là gì")
+
+
+def test_the_plural_fold_reaches_the_head_rule_too():
+    # `page_overlap` decides containment from `tokens()` and hands the judgment
+    # to `_narrows`, which rebuilds the words from `_sequence`. Both fold, or a
+    # keyword is a subset by one and not by the other and the containment the
+    # coefficient scored 1.0 gets silently thrown away.
+    assert tokens("coefficients là gì") < tokens("path coefficient là gì")
+    assert page_overlap("coefficients là gì", "path coefficient là gì") == 1.0
+
+
+def test_find_clashes_catches_the_plural():
+    # The path the loader's guard actually takes, which is what should have
+    # refused `outliers` at create time.
+    subject = _c("outliers", "outliers")
+    clashes = find_clashes(subject, [_c("outlier", "outlier"),
+                                     _c("do-lech-chuan", "độ lệch chuẩn")])
+    assert [c.slug for c in clashes] == ["outlier"]
+    assert clashes[0].score == 1.0
+
+    # `outlier trong spss` is a third page and stays one: a procedure page and
+    # a definition page do not compete, plural or not.
+    assert find_clashes(_c("outlier-trong-spss", "outlier trong spss"),
+                        [_c("outlier", "outlier"), _c("outliers", "outliers")]) == []

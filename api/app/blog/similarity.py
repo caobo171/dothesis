@@ -17,6 +17,10 @@ audit call it — a second one would have to relearn the 48-pairs lesson, and
 would relearn it in production. `plan` joined them on 2026-09-08 through
 `same_page`, after a load in which 342 of 979 written pages were refused
 because plan's `cluster_key` and this module disagreed about what one page is.
+
+The one thing it could not see until 2026-09-09 was the plural. `outlier` and
+`outliers` share no token, so the overlap coefficient scored the most obvious
+duplicate in the bank 0.0 and both pages shipped. `singular()` closes it.
 """
 from __future__ import annotations
 
@@ -110,10 +114,56 @@ _FAMILY_RE = re.compile(
     re.IGNORECASE)
 
 
+# Endings where a trailing `s` belongs to the stem rather than marking a plural.
+# `is` and `us` and `ss` cover most of what this bank writes in English
+# (`analysis`, `hypothesis`, `thesis`, `kurtosis`, `skewness`, `process`,
+# `spss`, `bonus`); `as` is here for `bias`, and costs only `formulas` and
+# `ideas`, neither of which pairs with anything in the bank.
+_STEM_S_ENDINGS: tuple[str, ...] = ("ss", "us", "is", "as")
+
+# Words that end in `s`, are not a plural, and whose singular is a DIFFERENT
+# term this bank already writes about. The ending rule above cannot see these,
+# because both look like ordinary plurals:
+#
+#   `amos`      is the SEM software; `amo` is the Ability-Motivation-Opportunity
+#               theory. Both are published (`amos` at volume 1,000, `amo-la-gi`),
+#               with `mo-hinh-amo` and `ly-thuyet-amo` behind them.
+#   `logistics` is the industry (`đề tài luận văn logistics`); `logistic` is the
+#               regression (`hồi quy logistic`, `logistic-regression-la-gi`).
+#
+# Measured on the 979-row vi bank and the 978-row en bank on 2026-09-09: folding
+# these two was the ONLY thing a blanket plural rule got wrong, reporting four
+# pairs of genuinely different pages as one page.
+NOT_A_PLURAL: frozenset[str] = frozenset({"amos", "logistics"})
+
+
+def singular(token: str) -> str:
+    """An English plural folded onto its singular. Everything else unchanged.
+
+    Vietnamese does not inflect for number, so a trailing `s` in this corpus is
+    almost always an English technical term the student typed in English, and
+    the two spellings are one page. `tokens()` could not see that: `outlier`
+    and `outliers` share no token at all, so the overlap coefficient scored the
+    pair 0.0 and `same_page` waved the second one through. Both posts published
+    on 2026-09-08 with the same 6,600-volume keyword and the same title after
+    the plural, and each showed up in the other's related list.
+
+    Deliberately only `-s`. `-ies -> -y` is absent because nothing in either
+    bank pairs across it (`capabilities`, `frequencies`, `opportunities`,
+    `series`, `studies` have no singular counterpart written), and it would
+    have to special-case `series` to avoid inventing `serie`.
+    """
+    if len(token) <= 3 or not token.endswith("s"):
+        return token
+    if token.endswith(_STEM_S_ENDINGS) or token in NOT_A_PLURAL:
+        return token
+    return token[:-1]
+
+
 def tokens(text: str) -> set[str]:
     cleaned = _FAMILY_RE.sub(" ", (text or "").lower())
     cleaned = _NON_WORD.sub(" ", cleaned)
-    return {t for t in cleaned.split() if len(t) > 1 and t not in STOP}
+    return {singular(t) for t in cleaned.split() if len(t) > 1 and t not in STOP}
 
 
 def classify(text: str) -> Intent:
@@ -148,11 +198,17 @@ def _sequence(text: str) -> list[tuple[str, bool]]:
     the overlap coefficient wants. `same_page` needs to know WHERE the words
     that survived sat, so this keeps every content token and flags the ones a
     family phrase contributed.
+
+    It folds plurals exactly as `tokens()` does, and has to: `page_overlap`
+    decides containment from `tokens()` and then asks `_narrows` to judge it
+    from this sequence. If only one of the two folded, a keyword could be a
+    subset of another by the set and not by the sequence, and the head rule
+    would silently reject a containment the coefficient had already scored 1.0.
     """
     lowered = (text or "").lower()
 
     def content(chunk: str) -> list[str]:
-        return [t for t in _NON_WORD.sub(" ", chunk).split()
+        return [singular(t) for t in _NON_WORD.sub(" ", chunk).split()
                 if len(t) > 1 and t not in STOP]
 
     out: list[tuple[str, bool]] = []

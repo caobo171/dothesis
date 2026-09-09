@@ -269,6 +269,65 @@ def test_only_existing_refuses_to_insert_what_the_duplicate_gate_refused(capsys,
 
 # --- audits ----------------------------------------------------------------
 
+# --- retire ----------------------------------------------------------------
+
+def test_retire_deletes_the_merged_post_and_leaves_the_keeper(capsys, db):
+    _post(db, "outlier", focus_keyword="outlier")
+    _post(db, "outliers", focus_keyword="outliers")
+    assert cli.main(["retire", "--slug", "outliers", "--into", "outlier"]) == 0
+    out = capsys.readouterr().out
+    assert "Deleted: outliers [vi]" in out
+    assert {p.slug for p in db.query(BlogPost).all()} == {"outlier"}
+
+
+def test_retire_prints_the_redirect_it_needs_before_the_row_goes(capsys, db):
+    _post(db, "outlier", focus_keyword="outlier")
+    _post(db, "outliers", focus_keyword="outliers")
+    assert cli.main(["retire", "--slug", "outliers", "--into", "outlier"]) == 0
+    out = capsys.readouterr().out
+    # The exact line, because a deleted slug with no redirect is a 404 on a URL
+    # the other posts already link to.
+    assert ('{ source: "/blog/vi/outliers", destination: "/blog/vi/outlier", '
+            "permanent: true }," ) in out
+    assert "BEFORE the row goes" in out
+
+
+def test_retire_dry_run_shows_the_row_and_deletes_nothing(capsys, db):
+    _post(db, "outlier", focus_keyword="outlier")
+    _post(db, "outliers", focus_keyword="outliers", title="Outliers là gì")
+    assert cli.main(["retire", "--slug", "outliers", "--into", "outlier",
+                     "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "Outliers là gì" in out and "Dry run, nothing deleted." in out
+    assert db.query(BlogPost).count() == 2
+
+
+def test_retire_refuses_when_the_redirect_would_have_nowhere_to_land(capsys, db):
+    _post(db, "outliers", focus_keyword="outliers")
+    assert cli.main(["retire", "--slug", "outliers", "--into", "outlier"]) == 1
+    assert db.query(BlogPost).count() == 1
+
+
+def test_retire_refuses_a_post_that_is_not_there(capsys, db):
+    _post(db, "outlier", focus_keyword="outlier")
+    assert cli.main(["retire", "--slug", "outliers", "--into", "outlier"]) == 1
+    assert db.query(BlogPost).count() == 1
+
+
+def test_retire_will_not_point_a_post_at_itself(capsys, db):
+    _post(db, "outlier", focus_keyword="outlier")
+    assert cli.main(["retire", "--slug", "outlier", "--into", "outlier"]) == 2
+    assert db.query(BlogPost).count() == 1
+
+
+def test_retire_keeps_the_locales_apart(capsys, db):
+    # The en bank has its own `outliers`; retiring the vi one must not see it.
+    _post(db, "outlier", focus_keyword="outlier")
+    _post(db, "outliers", locale="en", focus_keyword="outliers")
+    assert cli.main(["retire", "--slug", "outliers", "--into", "outlier"]) == 1
+    assert db.query(BlogPost).count() == 2
+
+
 def test_audit_seo_reports_a_planted_overlap(capsys, db):
     _post(db, "efa-la-gi", focus_keyword="phân tích efa là gì")
     _post(db, "efa-la-gi-2", focus_keyword="phân tích efa là gì")
