@@ -431,7 +431,13 @@
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 16 / 9;
+  /* 3:2, which is what the library actually generates. 16/9 was written when
+     the only picture here was the 1200x630 generated card; against a real
+     illustration it cropped a sixth of the frame away, and the prompts ask for
+     generous negative space precisely so the subject sits in it. The listing
+     card keeps 1200/630, because a post with no hero falls back to that
+     generated card and cropping the sides of it would cut its text. */
+  aspect-ratio: 3 / 2;
   object-fit: cover;
   border-radius: var(--radius-lg);
   border: 1px solid var(--ink-100);

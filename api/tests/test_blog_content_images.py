@@ -240,6 +240,25 @@ def test_neighbouring_seeds_never_share_a_key(tmp_path):
     assert all(a != b for a, b in zip(keys, keys[1:])), keys
 
 
+def test_a_translation_takes_the_picture_of_the_post_it_came_from(tmp_path):
+    """One article, one picture, in both languages.
+
+    The English edition has its own slug, so hashing it gave `what-is-cfa` a
+    different scene from `cfa-la-gi`. A reader who follows the language switch
+    then sees what looks like a different article."""
+    lib = _library(tmp_path, VARIANT_LIBRARY)
+    vi, en = tmp_path / "vi", tmp_path / "en"
+    for i, slug in enumerate(["cronbach-alpha", "efa", "hoi-quy", "anova"], start=1):
+        _seed(vi, f"{i:04d}-{slug}.json", slug=slug)
+        _seed(en, f"{i:04d}-what-is-{slug}.json", slug=f"what-is-{slug}",
+              source_slug=slug)
+
+    vi_keys = images.assign(vi, lib_path=lib)
+    en_keys = images.assign(en, lib_path=lib)
+
+    assert [vi_keys[p] for p in sorted(vi_keys)] == [en_keys[p] for p in sorted(en_keys)]
+
+
 def test_an_archetype_with_no_variants_falls_back_to_the_category_key(tmp_path):
     lib = _library(tmp_path, VARIANT_LIBRARY)
     posts = tmp_path / "posts"
@@ -444,7 +463,8 @@ def test_the_committed_library_covers_every_category_and_archetype():
     for archetype in ("term-la-gi", "spss-howto", "smartpls-howto", "test",
                       "model-theory", "scale", "thesis-writing", "survey",
                       "topic-list", "troubleshoot"):
-        assert len(images.variants_for(archetype, library)) == 3, archetype
+        assert len(images.variants_for(archetype, library)) == \
+            images.VARIANTS_PER_ARCHETYPE, archetype
 
 
 def test_every_prompt_forbids_generated_type():

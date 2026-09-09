@@ -258,9 +258,15 @@ def save_library(library: dict[str, dict[str, Any]], path: str | Path | None = N
 # Assignment
 # --------------------------------------------------------------------------
 
-#: The ten archetypes each have `<archetype>-1..3`; a slug whose archetype has
+#: The ten archetypes each have `<archetype>-1..6`; a slug whose archetype has
 #: no variants falls back to its category key.
-VARIANTS_PER_ARCHETYPE = 3
+#:
+#: Three was not enough, and the category hub is where it showed. A hub lists
+#: thirty posts of two or three archetypes, so with three variants the best a
+#: page could do was three distinct pictures and seven rows came out with four.
+#: Six is the number where a hub page stops repeating within a screen; the
+#: second three were generated on 2026-09-09 for $1.26 at gpt-image-2 medium.
+VARIANTS_PER_ARCHETYPE = 6
 
 #: Vietnamese alt text, one line per library key, describing the scene the
 #: prompt asks for. It lives here rather than in the JSON so the library keeps
@@ -315,6 +321,46 @@ ALT_VI: dict[str, str] = {
     "troubleshoot-1": "Sinh viên ngả người ra khỏi laptop lúc khuya, một tay đưa lên trán, chỉ có đèn bàn sáng",
     "troubleshoot-2": "Hai sinh viên ở một bàn, một bạn cúi qua vai bạn kia nhìn và chỉ vào màn hình",
     "troubleshoot-3": "Bàn làm việc lúc khuya nhìn từ trên xuống: laptop, tách cà phê nguội và hai tờ giấy vo nhàu",
+    # term-la-gi, the second three (2026-09-09)
+    "term-la-gi-4": "Sinh viên ngồi cạnh cửa sổ trên tàu, sách giáo trình mở trên đùi",
+    "term-la-gi-5": "Cận cảnh bàn tay lật một trang trong quyển sách tra cứu dày đặt trên bàn",
+    "term-la-gi-6": "Sinh viên đứng đọc thông báo dán trên bảng tin của khoa, túi đeo một bên vai",
+    # spss-howto, the second three (2026-09-09)
+    "spss-howto-4": "Laptop mở trên bàn bếp buổi sáng sớm, bát và thìa đẩy sang một bên",
+    "spss-howto-5": "Sinh viên ngồi bàn làm việc với màn hình phụ dựng dọc, trang giấy in kẹp trên giá bên cạnh",
+    "spss-howto-6": "Cận cảnh hai bàn tay đặt trên bàn phím, quyển sổ lò xo mở dựng phía sau",
+    # smartpls-howto, the second three (2026-09-09)
+    "smartpls-howto-4": "Sinh viên đứng làm việc với laptop kê trên chồng sách, đang vẽ vào tập giấy nhỏ",
+    "smartpls-howto-5": "Cận cảnh bàn tay vẽ các vòng tròn nối nhau lên giấy kẻ ô bằng bút mảnh",
+    "smartpls-howto-6": "Hai sinh viên trước bảng trắng, một bạn vẽ chuỗi ô, bạn kia cầm trang giấy in",
+    # test, the second three (2026-09-09)
+    "test-4": "Sinh viên trải bốn trang giấy in thành hàng trên bàn, hai tay đặt lên hai trang ngoài cùng",
+    "test-5": "Cận cảnh bút dạ quang kẻ dọc theo một cột trên trang giấy in",
+    "test-6": "Sinh viên đứng chờ bên máy photocopy trong hành lang khoa, kẹp tài liệu dưới cánh tay",
+    # model-theory, the second three (2026-09-09)
+    "model-theory-4": "Sinh viên ngồi nghiêng trong phòng seminar, ghi chép vào sổ trong khi những người khác lắng nghe",
+    "model-theory-5": "Chồng bài báo khoa học dán tab màu ở mép, đặt trên bàn thư viện, một bàn tay đặt lên trên cùng",
+    "model-theory-6": "Sinh viên trải tờ giấy khổ lớn ra bàn và vẽ chuỗi các ô nối nhau",
+    # scale, the second three (2026-09-09)
+    "scale-4": "Sinh viên đánh số vào bảng hỏi in ra bằng bút, cây thước đặt dọc theo lề",
+    "scale-5": "Cận cảnh bàn tay cho tờ bảng hỏi vào phong bì trên mặt bàn",
+    "scale-6": "Hai sinh viên đối chiếu hai bảng hỏi in, mỗi người cầm một tờ giơ lên",
+    # thesis-writing, the second three (2026-09-09)
+    "thesis-writing-4": "Sinh viên ngồi trong ô bàn thư viện ban đêm, chỉ một ngọn đèn sáng giữa dãy bàn tối",
+    "thesis-writing-5": "Cận cảnh bút đỏ ghi chú vào lề một chương in ra",
+    "thesis-writing-6": "Sinh viên ôm chồng chương đóng quyển đi xuống cầu thang ngoài trời trong trường",
+    # survey, the second three (2026-09-09)
+    "survey-4": "Sinh viên ngồi bàn gấp nhỏ ngoài giảng đường với tờ đăng ký và lọ bút",
+    "survey-5": "Cận cảnh điện thoại cầm trên tay hiện biểu mẫu trống, bên cạnh là danh sách giấy trên bàn",
+    "survey-6": "Sinh viên phân loại các bảng hỏi đã điền thành ba chồng trên mặt bàn rộng",
+    # topic-list, the second three (2026-09-09)
+    "topic-list-4": "Sinh viên ngồi bàn quán cà phê với quyển sổ chép tay, đang gạch bỏ một dòng",
+    "topic-list-5": "Cận cảnh bàn tay ghim một tờ giấy nhỏ vào bảng nút chi chít giấy",
+    "topic-list-6": "Hai sinh viên vừa đi trên lối đi trong trường vừa trò chuyện, một bạn cầm tờ giấy gấp",
+    # troubleshoot, the second three (2026-09-09)
+    "troubleshoot-4": "Sinh viên đứng bên cửa sổ, laptop đã gập kẹp dưới cánh tay, dừng lại một lúc",
+    "troubleshoot-5": "Cận cảnh bàn tay bấm một phím trên laptop, trang giấy in nằm hờ dưới máy",
+    "troubleshoot-6": "Sinh viên và trợ giảng ngồi cùng bàn trong phòng máy, cả hai nhìn vào một màn hình",
 }
 
 
@@ -403,7 +449,11 @@ def assign(seed_dir: str | Path, *, lib_path: str | Path | None = None,
         except (OSError, json.JSONDecodeError) as e:
             print(f"  skip {path.name}: {e}")
             continue
-        slug = seed.get("slug") or path.stem
+        # The translated edition hashes the slug it was translated FROM, so one
+        # article carries one picture in both languages. Hashing its own slug
+        # gave `what-is-cfa` a different scene from `cfa-la-gi`, which reads as
+        # two articles to anyone who follows the language switch.
+        slug = seed.get("source_slug") or seed.get("slug") or path.stem
         key = library_key(slug, seed.get("archetype"), seed.get("category"),
                           library, previous=previous)
         if key is None:
