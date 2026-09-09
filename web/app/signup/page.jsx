@@ -3,11 +3,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { AuthShell } from "../components/auth/AuthShell";
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
-import { AuthBrand } from "../components/layout/Brand";
 import { apiFetch } from "../lib/api";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { PasswordInput } from "../components/ui/password-input";
 import { Label } from "../components/ui/label";
@@ -47,49 +46,43 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-ink-50 px-4 py-12">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <AuthBrand />
-          <CardTitle className="mt-2 text-xl">Create your account</CardTitle>
-          <CardDescription>Sign up to start drafting verified-citation theses.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <GoogleSignInButton onError={setError} />
+    <AuthShell
+      title="Create your account"
+      subtitle="Sign up to start drafting verified-citation theses."
+    >
+      <GoogleSignInButton onError={setError} />
 
-          <form onSubmit={submit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                autoFocus
-                placeholder="your_handle"
-                pattern="[a-zA-Z0-9_]{3,32}"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="Enter your email address" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password (8+ chars)</Label>
-              <PasswordInput id="password" placeholder="Create a password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
-            </div>
-            {error && <div className="text-sm text-destructive">{error}</div>}
-            <Button type="submit" className="w-full" disabled={busy}>
-              {busy ? "Creating account…" : "Create account"}
-            </Button>
-          </form>
+      <form onSubmit={submit} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="username">Username</Label>
+          <Input
+            id="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+            autoFocus
+            placeholder="your_handle"
+            pattern="[a-zA-Z0-9_]{3,32}"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input id="email" type="email" placeholder="Enter your email address" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="password">Password (8+ chars)</Label>
+          <PasswordInput id="password" placeholder="Create a password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+        </div>
+        {error && <div className="text-sm text-destructive">{error}</div>}
+        <Button type="submit" className="w-full" disabled={busy}>
+          {busy ? "Creating account…" : "Create account"}
+        </Button>
+      </form>
 
-          <div className="text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Link href="/login" className="text-primary-600 font-medium hover:underline">Sign in</Link>
-          </div>
-        </CardContent>
-      </Card>
-    </main>
+      <div className="text-sm text-muted-foreground">
+        Already have an account?{" "}
+        <Link href="/login" className="text-primary-600 font-medium hover:underline">Sign in</Link>
+      </div>
+    </AuthShell>
   );
 }

@@ -70,3 +70,18 @@ export function AuthBrand() {
     </div>
   );
 }
+
+// The same lockup laid out horizontally, for AuthShell — which sits the brand
+// at the top-left corner of the form column rather than centred over a card.
+// Lives here beside AuthBrand for the reason above: a second wordmark written
+// out at the call site is exactly how the two drift apart.
+export function AuthBrandInline() {
+  return (
+    <Link href="/" className="flex items-center gap-2.5 no-underline">
+      <BrandMark size={30} className="rounded-lg" />
+      <span className="text-lg font-extrabold tracking-tight text-ink-900">
+        Do<span className="text-primary-600">Thesis</span>
+      </span>
+    </Link>
+  );
+}

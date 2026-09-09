@@ -14,6 +14,15 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     include: ["app/**/*.test.{ts,tsx}", "tests/**/*.test.{ts,tsx}"],
   },
+  // tsconfig sets "jsx": "react-jsx", and esbuild honours that for .ts/.tsx —
+  // but not for plain .jsx, which it transforms with the classic runtime
+  // instead, i.e. bare `React.createElement` against a `React` nobody imported.
+  // Every test so far happened to render a .tsx component, so the first .jsx
+  // page under test (app/login/page.jsx) died on "React is not defined".
+  // Next builds .jsx with the automatic runtime; this says the same thing.
+  esbuild: {
+    jsx: "automatic",
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./"),
