@@ -1,10 +1,12 @@
 """The CLI, driven through `main([...])` exactly as the shell drives it."""
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 
 from app.blog import STATUS_DRAFT, STATUS_PUBLISHED, STATUS_SCHEDULED, cli
 from app.blog.schedule import VN_TZ
@@ -220,12 +222,49 @@ def test_update_from_seed_dry_run_changes_nothing(capsys, db):
     assert db.get(BlogPost, post.id).title == "Tiêu đề cũ"
 
 
-def test_update_from_seed_accepts_a_single_file(capsys, db):
+def test_update_from_seed_accepts_a_single_file(capsys, db, tmp_path):
     cli.main(["create", "--dir", FIXTURE_DIR])
     capsys.readouterr()
-    path = str(Path(FIXTURE_DIR) / "posts" / "0001-cronbach-alpha-la-gi.json")
-    assert cli.main(["update-from-seed", "--file", path]) == 0
+    path = Path(FIXTURE_DIR) / "posts" / "0001-cronbach-alpha-la-gi.json"
+    seed = json.loads(path.read_text(encoding="utf-8"))
+    seed["body"] = seed["body"] + "\n\nMột câu mới ở cuối bài."
+    edited = tmp_path / "edited.json"
+    edited.write_text(json.dumps(seed, ensure_ascii=False), encoding="utf-8")
+
+    assert cli.main(["update-from-seed", "--file", str(edited)]) == 0
+
     assert "UPDATED cronbach-alpha-la-gi" in capsys.readouterr().out
+
+
+def test_a_seed_that_says_what_the_row_already_says_is_left_alone(capsys, db):
+    """A bulk refresh must not restamp the bank.
+
+    `updated_at` is what `modifiedTime` reports to a crawler and what a reader
+    sees as the post's date. Rewriting 1,957 rows with their own content would
+    announce that every post changed today, which is both untrue and the kind of
+    signal a scaled-content check is looking for."""
+    cli.main(["create", "--dir", FIXTURE_DIR])
+    capsys.readouterr()
+    before = db.scalar(select(BlogPost).where(BlogPost.slug == "cronbach-alpha-la-gi")).updated_at
+
+    assert cli.main(["update-from-seed", "--dir", FIXTURE_DIR]) == 0
+
+    out = capsys.readouterr().out
+    assert "Updated: 0" in out and "Unchanged: 2" in out
+    db.expire_all()
+    after = db.scalar(select(BlogPost).where(BlogPost.slug == "cronbach-alpha-la-gi")).updated_at
+    assert after == before
+
+
+def test_only_existing_refuses_to_insert_what_the_duplicate_gate_refused(capsys, db):
+    """`create` rejects a seed whose intent duplicates a live post. Nothing that
+    walks around that gate may live in a refresh command."""
+    assert cli.main(["update-from-seed", "--dir", FIXTURE_DIR, "--only-existing"]) == 0
+
+    out = capsys.readouterr().out
+    assert "Created: 0" in out
+    assert "Skipped (no row): 2" in out
+    assert db.scalar(select(BlogPost).where(BlogPost.slug == "cronbach-alpha-la-gi")) is None
 
 
 # --- audits ----------------------------------------------------------------

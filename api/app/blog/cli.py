@@ -272,25 +272,36 @@ def cmd_update_from_seed(args) -> int:
 
     seeds, categories = _load_inputs(args)
     now = datetime.now(timezone.utc)
-    updated = created = 0
+    updated = created = unchanged = skipped = 0
 
     with _session() as db:
         category_ids = _category_ids(db, categories, dry_run=args.dry_run)
         for path, seed in seeds:
             slug, locale = seed["slug"], seed["locale"]
             existing = find_post(db, locale, slug)
+            # A seed with no row is usually one the duplicate-intent gate refused
+            # at `create` time. Inserting it here would walk straight around that
+            # gate, which is the one thing a content refresh must never do, so a
+            # bulk refresh says so explicitly with `--only-existing`.
+            if existing is None and args.only_existing:
+                skipped += 1
+                continue
             if args.dry_run:
                 print(f"  {'WOULD UPDATE' if existing else 'WOULD CREATE'} "
                       f"{slug} [{locale}] ({path.name})")
                 updated += bool(existing)
                 created += not existing
                 continue
-            action, _ = upsert_from_seed(db, seed, category_ids, now=now)
-            print(f"  {action.upper():7} {slug} [{locale}]")
+            action, _ = upsert_from_seed(db, seed, category_ids, now=now,
+                                         skip_unchanged=True)
+            if action != "unchanged":
+                print(f"  {action.upper():7} {slug} [{locale}]")
             updated += action == "updated"
             created += action == "created"
+            unchanged += action == "unchanged"
 
-    print(f"\n=== Summary ===\nUpdated: {updated}\nCreated: {created}")
+    print(f"\n=== Summary ===\nUpdated: {updated}\nCreated: {created}\n"
+          f"Unchanged: {unchanged}\nSkipped (no row): {skipped}")
     return 0
 
 
@@ -401,6 +412,10 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("--dir")
     update.add_argument("--file")
     update.add_argument("--dry-run", action="store_true")
+    update.add_argument("--only-existing", action="store_true",
+                        help="refresh posts that are already in the database and "
+                             "insert nothing; a seed with no row is one the "
+                             "duplicate-intent gate refused at create time")
     update.set_defaults(func=cmd_update_from_seed)
 
     seo = sub.add_parser("audit-seo", help="coverage and intent-clash report")

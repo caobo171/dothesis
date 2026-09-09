@@ -405,12 +405,19 @@ def upsert_from_seed(
     status: int | None = None,
     published_at: datetime | None = None,
     scheduled_at: datetime | None = None,
+    skip_unchanged: bool = False,
 ) -> tuple[str, Any]:
     """Create the post, or refresh an existing one from the seed.
 
     An existing post keeps its schedule unless the caller passes an explicit
     one. Re-running the writer over a live bank must not drag a scheduled post
     forward or push a published one back.
+
+    `skip_unchanged` answers "updated" with "unchanged" when the seed says
+    exactly what the row already says, and leaves `updated_at` alone. It is off
+    by default because a person pressing save in the admin means it; it is on
+    for a bulk refresh, where writing a new timestamp onto two thousand posts
+    would tell every reader of `modifiedTime` that the whole bank changed today.
     """
     from ..models import BlogPost  # noqa: PLC0415
 
@@ -440,6 +447,13 @@ def upsert_from_seed(
             existing.scheduled_at = scheduled_at
 
     _apply_content(existing, seed, category_ids)
+    # `is_modified` compares against the loaded values rather than merely noting
+    # that the attributes were assigned, so a field re-assigned its own value
+    # does not count. Collections are excluded because a JSON list is compared
+    # by value on the attribute itself.
+    if (skip_unchanged and action == "updated"
+            and not db.is_modified(existing, include_collections=False)):
+        return "unchanged", existing
     existing.updated_at = moment
     db.commit()
     return action, existing

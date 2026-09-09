@@ -104,4 +104,4 @@ def test_cli_exposes_every_command():
     parser = cli.build_parser()
     actions = [a for a in parser._actions if a.dest == "command"]
     assert set(actions[0].choices) == {"expand", "gate", "plan", "write", "translate",
-                                       "qa", "images", "relink", "report"}
+                                       "variants", "qa", "images", "relink", "report"}
