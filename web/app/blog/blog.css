@@ -13,7 +13,10 @@
 
 /* ------------------------------- Layout --------------------------------- */
 .lp-root .blog-page {
-  padding: 40px 0 96px;
+  /* 24px, not 40px: the language switch is the first thing in here and it used
+     to float in 88px of its own vertical space above the H1, reading as a
+     stray element rather than as the page's own furniture. */
+  padding: 24px 0 96px;
 }
 .lp-root .blog-measure {
   /* ~720px is the classic 70-80 character measure at this body size. Wider and
@@ -297,6 +300,9 @@
 }
 .lp-root .blog-row {
   position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
   border-bottom: 1px solid var(--ink-100);
   /* 12px of side padding so the hover tint has air around the text instead of
      stopping flush against the first and last character. */
@@ -305,6 +311,22 @@
 }
 .lp-root .blog-row:hover {
   background: var(--ink-50);
+}
+/* The listing's illustration at thumbnail size. A hub is thirty links and it
+   read as a directory dump without one. Fixed 3:2 so thirty rows keep one
+   rhythm whatever each picture's own aspect is, and `flex: none` so a long
+   title never squeezes the picture into a sliver. */
+.lp-root .blog-row__thumb {
+  flex: none;
+  width: 104px;
+  height: 69px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: var(--ink-100);
+}
+/* min-width:0 or a long unbroken title would push the flex item past the row. */
+.lp-root .blog-row__text {
+  min-width: 0;
 }
 .lp-root .blog-row__title {
   font-size: var(--text-prose);
@@ -351,6 +373,16 @@
   }
   .lp-root .blog-rows {
     margin-top: 24px;
+  }
+  /* 104px of picture out of a 343px row leaves the title barely 200px, which
+     wraps a Vietnamese headline to four lines. The thumb keeps its 3:2 shape
+     and gives the width back. */
+  .lp-root .blog-row {
+    gap: 12px;
+  }
+  .lp-root .blog-row__thumb {
+    width: 72px;
+    height: 48px;
   }
 }
 
@@ -555,6 +587,20 @@
   border: 1px solid var(--ink-200);
   border-radius: var(--radius-lg);
 }
+/* A five-column table is not prose and must not be held to a prose measure.
+   Inside 720px the browser spends the width on the columns whose headers are
+   longest and crushes whichever column carries sentences: the `Cách đọc`
+   column of the CFA table came out three words wide and 130px tall per row.
+   The wrap around the article is 1160px, so there is room to borrow. Below
+   this viewport the table stays in the measure and the wrapper scrolls it,
+   which is the phone behaviour already. */
+@media (min-width: 1080px) {
+  .lp-root .blog-article .blog-tablewrap {
+    width: calc(100% + 200px);
+    margin-left: -100px;
+    margin-right: -100px;
+  }
+}
 .lp-root .blog-tablewrap table {
   width: 100%;
   border-collapse: collapse;
@@ -663,7 +709,4 @@
   border-top: none;
   margin-top: 44px;
   padding-top: 0;
-}
-.lp-root .blog-siblings .blog-chips {
-  margin-top: 14px;
 }

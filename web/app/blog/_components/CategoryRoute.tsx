@@ -35,18 +35,16 @@ const CATEGORY_PAGE_SIZE = 30;
 
 const COPY: Record<
   string,
-  { empty: string; siblings: string; all: string; about: string; count: (n: number) => string }
+  { empty: string; all: string; about: string; count: (n: number) => string }
 > = {
   vi: {
     empty: "Chưa có bài viết trong chủ đề này.",
-    siblings: "Chủ đề khác",
     all: "Tất cả bài viết",
     about: "Về chuyên mục này",
     count: (n) => `${n} bài viết`,
   },
   en: {
     empty: "No posts in this topic yet.",
-    siblings: "Other topics",
     all: "All posts",
     about: "About this topic",
     count: (n) => `${n} ${n === 1 ? "post" : "posts"}`,
@@ -163,7 +161,7 @@ export async function CategoryRoute(
   const paired = await pairedCategoryPath(locale, cat.slug);
 
   return (
-    <BlogShell locale={locale} alternate={paired ?? undefined}>
+    <BlogShell locale={locale} alternate={paired ?? undefined} measure>
       <header className="blog-hero">
         <div className="lp-wrap">
           {/* Same measure as the body below. The hero used to run the full
@@ -195,19 +193,40 @@ export async function CategoryRoute(
                 const read = formatReadingTime(post.reading_time, post.locale);
                 return (
                   <li key={post.slug} className="blog-row">
-                    <h2 className="blog-row__title">
-                      <Link href={postPath(post.locale, post.slug)}>{post.title}</Link>
-                    </h2>
-                    {post.excerpt && <p className="blog-row__excerpt">{post.excerpt}</p>}
-                    {(date || read) && (
-                      <div className="blog-meta">
-                        {date && (
-                          <time dateTime={post.published_at ?? undefined}>{date}</time>
-                        )}
-                        {date && read && <span className="blog-meta__sep">·</span>}
-                        {read && <span>{read}</span>}
-                      </div>
+                    {/* The same illustration the listing card shows, at thumbnail
+                        size. A hub is a list of thirty links and it read as a
+                        directory dump without one; the picture is what tells a
+                        reader these are articles rather than index entries.
+                        `alt=""` and `aria-hidden`: the title beside it is the
+                        link text, and a screen reader announcing a paraphrase of
+                        it twice is noise. Lazy because a hub shows thirty. */}
+                    {post.image_url && (
+                      <img
+                        className="blog-row__thumb"
+                        src={post.image_url}
+                        alt=""
+                        aria-hidden="true"
+                        width={1200}
+                        height={800}
+                        loading="lazy"
+                        decoding="async"
+                      />
                     )}
+                    <div className="blog-row__text">
+                      <h2 className="blog-row__title">
+                        <Link href={postPath(post.locale, post.slug)}>{post.title}</Link>
+                      </h2>
+                      {post.excerpt && <p className="blog-row__excerpt">{post.excerpt}</p>}
+                      {(date || read) && (
+                        <div className="blog-meta">
+                          {date && (
+                            <time dateTime={post.published_at ?? undefined}>{date}</time>
+                          )}
+                          {date && read && <span className="blog-meta__sep">·</span>}
+                          {read && <span>{read}</span>}
+                        </div>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -233,15 +252,6 @@ export async function CategoryRoute(
             </section>
           )}
 
-          {siblings.length > 0 && (
-            <section className="blog-siblings">
-              <h2 className="blog-section-title">{copy.siblings}</h2>
-              {/* Chips, not a stacked list of links. `active` is this page's own
-                  slug, which no sibling carries, so nothing here is marked
-                  current and the "all posts" chip stays a plain link. */}
-              <CategoryChips categories={siblings} locale={locale} active={cat.slug} />
-            </section>
-          )}
         </div>
       </div>
     </BlogShell>

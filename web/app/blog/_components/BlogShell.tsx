@@ -39,14 +39,24 @@ import { blogPath } from "../_lib/site";
  * Vietnamese is scanning for "Tiếng Việt", not for "Vietnamese" — and carries
  * `lang`/`hrefLang` so a screen reader switches voice on it and a crawler reads
  * it as an edition link rather than as navigation.
+ *
+ * `measure` says the page below puts its own content in the 720px reading
+ * column rather than across the 1160px wrap. The switch has to follow it: on
+ * the category hub and the post page it was sitting at the far right of the
+ * wrap while the H1 under it started 190px further in, which is what made one
+ * small link in whitespace read as a stray element instead of as this page's
+ * furniture. The listing's card grid does use the whole wrap, so it does not
+ * pass this.
  */
 export function BlogShell({
   locale,
   alternate,
+  measure = false,
   children,
 }: {
   locale: string;
   alternate?: string;
+  measure?: boolean;
   children: ReactNode;
 }) {
   const other = otherLocale(isLocale(locale) ? locale : DEFAULT_LOCALE);
@@ -55,7 +65,7 @@ export function BlogShell({
       <Nav />
       <main className="blog-page">
         <div className="lp-wrap">
-          <div className="blog-langbar">
+          <div className={measure ? "blog-measure blog-langbar" : "blog-langbar"}>
             <Link
               className="blog-langswitch"
               href={alternate ?? blogPath(other)}

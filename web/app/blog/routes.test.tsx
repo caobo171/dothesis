@@ -379,17 +379,35 @@ describe("/blog/[locale]/chu-de/[category]", () => {
     expect(screen.getByRole("heading", { name: "Về chuyên mục này" })).toBeTruthy();
   });
 
-  test("offers the sibling topics as chips rather than a stack of links", async () => {
+  test("links every sibling topic once, from the rail under the hero", async () => {
+    // There used to be a second copy of this rail at the foot of the page under
+    // its own heading. It linked nothing the rail up here does not, so it added
+    // a screenful of repetition to a page whose job is to be scannable.
     const { container } = await renderCategory();
-    expect(screen.getByRole("heading", { name: "Chủ đề khác" })).toBeTruthy();
-    const chips = Array.from(container.querySelectorAll(".blog-siblings .blog-chip"));
+    const chips = Array.from(container.querySelectorAll(".blog-chip"));
     expect(chips.map((c) => c.getAttribute("href"))).toEqual([
       "/blog/vi",
+      "/blog/vi/chu-de/spss",
       "/blog/vi/chu-de/smartpls",
     ]);
-    // Nothing in the footer row is the current page, so no chip is marked so.
-    expect(chips.some((c) => c.getAttribute("aria-current"))).toBe(false);
-    expect(container.querySelector(".blog-siblings .blog-linklist")).toBeNull();
+    // The hub the reader is on is the one marked current, and only it.
+    expect(chips.filter((c) => c.getAttribute("aria-current")).map((c) => c.textContent)).toEqual([
+      "SPSS20",
+    ]);
+  });
+
+  test("each row carries the post's own illustration", async () => {
+    // A hub is thirty links. Without a picture it read as a directory dump,
+    // which is the complaint that started this redesign.
+    const { container } = await renderCategory({
+      posts: [{ ...COMPACT, image_url: "/img/blog/spss-howto-1.webp" }],
+    });
+    const thumb = container.querySelector(".blog-row__thumb") as HTMLImageElement;
+    expect(thumb.getAttribute("src")).toBe("/img/blog/spss-howto-1.webp");
+    // Decorative: the title beside it is the link text, and a screen reader
+    // reading a paraphrase of it twice is noise.
+    expect(thumb.getAttribute("alt")).toBe("");
+    expect(thumb.getAttribute("loading")).toBe("lazy");
   });
 
   test("self-canonicalises", async () => {

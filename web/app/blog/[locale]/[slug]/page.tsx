@@ -106,12 +106,12 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
   const categoryName = category?.display_name ?? post.category?.display_name ?? null;
 
   return (
-    <BlogShell locale={locale}>
+    <BlogShell locale={locale} measure>
       <JsonLd data={blogPostingJsonLd(post)} />
       <JsonLd data={faqJsonLd(faq, post)} />
 
       <div className="lp-wrap">
-        <article className="blog-measure">
+        <article className="blog-article blog-measure">
           <div className="blog-meta" style={{ marginBottom: 20 }}>
             <Link href={blogPath(locale)}>{copy.back}</Link>
           </div>
