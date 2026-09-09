@@ -64,6 +64,53 @@ study. Surface these as a caution:
 - **HTMT ≈ 1.0** → the two constructs are empirically identical; merge or redesign.
 - **Zero missing data on a long online survey** → check the export, not luck.
 
+## Building the keep-it argument (marginal numbers)
+
+A value just outside a cutoff is not a verdict. It is a decision the student has to be
+able to defend out loud, and the defence is built from **converging evidence plus content
+validity** — never from the single breached number alone. Give the student the paragraph,
+not the ruling.
+
+**The pattern.** For a marginal indicator, state in order:
+
+1. the value and how far it sits from the convention ("0.49 vs the 0.50 cutoff");
+2. what the *other* measurement statistics say for the same construct (α, CR, AVE — if
+   those hold, the construct is behaving);
+3. what the item means theoretically — does its content clearly belong to this construct;
+4. the decision, and the counterfactual ("keeping it; dropping it would not lift AVE
+   above the bar and would cost the construct's content coverage").
+
+**Worked cases** (each recurs constantly in practice):
+
+- **Outer loading between 0.40 and 0.708.** Do not drop reflexively. Check whether α and
+  AVE for that construct already clear their thresholds; if they do, the item can stay, and
+  the justification is that removing it would not materially improve convergent validity
+  (Hair et al.). Drop it only when removal actually lifts CR/AVE past the bar.
+- **α or CR above 0.90.** Report it as expected, not as a problem, when the construct has
+  many items on a homogeneous scale — that is what a short, tightly-worded scale produces.
+  Only flag redundancy when the items are near-paraphrases of each other (see the
+  "suspiciously perfect" heuristics below), and say which reading you're taking and why.
+- **Cross-loading.** The question is the *gap* between the primary and secondary loading
+  and whether the item's wording unambiguously belongs to its own construct. An item whose
+  content is plainly about willingness-to-pay stays with willingness-to-pay even if it
+  loads modestly on a price construct — say that, with the numbers.
+- **Fornell–Larcker breach between two theoretically adjacent constructs.** When one
+  construct is a direct antecedent of the other, a high correlation is predicted by the
+  theory, and √AVE may fall below it without indicating a measurement fault. Report
+  HTMT alongside; if HTMT is under the bar, discriminant validity has support from the
+  more sensitive criterion, and say so explicitly rather than reporting a bare failure.
+- **A non-significant path.** This is a finding, not a defect. Write what it means
+  theoretically, why the context may differ from the source study, and what it implies
+  for future research. Never treat "the hypothesis wasn't supported" as something to be
+  fixed.
+
+**Know when the argument does not exist.** If reliability has already eliminated every
+indicator of a construct, stop the pipeline and say so — "at Cronbach's α this construct
+lost all of its items; running the structural model on it would be meaningless." An
+honest stop is worth more than a chain of computations on a construct that no longer
+exists. Same for a construct whose AVE, CR *and* loadings all fail: that is a measurement
+problem to disclose, not a paragraph to write around.
+
 ## Narration guidance
 
 When you report a table:

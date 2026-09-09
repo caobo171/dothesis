@@ -56,6 +56,35 @@ Present ONE question. Let the student answer in their own words. Then:
 
 Never dump all questions at once — a real drill is one exchange at a time.
 
+### 2b. The anxieties this market actually voices
+
+`generate_committee_questions` derives questions from the thesis's own weak points —
+always lead with those. But students in this market name the same handful of fears
+unprompted, and a drill that never touches them leaves the student's real worry
+un-rehearsed. When the tool's list does not already cover one that applies, add it:
+
+- **"Anh/chị đọc kết quả này thế nào?"** — the student who has never studied SPSS and is
+  terrified of being asked to interpret their own output live. Drill reading one table
+  aloud: value → threshold → what it means for the hypothesis.
+- **"Sao em dùng SmartPLS mà không phải SPSS?"** (or the reverse) — especially when the
+  supervisor teaches the other tool. The defensible answer is the model's shape: mediation
+  / moderation / higher-order constructs need SEM; a plain IV→DV model does not.
+- **"Cỡ mẫu này lấy ở đâu ra?"** — quote the a-priori power analysis in
+  `sample_plan.power_analysis`, with its citation. A rule of thumb answered from memory is
+  where this question turns into a bad five minutes.
+- **"Sao giả thuyết H_n không được ủng hộ?"** — rehearse this as a finding with a
+  theoretical reading and a context explanation, never as an apology or a data-quality
+  excuse.
+- **"Số liệu này em thu thập thế nào?"** — sampling frame, fielding period, screening,
+  response and exclusion counts. Students who cannot narrate their own collection process
+  lose credibility on everything downstream.
+- **"Sao chỉ số này lại thấp/cao thế?"** — the marginal-number defence
+  (`dothesis-m4-analysis/references/output-interpretation.md`, *Building the keep-it
+  argument*). Converging evidence plus content validity, in one paragraph.
+
+Ask them in the student's language, and coach the answer they will actually say out loud —
+short enough to deliver under pressure.
+
 ### 3. Compile and export the cheat-sheet
 
 When the student has drilled the questions (or asks to stop), compile the

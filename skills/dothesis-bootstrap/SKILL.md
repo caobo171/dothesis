@@ -96,6 +96,42 @@ the first message), ask them the question instead — same list:
 Wait for the answer. Then for each declared item, ask the user to paste content or
 upload a file.
 
+## Step 1b — Triage (two questions, before any module work)
+
+The declare list tells you what the student *has*. It does not tell you what they
+**need**, and those diverge constantly. Resolve both before handing off — one
+`[OPTIONS]` row each, so it costs two clicks.
+
+**Q1 — does this thesis need inferential statistics at all?**
+
+> "Bài của bạn chỉ cần thống kê mô tả (tần suất, tỷ lệ, trung bình), hay có mô hình
+> nghiên cứu cần chạy kiểm định?"
+>
+> `[OPTIONS:needs_inferential] Có mô hình, cần chạy kiểm định | Chỉ thống kê mô tả | Chưa rõ, tư vấn giúp mình`
+
+If the answer is descriptive-only, say so plainly and do **not** build a conceptual
+model or push toward SEM — frequencies and means are a complete answer for some
+assignments, and saying that early saves the student weeks. Seed M1 and skip the M3
+model work. If "chưa rõ", ask what the supervisor/outline requires and decide from that.
+
+**Q2 — where are they stuck?** (only for the model case)
+
+> `[OPTIONS:research_stage] Đã chốt mô hình, đang/sắp thu khảo sát | Đang xây đề tài, chưa chốt mô hình | Đã có data nhưng chạy ra kết quả xấu`
+
+| Answer | Entry focus | First thing you do |
+|---|---|---|
+| Đã chốt mô hình | M3 | QA the instrument before a single response is collected (`audit_instrument` + the structural defects in `dothesis-m3-design/references/questionnaire-quality.md`) |
+| Đang xây đề tài | M1 or M2 | Normal M1 → M2 → M3 sequence |
+| Data xấu | M4 | `run_stats(op="screening")` first — careless responders and un-recoded reverse items explain most "ugly" datasets |
+
+This answer **overrides Step 4's computed focus** when the two disagree: a student who
+says their data is failing opens at M4 even if M2 is technically incomplete. Position is
+a recommendation, not a wall.
+
+Also note anything they say about their supervisor here — an approved model, a required
+software, a pending approval. That constraint outranks your own recommendations for the
+rest of the project (see the `dothesis` skill, *Supervisor precedence*).
+
 ## Step 2 — Import (seed into context_store)
 
 Use this declare → seed map. Import via the **module's own tools** — don't invent a
