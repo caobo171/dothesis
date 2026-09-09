@@ -61,9 +61,21 @@ export function ogImagePath(locale: string, slug: string): string {
   return `/blog/${locale}/${slug}/opengraph-image`;
 }
 
-/** Page 1 is the bare listing URL — `?page=1` would be a duplicate of it. */
-export function listingPath(locale: string, page = 1): string {
-  return page > 1 ? `${blogPath(locale)}?page=${page}` : blogPath(locale);
+/**
+ * The listing URL, optionally paged and optionally searched.
+ *
+ * Page 1 is the bare URL: `?page=1` would be a second address for the same
+ * page. `q` comes first in the query string so that page 2 of a search reads
+ * `?q=alpha&page=2`, which is what a reader sees and what the form produces —
+ * a form submits its fields in document order, and the search box is above the
+ * pager.
+ */
+export function listingPath(locale: string, page = 1, q?: string): string {
+  const query = new URLSearchParams();
+  if (q) query.set("q", q);
+  if (page > 1) query.set("page", String(page));
+  const suffix = query.toString();
+  return suffix ? `${blogPath(locale)}?${suffix}` : blogPath(locale);
 }
 
 export function absoluteUrl(path: string): string {

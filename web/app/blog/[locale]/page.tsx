@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { isLocale } from "../../lib/i18n/locale";
+import { BlogSearch } from "../_components/BlogSearch";
 import { BlogShell } from "../_components/BlogShell";
 import { CategoryChips } from "../_components/CategoryChips";
 import { Pagination } from "../_components/Pagination";
@@ -16,11 +18,21 @@ import { absoluteUrl, listingPath } from "../_lib/site";
 export const dynamic = "force-dynamic";
 
 type Params = { locale: string };
-type Search = { page?: string | string[] };
+type Search = { page?: string | string[]; q?: string | string[] };
 
 const COPY: Record<
   string,
-  { title: string; sub: string; empty: string; metaTitle: string; pageSuffix: (n: number) => string }
+  {
+    title: string;
+    sub: string;
+    empty: string;
+    metaTitle: string;
+    pageSuffix: (n: number) => string;
+    found: (n: number, q: string) => string;
+    nothing: (q: string) => string;
+    clear: string;
+    searchTitle: (q: string) => string;
+  }
 > = {
   vi: {
     title: "Blog DoThesis",
@@ -28,6 +40,10 @@ const COPY: Record<
     empty: "Chưa có bài viết nào.",
     metaTitle: "Blog — SPSS, SmartPLS và luận văn định lượng | DoThesis",
     pageSuffix: (n) => ` — trang ${n}`,
+    found: (n, q) => `${n} bài cho “${q}”`,
+    nothing: (q) => `Không có bài nào khớp với “${q}”. Thử một từ khóa ngắn hơn, ví dụ EFA hoặc Alpha.`,
+    clear: "Xóa tìm kiếm",
+    searchTitle: (q) => `Tìm “${q}” — Blog | DoThesis`,
   },
   en: {
     title: "DoThesis blog",
@@ -35,6 +51,10 @@ const COPY: Record<
     empty: "No posts yet.",
     metaTitle: "Blog — SPSS, SmartPLS and quantitative theses | DoThesis",
     pageSuffix: (n) => ` — page ${n}`,
+    found: (n, q) => `${n} ${n === 1 ? "post" : "posts"} for “${q}”`,
+    nothing: (q) => `Nothing matches “${q}”. Try a shorter term, such as EFA or Alpha.`,
+    clear: "Clear search",
+    searchTitle: (q) => `Search “${q}” — Blog | DoThesis`,
   },
 };
 
@@ -43,6 +63,18 @@ function readPage(search: Search | undefined): number {
   const raw = Array.isArray(search?.page) ? search?.page[0] : search?.page;
   const n = Number.parseInt(raw ?? "1", 10);
   return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+/**
+ * `?q=` trimmed, or empty for anything that is not a search.
+ *
+ * Capped at 80 characters. The value is echoed back into the page and into the
+ * title, and a query string is the one part of the URL a stranger controls; a
+ * bookmarked search is a few words, and nothing longer is a reader.
+ */
+function readQuery(search: Search | undefined): string {
+  const raw = Array.isArray(search?.q) ? search?.q[0] : search?.q;
+  return (raw ?? "").trim().slice(0, 80);
 }
 
 export async function generateMetadata({
@@ -54,8 +86,26 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return {};
-  const page = readPage(await searchParams);
+  const search = await searchParams;
+  const page = readPage(search);
+  const q = readQuery(search);
   const copy = COPY[locale] ?? COPY.en;
+
+  // A search view is thin, infinitely variable and duplicates the listing it
+  // filters, so it stays out of the index — but its links are the whole point,
+  // so they are still followed. The canonical is the search URL itself rather
+  // than the bare listing: a noindex page pointing its canonical somewhere else
+  // gives Google two contradictory instructions, and it follows neither.
+  if (q) {
+    const url = absoluteUrl(listingPath(locale, page, q));
+    return {
+      metadataBase: new URL(absoluteUrl("/")),
+      title: copy.searchTitle(q),
+      description: copy.sub,
+      alternates: { canonical: url },
+      robots: { index: false, follow: true },
+    };
+  }
   // Every paginated page canonicalises to ITSELF. Pointing page 2 at page 1
   // would tell Google the posts only reachable from page 2 are duplicates of
   // a page that does not list them, and they drop out of the index.
@@ -99,11 +149,13 @@ export default async function BlogListingPage({
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  const page = readPage(await searchParams);
+  const search = await searchParams;
+  const page = readPage(search);
+  const q = readQuery(search);
   const copy = COPY[locale] ?? COPY.en;
 
   const [list, categories] = await Promise.all([
-    fetchPosts({ locale, page }),
+    fetchPosts({ locale, page, q: q || undefined }),
     fetchCategories(locale),
   ]);
 
@@ -113,12 +165,21 @@ export default async function BlogListingPage({
         <div className="lp-wrap">
           <h1 className="blog-hero__title">{copy.title}</h1>
           <p className="blog-hero__sub">{copy.sub}</p>
+          <BlogSearch locale={locale} value={q} />
           <CategoryChips categories={categories} locale={locale} />
         </div>
       </header>
       <div className="lp-wrap">
+        {q && (
+          <div className="blog-searchbar">
+            <p className="blog-searchbar__count">{copy.found(list.total, q)}</p>
+            <Link className="blog-searchbar__clear" href={listingPath(locale)}>
+              {copy.clear}
+            </Link>
+          </div>
+        )}
         {list.posts.length === 0 ? (
-          <p className="blog-empty">{copy.empty}</p>
+          <p className="blog-empty">{q ? copy.nothing(q) : copy.empty}</p>
         ) : (
           <div className="blog-grid">
             {list.posts.map((post) => (
@@ -131,7 +192,7 @@ export default async function BlogListingPage({
           total={list.total}
           pageSize={list.page_size || PAGE_SIZE}
           locale={locale}
-          hrefFor={(p) => listingPath(locale, p)}
+          hrefFor={(p) => listingPath(locale, p, q || undefined)}
         />
       </div>
     </BlogShell>

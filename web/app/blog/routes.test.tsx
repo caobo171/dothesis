@@ -183,6 +183,103 @@ describe("/blog/[locale]", () => {
     ).toBe("/blog/vi/cronbach-alpha-la-gi");
   });
 
+  // ------------------------------------------------------------ search
+  //
+  // 420 live Vietnamese posts is 35 listing pages. A reader who knows the term
+  // they want should not have to page through them, and the API has taken a `q`
+  // since it was written — only the box was missing.
+
+  test("the search box is a plain GET form pointed at the listing", async () => {
+    stubApi();
+    const { container } = render(
+      await BlogListingPage({
+        params: Promise.resolve({ locale: "vi" }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+    const form = container.querySelector("form.blog-search") as HTMLFormElement;
+    expect(form.getAttribute("action")).toBe("/blog/vi");
+    expect(form.getAttribute("method")).toBe("get");
+    // A field named `q`, so submitting produces the URL the page already reads.
+    expect(form.querySelector('input[name="q"]')).toBeTruthy();
+    // Labelled for a screen reader even though the label is visually hidden.
+    expect(screen.getByLabelText("Tìm bài viết")).toBeTruthy();
+  });
+
+  test("?q= filters through the API and says what was found", async () => {
+    let sent: Record<string, unknown> = {};
+    server.use(
+      http.post("*/api/v1/blog/list", async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ posts: [COMPACT], total: 1, page: 1, page_size: 12 });
+      }),
+      http.post("*/api/v1/blog/categories", () => HttpResponse.json({ categories: CATEGORIES })),
+    );
+
+    render(
+      await BlogListingPage({
+        params: Promise.resolve({ locale: "vi" }),
+        searchParams: Promise.resolve({ q: "  alpha  " }),
+      }),
+    );
+
+    expect(sent.q).toBe("alpha");
+    expect(screen.getByText("1 bài cho “alpha”")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Xóa tìm kiếm" }).getAttribute("href")).toBe(
+      "/blog/vi",
+    );
+  });
+
+  test("a search that finds nothing says so instead of showing the empty-blog copy", async () => {
+    stubApi({ posts: [], total: 0 });
+    render(
+      await BlogListingPage({
+        params: Promise.resolve({ locale: "vi" }),
+        searchParams: Promise.resolve({ q: "khong-co-gi" }),
+      }),
+    );
+    expect(screen.queryByText("Chưa có bài viết nào.")).toBeNull();
+    expect(screen.getByText(/Không có bài nào khớp/)).toBeTruthy();
+  });
+
+  test("a search view is noindex, follow, and canonicalises to itself", async () => {
+    stubApi();
+    const meta = await listingMetadata({
+      params: Promise.resolve({ locale: "vi" }),
+      searchParams: Promise.resolve({ q: "alpha", page: "2" }),
+    });
+    expect(meta.robots).toEqual({ index: false, follow: true });
+    // Self, not the bare listing: a noindex page whose canonical points
+    // elsewhere gives Google two contradictory instructions.
+    expect(meta.alternates?.canonical).toBe("http://localhost:3006/blog/vi?q=alpha&page=2");
+    // And no hreflang: there is no such thing as the other edition of a search.
+    expect(meta.alternates?.languages).toBeUndefined();
+  });
+
+  test("paging inside a search keeps the query", async () => {
+    stubApi({ total: 40 });
+    render(
+      await BlogListingPage({
+        params: Promise.resolve({ locale: "vi" }),
+        searchParams: Promise.resolve({ q: "alpha" }),
+      }),
+    );
+    const pager = screen.getByRole("navigation", { name: "Phân trang" });
+    expect(
+      within(pager).getByRole("link", { name: "Trang sau" }).getAttribute("href"),
+    ).toBe("/blog/vi?q=alpha&page=2");
+  });
+
+  test("the listing with no query is untouched: indexable, with its hreflang", async () => {
+    stubApi();
+    const meta = await listingMetadata({
+      params: Promise.resolve({ locale: "vi" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(meta.robots).toBeUndefined();
+    expect(meta.alternates?.canonical).toBe("http://localhost:3006/blog/vi");
+  });
+
   test("pages through with ?page= and canonicalises each page to itself", async () => {
     stubApi({ total: 40 });
     render(

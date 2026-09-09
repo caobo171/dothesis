@@ -42,6 +42,15 @@ describe("site", () => {
     expect(listingPath("vi", 3)).toBe("/blog/vi?page=3");
   });
 
+  test("a search keeps its query when it pages, and q comes first", () => {
+    expect(listingPath("vi", 1, "alpha")).toBe("/blog/vi?q=alpha");
+    expect(listingPath("vi", 2, "alpha")).toBe("/blog/vi?q=alpha&page=2");
+    // The form produces the query in this order, so a link that pages must too:
+    // two orderings of the same parameters are two URLs for one result set.
+    expect(listingPath("vi", 2, "cỡ mẫu")).toBe("/blog/vi?q=c%E1%BB%A1+m%E1%BA%ABu&page=2");
+    expect(listingPath("vi", 2, "")).toBe("/blog/vi?page=2");
+  });
+
   test("absoluteUrl prefixes paths and leaves absolute URLs alone", () => {
     expect(absoluteUrl("/blog/vi")).toBe("http://localhost:3006/blog/vi");
     expect(absoluteUrl("https://dothesis.io/x")).toBe("https://dothesis.io/x");
