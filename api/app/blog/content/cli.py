@@ -5,6 +5,7 @@
     plan     harvest + gate survivors    -> backlog.tsv
     write    backlog.tsv + the model     -> seed JSON + write-log.tsv
     translate vi seed dir + the model    -> en seed JSON + translate-log.tsv
+    variants seed dir + the variant pools-> the same posts, saying it several ways
     qa       seed dir                    -> pass/fail report, exit 1 on any FAIL
     images   seed dir + the library      -> hero per seed, one picture per scene
     report   everything above            -> counts, volume, spend, shortfall
@@ -90,6 +91,17 @@ def _cmd_translate(args) -> int:
                   dry_run=args.dry_run, force=args.force)
     return 0 if summary["failed"] == 0 else 1
 
+
+def _cmd_variants(args) -> int:
+    from .variants import run  # noqa: PLC0415
+
+    stats = run(seed_dir=args.dir, locale=args.locale, pools_path=args.pools,
+                dry_run=args.dry_run)
+    verb = "would rewrite" if args.dry_run else "rewrote"
+    print(f"{verb} {stats.replacements} occurrence(s) in {stats.touched} of "
+          f"{stats.posts} post(s); {stats.unchanged} already held the phrasing "
+          f"the rotation assigned")
+    return 0
 
 def _cmd_qa(args) -> int:
     from .qa import main  # noqa: PLC0415
@@ -209,6 +221,18 @@ def build_parser() -> argparse.ArgumentParser:
                    help="translate nothing: point the finished English bodies at their "
                         "English targets and hand what will not map to relink")
     p.set_defaults(func=_cmd_translate)
+
+    p = sub.add_parser("variants",
+                       help="rotate a repeated narrative sentence through its "
+                            "interchangeable phrasings")
+    p.add_argument("--dir", required=True, help="seed directory to rewrite in place")
+    p.add_argument("--locale", default="vi", choices=("vi", "en"),
+                   help="which half of the pool file to apply")
+    p.add_argument("--pools", default=None,
+                   help="variant pools JSON (default: docs/seo/prose-variants.json)")
+    p.add_argument("--dry-run", action="store_true",
+                   help="report what would change, write nothing")
+    p.set_defaults(func=_cmd_variants)
 
     p = sub.add_parser("qa", help="run the mechanical gate over a seed directory")
     p.add_argument("seed_dir")

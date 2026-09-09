@@ -677,3 +677,65 @@ is the single-host behaviour `dev.sh` has on localhost:3006.
 
 Verified against a running dev server before merge, both hostnames, six paths
 each; the table above is what it answered.
+
+## 22. Shared prose, and what may repeat (2026-09-09)
+
+WELE ran a voice pass over its own bank on 2026-09-08 and found the failure this
+engine had not been looking for. Near-duplication (§14) catches one page
+rewritten as another. It does not catch one sentence written once and pasted
+into eighty pages, which is what a bank generated from archetype skeletons
+drifts into: WELE had one connective sentence standing in 89 of its 166 verb
+articles, and a reader who landed on two of them had read one page twice.
+
+Measured here on 2026-09-09, over 979 Vietnamese and 978 English bodies:
+
+| | vi | en |
+|---|---:|---:|
+| sentences in 100+ posts | 1 | 2 |
+| sentences in 40-99 posts | 2 | 2 |
+| sentences in 12-39 posts | 33 | 36 |
+| median post's sentences shared with 12+ others | 0.8% | 0.8% |
+| worst post | 5.9% | 5.2% |
+
+Nowhere near WELE's state, and the fix is proportionate to that. Three kinds of
+repetition are exempt, and the exemptions are the design:
+
+- **The illustrative-output disclosure.** The gate requires it on every worked
+  table. A disclosure reworded per page is a worse disclosure, not a better one.
+- **A sourced threshold**, verbatim from `canonical-sources.md`. It repeats
+  because there is one right answer, and rephrasing for variety is how a number
+  or a citation gets garbled. Both citation shapes count: `(Nunnally, 1978)` and
+  `Likert (1932)`.
+- **A menu path**, quoted as SPSS and SmartPLS print it.
+
+What is left is narrative, and `qa --corpus` fails the bank when one narrative
+sentence reaches 25 posts — 2.6% of the bank, above every legitimate repeat
+measured and below the two that were real. The offenders are rotated through
+interchangeable phrasings in `docs/seo/prose-variants.json`, applied by
+`cli variants`, which assigns positionally and is therefore reproducible and
+idempotent. Existing phrasings are members of their group rather than targets,
+so a family already spread 47/16/12/12/9/8 is levelled rather than moved.
+
+First pass, 2026-09-09: 206 occurrences rewritten across 166 Vietnamese posts
+and 264 across 207 English ones. The worst narrative repeat fell from 56 to 18
+posts in Vietnamese and from 79 to 18 in English. No post changed its tables,
+its links or its word count materially, and both banks report 0 failing,
+0 near-duplicate pairs, 0 over-shared sentences.
+
+Two of WELE's rules were measured and deliberately not adopted:
+
+- **Hunting absolutes by keyword.** WELE flags `chắc chắn`, `luôn luôn` and
+  `mọi X đều`. This corpus has 398 uses of `chắc chắn` and almost none is an
+  overclaim: in Vietnamese it is also the verb *make sure*, it sits inside the
+  negations this field is built on, and it appears inside quoted bad examples the
+  post is warning against. 24 of the 27 `luôn luôn` are advice telling students
+  not to put absolute words in a questionnaire. The rule that applies here is
+  narrower and is stated in `voice.md`: an absolute is a defect only when the
+  post asserts it in its own voice about the reader's data.
+- **Varying everything that repeats.** See the exemptions above.
+
+One WELE fix was adopted verbatim, because the hole is identical: a one-brace
+`{img:key}` shipped a figure-less article there, since the two-brace pattern
+never matched it and nothing else reads these tokens. The gate now fails any
+malformed placeholder. This bank carries none — its heroes are `image_url` —
+so the check is insurance, not a repair.

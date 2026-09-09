@@ -1,0 +1,7 @@
+đợt	phạm vi	kết quả
+1a rotation vi	979 bài	5 nhóm câu, 206 lượt thay; câu kể lặp nặng nhất 56 bài → 18; 166 bài bị chạm
+1b rotation en	978 bài	5 nhóm câu, 264 lượt thay; câu kể lặp nặng nhất 79 bài → 18; 207 bài bị chạm
+đo trước khi sửa	1.957 bài	trung vị mỗi bài chỉ 0,8% số câu trùng với >=12 bài khác; bài tệ nhất 5,9%
+không áp dụng	quy tắc từ tuyệt đối của WELE	398 lượt "chắc chắn" hầu hết là động từ hoặc nằm trong câu phủ định; 24/27 "luôn luôn" là lời khuyên về bảng hỏi
+vá QA	toàn bộ	placeholder ảnh một cặp ngoặc nay fail; ngưỡng câu kể dùng chung đặt ở 25 bài
+còn lại	biên tập tay theo editorial-pass.md	theo thứ tự ngày lên sóng

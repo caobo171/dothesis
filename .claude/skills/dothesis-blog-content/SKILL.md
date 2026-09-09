@@ -221,6 +221,7 @@ single CTA to `/landing`. The category intro links back to its strongest posts.
 
 - `references/structure.md` — target shape and the ten archetype skeletons
 - `references/voice.md` — voice, the slop blacklist, the hard prose rules
+- `references/editorial-pass.md` — the second-read checklist, run before a post ships
 - `references/canonical-sources.md` — the citation allowlist, verbatim strings
 - `references/seed-schema.md` — seed JSON fields and body rules
 - `references/images.md` — the shared illustration library, its cost argument and its prompt rules

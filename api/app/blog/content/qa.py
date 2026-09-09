@@ -833,7 +833,15 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
         fails.append(f"raw HTML tag {_HTML_TAG_RE.search(body).group(0)!r}, body is markdown")
 
     image_ids = {(i or {}).get("id") for i in (post.get("images") or [])}
-    for ref in set(re.findall(r"\{\{img:([^}]+)\}\}", body)):
+    # A one-brace {img:key} shipped a figure-less article on WELE because the
+    # two-brace pattern never matched it and nothing else looks at these tokens.
+    # Match one brace or more, then refuse anything that is not exactly two: a
+    # placeholder that will never render is worse than a missing one, because it
+    # prints as literal text in the published body.
+    for token in re.findall(r"\{+\s*img:[^{}]+\}+", body):
+        if not (token.startswith("{{") and token.endswith("}}")):
+            fails.append(f"malformed image placeholder {token!r}, it will never render")
+    for ref in set(re.findall(r"\{+\s*img:([^{}]+?)\s*\}+", body)):
         if ref not in image_ids:
             fails.append(f"body references {{{{img:{ref}}}}} with no images[] entry")
 
@@ -914,6 +922,113 @@ def read_slug_file(path: str) -> set[str]:
     return slugs
 
 
+# ------------------------------------------------------- corpus: shared prose
+#
+# Near-duplication above catches one page rewritten as another. This catches the
+# other shape of the same problem: one sentence written once and pasted into
+# eighty pages, which is what a bank generated from archetype skeletons drifts
+# into. WELE hit it first — one connective sentence stood in 89 of its 166 verb
+# articles — and the fix there was to rotate the offenders through variant pools
+# rather than to rewrite the family.
+#
+# Not every repetition is a defect, and the exemptions are the whole design:
+#
+# - the illustrative-output disclaimer is a disclosure the gate itself requires
+#   on every worked table, and a disclosure that is reworded per page is a worse
+#   disclosure
+# - a threshold repeats because there is one right answer, and it must stay
+#   verbatim from `canonical-sources.md`; rephrasing for variety is how a number
+#   or a citation gets garbled
+# - a menu path repeats because there is one menu, and it is quoted as SPSS and
+#   SmartPLS print it
+#
+# What is left is narrative: one writer's sentence, and a reader who meets it on
+# two pages has met one page written twice.
+#
+# Measured 2026-09-09 over 979 vi and 978 en bodies: the median post shares 0.8%
+# of its sentences with twelve or more others. The ceiling is set at 25 posts,
+# 2.6% of the bank, which is above every legitimate repeat measured and below
+# the two that were real (`EFA hiếm khi ra đẹp ở lần chạy đầu`, 56 posts; its
+# English translation, 79).
+SHARED_SENTENCE_LIMIT = 25
+
+# Six words drops headings, table cells and stubs; a terminal full stop or
+# question mark drops the bold section labels (`**Cách viết vào luận văn**`),
+# which repeat by design because they are the archetype's own structure.
+_SENTENCE_MIN_WORDS = 6
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.?])\s+")
+_SENTENCE_STRIP_RE = re.compile(r"^\s{0,3}([-*+]|\d+\.)\s+")
+_MENU_PATH_RE = re.compile(r"\w\s*>\s*\w")
+# Both citation shapes this bank uses: parenthetical `(Nunnally, 1978)` and
+# narrative `Likert (1932)`. Missing the narrative one would report a sourced
+# sentence as narrative, and the only way to satisfy that report would be to
+# reword a citation — the one edit `canonical-sources.md` forbids.
+_CITATION_IN_TEXT_RE = re.compile(
+    r"\(\s*[^()\d]{2,60},\s*\d{4}[a-z]?\s*\)"
+    r"|[A-ZÀ-Ỹ][^\s()]*\s*\(\s*\d{4}[a-z]?\s*\)")
+# Both locales' labels, unconditionally: a seed directory is single-language but
+# the exemption costs nothing in the other, and a body legitimately quotes the
+# English label inside a Vietnamese sentence. The second line is the disclosure
+# written as two sentences, where the label sits in the sentence before and this
+# half would otherwise read as narrative.
+_WORKED_LABELS = ("số liệu minh họa", "illustrative output")
+_DISCLOSURE_TAILS = ("không phải kết quả của", "not the result of", "not the results of")
+
+
+def prose_sentences(body: str) -> list[str]:
+    """The narrative sentences of a body: no headings, tables, code or quotes.
+
+    Deliberately not `plain_text`, which flattens the body to one line. Line
+    structure is what tells a table row from a sentence here, so the markup is
+    stripped per line and only then split.
+    """
+    out: list[str] = []
+    fenced = False
+    for line in (body or "").split("\n"):
+        line = line.strip()
+        if line.startswith(("```", "~~~")):
+            fenced = not fenced
+            continue
+        if fenced or not line or line.startswith(("#", "|", ">")):
+            continue
+        line = _SENTENCE_STRIP_RE.sub("", line)
+        line = _LINK_RE.sub(r"\1", line)
+        line = re.sub(r"(\*\*\*|\*\*|\*|___|__|_|~~|`)", "", line)
+        for sentence in _SENTENCE_SPLIT_RE.split(line):
+            sentence = sentence.strip()
+            if sentence.endswith((".", "?")) and len(sentence.split()) >= _SENTENCE_MIN_WORDS:
+                out.append(sentence)
+    return out
+
+
+def may_repeat(sentence: str) -> bool:
+    """True when this sentence is one of the three kinds that must stay verbatim."""
+    lowered = sentence.lower()
+    if any(label in lowered for label in _WORKED_LABELS):
+        return True
+    if any(tail in lowered for tail in _DISCLOSURE_TAILS):
+        return True
+    if _CITATION_IN_TEXT_RE.search(sentence):
+        return True
+    return bool(_MENU_PATH_RE.search(sentence))
+
+
+def shared_sentences(docs: list[dict], limit: int = SHARED_SENTENCE_LIMIT) -> list[dict]:
+    """Narrative sentences standing in `limit` posts or more, most-shared first.
+
+    `docs` are `{"key", "sentences"}`. Counted per document, not per occurrence:
+    a sentence used twice in one post is that post's problem, not the bank's.
+    """
+    owners: dict[str, set[str]] = collections.defaultdict(set)
+    for doc in docs:
+        for sentence in set(doc["sentences"]):
+            if not may_repeat(sentence):
+                owners[sentence].add(doc["key"])
+    hits = [{"sentence": sentence, "posts": len(keys), "examples": sorted(keys)[:3]}
+            for sentence, keys in owners.items() if len(keys) >= limit]
+    return sorted(hits, key=lambda h: -h["posts"])
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     # Link resolution defaults to the batch on disk plus `backlog.tsv`. Outside
@@ -982,13 +1097,14 @@ def main(argv: list[str] | None = None) -> int:
             for x in warns:
                 print(f"    warn {x}")
 
-    duplicate_pairs = 0
+    duplicate_pairs = over_shared = 0
     if corpus:
-        duplicate_pairs = _report_corpus(seed_dir, files)
+        duplicate_pairs, over_shared = _report_corpus(seed_dir, files)
 
     print(f"\n{len(files)} file(s), {total_fail} failing"
-          + (f", {duplicate_pairs} near-duplicate pair(s)" if corpus else ""))
-    return 1 if (total_fail or duplicate_pairs) else 0
+          + (f", {duplicate_pairs} near-duplicate pair(s), "
+             f"{over_shared} over-shared sentence(s)" if corpus else ""))
+    return 1 if (total_fail or duplicate_pairs or over_shared) else 0
 
 
 def build_corpus(seed_dir: str, files: list[str]) -> list[dict]:
@@ -1004,11 +1120,13 @@ def build_corpus(seed_dir: str, files: list[str]) -> list[dict]:
             continue
         docs.append({"key": post.get("slug") or name,
                      "unmeasured": is_unmeasured(post),
-                     "sketch": sketch(post["body"])})
+                     "sketch": sketch(post["body"]),
+                     "sentences": prose_sentences(post["body"])})
     return docs
 
 
-def _report_corpus(seed_dir: str, files: list[str]) -> int:
+def _report_corpus(seed_dir: str, files: list[str]) -> tuple[int, int]:
+    """`(near-duplicate pairs, over-shared sentences)`, both reported, both failing."""
     docs = build_corpus(seed_dir, files)
     hits = near_duplicates(docs)
     print(f"\nCorpus: {len(docs)} bodies, word {SHINGLE_WORDS}-gram Jaccard over a "
@@ -1017,12 +1135,22 @@ def _report_corpus(seed_dir: str, files: list[str]) -> int:
           f"{NEAR_DUPLICATE_UNMEASURED:.3f} when either has no measured volume")
     if not hits:
         print("        no pair is a near duplicate of another")
-        return 0
     for hit in hits:
         why = "unmeasured" if hit["unmeasured"] else "measured"
         print(f"  FAIL {hit['score']:.3f} >= {hit['limit']:.3f} ({why})  "
               f"{hit['a']}  <->  {hit['b']}")
-    return len(hits)
+
+    over = shared_sentences(docs)
+    print(f"\nShared prose: narrative sentences standing in {SHARED_SENTENCE_LIMIT} "
+          f"post(s) or more")
+    print("        disclosures, sourced thresholds and menu paths are exempt: "
+          "they repeat because there is one right wording")
+    if not over:
+        print("        no narrative sentence is over the limit")
+    for hit in over:
+        print(f"  FAIL {hit['posts']:4d} posts  {hit['sentence'][:96]}")
+        print(f"            e.g. {', '.join(hit['examples'])}")
+    return len(hits), len(over)
 
 
 if __name__ == "__main__":

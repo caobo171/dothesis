@@ -1,0 +1,115 @@
+{
+  "note": "Interchangeable phrasings of one narrative sentence, one group per idea. Every member is both a matcher and a variant, so a group that already had several phrasings is levelled rather than replaced. Applied by `python -m app.blog.content.cli variants`, whose rotation is deterministic and idempotent. Nothing here may carry a citation, a threshold or a menu path: those repeat because there is one right wording, and rephrasing them is how a number gets garbled. See references/voice.md, 'Shared prose'.",
+  "vi": [
+    {
+      "why": "One writer's line about the first EFA run, in 56 posts.",
+      "members": [
+        "EFA hiếm khi ra đẹp ở lần chạy đầu.",
+        "Lần chạy EFA đầu tiên hiếm khi cho ra bảng gọn gàng.",
+        "Rất ít khi EFA cho kết quả sạch ngay ở lần chạy đầu.",
+        "Bảng EFA ở lần chạy đầu thường chưa gọn.",
+        "Chạy EFA lần đầu mà ra ngay kết quả gọn là chuyện hiếm.",
+        "Ở lần chạy đầu, EFA thường chưa cho ma trận gọn."
+      ]
+    },
+    {
+      "why": "Six phrasings of 'no single number fits every study' already existed, spread 47/16/12/12/9/8. Levelled, plus two shapes that break the frame.",
+      "members": [
+        "Không có một con số cố định áp dụng cho mọi đề tài.",
+        "Không có một con số cố định cho mọi đề tài.",
+        "Không có một con số áp dụng cho mọi đề tài.",
+        "Không có một con số chung cho mọi đề tài.",
+        "Không có một con số chung áp dụng cho mọi đề tài.",
+        "Không có một con số duy nhất áp dụng cho mọi đề tài.",
+        "Con số phù hợp thay đổi theo từng đề tài.",
+        "Mỗi đề tài có một mức phù hợp riêng."
+      ]
+    },
+    {
+      "why": "A checkbox instruction, not a menu path: the dialog and the option keep their names, the sentence around them does not have to be one sentence. Written with the inline-code marks the corpus uses; the matcher ignores marks, so a bare occurrence is marked up on the way back.",
+      "members": [
+        "Trong `Descriptives`, chọn `KMO and Bartlett's test`.",
+        "Ở hộp thoại `Descriptives`, tick `KMO and Bartlett's test`.",
+        "Trong `Descriptives`, đánh dấu `KMO and Bartlett's test`.",
+        "Mở `Descriptives` rồi chọn `KMO and Bartlett's test`.",
+        "Tại `Descriptives`, chọn mục `KMO and Bartlett's test`."
+      ]
+    },
+    {
+      "why": "The 'related but not the same' line that closes a comparison section.",
+      "members": [
+        "Hai khái niệm có liên quan nhưng không đồng nhất.",
+        "Hai khái niệm liên quan nhưng không đồng nhất.",
+        "Hai khái niệm gần nhau nhưng không phải là một.",
+        "Chúng liên quan với nhau nhưng không phải cùng một thứ.",
+        "Hai khái niệm này có liên hệ, song không thay thế được cho nhau."
+      ]
+    },
+    {
+      "why": "Reading the three EFA tables. At 20 posts it is under the ceiling; rotated for headroom, since the table names are what must stay fixed and the verb is not.",
+      "members": [
+        "Kiểm tra `KMO and Bartlett's Test`, `Total Variance Explained` và `Rotated Component Matrix`.",
+        "Đọc `KMO and Bartlett's Test`, `Total Variance Explained` và `Rotated Component Matrix`.",
+        "Xem ba bảng `KMO and Bartlett's Test`, `Total Variance Explained` và `Rotated Component Matrix`.",
+        "Kiểm tra lần lượt `KMO and Bartlett's Test`, `Total Variance Explained` và `Rotated Component Matrix`."
+      ]
+    }
+  ],
+  "en": [
+    {
+      "why": "The same first-EFA-run line, in 79 posts: the translator carried the Vietnamese concentration across.",
+      "members": [
+        "EFA rarely looks clean on the first run.",
+        "The first EFA run rarely comes out tidy.",
+        "It is rare for EFA to give a clean matrix on the first pass.",
+        "The first pass of EFA seldom produces a tidy table.",
+        "EFA output is rarely tidy the first time you run it.",
+        "A first EFA run that comes out clean is unusual."
+      ]
+    },
+    {
+      "why": "Eight phrasings of 'no single number' already existed, spread 27/20/19/18/13/12/8/8. Levelled, plus two shapes that break the frame.",
+      "members": [
+        "There is no single number that applies to every study.",
+        "There is no fixed number that applies to every study.",
+        "There is no fixed number for every study.",
+        "There is no fixed number that applies to every topic.",
+        "There is no single number that applies to every topic.",
+        "There is no single number for every topic.",
+        "There is no single number for every study.",
+        "There is no fixed number for every topic.",
+        "The right number changes from study to study.",
+        "Each study has its own appropriate level."
+      ]
+    },
+    {
+      "why": "The Descriptives checkbox, 26 + 24 across two phrasings. Written with the inline-code marks the corpus uses; the matcher ignores marks, so a bare occurrence is marked up on the way back.",
+      "members": [
+        "Under `Descriptives`, select `KMO and Bartlett's test`.",
+        "In `Descriptives`, select `KMO and Bartlett's test`.",
+        "In the `Descriptives` dialog, tick `KMO and Bartlett's test`.",
+        "Open `Descriptives` and select `KMO and Bartlett's test`.",
+        "Under `Descriptives`, tick the `KMO and Bartlett's test` box."
+      ]
+    },
+    {
+      "why": "The 'related but not the same' line that closes a comparison section.",
+      "members": [
+        "The two concepts are related but not identical.",
+        "The two concepts are related, but they are not the same thing.",
+        "They are close, but not interchangeable.",
+        "The two are connected without being identical.",
+        "They overlap, but they do not mean the same thing."
+      ]
+    },
+    {
+      "why": "Reading the three EFA tables, 23 posts. Under the ceiling, rotated for headroom.",
+      "members": [
+        "Check `KMO and Bartlett's Test`, `Total Variance Explained`, and `Rotated Component Matrix`.",
+        "Read `KMO and Bartlett's Test`, `Total Variance Explained`, and `Rotated Component Matrix`.",
+        "Look at the `KMO and Bartlett's Test`, `Total Variance Explained`, and `Rotated Component Matrix` tables.",
+        "Check, in order, `KMO and Bartlett's Test`, `Total Variance Explained`, and `Rotated Component Matrix`."
+      ]
+    }
+  ]
+}

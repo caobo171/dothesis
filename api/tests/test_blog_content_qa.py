@@ -855,3 +855,107 @@ def test_main_runs_the_english_directory_end_to_end(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "0001-what-is-cronbachs-alpha.json" in out
     assert "1 file(s), 0 failing" in out
+
+
+# ------------------------------------------------------- corpus: shared prose
+#
+# The other shape of scaled content: not one page rewritten as another, but one
+# sentence pasted into eighty. WELE hit it at 89 of 166 articles before anyone
+# measured it, which is why the gate measures it here.
+
+
+def _docs(sentences_by_key):
+    return [{"key": key, "sentences": sentences} for key, sentences in sentences_by_key.items()]
+
+
+def test_a_narrative_sentence_in_too_many_posts_is_reported():
+    line = "EFA hiếm khi ra đẹp ở lần chạy đầu."
+    docs = _docs({f"p{i}": [line] for i in range(qa.SHARED_SENTENCE_LIMIT)})
+
+    hits = qa.shared_sentences(docs)
+
+    assert [h["sentence"] for h in hits] == [line]
+    assert hits[0]["posts"] == qa.SHARED_SENTENCE_LIMIT
+
+
+def test_one_post_short_of_the_limit_passes():
+    docs = _docs({f"p{i}": ["EFA hiếm khi ra đẹp ở lần chạy đầu."]
+                  for i in range(qa.SHARED_SENTENCE_LIMIT - 1)})
+
+    assert qa.shared_sentences(docs) == []
+
+
+def test_the_same_sentence_twice_in_one_post_counts_once():
+    line = "EFA hiếm khi ra đẹp ở lần chạy đầu."
+    docs = _docs({f"p{i}": [line, line] for i in range(qa.SHARED_SENTENCE_LIMIT - 1)})
+
+    assert qa.shared_sentences(docs) == [], "that is one post's problem, not the bank's"
+
+
+@pytest.mark.parametrize("sentence", [
+    # A disclosure the gate itself requires on every worked table. Reworded per
+    # page it would be a worse disclosure, not a better one.
+    "Bảng dưới đây là số liệu minh họa, không phải kết quả của một nghiên cứu thật.",
+    "The table below is illustrative output, not the result of a real study.",
+    # The same disclosure split in two, where the label sits in the sentence before.
+    "It is not the result of a real study.",
+    # A threshold, verbatim from canonical-sources.md, in both citation shapes.
+    "Cronbach's Alpha từ 0.7 trở lên thường được chấp nhận theo (Nunnally, 1978).",
+    "Thang Likert bắt nguồn từ kỹ thuật đo lường thái độ của Likert (1932).",
+    # A menu path, quoted as SPSS prints it.
+    "Nếu chạy EFA, vào Analyze > Dimension Reduction > Factor.",
+])
+def test_what_repeats_because_there_is_one_right_wording_is_exempt(sentence):
+    docs = _docs({f"p{i}": [sentence] for i in range(qa.SHARED_SENTENCE_LIMIT * 2)})
+
+    assert qa.may_repeat(sentence)
+    assert qa.shared_sentences(docs) == []
+
+
+def test_prose_sentences_reads_narrative_and_nothing_else():
+    body = ("## Một tiêu đề dài đủ sáu từ để đếm.\n"
+            "| một | hàng bảng dài đủ sáu từ để đếm. |\n"
+            "> Một trích dẫn dài đủ sáu từ để đếm.\n"
+            "```\nMột dòng code dài đủ sáu từ để đếm.\n```\n"
+            "**Cách viết vào luận văn của bạn**\n"
+            "- Một câu văn xuôi dài đủ sáu từ.\n")
+
+    assert qa.prose_sentences(body) == ["Một câu văn xuôi dài đủ sáu từ."], (
+        "a bold section label has no full stop and is the archetype's own structure")
+
+
+def test_the_corpus_report_fails_the_run_and_names_the_posts(tmp_path, capsys):
+    line = " Đây là một câu kể lặp lại trên khắp ngân hàng bài."
+    seed_dir = _corpus_dir(tmp_path, [
+        (f"post-{i}", "measured", _passing_seed()["body"] + "\n\n" + line.strip())
+        for i in range(qa.SHARED_SENTENCE_LIMIT)
+    ])
+
+    assert qa.main([seed_dir, "--corpus"]) == 1
+    out = capsys.readouterr().out
+    assert "over-shared sentence(s)" in out
+    assert line.strip() in out
+    assert "post-0" in out
+
+
+# ---------------------------------------------------- malformed image tokens
+
+
+def test_a_one_brace_image_placeholder_fails():
+    """WELE shipped a figure-less article on exactly this: the two-brace pattern
+    never matched `{img:...}`, so nothing looked at it and it printed as text."""
+    post = _seed(body_transform=lambda b: b + "\n\n{img:luyen-nghe}",
+                 images=[{"id": "luyen-nghe", "url": "/img/blog/x.webp"}])
+
+    fails = _check(post)[0]
+
+    assert any("malformed image placeholder" in f for f in fails)
+
+
+def test_a_well_formed_placeholder_with_an_entry_still_passes():
+    post = _seed(body_transform=lambda b: b + "\n\n{{img:hinh-1}}",
+                 images=[{"id": "hinh-1", "url": "/img/blog/x.webp"}])
+
+    fails = _check(post)[0]
+
+    assert not any("img" in f for f in fails), fails

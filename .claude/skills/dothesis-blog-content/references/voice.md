@@ -65,6 +65,88 @@ keep it.
   `canonical-sources.md`, as the exact string given there. If a claim needs a
   source you do not have, describe the shape of the thing and drop the number.
 
+## Sounding human, not AI (founder review, 2026-09-09)
+
+Adapted from WELE's review of the same problem on 2026-09-08, after its corpus
+passed every rule above and still read as machine-made. Four of those findings
+transfer to this bank, two do not, and the difference is worth stating because
+copying the list wholesale would flag correct writing here.
+
+**These transfer:**
+
+- **One memorable line per article, not one per section.** A phrasing that lands,
+  `Alpha cao chỉ nói các biến đi cùng nhau, không nói chúng đo đúng thứ bạn định
+  đo`, earns its place once. Six of them in one post is a tic and it is the
+  loudest machine tell there is. Keep the best one, make the rest plain
+  sentences.
+- **A section may open plainly.** Not every H2 needs a hook. Someone who has run
+  the analysis states the thing and moves on; a copywriter reaches for a lead
+  every time.
+- **Cut the restatement, never the example.** Length in a bank this size comes
+  from saying one point in three shapes. Remove the second and third shape. A
+  worked table, a menu path, a real output column: those stay, always.
+- **Weight the differentiated parts.** The worked output, the failure mode with
+  its fix, the defence question: those earn space and belong early. A generic
+  definition paragraph does not, however easy it is to extend.
+- **The DoThesis paragraph is the answer to the problem the post just
+  described,** in the same voice. If it reads as a product block dropped into a
+  post, it fails.
+- **The writer knows the field and does not perform it.** Understated beats
+  clever. Do not overcorrect either: no slang, no deliberate roughness to look
+  human. Clear writing is still the point.
+
+**These do not transfer, and the measurement is why:**
+
+- **Do not hunt absolutes by keyword here.** WELE's list flags `chắc chắn`,
+  `luôn luôn` and `mọi X đều`. This corpus contains 398 uses of `chắc chắn` and
+  almost none is an overclaim: in Vietnamese it is also the verb *make sure*
+  (`kiểm tra bảng tần số để chắc chắn mã 1 đã thành 5`), it appears inside the
+  negations this field is built on (`Alpha tăng không có nghĩa item chắc chắn
+  phải bị loại`), and it appears inside quoted bad examples the post is warning
+  against (`“X chắc chắn ảnh hưởng đến Y”`). `luôn luôn` appears 27 times, 24 of
+  them in advice telling students not to put absolute words in a questionnaire.
+  The rule that does apply: **an absolute is a defect only when the post asserts
+  it in its own voice about the reader's data or the world.** Hedged, negated
+  and quoted uses are the corpus writing correctly.
+- **Do not vary a sourced threshold or a menu path.** WELE broke up prose that
+  repeated across 166 articles from one template. The equivalent sentences here
+  are `Cronbach's Alpha từ 0.7 trở lên thường được chấp nhận theo (Nunnally,
+  1978)` and `Analyze > Scale > Reliability Analysis`. Those repeat because
+  there is one right answer and one menu, and rephrasing them for variety is how
+  a number or a citation gets garbled. Repetition is a defect in *narrative*
+  sentences only.
+
+Then run `references/editorial-pass.md` before shipping. It is the second-read
+checklist, and it catches what the rules above do not: mediocre examples kept
+for volume, FAQ answers that re-explain the body, a definition paragraph
+inserted mid-narrative to catch a query, and section order.
+
+Also apply the `deslop` skill's checks: no throat-clearing opener, no rhetorical
+question answered in the next sentence, no dramatic fragmentation, no tricolons,
+varied sentence length, and no paragraph that ends on a manufactured one-liner.
+
+## Shared prose across the bank
+
+Measured 2026-09-09 over 979 Vietnamese and 978 English posts: the median post
+has 0.8% of its sentences in common with twelve or more other posts, and the
+worst has 5.9%. WELE's verb family, before its pass, had one sentence in 89 of
+166 articles. This bank is not in that state and the fix here is proportionate.
+
+What repeats legitimately, and must be left alone:
+
+- the illustrative-output disclaimer, which the gate requires on every worked
+  table and which is a disclosure, not prose
+- sourced thresholds, verbatim per `canonical-sources.md`
+- SPSS and SmartPLS menu paths, verbatim as the software prints them
+
+What must not repeat is narrative: `EFA hiếm khi ra đẹp ở lần chạy đầu` in 56
+posts is one writer's sentence, and a reader who lands on two of them sees one
+page written twice. Those rotate through the pools in
+`docs/seo/prose-variants.json`, applied by
+`python -m app.blog.content.cli variants`. `qa --corpus` fails the bank when a
+narrative sentence reaches the ceiling recorded there, so the problem cannot
+grow back unnoticed.
+
 ## Vietnamese specifics
 
 - **Keep English technical terms in English.** `Cronbach's Alpha`, `p-value`,
