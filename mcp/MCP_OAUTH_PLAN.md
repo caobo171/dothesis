@@ -2,7 +2,7 @@
 
 > **STATUS (2026-08-03): BUILT.** Checklist items 1-5 are implemented in
 > `mcp/server_lite.py` + `mcp/oauth.py`, with `dothesis-mcp.service` and the
-> nginx routing in `scripts/deploy.sh` / `deploy/nginx/dothesis.conf`. What
+> nginx routing in `script.sh` / `deploy/nginx/dothesis.conf`. What
 > actually got built differs from this plan in three ways worth recording:
 >
 > 1. **No Google round-trip of our own.** The plan assumed `/authorize` would

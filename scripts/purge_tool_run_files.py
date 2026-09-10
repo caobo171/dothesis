@@ -5,7 +5,7 @@ The retention window is a promise the web app makes to the student ("File đư�
 giữ đến …"). Nothing else deletes these objects, so if this is not scheduled
 the promise is simply false and every thesis ever run through a document tool
 stays on S3 forever. The systemd timer that runs it is installed by
-scripts/deploy.sh.
+script.sh.
 
 Only the FILES go. The tool_runs row stays, because it is a billing record and
 reclaiming storage must not erase the evidence that someone was charged.

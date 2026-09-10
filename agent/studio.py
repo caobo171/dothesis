@@ -18,7 +18,7 @@ from pathlib import Path
 # installed package — it only lands on sys.path as a side effect of the api
 # process importing an orchestrator.tools module first (m2_literature.py /
 # m5_writing.py each self-insert repo root + engine/ at import time), or via
-# PYTHONPATH=<repo root> in the deployed systemd unit (scripts/deploy.sh).
+# PYTHONPATH=<repo root> in the deployed systemd unit (script.sh).
 # `langgraph dev` spawns a bare process from langgraph.json's `./agent`
 # dependency alone — neither of those happens — so without this, importing
 # agent.runtime here raises `ModuleNotFoundError: No module named 'engine'`

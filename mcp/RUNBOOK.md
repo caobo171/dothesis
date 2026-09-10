@@ -135,7 +135,7 @@ cloudflared tunnel run webkaze-local
 
 ## 5b. Production (app.dothesis.com) — nginx, not cloudflared
 
-`scripts/deploy.sh` installs `dothesis-mcp.service` and starts it on :9000.
+`script.sh` installs `dothesis-mcp.service` and starts it on :9000.
 nginx then has to route the same four paths, which `deploy/nginx/dothesis.conf`
 now does:
 

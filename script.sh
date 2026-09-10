@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Production deploy for DoThesis on a single Ubuntu server (native, systemd-supervised).
+# Top-level deploy for DoThesis on a single Ubuntu server (native,
+# systemd-supervised). Lives at the repo root as ./script.sh, the same place and
+# name the sibling products keep it (wele/script.sh, agentmemo/script.sh), so
+# the on-server command is the same one everywhere. scripts/ still holds the
+# pieces this calls — check-export-deps.sh, purge_tool_run_files.py.
 #
 # What this does, idempotently:
 #   0. Preflight — sanity-check the host, .env, and required tooling
@@ -19,10 +23,10 @@
 # the services at the end.
 #
 # Usage:
-#   sudo -E ./scripts/deploy.sh             # pull + full deploy (needs root for apt + systemd)
-#   sudo -E SKIP_WEB=1 ./scripts/deploy.sh  # api-only: skips the ~minutes-long next build
-#   sudo -E SKIP_PULL=1 ./scripts/deploy.sh # deploy THIS checkout (rollback to a tag, local test)
-#   APP_USER=deploy ./scripts/deploy.sh     # run services as a non-root user
+#   sudo -E ./script.sh                     # pull + full deploy (needs root for apt + systemd)
+#   sudo -E SKIP_WEB=1 ./script.sh          # api-only: skips the ~minutes-long next build
+#   sudo -E SKIP_PULL=1 ./script.sh         # deploy THIS checkout (rollback to a tag, local test)
+#   APP_USER=deploy ./script.sh             # run services as a non-root user
 #
 # Tunables (env or .env):
 #   APP_USER       unix user the services run as            (default: invoking user)
@@ -37,7 +41,10 @@
 #   SKIP_PULL=1    deploy the checkout as-is instead of fast-forwarding it
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# No "/.." — this script sits at the repo root (it used to live in scripts/).
+# Everything below is relative to REPO_DIR after the cd, including the calls
+# back into scripts/, so nothing else moved.
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$REPO_DIR"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }

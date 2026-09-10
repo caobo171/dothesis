@@ -186,7 +186,7 @@ cleanup.
 
 - **Inconsistent env prefixes:** `ORCHESTRATOR_LLM_*` (report) vs `DOTHESIS_*` (agent).
   Proposed (deferred) rename to `DOTHESIS_REPORT_*` / `DOTHESIS_AGENT_*` for symmetry — touches
-  `orchestrator/llm.py`, `agent/model_factory.py`, `.env`, `scripts/deploy.sh`. Low value, some
+  `orchestrator/llm.py`, `agent/model_factory.py`, `.env`, `script.sh`. Low value, some
   risk; owner said **don't rename now**.
 - **Overloaded "agent":** consider renaming `orchestrator/agents/` → `orchestrator/modules/` (or
   `workers/`) in a future cleanup to disambiguate from the chat `agent/`.

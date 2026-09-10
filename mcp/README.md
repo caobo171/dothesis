@@ -195,7 +195,7 @@ pinned-pydantic conflict entirely rather than working around it.
 - ✅ Full handshake verified locally against a real uvicorn process: register →
   login bounce → consent → code → PKCE token exchange → authenticated
   `tools/list`.
-- ✅ `dothesis-mcp.service` + nginx routing land via `scripts/deploy.sh` and
+- ✅ `dothesis-mcp.service` + nginx routing land via `script.sh` and
   `deploy/nginx/dothesis.conf`.
 - ⏳ **Not yet verified in production.** The deploy has to actually run on the
   app.dothesis.com host — nginx needs the new locations and a reload — before
