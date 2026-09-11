@@ -232,7 +232,11 @@ def test_make_vision_model_text_only_brain_defaults_to_gemini(monkeypatch):
     spec = ModelSpec(route="native", model="qwen-plus", supports_vision=False)
     m = make_vision_model(spec)
     assert m.__class__.__name__ == "ChatGoogleGenerativeAI"
-    assert "gemini-2.5-flash" in m.model
+    # Pinned, not pattern-matched: the sidecar's default model is a priced,
+    # accuracy-sensitive decision (it transcribes result tables), so moving it
+    # should be a deliberate edit here rather than something a loose "gemini" in
+    # m.model would wave through. See make_vision_model for why it is this one.
+    assert m.model.endswith("gemini-3.5-flash-lite")
 
 
 def test_make_vision_model_never_hands_a_claude_id_to_the_gemini_client(monkeypatch):

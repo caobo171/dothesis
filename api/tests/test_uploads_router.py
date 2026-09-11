@@ -407,3 +407,180 @@ def test_nothing_else_builds_the_workspace_path_by_hand():
         and re.search(r'"agent_projects"|\'agent_projects\'', p.read_text(encoding="utf-8"))
     ]
     assert not offenders, f"call workspace_dir() instead: {offenders}"
+
+
+# --- survey datasets and results exports ------------------------------------
+# The M4 skill tells the student "upload your survey dataset (.sav / .csv /
+# .xlsx)" and agent/tools/stats.py already reads all three off the workspace,
+# but the gate here used to 415 every one of them.
+
+def _xlsx(rows: int = 3) -> io.BytesIO:
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("openpyxl")
+    buf = io.BytesIO()
+    pd.DataFrame({"EX1": [5] * rows, "EX2": [4] * rows}).to_excel(buf, index=False)
+    buf.seek(0)
+    return buf
+
+
+@pytest.mark.parametrize("name,mime", [
+    ("survey.csv", "text/csv"),
+    ("survey.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    ("survey.sav", "application/octet-stream"),
+    ("results.htm", "text/html"),
+])
+def test_upload_accepts_data_and_results_exports(client, monkeypatch, name, mime):
+    monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: MagicMock())
+    _login(client)
+    pid = _project(client)
+
+    payload = _xlsx() if name.endswith(".xlsx") else io.BytesIO(b"EX1,EX2\n5,4\n")
+    r = client.post(f"/api/v1/projects/{pid}/uploads",
+                    files={"file": (name, payload, mime)})
+    assert r.status_code == 200, r.text
+
+
+def test_a_dataset_extracts_as_a_profile_not_zip_mojibake(client, monkeypatch):
+    """A .xlsx is a ZIP. The old else-branch UTF-8 decoded whatever it was
+    handed, so the cached 'extracted text' for a dataset was archive noise —
+    which import_route then fed to the model as if it were the student's data."""
+    written: dict[str, bytes] = {}
+    fake_s3 = MagicMock()
+    fake_s3.put_object.side_effect = lambda **kw: written.__setitem__(kw["Key"], kw["Body"])
+    monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: fake_s3)
+
+    _login(client)
+    pid = _project(client)
+    r = client.post(f"/api/v1/projects/{pid}/uploads",
+                    files={"file": ("survey.xlsx", _xlsx(),
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
+    assert r.status_code == 200, r.text
+
+    extracted = [v for k, v in written.items() if k.endswith("extracted.txt")]
+    assert extracted, "a dataset should still cache something readable"
+    text = extracted[0].decode("utf-8")
+    assert "3 rows x 2 columns" in text
+    assert "EX1" in text
+    assert "uploads/survey.xlsx" in text, "the path the stats tools need"
+
+
+def test_a_dataset_lands_in_the_workspace_for_the_stats_tools(client, monkeypatch, tmp_path):
+    from app.workspace import workspace_dir
+
+    monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: MagicMock())
+    monkeypatch.setenv("JOB_WORKDIR_ROOT", str(tmp_path))
+    _login(client)
+    pid = _project(client)
+
+    r = client.post(f"/api/v1/projects/{pid}/uploads",
+                    files={"file": ("survey.xlsx", _xlsx(),
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
+    assert r.status_code == 200, r.text
+    assert (workspace_dir(pid) / "uploads" / "survey.xlsx").exists()
+
+
+def test_upload_still_rejects_a_type_nothing_can_read(client, monkeypatch):
+    """Widening the allowlist must not turn it into 'anything goes'."""
+    monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: MagicMock())
+    _login(client)
+    pid = _project(client)
+
+    r = client.post(f"/api/v1/projects/{pid}/uploads",
+                    files={"file": ("thesis.zip", io.BytesIO(b"PK\x03\x04"),
+                                    "application/zip")})
+    assert r.status_code == 415
+
+
+# --- re-uploading the same file must not re-pay for reading it --------------
+
+_DOCX_M = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+@pytest.fixture
+def dedupe_env(client, monkeypatch, tmp_path):
+    """S3 + workspace stubbed, and a counted docx extraction."""
+    fake_s3 = MagicMock()
+    monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: fake_s3)
+    monkeypatch.setattr("app.routers.uploads.workspace_dir", lambda _pid: tmp_path)
+    calls: list[int] = []
+
+    def fake_extract(body):
+        calls.append(len(body))
+        return (f"EXTRACTED {len(calls)}", 0)
+
+    monkeypatch.setattr("app.routers.uploads._extract_docx_text", fake_extract)
+    _login(client)
+    return calls, _project(client)
+
+
+def _post_docx(client, pid, data: bytes, name="Result.docx"):
+    return client.post(f"/api/v1/projects/{pid}/uploads",
+                       files={"file": (name, io.BytesIO(data), _DOCX_M)})
+
+
+def test_re_uploading_identical_bytes_reuses_the_extraction(client, dedupe_env):
+    """Five byte-identical copies of one results .docx were uploaded to a real
+    project in a single morning, each paying a vision call per screenshot.
+
+    The file is unchanged, so the reading of it is too. A second upload still
+    gets its own row and id — students re-upload to mean "use this one" — it
+    just doesn't buy the same transcription twice.
+    """
+    calls, pid = dedupe_env
+    data = b"PK\x03\x04 pretend this is a results docx"
+
+    first = _post_docx(client, pid, data)
+    second = _post_docx(client, pid, data)
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert len(calls) == 1, f"identical upload was extracted {len(calls)} times"
+    assert first.json()["upload_id"] != second.json()["upload_id"]
+
+    sf = get_session_factory()
+    with sf() as db:
+        rows = db.query(PaperUpload).filter_by(project_id=pid).all()
+        assert len(rows) == 2
+        assert all(r.text_extract_uri for r in rows), "reused row lost its text"
+
+
+def test_different_bytes_under_the_same_filename_are_extracted_again(client, dedupe_env):
+    """The dedupe key is CONTENT, not the name. A student who fixes their
+    analysis and re-exports `Result.docx` must get the new numbers read."""
+    calls, pid = dedupe_env
+
+    _post_docx(client, pid, b"PK\x03\x04 version one")
+    _post_docx(client, pid, b"PK\x03\x04 version two, with corrected EFA")
+
+    assert len(calls) == 2
+
+
+def test_an_extraction_from_before_the_epoch_is_never_reused(client, dedupe_env, monkeypatch):
+    """A cached extraction is only as trustworthy as the model that produced it.
+
+    gemini-2.5-flash mis-assigned every outer loading on a real SmartPLS path
+    diagram; those wrong numbers are still cached against real projects. Re-
+    uploading the file is how a student fixes that, so content-dedupe must not
+    hand the stale transcription straight back. The epoch is bumped whenever
+    the vision model or prompt changes.
+    """
+    from datetime import datetime, timedelta, timezone
+    calls, pid = dedupe_env
+    data = b"PK\x03\x04 a results docx read by the old model"
+
+    _post_docx(client, pid, data)
+    assert len(calls) == 1
+
+    # Backdate the first extraction to before the epoch, as a real pre-upgrade
+    # row would be.
+    sf = get_session_factory()
+    with sf() as db:
+        row = db.query(PaperUpload).filter_by(project_id=pid).one()
+        row.text_extracted_at = (
+            __import__("app.routers.uploads", fromlist=["x"])._EXTRACTION_EPOCH
+            - timedelta(days=1))
+        db.commit()
+
+    _post_docx(client, pid, data)
+
+    assert len(calls) == 2, "a pre-epoch extraction was reused"

@@ -69,11 +69,23 @@ class Attachment:
     `bytes` is the raw file content. `mime_type` defaults to a guess from
     the filename suffix when the caller doesn't know. `display_name` is
     the short label the LLM might cite (logs / error messages).
+
+    `text` is an OPTIONAL pre-extraction: the caller saying "I have already
+    read this file, do not read it again." The upload route extracts every file
+    on the way in and caches the result, but attachments reached the runtime as
+    raw bytes, so a .docx of pasted SmartPLS screenshots paid its per-image
+    vision cost twice — once at upload and once more on the turn that attached
+    it. The API layer fills this in from that cache; `agent/` never learns where
+    it came from, which keeps the DB on the api side of the layering line.
+
+    Left as None by every caller that genuinely has only bytes (the vision
+    sidecars in docx_extract / pdf_extract), so their behaviour is unchanged.
     """
     filename: str
     bytes: bytes
     mime_type: str
     display_name: str | None = None
+    text: str | None = None
 
     @property
     def size_bytes(self) -> int:
@@ -244,11 +256,39 @@ def _transcribe_via_vision(att: Attachment, prompt: str | None = None) -> str:
     return _flatten_content(getattr(out, "content", ""))
 
 
+def _label_for(att: Attachment) -> str:
+    """The label `_textualize` would give this attachment, without reading it.
+
+    Exists so a pre-extracted attachment is described the same way as one we
+    extracted ourselves — the label is what the brain sees as the section
+    heading, and "file content" where "Word text" belongs would tell it the
+    thesis is an unknown blob.
+    """
+    name = (att.filename or "").lower()
+    if att.mime_type.startswith("image/"):
+        return "image transcription"
+    if att.mime_type == "application/pdf" or name.endswith(".pdf"):
+        return "PDF text"
+    if name.endswith(".docx") or att.mime_type == _DOCX_MIME:
+        return "Word text"
+    from agent.data_profile import is_dataset  # noqa: PLC0415 — agent-layer, lazy
+    if is_dataset(name):
+        return "dataset profile"
+    return "file content"
+
+
 def _textualize(att: Attachment) -> tuple[str, str]:
     """(label, body) for one attachment as plain text — the text-only-brain
     path of the capability table (spec §2). Never raises: the worst input
     degrades to a lossy decode, not a dead turn."""
     name = (att.filename or "").lower()
+    # Already read upstream (see Attachment.text) — the single most expensive
+    # thing this function can do is redo work the upload route already paid for.
+    # Truthiness, not `is not None`, on purpose: "" is a FAILED extraction, not
+    # a cached one, and returning it would hand the brain an empty attachment
+    # with no error attached. Fall through and read the file for real.
+    if att.text:
+        return (_label_for(att), att.text)
     if att.mime_type.startswith("image/"):
         return ("image transcription", _transcribe_via_vision(att))
     if att.mime_type == "application/pdf" or name.endswith(".pdf"):
@@ -272,6 +312,16 @@ def _textualize(att: Attachment) -> tuple[str, str]:
             return ("Word text", body)
         # Empty extraction: fall through rather than hand back a blank
         # attachment, so the failure is at least visible in the transcript.
+    from agent.data_profile import is_dataset  # noqa: PLC0415 — agent-layer, lazy
+    if is_dataset(name):
+        # A dataset gets a profile, never a decode. .xlsx and .sav are binary,
+        # so the fallback below would hand the brain archive mojibake — the same
+        # failure the .docx branch above exists to prevent. And even a .csv that
+        # decodes cleanly is the wrong thing to inline: the numbers are for
+        # agent/tools/stats.py to compute on off the workspace copy, not for the
+        # model to read.
+        from agent.data_profile import profile_dataset  # noqa: PLC0415
+        return ("dataset profile", profile_dataset(att.bytes, att.filename or name))
     return ("file content", att.bytes.decode("utf-8", errors="replace"))
 
 

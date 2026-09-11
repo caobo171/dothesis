@@ -50,6 +50,13 @@ _NS_R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 # single upload into an unbounded run of model calls. Small images are skipped
 # outright — logos, bullets and signature scribbles carry no statistics.
 _MAX_IMAGES = 25
+# How many transcriptions may be in flight at once. Each call is essentially
+# pure network wait (a model round-trip on a ~25 KB PNG), so serializing them
+# spent an upload's entire latency budget on an idle socket: 12 screenshots
+# measured 29s serial against a real _Result.docx. Six rather than "all of
+# them" because _MAX_IMAGES allows 25, and 25 simultaneous vision calls is a
+# rate-limit incident, not a speedup.
+_OCR_CONCURRENCY = 6
 _MIN_IMAGE_BYTES = 3000
 # ...but bytes alone got this wrong in the direction that loses data. A tightly
 # cropped four-row reliability table is mostly white, compresses to well under
@@ -91,11 +98,14 @@ def _longest_side_px(part) -> int:
         return 0
 
 
-def _transcribe(doc, rid: str, index: int) -> str | None:
-    """Vision-transcribe one embedded image, or None to skip it.
+def _image_payload(doc, rid: str, ordinal: int) -> tuple[str, bytes, str] | None:
+    """The bytes of one embedded image as (name, data, mime), or None to skip it.
 
-    Never raises: a missing key, an unreachable model or an odd part degrades to
-    the text-only extraction this module did before.
+    Split from the model call below and kept ON THE WALK THREAD deliberately:
+    everything here reaches into python-docx and its shared lxml tree
+    (`related_parts`, `.blob`, `.image`), which is not something to touch from
+    six threads at once. The pool downstream receives plain bytes and never
+    sees the document at all.
     """
     try:
         part = doc.part.related_parts[rid]
@@ -106,22 +116,29 @@ def _transcribe(doc, rid: str, index: int) -> str | None:
         return None
     if len(data) < _MIN_IMAGE_BYTES and _longest_side_px(part) < _MIN_IMAGE_PX:
         return None
+    name = str(getattr(part, "partname", f"image{ordinal}")).rsplit("/", 1)[-1]
+    return (name, data, getattr(part, "content_type", None) or "image/png")
+
+
+def _vision_block(payload: tuple[str, bytes, str]) -> str | None:
+    """Vision-transcribe one image's bytes, or None when it carries no data.
+
+    Runs in the thread pool. Never raises: a missing key, an unreachable model
+    or an odd part degrades to the text-only extraction this module did before,
+    and one bad image must not take the other eleven down with it.
+    """
+    name, data, mime = payload
     try:
         from agent.multimodal import Attachment, _transcribe_via_vision  # noqa: PLC0415 — heavy/lazy
 
-        name = str(getattr(part, "partname", f"image{index}")).rsplit("/", 1)[-1]
-        att = Attachment(
-            filename=name,
-            bytes=data,
-            mime_type=getattr(part, "content_type", None) or "image/png",
-        )
+        att = Attachment(filename=name, bytes=data, mime_type=mime)
         text = (_transcribe_via_vision(att, prompt=_IMAGE_PROMPT) or "").strip()
     except Exception:
-        logger.exception("docx image transcription failed (rid=%s)", rid)
+        logger.exception("docx image transcription failed (%s)", name)
         return None
     if not text or text.upper().startswith("NONE"):
         return None
-    return f"[Hình {index}]\n{text}"
+    return text
 
 
 def extract_docx_text(data: bytes, *, transcribe_images: bool = True) -> str:
@@ -142,29 +159,40 @@ def extract_docx_text(data: bytes, *, transcribe_images: bool = True) -> str:
 
         doc = Document(io.BytesIO(data))
         parts: list[str] = []
-        images_done = 0
         over_cap = 0
         # One rid is one image, however many places reference it. `row.cells`
         # repeats a merged cell, so without this a merged screenshot is
         # transcribed twice: two vision calls, and the same table printed twice
         # into text a model then reads as two findings.
         seen_rids: set[str] = set()
+        # (index into `parts`, payload) per image awaiting transcription. The
+        # placeholder claims the image's SLOT during the walk, before any model
+        # call happens, so the concurrent pass below can finish in whatever
+        # order it likes and the text still reads in document order — the
+        # property this whole module exists to protect.
+        slots: list[tuple[int, tuple[str, bytes, str]]] = []
 
         def take_images(element) -> None:
-            nonlocal images_done, over_cap
+            nonlocal over_cap
             if not transcribe_images:
                 return
             for rid in _image_rids(element):
                 if rid in seen_rids:
                     continue
                 seen_rids.add(rid)
-                if images_done >= _MAX_IMAGES:
+                # The cap now counts images ATTEMPTED, not images that came back
+                # with text. It used to be the latter, which meant a document of
+                # blank screenshots could keep spending model calls forever
+                # without the counter moving. Budget should be spent by asking,
+                # since asking is what costs.
+                if len(slots) >= _MAX_IMAGES:
                     over_cap += 1
                     continue
-                block = _transcribe(doc, rid, images_done + 1)
-                if block:
-                    images_done += 1
-                    parts.append(block)
+                payload = _image_payload(doc, rid, len(slots) + 1)
+                if payload is None:
+                    continue
+                slots.append((len(parts), payload))
+                parts.append("")     # placeholder; filled in after the walk
 
         for child in doc.element.body.iterchildren():
             tag = child.tag.split("}")[-1]
@@ -183,6 +211,31 @@ def extract_docx_text(data: bytes, *, transcribe_images: bool = True) -> str:
                     # table inside a bordered cell is exactly where one lives.
                     for cell in row.cells:
                         take_images(cell._tc)
+        # The walk is done and every image has a reserved slot; now pay for the
+        # model calls, all at once instead of one after another. `pool.map`
+        # rather than `as_completed` because it yields results in SUBMIT order,
+        # which lines the zip up with `slots` without any sorting — the
+        # ordering guarantee falls out of the API instead of being re-derived.
+        filled: dict[int, str] = {}
+        if slots:
+            from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415 — only needed here
+
+            with ThreadPoolExecutor(max_workers=min(_OCR_CONCURRENCY, len(slots))) as pool:
+                for (slot_i, _payload), text in zip(
+                        slots, pool.map(_vision_block, [p for _, p in slots])):
+                    if text:
+                        filled[slot_i] = text
+
+        # Number the survivors in DOCUMENT order. The figure number is a label
+        # the writer cites, so it has to follow the page, not the order twelve
+        # threads happened to finish in.
+        for n, slot_i in enumerate(sorted(filled), start=1):
+            parts[slot_i] = f"[Hình {n}]\n{filled[slot_i]}"
+        # Drop the slots whose image yielded nothing. Only placeholders are ever
+        # empty here — the walk appends text solely when it is non-blank.
+        parts = [p for p in parts if p]
+        images_done = len(filled)
+
         # Say what was left out. The cap is right — it bounds the spend on one
         # upload — but dropping the excess silently is not: a results chapter
         # with thirty screenshots came back looking complete and missing its

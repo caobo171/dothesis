@@ -202,3 +202,65 @@ def test_v3_error_event_surfaces(client, monkeypatch):
     resp = client.post(f"/api/v1/threads/{tid}/messages", json={"text": "hi"})
     assert '"type": "error"' in resp.text
     assert "BoomError" in resp.text
+
+
+# --- attachments carry the upload's extraction, not just its bytes ----------
+
+_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _upload_row(db, pid, filename, *, size=8):
+    from app.models import PaperUpload
+    up = PaperUpload(project_id=pid, filename=filename, s3_uri="s3://b/k",
+                     size_bytes=size, mime_type=_DOCX)
+    db.add(up); db.commit(); db.refresh(up)
+    return up
+
+
+def test_an_attachment_carries_the_text_the_upload_already_extracted(
+        client, monkeypatch, tmp_path):
+    """The turn must not re-read a file the upload route already read.
+
+    Attachments reached the runtime as raw bytes, so a .docx of pasted
+    SmartPLS screenshots paid a vision call per image AGAIN on the turn that
+    attached it — the upload's cached extraction sat unused on disk beside the
+    bytes we did read. Measured at roughly double the cost of a real upload.
+    """
+    pid, _tid = _setup_project(client)
+    from app.routers import chat_v3
+
+    monkeypatch.setattr(chat_v3, "_workspace_dir", lambda _p: tmp_path)
+    (tmp_path / "uploads").mkdir(parents=True)
+    (tmp_path / "uploads" / "Result.docx").write_bytes(b"RAWBYTES")
+    (tmp_path / "uploads" / "Result.docx.txt").write_text(
+        "CACHED TABLES", encoding="utf-8")
+
+    sf = get_session_factory()
+    with sf() as db:
+        up = _upload_row(db, pid, "Result.docx")
+        atts = chat_v3._materialize_attachments(db, pid, [up.id])
+
+    assert len(atts) == 1
+    assert atts[0].text == "CACHED TABLES"
+    assert atts[0].bytes == b"RAWBYTES"   # raw bytes still ride along
+
+
+def test_an_attachment_with_no_cached_extraction_falls_back_to_reading_it(
+        client, monkeypatch, tmp_path):
+    """No sidecar is not an error — it is the pre-cache case and the older
+    uploads that predate it. Leave `text` unset so the runtime extracts as
+    before, rather than shipping an attachment asserting it has no content."""
+    pid, _tid = _setup_project(client)
+    from app.routers import chat_v3
+
+    monkeypatch.setattr(chat_v3, "_workspace_dir", lambda _p: tmp_path)
+    (tmp_path / "uploads").mkdir(parents=True)
+    (tmp_path / "uploads" / "Result.docx").write_bytes(b"RAWBYTES")
+
+    sf = get_session_factory()
+    with sf() as db:
+        up = _upload_row(db, pid, "Result.docx")
+        atts = chat_v3._materialize_attachments(db, pid, [up.id])
+
+    assert len(atts) == 1
+    assert atts[0].text is None

@@ -356,7 +356,14 @@ def make_vision_model(spec: ModelSpec | None = None, temperature: float | None =
     # spec.model would hand e.g. a Claude id to the Gemini client below: it
     # constructs fine and fails at invoke. A vision-capable brain never needs
     # this function at all; build_user_message gives it native blocks instead.
-    m = spec.vision_model or "gemini-2.5-flash"
+    # Default moved off gemini-2.5-flash 2026-09-10. Same price ($0.30/$2.50 per
+    # 1M in/out), measurably better at the job this sidecar actually does: on a
+    # real SmartPLS path diagram 2.5-flash shifted all five outer loadings onto
+    # the wrong indicators and missed one, which is silent corruption in a
+    # results chapter — nothing downstream can tell a plausible wrong number
+    # from a right one. The default matters as much as the env var: a deploy
+    # that never sets DOTHESIS_VISION_MODEL lands here.
+    m = spec.vision_model or "gemini-3.5-flash-lite"
     t = 0.2 if temperature is None else temperature
     ofox_key = os.getenv("OFOX_API_KEY")
     if spec.route == "ofox" and ofox_key:

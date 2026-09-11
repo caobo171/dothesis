@@ -167,3 +167,73 @@ def test_the_vision_pass_can_be_turned_off(vision):
 
     assert out.strip() == "prose"
     assert vision == []
+
+
+def _four_image_docx() -> bytes:
+    def build(doc):
+        for i in range(4):
+            doc.add_paragraph(f"para{i}")
+            doc.add_paragraph().add_run().add_picture(
+                io.BytesIO(_png(250, 250, noisy=True)))
+    return _docx(build)
+
+
+def test_images_are_transcribed_concurrently(monkeypatch):
+    """Four screenshots must be four calls IN FLIGHT AT ONCE, not one after another.
+
+    A results .docx is a deck of screenshots, and each transcription is a whole
+    model round-trip — measured at ~2.5s against a real upload. Sequentially
+    that is the upload's entire latency budget spent waiting on a network that
+    was idle in between.
+
+    A barrier, not a stopwatch: every stubbed call blocks until all four have
+    arrived. If the walk transcribes sequentially, call #1 waits for siblings
+    that will never come and the barrier times out — a deterministic failure
+    rather than a flaky timing threshold on a loaded CI box.
+    """
+    import threading
+    import agent.multimodal as mm
+
+    barrier = threading.Barrier(4, timeout=5)
+    broke = []
+
+    def fake(att, prompt=None):
+        try:
+            barrier.wait()
+        except threading.BrokenBarrierError:
+            broke.append(att.filename)
+            return "NOT CONCURRENT"
+        return f"TRANSCRIBED {att.filename}"
+
+    monkeypatch.setattr(mm, "_transcribe_via_vision", fake)
+
+    out = extract_docx_text(_four_image_docx())
+
+    assert broke == [], f"transcription ran sequentially; barrier broke on {broke}"
+    assert out.count("TRANSCRIBED") == 4
+
+
+def test_concurrent_transcription_still_emits_images_in_document_order(monkeypatch):
+    """Order is the whole point of this module — parallelism must not cost it.
+
+    The stub finishes in REVERSE document order (the last image returns first),
+    which is exactly what a thread pool produces when an early image is a dense
+    table and a later one is a small chart. Whatever order the calls complete
+    in, the text must read in the order the student wrote it, or the writer can
+    no longer tell which table belongs to which section.
+    """
+    import time
+    import agent.multimodal as mm
+
+    def fake(att, prompt=None):
+        # image1 sleeps longest, image4 returns first.
+        idx = int("".join(c for c in att.filename if c.isdigit()) or 0)
+        time.sleep(max(0, (5 - idx)) * 0.05)
+        return f"MARK {att.filename}"
+
+    monkeypatch.setattr(mm, "_transcribe_via_vision", fake)
+
+    out = extract_docx_text(_four_image_docx())
+
+    marks = [ln for ln in out.splitlines() if ln.startswith("MARK ")]
+    assert marks == sorted(marks), f"images came back out of document order: {marks}"

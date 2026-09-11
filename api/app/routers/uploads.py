@@ -7,6 +7,7 @@ the orchestrator wrapper.
 """
 from __future__ import annotations
 
+import hashlib
 import io
 import logging
 import os
@@ -31,12 +32,29 @@ router = APIRouter(tags=["uploads"])
 logger = logging.getLogger(__name__)
 
 _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-# Text-extractable upload formats. We only accept what we can pull real text
-# from (so analysis never runs on an empty extraction): PDF, Word (.docx),
-# plain text + markdown. Browsers sometimes send .docx as octet-stream on
-# drag-drop, so the gate also accepts by extension (see _ALLOWED_EXT).
-_ALLOWED_MIME = {"application/pdf", "text/plain", "text/markdown", _DOCX_MIME}
-_ALLOWED_EXT = (".pdf", ".txt", ".md", ".markdown", ".docx")
+_XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_XLS_MIME = "application/vnd.ms-excel"
+# What we accept, and why each group is here:
+#
+#   documents — PDF, Word, plain text, markdown. We can pull real text out, so
+#     analysis never runs on an empty extraction.
+#   datasets  — .csv/.xlsx/.xls/.sav. NOT text-extractable, and deliberately so:
+#     the value of a dataset is that `agent/tools/stats.py` can compute on it
+#     off the workspace mirror below. What we cache is a profile (see
+#     agent.data_profile), not the numbers. These used to 415 even though the
+#     M4 skill text asks the student to upload exactly them.
+#   results   — .htm/.html, the SmartPLS/SPSS results export that
+#     agent/tools/output_parse.py parses.
+#
+# Browsers report these types inconsistently (.docx and .sav both arrive as
+# octet-stream on drag-drop), so the gate accepts by extension too.
+_ALLOWED_MIME = {
+    "application/pdf", "text/plain", "text/markdown", _DOCX_MIME,
+    "text/csv", "application/csv", _XLSX_MIME, _XLS_MIME,
+    "text/html", "application/x-spss-sav",
+}
+_ALLOWED_EXT = (".pdf", ".txt", ".md", ".markdown", ".docx",
+                ".csv", ".xlsx", ".xls", ".sav", ".htm", ".html")
 
 
 def _extract_docx_text(body: bytes) -> tuple[str, int]:
@@ -65,7 +83,94 @@ def _extract_docx_text(body: bytes) -> tuple[str, int]:
     """
     from agent.docx_extract import extract_docx_text  # noqa: PLC0415
     return extract_docx_text(body), 0
+
+
+def is_dataset(filename: str) -> bool:
+    """Delegates to agent.data_profile so the API and the chat attachment path
+    agree on what counts as a dataset — the same sharing docx_extract does."""
+    from agent.data_profile import is_dataset as _is_dataset  # noqa: PLC0415
+    return _is_dataset(filename)
+
+
+def profile_dataset(body: bytes, filename: str) -> str:
+    from agent.data_profile import profile_dataset as _profile  # noqa: PLC0415
+    return _profile(body, filename)
 _DEFAULT_MAX_BYTES = 50 * 1024 * 1024
+
+# Cached extractions produced BEFORE this moment are not reused, however
+# byte-identical the file is. A cached transcription is only as good as the
+# model that made it, and gemini-2.5-flash — the vision sidecar until
+# 2026-09-10 — mis-assigned all five outer loadings on a real SmartPLS path
+# diagram and dropped one entirely. Re-uploading is how a student fixes a bad
+# read, so dedupe must not hand the same wrong numbers straight back.
+#
+# BUMP THIS whenever the vision model or the extraction prompt changes. It is a
+# constant rather than a column because the alternative — recording the model
+# on every row — is a migration to answer a question this one line answers.
+#
+# The TIME matters, not just the date: the swap to gemini-3.5-flash-lite landed
+# ~16:00 UTC, and the newest extraction made by the old model was 11:49 UTC the
+# SAME DAY. A midnight epoch would have called all seventeen of those stale
+# rows trustworthy and handed their wrong numbers back on re-upload — which is
+# the precise failure this constant exists to prevent.
+_EXTRACTION_EPOCH = datetime(2026, 9, 10, 16, 0, tzinfo=timezone.utc)
+
+
+def _extract_upload_text(body: bytes, mime: str, fname: str, filename: str) -> tuple[str, int]:
+    """(text, page_count) for one uploaded file. Pure and blocking — it is the
+    slow half of this route (vision calls, pdfminer, OCR), so the caller hands
+    it to a worker thread rather than running it on the event loop."""
+    if mime == "application/pdf" or fname.endswith(".pdf"):
+        # Ingest: a scanned or screenshot-built PDF must not cache as empty text.
+        return extract_pdf_text(body, ocr_if_hollow=True)
+    if mime == _DOCX_MIME or fname.endswith(".docx"):
+        return _extract_docx_text(body)
+    if is_dataset(fname):
+        # A dataset is not a document. Decoding .xlsx (a ZIP) or .sav as UTF-8
+        # cached archive mojibake as the student's "data", which import_route
+        # then handed to the model. Cache the variable view instead — shape,
+        # columns, a few rows — and let the stats tools compute on the real file
+        # mirrored into the workspace.
+        return (profile_dataset(body, filename or "dataset"), 0)
+    try:
+        return (body.decode("utf-8", errors="ignore"), 1)
+    except Exception:  # noqa: BLE001
+        return ("", 0)
+
+
+def _reusable_extraction(db: Session, project_id: uuid.UUID, body: bytes,
+                         filename: str, workspace) -> PaperUpload | None:
+    """A previous upload of these EXACT bytes whose extraction we can reuse.
+
+    Identity is established against the workspace mirror rather than a stored
+    hash: the mirror is where the prior upload's raw bytes already live, and
+    this route is already committed to it for everything downstream, so it
+    settles content-equality without a schema change.
+
+    Deliberately narrow. Filename and size prune the candidates cheaply, the
+    hash decides, and `_EXTRACTION_EPOCH` throws out anything read by a model
+    we no longer trust. Anything unexpected returns None, which just means
+    "extract it again" — the safe direction.
+    """
+    if workspace is None:
+        return None
+    safe_name = (filename or "untitled").replace("/", "_")
+    mirror = workspace / "uploads" / safe_name
+    try:
+        if not mirror.exists():
+            return None
+        if hashlib.sha256(mirror.read_bytes()).digest() != hashlib.sha256(body).digest():
+            return None
+    except Exception:  # noqa: BLE001 — an unreadable mirror is not an error here
+        return None
+    return (db.query(PaperUpload)
+              .filter(PaperUpload.project_id == project_id,
+                      PaperUpload.filename == filename,
+                      PaperUpload.size_bytes == len(body),
+                      PaperUpload.text_extract_uri.isnot(None),
+                      PaperUpload.text_extracted_at >= _EXTRACTION_EPOCH)
+              .order_by(PaperUpload.uploaded_at.desc())
+              .first())
 
 
 def _inline_content_disposition(filename: str) -> str:
@@ -152,6 +257,13 @@ class UploadListItem(BaseModel):
     uploaded_at: Any
 
 
+# KNOWN COST: this route extracts text INSIDE the request. For a .docx that
+# means agent.docx_extract vision-transcribes every pasted screenshot — up to 25
+# sequential model calls — so a SmartPLS results document (which is nothing but
+# result screenshots) can hold the POST open for minutes. The composer now waits
+# on it visibly rather than dropping the file (web ChatInput.UPLOAD_WAIT_MS), but
+# the real fix is to return the upload row immediately and extract in a job the
+# client polls. Until then, do not tighten the client-side timeout.
 @router.post("/projects/{project_id}/uploads", response_model=UploadOut)
 async def upload_paper(project_id: uuid.UUID,
                        file: UploadFile = File(...),
@@ -179,34 +291,55 @@ async def upload_paper(project_id: uuid.UUID,
     bucket = os.environ.get("S3_BUCKET")
     s3_uri = f"s3://{bucket}/users/{p.user_id}/projects/{project_id}/uploads/{upload_id}/{file.filename}"
 
+    # Every blocking call below goes through run_in_threadpool. This route is
+    # `async def`, so boto3 and the extraction were running ON the event loop:
+    # a single-worker API (which is exactly what dev.sh starts) froze entirely
+    # for the duration — 99 seconds, measured, on a results .docx — and every
+    # other request behind it, not just this upload, waited.
+    from starlette.concurrency import run_in_threadpool  # noqa: PLC0415
+
     s3 = s3_from_env()
-    s3.put_object(
+    await run_in_threadpool(
+        s3.put_object,
         Bucket=bucket,
         Key=f"users/{p.user_id}/projects/{project_id}/uploads/{upload_id}/{file.filename}",
         Body=body,
         ContentType=mime,
     )
 
+    # Resolve the workspace BEFORE the mirror below is written: the mirror is
+    # what tells us whether we have read these exact bytes before, and writing
+    # first would compare the file against itself.
+    try:
+        workspace = workspace_dir(project_id)
+    except Exception:  # noqa: BLE001 — no workspace just means no dedupe
+        workspace = None
+
     text = ""
     page_count = 0
     text_uri = None
     text_extracted_at = None
-    if mime == "application/pdf" or fname.endswith(".pdf"):
-        # Ingest: a scanned or screenshot-built PDF must not cache as empty text.
-        text, page_count = extract_pdf_text(body, ocr_if_hollow=True)
-    elif mime == _DOCX_MIME or fname.endswith(".docx"):
-        text, page_count = _extract_docx_text(body)
+
+    reuse = _reusable_extraction(db, project_id, body, file.filename or "untitled", workspace)
+    if reuse is not None:
+        # Same bytes, already read, read recently enough to trust. Point at the
+        # existing extraction instead of buying it twice. A fresh row and id
+        # still get created — re-uploading means "use this one", and collapsing
+        # the two would make a deliberate re-upload look like a no-op.
+        text_uri = reuse.text_extract_uri
+        text_extracted_at = reuse.text_extracted_at
+        page_count = reuse.page_count or 0
+        logger.info("upload %s reuses the extraction cached on %s (%s)",
+                    upload_id, reuse.id, file.filename)
     else:
-        try:
-            text = body.decode("utf-8", errors="ignore")
-            page_count = 1
-        except Exception:
-            text = ""
+        text, page_count = await run_in_threadpool(
+            _extract_upload_text, body, mime, fname, file.filename or "")
 
     if text:
         text_key = f"users/{p.user_id}/projects/{project_id}/uploads/{upload_id}/extracted.txt"
-        s3.put_object(Bucket=bucket, Key=text_key, Body=text.encode("utf-8"),
-                      ContentType="text/plain")
+        await run_in_threadpool(
+            s3.put_object, Bucket=bucket, Key=text_key,
+            Body=text.encode("utf-8"), ContentType="text/plain")
         text_uri = f"s3://{bucket}/{text_key}"
         text_extracted_at = datetime.now(timezone.utc)
 
@@ -224,11 +357,15 @@ async def upload_paper(project_id: uuid.UUID,
     # behaviour, so the student's file went to api/var/jobs/… while every reader
     # looked in var/jobs/…, and a full run wrote a thesis with an empty Results
     # chapter over a dataset that was on disk the whole time.
+    # `workspace` was resolved above, before the dedupe check read the mirror.
     try:
-        workspace = workspace_dir(project_id)
         (workspace / "uploads").mkdir(parents=True, exist_ok=True)
         safe_name = (file.filename or "untitled").replace("/", "_")
         (workspace / "uploads" / safe_name).write_bytes(body)
+        # On a reuse `text` is empty and the sidecar is left exactly as it is —
+        # it already holds this file's extraction, written by the upload that
+        # actually paid for it. Blanking it here would delete the cache the
+        # chat turn now reads (chat_v3._materialize_attachments).
         if text:
             (workspace / "uploads" / f"{safe_name}.txt").write_text(text, encoding="utf-8")
     except Exception as _e:  # noqa: BLE001 — best-effort mirror

@@ -284,11 +284,30 @@ def _materialize_attachments(
         except Exception:
             logger.exception("attachment %s read failed — skipped", uid)
             continue
+        # The upload route already extracted this file and cached the text in a
+        # sidecar next to the bytes. Hand it over, so the turn does not pay to
+        # read the file a second time: for a .docx of pasted SmartPLS
+        # screenshots that second read is a vision call PER IMAGE, and it was
+        # happening on every message the file was attached to.
+        #
+        # The local sidecar rather than the S3 copy at text_extract_uri on
+        # purpose — we are already committed to this mirror for the bytes
+        # directly above, so a missing mirror skips the attachment anyway and a
+        # network round-trip here would buy nothing.
+        cached = None
+        sidecar = path.with_name(path.name + ".txt")
+        try:
+            if sidecar.exists():
+                cached = sidecar.read_text(encoding="utf-8") or None
+        except Exception:  # noqa: BLE001 — a bad sidecar just means re-extract
+            logger.warning("attachment %s: unreadable text sidecar at %s",
+                           uid, sidecar, exc_info=True)
         out.append(Attachment(
             filename=row.filename,
             bytes=data,
             mime_type=row.mime_type or "application/octet-stream",
             display_name=row.filename,
+            text=cached,
         ))
     return out
 

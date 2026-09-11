@@ -70,10 +70,16 @@ def test_vision_capable_openai_keeps_image_blocks():
 def test_openai_non_image_never_raises(monkeypatch):
     # The NotImplementedError landmine (multimodal.py:200-209) is gone: a CSV
     # on the openai provider becomes text, whatever the vision capability.
+    #
+    # It became a *profile* rather than the inlined rows when datasets got their
+    # own branch — the columns still reach the brain, but the numbers stay in
+    # the workspace for the stats tools. The property under test is unchanged:
+    # a non-image attachment turns into text and never raises.
     csv = Attachment(filename="data.csv", bytes=b"a,b\n1,2", mime_type="text/csv")
     msg = build_user_message("data", [csv], "openai", supports_vision=True)
     flat = msg.content if isinstance(msg.content, str) else str(msg.content)
-    assert "a,b" in flat
+    assert "data.csv" in flat
+    assert "- a (" in flat and "- b (" in flat
 
 
 def test_anthropic_pdf_document_block():
@@ -145,9 +151,92 @@ def test_a_docx_recognised_by_extension_alone():
     assert "0.8431" in body
 
 
+def test_text_already_extracted_upstream_is_used_verbatim():
+    """The upload route already read this file. Reading it a second time is the
+    single most expensive thing the chat turn could do.
+
+    A .docx of pasted SmartPLS screenshots costs a vision call per image — the
+    upload path pays that once and caches the result, and then the turn threw
+    the cache away and paid it AGAIN, because attachments reach the runtime as
+    raw bytes. Measured on a real 12-screenshot upload that was ~6s duplicated,
+    and ~99s duplicated before the model and concurrency fixes.
+
+    `text` is the caller saying "I already did this." Honour it and skip the
+    extraction entirely.
+    """
+    from agent.multimodal import Attachment, _textualize
+    label, body = _textualize(Attachment(
+        filename="thesis.docx", bytes=_thesis_docx(), mime_type=_DOCX_MIME,
+        text="ALREADY EXTRACTED UPSTREAM"))
+
+    assert body == "ALREADY EXTRACTED UPSTREAM"
+    assert label == "Word text"
+    assert "0.8431" not in body        # proves the docx was not re-walked
+
+
+def test_a_blank_pre_extraction_still_falls_through_to_reading_the_file():
+    """An empty string is not "already read" — it is a failed read.
+
+    Treating "" as a cache hit would hand the brain an attachment with no
+    content and no error, which is the silent-empty failure this module keeps
+    being bitten by. Fall through and extract.
+    """
+    from agent.multimodal import Attachment, _textualize
+    _label, body = _textualize(Attachment(
+        filename="thesis.docx", bytes=_thesis_docx(), mime_type=_DOCX_MIME,
+        text=""))
+
+    assert "0.8431" in body
+
+
 def test_an_unreadable_docx_degrades_instead_of_dying():
     """Never raise on one odd file — the turn is worth more than the attachment."""
     from agent.multimodal import Attachment, _textualize
     label, _body = _textualize(Attachment(
         filename="broken.docx", bytes=b"not really a docx", mime_type=_DOCX_MIME))
     assert label == "file content"             # fell through, no exception
+
+
+# --- datasets ----------------------------------------------------------------
+
+def _survey_xlsx() -> bytes:
+    import io as _io
+    import pytest as _pytest
+    pd = _pytest.importorskip("pandas")
+    _pytest.importorskip("openpyxl")
+    buf = _io.BytesIO()
+    pd.DataFrame({"EX1": [5, 4, 3], "EX2": [4, 4, 2]}).to_excel(buf, index=False)
+    return buf.getvalue()
+
+
+def test_a_dataset_attachment_becomes_a_profile_not_zip_mojibake():
+    """Same shape of bug the .docx branch fixed: a .xlsx is a ZIP, so without a
+    branch of its own it fell through to the lossy decode and the brain was
+    handed archive noise for the student's data."""
+    from agent.multimodal import Attachment, _textualize
+    label, body = _textualize(Attachment(
+        filename="survey.xlsx", bytes=_survey_xlsx(),
+        mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+
+    assert label == "dataset profile"
+    assert "3 rows x 2 columns" in body
+    assert "EX1" in body
+    assert "PK" not in body[:20]
+
+
+def test_a_dataset_profile_names_the_workspace_path_for_the_stats_tools():
+    """Knowing the columns but not the path makes the brain describe the data
+    instead of running anything on it."""
+    from agent.multimodal import Attachment, _textualize
+    _label, body = _textualize(Attachment(
+        filename="survey.sav", bytes=b"not a real sav",
+        mime_type="application/octet-stream"))
+    assert "uploads/survey.sav" in body
+
+
+def test_a_dataset_recognised_by_extension_alone():
+    from agent.multimodal import Attachment, _textualize
+    label, _body = _textualize(Attachment(
+        filename="survey.xlsx", bytes=_survey_xlsx(),
+        mime_type="application/octet-stream"))
+    assert label == "dataset profile"

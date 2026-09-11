@@ -51,7 +51,7 @@ The word **"agent" is overloaded** in the repo — this is the main source of co
 - Model built by `orchestrator/llm.py` (`get_orchestrator_llm()`): routes `native` (Gemini)
   and `ofox` (ChatOpenAI → `https://api.ofox.ai/v1`). Vision handled separately via
   `get_vision_llm()` (on `ofox`, uses a Google client pointed at Ofox's `/gemini` endpoint;
-  `DOTHESIS_VISION_MODEL`, default `gemini-2.5-flash`, because qwen is text-only).
+  `DOTHESIS_VISION_MODEL`, default `gemini-3.5-flash-lite`, because qwen is text-only).
 - Runs **headless** for the partner/B2B flow — see §2.
 
 ---
@@ -107,7 +107,7 @@ even when the button was pressed from chat). So "who writes the thesis" = **qwen
 |---|---|---|---|
 | `ORCHESTRATOR_LLM_ROUTE` / `_MODEL` | Report pipeline (M1–M5) | `ofox` / `bailian/qwen-plus` | Owner's benchmark: qwen-plus wins report-writing quality **and** is cheapest. Verified it drives the tool-heavy pipeline end-to-end (~215s full report, real tables/TOC/citations). |
 | `DOTHESIS_MODEL_ROUTE` / `DOTHESIS_AGENT_MODEL` | Chat agent | *(unset)* → native Gemini | Vision (student images) works only on the native path today (see §4c). Also prompt-caching on the big system prompt. |
-| `DOTHESIS_VISION_MODEL` | Orchestrator vision turns | `gemini-2.5-flash` | qwen is text-only; image turns go to Gemini via Ofox's `/gemini` endpoint. |
+| `DOTHESIS_VISION_MODEL` | Orchestrator vision turns | `gemini-3.5-flash-lite` | qwen is text-only; image turns go to Gemini via Ofox's `/gemini` endpoint. Moved off `gemini-2.5-flash` 2026-09-10 — same $0.30/$2.50, but 2.5-flash mis-assigned every outer loading on a real SmartPLS path diagram; A/B'd against the source image, not swapped on faith. |
 
 `.env` is gitignored; never committed. Owner does **not** treat "Chinese model (Alibaba/qwen)
 writes thesis content" as a dealbreaker.
