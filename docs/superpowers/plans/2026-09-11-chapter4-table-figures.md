@@ -1,5 +1,21 @@
 # Chapter 4 Table Figures Implementation Plan
 
+> **STATUS: executed 2026-09-11** on branch `fix/chapter4-table-figures`
+> (6 commits). The checkboxes below are the plan as written, not a live
+> tracker. Three things the plan did not anticipate, all found by rendering
+> end-to-end rather than by the unit tests, and all fixed in the commits:
+>
+> 1. `export_docx` uses **Pandoc**; `export_docx_basic` (what Tasks 3/7 test)
+>    is only the fallback. Comment stripping had to move to a whole-text pass
+>    (`_strip_html_comments`) because the closing sentinel shares a paragraph
+>    with the source line.
+> 2. Pandoc demotes `![](img)` to an inline unless a blank line follows, and
+>    both engines caption a non-empty alt *below*. Final form is
+>    `**caption**\n\n![](path)` — caption above, empty alt.
+> 3. `weave()` places blocks at the writer's tokens, so the fixed per-kind
+>    numbers came out `4.1, 4.4, 4.3` on the real chapter. Numbering now
+>    follows document order (an extra change beyond the tasks below).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Chapter 4 ships the student's real SmartPLS table screenshots in the Word/PDF export, captioned and numbered, with the transcribed numbers still committed to state so the verification gates keep working.
