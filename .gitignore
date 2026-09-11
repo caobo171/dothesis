@@ -16,6 +16,11 @@ env/
 .env.local
 .env.*.local
 .env
+# Timestamped .env backups (.env.bak.20260911-152219 and friends). `.env` above
+# does not cover them, so a plain `git add -A` would have published live AWS,
+# OpenAI/Gemini, session and Polar PRODUCTION credentials to a GitHub repo.
+.env.bak*
+.env.backup*
 # IDEs
 .vscode/
 .idea/
