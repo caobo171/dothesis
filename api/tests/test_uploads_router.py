@@ -322,7 +322,7 @@ def test_docx_text_keeps_tables_in_document_order():
     vanished from the export.
     """
     from app.routers.uploads import _extract_docx_text
-    text, _ = _extract_docx_text(_docx_with_table_between_chapters())
+    text, _, _ = _extract_docx_text(_docx_with_table_between_chapters())
 
     assert "0.8431" in text                       # the table survived at all
     # and it sits BETWEEN the two chapter headings, where it was written.
@@ -335,7 +335,7 @@ def test_the_chapter_split_leaves_result_tables_with_the_analysis():
     from app.routers.uploads import _extract_docx_text
     from orchestrator.chapter_split import split_final_chapter
 
-    text, _ = _extract_docx_text(_docx_with_table_between_chapters())
+    text, _, _ = _extract_docx_text(_docx_with_table_between_chapters())
     split = split_final_chapter(text)
     assert split is not None
     head, tail = split
@@ -504,9 +504,9 @@ def dedupe_env(client, monkeypatch, tmp_path):
     monkeypatch.setattr("app.routers.uploads.workspace_dir", lambda _pid: tmp_path)
     calls: list[int] = []
 
-    def fake_extract(body):
+    def fake_extract(body, *, stem=""):
         calls.append(len(body))
-        return (f"EXTRACTED {len(calls)}", 0)
+        return (f"EXTRACTED {len(calls)}", 0, [])
 
     monkeypatch.setattr("app.routers.uploads._extract_docx_text", fake_extract)
     _login(client)
@@ -584,3 +584,42 @@ def test_an_extraction_from_before_the_epoch_is_never_reused(client, dedupe_env,
     _post_docx(client, pid, data)
 
     assert len(calls) == 2, "a pre-epoch extraction was reused"
+
+
+# --- the screenshots behind the numbers -------------------------------------
+
+def _docx_with_one_image() -> bytes:
+    """A results .docx whose table is a pasted screenshot — the ordinary case."""
+    import io
+
+    from docx import Document
+    from agent.tests.test_docx_extract import _png
+
+    d = Document()
+    d.add_paragraph("ĐỘ TIN CẬY")
+    d.add_paragraph().add_run().add_picture(io.BytesIO(_png(300, 200, noisy=True)))
+    buf = io.BytesIO(); d.save(buf)
+    return buf.getvalue()
+
+
+def test_docx_extraction_returns_images_for_the_workspace(monkeypatch):
+    """The sidecar names the file each [Hình n] came from, so the agent can
+    point a results block at the original screenshot instead of describing it."""
+    import agent.multimodal as mm
+    monkeypatch.setattr(mm, "_transcribe_via_vision",
+                        lambda att, prompt=None: "| A |\n|---|\n| 1 |")
+    from app.routers.uploads import _extract_docx_text
+
+    text, _pages, images = _extract_docx_text(_docx_with_one_image(), stem="_Result.docx")
+
+    assert len(images) == 1
+    assert images[0]["figure"] == 1
+    assert images[0]["relpath"] == "uploads/_Result.docx.img/hinh-01.png"
+    assert "[Hình 1] (ảnh gốc: uploads/_Result.docx.img/hinh-01.png)" in text
+
+
+def test_docx_extraction_without_images_still_returns_a_triple():
+    from app.routers.uploads import _extract_docx_text
+    text, _pages, images = _extract_docx_text(_docx_with_table_between_chapters())
+    assert images == []
+    assert "0.8431" in text

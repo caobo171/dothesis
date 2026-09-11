@@ -647,6 +647,26 @@ def _convert_math(line: str) -> str:
     return line
 
 
+_HTML_COMMENT_RE = _re.compile(r"<!--.*?-->", _re.DOTALL)
+
+
+def _strip_html_comments(md: str) -> str:
+    """HTML comments are internal markup, never document content.
+
+    The results renderer brackets every verified table in
+    `<!--dt-rendered:begin …-->` sentinels so the coherence and similarity
+    checkers can tell a computed table from a table the model typed. Stripped
+    over the WHOLE text rather than per line, because the closing sentinel sits
+    directly under the source line with no blank line between them — the writer
+    joins consecutive non-blank lines into one paragraph, so a per-line skip
+    still left "*Nguồn: …* <!--dt-rendered:end …-->" in the document.
+    """
+    out = _HTML_COMMENT_RE.sub("", md)
+    # A comment on its own line leaves an empty line behind; harmless (the walk
+    # skips blanks) and cheaper than tracking which lines became empty.
+    return out
+
+
 _TABLE_CAPTION_RE = _re.compile(r"^\s*(?:Bảng|Bang|Table|Tabelle)\b", _re.IGNORECASE)
 
 
@@ -860,6 +880,7 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
         # Drop the YAML frontmatter outright — basic exporter doesn't render a
         # cover page from it, so leaving it in produces a wall of key:value lines.
         md_content = _strip_yaml_frontmatter(md_content)
+        md_content = _strip_html_comments(md_content)
         lines = md_content.splitlines()
 
         # Create document with 1" margins
@@ -946,16 +967,6 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
 
             # Blank
             if not line.strip():
-                i += 1
-                continue
-
-            # HTML comments are internal markup, never document content. The
-            # results renderer brackets every verified table in
-            # `<!--dt-rendered:begin …-->` sentinels so the coherence and
-            # similarity checkers can tell a computed table from a typed one.
-            # Without this branch those sentinels print into Word as body text,
-            # and the one sharing a line with the caption swallows the caption.
-            if line.strip().startswith("<!--"):
                 i += 1
                 continue
 

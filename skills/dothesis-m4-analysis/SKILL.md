@@ -9,7 +9,11 @@ description: Use when analyzing quantitative thesis data — running statistics 
 
 You own this slice:
 - `analysis_outline: AnalysisOutline` — which tests, in what order, each tied to a hypothesis
-- `analysis_results: AnalysisResult[]` — actual numbers + per-test interpretation
+- `analysis_results: AnalysisResultBlock` — ONE dict keyed by table
+  (`measurement_model`, `hypothesis_tests`, `discriminant_validity`,
+  `structural_model`, `descriptives`), not a list of steps. M5 renders Chapter 4
+  from these keys; a list of `{id, results}` step entries once rendered nothing
+  at all and shipped a Results chapter with no tables in it.
 
 This module **actually runs computation** through the `run_stats` tool. You never
 LLM-interpret numbers you didn't compute, and you never hallucinate statistics.
@@ -203,8 +207,9 @@ Step 4 — Robustness: controls, harman
 Ask: *"Run this as outlined, or adjust?"* On confirm → commit the outline.
 
 ### Steps 4–5 — Execute and interpret
-Per step: call `run_stats`, capture the returned numbers verbatim, append to
-`analysis_results`.
+Per step: call `run_stats`, capture the returned numbers verbatim, and MERGE
+them into the `analysis_results` dict under the table key they belong to. Merge,
+never append — `analysis_results` is one block, not a log of steps.
 
 **Method-appropriate extras (run them, don't wait to be asked):** after the core
 PLS/CB-SEM fit, run `run_stats(op="ipma", target=<the key outcome construct>)` to
@@ -242,12 +247,48 @@ from `run_stats`, never typed from memory):
 }
 ```
 
+**When the numbers came from a screenshot, name the screenshot.** An uploaded
+`.docx` of SmartPLS output is transcribed image by image, and the sidecar
+(`uploads/<name>.docx.txt`) labels each one with the file it came from:
+
+```
+[Hình 4] (ảnh gốc: uploads/_Result.docx.img/hinh-04.png)
+| Matrix | Cronbach's ... | rho_A | Composite ... | Average Va... |
+```
+
+Put those paths on `source_figures`, keyed by the table each image shows:
+
+```json
+"source_figures": {
+  "measurement_model": "uploads/_Result.docx.img/hinh-04.png",
+  "discriminant_validity": "uploads/_Result.docx.img/hinh-05.png",
+  "structural_paths": "uploads/_Result.docx.img/hinh-09.png"
+}
+```
+
+Chapter 4 then carries the student's own SmartPLS screenshot instead of a table
+rebuilt from the transcription — which is what a supervisor recognises as
+output, and it is right even where the transcription was lossy on a tight crop.
+Paths are workspace-relative; `commit_slice` resolves them, checks they sit
+inside the project, and drops any that don't. The keys are `descriptives`,
+`measurement_model`, `discriminant_validity`, `model_fit`, `structural_paths`
+and `r2_q2`.
+
+**Store the transcribed rows too, always — a screenshot does not replace them.**
+The coherence gate compares the chapter's prose against these numbers, so a
+block carrying only an image is a chapter nobody can check.
+
 Rules for the tables:
 - **Keep the metric family consistent with M3's tool.** PLS-SEM → loadings, CR,
   AVE, HTMT, R²/f²/Q², path β with bootstrap t/p (NO CFI/TLI/RMSEA). CB-SEM →
   add the fit indices + χ²/df. Never store both families.
 - A reliability/validity value (α, CR, AVE, loading) is required for **every**
   construct so Table 4.1 is complete — don't summarize "all α>.7" in prose only.
+- **Never summarize a table you were handed.** A transcribed SmartPLS table
+  comes back with every row already read for you. Writing
+  `"outer_loadings": "all > 0.7, range 0.766-0.863"` throws away 41 rows and
+  Table 4.1 then cannot be rendered at all — that exact line shipped a thesis
+  whose Chapter 4 had no measurement table. Copy the rows.
 - Interpretation per hypothesis: **supported / not supported** stated plainly ·
   effect size, not just p · the caveat · the M2 gap it speaks to.
 - Surface threshold violations prominently (e.g. "AVE(JobSec)=.48 < .50 — drop

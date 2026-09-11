@@ -57,7 +57,17 @@ _ALLOWED_EXT = (".pdf", ".txt", ".md", ".markdown", ".docx",
                 ".csv", ".xlsx", ".xls", ".sav", ".htm", ".html")
 
 
-def _extract_docx_text(body: bytes) -> tuple[str, int]:
+_MIME_EXT = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif",
+             "image/bmp": "bmp", "image/tiff": "tif", "image/webp": "webp"}
+
+
+def _figure_filename(entry: dict) -> str:
+    """`hinh-04.png` — zero-padded so a directory listing sorts by page."""
+    ext = _MIME_EXT.get(str(entry.get("mime") or "").lower(), "png")
+    return f"hinh-{int(entry['figure']):02d}.{ext}"
+
+
+def _extract_docx_text(body: bytes, *, stem: str = "") -> tuple[str, int, list]:
     """Pull paragraph + table text from a .docx, IN DOCUMENT ORDER. Table rows
     are flattened into pipe rows so numbers inside result tables survive.
     Best-effort → ("", 0).
@@ -82,7 +92,18 @@ def _extract_docx_text(body: bytes) -> tuple[str, int]:
     same thesis was legible when imported and unreadable when attached.
     """
     from agent.docx_extract import extract_docx_text  # noqa: PLC0415
-    return extract_docx_text(body), 0
+    images: list = []
+    text = extract_docx_text(body, image_sink=images)
+    # Name the file each figure came from, inline in the sidecar the agent
+    # reads. Without this the agent knows a table was transcribed but not which
+    # screenshot backs it, and Chapter 4 can only rebuild the table in markdown
+    # — which reads as retyped rather than as SmartPLS output.
+    for entry in images:
+        entry["relpath"] = f"uploads/{stem}.img/{_figure_filename(entry)}"
+        text = text.replace(
+            f"[Hình {entry['figure']}]",
+            f"[Hình {entry['figure']}] (ảnh gốc: {entry['relpath']})", 1)
+    return text, 0, images
 
 
 def is_dataset(filename: str) -> bool:
@@ -116,26 +137,32 @@ _DEFAULT_MAX_BYTES = 50 * 1024 * 1024
 _EXTRACTION_EPOCH = datetime(2026, 9, 10, 16, 0, tzinfo=timezone.utc)
 
 
-def _extract_upload_text(body: bytes, mime: str, fname: str, filename: str) -> tuple[str, int]:
-    """(text, page_count) for one uploaded file. Pure and blocking — it is the
-    slow half of this route (vision calls, pdfminer, OCR), so the caller hands
-    it to a worker thread rather than running it on the event loop."""
+def _extract_upload_text(body: bytes, mime: str, fname: str,
+                         filename: str) -> tuple[str, int, list]:
+    """(text, page_count, images) for one uploaded file. Pure and blocking — it
+    is the slow half of this route (vision calls, pdfminer, OCR), so the caller
+    hands it to a worker thread rather than running it on the event loop.
+
+    `images` is the transcribed screenshots a .docx carried, for the caller to
+    mirror into the workspace; every other type returns [].
+    """
     if mime == "application/pdf" or fname.endswith(".pdf"):
         # Ingest: a scanned or screenshot-built PDF must not cache as empty text.
-        return extract_pdf_text(body, ocr_if_hollow=True)
+        text, pages = extract_pdf_text(body, ocr_if_hollow=True)
+        return (text, pages, [])
     if mime == _DOCX_MIME or fname.endswith(".docx"):
-        return _extract_docx_text(body)
+        return _extract_docx_text(body, stem=(filename or "untitled").replace("/", "_"))
     if is_dataset(fname):
         # A dataset is not a document. Decoding .xlsx (a ZIP) or .sav as UTF-8
         # cached archive mojibake as the student's "data", which import_route
         # then handed to the model. Cache the variable view instead — shape,
         # columns, a few rows — and let the stats tools compute on the real file
         # mirrored into the workspace.
-        return (profile_dataset(body, filename or "dataset"), 0)
+        return (profile_dataset(body, filename or "dataset"), 0, [])
     try:
-        return (body.decode("utf-8", errors="ignore"), 1)
+        return (body.decode("utf-8", errors="ignore"), 1, [])
     except Exception:  # noqa: BLE001
-        return ("", 0)
+        return ("", 0, [])
 
 
 def _reusable_extraction(db: Session, project_id: uuid.UUID, body: bytes,
@@ -319,6 +346,9 @@ async def upload_paper(project_id: uuid.UUID,
     page_count = 0
     text_uri = None
     text_extracted_at = None
+    # On a reuse the screenshots are already mirrored beside the cached sidecar,
+    # so there is nothing to write — but the name still has to be bound.
+    images: list = []
 
     reuse = _reusable_extraction(db, project_id, body, file.filename or "untitled", workspace)
     if reuse is not None:
@@ -332,7 +362,7 @@ async def upload_paper(project_id: uuid.UUID,
         logger.info("upload %s reuses the extraction cached on %s (%s)",
                     upload_id, reuse.id, file.filename)
     else:
-        text, page_count = await run_in_threadpool(
+        text, page_count, images = await run_in_threadpool(
             _extract_upload_text, body, mime, fname, file.filename or "")
 
     if text:
@@ -368,6 +398,15 @@ async def upload_paper(project_id: uuid.UUID,
         # chat turn now reads (chat_v3._materialize_attachments).
         if text:
             (workspace / "uploads" / f"{safe_name}.txt").write_text(text, encoding="utf-8")
+        # The screenshots the OCR pass transcribed, beside the sidecar that
+        # names them. Chapter 4 embeds these originals rather than a table
+        # rebuilt from the transcription — a supervisor recognises SmartPLS
+        # output, and the transcription is lossy on tight crops besides.
+        if images:
+            img_dir = workspace / "uploads" / f"{safe_name}.img"
+            img_dir.mkdir(parents=True, exist_ok=True)
+            for entry in images:
+                (img_dir / _figure_filename(entry)).write_bytes(entry["bytes"])
     except Exception as _e:  # noqa: BLE001 — best-effort mirror
         pass
 

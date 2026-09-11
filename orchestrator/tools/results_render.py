@@ -134,9 +134,45 @@ def _sha12(sub: Any) -> str:
         json.dumps(sub, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:12]
 
 
+def _figure_body(ar: dict, kind: str, caption: str) -> Optional[str]:
+    """The student's own screenshot of this table as a markdown image line, or
+    None when there isn't one on disk.
+
+    Why the image wins over the table we can render: a SmartPLS screenshot is
+    visibly output from the software, and a supervisor reads that as evidence in
+    a way a table of retyped numbers is not. The transcription still lives in
+    state, so the coherence gate keeps checking the prose against it either way,
+    and the caption/numbering is ours either way too.
+
+    The path was resolved and contained under the project workspace by
+    `commit_slice`; existence is re-checked here because state outlives files.
+    """
+    try:
+        import os  # noqa: PLC0415 — stdlib, keeps this module's import cost flat
+
+        figures = ar.get("source_figures")
+        path = figures.get(kind) if isinstance(figures, dict) else None
+        if not (isinstance(path, str) and path and os.path.isfile(path)):
+            return None
+        # Caption as its own paragraph ABOVE, image with EMPTY alt text. Both
+        # exporters turn a non-empty alt into a caption of their own — Pandoc
+        # below the figure, python-docx below the picture — and a table is
+        # captioned above. Empty alt means neither adds one, so this single
+        # form gives the same layout through both engines and cannot double up.
+        return f"**{caption}**\n\n![]({path})"
+    except Exception:
+        logger.debug("_figure_body failed for %s", kind, exc_info=True)
+        return None
+
+
 def _wrap(kind: str, source_sub: Any, body: str, language: str) -> dict:
     sha = _sha12(source_sub)
-    md = (_BEGIN.format(kind=kind, sha=sha) + "\n" + body.rstrip() + "\n"
+    # Blank line before the source note, not just a newline. Markdown needs one
+    # to end the preceding block: without it Pandoc read the image and the note
+    # as ONE paragraph, which demotes the image to an inline and drops it out of
+    # figure layout entirely. Harmless for a pipe table, which ends at the first
+    # line not starting with "|" either way.
+    md = (_BEGIN.format(kind=kind, sha=sha) + "\n" + body.rstrip() + "\n\n"
           + _SOURCE_LINE.get(language, _SOURCE_LINE["en"]) + "\n"
           + _END.format(kind=kind))
     return {"kind": kind, "markdown": md, "sha": sha, "token": f"[[DT:{kind}]]"}
@@ -438,8 +474,12 @@ def _measurement_block(ar, family, language, num=None):
                          for c in mm)
     caption = _caption("measurement_model" if has_convergent else "scale_reliability",
                        language, num)
-    body = f"**{caption}**\n\n" + _table_pruned(
-        [H["construct"], H["item"], loading_hdr, H["alpha"], H["cr"], H["ave"]], rows)
+    # Keyed off the fixed kind, not the caption's — `scale_reliability` and
+    # `measurement_model` are the same block to weave(), the sentinel and the
+    # student's screenshot.
+    body = _figure_body(ar, "measurement_model", caption) or (
+        f"**{caption}**\n\n" + _table_pruned(
+            [H["construct"], H["item"], loading_hdr, H["alpha"], H["cr"], H["ave"]], rows))
     return _wrap("measurement_model", mm, body, language)
 
 
@@ -459,8 +499,10 @@ def _discriminant_block(ar, language, num=None):
         rows.append([label] + [_fmt(c) for c in r])
     method = dv.get("method", "")
     caption = _caption("discriminant_validity", language, num)
-    title = f"**{caption}" + (f" ({method})" if method else "") + "**"
-    body = title + "\n\n" + _table([""] + [_fmt(l) for l in labels], rows)
+    full_caption = caption + (f" ({method})" if method else "")
+    title = f"**{full_caption}**"
+    body = _figure_body(ar, "discriminant_validity", full_caption) or (
+        title + "\n\n" + _table([""] + [_fmt(l) for l in labels], rows))
     return _wrap("discriminant_validity", dv, body, language)
 
 
@@ -474,7 +516,8 @@ def _model_fit_block(ar, language, num=None):
     rows = [[k.upper() if k != "chi2_df" else "χ²/df", _fmt(src[k]), _FIT_THRESHOLDS[k]]
             for k in _FIT_KEYS if isinstance(src[k], (int, float))]
     caption = _caption("model_fit", language, num)
-    body = f"**{caption}**\n\n" + _table([H["index"], H["value"], H["threshold"]], rows)
+    body = _figure_body(ar, "model_fit", caption) or (
+        f"**{caption}**\n\n" + _table([H["index"], H["value"], H["threshold"]], rows))
     return _wrap("model_fit", src, body, language)
 
 
@@ -508,7 +551,8 @@ def _structural_block(ar, family, language, num=None):
         row.append(_fmt(t.get("decision")))
         rows.append(row)
     caption = _caption("structural_paths", language, num)
-    body = f"**{caption}**\n\n" + _table_pruned(headers, rows)
+    body = _figure_body(ar, "structural_paths", caption) or (
+        f"**{caption}**\n\n" + _table_pruned(headers, rows))
     return _wrap("structural_paths", tests, body, language)
 
 
@@ -529,7 +573,8 @@ def _r2q2_block(ar, family, language, num=None):
     # metric that is not in the table and was never computed. Say what is there.
     if not show_q2:
         caption = caption.replace(" / Q²", "")
-    body = f"**{caption}**\n\n" + _table(headers, rows)
+    body = _figure_body(ar, "r2_q2", caption) or (
+        f"**{caption}**\n\n" + _table(headers, rows))
     return _wrap("r2_q2", {"r2": r2, "q2": q2 if show_q2 else {}}, body, language)
 
 
@@ -545,7 +590,8 @@ def _descriptives_block(ar, language, num=None):
     caption = _caption("descriptives", language, num)
     n = d.get("n")
     ncap = f" (n = {_fmt(n)})" if isinstance(n, (int, float)) else ""
-    body = f"**{caption}{ncap}**\n\n" + _table([H["item"], H["mean"], H["sd"]], rows)
+    body = _figure_body(ar, "descriptives", caption + ncap) or (
+        f"**{caption}{ncap}**\n\n" + _table([H["item"], H["mean"], H["sd"]], rows))
     return _wrap("descriptives", d, body, language)
 
 
@@ -554,9 +600,17 @@ def render_results_tables(analysis_results: Any, language: str = "en",
     """The Chapter 4 tables.
 
     `host_prose` is the chapter these blocks are going INTO, when the caller
-    knows it. Its only use is numbering: a chapter the student wrote already
-    numbers its own tables, and dropping a "Bảng 4.1" into one that runs to
-    Bảng 4.14 hands the document two tables with the same number.
+    knows it. It decides numbering, and it decides ORDER:
+
+    - A chapter the student wrote already numbers its own tables, so dropping a
+      "Bảng 4.1" into one that runs to Bảng 4.14 hands the document two tables
+      with the same number. Continue their sequence instead.
+    - `weave()` places each block at the writer's `[[DT:kind]]` token, which is
+      not the order the builders run in. With fixed per-kind numbers a real
+      chapter whose tokens ran …r2_q2 … structural_paths came out numbered
+      Bảng 4.1, Bảng 4.4, Bảng 4.3 — right tables, wrong sequence, and a
+      supervisor sends that back. Emit in the order the tokens appear, so the
+      numbers climb the way the reader meets them.
     """
     try:
         ar = normalize_analysis_results(analysis_results)
@@ -566,36 +620,46 @@ def render_results_tables(analysis_results: Any, language: str = "en",
         if fam is None:
             return []
         # Sequential numbering continuing the host chapter, or the fixed
-        # defaults when there is no host to continue.
+        # per-kind defaults when there is no host to continue.
         seq = None
         if host_prose:
-            start = next_table_number(host_prose, "")
-            if start:
-                chapter, idx = start.split(".")
-                seq = (int(chapter), int(idx))
+            chapter, idx = next_table_number(host_prose, "4.1").split(".")
+            seq = (int(chapter), int(idx))
+
+        # (kind, builder) in canonical order — the fallback when the host prose
+        # asks for nothing in particular.
+        builders = [("descriptives", lambda n: _descriptives_block(ar, language, n)),
+                    ("measurement_model", lambda n: _measurement_block(ar, fam, language, n))]
+        if fam == "pls_sem":
+            builders.append(("discriminant_validity", lambda n: _discriminant_block(ar, language, n)))
+        if fam == "cb_sem":
+            builders.append(("model_fit", lambda n: _model_fit_block(ar, language, n)))
+        builders.append(("structural_paths", lambda n: _structural_block(ar, fam, language, n)))
+        builders.append(("r2_q2", lambda n: _r2q2_block(ar, fam, language, n)))
+
+        if host_prose:
+            # Where each kind's token sits. `scale_reliability` is the same block
+            # as `measurement_model` under the caption the data earns, so either
+            # token places it. A kind with no token is appended by weave() and
+            # sorts after the placed ones, keeping its canonical position.
+            pos = {}
+            for m in _TOKEN_RE.finditer(host_prose):
+                kind = m.group("kind")
+                if kind == "scale_reliability":
+                    kind = "measurement_model"
+                pos.setdefault(kind, m.start())
+            builders.sort(key=lambda kb: pos.get(kb[0], len(host_prose) + 1))
 
         blocks = []
-
-        def _emit(build):
-            """Number a block only if it turns out to exist — several of these
-            return None for a study that lacks the data, and consuming a number
-            for one of them would leave a hole in the chapter's sequence."""
-            nonlocal seq
-            n = f"{seq[0]}.{seq[1]}" if seq else None
-            b = build(n)
+        for _kind, build in builders:
+            # Number a block only if it turns out to exist — several builders
+            # return None for a study that lacks the data, and consuming a
+            # number for one would leave a hole in the chapter's sequence.
+            b = build(f"{seq[0]}.{seq[1]}" if seq else None)
             if b:
                 blocks.append(b)
                 if seq:
                     seq = (seq[0], seq[1] + 1)
-
-        _emit(lambda n: _descriptives_block(ar, language, n))
-        _emit(lambda n: _measurement_block(ar, fam, language, n))
-        if fam == "pls_sem":
-            _emit(lambda n: _discriminant_block(ar, language, n))
-        if fam == "cb_sem":
-            _emit(lambda n: _model_fit_block(ar, language, n))
-        _emit(lambda n: _structural_block(ar, fam, language, n))
-        _emit(lambda n: _r2q2_block(ar, fam, language, n))
         return blocks
     except Exception:
         logger.debug("render_results_tables failed", exc_info=True)

@@ -101,6 +101,42 @@ def chapter_to_module(chapter: str | None) -> str:
     return _CHAPTER_TO_MODULE.get((chapter or "").lower(), "M5")
 
 
+def _resolve_source_figures(figures: Any, project_dir: Any) -> dict:
+    """Workspace-relative figure paths → absolute paths that exist, dropping
+    anything that escapes the workspace.
+
+    The model names a file it saw in the upload sidecar; deterministic code
+    decides whether that name points at a real file inside THIS project. A path
+    is the one piece of state a model supplies that a later step opens, so it is
+    resolved and contained here rather than trusted downstream by the renderer.
+
+    One bad entry drops itself, not the whole map — a student whose second
+    screenshot went missing should still get the first table.
+    """
+    import os  # noqa: PLC0415 — stdlib, only needed on this path
+
+    if not (isinstance(figures, dict) and project_dir):
+        return {}
+    try:
+        root = os.path.realpath(str(project_dir))
+    except Exception:  # noqa: BLE001
+        return {}
+    out: dict = {}
+    for kind, rel in figures.items():
+        if not isinstance(rel, str) or not rel:
+            continue
+        try:
+            full = os.path.realpath(os.path.join(root, rel))
+            if not (full == root or full.startswith(root + os.sep)):
+                logger.warning("commit_slice: source_figures[%s] escapes the workspace", kind)
+                continue
+            if os.path.isfile(full):
+                out[str(kind)] = full
+        except Exception:  # noqa: BLE001 — one odd path must not lose the rest
+            logger.debug("commit_slice: source_figures[%s] unresolvable", kind, exc_info=True)
+    return out
+
+
 # What separates a finished chapter from a stub, for the strict done-gate only.
 # Same number orchestrator/artifacts.py uses for the imported-write-up escape
 # (_IMPORTED_WRITEUP_MIN) and for the same reason: below this it is not prose
@@ -372,6 +408,19 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
                         "hint": "Retry; if it persists, the sections cannot be attested.",
                     }, ensure_ascii=False)
                 _coherence_warnings = "unavailable"
+        # Resolve the screenshot paths the agent named in the results block, so
+        # Chapter 4 can embed the student's own SmartPLS output instead of a
+        # table rebuilt from its transcription. Before provenance, so what gets
+        # attributed is what actually gets stored.
+        if (module == "M4" and isinstance(writes.get("analysis_results"), dict)
+                and writes["analysis_results"].get("source_figures")):
+            try:
+                _ar = writes["analysis_results"]
+                _figs = _resolve_source_figures(_ar["source_figures"],
+                                                getattr(store, "project_dir", None))
+                writes = {**writes, "analysis_results": {**_ar, "source_figures": _figs}}
+            except Exception:
+                logger.debug("commit_slice: source_figures resolution skipped", exc_info=True)
         # Provenance injection (roadmap #12): after the model-edge strip (so a
         # forged analysis_provenance is already gone) and after the hard gate (so
         # only committable numbers are attributed), deterministic code matches the

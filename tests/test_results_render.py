@@ -260,3 +260,64 @@ def test_normalize_rejects_what_it_cannot_map():
     assert normalize_analysis_results(FREE_TEXT_BLOCK) == {}
     assert normalize_analysis_results(None) == {}
     assert normalize_analysis_results([1, 2, 3]) == {}
+
+
+# --- the student's own screenshot instead of a rebuilt table -----------------
+
+def test_source_figure_replaces_the_rebuilt_table(tmp_path):
+    """A real SmartPLS screenshot is evidence in a way a rebuilt table is not,
+    so when one exists it IS the table."""
+    png = tmp_path / "hinh-04.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\n")
+    block = {**PLS_BLOCK, "source_figures": {"measurement_model": str(png)}}
+
+    blocks = {b["kind"]: b for b in render_results_tables(block, "vi")}
+    md = blocks["measurement_model"]["markdown"]
+    assert f"]({png})" in md
+    assert "Bảng 4.1" in md
+    assert "\n|" not in md                                    # the pipe table is gone
+    assert "dt-rendered:begin kind=measurement_model" in md   # still verified state
+    # Kinds without a screenshot keep rendering as tables.
+    assert "\n|" in blocks["structural_paths"]["markdown"]
+
+
+def test_missing_figure_falls_back_to_the_table(tmp_path):
+    block = {**PLS_BLOCK, "source_figures": {"measurement_model": str(tmp_path / "gone.png")}}
+    md = {b["kind"]: b for b in render_results_tables(block, "vi")}["measurement_model"]["markdown"]
+    assert "\n|" in md
+
+
+def test_every_kind_can_carry_a_figure(tmp_path):
+    png = tmp_path / "s.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\n")
+    kinds = ("descriptives", "measurement_model", "discriminant_validity",
+             "structural_paths", "r2_q2")
+    block = {**PLS_BLOCK, "source_figures": {k: str(png) for k in kinds}}
+    for b in render_results_tables(block, "vi"):
+        assert f"]({png})" in b["markdown"], b["kind"]
+        assert "\n|" not in b["markdown"], b["kind"]
+
+
+def test_numbers_follow_the_order_the_tables_LAND_in():
+    """weave() places each block at the writer's token, not in builder order.
+
+    The live chapter's tokens ran …[[DT:r2_q2]] … [[DT:structural_paths]], and
+    the fixed per-kind numbers put R² at 4.4 and the paths table at 4.3 — so the
+    document read Bảng 4.1, Bảng 4.4, Bảng 4.3. A supervisor sends that back.
+    """
+    prose = ("Mở đầu.\n\n[[DT:measurement_model]]\n\nGiữa.\n\n"
+             "[[DT:r2_q2]]\n\nSau.\n\n[[DT:structural_paths]]\n")
+    blocks = render_results_tables(PLS_BLOCK, "vi", host_prose=prose)
+    woven = weave(prose, blocks, drop_llm_tables=True)
+
+    import re
+    nums = [tuple(int(x) for x in n.split("."))
+            for n in re.findall(r"\*\*Bảng ([0-9]+\.[0-9]+)", woven)]
+    assert nums == sorted(nums), f"tables numbered out of document order: {nums}"
+
+
+def test_a_host_without_numbered_tables_still_starts_at_one():
+    prose = "Chương này trình bày kết quả.\n\n[[DT:measurement_model]]\n"
+    blocks = render_results_tables(PLS_BLOCK, "vi", host_prose=prose)
+    first = weave(prose, blocks).split("**Bảng ")[1][:3]
+    assert first == "4.1"

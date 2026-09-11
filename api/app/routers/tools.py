@@ -581,7 +581,9 @@ async def extract_text(request: Request, file: UploadFile = File(...),
         # come back transcribed rather than blank.
         text, page_count = extract_pdf_text(body, ocr_if_hollow=True)
     elif mime == _DOCX_MIME or fname.endswith(".docx"):
-        text, page_count = _extract_docx_text(body)
+        # This endpoint hands back text only; the screenshots it also extracted
+        # have nowhere to live without a project workspace.
+        text, page_count, _images = _extract_docx_text(body)
     else:
         text = body.decode("utf-8", errors="replace")
 
