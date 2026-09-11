@@ -647,23 +647,42 @@ def _convert_math(line: str) -> str:
     return line
 
 
+_TABLE_CAPTION_RE = _re.compile(r"^\s*(?:Bảng|Bang|Table|Tabelle)\b", _re.IGNORECASE)
+
+
 def _add_docx_image(doc, path: str, caption: str) -> bool:
-    """Place a picture on its own centred paragraph with an italic caption under it."""
+    """Place a picture on its own centred paragraph with its caption.
+
+    A figure is captioned below it and a table above it — the convention every
+    Vietnamese thesis template follows, and one of the first things a supervisor
+    checks. The caption text says which it is, because the results renderer
+    writes "Bảng 4.1 — …" over a table screenshot and "Hình 3.1. …" over a
+    diagram. Chapter 4 embeds the student's own SmartPLS screenshots, so table
+    captions are no longer the rare case they were when this only ever placed
+    the research-model figure.
+    """
     from pathlib import Path as _P
     from docx.shared import Inches as _Inches
     from docx.enum.text import WD_ALIGN_PARAGRAPH as _AL
     p = _P(path)
     if not p.exists():
         return False
-    para = doc.add_paragraph()
-    para.alignment = _AL.CENTER
-    para.add_run().add_picture(str(p), width=_Inches(6.0))
-    if caption:
+
+    def _add_caption():
         cap = doc.add_paragraph()
         cap.alignment = _AL.CENTER
         r = cap.add_run(caption)
         r.italic = True
         r.font.size = _docx_pt(10)
+
+    is_table = bool(caption and _TABLE_CAPTION_RE.match(caption))
+    if caption and is_table:
+        _add_caption()
+    para = doc.add_paragraph()
+    para.alignment = _AL.CENTER
+    para.add_run().add_picture(str(p), width=_Inches(6.0))
+    if caption and not is_table:
+        _add_caption()
     return True
 
 
@@ -927,6 +946,16 @@ def export_docx_basic(md_file: Path, output_docx: Path) -> bool:
 
             # Blank
             if not line.strip():
+                i += 1
+                continue
+
+            # HTML comments are internal markup, never document content. The
+            # results renderer brackets every verified table in
+            # `<!--dt-rendered:begin …-->` sentinels so the coherence and
+            # similarity checkers can tell a computed table from a typed one.
+            # Without this branch those sentinels print into Word as body text,
+            # and the one sharing a line with the caption swallows the caption.
+            if line.strip().startswith("<!--"):
                 i += 1
                 continue
 
