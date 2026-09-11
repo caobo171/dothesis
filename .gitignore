@@ -108,3 +108,15 @@ engine/tools/mermaid_cli/*.svg
 # every `app.blog.content.cli write` run — the committed artefacts are
 # docs/blog-index.md and the backlog TSVs, not the seeds themselves.
 api/data/
+
+# Scratch research corpora (~840MB: fillform-support-corpus and friends). These
+# are INPUTS someone pulled down to analyse, not artefacts the build needs, and
+# git keeps every byte forever once committed. The conclusions drawn from them
+# belong in docs/research/ as prose; the raw dumps stay local.
+research/
+
+# Yarn's local cache/release dir (~190MB of zipped deps). The deploy installs
+# with `npm ci` (script.sh), so this is not the lockfile the build reads — it is
+# a leftover of the in-progress yarn migration. Committing it would put a second
+# package manager's cache in the repo while npm remains the one that ships.
+web/.yarn/
