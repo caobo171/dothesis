@@ -116,14 +116,15 @@ def checkout(
 @router.post("/polar/webhook")
 async def polar_webhook(
     request: Request,
-    x_polar_signature: str | None = Header(default=None, alias="X-Polar-Signature"),
     db: Session = Depends(db_session),
 ):
     payload = await request.body()
-    if not x_polar_signature:
-        raise HTTPException(400, detail={"error": {"code": "missing_signature"}})
+    # The whole header mapping: Polar's signature covers
+    # `{webhook-id}.{webhook-timestamp}.{body}`, so the id and timestamp are
+    # part of the verification, not decoration. Pulling out one header was what
+    # made this unverifiable against real deliveries.
     try:
-        verify_webhook(payload, x_polar_signature)
+        verify_webhook(payload, request.headers)
     except PolarError as e:
         raise HTTPException(400, detail={"error": {"code": "bad_signature", "message": str(e)}})
 

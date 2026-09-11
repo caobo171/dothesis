@@ -37,6 +37,17 @@ class Settings(BaseSettings):
     polar_access_token: str = Field(alias="POLAR_ACCESS_TOKEN", default="")
     polar_webhook_secret: str = Field(alias="POLAR_WEBHOOK_SECRET", default="")
     polar_server: str = Field(alias="POLAR_SERVER", default="sandbox")
+    # `pricing.PACKAGES` id -> Polar product UUID, as "starter_package=uuid,...".
+    #
+    # Config rather than a constant in pricing.py because the UUIDs are minted per
+    # Polar environment: sandbox and production issue different ids for the same
+    # pack, so hardcoding either one makes the other unusable. Empty is the correct
+    # dev value — `_is_dummy` short-circuits before any lookup.
+    #
+    # Deliberately does NOT carry credits or price. Polar owns the dollar amount,
+    # `pricing.PACKAGES` owns the credits, and keeping them apart means re-tuning
+    # credits is a code change with no vendor round trip.
+    polar_product_ids: str = Field(alias="POLAR_PRODUCT_IDS", default="")
     dothesis_base_url: str = Field(alias="DOTHESIS_BASE_URL", default="http://localhost:3000")
     # Comma-separated providers offered to users (e.g. "polar,paypal"). SePay is
     # always added on top for UTC+7 users when configured. "dummy" forces every
