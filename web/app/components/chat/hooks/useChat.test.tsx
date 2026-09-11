@@ -134,3 +134,56 @@ describe("useChat", () => {
     });
   });
 });
+
+
+describe("useChat — attachments settle after the optimistic paint", () => {
+  test("shows the message with its chip immediately, then sends the real upload id", async () => {
+    let posted: { upload_ids?: string[] } = {};
+    server.use(
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),
+      http.post("/api/v1/threads/t1/messages", async ({ request }) => {
+        posted = await request.json() as { upload_ids?: string[] };
+        return streamResponse(['data: {"type":"done"}\n\n']);
+      }),
+    );
+
+    const { result } = renderHook(() => useChat("t1"), { wrapper });
+    await waitFor(() => expect(result.current.messages).toEqual([]));
+
+    // The upload hasn't landed when send is called — the chip has no id yet.
+    const chips = [{ upload_id: "", filename: "_Result.docx", size_bytes: 299_000 }];
+    await act(async () => {
+      await result.current.send("kết quả smartpls", undefined, chips,
+        async () => [{ upload_id: "u-real", filename: "_Result.docx", size_bytes: 299_000 }]);
+    });
+
+    // The POST waited for the real id rather than sending the empty one.
+    expect(posted.upload_ids).toEqual(["u-real"]);
+  });
+
+  test("a failed upload takes the optimistic message back instead of sending a fileless one", async () => {
+    let called = false;
+    server.use(
+      http.post("*/api/v1/threads/t1/messages/list", () => HttpResponse.json([])),
+      http.post("/api/v1/threads/t1/messages", () => {
+        called = true;
+        return streamResponse(['data: {"type":"done"}\n\n']);
+      }),
+    );
+
+    const { result } = renderHook(() => useChat("t1"), { wrapper });
+    await waitFor(() => expect(result.current.messages).toEqual([]));
+
+    await act(async () => {
+      await result.current.send(
+        "đây là file kết quả", undefined,
+        [{ upload_id: "", filename: "_Result.docx", size_bytes: 299_000 }],
+        async () => { throw new Error("upload_failed"); },
+      );
+    });
+
+    expect(called).toBe(false);                       // nothing was sent
+    expect(result.current.messages).toEqual([]);      // the bubble was rolled back
+    expect(result.current.error?.message).toMatch(/tải lên không thành công/);
+  });
+});

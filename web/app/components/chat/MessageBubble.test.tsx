@@ -28,10 +28,14 @@ describe("MessageBubble", () => {
     expect(el.closest("[data-role='user']")).toBeTruthy();
   });
 
-  test("renders assistant role on the left with module tag", () => {
+  // The module chip is deliberately gone: DoThesis is one assistant, and
+  // labelling a reply "M2" read as a different agent taking the conversation
+  // over. The tag is still accepted (routing still uses it) — it just isn't
+  // rendered.
+  test("renders the assistant reply without announcing the internal module", () => {
     render(<MessageBubble role="assistant" content="hi" moduleTag="M2" />);
     expect(screen.getByText("hi")).toBeTruthy();
-    expect(screen.getByText("M2")).toBeTruthy();
+    expect(screen.queryByText("M2")).toBeNull();
   });
 
   test("system messages render distinct style", () => {

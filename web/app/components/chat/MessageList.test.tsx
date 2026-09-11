@@ -12,13 +12,16 @@ describe("MessageList", () => {
     render(<MessageList messages={messages} streamingText="" streamingModuleTag={null} />);
     expect(screen.getByText("Hello")).toBeTruthy();
     expect(screen.getByText("Hi back")).toBeTruthy();
-    expect(screen.getByText("M1")).toBeTruthy();
+    // `module_tag` still rides along with the message and still drives routing,
+    // but it is no longer painted above the reply — DoThesis is one assistant,
+    // and an "M1" chip read as a hand-off to a different one.
+    expect(screen.queryByText("M1")).toBeNull();
   });
 
   test("renders streaming bubble when streamingText set", () => {
     render(<MessageList messages={[]} streamingText="streaming reply" streamingModuleTag="M2" />);
     expect(screen.getByText("streaming reply")).toBeTruthy();
-    expect(screen.getByText("M2")).toBeTruthy();
+    expect(screen.queryByText("M2")).toBeNull();
   });
 
   test("renders ProgressBubble when in-flight with progress but no tokens yet", () => {

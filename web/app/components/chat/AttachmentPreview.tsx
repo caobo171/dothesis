@@ -35,13 +35,76 @@ function polishDocxPreview(root: HTMLElement) {
   }
 }
 
-function _kindOf(meta: AttachmentChipMeta): "pdf" | "docx" | "plain" {
+/** Scale the rendered page down until it fits the canvas, and keep it fitting.
+ *
+ *  `ignoreWidth: false` (below) is deliberate — it gives `section.docx` the
+ *  document's REAL page width, which is the whole point of this tab. But that
+ *  width is a constant: an A4 page is 794px plus the wrapper's padding, ~906px
+ *  in total, and nothing ever reduced it. Any canvas narrower than that — a
+ *  smaller window, a split screen, or just browser zoom, which shrinks the CSS
+ *  viewport — clipped the right-hand side of the student's document. Measured
+ *  before this fix: a 780px modal overflowed by 144px, a 560px one by 364px,
+ *  at every zoom level, with `min-width: max-content` in globals.css
+ *  guaranteeing the canvas could never shrink to compensate.
+ *
+ *  Scaling rather than reflowing is the point. Dropping `ignoreWidth` would let
+ *  paragraphs and tables re-wrap to the panel, which answers a DIFFERENT
+ *  question than "what does my Word file look like" — the line breaks and table
+ *  widths would stop matching what the student sees in Word, which is exactly
+ *  what they opened this to check.
+ *
+ *  The zoom is applied to `.docx-wrapper` while the intrinsic width is read
+ *  from it once, at zoom 1. Reading it back after a zoom would feed the scale
+ *  into its own input and converge on garbage.
+ */
+function fitDocxToWidth(host: HTMLElement): () => void {
+  const wrapper = host.querySelector<HTMLElement>(".docx-wrapper");
+  const canvas = host.parentElement;
+  if (!wrapper || !canvas) return () => {};
+
+  wrapper.style.removeProperty("zoom");
+  const intrinsic = wrapper.scrollWidth;
+  if (!intrinsic) return () => {};
+
+  const apply = () => {
+    // Floor at 0.4: past that the text is unreadable, and a horizontal scroll
+    // the student can drag beats a page they cannot read at all.
+    const scale = Math.max(0.4, Math.min(1, canvas.clientWidth / intrinsic));
+    wrapper.style.zoom = String(scale);
+  };
+  apply();
+
+  // The canvas resizes without the component re-rendering — window resize, the
+  // context panel opening, a zoom change — so a one-shot fit would go stale.
+  const ro = new ResizeObserver(apply);
+  ro.observe(canvas);
+  return () => ro.disconnect();
+}
+
+type Kind = "pdf" | "docx" | "data" | "plain";
+
+function _kindOf(meta: AttachmentChipMeta): Kind {
   const name = (meta.filename || "").toLowerCase();
   const mime = (meta.mime_type || "").toLowerCase();
   if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf";
   if (name.endsWith(".docx") || mime.includes("wordprocessingml")) return "docx";
+  if (/\.(csv|xlsx|xls|sav)$/.test(name)) return "data";
   return "plain";
 }
+
+/** Only these two have something to render as a document. Everything else has
+ *  exactly one useful view — the extracted text — so offering a "Tài liệu" tab
+ *  just routes the student to docx-preview choking on a spreadsheet. */
+function _hasDocumentView(kind: Kind): boolean {
+  return kind === "pdf" || kind === "docx";
+}
+
+const _SUBTITLE: Record<Kind, string> = {
+  pdf: "PDF preview",
+  docx: "Word document preview",
+  data: "Bộ dữ liệu — xem cấu trúc bên dưới",
+  plain: "Văn bản",
+};
 
 /** The file as the student wrote it. PDFs go to the browser's own viewer;
  *  .docx is converted to HTML client-side (mammoth), which keeps headings and
@@ -55,6 +118,9 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
 
   useEffect(() => {
     let alive = true;
+    // Holds the ResizeObserver disposer from fitDocxToWidth. Assigned inside the
+    // async body, so cleanup has to read it from here rather than return it.
+    let stopFit: (() => void) | undefined;
     (async () => {
       try {
         const url = await uploadViewUrl(meta.upload_id);
@@ -95,6 +161,7 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
           experimental: true,     // needed for some table/border cases
         });
         polishDocxPreview(host.current);
+        stopFit = fitDocxToWidth(host.current);
         if (alive) setBusy(false);
       } catch {
         if (alive) {
@@ -103,7 +170,7 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
         }
       }
     })();
-    return () => { alive = false; };
+    return () => { alive = false; stopFit?.(); };
   }, [meta.upload_id, kind]);
 
   if (error) return <p className="text-[13px] text-[#7A5B2E]">{error}</p>;
@@ -183,8 +250,10 @@ export function AttachmentPreview({
   meta: AttachmentChipMeta;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>(_kindOf(meta) === "plain" ? "text" : "document");
-  const documentCanvas = tab === "document" && _kindOf(meta) !== "plain";
+  const kind = _kindOf(meta);
+  const hasDocumentView = _hasDocumentView(kind);
+  const [tab, setTab] = useState<Tab>(hasDocumentView ? "document" : "text");
+  const documentCanvas = tab === "document" && hasDocumentView;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -217,13 +286,19 @@ export function AttachmentPreview({
           </span>
           <div className="min-w-0">
             <div className="truncate text-[13.5px] font-semibold text-ink-900">{meta.filename}</div>
-            <div className="text-[11px] text-ink-400">Word document preview</div>
+            {/* `truncate` here too. The filename had it and the subtitle did
+                not, so in a cramped header the filename stayed on one line
+                while "Word document preview" wrapped to three and shoved
+                itself under the tabs — measured at 460px and below. */}
+            <div className="truncate text-[11px] text-ink-400">{_SUBTITLE[kind]}</div>
           </div>
           <span className="flex-1" />
           <div className="flex items-center gap-1 shrink-0">
-            <button type="button" onClick={() => setTab("document")} className={tabCls("document")}>
-              Tài liệu
-            </button>
+            {hasDocumentView && (
+              <button type="button" onClick={() => setTab("document")} className={tabCls("document")}>
+                Tài liệu
+              </button>
+            )}
             {/* Named for what it is: the text the agent read, not a second copy
                 of the document. */}
             <button type="button" onClick={() => setTab("text")} className={tabCls("text")}>

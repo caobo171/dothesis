@@ -2,10 +2,66 @@
 import { useEffect, useState, useCallback } from "react";
 
 import { apiFetch } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
+import type { MessageKey } from "@/app/lib/i18n/messages/en";
+
+/**
+ * Backend id -> message key, written out rather than built as
+ * `roadmap.substep.${id}`.
+ *
+ * A template literal is not a MessageKey, so the whole point of the typed
+ * catalogue — a missing translation failing the BUILD — would be lost, and a
+ * new spine step would reach a student as the raw key instead. Spelled out,
+ * `tsc` rejects a typo here and an id with no entry falls back to the English
+ * label the API already sends.
+ */
+const SUBSTEP_KEY: Record<string, MessageKey> = {
+  frame_topic: "roadmap.substep.frame_topic",
+  propose_titles: "roadmap.substep.propose_titles",
+  confirm_title: "roadmap.substep.confirm_title",
+  derive_questions: "roadmap.substep.derive_questions",
+  familiarize: "roadmap.substep.familiarize",
+  map_research_state: "roadmap.substep.map_research_state",
+  find_gaps: "roadmap.substep.find_gaps",
+  generate_output: "roadmap.substep.generate_output",
+  define_constructs: "roadmap.substep.define_constructs",
+  build_model: "roadmap.substep.build_model",
+  state_hypotheses: "roadmap.substep.state_hypotheses",
+  choose_method: "roadmap.substep.choose_method",
+  design_instrument: "roadmap.substep.design_instrument",
+  detect_data: "roadmap.substep.detect_data",
+  outline_analysis: "roadmap.substep.outline_analysis",
+  confirm_plan: "roadmap.substep.confirm_plan",
+  run_per_step: "roadmap.substep.run_per_step",
+  interpret: "roadmap.substep.interpret",
+  write_conclusion: "roadmap.substep.write_conclusion",
+  export: "roadmap.substep.export",
+};
+
+export const MODULE_KEY: Record<string, MessageKey> = {
+  M1: "roadmap.module.M1", M2: "roadmap.module.M2", M3: "roadmap.module.M3",
+  M4: "roadmap.module.M4", M5: "roadmap.module.M5",
+};
+
+/** Localized step label, falling back to whatever the API called it. */
+export function useSubstepLabel() {
+  const t = useT();
+  return (sub: { id: string; label: string }) => {
+    const key = SUBSTEP_KEY[sub.id];
+    return key ? t(key) : sub.label;
+  };
+}
 
 export type Sub = { id: string; label: string; state: "done" | "current" | "upcoming" };
 export type Mod = { id: string; status: string; current: string | null; substeps: Sub[] };
-type NextAction = { module: string; substep: string; title: string; why: string; cta_options: string[] };
+type NextKind = "blocker" | "substep" | "confirm_module" | "next_module" | "all_done";
+// `title` / `why` / `cta_options` are the API's English strings. They stay in
+// the type because a `blocker` is agent-authored prose with no translation to
+// find, and because an older API without `kind` must still render.
+type NextAction = {
+  kind?: NextKind; module: string; substep: string;
+  title: string; why: string; cta_options: string[];
+};
 // F11: progress-vs-plan. {} (no keys) when the student hasn't set a defense date.
 type Timeline = { this_week?: string; on_track?: boolean; weeks_behind?: number };
 type Roadmap = {
@@ -67,12 +123,67 @@ export function useRoadmap(projectId: string | undefined, refreshKey = 0, interv
 }
 
 
+/**
+ * Rebuild the Next card in the reader's language from `kind` + the ids.
+ *
+ * The API composes an English sentence ("M3 has all its content — confirm it so
+ * we move on"). That string is still needed there — the per-turn [NEXT] prompt
+ * and the headless/partner surfaces read it — so it is not translated at the
+ * source; it is RE-composed here from the same parts.
+ *
+ * A `blocker` is the deliberate exception: its title and why are written by the
+ * agent for one situation, so there is no key to look up and the English is
+ * passed through. Only its CTAs, which are fixed, get translated.
+ */
+function useNextCopy() {
+  const t = useT();
+  const substepLabel = useSubstepLabel();
+  return (na: NextAction) => {
+    const m = na.module;
+    const mod = MODULE_KEY[m] ? t(MODULE_KEY[m]) : m;
+    // Module CTAs read better with the bare id ("Start M4") than the full
+    // title ("Start M4 · Analysis"), so those interpolate `m`, not `mod`.
+    const step = na.substep
+      ? substepLabel({ id: na.substep, label: na.title })
+      : na.title;
+    switch (na.kind) {
+      case "substep":
+        return { title: step, why: t("roadmap.next.why.substep"),
+                 ctas: [step, t("roadmap.next.cta.skipModule")] };
+      case "confirm_module":
+        return { title: t("roadmap.next.title.confirm", { module: m }),
+                 why: t("roadmap.next.why.confirm", { module: mod }),
+                 ctas: [t("roadmap.next.cta.markDone", { module: m }),
+                        t("roadmap.next.cta.notYet")] };
+      case "next_module":
+        return { title: step,
+                 why: t("roadmap.next.why.nextModule", { focus: na.module, module: mod }),
+                 ctas: [t("roadmap.next.cta.start", { module: m }),
+                        t("roadmap.next.cta.whatInvolves", { module: m })] };
+      case "all_done":
+        return { title: t("roadmap.next.title.allDone"),
+                 why: t("roadmap.next.why.allDone"),
+                 ctas: [t("roadmap.next.cta.export"), t("roadmap.next.cta.defense"),
+                        t("roadmap.next.cta.review")] };
+      case "blocker":
+        return { title: na.title, why: na.why,
+                 ctas: [t("roadmap.next.cta.fix"), t("roadmap.next.cta.skipForNow")] };
+      default:
+        // No `kind`: an API older than this panel. Render what it sent.
+        return { title: na.title, why: na.why, ctas: na.cta_options };
+    }
+  };
+}
+
 export function RoadmapPanel({
   data, onSendMessage,
 }: { data: Roadmap | null; onSendMessage?: (text: string) => void }) {
+  const t = useT();
+  const nextCopy = useNextCopy();
   if (!data) return null;
   const na = data.next_action as NextAction;
   const hasNext = na && "title" in na;
+  const copy = hasNext ? nextCopy(na) : null;
 
   return (
     <div className="flex flex-col gap-3" data-testid="roadmap-panel">
@@ -80,21 +191,31 @@ export function RoadmapPanel({
           timeline (defense date set) — keeps the plan visible every session. */}
       {data.timeline?.this_week && (
         <div className="rounded-xl border border-ink-200 p-3 text-[12.5px]" data-testid="timeline-card">
-          <div className="font-semibold text-ink-800">This week: {data.timeline.this_week}</div>
+          <div className="font-semibold text-ink-800">
+            {t("roadmap.timeline.thisWeek", { what: data.timeline.this_week })}
+          </div>
           <div className={data.timeline.on_track ? "text-green-600" : "text-amber-600"}>
-            {data.timeline.on_track ? "On track" : `~${data.timeline.weeks_behind} week(s) behind`}
+            {data.timeline.on_track
+              ? t("roadmap.timeline.onTrack")
+              : t("roadmap.timeline.behind", { weeks: data.timeline.weeks_behind ?? 0 })}
           </div>
         </div>
       )}
       {hasNext && (
         <div className="rounded-xl border border-primary-200 bg-primary-50 p-3">
-          <div className="text-[10.5px] uppercase tracking-[0.08em] text-primary-700 font-semibold">Next</div>
-          <div className="text-[13.5px] font-semibold text-ink-900 mt-1">{na.title}</div>
-          <div className="text-[12px] text-ink-600 mt-0.5">{na.why}</div>
+          <div className="text-[10.5px] uppercase tracking-[0.08em] text-primary-700 font-semibold">
+            {t("roadmap.next.label")}
+          </div>
+          <div className="text-[13.5px] font-semibold text-ink-900 mt-1">{copy!.title}</div>
+          <div className="text-[12px] text-ink-600 mt-0.5">{copy!.why}</div>
           {onSendMessage && (
             <div className="flex flex-wrap gap-1.5 mt-2">
-              {na.cta_options.map((c) => (
-                <button key={c} type="button" onClick={() => onSendMessage(c)}
+              {copy!.ctas.map((c, i) => (
+                // Send the API's original English: the agent's [NEXT] contract
+                // and its tool routing are written against those exact phrases,
+                // so translating the wire message would break the click.
+                <button key={c} type="button"
+                  onClick={() => onSendMessage(na.cta_options[i] ?? c)}
                   className="px-2.5 py-1 rounded-full bg-primary-600 text-white text-[12px] font-semibold hover:bg-primary-700">
                   {c}
                 </button>
@@ -121,6 +242,8 @@ export function RoadmapPanel({
  * expanding the card shows them in full (see StepList).
  */
 export function StepBar({ substeps }: { substeps: Sub[] }) {
+  const t = useT();
+  const label = useSubstepLabel();
   if (!substeps.length) return null;
   const done = substeps.filter(s => s.state === "done").length;
   const pct = Math.round((done / substeps.length) * 100);
@@ -130,7 +253,7 @@ export function StepBar({ substeps }: { substeps: Sub[] }) {
       className="inline-flex items-center gap-1.5 shrink-0"
       // Hover detail without spending vertical space on it.
       title={substeps.map(s =>
-        `${s.state === "done" ? "✓" : s.state === "current" ? "▸" : "·"} ${s.label}`
+        `${s.state === "done" ? "✓" : s.state === "current" ? "▸" : "·"} ${label(s)}`
       ).join("\n")}
     >
       <span className="w-14 h-1 rounded-full bg-ink-100 overflow-hidden" aria-hidden>
@@ -144,7 +267,9 @@ export function StepBar({ substeps }: { substeps: Sub[] }) {
         {done}/{substeps.length}
       </span>
       <span className="sr-only">
-        {current ? `Current step: ${current.label}` : `${done} of ${substeps.length} steps done`}
+        {current
+          ? t("roadmap.steps.current", { label: label(current) })
+          : t("roadmap.steps.done", { done, total: substeps.length })}
       </span>
     </span>
   );
@@ -153,6 +278,7 @@ export function StepBar({ substeps }: { substeps: Sub[] }) {
 
 /** The full sub-step list, shown when the module card is expanded. */
 export function StepList({ substeps }: { substeps: Sub[] }) {
+  const label = useSubstepLabel();
   if (!substeps.length) return null;
   return (
     <ul className="flex flex-col gap-0.5 mb-2.5 pb-2.5 border-b border-ink-100">
@@ -161,7 +287,7 @@ export function StepList({ substeps }: { substeps: Sub[] }) {
           s.state === "done" ? "text-ink-400"
           : s.state === "current" ? "text-primary-700 font-semibold"
           : "text-ink-500"}`}>
-          {s.state === "done" ? "✓ " : s.state === "current" ? "▸ " : "· "}{s.label}
+          {s.state === "done" ? "✓ " : s.state === "current" ? "▸ " : "· "}{label(s)}
         </li>
       ))}
     </ul>

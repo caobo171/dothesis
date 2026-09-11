@@ -95,3 +95,84 @@ def test_completed_substep_reads_done_even_when_an_earlier_one_is_current(monkey
     assert m1_steps["frame_topic"] == "done"
     assert m1_steps["derive_questions"] == "done"
     assert m1["current"] is None
+
+
+# --- M3 "complete but 3/5" ------------------------------------------------
+#
+# Reported from a real project: the panel showed M3 at 3/5 with "Design the
+# instrument" not started, while the NEXT card said "M3 has all its content —
+# confirm it so we move on". Both read the same state, so one was lying.
+
+def _m3(instrument):
+    return {"focus": "M3",
+            "status": {"M1": "done", "M2": "done", "M3": "in_progress",
+                       "M4": "locked", "M5": "locked"},
+            "contextStore": {
+                "conceptual_model": {"constructs": ["ATT", "DEC"], "edges": [["ATT", "DEC"]]},
+                "hypotheses": [{"id": "H1"}],
+                "methodology": {"paradigm": "positivist", "design": "cross-sectional survey"},
+                "instrument": instrument,
+            }}
+
+
+# What the real project holds: a DESCRIPTION of the questionnaire — how many
+# items per construct, which scale, "source: user-provided Word document" —
+# and not one item of actual text.
+_SPEC_ONLY = {"scale": "Five-point Likert scale", "language": "vi-en",
+              "constructs": ["ATT", "DEC"], "items_per_construct": {"ATT": 5, "DEC": 5},
+              "source": "User-provided bilingual questionnaire in attached Word document"}
+
+# The canonical shape m3_contract.normalize_instrument produces.
+_WITH_ITEMS = {"scale": "Five-point Likert scale",
+               "items": [{"construct": "ATT", "text": "Tôi thấy nội dung du lịch hấp dẫn."},
+                         {"construct": "DEC", "text": "Tôi dự định đặt chuyến đi."}]}
+
+
+def test_a_spec_without_items_is_not_a_finished_instrument():
+    """Presence of the key is not the deliverable.
+
+    A spec dict is truthy, so a bare `cs.get("instrument")` marked the step
+    done — while preflight_check, reading the same slice, reported "M3 — no
+    questionnaire instrument yet". The roadmap must use preflight's rule.
+    """
+    from agent.roadmap import satisfied_substeps
+    assert "design_instrument" not in satisfied_substeps("M3", _m3(_SPEC_ONLY))
+
+
+def test_real_items_do_finish_the_step():
+    from agent.roadmap import satisfied_substeps
+    assert "design_instrument" in satisfied_substeps("M3", _m3(_WITH_ITEMS))
+
+
+def test_spec_only_keeps_designing_the_instrument_as_the_next_step(monkeypatch):
+    """The honest rendering of the reported project: 4/5, with the instrument
+    step current — NOT a card claiming M3 has all its content."""
+    body = _client(monkeypatch, _m3(_SPEC_ONLY)).post("/api/v1/projects/abc/roadmap").json()
+    m3 = next(m for m in body["modules"] if m["id"] == "M3")
+    steps = {s["id"]: s["state"] for s in m3["substeps"]}
+    assert steps["design_instrument"] == "current"
+    assert body["next_action"]["title"] == "Design the instrument"
+    assert "has all its content" not in body["next_action"]["why"]
+
+
+def test_no_step_is_current_once_every_artifact_is_in(monkeypatch):
+    """With nothing left to produce, no step may be painted "current".
+
+    `_substep_states` fell back to idx=0 whenever `current` was None, which
+    marked the FIRST step current — so "Define constructs" glowed as the next
+    action while the three steps BELOW it were already ticked.
+    """
+    c = _client(monkeypatch, _m3(_WITH_ITEMS))
+    m3 = next(m for m in c.post("/api/v1/projects/abc/roadmap").json()["modules"] if m["id"] == "M3")
+    assert [s["state"] for s in m3["substeps"]].count("current") == 0
+    assert m3["current"] is None
+
+
+def test_the_panel_and_the_next_card_agree(monkeypatch):
+    """The original bug in one assertion: "has all its content" must mean every
+    step reads done, not "every step I happened to map an artifact for"."""
+    body = _client(monkeypatch, _m3(_WITH_ITEMS)).post("/api/v1/projects/abc/roadmap").json()
+    m3 = next(m for m in body["modules"] if m["id"] == "M3")
+    done = sum(1 for s in m3["substeps"] if s["state"] == "done")
+    assert body["next_action"]["title"] == "Confirm M3 is done"
+    assert done == len(m3["substeps"]), f"card says complete, panel says {done}/{len(m3['substeps'])}"

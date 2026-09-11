@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import useSWR, { mutate as globalMutate } from "swr";
 import { useStream } from "./useStream";
 import type { WidgetHint } from "../widgets/types";
@@ -104,6 +104,10 @@ export function useChat(threadId: string) {
     .map(e => (e as unknown as { message: string }).message)
     .at(-1) ?? null;
 
+  // An attachment that never uploaded fails the send before any request is
+  // made, so it has no stream event to ride on and needs its own slot.
+  const [uploadError, setUploadError] = useState<Error | null>(null);
+
   const send = async (
     text: string,
     // Structured payload from a rich-widget click (FlowChart, ListEditor).
@@ -120,7 +124,13 @@ export function useChat(threadId: string) {
     // Message row (chat_v3.send_message_v3 + Message.tool_calls_json),
     // so SWR revalidation is a no-op for the chip render path.
     attachments?: { upload_id: string; filename: string; size_bytes: number; mime_type?: string }[],
+    // Resolves to the same chips carrying real upload ids, once the uploads
+    // land. Awaited AFTER the optimistic paint below and before the POST that
+    // needs the ids — so a .docx whose extraction takes minutes (see
+    // api/app/routers/uploads.py) never holds the composer or the bubble.
+    settleUploads?: () => Promise<{ upload_id: string; filename: string; size_bytes: number }[]>,
   ) => {
+    setUploadError(null);
     // Optimistic update: show user message immediately before server confirms
     const optimistic: Message = {
       id: -Date.now(),
@@ -150,6 +160,25 @@ export function useChat(threadId: string) {
       ? `${apiBase}/threads/${threadId}/messages`
       : `/api/v1/threads/${threadId}/messages`;
     const accessToken = tokenStore.get();
+
+    // The bubble is already on screen; NOW wait for the ids it referred to.
+    // All-or-nothing: sending with the uploads that happened to finish is how a
+    // message ended up claiming a file it never carried.
+    let sending = attachments ?? [];
+    if (settleUploads) {
+      try {
+        sending = await settleUploads();
+      } catch {
+        awaitingAssistantRef.current = null;
+        void mutate(messages ?? [], false);   // take the optimistic bubble back
+        setUploadError(new Error(
+          "Tệp đính kèm tải lên không thành công — tin nhắn chưa được gửi. " +
+          "Bạn thử đính kèm lại nhé.",
+        ));
+        return;
+      }
+    }
+
     try {
       await stream.start(streamUrl, {
         method: "POST",
@@ -157,7 +186,7 @@ export function useChat(threadId: string) {
         body: JSON.stringify({
           text,
           widget_payload: widgetPayload ?? null,
-          upload_ids: (attachments ?? []).map(a => a.upload_id),
+          upload_ids: sending.map(a => a.upload_id),
           access_token: accessToken,
         }),
       });
@@ -196,7 +225,9 @@ export function useChat(threadId: string) {
     streamingProgress,
     streamingError,
     inflight: stream.state.inflight,
-    error: stream.state.error,
+    // An upload that failed is a send that failed, even though no request was
+    // made — surface it through the same banner the stream's errors use.
+    error: uploadError ?? stream.state.error,
     send,
   };
 }

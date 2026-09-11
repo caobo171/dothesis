@@ -7,6 +7,7 @@ const apiFetch = vi.fn();
 vi.mock("@/app/lib/api", () => ({ apiFetch: (...a: any[]) => apiFetch(...a) }));
 
 import { RoadmapPanel, StepBar, StepList, useRoadmap } from "./RoadmapPanel";
+import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
 
 const FIXTURE = {
   modules: [{ id: "M1", status: "in_progress", current: "derive_questions",
@@ -18,6 +19,15 @@ const FIXTURE = {
     cta_options: ["Derive research questions", "Skip to next module"] },
 };
 
+
+// These components read the locale catalogue, and useLocale() throws outside a
+// provider. Pinned to "en" (the app default is "vi") so the assertions below
+// keep asserting BEHAVIOUR — which step is current, what the panel shows — and
+// don't quietly become a test of the Vietnamese copy.
+function renderEn(ui: React.ReactElement) {
+  return render(<LocaleProvider initialLocale="en">{ui}</LocaleProvider>);
+}
+
 describe("RoadmapPanel", () => {
   beforeEach(() => {
     apiFetch.mockReset();
@@ -26,7 +36,7 @@ describe("RoadmapPanel", () => {
 
   test("renders the Next card and posts a CTA to chat", async () => {
     const onSend = vi.fn();
-    render(<RoadmapPanel data={FIXTURE as any} onSendMessage={onSend} />);
+    renderEn(<RoadmapPanel data={FIXTURE as any} onSendMessage={onSend} />);
     // getByText was ambiguous here — the Next card's TITLE and its CTA button
     // carry the same string, so it matched two nodes and threw. Ask for the
     // button, which is what this test is actually about.
@@ -36,13 +46,13 @@ describe("RoadmapPanel", () => {
   });
 
   test("without onSendMessage the panel is read-only (no CTA buttons)", async () => {
-    render(<RoadmapPanel data={FIXTURE as any} />);
+    renderEn(<RoadmapPanel data={FIXTURE as any} />);
     await waitFor(() => screen.getByTestId("roadmap-panel"));
     expect(screen.queryByRole("button")).toBeNull();
   });
 
   test("renders the F11 timeline card with an on-track/behind badge", async () => {
-    render(<RoadmapPanel data={{
+    renderEn(<RoadmapPanel data={{
       ...FIXTURE,
       timeline: { this_week: "Data analysis", on_track: false, weeks_behind: 2 },
     } as any} />);
@@ -52,7 +62,7 @@ describe("RoadmapPanel", () => {
   });
 
   test("no timeline card when the plan is absent", async () => {
-    render(<RoadmapPanel data={FIXTURE as any} />); // no `timeline` key
+    renderEn(<RoadmapPanel data={FIXTURE as any} />); // no `timeline` key
     await waitFor(() => screen.getByTestId("roadmap-panel"));
     expect(screen.queryByTestId("timeline-card")).toBeNull();
   });
@@ -70,12 +80,12 @@ describe("module sub-steps on the module card", () => {
     // It used to render every module's sub-steps here AND again as cards
     // below — on a finished thesis, 23 struck-through lines of scroll for
     // information already on screen. The Next card stays; the lists moved.
-    render(<RoadmapPanel data={FIXTURE as any} />);
+    renderEn(<RoadmapPanel data={FIXTURE as any} />);
     expect(screen.queryByText("Frame the topic")).toBeNull();
   });
 
   test("StepBar states the progress and keeps the steps on hover", () => {
-    const { container } = render(<StepBar substeps={SUBS} />);
+    const { container } = renderEn(<StepBar substeps={SUBS} />);
     expect(screen.getByText("2/4")).toBeTruthy();
     // The detail is not lost, it just costs no vertical space until wanted.
     const title = container.querySelector("[title]")?.getAttribute("title") ?? "";
@@ -84,12 +94,12 @@ describe("module sub-steps on the module card", () => {
   });
 
   test("StepBar renders nothing when a module has no steps", () => {
-    const { container } = render(<StepBar substeps={[]} />);
+    const { container } = renderEn(<StepBar substeps={[]} />);
     expect(container.firstChild).toBeNull();
   });
 
   test("StepList shows every step in full for the expanded card", () => {
-    render(<StepList substeps={SUBS} />);
+    renderEn(<StepList substeps={SUBS} />);
     for (const s of SUBS) expect(screen.getByText(new RegExp(s.label))).toBeTruthy();
   });
 });
@@ -135,5 +145,74 @@ describe("useRoadmap", () => {
     unmount();
     await act(async () => { vi.advanceTimersByTime(60_000); });
     expect(apiFetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("i18n", () => {
+  const M3_STEPS = [
+    { id: "choose_method", label: "Choose the method", state: "done" as const },
+    { id: "design_instrument", label: "Design the instrument", state: "current" as const },
+  ];
+
+  test("the questionnaire step is never shown to a student as 'instrument'", () => {
+    // The report that started this: "instrument" is correct methodology English
+    // and the right STORAGE key, but on a checklist a student reads it as lab
+    // equipment. Both locales must name the thing they actually build.
+    render(<LocaleProvider initialLocale="vi"><StepList substeps={M3_STEPS} /></LocaleProvider>);
+    expect(screen.getByText(/Xây dựng thang đo/)).toBeTruthy();
+    expect(screen.queryByText(/instrument/i)).toBeNull();
+  });
+
+  test("English says questionnaire, not instrument", () => {
+    render(<LocaleProvider initialLocale="en"><StepList substeps={M3_STEPS} /></LocaleProvider>);
+    expect(screen.getByText(/Build the questionnaire/)).toBeTruthy();
+    expect(screen.queryByText(/instrument/i)).toBeNull();
+  });
+
+  test("an unknown step id falls back to the label the API sent", () => {
+    // A spine step added to agent/roadmap.py before this catalogue catches up
+    // must still read as words, not as a raw message key.
+    render(
+      <LocaleProvider initialLocale="vi">
+        <StepList substeps={[{ id: "brand_new_step", label: "Some new step", state: "current" }]} />
+      </LocaleProvider>,
+    );
+    expect(screen.getByText(/Some new step/)).toBeTruthy();
+  });
+
+  test("the Next card is rebuilt in Vietnamese from kind, not echoed from the API", () => {
+    const data = {
+      modules: [], tasks: [],
+      next_action: {
+        kind: "confirm_module", module: "M3", substep: "",
+        title: "Confirm M3 is done",
+        why: "M3 has all its content — confirm it so we move on.",
+        cta_options: ["Mark M3 done", "Not yet"],
+      },
+    };
+    render(<LocaleProvider initialLocale="vi"><RoadmapPanel data={data as never} /></LocaleProvider>);
+    expect(screen.getByText("Xác nhận hoàn thành M3")).toBeTruthy();
+    expect(screen.queryByText(/has all its content/)).toBeNull();
+  });
+
+  test("a CTA sends the API's English even when the button reads Vietnamese", () => {
+    // The agent's [NEXT] contract is written against those exact phrases, so the
+    // wire message must not be translated with the button.
+    const sent: string[] = [];
+    const data = {
+      modules: [], tasks: [],
+      next_action: {
+        kind: "confirm_module", module: "M3", substep: "",
+        title: "Confirm M3 is done", why: "…",
+        cta_options: ["Mark M3 done", "Not yet"],
+      },
+    };
+    render(
+      <LocaleProvider initialLocale="vi">
+        <RoadmapPanel data={data as never} onSendMessage={(m) => sent.push(m)} />
+      </LocaleProvider>,
+    );
+    fireEvent.click(screen.getByText("Đánh dấu M3 đã xong"));
+    expect(sent).toEqual(["Mark M3 done"]);
   });
 });

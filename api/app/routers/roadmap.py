@@ -20,6 +20,7 @@ from ..auth_admin import readable_project
 from ..models import Project, User
 from agent.roadmap import (
     ROADMAP,
+    SUBSTEP_ARTIFACT,
     SUBSTEP_LABELS,
     derive_substep,
     next_action,
@@ -89,7 +90,22 @@ def _substep_states(module: str, current: str | None, module_status: str,
     """
     spine = ROADMAP[module]
     satisfied = satisfied or set()
-    idx = spine.index(current) if current in spine else (len(spine) if module_status == "done" else 0)
+    if current in spine:
+        idx = spine.index(current)
+    elif module_status == "done" or (current is None and SUBSTEP_ARTIFACT.get(module)):
+        # `current is None` from derive_substep means no backed artifact is
+        # missing — the module's content is all in and the only thing left is
+        # the student's confirmation. Nothing should read as "current".
+        #
+        # This used to fall through to idx=0, which painted the FIRST step
+        # current. On a finished M3 that put a blue "Define constructs" ABOVE
+        # three already-ticked steps, as if the student had to go back and
+        # start over. Guarded on the module actually having backed steps: with
+        # an empty artifact map, derive_substep returns None for a module
+        # nobody has touched, and len(spine) would mark all of it done.
+        idx = len(spine)
+    else:
+        idx = 0
     out = []
     for i, sid in enumerate(spine):
         if module_status == "done":

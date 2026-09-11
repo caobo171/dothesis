@@ -16,6 +16,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
 import { ImportSummary } from "./ImportSummary";
+import { UPLOAD_ACCEPT } from "./uploadAccept";
 import { useRunProgress } from "@/app/(inapp)/tools/_components/use-tool";
 import { StartModeTabs } from "./StartModeTabs";
 import { ThesisComposer, STARTER_CHIPS, type StartMode } from "./ThesisComposer";
@@ -35,12 +36,9 @@ type ImportResult = {
   to_reconstruct: string[];
 };
 
-// Keep in sync with the uploads endpoint's text-extractable set
-// (api/app/routers/uploads.py). Same list the /new page advertised.
-const ACCEPT_TYPES =
-  "application/pdf,text/plain,text/markdown," +
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
-  ".pdf,.txt,.md,.markdown,.docx";
+// Shared with the composer's picker — see uploadAccept.ts for why the list
+// carries both MIME types and extensions.
+const ACCEPT_TYPES = UPLOAD_ACCEPT;
 
 /**
  * The homepage IS the start experience now — a prompt-first launcher, not the

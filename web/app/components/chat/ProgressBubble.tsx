@@ -57,14 +57,9 @@ export function ProgressBubble({
     // machine narrating itself rather than as part of the answer. The old
     // version put it in the same white card the reply used, which gave a
     // transient "Trying Crossref…" the same visual weight as the thesis text.
+    // No module chip — see AssistantFrame: one assistant, so naming the
+    // internal stage above the work just reads as a hand-off to someone else.
     <div data-role="assistant" data-testid="progress-bubble" className="flex flex-col">
-      {moduleTag && (
-        <div className="flex items-center gap-2 mb-2">
-          <span className="px-[7px] py-[2px] rounded-md bg-ink-100 text-ink-600 font-serif font-extrabold text-[11px] tracking-[0.03em]">
-            {moduleTag}
-          </span>
-        </div>
-      )}
       {/* Headline + rule, like the reference's thinking block: one line saying
           what is happening now, with the trail hung off a hairline beneath it.
           The trail is there to show motion, not to be read, so it fades out

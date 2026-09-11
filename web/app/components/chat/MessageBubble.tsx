@@ -17,6 +17,7 @@ import { CitationChip } from "./CitationChip";
 import { triggerExportDownload } from "@/app/lib/api";
 import { WidgetRenderer } from "./widgets/WidgetRenderer";
 import { AttachmentPreview } from "./AttachmentPreview";
+import { FileTypeIcon } from "./FileTypeIcon";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
 import type {
   AttachmentChipMeta,
@@ -34,6 +35,10 @@ function UserAttachmentChip({ meta }: { meta: AttachmentChipMeta }) {
     typeof meta.size_bytes === "number"
       ? _formatBytes(meta.size_bytes)
       : null;
+  // The optimistic bubble paints before the upload lands, so a chip can exist
+  // with no id yet. There is nothing to preview until there is — clicking would
+  // fetch /uploads//text — so it stays inert until SWR brings server truth.
+  const pending = !meta.upload_id;
   return (
     <>
       {/* Clickable: the chip names a file the student can no longer see. Opening
@@ -43,16 +48,30 @@ function UserAttachmentChip({ meta }: { meta: AttachmentChipMeta }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 max-w-[260px] rounded-lg border border-ink-200 bg-white px-2 py-1 text-[11.5px] text-ink-700 hover:border-ink-300 hover:bg-ink-50 transition-colors"
-        title={`${meta.filename} — bấm để xem nội dung`}
+        disabled={pending}
+        className={`inline-flex items-center gap-1.5 max-w-[260px] rounded-lg border border-ink-200 bg-white px-2 py-1 text-[11.5px] text-ink-700 transition-colors ${
+          pending ? "opacity-70" : "hover:border-ink-300 hover:bg-ink-50"
+        }`}
+        title={pending
+          ? `${meta.filename} — đang tải lên`
+          : `${meta.filename} — bấm để xem nội dung`}
       >
-        <FileText className="w-3.5 h-3.5 text-ink-500 shrink-0" aria-hidden />
+        {/* The format's own icon, not a generic sheet — the chip is the only
+            trace of the file left in the thread, so it should be as
+            identifiable here as it was in the composer. */}
+        <FileTypeIcon kind={_extOf(meta.filename)} className="w-[13px] h-4 shrink-0" />
         <span className="truncate">{meta.filename}</span>
         {size && <span className="text-ink-400 shrink-0">· {size}</span>}
+        {pending && <Loader2 className="w-3 h-3 animate-spin shrink-0 text-ink-400" aria-hidden />}
       </button>
-      {open && <AttachmentPreview meta={meta} onClose={() => setOpen(false)} />}
+      {open && !pending && <AttachmentPreview meta={meta} onClose={() => setOpen(false)} />}
     </>
   );
+}
+
+function _extOf(name: string): string {
+  const i = (name || "").lastIndexOf(".");
+  return i === -1 || i === name.length - 1 ? "" : name.slice(i + 1);
 }
 
 function _formatBytes(n: number): string {
@@ -693,16 +712,15 @@ export function AssistantFrame({
     // Claude.ai shape: the assistant does not speak from inside a card. The
     // reply IS the page — no avatar, no border, no shadow, full measure — so
     // long analytical answers read as a document rather than as a chat log of
-    // boxed quotes. The only chrome is a quiet label row carrying the module
-    // tag, which is real information the reference design has no equivalent of.
+    // boxed quotes.
+    //
+    // The module chip that used to sit above the reply is gone. It described an
+    // internal pipeline stage ("M2") to a student who is talking to one
+    // assistant, and it read as if a different agent had taken over the
+    // conversation. `moduleTag` is still accepted and still carried in the
+    // message data — the routing is real — it is simply not chrome the student
+    // needs to see.
     <div data-role="assistant" className="flex flex-col" {...rest}>
-      {moduleTag && (
-        <div className="flex items-center gap-2 mb-2">
-          <span className="px-[7px] py-[2px] rounded-md bg-ink-100 text-ink-600 font-serif font-extrabold text-[11px] tracking-[0.03em]">
-            {moduleTag}
-          </span>
-        </div>
-      )}
       {/* Serif body, like the reference: it is what makes multi-paragraph
           reasoning readable at length, and it distinguishes the assistant's
           prose from the UI's sans-serif chrome without needing a container. */}

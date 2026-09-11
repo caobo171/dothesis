@@ -61,12 +61,38 @@ SUBSTEP_LABELS: dict[str, str] = {
 SUBSTEP_ARTIFACT: dict[str, dict[str, str]] = {
     "M1": {"frame_topic": "research_title", "derive_questions": "research_questions"},
     "M2": {"familiarize": "literature_sources", "find_gaps": "research_gaps"},
+    # `instrument` is a first-class M3 artifact — declared in
+    # agent.state.SLICE_KEYS["M3"], written by m3_contract.normalize_instrument,
+    # read by preflight. It was missing from this table, so a student whose
+    # questionnaire was already persisted still saw "Design the instrument" as
+    # not started, M3 stuck at 3/5, and a [NEXT] card insisting M3 "has all its
+    # content" — because THIS table, not the spine, is what "all its content"
+    # was measured against.
     "M3": {"build_model": "conceptual_model", "state_hypotheses": "hypotheses",
-           "choose_method": "methodology"},
+           "choose_method": "methodology", "design_instrument": "instrument"},
     "M4": {"outline_analysis": "analysis_outline", "run_per_step": "analysis_results"},
     # `final_sections` is where M5's composed prose lands, so it backs the one
     # writing step M5 has.
     "M5": {"write_conclusion": "final_sections"},
+}
+
+
+# Artifacts that are truthy LONG before they hold the thing they are named
+# after, and the predicate that decides whether they really do.
+#
+# `instrument` is the case that forced this. Its canonical shape
+# (m3_contract.normalize_instrument) is {"items": [...]} — the actual scale
+# items. But a slice can also hold a SPEC of the questionnaire — constructs,
+# items_per_construct, scale, "source": "user-provided Word document" — with no
+# item text anywhere. That dict is truthy, so a presence check called the step
+# done while preflight_check reported "M3 — no questionnaire instrument yet"
+# off the very same slice, and m5_writing quietly called _generate_scale_items
+# to invent the items Chapter 3 needed.
+#
+# Same predicate as preflight, deliberately: two places deciding "is there an
+# instrument" by different rules is what produced the contradiction.
+_ARTIFACT_HAS_CONTENT = {
+    "instrument": lambda v: bool(isinstance(v, dict) and v.get("items")),
 }
 
 
@@ -82,7 +108,17 @@ def satisfied_substeps(module: str, state: dict) -> set[str]:
     artifacts rather than from how far along the current step is.
     """
     cs = state.get("contextStore") or {}
-    return {sid for sid, key in SUBSTEP_ARTIFACT.get(module, {}).items() if cs.get(key)}
+    out = set()
+    for sid, key in SUBSTEP_ARTIFACT.get(module, {}).items():
+        value = cs.get(key)
+        if not value:
+            continue
+        # Present is not the same as filled in — see _ARTIFACT_HAS_CONTENT.
+        check = _ARTIFACT_HAS_CONTENT.get(key)
+        if check and not check(value):
+            continue
+        out.add(sid)
+    return out
 
 
 def derive_substep(module: str, state: dict) -> str | None:
@@ -112,7 +148,16 @@ def _title_for(module: str, substep: str | None) -> str:
 
 
 def next_action(state: dict, required: frozenset[str] | None = None) -> dict | None:
-    """The single next thing the student should do. Deterministic precedence:
+    """The single next thing the student should do.
+
+    Every branch carries a `kind` so a caller can rebuild the sentence in its own
+    language. `title`/`why`/`cta_options` stay English and stay populated: the
+    per-turn [NEXT] prompt injection and the headless/partner surfaces read them
+    directly and must not start depending on a UI translation layer. `kind` is
+    additive — the web panel prefers its own localized copy and falls back to
+    these strings for anything it has no translation for (a blocker's title is
+    agent-authored prose, so it can only ever be passed through).
+ Deterministic precedence:
     open blocker > advance focus > next module > done.
 
     Null-safe on headless-produced state (no roadmap_tasks, minimal status) so it
@@ -135,7 +180,8 @@ def next_action(state: dict, required: frozenset[str] | None = None) -> dict | N
     # 1) An open agent-inserted blocker jumps the queue.
     for t in cs.get("roadmap_tasks") or []:
         if t.get("status") == "open":
-            return {"module": t.get("module", focus), "substep": t.get("substep", ""),
+            return {"kind": "blocker",
+                    "module": t.get("module", focus), "substep": t.get("substep", ""),
                     "title": t.get("title", "Resolve blocker"),
                     "why": t.get("why", "This is blocking progress."),
                     "cta_options": ["How do I fix this?", "Skip for now"]}
@@ -154,11 +200,13 @@ def next_action(state: dict, required: frozenset[str] | None = None) -> dict | N
             status.get(focus) not in ("done", None) or derive_substep(focus, state) is not None):
         sub = derive_substep(focus, state)
         if sub is not None:
-            return {"module": focus, "substep": sub, "title": _title_for(focus, sub),
+            return {"kind": "substep",
+                    "module": focus, "substep": sub, "title": _title_for(focus, sub),
                     "why": "This is the next step in your current module.",
                     "cta_options": [_title_for(focus, sub), "Skip to next module"]}
         if status.get(focus) != "done":
-            return {"module": focus, "substep": "", "title": f"Confirm {focus} is done",
+            return {"kind": "confirm_module",
+                    "module": focus, "substep": "", "title": f"Confirm {focus} is done",
                     "why": f"{focus} has all its content — confirm it so we move on.",
                     "cta_options": [f"Mark {focus} done", "Not yet"]}
 
@@ -166,7 +214,8 @@ def next_action(state: dict, required: frozenset[str] | None = None) -> dict | N
     for m in MODULES:
         if m in eligible and status.get(m) != "done":
             sub = derive_substep(m, state)
-            return {"module": m, "substep": sub or "", "title": _title_for(m, sub),
+            return {"kind": "next_module",
+                    "module": m, "substep": sub or "", "title": _title_for(m, sub),
                     "why": f"{focus} is done — {m} is next.",
                     "cta_options": [f"Start {m}", f"What does {m} involve?"]}
 
@@ -174,7 +223,8 @@ def next_action(state: dict, required: frozenset[str] | None = None) -> dict | N
     #    the emotional peak of the journey, not just a file drop. substep stays
     #    "export" (the terminal spine step); defense prep is an optional
     #    rehearsal offered via the CTA, not a tracked module.
-    return {"module": "M5", "substep": "export",
+    return {"kind": "all_done",
+            "module": "M5", "substep": "export",
             "title": "Export your thesis & prep your defense",
             "why": "Every module is done — generate the final document and rehearse your defense.",
             "cta_options": ["Export my thesis", "Prep for my defense", "Review it first"]}

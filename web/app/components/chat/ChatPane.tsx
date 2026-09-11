@@ -786,7 +786,8 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         // the FULL chip metadata (not just upload_ids) so the optimistic
         // user bubble can render the linked-file chips on the spot —
         // without waiting for SWR to revalidate the server row.
-        onSubmit={(text, attachments) => void send(text, undefined, attachments)}
+        onSubmit={(text, attachments, settleUploads) =>
+          void send(text, undefined, attachments, settleUploads)}
         onFileDrop={onFileDrop}
         // Disable the composer when out of credits — the backend would 402 the
         // turn anyway; blocking here avoids an orphaned user message + a confusing

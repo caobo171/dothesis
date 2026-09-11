@@ -660,6 +660,69 @@ export const en = {
   "lang.label": "Language",
   "lang.en": "English",
   "lang.vi": "Tiếng Việt",
+
+  // --- roadmap: module titles, spine steps, and the NEXT card ---
+  //
+  // Keyed by the BACKEND's stable ids (agent/roadmap.py ROADMAP + SUBSTEP_LABELS),
+  // not by its English label, so re-wording a label there can never silently
+  // orphan a translation. The API still sends `label`; it is the fallback for an
+  // id this catalogue has not caught up with yet.
+  "roadmap.module.M1": "M1 · Topic & questions",
+  "roadmap.module.M2": "M2 · Gaps & hypotheses",
+  "roadmap.module.M3": "M3 · Methodology & model",
+  "roadmap.module.M4": "M4 · Analysis",
+  "roadmap.module.M5": "M5 · Conclusion",
+
+  "roadmap.substep.frame_topic": "Frame the topic",
+  "roadmap.substep.propose_titles": "Propose titles",
+  "roadmap.substep.confirm_title": "Confirm the title",
+  "roadmap.substep.derive_questions": "Derive research questions",
+  "roadmap.substep.familiarize": "Get to know the field",
+  "roadmap.substep.map_research_state": "Map the research state",
+  "roadmap.substep.find_gaps": "Find research gaps",
+  "roadmap.substep.generate_output": "Write the literature review",
+  "roadmap.substep.define_constructs": "Name what you're measuring",
+  "roadmap.substep.build_model": "Build the research model",
+  "roadmap.substep.state_hypotheses": "Write your hypotheses",
+  "roadmap.substep.choose_method": "Pick the analysis method",
+  // NOT "Design the instrument". "Instrument" is correct methodology English
+  // (Hair, Churchill) and it is what the stored artifact is called — but on a
+  // progress checklist it reads as laboratory equipment. The student knows this
+  // step as building their questionnaire, so that is what the step is called.
+  // The storage key stays `instrument`; only the label moved.
+  "roadmap.substep.design_instrument": "Build the questionnaire",
+  "roadmap.substep.detect_data": "Detect the dataset",
+  "roadmap.substep.outline_analysis": "Outline the analysis",
+  "roadmap.substep.confirm_plan": "Confirm the analysis plan",
+  "roadmap.substep.run_per_step": "Run each analysis step",
+  "roadmap.substep.interpret": "Interpret the results",
+  "roadmap.substep.write_conclusion": "Write the conclusion",
+  "roadmap.substep.export": "Export the document",
+
+  "roadmap.next.label": "Next",
+  "roadmap.next.title.confirm": "Confirm {module} is done",
+  "roadmap.next.title.allDone": "Export your thesis & prep your defense",
+  "roadmap.next.why.substep": "This is the next step in your current module.",
+  "roadmap.next.why.confirm": "{module} has all its content — confirm it so we move on.",
+  "roadmap.next.why.nextModule": "{focus} is done — {module} is next.",
+  "roadmap.next.why.allDone":
+    "Every module is done — generate the final document and rehearse your defense.",
+  "roadmap.next.cta.skipModule": "Skip to next module",
+  "roadmap.next.cta.markDone": "Mark {module} done",
+  "roadmap.next.cta.notYet": "Not yet",
+  "roadmap.next.cta.start": "Start {module}",
+  "roadmap.next.cta.whatInvolves": "What does {module} involve?",
+  "roadmap.next.cta.fix": "How do I fix this?",
+  "roadmap.next.cta.skipForNow": "Skip for now",
+  "roadmap.next.cta.export": "Export my thesis",
+  "roadmap.next.cta.defense": "Prep for my defense",
+  "roadmap.next.cta.review": "Review it first",
+
+  "roadmap.steps.current": "Current step: {label}",
+  "roadmap.steps.done": "{done} of {total} steps done",
+  "roadmap.timeline.thisWeek": "This week: {what}",
+  "roadmap.timeline.onTrack": "On track",
+  "roadmap.timeline.behind": "~{weeks} week(s) behind",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -4,13 +4,15 @@ import { useState } from "react";
 import useSWR from "swr";
 import { AlertTriangle, Clock, Coins, Download, Loader2 } from "lucide-react";
 
-import { FileTypeIcon } from "./FileTypeIcon";
+import { AttachmentPreview } from "./AttachmentPreview";
+import { FileTypeIcon, fileKindOf } from "./FileTypeIcon";
 // The per-module slice renderers live in ModuleSlices now — the reconstructed-
 // modules card renders the SAME components, so a backfilled M3 looks exactly
 // like a live M3 (mermaid model included) instead of a second, worse view.
 import { EmptyHint, M1Body, M2Body, M3Body, M5Body } from "./ModuleSlices";
-import { RoadmapPanel, StepBar, StepList, useRoadmap, type Sub } from "./RoadmapPanel";
+import { RoadmapPanel, StepBar, StepList, useRoadmap, type Sub, MODULE_KEY } from "./RoadmapPanel";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 import {
   triggerExportDownload,
   triggerUploadDownload,
@@ -109,6 +111,7 @@ export function ContextPanel({
    */
   runLive?: boolean;
 }) {
+  const t = useT();
   const [showRaw, setShowRaw] = useState(false);
   // Fetched once here, then split two ways: the Next card stays in
   // RoadmapPanel, and each module's sub-steps ride on that module's own card
@@ -186,7 +189,7 @@ export function ContextPanel({
               <RoadmapPanel data={roadmap} onSendMessage={onSendMessage} />
             )}
             <CtxSection
-              label="M1 · Topic & questions"
+              label={t(MODULE_KEY.M1)}
               moduleId="M1"
               status={sectionStatus("M1", contextStore.m1_topic)}
               stale={isStale("M1")}
@@ -196,7 +199,7 @@ export function ContextPanel({
             </CtxSection>
 
             <CtxSection
-              label="M2 · Gaps & hypotheses"
+              label={t(MODULE_KEY.M2)}
               moduleId="M2"
               status={sectionStatus("M2", contextStore.m2_literature)}
               stale={isStale("M2")}
@@ -206,7 +209,7 @@ export function ContextPanel({
             </CtxSection>
 
             <CtxSection
-              label="M3 · Methodology & model"
+              label={t(MODULE_KEY.M3)}
               moduleId="M3"
               status={sectionStatus("M3", contextStore.m3_design)}
               stale={isStale("M3")}
@@ -216,7 +219,7 @@ export function ContextPanel({
             </CtxSection>
 
             <CtxSection
-              label="M4 · Analysis"
+              label={t(MODULE_KEY.M4)}
               moduleId="M4"
               status={sectionStatus("M4", contextStore.m4_analysis)}
               stale={isStale("M4")}
@@ -231,7 +234,7 @@ export function ContextPanel({
                 written INSIDE the closing chapter rather than as a chapter
                 of its own (agent/roadmap.py ROADMAP["M5"]). */}
             <CtxSection
-              label="M5 · Conclusion"
+              label={t(MODULE_KEY.M5)}
               moduleId="M5"
               status={sectionStatus("M5", contextStore.m5_writing)}
               stale={isStale("M5")}
@@ -478,43 +481,82 @@ function ExportRowItem({ row }: { row: ExportRow }) {
   );
 }
 
-// Uploads row — same shape as ExportRowItem. Uses FileTypeIcon (red PDF band)
-// instead of the old 📄 emoji, shows page count when present, and downloads via
-// triggerUploadDownload (mints a scoped ?st= token → /uploads/{id}/download
-// → S3 signed URL). Kind is derived from mime_type.
+// Uploads row — same shape as ExportRowItem, with two differences.
+//
+// 1. The row OPENS the file, in the same AttachmentPreview modal the chat chips
+//    use. These rows name files the student can no longer see anywhere else, so
+//    a click should answer "what's in it?" — downloading and opening Word is
+//    the fallback, not the only move. Reusing the chat component means one
+//    docx/pdf renderer and one extracted-text tab, not a second, worse viewer.
+// 2. Download moved to its own button on the right. It used to be the row's
+//    only action, with that Download glyph as decoration inside the button;
+//    now that the row previews, the glyph has to be separately clickable (and
+//    a button can't nest inside a button).
+//
+// The icon kind comes from fileKindOf(), which reads the extension: the old
+// `mime.includes("pdf") ? "pdf" : "file"` put every .docx on the generic grey
+// sheet even though FileTypeIcon has drawn a Word badge all along.
 function UploadRow({ upload }: { upload: UploadItem }) {
-  const kind = (upload.mime_type || "").includes("pdf") ? "pdf" : "file";
+  const [preview, setPreview] = useState(false);
   const { busy, error, start } = useArtifactDownload();
   return (
     <>
-    <button
-      type="button"
-      aria-busy={busy}
-      onClick={() => void start(() => triggerUploadDownload(upload.id))}
-      title={`Download ${upload.filename}`}
-      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-colors text-left ${
-        busy
-          ? "border-primary-300 bg-primary-50 cursor-progress"
-          : "border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50"
-      }`}
-    >
-      {busy ? (
-        <Loader2 className="w-[18px] h-[22px] shrink-0 text-primary-600 animate-spin" aria-hidden />
-      ) : (
-        <FileTypeIcon kind={kind} className="w-[18px] h-[22px] shrink-0" />
-      )}
-      <span className="text-[12.5px] text-ink-800 truncate flex-1 min-w-0">
-        {upload.filename}
-      </span>
-      {upload.page_count != null && (
-        <span className="text-[11px] text-ink-400 tabular-nums shrink-0">
-          {upload.page_count}p
+    <div className="w-full flex items-stretch rounded-lg border border-ink-200 bg-white transition-colors hover:border-primary-300 hover:bg-primary-50">
+      <button
+        type="button"
+        onClick={() => setPreview(true)}
+        // Labelled, not left to the filename inside it: the row now holds two
+        // buttons over the same file, and "paper.pdf" / "Download paper.pdf"
+        // doesn't say which one opens it.
+        aria-label={`Preview ${upload.filename}`}
+        title={`Preview ${upload.filename}`}
+        className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 text-left rounded-l-lg"
+      >
+        <FileTypeIcon
+          kind={fileKindOf(upload.filename, upload.mime_type)}
+          className="w-[18px] h-[22px] shrink-0"
+        />
+        <span className="text-[12.5px] text-ink-800 truncate min-w-0">
+          {upload.filename}
         </span>
-      )}
-      <Download className="w-3.5 h-3.5 text-ink-400 shrink-0" aria-hidden />
-    </button>
+        {upload.page_count != null && (
+          <span className="text-[11px] text-ink-400 tabular-nums shrink-0">
+            {upload.page_count}p
+          </span>
+        )}
+      </button>
+      <button
+        type="button"
+        aria-busy={busy}
+        onClick={() => void start(() => triggerUploadDownload(upload.id))}
+        aria-label={`Download ${upload.filename}`}
+        title={`Download ${upload.filename}`}
+        className={`shrink-0 px-2.5 flex items-center rounded-r-lg transition-colors ${
+          busy ? "text-primary-600 cursor-progress" : "text-ink-400 hover:text-primary-600"
+        }`}
+      >
+        {busy ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+        ) : (
+          <Download className="w-3.5 h-3.5" aria-hidden />
+        )}
+      </button>
+    </div>
     {error && (
       <div className="text-[11px] text-[#8E6B2A] px-2.5 pt-1" role="alert">{error}</div>
+    )}
+    {preview && (
+      <AttachmentPreview
+        // UploadItem is the same file AttachmentChipMeta describes, under the
+        // list endpoint's field names — `id` is the upload_id the modal fetches.
+        meta={{
+          upload_id: upload.id,
+          filename: upload.filename,
+          size_bytes: upload.size_bytes,
+          mime_type: upload.mime_type,
+        }}
+        onClose={() => setPreview(false)}
+      />
     )}
     </>
   );
