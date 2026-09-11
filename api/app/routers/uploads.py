@@ -134,7 +134,14 @@ _DEFAULT_MAX_BYTES = 50 * 1024 * 1024
 # SAME DAY. A midnight epoch would have called all seventeen of those stale
 # rows trustworthy and handed their wrong numbers back on re-upload — which is
 # the precise failure this constant exists to prevent.
-_EXTRACTION_EPOCH = datetime(2026, 9, 10, 16, 0, tzinfo=timezone.utc)
+#
+# 2026-09-11: the OUTPUT changed, not the model. Extraction now also saves each
+# transcribed screenshot to `uploads/<name>.img/` and labels it in the sidecar
+# ("[Hình 4] (ảnh gốc: …)"), which is how Chapter 4 embeds the student's real
+# SmartPLS table instead of rebuilding it. Every sidecar cached before this has
+# neither, and reusing one leaves the feature silently off for that upload — so
+# the same rule applies as for a model swap.
+_EXTRACTION_EPOCH = datetime(2026, 9, 11, 12, 0, tzinfo=timezone.utc)
 
 
 def _extract_upload_text(body: bytes, mime: str, fname: str,
