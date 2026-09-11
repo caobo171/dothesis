@@ -237,3 +237,38 @@ def test_concurrent_transcription_still_emits_images_in_document_order(monkeypat
 
     marks = [ln for ln in out.splitlines() if ln.startswith("MARK ")]
     assert marks == sorted(marks), f"images came back out of document order: {marks}"
+
+
+# --- keeping the bytes ------------------------------------------------------
+
+def test_image_sink_collects_bytes_for_transcribed_images(vision):
+    """The export needs the original screenshot, not only its transcription.
+
+    A SmartPLS table is recognisable AS SmartPLS output; a table rebuilt from
+    the transcription reads as numbers someone typed. Chapter 4 embeds the
+    student's own image, so the bytes have to survive extraction.
+    """
+    sink: list[dict] = []
+    out = extract_docx_text(_four_image_docx(), image_sink=sink)
+
+    assert [entry["figure"] for entry in sink] == [1, 2, 3, 4]
+    assert all(entry["bytes"] for entry in sink)
+    assert all(entry["mime"].startswith("image/") for entry in sink)
+    # The figure number in the sink is the one printed in the text.
+    assert "[Hình 1]" in out and "[Hình 4]" in out
+
+
+def test_image_sink_skips_images_that_yielded_nothing(monkeypatch):
+    """An image transcribed as NONE gets no [Hình n] slot, so it must not claim
+    a sink entry either — otherwise the numbers stop lining up with the text."""
+    import agent.multimodal as mm
+    monkeypatch.setattr(mm, "_transcribe_via_vision", lambda att, prompt=None: "NONE")
+
+    sink: list[dict] = []
+    extract_docx_text(_four_image_docx(), image_sink=sink)
+    assert sink == []
+
+
+def test_image_sink_is_optional(vision):
+    extract_docx_text(_four_image_docx())                              # no sink
+    extract_docx_text(_four_image_docx(), transcribe_images=False)     # no vision

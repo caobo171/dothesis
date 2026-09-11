@@ -141,7 +141,8 @@ def _vision_block(payload: tuple[str, bytes, str]) -> str | None:
     return text
 
 
-def extract_docx_text(data: bytes, *, transcribe_images: bool = True) -> str:
+def extract_docx_text(data: bytes, *, transcribe_images: bool = True,
+                      image_sink: list | None = None) -> str:
     """Paragraphs, table rows and embedded images as text, in document order.
 
     Table rows are flattened to `a | b | c` so the numbers inside them survive
@@ -151,6 +152,15 @@ def extract_docx_text(data: bytes, *, transcribe_images: bool = True) -> str:
 
     `transcribe_images=False` skips the vision pass for callers that only need
     the prose and cannot afford the latency.
+
+    `image_sink`, when given a list, also receives the BYTES of every image that
+    transcribed to something — `{"figure", "name", "bytes", "mime"}`, with
+    `figure` matching the `[Hình n]` label in the returned text. Chapter 4
+    embeds the student's original SmartPLS screenshot rather than a table
+    rebuilt from the transcription: the screenshot is visibly output from the
+    software, and a supervisor reads that as evidence in a way retyped numbers
+    are not. An image that transcribed to nothing gets no label and no entry, so
+    the two stay in step.
     """
     try:
         from docx import Document  # noqa: PLC0415 — heavy, and only needed here
@@ -229,8 +239,15 @@ def extract_docx_text(data: bytes, *, transcribe_images: bool = True) -> str:
         # Number the survivors in DOCUMENT order. The figure number is a label
         # the writer cites, so it has to follow the page, not the order twelve
         # threads happened to finish in.
+        # `slots` is in document order and `filled` is keyed by slot index, so
+        # sorting the surviving keys numbers the figures by page — the ordering
+        # the label promises — and lets the sink reuse that same number.
+        payload_by_slot = {slot_i: payload for slot_i, payload in slots}
         for n, slot_i in enumerate(sorted(filled), start=1):
             parts[slot_i] = f"[Hình {n}]\n{filled[slot_i]}"
+            if image_sink is not None:
+                name, blob, mime = payload_by_slot[slot_i]
+                image_sink.append({"figure": n, "name": name, "bytes": blob, "mime": mime})
         # Drop the slots whose image yielded nothing. Only placeholders are ever
         # empty here — the walk appends text solely when it is non-blank.
         parts = [p for p in parts if p]
