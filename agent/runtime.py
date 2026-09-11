@@ -174,6 +174,7 @@ from agent.feasibility import make_feasibility_tool
 from agent.preflight import make_preflight_tool
 from agent.state import MODULES, ProjectStateStore
 from agent.tools.backfill_tool import make_backfill_tool  # reconstruct upstream modules
+from agent.tools.data_fetch import make_data_fetch_tools  # Google Sheets link -> workspace file
 from agent.tools.defense import make_defense_tools  # F6: Mock Committee
 from agent.tools.diagram import render_model_diagram  # research-model figure, all surfaces
 from agent.tools.forms import make_google_form_script
@@ -575,6 +576,12 @@ def build_agent(
         parse_reference,
         # run_stats bound to the project workspace — data paths are confined to it.
         *make_stats_tools(project_dir),
+        # Google Sheets link -> a real file in this workspace. VN students collect
+        # thesis data with Google Forms, so the data IS a Sheet and the link is
+        # what they paste; without this every data tool needed a path and the
+        # agent could only ask them to download and re-upload. Same bound-factory
+        # confinement as run_stats above; host-allowlisted (see data_fetch).
+        *make_data_fetch_tools(project_dir),
         # F8: output sanity layer — classify pasted result tables (loadings/AVE/
         # CR/HTMT/VIF) against thresholds + flag suspiciously-perfect data.
         check_thresholds,
