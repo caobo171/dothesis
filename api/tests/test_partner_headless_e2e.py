@@ -10,7 +10,7 @@ them, three seams were only ever pinned structurally:
   1. router -> job_runner.spawn_headless_run -> `python -m app.headless_entry`
      -> build_agent -> run_headless -> run_partner_export
   2. events.jsonl -> _monitor -> _ingest_event -> JobEvent.meta_json -> the
-     endpoint response / the progress poll. job_runner.py:221 keeps every key
+     endpoint response / the progress poll. _ingest_event keeps every key
      except type/phase/agent/text, which is the ONLY reason run_partner_export's
      sections/chapters/artifact_keys reach the partner at all.
   3. that `python -m app.headless_entry` BOOTS. Only `--help` was ever proven,
@@ -67,13 +67,32 @@ def _module_steps(module, writes):
     ]
 
 
+# Headless strict-gates refuse confirm_done unless the write actually satisfies
+# the module DoD (artifacts.dod_analysis / ch_conclusion + 1500-char floor).
+# The original fixture wrote an outline and a one-letter Intro; after the
+# five-chapter collapse and the done-gate, that left M4/M5 in_progress and the
+# run died on max_turns. These writes are the minimum that earns `done`.
+_CONCLUSION = (
+    "This study finds that trust drives purchase intention. "
+    "The estimated path is significant, and the managerial implications "
+    "follow from that effect rather than from a restated literature review. "
+) * 20
+
 # depth=analysis_report -> required_modules_for(...) == {"M4","M5"}: intro /
-# discussion / conclusion are M5-owned, results is M4-owned, and M1 owns no
-# chapter. A run that respects its profile therefore finishes on M4 + M5 alone —
+# conclusion are M5-owned, results is M4-owned, and M1 owns no chapter.
+# A run that respects its profile therefore finishes on M4 + M5 alone —
 # so that is what this fixture does. Not a shortcut; the contract.
 FIXTURE = {"scenario": "partner-e2e", "entry": KICKOFF_ENTRY, "steps": [
-    *_module_steps("M4", {"analysis_outline": "Reliability, validity, paths"}),
-    *_module_steps("M5", {"final_sections": [{"title": "Intro", "prose": "p"}]}),
+    *_module_steps("M4", {
+        "analysis_outline": "Reliability, validity, paths",
+        "data_type_detected": "Quantitative",
+        "results": "Cronbach alpha 0.87 AVE 0.62 HTMT 0.71 R square 0.44 p=0.001 beta=0.38",
+    }),
+    *_module_steps("M5", {"final_sections": [{
+        "chapter_name": "conclusion",
+        "title": "Chapter 5 — Conclusions and Recommendations",
+        "prose": _CONCLUSION,
+    }]}),
 ]}
 
 # Injected into the SUBPROCESS via PYTHONPATH — Python auto-imports
@@ -110,7 +129,8 @@ if _marker:
         def invoke(payload):
             return {"prose": "PROSE[%s]" % payload["chapter_name"]}
 
-    def _run_export(sections, project_id, references=None, language="en"):
+    def _run_export(sections, project_id, references=None, language="en",
+                    title=None, context_store=None, **kwargs):
         out = os.getenv("DOTHESIS_E2E_SECTIONS_OUT")
         if out:
             with open(out, "w") as fh:
@@ -248,7 +268,7 @@ def test_partner_report_end_to_end_through_a_real_subprocess(e2e, monkeypatch):
 
     The only fakes are the model/renderer LEAVES. If this passes, the argv, the
     module boot, the profile derivation, the event pipe, the meta_json
-    passthrough at job_runner.py:221 and the response mapping are all real.
+    passthrough in _ingest_event and the response mapping are all real.
     """
     monkeypatch.setattr(router_mod.prun, "_extract_text", lambda b, f: _ANALYSIS)
 
@@ -287,7 +307,7 @@ def test_partner_report_end_to_end_through_a_real_subprocess(e2e, monkeypatch):
     assert "phase_progress" in types, types   # headless_entry's per-turn hook fired
     assert "job_done" in types, types
     done_ev = next(e for e in events if e.type == "job_done")
-    # job_runner.py:221 keeps every key but type/phase/agent/text — the only
+    # _ingest_event keeps every key but type/phase/agent/text — the only
     # reason run_partner_export's return value reaches the partner at all.
     assert set(done_ev.meta_json) >= {"sections", "chapters", "artifact_keys"}
     assert done_ev.meta_json["artifact_keys"]["pdf"].endswith("report.pdf")
@@ -295,9 +315,9 @@ def test_partner_report_end_to_end_through_a_real_subprocess(e2e, monkeypatch):
     assert job.progress == 1.0
 
     # --- seam 3 + the response contract --------------------------------------
-    assert body["chapters"] == ["intro", "results", "discussion"]  # post-merge
+    assert body["chapters"] == ["intro", "results", "conclusion"]
     assert body["sections"] == ["Chapter 1 — Introduction", "Chapter 4 — Results",
-                                "Chapter 5 — Conclusion"]
+                                "Chapter 5 — Conclusions and Recommendations"]
     assert body["pdf_url"].endswith("report.pdf")
     assert body["docx_url"].endswith("report.docx")
     assert body["pages"] == 3
@@ -312,7 +332,13 @@ def test_partner_report_end_to_end_through_a_real_subprocess(e2e, monkeypatch):
     # be exactly the kind of claim this task exists to stop making.
     composed = json.loads(e2e.sections_out.read_text())
     assert [s["title"] for s in composed] == body["sections"]
-    assert all(s["prose"].startswith("PROSE[") for s in composed), composed
+    by_title = {s["title"]: s["prose"] for s in composed}
+    # intro + results were not in the agent's final_sections, so they went
+    # through compose_chapter (the stub). conclusion was already written this
+    # run, so compose_sections reuses it rather than paying for it twice.
+    assert by_title["Chapter 1 — Introduction"].startswith("PROSE[")
+    assert by_title["Chapter 4 — Results"].startswith("PROSE[")
+    assert by_title["Chapter 5 — Conclusions and Recommendations"] == _CONCLUSION.strip()
 
     # run_partner_export persisted the partner-scoped export rows.
     with Session(get_engine()) as s:
@@ -335,7 +361,7 @@ def test_partner_report_end_to_end_through_a_real_subprocess(e2e, monkeypatch):
 def test_analysis_report_without_literature_runs_to_done_then_is_refused(e2e, monkeypatch):
     """THE required_modules / export-gate question, settled: the gap is REAL.
 
-    `required_modules_for(["intro","results","discussion","conclusion"])` is
+    `required_modules_for(["intro","results","conclusion"])` is
     {"M4","M5"} — M2 is NOT required. partner_run.run_partner_export's comment
     claims the gate "is already required_modules-aware by construction — a
     chapter-specific check is owned by exactly the module required_modules_for
