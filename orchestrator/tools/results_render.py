@@ -34,13 +34,15 @@ _FIT_KEYS = ("cfi", "tli", "rmsea", "srmr", "chi2_df")
 
 _HEADERS = {
     "en": {"construct": "Construct", "item": "Item", "loading": "Loading",
-           "alpha": "Cronbach's α", "cr": "CR", "ave": "AVE", "path": "Path",
+           "alpha": "Cronbach's α", "rho_a": "rho_A", "cr": "CR", "ave": "AVE",
+           "path": "Path",
            "beta": "β", "t": "t", "p": "p", "f2": "f²", "decision": "Decision",
            "hyp": "H", "r2": "R²", "q2": "Q²", "index": "Index", "value": "Value",
            "threshold": "Threshold (Hu & Bentler)", "se": "SE", "z": "z",
            "mean": "Mean", "sd": "SD", "n": "n", "stage": "Stage", "removed": "Removed"},
     "vi": {"construct": "Khái niệm", "item": "Biến quan sát", "loading": "Hệ số tải",
-           "alpha": "Cronbach's α", "cr": "CR", "ave": "AVE", "path": "Quan hệ",
+           "alpha": "Cronbach's α", "rho_a": "rho_A", "cr": "CR", "ave": "AVE",
+           "path": "Quan hệ",
            "beta": "β", "t": "t", "p": "p", "f2": "f²", "decision": "Kết luận",
            "hyp": "GT", "r2": "R²", "q2": "Q²", "index": "Chỉ số", "value": "Giá trị",
            "threshold": "Ngưỡng (Hu & Bentler)", "se": "SE", "z": "z",
@@ -453,16 +455,22 @@ def _measurement_block(ar, family, language, num=None):
         name = _fmt(con.get("construct"))
         items = con.get("items") or []
         alpha = _fmt(con.get("cronbach_alpha"))
+        # rho_A sits beside α and CR in every SmartPLS reliability table, and a
+        # PLS thesis is expected to report it. It stays OPTIONAL without a flag:
+        # _table_pruned drops any column no row fills, so an SPSS or CB-SEM
+        # study never sees a rho_A header it has no value for.
+        rho_a = _fmt(con.get("rho_a"))
         cr = _fmt(con.get("composite_reliability"))
         ave = _fmt(con.get("ave"))
         first = True
         if not items:
-            rows.append([name, "—", "—", alpha, cr, ave])
+            rows.append([name, "—", "—", alpha, rho_a, cr, ave])
         for it in items:
             if not isinstance(it, dict):
                 continue
             rows.append([name, _fmt(it.get("item")), _fmt(it.get("loading")),
-                         alpha if first else "", cr if first else "", ave if first else ""])
+                         alpha if first else "", rho_a if first else "",
+                         cr if first else "", ave if first else ""])
             first = False
     if not rows:
         return None
@@ -479,7 +487,8 @@ def _measurement_block(ar, family, language, num=None):
     # student's screenshot.
     body = _figure_body(ar, "measurement_model", caption) or (
         f"**{caption}**\n\n" + _table_pruned(
-            [H["construct"], H["item"], loading_hdr, H["alpha"], H["cr"], H["ave"]], rows))
+            [H["construct"], H["item"], loading_hdr, H["alpha"], H["rho_a"],
+             H["cr"], H["ave"]], rows))
     return _wrap("measurement_model", mm, body, language)
 
 
