@@ -25,8 +25,31 @@ class PayPalError(Exception):
 
 
 def _is_dummy(settings: Settings | None = None) -> bool:
+    """Dummy mode for OUTBOUND calls (create/capture order).
+
+    Treating an absent client id as dummy is safe here — the worst case is a
+    fake order id that moves no money. Never reuse it on a path that GRANTS
+    something; see `_explicit_dummy`.
+    """
     settings = settings or get_settings()
     return settings.dothesis_payments == "dummy" or not settings.paypal_client_id
+
+
+def _explicit_dummy(settings: Settings | None = None) -> bool:
+    """Dummy mode somebody ASKED for, rather than inferred from missing config.
+
+    Mirrors polar_client._explicit_dummy, and exists for the same reason: the
+    webhook below grants credit, and `_is_dummy` is true whenever PayPal is
+    simply unconfigured. DoThesis ships `DOTHESIS_PAYMENTS=polar` with no PayPal
+    credentials, so that route was live and skipping verification in production.
+
+    The exploit needed no secret — start a real checkout to mint an Order row,
+    then post PAYMENT.CAPTURE.COMPLETED with its id as `custom_id` instead of
+    paying. Missing config now refuses; wanting the short circuit means saying
+    `DOTHESIS_PAYMENTS=dummy`.
+    """
+    settings = settings or get_settings()
+    return settings.dothesis_payments == "dummy"
 
 
 def _base_url(settings: Settings) -> str:
@@ -119,8 +142,14 @@ def capture_order(paypal_order_id: str) -> tuple[str, str | None]:
 def verify_webhook(headers: dict, body: bytes) -> None:
     """Verify a PayPal webhook signature. Raises PayPalError on failure."""
     settings = get_settings()
-    if _is_dummy(settings):
+    # `_explicit_dummy`, NOT `_is_dummy`: missing PayPal credentials must not
+    # read as permission to skip verification on the path that grants credit.
+    if _explicit_dummy(settings):
         return
+    if not (settings.paypal_client_id and settings.paypal_webhook_id):
+        # Half-configured is not configured — there is nothing to verify
+        # against, and accepting on that basis is the same fail-open bug.
+        raise PayPalError("paypal is not configured (client id / webhook id)")
     import json as _json
 
     token = _access_token(settings)

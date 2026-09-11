@@ -20,8 +20,32 @@ class PolarError(Exception):
 
 
 def _is_dummy(settings: Settings | None = None) -> bool:
+    """Dummy mode for OUTBOUND calls (create_checkout).
+
+    An absent access token counts here, and that is fine for a checkout: the
+    worst case is a fake `?polar=dummy` URL that charges nobody. Do NOT reuse
+    this for anything that GRANTS something — see `_explicit_dummy`.
+    """
     settings = settings or get_settings()
     return settings.dothesis_payments == "dummy" or not settings.polar_access_token
+
+
+def _explicit_dummy(settings: Settings | None = None) -> bool:
+    """Dummy mode somebody ASKED for, rather than inferred from missing config.
+
+    The distinction exists because inferring it on the INBOUND path was a hole:
+    `_is_dummy` is true whenever the access token is absent, and the webhook
+    skipped signature verification in dummy mode — so a production server
+    deployed without `POLAR_ACCESS_TOKEN` granted credits to anyone who posted
+    `{"type":"order.paid"}` at the endpoint. The endpoint is registered with
+    Polar and publicly reachable, so obscurity was never protecting it.
+
+    A missing env var is a broken deployment, and a broken deployment should
+    stop selling rather than start giving the product away. Wanting the short
+    circuit is a decision, so it has to be written down: `DOTHESIS_PAYMENTS=dummy`.
+    """
+    settings = settings or get_settings()
+    return settings.dothesis_payments == "dummy"
 
 
 def _product_id(package_id: str, settings: Settings) -> str:
@@ -104,12 +128,18 @@ def verify_webhook(payload: bytes, headers: "Mapping[str, str]") -> None:
     # distinguished the same way.
     if not (hdrs.get("webhook-signature") or hdrs.get("x-polar-signature")):
         raise PolarError("missing signature")
-    if _is_dummy(settings):
+    # `_explicit_dummy`, NOT `_is_dummy`: an absent access token must not be
+    # read as permission to skip verification on the path that grants credit.
+    if _explicit_dummy(settings):
         return
 
     from standardwebhooks.webhooks import Webhook  # noqa: PLC0415 — vendored via polar-sdk
 
     secret = settings.polar_webhook_secret
+    if not secret:
+        # Half-configured is not configured: there is nothing to verify against,
+        # and accepting on that basis is the same fail-open bug one step along.
+        raise PolarError("polar webhook secret is not configured")
     # str  -> strip `whsec_`, base64-decode  (Standard Webhooks, post 2026-09-08)
     # bytes-> use verbatim as the HMAC key    (Polar HMAC, pre 2026-09-08)
     for key in (secret, secret.encode()):

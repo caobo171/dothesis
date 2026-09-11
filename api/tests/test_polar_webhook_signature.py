@@ -98,3 +98,57 @@ def test_rejects_a_replayed_old_timestamp():
 def test_rejects_when_the_signature_header_is_absent():
     with pytest.raises(PolarError):
         verify_webhook(PAYLOAD, {"content-type": "application/json"})
+
+
+# --- misconfiguration must refuse, not pay out -----------------------------
+
+def _configure(monkeypatch, **over):
+    """Replace the settings this module reads, field by field."""
+    base = dict(dothesis_payments="polar", polar_access_token="polar_oat_test",
+                polar_webhook_secret=SECRET)
+    base.update(over)
+    monkeypatch.setattr("app.polar_client.get_settings",
+                        lambda: SimpleNamespace(**base))
+
+
+def test_a_missing_access_token_refuses_instead_of_granting_credit(monkeypatch):
+    """Forgetting one env var must not turn the webhook into a free-credit tap.
+
+    `_is_dummy()` is true when the access token is merely ABSENT, and dummy mode
+    returns before any signature check — so a production server deployed without
+    POLAR_ACCESS_TOKEN accepted `{"type":"order.paid"}` from anyone who knew the
+    URL and granted the credits. The endpoint is registered with Polar and
+    publicly reachable, so "nobody knows the path" was never the protection.
+
+    Missing configuration is a broken deployment. It should fail closed — stop
+    selling — rather than fail open and give the product away.
+    """
+    _configure(monkeypatch, polar_access_token="")
+
+    with pytest.raises(PolarError):
+        verify_webhook(PAYLOAD, {"webhook-signature": "v1,forged"})
+
+
+def test_a_missing_webhook_secret_refuses(monkeypatch):
+    """The token can be present and the secret still missing — half-configured
+    is not configured, and there is nothing to verify against."""
+    _configure(monkeypatch, polar_webhook_secret="")
+
+    with pytest.raises(PolarError):
+        verify_webhook(PAYLOAD, _headers(SECRET))
+
+
+def test_dummy_mode_still_works_when_it_is_declared_on_purpose(monkeypatch):
+    """Local dev and the credit-route tests need the short circuit — they just
+    have to ASK for it. `DOTHESIS_PAYMENTS=dummy` is the explicit request; an
+    empty token is not."""
+    _configure(monkeypatch, dothesis_payments="dummy", polar_access_token="",
+               polar_webhook_secret="")
+
+    verify_webhook(PAYLOAD, {"x-polar-signature": "any-in-dummy"})
+
+
+def test_a_configured_server_is_unaffected(monkeypatch):
+    """The fix must not cost the real path: fully configured still verifies."""
+    _configure(monkeypatch)
+    verify_webhook(PAYLOAD, _headers(SECRET))

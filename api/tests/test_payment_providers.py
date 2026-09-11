@@ -307,3 +307,47 @@ def test_sepay_webhook_ignores_underpayment(client_with_user):
     Session = get_session_factory()
     with Session() as s:
         assert s.get(User, buyer.id).credit == 0
+
+
+# --- a half-configured provider must refuse, not grant ----------------------
+
+def test_paypal_webhook_refuses_when_paypal_is_not_configured(monkeypatch):
+    """Same fail-open shape as the Polar webhook, on a route that also grants.
+
+    `paypal_client._is_dummy` is true when PAYPAL_CLIENT_ID is merely absent,
+    and verify_webhook returns before checking anything in dummy mode. DoThesis
+    ships with DOTHESIS_PAYMENTS=polar and no PayPal credentials, so this route
+    is live and unverified on production.
+
+    The exploit needs no stolen secret: start a real checkout to mint an Order
+    row, read its id, then POST PAYMENT.CAPTURE.COMPLETED with
+    `custom_id=<that id>` instead of paying. `_grant_order` credits the account.
+    """
+    from types import SimpleNamespace
+    from app import paypal_client
+
+    monkeypatch.setattr(
+        paypal_client, "get_settings",
+        lambda: SimpleNamespace(dothesis_payments="polar", paypal_client_id="",
+                                paypal_secret="", paypal_mode="sandbox",
+                                paypal_webhook_id=""),
+    )
+
+    with pytest.raises(paypal_client.PayPalError):
+        paypal_client.verify_webhook({"paypal-transmission-sig": "forged"}, b"{}")
+
+
+def test_paypal_dummy_mode_still_works_when_declared(monkeypatch):
+    """The existing dummy-mode tests above must keep passing — they ask for it
+    explicitly via DOTHESIS_PAYMENTS=dummy."""
+    from types import SimpleNamespace
+    from app import paypal_client
+
+    monkeypatch.setattr(
+        paypal_client, "get_settings",
+        lambda: SimpleNamespace(dothesis_payments="dummy", paypal_client_id="",
+                                paypal_secret="", paypal_mode="sandbox",
+                                paypal_webhook_id=""),
+    )
+
+    paypal_client.verify_webhook({}, b"{}")
