@@ -191,10 +191,175 @@ _REGRESSION_MARKERS = ("spss", "stata", "eviews", "jamovi", "jasp",
                        "regression", "hồi quy", "ols", "anova")
 
 
+# --- shape normalization ----------------------------------------------------
+#
+# Two shapes reach this module and only one was ever read. The documented block
+# (skills/dothesis-m4-analysis/SKILL.md) is a dict keyed by table name; the chat
+# agent commits a LIST of {id, source, results} steps, because the same skill
+# declares `analysis_results: AnalysisResult[]` and says "append to
+# analysis_results". Every consumer here — and claims_from_analysis_results, and
+# coverage_findings — tests `isinstance(dict)` and silently sees nothing, so one
+# real thesis exported a Results chapter with a complete SmartPLS run behind it
+# and not one table in it.
+#
+# Coerce rather than reject: the student is mid-flow and the numbers are right,
+# only the container is wrong. What cannot be mapped returns {} and the caller
+# falls back to exactly the no-data behaviour it had before.
+
+_CONSTRUCT_ALIASES = ("construct", "matrix", "name", "variable")
+_CON_FIELDS = {
+    "cronbach_alpha": ("cronbach_alpha", "alpha", "cronbachs_alpha"),
+    "composite_reliability": ("composite_reliability", "cr", "composite"),
+    "ave": ("ave", "average_variance_extracted"),
+    "rho_a": ("rho_a",),
+}
+_ARROW_RE = re.compile(r"\s*(?:->|→|_to_)\s*")
+
+
+def _lower_keys(d: dict) -> dict:
+    return {str(k).lower(): v for k, v in d.items()}
+
+
+def _pick(low: dict, names: tuple) -> Any:
+    for n in names:
+        if low.get(n) is not None:
+            return low[n]
+    return None
+
+
+def _norm_path_key(value: Any) -> str:
+    """"EXP → INT", "EXP -> INT" and "EXP_to_INT" are one path. Used only to
+    line the f² map up with the hypothesis rows it belongs to."""
+    return "->".join(p.strip().upper() for p in _ARROW_RE.split(str(value or "")) if p.strip())
+
+
+def _constructs_from(payload: Any) -> list:
+    """The list of per-construct reliability rows inside a step payload.
+
+    The agent parks it under whatever the SmartPLS tab was called
+    (`reliability_validity`, `constructs`, `rows`), so find it by SHAPE: a
+    non-empty list of dicts that name a construct and carry at least one
+    reliability statistic.
+    """
+    candidates = [payload] if isinstance(payload, list) else (
+        list(payload.values()) if isinstance(payload, dict) else [])
+    for value in candidates:
+        if not (isinstance(value, list) and value):
+            continue
+        rows = [r for r in value if isinstance(r, dict)]
+        if not rows:
+            continue
+        low = _lower_keys(rows[0])
+        has_name = any(a in low for a in _CONSTRUCT_ALIASES)
+        has_stat = any(_pick(low, names) is not None for names in _CON_FIELDS.values())
+        if has_name and has_stat:
+            return rows
+    return []
+
+
+def _constructs_block(rows: list) -> list:
+    out = []
+    for row in rows:
+        low = _lower_keys(row)
+        con = {"construct": _pick(low, _CONSTRUCT_ALIASES), "items": []}
+        for target, names in _CON_FIELDS.items():
+            value = _pick(low, names)
+            if value is not None:
+                con[target] = value
+        out.append(con)
+    return out
+
+
+def _hypotheses_block(rows: Any, f2_map: dict) -> list:
+    """Flat {beta, t, p} rows → the {id, path, numbers:{…}, decision} shape
+    `_structural_block` reads. f² arrives as its own SmartPLS tab keyed by path,
+    so fold it into the row it describes instead of dropping a whole column."""
+    out = []
+    for row in (rows if isinstance(rows, list) else []):
+        if not isinstance(row, dict):
+            continue
+        low = _lower_keys(row)
+        numbers = dict(low.get("numbers") or {})
+        for key in ("beta", "t", "p", "f2", "se", "z"):
+            if low.get(key) is not None:
+                numbers.setdefault(key, low[key])
+        path = low.get("path")
+        if numbers.get("f2") is None:
+            f2 = f2_map.get(_norm_path_key(path))
+            if f2 is not None:
+                numbers["f2"] = f2
+        out.append({"id": _pick(low, ("id", "hypothesis")), "path": path,
+                    "numbers": numbers, "decision": low.get("decision")})
+    return out
+
+
+def normalize_analysis_results(analysis_results: Any) -> dict:
+    """The documented dict block, whatever shape the results arrived in.
+
+    Returns the input unchanged when it is already a dict, a mapped block when
+    it is the agent's list-of-steps, and {} for anything else (free text, a bare
+    list of numbers) so callers keep their existing no-data behaviour.
+    """
+    try:
+        if isinstance(analysis_results, dict):
+            return analysis_results
+        if not isinstance(analysis_results, list):
+            return {}
+        # Generic pass: an entry's `id` IS the block name for every kind whose
+        # payload already matches (hypothesis_tests, descriptives, …).
+        by_id: Dict[str, Any] = {}
+        for entry in analysis_results:
+            if isinstance(entry, dict) and entry.get("id") and entry.get("results") is not None:
+                by_id.setdefault(str(entry["id"]), entry["results"])
+        if not by_id:
+            return {}
+
+        out: Dict[str, Any] = {}
+        structural: Dict[str, Any] = {}
+        f2_map: Dict[str, Any] = {}
+
+        # R²/Q²/f²/tool ride inside whichever step happened to report them.
+        for payload in by_id.values():
+            if not isinstance(payload, dict):
+                continue
+            for key in ("r2", "q2"):
+                if isinstance(payload.get(key), dict):
+                    structural.setdefault(key, payload[key])
+            if isinstance(payload.get("f2"), dict):
+                f2_map.update({_norm_path_key(k): v for k, v in payload["f2"].items()})
+            if isinstance(payload.get("tool"), str):
+                structural.setdefault("tool", payload["tool"])
+
+        for kind, payload in by_id.items():
+            if kind == "hypothesis_tests":
+                continue                       # needs f2_map; done after this loop
+            rows = _constructs_from(payload)
+            if rows:
+                out.setdefault("measurement_model", _constructs_block(rows))
+            elif isinstance(payload, dict) and isinstance(payload.get("matrix"), list):
+                out.setdefault("discriminant_validity", payload)
+
+        if "hypothesis_tests" in by_id:
+            tests = _hypotheses_block(by_id["hypothesis_tests"], f2_map)
+            if tests:
+                out["hypothesis_tests"] = tests
+        if structural:
+            out["structural_model"] = structural
+        # `source_figures` is a top-level key, not a step — carry it across so a
+        # list-shaped commit can still point Chapter 4 at its screenshots.
+        for entry in analysis_results:
+            if isinstance(entry, dict) and isinstance(entry.get("source_figures"), dict):
+                out.setdefault("source_figures", entry["source_figures"])
+        return out
+    except Exception:
+        logger.debug("normalize_analysis_results failed", exc_info=True)
+        return {}
+
+
 def detect_family(analysis_results: Any, methodology: Optional[str] = None) -> Optional[str]:
     try:
-        ar = analysis_results
-        if not isinstance(ar, dict):
+        ar = normalize_analysis_results(analysis_results)
+        if not ar:
             return None
         sm = ar.get("structural_model")
         has_fit = isinstance(sm, dict) and any(isinstance(sm.get(k), (int, float)) for k in _FIT_KEYS)
@@ -394,8 +559,8 @@ def render_results_tables(analysis_results: Any, language: str = "en",
     Bảng 4.14 hands the document two tables with the same number.
     """
     try:
-        ar = analysis_results
-        if not isinstance(ar, dict):
+        ar = normalize_analysis_results(analysis_results)
+        if not ar:
             return []
         fam = detect_family(ar)
         if fam is None:

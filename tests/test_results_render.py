@@ -11,9 +11,9 @@ from orchestrator.tools.results_render import (
     verify_rendered_blocks, weave,
 )
 from tests.fixtures.renderer_blocks import (
-    CBSEM_BLOCK, CBSEM_FIT_PAYLOAD, FREE_TEXT_BLOCK, LEGACY_STEP_BLOCK,
-    MALFORMED_BLOCK, NESTED_CS_CLEAN, NESTED_CS_WEAK, PARTIAL_BLOCK, PLS_BLOCK,
-    REGRESSION_BLOCK, SCREENING_BLOCK,
+    AGENT_LIST_BLOCK, CBSEM_BLOCK, CBSEM_FIT_PAYLOAD, FREE_TEXT_BLOCK,
+    LEGACY_STEP_BLOCK, MALFORMED_BLOCK, NESTED_CS_CLEAN, NESTED_CS_WEAK,
+    PARTIAL_BLOCK, PLS_BLOCK, REGRESSION_BLOCK, SCREENING_BLOCK,
 )
 
 
@@ -223,3 +223,40 @@ def test_all_never_raise_on_garbage():
                     (rendered_kinds, (None,)), (verify_rendered_blocks, (None, None))]:
         fn, args = fn_args
         fn(*args)  # must not raise
+
+
+# --- shape normalization (the agent's list-of-steps block) -------------------
+
+def test_agent_list_shape_normalizes_and_renders():
+    """The list shape the chat agent commits must reach the same tables the
+    documented dict shape does — same numbers, different container."""
+    from orchestrator.tools.results_render import normalize_analysis_results
+
+    norm = normalize_analysis_results(AGENT_LIST_BLOCK)
+    assert [c["construct"] for c in norm["measurement_model"]] == ["ATT", "DEC", "INT"]
+    assert norm["measurement_model"][0]["cronbach_alpha"] == 0.878
+    assert norm["measurement_model"][0]["composite_reliability"] == 0.911
+    assert norm["measurement_model"][0]["ave"] == 0.671
+    assert norm["structural_model"]["r2"] == {"DEC": 0.575, "INT": 0.527}
+    # Flat beta/t/p must move under `numbers` — where _structural_block reads them.
+    h2 = next(h for h in norm["hypothesis_tests"] if h["id"] == "H2")
+    assert h2["numbers"]["beta"] == 0.257
+    assert h2["numbers"]["t"] == 7.49
+    assert h2["numbers"]["f2"] == 0.137      # merged from the f2 map by path
+    assert h2["decision"] == "supported"
+
+    assert detect_family(AGENT_LIST_BLOCK) == "pls_sem"
+    kinds = {b["kind"] for b in render_results_tables(AGENT_LIST_BLOCK, "vi")}
+    assert kinds == {"measurement_model", "structural_paths", "r2_q2"}
+
+
+def test_normalize_leaves_documented_shape_untouched():
+    from orchestrator.tools.results_render import normalize_analysis_results
+    assert normalize_analysis_results(PLS_BLOCK) is PLS_BLOCK
+
+
+def test_normalize_rejects_what_it_cannot_map():
+    from orchestrator.tools.results_render import normalize_analysis_results
+    assert normalize_analysis_results(FREE_TEXT_BLOCK) == {}
+    assert normalize_analysis_results(None) == {}
+    assert normalize_analysis_results([1, 2, 3]) == {}

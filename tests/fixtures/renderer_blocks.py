@@ -53,6 +53,34 @@ PARTIAL_BLOCK = {"measurement_model": [{"construct": "A", "items": [{"item": "a1
 MALFORMED_BLOCK = {"measurement_model": ["not a dict", {"construct": "B", "items": "bad",
                                                         "ave": None}]}
 
+# The shape the CHAT agent actually commits: a list of {id, source, results}
+# step blocks, not the dict every consumer reads. skills/dothesis-m4-analysis
+# declares `analysis_results: AnalysisResult[]` (an array) while showing a dict
+# payload, and the agent followed the declaration. Values copied from project
+# 4c5f769a-7d96-4056-9a5d-a4e3654116ac, whose Chapter 4 exported with a complete
+# SmartPLS run behind it and not one table in it.
+AGENT_LIST_BLOCK = [
+    {"id": "measurement_model", "source": "user-provided SmartPLS report",
+     "results": {
+         "r2": {"DEC": 0.575, "INT": 0.527},
+         "f2": {"ATT_to_INT": 0.137, "INT_to_DEC": 0.858},
+         "htmt_max": 0.661,
+         "vif_range": "1.000-1.025",
+         "outer_loadings": "All reported indicators > 0.7",
+         "reliability_validity": [
+             {"construct": "ATT", "alpha": 0.878, "rho_A": 0.894, "CR": 0.911, "AVE": 0.671},
+             {"construct": "DEC", "alpha": 0.911, "rho_A": 0.912, "CR": 0.933, "AVE": 0.737},
+             {"construct": "INT", "alpha": 0.905, "rho_A": 0.906, "CR": 0.930, "AVE": 0.725},
+         ]}},
+    {"id": "hypothesis_tests", "source": "user-provided SmartPLS bootstrapping report",
+     "results": [
+         {"hypothesis": "H2", "path": "ATT → INT", "beta": 0.257, "t": 7.49,
+          "sd": 0.034, "p": "<0.001", "decision": "supported"},
+         {"hypothesis": "H7", "path": "INT → DEC", "beta": 0.606, "t": 13.367,
+          "sd": 0.045, "p": "<0.001", "decision": "supported"},
+     ]},
+]
+
 NESTED_CS_WEAK = {
     "m3_design": {"sample_plan": {"power_analysis": {"recommended_n": 200,
                   "justification": "inverse square root (Kock & Hadaya, 2018)"}}},
