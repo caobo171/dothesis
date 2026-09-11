@@ -215,7 +215,14 @@ def _basic_regression_claims(summary: dict, mk) -> list[dict]:
 # ============================================================================
 
 def claims_from_analysis_results(block: Any) -> list[dict]:
+    # The agent's list-of-steps shape carries the same numbers in a different
+    # container; reading it as "no claims" is how a full SmartPLS run committed
+    # with analysis_provenance numbers.total = 0 and nothing verified at all.
     if not isinstance(block, dict):
+        from orchestrator.tools.results_render import (  # noqa: PLC0415 — pure, stdlib-only
+            normalize_analysis_results)
+        block = normalize_analysis_results(block)
+    if not block:
         return []
     _agg_, _rigor, claims_from_table, mk, _vc = _lib()
     claims: list[dict] = []
@@ -346,11 +353,17 @@ def validate_analysis_results(block: Any, m3_hypotheses: Optional[list] = None) 
         _a, _r, _t, mk, validate_claims = _lib()
         claims = claims_from_analysis_results(block)
         findings = validate_claims(claims)
-        # Unstructured free-text results: cannot verify numbers.
-        if isinstance(block, str) and block.strip():
+        # Results nothing can read: cannot verify numbers, and Chapter 4 will
+        # have no tables. This used to test `isinstance(block, str)` only, so a
+        # LIST — the shape the chat agent actually commits — passed with no
+        # claims AND no warning, which read downstream as a clean bill of health.
+        from orchestrator.tools.results_render import (  # noqa: PLC0415 — pure, stdlib-only
+            normalize_analysis_results)
+        if block and not normalize_analysis_results(block):
             findings = findings + [{
                 "check": "structure.unstructured", "severity": "soft",
-                "message": "Results are stored as free text, so the numbers cannot be verified.",
+                "message": "Results are not stored as a readable results block, so the "
+                           "numbers cannot be verified and Chapter 4 will have no tables.",
                 "location": {"table": "analysis_results", "construct": None, "item": None, "path": None},
                 "observed": None, "expected": "structured analysis_results", "tolerance": None,
                 "source": "parsed"}]
