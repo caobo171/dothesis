@@ -52,9 +52,12 @@ _ALLOWED_MIME = {
     "application/pdf", "text/plain", "text/markdown", _DOCX_MIME,
     "text/csv", "application/csv", _XLSX_MIME, _XLS_MIME,
     "text/html", "application/x-spss-sav",
+    # Standalone screenshots — pasted in the composer or attached directly.
+    "image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff", "image/webp",
 }
 _ALLOWED_EXT = (".pdf", ".txt", ".md", ".markdown", ".docx",
-                ".csv", ".xlsx", ".xls", ".sav", ".htm", ".html")
+                ".csv", ".xlsx", ".xls", ".sav", ".htm", ".html",
+                ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp")
 
 
 _MIME_EXT = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif",
@@ -144,6 +147,27 @@ _DEFAULT_MAX_BYTES = 50 * 1024 * 1024
 _EXTRACTION_EPOCH = datetime(2026, 9, 11, 12, 0, tzinfo=timezone.utc)
 
 
+def _extract_image_text(body: bytes, mime: str,
+                        filename: str) -> tuple[str, int, list]:
+    """Vision-transcribe one pasted/attached screenshot."""
+    stem = (filename or "screenshot.png").replace("/", "_")
+    mime = mime if str(mime).startswith("image/") else "image/png"
+    try:
+        from agent.docx_extract import _IMAGE_PROMPT  # noqa: PLC0415
+        from agent.multimodal import Attachment, _transcribe_via_vision  # noqa: PLC0415
+
+        att = Attachment(filename=stem, bytes=body, mime_type=mime)
+        text = (_transcribe_via_vision(att, prompt=_IMAGE_PROMPT) or "").strip()
+    except Exception:  # noqa: BLE001
+        logger.exception("image transcription failed (%s)", stem)
+        return ("", 0, [])
+    if not text or text.upper().startswith("NONE"):
+        return ("", 0, [])
+    entry = {"figure": 1, "name": stem, "bytes": body, "mime": mime}
+    relpath = f"uploads/{stem}.img/{_figure_filename(entry)}"
+    return (f"[Hình 1] (ảnh gốc: {relpath})\n{text}", 1, [entry])
+
+
 def _extract_upload_text(body: bytes, mime: str, fname: str,
                          filename: str) -> tuple[str, int, list]:
     """(text, page_count, images) for one uploaded file. Pure and blocking — it
@@ -153,6 +177,10 @@ def _extract_upload_text(body: bytes, mime: str, fname: str,
     `images` is the transcribed screenshots a .docx carried, for the caller to
     mirror into the workspace; every other type returns [].
     """
+    if mime.startswith("image/") or fname.endswith(
+        (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp"),
+    ):
+        return _extract_image_text(body, mime, filename or "screenshot.png")
     if mime == "application/pdf" or fname.endswith(".pdf"):
         # Ingest: a scanned or screenshot-built PDF must not cache as empty text.
         text, pages = extract_pdf_text(body, ocr_if_hollow=True)

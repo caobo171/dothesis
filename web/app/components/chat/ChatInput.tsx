@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useRef, useState } from "react";
+import { type ClipboardEvent, ReactNode, useRef, useState } from "react";
 import {
   AtSign, ChevronDown, Paperclip, Send, X,
 } from "lucide-react";
@@ -245,6 +245,16 @@ export function ChatInput({
     updateAttachments(prev => prev.filter(a => a.uid !== uid));
   };
 
+  // Cmd/Ctrl+V with a screenshot on the clipboard attaches it like picking a
+  // file — the ordinary way students share SmartPLS output from a screen grab.
+  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (disabled) return;
+    const files = clipboardImageFiles(e.clipboardData);
+    if (files.length === 0) return;
+    e.preventDefault();
+    attachFiles(files);
+  };
+
   const openFilePicker = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -327,6 +337,7 @@ export function ChatInput({
               rows={1}
               value={text}
               onChange={e => setText(e.target.value)}
+              onPaste={handlePaste}
               onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -421,9 +432,15 @@ export function ChatInput({
 
         {/* Keyboard-shortcut hint. ⌘K "jump module" was removed — it had no
             handler wired (dead UI) and is meaningless on touch devices. */}
-        <div className="max-w-[880px] mx-auto flex justify-center items-center gap-1.5 mt-2 text-[11px] text-ink-400">
-          <kbd className="px-1 py-px rounded border border-ink-200 bg-white text-[10px] font-mono">Shift+↵</kbd>
-          <span>for newline</span>
+        <div className="max-w-[880px] mx-auto flex flex-wrap justify-center items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-ink-400">
+          <span className="inline-flex items-center gap-1.5">
+            <kbd className="px-1 py-px rounded border border-ink-200 bg-white text-[10px] font-mono">Shift+↵</kbd>
+            <span>for newline</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <kbd className="px-1 py-px rounded border border-ink-200 bg-white text-[10px] font-mono">⌘V</kbd>
+            <span>to paste a screenshot</span>
+          </span>
         </div>
       </div>
     </FileDropZone>
@@ -505,4 +522,21 @@ function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function clipboardImageFiles(data: DataTransfer): File[] {
+  const files: File[] = [];
+  const stamp = Date.now();
+  for (const item of Array.from(data.items)) {
+    if (!item.type.startsWith("image/")) continue;
+    const blob = item.getAsFile();
+    if (!blob) continue;
+    const sub = item.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
+    files.push(new File(
+      [blob],
+      `pasted-screenshot-${stamp}-${files.length + 1}.${sub}`,
+      { type: blob.type },
+    ));
+  }
+  return files;
 }

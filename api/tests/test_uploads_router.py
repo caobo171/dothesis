@@ -618,6 +618,22 @@ def test_docx_extraction_returns_images_for_the_workspace(monkeypatch):
     assert "[Hình 1] (ảnh gốc: uploads/_Result.docx.img/hinh-01.png)" in text
 
 
+def test_image_extraction_transcribes_pasted_screenshot(monkeypatch):
+    import agent.multimodal as mm
+    monkeypatch.setattr(mm, "_transcribe_via_vision",
+                        lambda att, prompt=None: "β = 0.42, p < 0.05")
+    from app.routers.uploads import _extract_image_text
+
+    png = b"\x89PNG\r\n\x1a\n" + b"x" * 32
+    text, pages, images = _extract_image_text(png, "image/png", "pasted-screenshot-1.png")
+
+    assert pages == 1
+    assert len(images) == 1
+    assert images[0]["figure"] == 1
+    assert "β = 0.42" in text
+    assert "uploads/pasted-screenshot-1.png.img/hinh-01.png" in text
+
+
 def test_docx_extraction_without_images_still_returns_a_triple():
     from app.routers.uploads import _extract_docx_text
     text, _pages, images = _extract_docx_text(_docx_with_table_between_chapters())

@@ -64,6 +64,26 @@ describe("ChatInput", () => {
     }
   });
 
+  test("paste screenshot attaches image like a file pick", async () => {
+    const onFileDrop = vi.fn(async () => ["upload-1"]);
+    render(<ChatInput onSubmit={() => {}} onFileDrop={onFileDrop} disabled={false} />);
+    const textarea = screen.getByRole("textbox");
+    const blob = new File(["img"], "blob", { type: "image/png" });
+
+    fireEvent.paste(textarea, {
+      clipboardData: {
+        items: [{ type: "image/png", getAsFile: () => blob }],
+      },
+    });
+
+    await waitFor(() => expect(onFileDrop).toHaveBeenCalled());
+    const passed = onFileDrop.mock.calls[0][0] as File[];
+    expect(passed).toHaveLength(1);
+    expect(passed[0].type).toBe("image/png");
+    expect(passed[0].name).toMatch(/^pasted-screenshot-/);
+    await screen.findByText(/pasted-screenshot-/);
+  });
+
   test("file drop fires onFileDrop", () => {
     const onFileDrop = vi.fn();
     render(<ChatInput onSubmit={() => {}} onFileDrop={onFileDrop} disabled={false} />);

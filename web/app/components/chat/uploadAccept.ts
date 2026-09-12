@@ -24,4 +24,7 @@ export const UPLOAD_ACCEPT =
   "application/vnd.ms-excel," +
   // SmartPLS / SPSS results export
   "text/html," +
-  ".pdf,.txt,.md,.markdown,.docx,.csv,.xlsx,.xls,.sav,.htm,.html";
+  // pasted / attached screenshots
+  "image/png,image/jpeg,image/gif,image/bmp,image/tiff,image/webp," +
+  ".pdf,.txt,.md,.markdown,.docx,.csv,.xlsx,.xls,.sav,.htm,.html," +
+  ".png,.jpg,.jpeg,.gif,.bmp,.tif,.tiff,.webp";
