@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from app.blog import STATUS_PUBLISHED, seeds as S
 from app.db import get_session_factory
 from app.main import create_app
-from app.models import BlogPost, User
+from app.models import BlogCategory, BlogPost, User
 
 FIXTURE_DIR = Path(__file__).resolve().parents[2] / "docs" / "seo" / "fixtures" / "seeds"
 
@@ -187,3 +187,106 @@ def test_admin_delete_reports_a_missing_post(admin_client):
         "/api/v1/admin/blog/delete",
         json={"access_token": "t", "id": "00000000-0000-0000-0000-000000000000"})
     assert r.status_code == 404
+
+
+# --- reading one post back, for the editor ---------------------------------
+
+def test_get_returns_the_body_the_list_leaves_out(admin_client, seed, categories):
+    """/list is a listing card (`compact`), so it has no `body`. An editor that
+    cannot load the prose it is meant to edit is not an editor."""
+    created = admin_client.post("/api/v1/admin/blog/upsert", json=seed).json()
+    r = admin_client.post("/api/v1/admin/blog/get",
+                          json={"access_token": "t", "id": created["id"]})
+    assert r.status_code == 200
+    got = r.json()
+    # Stripped both sides: the write path normalises trailing whitespace, and
+    # that is the stored body's business, not this test's.
+    assert got["body"].strip() == seed["body"].strip()
+    # Every field the form has to round-trip, or an edit silently drops it.
+    for field in ("title", "slug", "locale", "meta_title", "meta_description",
+                  "focus_keyword", "excerpt", "archetype"):
+        assert got[field] == seed[field], field
+    assert got["category"]["slug"] == seed["category"]
+    assert got["secondary_keywords"] == seed.get("secondary_keywords", [])
+    # Publishing state travels with it — the editor shows and re-submits it.
+    assert "status" in got and "scheduled_at" in got and "published_at" in got
+
+
+def test_get_reports_a_missing_post(admin_client):
+    r = admin_client.post(
+        "/api/v1/admin/blog/get",
+        json={"access_token": "t", "id": "00000000-0000-0000-0000-000000000000"})
+    assert r.status_code == 404
+
+
+# --- the editor's selects --------------------------------------------------
+
+def test_options_lists_the_closed_category_set(admin_client, categories):
+    """The nine slugs are a closed list — a seed pointing outside it is an
+    error, so the form must offer exactly these and not a free text box."""
+    r = admin_client.post("/api/v1/admin/blog/options", json={"access_token": "t"})
+    assert r.status_code == 200
+    assert tuple(r.json()["category_slugs"]) == S.CATEGORY_SLUGS
+
+
+def test_options_suggests_the_archetypes_already_in_use(admin_client, seed, categories):
+    """Archetype is free text with no constant behind it, so the only honest
+    suggestion list is what the bank already contains."""
+    admin_client.post("/api/v1/admin/blog/upsert", json=seed)
+    r = admin_client.post("/api/v1/admin/blog/options", json={"access_token": "t"}).json()
+    assert seed["archetype"] in r["archetypes"]
+
+
+# --- categories ------------------------------------------------------------
+
+def test_categories_list_spans_every_locale(admin_client, categories, db):
+    """The public route answers for ONE locale. An operator is managing the
+    hub in both editions at once and needs to see them side by side."""
+    db.add(BlogCategory(locale="en", slug="spss", name="SPSS", display_name="SPSS",
+                        sort_order=0))
+    db.commit()
+    r = admin_client.post("/api/v1/admin/blog/categories/list",
+                          json={"access_token": "t"}).json()
+    assert {c["locale"] for c in r["categories"]} >= {"vi", "en"}
+
+
+def test_categories_upsert_refreshes_the_intro_copy(admin_client, categories, db):
+    r = admin_client.post("/api/v1/admin/blog/categories/upsert",
+                          json={"access_token": "t", "locale": "vi", "slug": "spss",
+                                "name": "SPSS", "display_name": "SPSS",
+                                "intro_md": "Đoạn mở đầu mới.", "sort_order": 3})
+    assert r.status_code == 200
+    assert r.json()["intro_md"] == "Đoạn mở đầu mới."
+    rows = db.query(BlogCategory).filter_by(locale="vi", slug="spss").all()
+    assert len(rows) == 1              # refreshed, not duplicated
+
+
+def test_categories_upsert_refuses_a_slug_outside_the_closed_set(admin_client, categories):
+    """Inventing a category here would produce a hub no seed can ever point at:
+    validate_seed rejects any category outside CATEGORY_SLUGS."""
+    r = admin_client.post("/api/v1/admin/blog/categories/upsert",
+                          json={"access_token": "t", "locale": "vi", "slug": "made-up",
+                                "name": "X", "display_name": "X"})
+    assert r.status_code == 422
+
+
+def test_categories_delete_refuses_while_posts_point_at_it(admin_client, seed, categories, db):
+    """Deleting the row would orphan every post in it — blog_posts.category_id
+    survives, pointing at nothing, and the hub page 404s with its posts inside."""
+    admin_client.post("/api/v1/admin/blog/upsert", json=seed)
+    post = db.query(BlogPost).filter_by(slug=seed["slug"]).one()
+    r = admin_client.post("/api/v1/admin/blog/categories/delete",
+                          json={"access_token": "t", "id": str(post.category_id)})
+    assert r.status_code == 409
+    assert db.query(BlogCategory).filter_by(id=post.category_id).count() == 1
+
+
+def test_categories_delete_removes_an_empty_one(admin_client, categories, db):
+    db.add(BlogCategory(locale="en", slug="spss", name="SPSS", display_name="SPSS",
+                        sort_order=0))
+    db.commit()
+    row = db.query(BlogCategory).filter_by(locale="en", slug="spss").one()
+    r = admin_client.post("/api/v1/admin/blog/categories/delete",
+                          json={"access_token": "t", "id": str(row.id)})
+    assert r.status_code == 200
+    assert db.query(BlogCategory).filter_by(locale="en", slug="spss").count() == 0
