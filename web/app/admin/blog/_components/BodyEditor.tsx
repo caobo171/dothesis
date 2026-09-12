@@ -1,10 +1,13 @@
 "use client";
 
+import Image from "@tiptap/extension-image";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Markdown } from "tiptap-markdown";
+
+import { ACCEPTED_IMAGE_TYPES, uploadBlogImage } from "./upload-image";
 
 /**
  * The post body: a WYSIWYG canvas and the markdown source, over ONE string.
@@ -42,6 +45,12 @@ const EXTENSIONS = [
   TableRow,
   TableHeader,
   TableCell,
+  // Not optional, and not only for the upload button. StarterKit has no image
+  // node, and without one the markdown parser has nowhere to put `![alt](url)`
+  // — it drops the image on load and the next save writes the post back
+  // without it. Measured before this line existed: "Before\n\n![a
+  // chart](/img/blog/x.webp)\n\nAfter" round-tripped to "Before\n\nAfter".
+  Image.configure({ inline: false }),
 ];
 
 export function BodyEditor({
@@ -53,6 +62,9 @@ export function BodyEditor({
 }) {
   const hasHtml = bodyHasRawHtml(value);
   const [mode, setMode] = useState<"rich" | "source">("rich");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const sourceRef = useRef<HTMLTextAreaElement | null>(null);
   // What WE last handed upward. The parent echoes it straight back as `value`,
   // and re-seeding the canvas from our own echo would reset the caret on every
   // keystroke.
@@ -90,6 +102,60 @@ export function BodyEditor({
     if (hasHtml) setMode("source");
   }, [hasHtml]);
 
+  /**
+   * Upload, then place the image where the author was working: as a real image
+   * node in the canvas, or as `![](url)` at the caret in the source. One
+   * function for the button, the paste and the drop, because all three mean
+   * the same thing and diverging would give three subtly different behaviours.
+   */
+  const insertImage = useCallback(async (file: File) => {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const url = await uploadBlogImage(file);
+      if (mode === "rich" && editor) {
+        // Alt text is the author's job and cannot be guessed from a filename;
+        // it starts empty and is edited in the source tab. Better an honest
+        // empty alt than "IMG_4032.png" read out to a screen reader.
+        editor.chain().focus().setImage({ src: url, alt: "" }).run();
+      } else {
+        const el = sourceRef.current;
+        const at = el ? el.selectionStart : value.length;
+        const snippet = `\n\n![](${url})\n\n`;
+        onChange(value.slice(0, at) + snippet + value.slice(at));
+      }
+    } catch (e) {
+      setUploadError((e as Error)?.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }, [editor, mode, onChange, value]);
+
+  /** The first image on the clipboard / in the drop, if there is one. */
+  const imageFrom = (list: FileList | DataTransferItemList | null): File | null => {
+    if (!list) return null;
+    const files = Array.from(list as ArrayLike<File | DataTransferItem>);
+    for (const entry of files) {
+      const file = "getAsFile" in entry ? entry.getAsFile() : (entry as File);
+      if (file && file.type.startsWith("image/")) return file;
+    }
+    return null;
+  };
+
+  const onPaste = (e: React.ClipboardEvent) => {
+    const file = imageFrom(e.clipboardData?.items ?? null);
+    if (!file) return;          // ordinary text paste — leave it alone
+    e.preventDefault();
+    void insertImage(file);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    const file = imageFrom(e.dataTransfer?.files ?? null);
+    if (!file) return;
+    e.preventDefault();
+    void insertImage(file);
+  };
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -124,23 +190,37 @@ export function BodyEditor({
         </p>
       )}
 
+      {uploadError && (
+        <p className="rounded-lg border border-[#E6C9C9] bg-[#FBF0F0] px-3 py-2 text-[12.5px] text-[#8A3A3A]">
+          {uploadError}
+        </p>
+      )}
+
       {mode === "rich" && editor ? (
-        <div className="rounded-lg border border-ink-200">
-          <Toolbar editor={editor} />
+        <div className="rounded-lg border border-ink-200"
+             onPaste={onPaste} onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
+          <Toolbar editor={editor} onPickImage={insertImage} uploading={uploading} />
           <div className="px-3 py-2">
             <EditorContent editor={editor} />
           </div>
         </div>
       ) : (
-        <textarea
-          className="w-full rounded-lg border border-ink-200 px-3 py-2 font-mono text-[13px] leading-relaxed text-ink-900 focus:border-primary-400 focus:outline-none"
-          rows={28}
-          value={value}
-          onChange={(e) => {
-            lastEmitted.current = e.target.value;
-            onChange(e.target.value);
-          }}
-        />
+        <div className="space-y-1">
+          <ImageButton onPick={insertImage} uploading={uploading} />
+          <textarea
+            ref={sourceRef}
+            className="w-full rounded-lg border border-ink-200 px-3 py-2 font-mono text-[13px] leading-relaxed text-ink-900 focus:border-primary-400 focus:outline-none"
+            rows={28}
+            value={value}
+            onPaste={onPaste}
+            onDrop={onDrop}
+            onDragOver={(e) => e.preventDefault()}
+            onChange={(e) => {
+              lastEmitted.current = e.target.value;
+              onChange(e.target.value);
+            }}
+          />
+        </div>
       )}
     </div>
   );
@@ -149,7 +229,44 @@ export function BodyEditor({
 /** Only what a blog body is actually made of. Anything markdown cannot express
  *  is deliberately absent — a button that writes a mark the serializer drops on
  *  save is a button that loses the author's work. */
-function Toolbar({ editor }: { editor: Editor }) {
+/** A file picker dressed as a button. Shared by both modes so "Image" means the
+ *  same thing whichever tab is open. */
+function ImageButton({ onPick, uploading }: {
+  onPick: (file: File) => void | Promise<void>;
+  uploading: boolean;
+}) {
+  const input = useRef<HTMLInputElement | null>(null);
+  return (
+    <>
+      <button
+        type="button"
+        disabled={uploading}
+        onClick={() => input.current?.click()}
+        className="rounded px-2 py-1 text-[12.5px] font-semibold text-ink-600 hover:bg-ink-100 disabled:opacity-40"
+      >
+        {uploading ? "Uploading…" : "Image"}
+      </button>
+      <input
+        ref={input}
+        type="file"
+        accept={ACCEPTED_IMAGE_TYPES.join(",")}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          // Cleared so picking the SAME file twice still fires a change event.
+          e.target.value = "";
+          if (file) void onPick(file);
+        }}
+      />
+    </>
+  );
+}
+
+function Toolbar({ editor, onPickImage, uploading }: {
+  editor: Editor;
+  onPickImage: (file: File) => void | Promise<void>;
+  uploading: boolean;
+}) {
   const btn = (active: boolean) =>
     `rounded px-2 py-1 text-[12.5px] font-semibold ${
       active ? "bg-ink-900 text-white" : "text-ink-600 hover:bg-ink-100"
@@ -215,6 +332,7 @@ function Toolbar({ editor }: { editor: Editor }) {
               onClick={() => editor.chain().focus().setHorizontalRule().run()}>
         ―
       </button>
+      <ImageButton onPick={onPickImage} uploading={uploading} />
     </div>
   );
 }

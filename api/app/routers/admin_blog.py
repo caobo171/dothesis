@@ -14,7 +14,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import Field
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
@@ -25,7 +25,7 @@ from ..blog.seeds import SeedError, category_index, upsert_from_seed, validate_s
 from ..db import db_session
 from ..jwt_auth import AuthedBody
 from ..models import BlogCategory, BlogPost
-from .blog import MAX_PAGE_SIZE, compact, full, iso
+from .blog import BLOG_IMAGE_PREFIX, MAX_PAGE_SIZE, compact, full, iso
 
 router = APIRouter(prefix="/admin/blog", tags=["admin"],
                    dependencies=[Depends(require_admin)])
@@ -135,6 +135,94 @@ def admin_list(body: AdminListBody, db: Session = Depends(db_session)):
     categories = {c.id: c for c in db.scalars(select(BlogCategory)).all()}
     return {"posts": [_admin_view(p, categories.get(p.category_id)) for p in rows],
             "total": total, "page": body.page, "page_size": body.page_size}
+
+
+#: Web-safe formats only, and the extension is derived from this map rather
+#: than from the filename — the filename is caller-supplied and is what a
+#: ".png.svg" would ride in on.
+_IMAGE_EXT: dict[str, str] = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
+
+#: Generous for a screenshot, mean enough that nobody drops a 12MP camera JPEG
+#: onto a page whose whole job is to load fast for Google.
+_IMAGE_MAX_BYTES_DEFAULT = 4 * 1024 * 1024
+
+
+def _image_max_bytes() -> int:
+    import os  # noqa: PLC0415
+
+    try:
+        return int(os.environ.get("BLOG_IMAGE_MAX_BYTES") or _IMAGE_MAX_BYTES_DEFAULT)
+    except ValueError:
+        return _IMAGE_MAX_BYTES_DEFAULT
+
+
+@router.post("/upload-image")
+async def admin_upload_image(file: UploadFile = File(...)):
+    """Store an image for a post body and return a permanent public url.
+
+    The UPLOAD half of this was never the missing piece — routers/uploads.py has
+    put bytes in S3 since the beginning. What did not exist is a way to read one
+    back without an account: that path 302s to a 300-second presigned url behind
+    an owner-or-admin check, and an <img> on a public post is fetched by
+    anonymous readers and by Googlebot, neither of which has a token and both of
+    which arrive long after 300 seconds. Hence the companion GET in blog.py.
+
+    CONTENT-ADDRESSED. The key is the sha256 of the bytes, so re-uploading the
+    same image is idempotent (no duplicate objects, same url) and a given url
+    can never come to mean different bytes — which is what lets the read side
+    serve it `immutable` for a year.
+
+    Stored as-is, in the format it arrived in. Converting to webp would be
+    smaller and is what the illustration library does, but that runs through
+    Pillow, and Pillow is installed here only as an undeclared transitive
+    dependency — a prod upload route that 500s the day something stops pulling
+    it in is a bad trade for a few KB. Declare it first, then convert.
+    """
+    import hashlib  # noqa: PLC0415
+    import os  # noqa: PLC0415
+
+    from starlette.concurrency import run_in_threadpool  # noqa: PLC0415
+
+    # Resolved through the module, not bound at import: uploads.s3_from_env is
+    # the single seam both this route and blog.blog_image go through.
+    from .uploads import s3_from_env  # noqa: PLC0415
+
+    mime = (file.content_type or "").lower()
+    if mime not in _IMAGE_EXT:
+        raise HTTPException(415, detail={"error": {"code": "bad_mime", "message":
+            f"unsupported image type: {mime or 'unknown'}; "
+            "expected one of " + ", ".join(sorted(_IMAGE_EXT))}})
+
+    body = await file.read()
+    if not body:
+        raise HTTPException(400, detail={"error": {"code": "empty_file",
+                                                   "message": "the file is empty"}})
+    limit = _image_max_bytes()
+    if len(body) > limit:
+        raise HTTPException(413, detail={"error": {"code": "too_large", "message":
+            f"image is {len(body)} bytes; the limit is {limit}"}})
+
+    key = f"{hashlib.sha256(body).hexdigest()}.{_IMAGE_EXT[mime]}"
+    # run_in_threadpool for the same reason uploads.py does it: boto3 is
+    # blocking, this route is async, and a single-worker API stalls entirely for
+    # the duration of a call made straight on the event loop.
+    await run_in_threadpool(
+        s3_from_env().put_object,
+        Bucket=os.environ.get("S3_BUCKET"),
+        Key=f"{BLOG_IMAGE_PREFIX}{key}",
+        Body=body,
+        ContentType=mime,
+    )
+    # Root-relative, like the illustration library's `/img/blog/x.webp`. An
+    # absolute origin in a post body bakes the environment into the row; the
+    # two places that need one (JSON-LD, OG tags) already run every url through
+    # absoluteUrl().
+    return {"url": f"/api/v1/blog/image/{key}", "bytes": len(body), "content_type": mime}
 
 
 @router.post("/get")

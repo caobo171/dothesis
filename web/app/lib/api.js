@@ -5,7 +5,11 @@
 // See web/app/lib/tokenStore.ts + api/app/jwt_auth.py for the design.
 import { tokenStore } from "./tokenStore";
 
-const PUBLIC_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
+// Exported so the one route that cannot go through apiFetch — the multipart
+// blog image upload, whose body is a FormData and not JSON — resolves the API
+// the same way everything else does instead of hardcoding a second guess.
+export const PUBLIC_BASE =
+  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:7100/api/v1";
 
 // Server-side rendering talks to the API over loopback when told to. The blog
 // renders on the marketing host, whose public API base points at the app

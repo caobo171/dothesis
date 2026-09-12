@@ -9,6 +9,7 @@
  * quietly eaten.
  */
 import { Editor } from "@tiptap/core";
+import Image from "@tiptap/extension-image";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
@@ -26,6 +27,7 @@ function roundTrip(markdown: string): string {
       TableRow,
       TableHeader,
       TableCell,
+      Image.configure({ inline: false }),
     ],
     content: markdown,
   });
@@ -61,6 +63,17 @@ describe("markdown round-trip", () => {
     const out = roundTrip("```r\nlibrary(psych)\n```");
     expect(out).toContain("```r");
     expect(out).toContain("library(psych)");
+  });
+
+  it("keeps an image, which it silently ate before the Image node existed", () => {
+    // Regression. StarterKit has no image node, so the markdown parser had
+    // nowhere to put `![alt](url)` and dropped it on load — the next save then
+    // wrote the post back without the picture. Measured at the time:
+    // "Before\n\n![a chart](/img/blog/x.webp)\n\nAfter" -> "Before\n\nAfter".
+    const out = roundTrip("Before\n\n![a chart](/api/v1/blog/image/abc.png)\n\nAfter");
+    expect(out).toContain("![a chart](/api/v1/blog/image/abc.png)");
+    expect(out).toContain("Before");
+    expect(out).toContain("After");
   });
 
   it("keeps a blockquote", () => {

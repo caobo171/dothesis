@@ -10,10 +10,11 @@ module is allowed to write its own version of "is this post public".
 """
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
@@ -23,6 +24,20 @@ from ..db import db_session
 from ..models import BlogCategory, BlogPost
 
 router = APIRouter(prefix="/blog", tags=["blog"])
+
+#: Where post-body images live in the bucket. A dedicated prefix, well away
+#: from `users/<uid>/projects/...`, because the read route below is public and
+#: the prefix is the boundary between what may be served and what may not.
+BLOG_IMAGE_PREFIX = "blog/images/"
+
+#: The only key shape the public image route will serve: a sha256 hex digest
+#: plus a known extension. The key arrives in a URL, so anything looser is a
+#: way to read arbitrary objects out of a bucket that also holds every
+#: student's private uploads.
+_IMAGE_KEY = re.compile(r"^[a-f0-9]{64}\.(png|jpg|webp|gif)$")
+
+_IMAGE_CONTENT_TYPE = {"png": "image/png", "jpg": "image/jpeg",
+                       "webp": "image/webp", "gif": "image/gif"}
 
 MAX_PAGE_SIZE = 50
 MAX_RELATED = 5
@@ -237,6 +252,50 @@ def get_post(body: GetBody, db: Session = Depends(db_session)):
         db.rollback()
 
     return payload
+
+
+@router.get("/image/{key}")
+def blog_image(key: str) -> Response:
+    """Serve a post-body image. Public, unauthenticated, and a GET.
+
+    THE SECOND GET IN THE API, and the exception is the same kind /health gets.
+    CLAUDE.md's POST-only rule exists so there is always a body for the auth
+    token to ride in; this route has no token to carry and could not use one if
+    it did. It is the `src` of an <img> on a public page — the browser issues a
+    GET, Googlebot issues a GET, and neither can be argued with. A POST here
+    would mean no image ever loads.
+
+    `key` comes off a public URL, so it is matched against a strict sha256 +
+    known-extension pattern before it touches S3. The bucket also holds every
+    student's private uploads under `users/<uid>/projects/...`; without this
+    check the route would read any of them out on request. The prefix is joined
+    here, never taken from the caller.
+
+    Cached `immutable` for a year because the key IS the hash of the bytes: the
+    url cannot come to mean something else, so there is nothing to revalidate.
+    """
+    import os  # noqa: PLC0415
+
+    from .uploads import s3_from_env  # noqa: PLC0415
+
+    if not _IMAGE_KEY.match(key):
+        raise HTTPException(400, detail={"error": {"code": "bad_key",
+                                                   "message": "not an image key"}})
+    try:
+        obj = s3_from_env().get_object(Bucket=os.environ.get("S3_BUCKET"),
+                                       Key=f"{BLOG_IMAGE_PREFIX}{key}")
+        body = obj["Body"].read()
+    except Exception as e:  # noqa: BLE001
+        # A missing object is the ordinary case (a deleted image, a stale url in
+        # an old post) and must read as 404, not as a 500 that pages someone.
+        raise HTTPException(404, detail={"error": {"code": "not_found",
+                                                   "message": "image not found"}}) from e
+
+    return Response(
+        content=body,
+        media_type=_IMAGE_CONTENT_TYPE[key.rsplit(".", 1)[1]],
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @router.post("/categories")

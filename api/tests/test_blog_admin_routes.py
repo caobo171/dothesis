@@ -290,3 +290,107 @@ def test_categories_delete_removes_an_empty_one(admin_client, categories, db):
                           json={"access_token": "t", "id": str(row.id)})
     assert r.status_code == 200
     assert db.query(BlogCategory).filter_by(locale="en", slug="spss").count() == 0
+
+
+# --- image upload ----------------------------------------------------------
+#
+# The upload half already existed (routers/uploads.py puts bytes in S3). What
+# did not, and what these cover, is serving one back at a PERMANENT PUBLIC url:
+# the only read path before this was a 300-second presigned redirect behind an
+# owner-or-admin check, and an <img> on a public post read by an anonymous
+# visitor satisfies neither.
+
+PNG_1PX = bytes.fromhex(
+    "89504e470d0a1a0a0000000d494844520000000100000001080600000"
+    "01f15c4890000000a49444154789c6300010000050001"
+    "0d0a2db40000000049454e44ae426082")
+
+
+class _FakeS3:
+    """Enough of the boto3 surface for put/get, keyed in memory."""
+
+    def __init__(self):
+        self.objects: dict[str, dict] = {}
+
+    def put_object(self, *, Bucket, Key, Body, ContentType=None, **kw):
+        self.objects[Key] = {"Body": Body, "ContentType": ContentType}
+
+    def get_object(self, *, Bucket, Key):
+        import io as _io
+
+        if Key not in self.objects:
+            from botocore.exceptions import ClientError
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+        row = self.objects[Key]
+        return {"Body": _io.BytesIO(row["Body"]), "ContentType": row["ContentType"]}
+
+
+@pytest.fixture
+def s3(monkeypatch):
+    fake = _FakeS3()
+    monkeypatch.setenv("S3_BUCKET", "test-bucket")
+    # One seam: both routes resolve s3_from_env through routers.uploads.
+    monkeypatch.setattr("app.routers.uploads.s3_from_env", lambda: fake)
+    return fake
+
+
+def test_an_uploaded_image_comes_back_from_a_public_url(admin_client, s3):
+    r = admin_client.post("/api/v1/admin/blog/upload-image",
+                          files={"file": ("hero.png", PNG_1PX, "image/png")})
+    assert r.status_code == 200, r.text
+    url = r.json()["url"]
+
+    # Anonymous — no token, no cookie. This is the whole point: Googlebot and a
+    # reader with no account have to be able to fetch it.
+    public = TestClient(create_app()).get(url)
+    assert public.status_code == 200
+    assert public.content == PNG_1PX
+    assert public.headers["content-type"] == "image/png"
+    # Content-addressed, so the url can never point at different bytes.
+    assert "immutable" in public.headers.get("cache-control", "")
+
+
+def test_uploading_the_same_image_twice_gives_the_same_url(admin_client, s3):
+    first = admin_client.post("/api/v1/admin/blog/upload-image",
+                              files={"file": ("a.png", PNG_1PX, "image/png")}).json()
+    second = admin_client.post("/api/v1/admin/blog/upload-image",
+                               files={"file": ("b.png", PNG_1PX, "image/png")}).json()
+    assert first["url"] == second["url"]
+    assert len(s3.objects) == 1          # stored once, not per upload
+
+
+def test_upload_refuses_a_file_that_is_not_an_image(admin_client, s3):
+    r = admin_client.post("/api/v1/admin/blog/upload-image",
+                          files={"file": ("notes.pdf", b"%PDF-1.4", "application/pdf")})
+    assert r.status_code == 415
+
+
+def test_upload_refuses_an_oversized_image(admin_client, s3, monkeypatch):
+    monkeypatch.setenv("BLOG_IMAGE_MAX_BYTES", "100")
+    r = admin_client.post("/api/v1/admin/blog/upload-image",
+                          files={"file": ("big.png", b"x" * 200, "image/png")})
+    assert r.status_code == 413
+
+
+def test_a_non_admin_cannot_upload(s3):
+    client, app = _client_as("student@example.com")
+    try:
+        r = client.post("/api/v1/admin/blog/upload-image",
+                        files={"file": ("hero.png", PNG_1PX, "image/png")})
+        assert r.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_the_public_image_route_serves_only_content_hashes(s3):
+    """The key comes straight off a public url, so anything other than a strict
+    hash is a way to read arbitrary S3 keys — every private upload in the
+    bucket lives under `users/<uid>/projects/...`."""
+    anon = TestClient(create_app())
+    for key in ("users/abc/projects/secret.pdf",
+                "../../etc/passwd",
+                "not-a-hash.png",
+                "a" * 64 + ".exe"):
+        assert anon.get(f"/api/v1/blog/image/{key}").status_code in (400, 404), key
+    # And a well-formed hash that simply is not there is a 404, not a 500.
+    assert anon.get(f"/api/v1/blog/image/{'a' * 64}.png").status_code == 404
