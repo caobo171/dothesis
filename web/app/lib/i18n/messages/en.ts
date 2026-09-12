@@ -241,6 +241,7 @@ export const en = {
   // renders it since the shells split, but a key is cheap and removing one is
   // a separate, greppable change.
   "nav.adminConsole": "Admin console",
+  "nav.backToApp": "Back to app",
   "nav.content": "Content",
   "nav.people": "People",
   "nav.operations": "Operations",

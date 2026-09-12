@@ -205,6 +205,7 @@ export const vi: Record<MessageKey, string> = {
   "nav.mcp": "MCP",
   "nav.admin": "Quản trị",
   "nav.adminConsole": "Bảng quản trị",
+  "nav.backToApp": "Quay lại ứng dụng",
   "nav.content": "Nội dung",
   "nav.people": "Người dùng",
   "nav.operations": "Vận hành",

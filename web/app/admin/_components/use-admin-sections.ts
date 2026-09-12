@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeftIcon,
   CpuChipIcon,
   CreditCardIcon,
   DocumentTextIcon,
@@ -41,6 +42,23 @@ export function useAdminSections(): SidebarSection[] {
   return useMemo(
     () => [
       {
+        // The way out, and the first thing in the list.
+        //
+        // Splitting the shells made the console a one-way door: the student
+        // menu it used to borrow was also how you left it, and nothing
+        // replaced that. An operator who clicked Admin had no route back to
+        // their own dashboard except editing the URL.
+        //
+        // No section heading — SidebarLayout skips the label when `name` is
+        // empty, so this reads as a single exit above the console's contents
+        // rather than a one-item category competing with them.
+        id: "exit",
+        name: "",
+        options: [
+          { name: t("nav.backToApp"), href: "/", icon: ArrowLeftIcon },
+        ],
+      },
+      {
         // The blog is a content surface with its own editorial workflow, so it
         // reads first and separately from the operational tables below it.
         id: "content",
@@ -65,7 +83,12 @@ export function useAdminSections(): SidebarSection[] {
         id: "operations",
         name: t("nav.operations"),
         options: [
-          { name: t("nav.papers"), href: "/admin/papers", icon: DocumentTextIcon },
+          // "Theses", not "Papers", even though the path is /admin/papers:
+          // admin_papers reads `projects`, and the legacy `papers` table it was
+          // named after has been empty since the v3 pivot. The route keeps its
+          // spelling — that is a separate change — but the menu should call the
+          // thing what the rest of the product calls it.
+          { name: t("nav.theses"), href: "/admin/papers", icon: DocumentTextIcon },
           { name: t("nav.jobs"), href: "/admin/jobs", icon: CpuChipIcon },
           // Plain "Tool usage" again, not "All tool usage": the disambiguation
           // only existed because the student entry sat in the same menu.

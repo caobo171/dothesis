@@ -66,6 +66,27 @@ describe("the student sidebar", () => {
 });
 
 describe("the admin sidebar", () => {
+  test("opens with a way back to the app", () => {
+    // Splitting the shells took the exit away with the menu it lived in: the
+    // console became a one-way door you could only leave by editing the URL.
+    const { result } = renderHook(() => useAdminSections(), { wrapper });
+
+    expect(result.current[0].options[0].href).toBe("/");
+    // Headerless, so it reads as an exit rather than a one-item category.
+    expect(result.current[0].name).toBe("");
+  });
+
+  test("calls /admin/papers what the rest of the product calls it", () => {
+    // It reads `projects`; the `papers` table it was named after has been
+    // empty since the v3 pivot.
+    const { result } = renderHook(() => useAdminSections(), { wrapper });
+    const entry = result.current
+      .flatMap((s) => s.options)
+      .find((o) => o.href === "/admin/papers");
+
+    expect(entry?.name).toBe("Theses");
+  });
+
   test("leads with the blog and carries no student destinations", () => {
     const { result } = renderHook(() => useAdminSections(), { wrapper });
     const hrefs = hrefsOf(result.current);
