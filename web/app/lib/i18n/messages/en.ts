@@ -237,6 +237,15 @@ export const en = {
   "nav.transactions": "Transactions",
   "nav.mcp": "MCP",
   "nav.admin": "Admin",
+  // The console's own nav. `nav.toolUsageAll` is kept below for now — nothing
+  // renders it since the shells split, but a key is cheap and removing one is
+  // a separate, greppable change.
+  "nav.adminConsole": "Admin console",
+  "nav.content": "Content",
+  "nav.people": "People",
+  "nav.operations": "Operations",
+  "nav.blogPosts": "Blog posts",
+  "nav.blogCategories": "Categories",
   "nav.users": "Users",
   "nav.papers": "Papers",
   "nav.jobs": "Jobs",

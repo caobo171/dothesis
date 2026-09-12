@@ -5,12 +5,20 @@ import type { ReactNode } from "react";
 
 import { AnnouncementProvider } from "@/app/components/announcements/AnnouncementProvider";
 import { SidebarLayout } from "@/app/components/layout/SidebarLayout";
-import { useSidebarSections } from "@/app/components/layout/use-sections";
 import { useMe } from "@/app/lib/use-me";
 
+import { useAdminSections } from "./_components/use-admin-sections";
+
+/**
+ * The admin console's own shell.
+ *
+ * It used to render `useSidebarSections()` — the STUDENT menu — so every admin
+ * table sat under Dashboard/Theses/Humanize with the operator entries appended
+ * at the bottom. See use-admin-sections.ts for why that was worth separating.
+ */
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const me = useMe();
-  const sections = useSidebarSections();
+  const sections = useAdminSections();
 
   if (me.isLoading) {
     return (

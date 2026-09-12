@@ -3,17 +3,13 @@
 import {
   BookOpenIcon,
   ClockIcon,
-  CpuChipIcon,
   PuzzlePieceIcon,
-  CreditCardIcon,
   CurrencyDollarIcon,
   DocumentTextIcon,
   HomeIcon,
-  LinkIcon,
+  ShieldCheckIcon,
   WrenchScrewdriverIcon,
   SparklesIcon,
-  SpeakerWaveIcon,
-  UserIcon,
 } from "@heroicons/react/24/outline";
 import { useMemo } from "react";
 
@@ -23,9 +19,12 @@ import { useMe } from "@/app/lib/use-me";
 import type { SidebarSection } from "./sections";
 
 /**
- * Single source of truth for the sidebar nav. Both (inapp) and admin
- * layouts use this so the menu looks identical across both shells —
- * admin entries appear inline only when useMe().data.is_super_admin.
+ * The STUDENT sidebar — the (inapp) shell's menu, and nothing else.
+ *
+ * It used to serve the admin layout too, appending the console's tables when
+ * useMe().data.is_super_admin. The console has its own shell and its own nav
+ * now (app/admin/_components/use-admin-sections.ts); what survives here is one
+ * Admin entry pointing at its door.
  *
  * Labels come from the message catalogue, not literals: this hook is the ONLY
  * place the master nav is spelled out, so an English literal here shows up on
@@ -103,22 +102,19 @@ export function useSidebarSections(): SidebarSection[] {
     ];
 
     if (me.data?.is_super_admin) {
+      // ONE door, not the seven destinations this used to splice in.
+      //
+      // The console has its own shell now (app/admin/_components/
+      // use-admin-sections.ts). Listing its tables here as well would put
+      // Users/Jobs/Orders in the sidebar of an admin who is writing their own
+      // thesis, and would mean the product's main menu changes shape depending
+      // on who is signed in — which is what made an admin's view of the app
+      // something nobody could reason about from the student's.
       sections.push({
         id: "admin",
         name: t("nav.admin"),
         options: [
-          { name: t("nav.users"), href: "/admin/users", icon: UserIcon },
-          { name: t("nav.papers"), href: "/admin/papers", icon: DocumentTextIcon },
-          { name: t("nav.jobs"), href: "/admin/jobs", icon: CpuChipIcon },
-          { name: t("nav.announcements"), href: "/admin/announcements", icon: SpeakerWaveIcon },
-          { name: t("nav.orders"), href: "/admin/orders", icon: CreditCardIcon },
-          { name: t("nav.connectors"), href: "/admin/connectors", icon: LinkIcon },
-          // Tool runs happen outside any project, so neither the jobs nor the
-          // papers view has ever shown them.
-          // Labelled distinctly from the student-facing /tool-runs entry
-          // above: an admin sees both, and two identical menu items pointing
-          // at different scopes is a trap.
-          { name: t("nav.toolUsageAll"), href: "/admin/tools", icon: PuzzlePieceIcon },
+          { name: t("nav.adminConsole"), href: "/admin", icon: ShieldCheckIcon },
         ],
       });
     }
