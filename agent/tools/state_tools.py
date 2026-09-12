@@ -183,7 +183,10 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
         before continuing.
 
         Args:
-            module: One of M1..M5 — the module whose slice is being written.
+            module: One of M1..M5 — the OWNER of the artifact being written.
+                Choose it from the content (questionnaire=M3, analysis=M4,
+                chapters=M5), never from the project's current focus. Focus is
+                advisory and this successful write updates it afterwards.
             writes: The slice keys to set. Must be keys the module owns.
             reason: One short sentence for the version history (shown to the user).
             confirm_done: True only on the final commit after the user confirmed
@@ -257,6 +260,24 @@ def make_state_tools(store: ProjectStateStore, *, strict_gates: bool = False) ->
                     f"do not mention it to the student and do not re-ask them to confirm.")
         except Exception:
             logger.debug("commit_slice: skill nudge skipped", exc_info=True)
+        # Canonicalize M3 at the model-facing write boundary. Producers may
+        # group real questionnaire text under `constructs.<code>.items`; storing
+        # that shape verbatim makes the roadmap and UI treat a complete
+        # questionnaire as an empty spec.
+        if module == "M3" and "instrument" in writes:
+            try:
+                from agent.m3_contract import normalize_instrument  # noqa: PLC0415
+                writes = {
+                    **writes,
+                    "instrument": normalize_instrument(writes["instrument"]),
+                }
+            except Exception as exc:
+                return json.dumps({
+                    "error": "m3_instrument_invalid — the questionnaire could not "
+                             "be normalized into instrument.items",
+                    "hint": f"Retry with explicit item id, text, and construct fields "
+                            f"({type(exc).__name__}).",
+                }, ensure_ascii=False)
         # M3 model guard: a research model must be an explicit graph, not merely
         # a prose methodology. Valid graphs are repaired deterministically; a
         # finalize/methodology commit without one is rejected so incomplete M3

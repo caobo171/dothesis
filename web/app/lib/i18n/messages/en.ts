@@ -804,12 +804,26 @@ export const en = {
   "context.field.conceptual_model": "Conceptual model",
   "context.field.hypotheses": "Hypotheses",
   "context.field.instrument": "Questionnaire",
+  "context.field.scale": "Scale",
   "context.field.research_title": "Research title",
   "context.field.research_questions": "Research questions",
   "context.field.chapters": "Chapters",
   "context.field.final_sections": "Draft sections",
   "context.field.literature_sources": "Literature sources",
   "context.field.research_gaps": "Research gaps",
+  "context.field.analysis_outline": "Analysis outline",
+  "context.field.analysis_results": "Results",
+  "context.field.data_type_detected": "Data type",
+
+  "context.empty.m4NotSet": "No analysis yet — open M4 once you have data or SmartPLS output.",
+  "context.empty.m4None": "No M4 data committed yet.",
+  "context.empty.m4SoftLock":
+    "You can jump in anytime — the agent will flag anything still missing upstream.",
+
+  "context.summary.resultTables_one": "{count} table",
+  "context.summary.resultTables_other": "{count} tables",
+  "context.summary.hypothesisTests": "{supported}/{total} hypotheses supported",
+  "context.summary.sampleSize": "n = {n}",
 
   "context.empty.m3NotSet": "No methodology set yet — open M3 to design.",
   "context.empty.m3None": "No M3 data committed yet.",
@@ -826,11 +840,19 @@ export const en = {
 
   "context.summary.constructsEdges": "{constructs} constructs · {edges} edges",
   "context.summary.moreHypotheses": "+{count} more…",
+  "context.uploads.more": "+{count} more…",
+  "context.uploads.showLess": "Show less",
   "context.summary.instrumentItems_one": "{count} item",
   "context.summary.instrumentItems_other": "{count} items",
   "context.summary.instrumentConstructs_one": "{count} construct",
   "context.summary.instrumentConstructs_other": "{count} constructs",
   "context.summary.questionnaireWords": "{count} words · click to view",
+  "context.summary.instrumentSpecItemsPerConstruct": "{construct}: {count} items",
+  "context.field.screening_criteria": "Screening criteria",
+  "context.field.instrument_source": "Source",
+  "context.field.instrument_language": "Language",
+  "context.empty.instrumentSpecNoText":
+    "Item wording is not in the project state yet — only the specification (constructs, counts, scale). Ask the agent to commit the full questionnaire, or import it from your Word document.",
 
   "context.sample.atLeast": "n ≥ {min}",
   "context.sample.withTarget": "n ≥ {min} (target {target})",
@@ -845,6 +867,7 @@ export const en = {
   "context.modal.hypothesisSubtitle": "Hypothesis",
   "context.modal.instrumentGrouped": "Items grouped by construct",
   "context.modal.instrumentRaw": "Full questionnaire text",
+  "context.modal.instrumentSpec": "Specification — item wording not committed yet",
 
   "context.value.paradigm.positivist": "Positivist",
   "context.value.paradigm.postpositivist": "Post-positivist",

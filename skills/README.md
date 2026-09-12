@@ -6,12 +6,13 @@ session) and adapted for the in-app deepagents runtime per
 
 Deltas from the v2 bundle:
 
-- `SKILL.md` (uppercase) per the deepagents layout; `dothesis-router` is retired — the
-  agent's own skill-matching does the dispatch, and the read/mutate semantics live in the
-  root `dothesis` skill while enforcement lives in the `commit_slice` tool.
+- `SKILL.md` (uppercase) per the deepagents layout; `dothesis-router` is retired. The
+  agent freely chooses skills, tools, order, and modules. The root `dothesis` skill defines
+  artifact ownership, while routing middleware rejects only a misdirected `commit_slice`.
 - State is server-side: `/project/context_store.json` is read through `read_slice` and
-  written ONLY through `commit_slice` (which versions, shifts focus, and flags downstream
-  `needs_review` deterministically). No "download the artifact" step.
+  written ONLY through `commit_slice` (which versions, records the owning module as the
+  latest focus, and flags downstream `needs_review` deterministically). Focus is advisory,
+  not a tool restriction. No "download the artifact" step.
 - M2 calls the engine research stack through the `research_scout` / `parse_reference`
   tools instead of relying on model memory or native-only PDF reading.
 - M5 generates and exports through the engine writing pipeline (`write_pipeline`,

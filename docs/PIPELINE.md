@@ -29,20 +29,21 @@ Module skills live in `skills/dothesis-m{1..5}-*`; the routing/state skill is `s
 
 ## Entry: the bootstrap wizard
 
-A new project opens the new-project modal, which collects whatever the student already has (topic, references, gaps, model, instrument, data, draft) and sends one structured `/bootstrap …` first message. The `dothesis-bootstrap` skill imports each declared item into the right module's slice, reconciles dependency holes, computes the entry focus (first module needing attention), commits, and hands off to normal routing. If the student has nothing, it just opens M1.
+A new project opens the new-project modal, which collects whatever the student already has (topic, references, gaps, model, instrument, data, draft) and sends one structured `/bootstrap …` first message. The `dothesis-bootstrap` skill imports each declared item into the right module's slice, reconciles dependency holes, computes the initial UI focus (first module needing attention), commits, and hands off to normal chat. If the student has nothing, it just opens M1. This focus is a continuity hint, not a tool or module restriction.
 
 ---
 
 ## Guided chat turn
 
 1. Browser POSTs to `/api/v1/threads/{id}/messages`; the API returns an SSE stream.
-2. The agent reads the `dothesis` routing skill, then the relevant module skill, and works the turn. It calls tools as needed:
+2. The agent reads the `dothesis` state/routing skill and whichever module skills the requested outcome needs. It freely chooses tools, call order, and modules rather than dispatching through the current focus:
    - `read_slice` / `commit_slice` — read/write project state (commit is the only write path).
    - `research_scout` — literature search (engine cascade); `parse_reference` — DOI/PDF → validated metadata.
    - `run_stats` — whitelisted statistics on an uploaded dataset.
    - `export_docx` — render the current draft to DOCX + PDF.
-3. SSE events the UI renders: `token` (assistant text), `progress` (tool activity as plain-language beats — "Reading the guide for this step…", "Searching for relevant research…", "Saving your topic…"), `tool_calls` (interactive cards / editable models), `done`.
-4. Decisions persist via `commit_slice`; downstream modules get flagged `needs_review`. The assistant message is saved and the turn is metered (credits) by an idempotent finalizer that also runs if the student disconnects mid-turn (partial reply saved, agent stopped).
+3. A durable artifact is always committed to its owner: topic/questions → M1, literature/gaps → M2, methodology/model/hypotheses/questionnaire → M3, analysis/results → M4, chapters/prose → M5. A terse “save it” inherits the nearest unambiguous artifact from recent dialogue. The routing guard rejects only a mismatched commit; all other tool use remains free.
+4. SSE events the UI renders: `token` (assistant text), `progress` (tool activity as plain-language beats — "Reading the guide for this step…", "Searching for relevant research…", "Saving your topic…"), `tool_calls` (interactive cards / editable models), `done`.
+5. Decisions persist via `commit_slice`; the artifact's owner becomes the latest focus and downstream modules get flagged `needs_review`. The assistant message is saved and the turn is metered (credits) by an idempotent finalizer that also runs if the student disconnects mid-turn (partial reply saved, agent stopped).
 
 ---
 

@@ -5,6 +5,7 @@ import useSWR from "swr";
 
 import { AdminTable, type AdminColumn } from "@/app/components/admin/AdminTable";
 import { swrFetcher } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 import { useQueryString } from "@/app/lib/useQueryString";
 
 import { PaperListFilters } from "./PaperListFilters";
@@ -21,6 +22,7 @@ type Row = {
 type ListResp = { items: Row[]; total: number; page: number; page_size: number };
 
 export default function PapersTable() {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -66,8 +68,8 @@ export default function PapersTable() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-ink-900">Papers</h1>
-        <p className="mt-1 text-sm text-ink-500">Every thesis project across all users.</p>
+        <h1 className="text-2xl font-bold text-ink-900">{t("admin.papers.title")}</h1>
+        <p className="mt-1 text-sm text-ink-500">{t("admin.papers.subtitle")}</p>
       </div>
 
       <PaperListFilters searchParams={searchParams} onFilterChange={onFilterChange} />

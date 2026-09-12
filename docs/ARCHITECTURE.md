@@ -33,9 +33,15 @@ This is the system map for the current DoThesis product: a chat-first thesis wor
 
 The **`context_store`** is the single source of truth, scoped to a *project* (shared by all of its chat threads).
 
-- **Shape:** flat keys per module (e.g. `research_title`, `literature_sources`, `analysis_results`, `chapters`) grouped into slices `m1_topic … m5_writing`. Persisted as JSONB slice columns on the project, with `projects.module_status` (`locked`/`in_progress`/`done`/`needs_review`) and `projects.focus` as fast-read derivations.
-- **Only write path:** `commit_slice(module, patch, reason, confirm_done?)`. It validates that the patch only touches keys the module owns, snapshots a version, applies the patch, shifts focus, and flags downstream modules `needs_review` along the dependency DAG (M1→M2..M5, M2→M3..M5, M3→M4,M5, M4→M5) — but only modules that have already started.
+- **Shape:** flat keys per module (e.g. `research_title`, `literature_sources`, `analysis_results`, `chapters`) grouped into slices `m1_topic … m5_writing`. Persisted as JSONB slice columns on the project, with `projects.module_status` (`locked`/`in_progress`/`done`/`needs_review`) and `projects.focus` as fast-read derivations. `focus` records the latest working context for UI/continuity; it does not select a handler or limit the agent's tools.
+- **Only write path:** `commit_slice(module, patch, reason, confirm_done?)`. It validates that the patch only touches keys the module owns, snapshots a version, applies the patch, records the owning module as the latest focus, and flags downstream modules `needs_review` along the dependency DAG (M1→M2..M5, M2→M3..M5, M3→M4,M5, M4→M5) — but only modules that have already started.
 - **Reads** (`read_slice`) never mutate.
+
+### Agent routing and tools
+
+There is no focused-module router. The one deep agent may read any skill, call any available tool, order calls itself, and work across modules when the requested outcome requires it. Durable artifacts still have one deterministic owner: topic/questions → M1, literature/gaps → M2, methodology/model/hypotheses/questionnaire → M3, analysis/results → M4, and chapters/prose → M5.
+
+For write-like turns, `chat_v3` resolves the artifact destination from the explicit request or the nearest unambiguous recent artifact (so terse follow-ups such as “save it” retain context). `agent/artifact_routing.py` passes that private target to the runtime and blocks only a mismatched `commit_slice`; it does not constrain any other tool choice.
 
 Stores: `agent/state.py:ProjectStateStore` (file-backed, CLI/tests) and `api/app/agent_state.py:DbProjectStateStore` (Postgres). Both honor the same contract.
 

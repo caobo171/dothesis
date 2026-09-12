@@ -149,6 +149,24 @@ describe("ContextPanel", () => {
     ]} />);
     expect(screen.getByText("paper.pdf")).toBeTruthy();
   });
+
+  test("truncated uploads expand on +N more click", () => {
+    const uploads = Array.from({ length: 8 }, (_, i) => ({
+      id: `u${i}`,
+      filename: `file-${i}.docx`,
+      size_bytes: 1000,
+      mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      page_count: null,
+      uploaded_at: "2026-05-27",
+    }));
+    renderEn(<ContextPanel contextStore={_baseCtx} uploads={uploads} />);
+    expect(screen.getByText("file-0.docx")).toBeTruthy();
+    expect(screen.queryByText("file-7.docx")).toBeNull();
+    fireEvent.click(screen.getByText(/\+3 (more|tệp)/i));
+    expect(screen.getByText("file-7.docx")).toBeTruthy();
+    fireEvent.click(screen.getByText(/show less|thu gọn/i));
+    expect(screen.queryByText("file-7.docx")).toBeNull();
+  });
 });
 
 

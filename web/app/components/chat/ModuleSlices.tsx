@@ -15,6 +15,10 @@
 import { useState } from "react";
 import { ExternalLink } from "lucide-react";
 
+import { useLocale } from "@/app/lib/i18n/LocaleProvider";
+import { translateContextValue } from "@/app/lib/i18n/contextSliceI18n";
+import type { MessageKey } from "@/app/lib/i18n/messages/en";
+
 import { SliceModal } from "./SliceModal";
 import { Mermaid } from "./Mermaid";
 // The canonical chapter count for "N/total chapters written" — CHAPTER_ORDER
@@ -26,8 +30,8 @@ import { CHAPTER_ORDER } from "../editor/OutlineRail";
 
 /** Render a module's slice with that module's own renderer.
  *
- *  M4 has no bespoke body (the context panel shows it as a soft-lock note),
- *  so it falls through to GenericSlice. That fallback is the reason this
+ *  M4 falls through to GenericSlice only when callers pass an unknown module
+ *  id. That fallback is the reason this
  *  switch exists at all rather than callers picking a body by hand: a caller
  *  that can be handed ANY module id — the reconstructed-modules card takes
  *  whatever the backfill produced — must never end up with nothing to draw. */
@@ -42,6 +46,7 @@ export function ModuleBody({
     case "M1": return <M1Body data={data} />;
     case "M2": return <M2Body data={data} />;
     case "M3": return <M3Body data={data} />;
+    case "M4": return <M4Body data={data} />;
     case "M5": return <M5Body data={data} />;
     default:   return <GenericSlice data={data} />;
   }
@@ -666,6 +671,9 @@ function SourceRow({ paper }: { paper: any }) {
 }
 
 export function M3Body({ data }: { data: Record<string, any> | null }) {
+  const { t, tn } = useLocale();
+  const tv = (category: string, raw: string) => translateContextValue(t, category, raw);
+
   // Modal state for click-to-show on the rich M3 fields.
   const [modal, setModal] = useState<
     | { kind: "methodology" }
@@ -675,7 +683,7 @@ export function M3Body({ data }: { data: Record<string, any> | null }) {
     | null
   >(null);
 
-  if (!data) return <EmptyHint text="No methodology set yet — open M3 to design." />;
+  if (!data) return <EmptyHint text={t("context.empty.m3NotSet")} />;
 
   const meth = data.methodology;
   const conceptualModel = data.conceptual_model as { nodes?: any[]; edges?: any[] } | undefined;
@@ -688,12 +696,71 @@ export function M3Body({ data }: { data: Record<string, any> | null }) {
   const instrument = data.instrument as InstrumentSlice | undefined;
   const instrumentItems = instrument?.items ?? [];
   const questionnaire = (data.questionnaire_text as string | undefined) || instrument?.raw;
+  // Imported / headless projects often commit a SPEC first — constructs,
+  // items_per_construct, scale, source — with no item text yet. The panel used
+  // to require `items` or `raw`, so a real questionnaire spec looked missing.
+  const instrumentSpec = instrumentSpecOf(instrument);
   const sampling = meth?.sampling || {};
 
   if (!meth && !conceptualModel && hypotheses.length === 0
-      && instrumentItems.length === 0 && !questionnaire) {
-    return <EmptyHint text="No M3 data committed yet." />;
+      && instrumentItems.length === 0 && !questionnaire && !instrumentSpec) {
+    return <EmptyHint text={t("context.empty.m3None")} />;
   }
+
+  const sampleMin = sampling.minSize ?? meth?.target_sample_size ?? "?";
+  const sampleLabel = sampling.targetSize
+    ? t("context.sample.withTarget", { min: sampleMin, target: sampling.targetSize })
+    : t("context.sample.atLeast", { min: sampleMin });
+
+  const questionnaireRow = instrumentItems.length > 0 ? (
+    <ClickRow
+      name={t("context.field.instrument")}
+      summary={[
+        tn("context.summary.instrumentItems_one", "context.summary.instrumentItems_other", instrumentItems.length, {
+          count: instrumentItems.length,
+        }),
+        countConstructs(instrumentItems)
+          ? tn(
+            "context.summary.instrumentConstructs_one",
+            "context.summary.instrumentConstructs_other",
+            countConstructs(instrumentItems),
+            { count: countConstructs(instrumentItems) },
+          )
+          : "",
+      ].filter(Boolean).join(" · ")}
+      onClick={() => setModal({ kind: "instrument" })}
+    />
+  ) : questionnaire ? (
+    <ClickRow
+      name={t("context.field.instrument")}
+      summary={t("context.summary.questionnaireWords", {
+        count: questionnaire.split(/\s+/).filter(Boolean).length,
+      })}
+      onClick={() => setModal({ kind: "instrument" })}
+    />
+  ) : instrumentSpec ? (
+    <>
+      <button
+        type="button"
+        onClick={() => setModal({ kind: "instrument" })}
+        className="block w-full text-left -mx-1 px-1 py-0.5 rounded-md hover:bg-primary-50 transition-colors group"
+      >
+        <FieldLabel name={t("context.field.instrument")} top />
+      </button>
+      <div className="mt-1.5 space-y-1.5">
+        {instrumentSpec.scale ? (
+          <KV k={t("context.field.scale")} v={instrumentSpec.scale} />
+        ) : null}
+        <KV
+          k={t("context.field.instrument")}
+          v={instrumentSpecSummary(instrumentSpec, t, tn)}
+        />
+        {instrumentSpec.source ? (
+          <KV k={t("context.field.instrument_source")} v={instrumentSpec.source} />
+        ) : null}
+      </div>
+    </>
+  ) : null;
 
   return (
     <>
@@ -704,28 +771,28 @@ export function M3Body({ data }: { data: Record<string, any> | null }) {
             onClick={() => setModal({ kind: "methodology" })}
             className="block w-full text-left -mx-1 px-1 py-0.5 rounded-md hover:bg-primary-50 transition-colors group"
           >
-            <FieldLabel name="methodology" top />
+            <FieldLabel name={t("context.field.methodology")} top />
           </button>
           <div className="mt-1.5 space-y-1.5">
-            {meth.paradigm && <KV k="Paradigm" v={meth.paradigm} />}
-            {meth.design && <KV k="Design" v={meth.design} />}
-            {meth.tool && <KV k="Tool" v={meth.tool} />}
+            {meth.paradigm && <KV k={t("context.field.paradigm")} v={tv("paradigm", meth.paradigm)} />}
+            {meth.design && <KV k={t("context.field.design")} v={tv("design", meth.design)} />}
+            {meth.tool && <KV k={t("context.field.tool")} v={tv("tool", meth.tool)} />}
             {(sampling.minSize || sampling.targetSize || meth.target_sample_size) && (
-              <KV
-                k="Sample"
-                v={`n ≥ ${sampling.minSize ?? meth.target_sample_size ?? "?"}${
-                  sampling.targetSize ? ` (target ${sampling.targetSize})` : ""
-                }`}
-              />
+              <KV k={t("context.field.sample")} v={sampleLabel} />
             )}
           </div>
         </>
       )}
 
+      {questionnaireRow}
+
       {conceptualModel && (conceptualModel.nodes?.length || conceptualModel.edges?.length) ? (
         <ClickRow
-          name="conceptual_model"
-          summary={`${conceptualModel.nodes?.length ?? 0} constructs · ${conceptualModel.edges?.length ?? 0} edges`}
+          name={t("context.field.conceptual_model")}
+          summary={t("context.summary.constructsEdges", {
+            constructs: conceptualModel.nodes?.length ?? 0,
+            edges: conceptualModel.edges?.length ?? 0,
+          })}
           onClick={() => setModal({ kind: "conceptual_model" })}
         />
       ) : null}
@@ -737,7 +804,7 @@ export function M3Body({ data }: { data: Record<string, any> | null }) {
             onClick={() => setModal({ kind: "hypotheses", index: null })}
             className="block w-full text-left -mx-1 px-1 py-0.5 rounded-md hover:bg-primary-50 transition-colors group"
           >
-            <FieldLabel name="hypotheses" count={hypotheses.length} />
+            <FieldLabel name={t("context.field.hypotheses")} count={hypotheses.length} />
           </button>
           <ul className="mt-1.5 space-y-1 list-none">
             {hypotheses.slice(0, 3).map((h, i) => (
@@ -763,7 +830,7 @@ export function M3Body({ data }: { data: Record<string, any> | null }) {
                   onClick={() => setModal({ kind: "hypotheses", index: null })}
                   className="text-[11.5px] text-primary-600 px-1.5 hover:underline"
                 >
-                  +{hypotheses.length - 3} more…
+                  {t("context.summary.moreHypotheses", { count: hypotheses.length - 3 })}
                 </button>
               </li>
             )}
@@ -771,31 +838,11 @@ export function M3Body({ data }: { data: Record<string, any> | null }) {
         </>
       )}
 
-      {instrumentItems.length > 0 ? (
-        <ClickRow
-          name="instrument"
-          summary={`${instrumentItems.length} item${instrumentItems.length === 1 ? "" : "s"}${
-            countConstructs(instrumentItems)
-              ? ` · ${countConstructs(instrumentItems)} constructs`
-              : ""
-          }`}
-          onClick={() => setModal({ kind: "instrument" })}
-        />
-      ) : questionnaire ? (
-        // Legacy projects carry the questionnaire as a plain string only.
-        <ClickRow
-          name="questionnaire_text"
-          summary={`${questionnaire.split(/\s+/).length} words · click to view`}
-          onClick={() => setModal({ kind: "instrument" })}
-        />
-      ) : null}
-
-
       {/* Detail modal */}
       <SliceModal
         open={modal !== null}
-        title={m3ModalTitle(modal, hypotheses)}
-        subtitle={m3ModalSubtitle(modal, instrumentItems.length)}
+        title={m3ModalTitle(modal, hypotheses, t)}
+        subtitle={m3ModalSubtitle(modal, instrumentItems.length, !!instrumentSpec, t)}
         onClose={() => setModal(null)}
       >
         {modal?.kind === "methodology" && <MethodologyDetail meth={meth} sampling={sampling} />}
@@ -808,10 +855,169 @@ export function M3Body({ data }: { data: Record<string, any> | null }) {
               />
         )}
         {modal?.kind === "instrument" && (
-          <InstrumentDetail instrument={instrument} text={questionnaire ?? ""} />
+          <InstrumentDetail
+            instrument={instrument}
+            text={questionnaire ?? ""}
+            spec={instrumentSpec}
+          />
         )}
       </SliceModal>
     </>
+  );
+}
+
+
+function summarizeAnalysisOutline(outline: unknown): string | null {
+  if (outline == null || outline === "") return null;
+  if (typeof outline === "string") {
+    const s = outline.trim();
+    return s || null;
+  }
+  if (Array.isArray(outline)) {
+    const lines = outline.map((entry, i) => {
+      if (typeof entry === "string") return `${i + 1}. ${entry}`;
+      if (entry && typeof entry === "object") {
+        const o = entry as Record<string, unknown>;
+        const label = o.step ?? o.name ?? o.text ?? o.section;
+        return label ? `${i + 1}. ${String(label)}` : null;
+      }
+      return `${i + 1}. ${String(entry)}`;
+    }).filter(Boolean);
+    return lines.length ? lines.join("\n") : null;
+  }
+  if (typeof outline === "object") {
+    const o = outline as Record<string, unknown>;
+    if (Array.isArray(o.sections)) return summarizeAnalysisOutline(o.sections);
+    if (Array.isArray(o.steps)) return summarizeAnalysisOutline(o.steps);
+  }
+  return null;
+}
+
+function analysisResultsSummary(results: unknown): {
+  tableKeys: string[];
+  testTotal: number;
+  testSupported: number;
+  sampleN: number | null;
+  textPreview: string | null;
+} {
+  if (results == null || results === "") {
+    return { tableKeys: [], testTotal: 0, testSupported: 0, sampleN: null, textPreview: null };
+  }
+  if (typeof results === "string") {
+    const s = results.trim();
+    return {
+      tableKeys: [],
+      testTotal: 0,
+      testSupported: 0,
+      sampleN: null,
+      textPreview: s.length > 220 ? `${s.slice(0, 220).trimEnd()}…` : s,
+    };
+  }
+  if (typeof results !== "object" || Array.isArray(results)) {
+    return { tableKeys: [], testTotal: 0, testSupported: 0, sampleN: null, textPreview: null };
+  }
+  const o = results as Record<string, unknown>;
+  const tableKeys = Object.keys(o).filter(k => !k.startsWith("_") && k !== "confirmed_at");
+  const tests = Array.isArray(o.hypothesis_tests) ? o.hypothesis_tests : [];
+  let testSupported = 0;
+  for (const t of tests) {
+    if (t && typeof t === "object") {
+      const d = String((t as Record<string, unknown>).decision ?? "").toLowerCase();
+      if (d.includes("support") && !d.includes("not")) testSupported += 1;
+    }
+  }
+  const desc = o.descriptives;
+  const sampleN = desc && typeof desc === "object" && typeof (desc as Record<string, unknown>).n === "number"
+    ? (desc as Record<string, unknown>).n as number
+    : null;
+  return {
+    tableKeys,
+    testTotal: tests.length,
+    testSupported,
+    sampleN,
+    textPreview: null,
+  };
+}
+
+export function M4Body({ data }: { data: Record<string, any> | null }) {
+  const { t, tn } = useLocale();
+  const tv = (category: string, raw: string) => translateContextValue(t, category, raw);
+
+  if (!data) {
+    return (
+      <>
+        <EmptyHint text={t("context.empty.m4NotSet")} />
+        <EmptyHint text={t("context.empty.m4SoftLock")} />
+      </>
+    );
+  }
+
+  const outlineText = summarizeAnalysisOutline(data.analysis_outline);
+  const results = analysisResultsSummary(data.analysis_results);
+  const dataType = data.data_type_detected ? String(data.data_type_detected) : "";
+  const hasContent = Boolean(
+    outlineText || dataType || results.textPreview
+    || results.tableKeys.length || results.testTotal || results.sampleN,
+  );
+
+  if (!hasContent) {
+    return (
+      <>
+        <EmptyHint text={t("context.empty.m4None")} />
+        <EmptyHint text={t("context.empty.m4SoftLock")} />
+      </>
+    );
+  }
+
+  const resultSummaryParts: string[] = [];
+  if (results.tableKeys.length) {
+    resultSummaryParts.push(
+      tn("context.summary.resultTables_one", "context.summary.resultTables_other", results.tableKeys.length, {
+        count: results.tableKeys.length,
+      }),
+    );
+  }
+  if (results.testTotal) {
+    resultSummaryParts.push(
+      t("context.summary.hypothesisTests", {
+        supported: results.testSupported,
+        total: results.testTotal,
+      }),
+    );
+  }
+  if (results.sampleN != null) {
+    resultSummaryParts.push(t("context.summary.sampleSize", { n: results.sampleN }));
+  }
+
+  return (
+    <div className="space-y-2">
+      {dataType ? (
+        <KV k={t("context.field.data_type_detected")} v={tv("design", dataType)} />
+      ) : null}
+      {outlineText ? (
+        <div>
+          <FieldLabel name={t("context.field.analysis_outline")} top />
+          <p className="mt-1 text-[12.5px] text-ink-700 leading-snug whitespace-pre-wrap line-clamp-4">
+            {outlineText}
+          </p>
+        </div>
+      ) : null}
+      {(resultSummaryParts.length > 0 || results.textPreview) ? (
+        <div>
+          <FieldLabel name={t("context.field.analysis_results")} top={!outlineText && !dataType} />
+          {resultSummaryParts.length > 0 ? (
+            <p className="mt-1 text-[12.5px] font-medium text-ink-800">
+              {resultSummaryParts.join(" · ")}
+            </p>
+          ) : null}
+          {results.textPreview ? (
+            <p className="mt-1 text-[12.5px] text-ink-700 leading-snug whitespace-pre-wrap line-clamp-4">
+              {results.textPreview}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -826,15 +1032,16 @@ function m3ModalTitle(
     | { kind: "instrument" }
     | null,
   hypotheses: Array<{ id?: string; text?: string; statement?: string }>,
+  t: (key: MessageKey, params?: Record<string, string | number>) => string,
 ): string {
   if (!m) return "";
   switch (m.kind) {
-    case "methodology":      return "Methodology";
-    case "conceptual_model": return "Conceptual model";
+    case "methodology":      return t("context.modal.methodology");
+    case "conceptual_model": return t("context.modal.conceptualModel");
     case "hypotheses":
-      if (m.index === null) return `Hypotheses (${hypotheses.length})`;
+      if (m.index === null) return t("context.modal.hypotheses", { count: hypotheses.length });
       return hypotheses[m.index]?.id ?? `H${m.index + 1}`;
-    case "instrument":       return "Questionnaire";
+    case "instrument":       return t("context.modal.questionnaire");
   }
 }
 
@@ -846,17 +1053,22 @@ function m3ModalSubtitle(
     | { kind: "instrument" }
     | null,
   instrumentItemCount = 0,
+  instrumentIsSpec = false,
+  t: (key: MessageKey) => string,
 ): string | undefined {
   if (!m) return undefined;
   switch (m.kind) {
-    case "methodology":      return "Design · sampling · analysis";
-    case "conceptual_model": return "Constructs and hypothesis paths";
-    case "hypotheses":       return m.index === null ? "All committed hypotheses" : "Hypothesis";
+    case "methodology":      return t("context.modal.methodologySubtitle");
+    case "conceptual_model": return t("context.modal.conceptualModelSubtitle");
+    case "hypotheses":       return m.index === null
+      ? t("context.modal.hypothesesSubtitle")
+      : t("context.modal.hypothesisSubtitle");
     // Structured instruments are shown as items grouped by construct; legacy
-    // projects still render the raw text, so the subtitle has to say which.
-    case "instrument":       return instrumentItemCount > 0
-      ? "Items grouped by construct"
-      : "Full questionnaire text";
+    // projects still render the raw text; spec-only imports show metadata.
+    case "instrument":
+      if (instrumentItemCount > 0) return t("context.modal.instrumentGrouped");
+      if (instrumentIsSpec) return t("context.modal.instrumentSpec");
+      return t("context.modal.instrumentRaw");
   }
 }
 
@@ -889,26 +1101,26 @@ function ClickRow({
 // --- M3 detail renderers ---
 
 function MethodologyDetail({ meth, sampling }: { meth: any; sampling: any }) {
+  const { t } = useLocale();
+  const tv = (category: string, raw: string) => translateContextValue(t, category, raw);
+  const sampleMin = meth.target_sample_size ?? sampling.minSize ?? "?";
+  const sampleValue = sampling.targetSize
+    ? t("context.sample.withTarget", { min: sampleMin, target: sampling.targetSize })
+    : t("context.sample.atLeast", { min: sampleMin });
+
   return (
     <div className="space-y-3 text-[13.5px]">
-      {meth.paradigm && <KVRich k="Paradigm" v={meth.paradigm} />}
-      {meth.design && <KVRich k="Design" v={meth.design} />}
-      {meth.tool && <KVRich k="Tool" v={meth.tool} />}
-      {meth.sampling_strategy && <KVRich k="Sampling strategy" v={meth.sampling_strategy} />}
+      {meth.paradigm && <KVRich k={t("context.field.paradigm")} v={tv("paradigm", meth.paradigm)} />}
+      {meth.design && <KVRich k={t("context.field.design")} v={tv("design", meth.design)} />}
+      {meth.tool && <KVRich k={t("context.field.tool")} v={tv("tool", meth.tool)} />}
+      {meth.sampling_strategy && (
+        <KVRich k={t("context.field.sampling_strategy")} v={tv("design", meth.sampling_strategy)} />
+      )}
       {(meth.target_sample_size || sampling.minSize || sampling.targetSize) && (
-        <KVRich
-          k="Target sample"
-          v={
-            meth.target_sample_size
-              ? `n ≥ ${meth.target_sample_size}`
-              : `n ≥ ${sampling.minSize ?? "?"}${
-                  sampling.targetSize ? ` (target ${sampling.targetSize})` : ""
-                }`
-          }
-        />
+        <KVRich k={t("context.field.target_sample")} v={sampleValue} />
       )}
       {meth.mixed_design_type && (
-        <KVRich k="Mixed design" v={meth.mixed_design_type} />
+        <KVRich k={t("context.field.mixed_design")} v={tv("design", meth.mixed_design_type)} />
       )}
     </div>
   );
@@ -1101,6 +1313,107 @@ export type InstrumentSlice = {
   raw?: string;
 };
 
+/** Questionnaire metadata without committed item text (common after import). */
+export type InstrumentSpec = {
+  scale?: string;
+  source?: string;
+  language?: string;
+  constructs?: string[];
+  screening_criteria?: string[];
+  items_per_construct?: Record<string, number> | number;
+};
+
+/** True when `instrument` holds a spec (constructs/counts/scale) but no items/raw. */
+export function instrumentSpecOf(inst: unknown): InstrumentSpec | null {
+  if (!inst || typeof inst !== "object" || Array.isArray(inst)) return null;
+  const o = inst as Record<string, unknown>;
+  if (Array.isArray(o.items) && o.items.length > 0) return null;
+  if (typeof o.raw === "string" && o.raw.trim()) return null;
+
+  const constructs = Array.isArray(o.constructs)
+    ? o.constructs.map(String).filter(Boolean)
+    : [];
+  const screening = Array.isArray(o.screening_criteria)
+    ? o.screening_criteria.map(String).filter(Boolean)
+    : [];
+  const ipc = o.items_per_construct;
+  const hasIpc = typeof ipc === "number"
+    || (ipc && typeof ipc === "object" && Object.keys(ipc as object).length > 0);
+  const scale = typeof o.scale === "string" ? o.scale.trim() : "";
+  const source = typeof o.source === "string" ? o.source.trim() : "";
+
+  if (!constructs.length && !hasIpc && !scale && !source && !screening.length) return null;
+
+  return {
+    scale: scale || undefined,
+    source: source || undefined,
+    language: typeof o.language === "string" ? o.language.trim() || undefined : undefined,
+    constructs: constructs.length ? constructs : undefined,
+    screening_criteria: screening.length ? screening : undefined,
+    items_per_construct: ipc as InstrumentSpec["items_per_construct"],
+  };
+}
+
+export function totalInstrumentSpecItems(spec: InstrumentSpec): number {
+  const ipc = spec.items_per_construct;
+  const nConstructs = spec.constructs?.length ?? 0;
+  if (typeof ipc === "number") return ipc * nConstructs;
+  if (ipc && typeof ipc === "object") {
+    return Object.values(ipc).reduce((sum, n) => sum + (Number(n) || 0), 0);
+  }
+  return 0;
+}
+
+export function instrumentSpecSummary(
+  spec: InstrumentSpec,
+  t: (key: MessageKey, params?: Record<string, string | number>) => string,
+  tn: (
+    one: MessageKey,
+    other: MessageKey,
+    count: number,
+    params?: Record<string, string | number>,
+  ) => string,
+): string {
+  const parts: string[] = [];
+  const constructCount = spec.constructs?.length ?? 0;
+  if (constructCount) {
+    parts.push(tn(
+      "context.summary.instrumentConstructs_one",
+      "context.summary.instrumentConstructs_other",
+      constructCount,
+      { count: constructCount },
+    ));
+  }
+  const itemCount = totalInstrumentSpecItems(spec);
+  if (itemCount) {
+    parts.push(tn(
+      "context.summary.instrumentItems_one",
+      "context.summary.instrumentItems_other",
+      itemCount,
+      { count: itemCount },
+    ));
+  }
+  if (spec.scale) parts.push(spec.scale);
+  return parts.join(" · ");
+}
+
+function specItemsPerConstruct(spec: InstrumentSpec): Array<{ construct: string; count: number }> {
+  const ipc = spec.items_per_construct;
+  if (ipc && typeof ipc === "object" && !Array.isArray(ipc)) {
+    const order = spec.constructs?.length
+      ? spec.constructs
+      : Object.keys(ipc);
+    return order
+      .map((construct) => ({
+        construct,
+        count: Number((ipc as Record<string, unknown>)[construct]) || 0,
+      }))
+      .filter((row) => row.count > 0);
+  }
+  const per = typeof ipc === "number" ? ipc : 0;
+  return (spec.constructs ?? []).map((construct) => ({ construct, count: per }));
+}
+
 /** How many distinct constructs the items cover (0 when none are tagged). */
 export function countConstructs(items: InstrumentItem[]): number {
   return new Set(items.map((it) => it.construct).filter(Boolean)).size;
@@ -1141,13 +1454,55 @@ function ItemFlag({ label }: { label: string }) {
   );
 }
 
+function InstrumentSpecDetail({ spec }: { spec: InstrumentSpec }) {
+  const { t } = useLocale();
+  const rows = specItemsPerConstruct(spec);
+
+  return (
+    <div className="space-y-3">
+      <EmptyHint text={t("context.empty.instrumentSpecNoText")} />
+      {spec.scale ? <KV k={t("context.field.scale")} v={spec.scale} /> : null}
+      {spec.language ? <KV k={t("context.field.instrument_language")} v={spec.language} /> : null}
+      {spec.source ? <KV k={t("context.field.instrument_source")} v={spec.source} /> : null}
+      {rows.length > 0 ? (
+        <div>
+          <FieldLabel name={t("context.field.instrument")} top />
+          <ul className="mt-1.5 space-y-1 list-none">
+            {rows.map((row) => (
+              <li key={row.construct} className="text-[12.5px] text-ink-700 px-1.5">
+                {t("context.summary.instrumentSpecItemsPerConstruct", {
+                  construct: row.construct,
+                  count: row.count,
+                })}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {spec.screening_criteria?.length ? (
+        <div>
+          <FieldLabel name={t("context.field.screening_criteria")} top />
+          <ul className="mt-1.5 space-y-1 list-disc list-inside text-[12.5px] text-ink-700">
+            {spec.screening_criteria.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function InstrumentDetail({
   instrument,
   text,
+  spec,
 }: {
   instrument?: InstrumentSlice;
   text: string;
+  spec?: InstrumentSpec | null;
 }) {
+  const { t } = useLocale();
   const items = instrument?.items ?? [];
 
   if (items.length > 0) {
@@ -1191,8 +1546,10 @@ function InstrumentDetail({
     );
   }
 
+  if (spec) return <InstrumentSpecDetail spec={spec} />;
+
   if (!text.trim()) {
-    return <EmptyHint text="Questionnaire is empty." />;
+    return <EmptyHint text={t("context.empty.questionnaireEmpty")} />;
   }
   return (
     <pre className="whitespace-pre-wrap font-serif text-[13.5px] leading-relaxed text-ink-900">

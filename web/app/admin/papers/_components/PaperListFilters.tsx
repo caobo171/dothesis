@@ -6,6 +6,7 @@ import { FilterSelect } from "@/app/components/admin/FilterSelect";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 
 const FILTER_ALL = "";
 
@@ -22,17 +23,18 @@ function readInput(id: string): string {
 }
 
 export function PaperListFilters({ searchParams, onFilterChange }: PaperListFiltersProps) {
+  const t = useT();
   const moduleValue = searchParams.get("module") ?? FILTER_ALL;
   const statusValue = searchParams.get("status") ?? FILTER_ALL;
 
   return (
     <div className="mb-3 flex flex-wrap items-end gap-3">
       <div className="w-full shrink-0 space-y-2 sm:w-72">
-        <Label htmlFor="papers-admin-search">Topic</Label>
+        <Label htmlFor="papers-admin-search">{t("admin.filters.topic")}</Label>
         <div className="flex min-w-0 items-center gap-2">
           <Input
             id="papers-admin-search"
-            placeholder="Search topic or field…"
+            placeholder={t("admin.filters.searchTopic")}
             defaultValue={searchParams.get("q") || ""}
             className="min-w-0 flex-1"
             onKeyDown={(e) => {
@@ -53,11 +55,11 @@ export function PaperListFilters({ searchParams, onFilterChange }: PaperListFilt
       </div>
 
       <div className="w-full shrink-0 space-y-2 sm:w-64">
-        <Label htmlFor="papers-admin-owner">Owner</Label>
+        <Label htmlFor="papers-admin-owner">{t("admin.filters.owner")}</Label>
         <div className="flex min-w-0 items-center gap-2">
           <Input
             id="papers-admin-owner"
-            placeholder="Filter by owner email"
+            placeholder={t("admin.filters.searchOwner")}
             defaultValue={searchParams.get("owner") || ""}
             className="min-w-0 flex-1"
             onKeyDown={(e) => {
@@ -79,20 +81,20 @@ export function PaperListFilters({ searchParams, onFilterChange }: PaperListFilt
 
       <FilterSelect
         id="papers-admin-module"
-        label="Module"
+        label={t("admin.filters.module")}
         className="sm:w-40"
         value={moduleValue}
         onValueChange={(v) => onFilterChange("module", v)}
-        options={MODULES.map((m) => ({ value: m, label: m || "All modules" }))}
+        options={MODULES.map((m) => ({ value: m, label: m || t("admin.filters.allModules") }))}
       />
 
       <FilterSelect
         id="papers-admin-status"
-        label="Status"
+        label={t("admin.filters.status")}
         className="sm:w-40"
         value={statusValue}
         onValueChange={(v) => onFilterChange("status", v)}
-        options={STATUSES.map((s) => ({ value: s, label: s || "All status" }))}
+        options={STATUSES.map((s) => ({ value: s, label: s || t("admin.filters.allStatus") }))}
       />
     </div>
   );

@@ -1057,17 +1057,19 @@ button { font: inherit; cursor: pointer; }
 /* Keep Word's real page geometry. The neutral desk, paper edge and page gaps
    make pagination legible without modifying the document's own typography. */
 .docx-body {
-  min-width: max-content;
+  width: 100%;
   font-size: 13.5px;
 }
 .docx-body .docx-wrapper {
   display: flex;
-  min-height: 100%;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
   background: #e9edf2;
-  padding: 32px clamp(20px, 4vw, 56px) 56px;
+  padding: 16px 12px 28px;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: 100%;
 }
 .docx-body section.docx {
   flex: none;

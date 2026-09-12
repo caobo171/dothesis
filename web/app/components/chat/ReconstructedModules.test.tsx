@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
 import { ReconstructedModules, type ReconstructedModule } from "./ReconstructedModules";
+
+function renderEn(ui: React.ReactElement) {
+  return render(<LocaleProvider initialLocale="en" hasCookie>{ui}</LocaleProvider>);
+}
 
 const item = (over: Partial<ReconstructedModule> = {}): ReconstructedModule => ({
   module: "M3",
@@ -16,7 +21,7 @@ const regionText = () =>
 
 describe("ReconstructedModules", () => {
   test("renders a card per module with its rationale, marked saved", () => {
-    render(
+    renderEn(
       <ReconstructedModules items={[item()]} saved={[{ module: "M3", status: "done" }]} />,
     );
     const text = regionText();
@@ -28,7 +33,7 @@ describe("ReconstructedModules", () => {
   test("nothing to confirm or skip — the reconstruction is already committed", () => {
     // The whole point of the change: a student never re-approves a
     // reconstruction of their own work. Any button here is a regression.
-    render(
+    renderEn(
       <ReconstructedModules items={[item()]} saved={[{ module: "M3", status: "done" }]} />,
     );
     expect(screen.queryByRole("button", { name: /confirm/i })).toBeNull();
@@ -37,7 +42,7 @@ describe("ReconstructedModules", () => {
   });
 
   test("a module too thin to earn a done is not drawn as finished", () => {
-    render(
+    renderEn(
       <ReconstructedModules
         items={[item()]}
         saved={[{ module: "M3", status: "in_progress" }]}
@@ -58,7 +63,7 @@ describe("ReconstructedModules", () => {
     // <pre> as raw JSON — unreadable, and it reads to a student like the
     // product broke. They go through the same renderers the chat context panel
     // uses now, so the card shows the actual gap text.
-    render(
+    renderEn(
       <ReconstructedModules
         items={[
           item({
@@ -81,10 +86,8 @@ describe("ReconstructedModules", () => {
     expect(text).not.toMatch(/"description":/);
   });
 
-  test("a module with no dedicated renderer still reads as prose, not JSON", () => {
-    // M4 has no bespoke body — it falls through to the generic renderer, which
-    // must still never print a JSON blob.
-    render(
+  test("M4 reconstruction uses the same body as the context panel, not raw JSON", () => {
+    renderEn(
       <ReconstructedModules
         items={[
           item({
@@ -100,8 +103,9 @@ describe("ReconstructedModules", () => {
       />,
     );
     const text = regionText();
-    expect(text).toMatch(/Data type detected/);
-    expect(text).toMatch(/survey/);
+    expect(text).toMatch(/Data type/);
+    expect(text).toMatch(/Survey/);
+    expect(text).toMatch(/measurement/);
     expect(text).not.toMatch(/[{}[\]]/);
   });
 });

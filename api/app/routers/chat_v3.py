@@ -17,6 +17,7 @@ import logging
 import re
 import uuid
 
+from agent.artifact_routing import resolve_write_target, write_target_marker
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -152,9 +153,9 @@ def _clicked_a_previous_option(db: Session, thread_pk, text: str) -> bool:
 _DIRECT_REQUEST_RE = re.compile(
     r"(?:\b(?:please|write|create|build|update|revise|finalize|finalise|save|"
     r"export|review|check|generate|give\s+me|i\s+(?:need|want))\b|"
-    r"\b(?:hãy|làm|viết|tạo|xuất|cập\s*nhật|chốt|sửa|đánh\s*giá|kiểm\s*tra|"
+    r"\b(?:hãy|làm|viết|tạo|xuất|lưu|cập\s*nhật|chốt|sửa|đánh\s*giá|kiểm\s*tra|"
     r"cho\s+tôi|tôi\s+(?:cần|muốn)|đồng\s*ý)\b|"
-    r"\b(?:hay|lam|viet|tao|xuat|cap\s*nhat|chot|sua|danh\s*gia|kiem\s*tra|"
+    r"\b(?:hay|lam|viet|tao|xuat|luu|cap\s*nhat|chot|sua|danh\s*gia|kiem\s*tra|"
     r"cho\s+toi|toi\s+(?:can|muon)|dong\s*y)\b)",
     re.IGNORECASE,
 )
@@ -226,6 +227,67 @@ def _chapter_export_directive(
             "survey/interview results and do not answer with an outline or another question."
         )
     return None
+
+
+_SAVED_CLAIM_RE = re.compile(
+    r"\b(?:đã\s+lưu|da\s+luu|đã\s+cập\s*nhật|da\s+cap\s*nhat|"
+    r"đã\s+build|da\s+build|locked\s+in|committed\s+to|saved\s+to)\b",
+    re.IGNORECASE,
+)
+
+
+def _save_state_directive(
+    text: str,
+    recent_messages: tuple[str, ...] | list[str] = (),
+) -> str | None:
+    """Return a private canonical write target when intent is unambiguous."""
+    target = resolve_write_target(text, recent_messages)
+    return write_target_marker(target) if target is not None else None
+
+
+def _tool_succeeded(preview: str) -> bool:
+    return not re.search(r'(^|["{\s])error["\s:]', preview or "", re.I)
+
+
+def _commit_slice_succeeded(tool_results: list[tuple[str, str]]) -> bool:
+    return any(
+        name == "commit_slice" and _tool_succeeded(preview)
+        for name, preview in tool_results
+    )
+
+
+def _honest_assistant_reply(
+    full: str,
+    tool_results: list[tuple[str, str]],
+    user_text: str,
+) -> str:
+    """Replace false 'saved' claims when commit_slice did not succeed."""
+    if not full or not _SAVED_CLAIM_RE.search(full):
+        return full
+    if _commit_slice_succeeded(tool_results):
+        return full
+    vi = bool(_VIETNAMESE_RE.search(user_text or full))
+    attempted = any(name == "commit_slice" for name, _ in tool_results)
+    if attempted:
+        return (
+            "## Chưa lưu được vào dự án\n\n"
+            "Mình đã thử ghi vào Workspace nhưng lệnh lưu bị từ chối. "
+            "Vui lòng gửi lại — mình sẽ `commit_slice` M3 với `instrument.items` "
+            "đầy đủ trong cùng lượt."
+            if vi else
+            "I tried to save to the project but the commit was rejected. "
+            "Please ask again — I'll commit M3 `instrument.items` in the same turn."
+        )
+    return (
+        "## Chưa lưu được vào dự án\n\n"
+        "Nội dung **chưa được ghi** vào Workspace — lần này mình mới trả lời trong chat. "
+        "Hãy gửi: **\"Commit bộ câu hỏi vào M3 ngay (instrument.items)\"** "
+        "để mình lưu thật vào panel bên phải."
+        if vi else
+        "Nothing was written to the Workspace — that reply was chat-only. "
+        'Ask: **"Commit the questionnaire to M3 now (instrument.items)"** '
+        "so it appears in the right-hand panel."
+    )
 
 
 def _tool_only_reply(user_text: str, tool_results: list[tuple[str, str]]) -> str:
@@ -383,13 +445,18 @@ async def send_message_v3(
 
     # Read before inserting this turn so terse corrections inherit the user's
     # last explicit scope, while a newly named chapter always wins.
-    recent_user_texts = tuple(db.scalars(
-        select(Message.content)
-        .where(Message.thread_id == t.id, Message.role == "user")
+    recent_rows = db.execute(
+        select(Message.role, Message.content)
+        .where(Message.thread_id == t.id)
         .order_by(Message.id.desc())
-        .limit(6)
-    ).all())
+        .limit(8)
+    ).all()
+    recent_user_texts = tuple(
+        row.content for row in recent_rows if row.role == "user")
+    recent_messages = tuple(
+        row.content for row in reversed(recent_rows) if row.content)
     chapter_directive = _chapter_export_directive(text, recent_user_texts)
+    save_directive = _save_state_directive(text, recent_messages)
 
     db.add(Message(thread_id=t.id, role="user", content=text,
                    tool_calls_json=user_tool_calls))
@@ -491,6 +558,7 @@ async def send_message_v3(
                 _runtime_text = "\n".join(part for part in (
                     EXECUTE_NOW_MARKER if execute_now else None,
                     chapter_directive,
+                    save_directive,
                     text,
                 ) if part)
                 async for ev in stream_turn(
@@ -560,6 +628,7 @@ async def send_message_v3(
             # are skipped: the error event already told the user what happened.
             if not full and _counts.get("error", 0) == 0:
                 full = _tool_only_reply(text, tool_results)
+            full = _honest_assistant_reply(full, tool_results, text)
             # Collapse the turn's widget hints into the single tool_calls_json
             # slot: none → null, one → that hint (back-compat), many → a `multi`
             # wrapper the frontend expands so an export card + papers panel both

@@ -82,7 +82,8 @@ class _Item(BaseModel):
 
 
 class M3Instrument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # Spec-only imports carry constructs/items_per_construct alongside items.
+    model_config = ConfigDict(extra="allow")
     items: list[_Item] = []
     preamble: str | None = None
     raw: str | None = None
@@ -302,6 +303,26 @@ def normalize_instrument(inst: Any, extracted_items: list[dict] | None = None) -
             out["raw"] = _s(raw)
         if preamble and _s(preamble):
             out["preamble"] = _s(preamble)
+        # Decision: some agent turns group complete item text under
+        # `constructs.<code>.items`. That is content, not a questionnaire spec.
+        # Flatten it at the canonical boundary so roadmap/preflight/UI all see
+        # the same `instrument.items`. Demographics remain separate metadata
+        # because they are profile fields, not measurement indicators.
+        if not raw_items and isinstance(inst.get("constructs"), dict):
+            demographics = {
+                _s(value) for value in (inst.get("demographics") or []) if _s(value)
+            }
+            raw_items = []
+            for code, block in inst["constructs"].items():
+                construct = _s(code)
+                if not construct or construct in demographics or not isinstance(block, dict):
+                    continue
+                for item in block.get("items") or []:
+                    if isinstance(item, dict):
+                        raw_items.append({
+                            **item,
+                            "construct": item.get("construct") or construct,
+                        })
     elif inst is None:
         raw_items = []
     else:
@@ -313,6 +334,18 @@ def normalize_instrument(inst: Any, extracted_items: list[dict] | None = None) -
             own.append(item)
 
     out["items"] = own if own else list(extracted_items or [])
+    # Preserve questionnaire spec metadata (common after import) when items are
+    # committed later — the panel and roadmap read constructs/counts from here.
+    if isinstance(inst, dict):
+        for key in (
+            "scale", "source", "language", "constructs", "title",
+            "items_per_construct", "screening_criteria", "screening_questions",
+            "demographics", "valid_sample_size", "collected_responses",
+            "compatibility_note",
+        ):
+            val = inst.get(key)
+            if val not in (None, "", [], {}):
+                out[key] = val
     return out
 
 

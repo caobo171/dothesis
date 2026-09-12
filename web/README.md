@@ -1,8 +1,8 @@
 # DoThesis — Next.js frontend
 
-Next.js 15 (App Router) frontend for the DoThesis chat-first thesis assistant. Renders the single chat thread + per-module widgets (Card / Grid / ListEditor / FlowChart) emitted by the orchestrator (`../orchestrator/`) via the FastAPI chat router (`../api/app/routers/chat.py`).
+Next.js 15 (App Router) frontend for the DoThesis chat-first thesis assistant. Renders the chat thread + per-module widgets (Card / Grid / ListEditor / FlowChart) streamed by the deep-agent runtime through the FastAPI chat router.
 
-> Architecture brief: [`../researchflow-architecture-brief.md`](../researchflow-architecture-brief.md). Agent contract + open gaps: [`../AGENTS.md`](../AGENTS.md). The chat surface is the brief's §1.4 conversation focus — keep "current module is a default context, never a lock" in mind when adding navigation UI.
+> Current architecture: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Agent contract: [`../AGENTS.md`](../AGENTS.md). Module focus is an advisory UI/continuity signal, never a router or tool restriction; widgets and context panels must reflect each artifact's owning module.
 
 The legacy per-paper "agent run" / "draft editor" / "citations" views below render output from the DoThesis engine and remain useful for the standalone draft-generator product (see [`../engine/README.md`](../engine/README.md)). They are NOT part of the M1–M5 chat flow.
 

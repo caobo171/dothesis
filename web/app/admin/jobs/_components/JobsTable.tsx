@@ -6,6 +6,7 @@ import useSWR, { mutate } from "swr";
 import { AdminTable, type AdminColumn } from "@/app/components/admin/AdminTable";
 import { Select } from "@/app/components/ui/select";
 import { apiFetch, swrFetcher } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 
 type Row = {
   id: string; paper_id: string; paper_topic: string;
@@ -20,6 +21,7 @@ type ListResp = { items: Row[]; total: number; page: number; page_size: number }
 const STATUSES = ["", "queued", "running", "done", "failed", "canceled"];
 
 export default function JobsTable() {
+  const t = useT();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("running");
   const [cancelling, setCancelling] = useState<string | null>(null);
@@ -65,11 +67,11 @@ export default function JobsTable() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold text-ink-900">Jobs</h1>
+        <h1 className="text-2xl font-bold text-ink-900">{t("admin.jobs.title")}</h1>
         <Select
           value={status}
           onValueChange={(v) => { setStatus(v); setPage(1); }}
-          options={STATUSES.map((s) => ({ value: s, label: s || "All statuses" }))}
+          options={STATUSES.map((s) => ({ value: s, label: s || t("admin.filters.allStatuses") }))}
           className="w-44"
         />
       </div>

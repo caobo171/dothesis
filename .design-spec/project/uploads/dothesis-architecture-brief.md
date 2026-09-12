@@ -1,5 +1,10 @@
 # DoThesis — Architecture & Context-Memory Brief
 
+> **Historical uploaded brief — do not implement as current architecture.** It
+> describes the retired per-module handler/router design. The current source of
+> truth is [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md): one deep agent,
+> advisory focus, free cross-module tool choice, and guarded artifact destinations.
+
 > Handoff spec for Claude Code. Target: an AI thesis-assistant SaaS with 5 modules, delivered as a **single chat interface** where the student can move between steps freely. This document captures the design decisions; build against the principles in §1 first — everything else follows from them.
 
 ---

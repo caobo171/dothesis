@@ -133,6 +133,30 @@ def test_interactive_questions_move_to_instrument():
     assert all(i["construct"] in {"PU", "PI"} for i in items)
 
 
+def test_nested_construct_items_flatten_to_canonical_instrument():
+    out = normalize_m3({"instrument": {
+        "scale": "Likert 5",
+        "constructs": {
+            "EXP": {"label": "Expertise", "items": [
+                {"id": "EXP_1", "text": "The influencer is knowledgeable."},
+                {"id": "EXP_2", "text": "The influencer is experienced."},
+            ]},
+            "Gender": {"label": "Gender", "items": [
+                {"id": "Gender", "text": "What is your gender?"},
+            ]},
+        },
+        "demographics": ["Gender"],
+    }})
+
+    assert [item["id"] for item in out["instrument"]["items"]] == [
+        "EXP_1", "EXP_2",
+    ]
+    assert all(
+        item["construct"] == "EXP" for item in out["instrument"]["items"]
+    )
+    assert out["instrument"]["demographics"] == ["Gender"]
+
+
 def test_headless_from_to_becomes_source_target():
     out = normalize_m3(HEADLESS)
     edge = out["conceptual_model"]["edges"][0]

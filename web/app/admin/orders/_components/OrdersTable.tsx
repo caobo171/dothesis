@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { AdminTable, type AdminColumn } from "@/app/components/admin/AdminTable";
 import { Select } from "@/app/components/ui/select";
 import { swrFetcher } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 
 type Row = {
   id: string; owner_email: string; package_id: string;
@@ -48,6 +49,7 @@ function providerRef(r: Row): string {
 }
 
 export default function OrdersTable() {
+  const t = useT();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("");
   const params = new URLSearchParams({ page: String(page), page_size: "20" });
@@ -75,11 +77,11 @@ export default function OrdersTable() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold text-ink-900">Orders</h1>
+        <h1 className="text-2xl font-bold text-ink-900">{t("admin.orders.title")}</h1>
         <Select
           value={status}
           onValueChange={(v) => { setStatus(v); setPage(1); }}
-          options={STATUSES.map((s) => ({ value: s, label: s || "All statuses" }))}
+          options={STATUSES.map((s) => ({ value: s, label: s || t("admin.filters.allStatuses") }))}
           className="w-44"
         />
       </div>

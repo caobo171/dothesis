@@ -1,5 +1,11 @@
 # ResearchFlow — Architecture & Context-Memory Brief
 
+> **Historical document — do not implement as current architecture.** This brief
+> describes the retired per-module handler/router design. The current system uses
+> one deep agent with advisory focus, free cross-module tool choice, and guarded
+> artifact destinations. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and
+> [`docs/superpowers/specs/2026-09-12-advisory-focus-artifact-routing-design.md`](docs/superpowers/specs/2026-09-12-advisory-focus-artifact-routing-design.md).
+
 > Handoff spec for Claude Code. Target: an AI thesis-assistant SaaS with 5 modules, delivered as a **single chat interface** where the student can move between steps freely. This document captures the design decisions; build against the principles in §1 first — everything else follows from them.
 
 ---

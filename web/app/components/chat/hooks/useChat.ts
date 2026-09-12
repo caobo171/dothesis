@@ -200,11 +200,15 @@ export function useChat(threadId: string) {
 
     // Revalidate to replace the optimistic message with server truth
     void mutate();
-    // Refresh the thread + project credit totals (rendered in the side panels
-    // by the layout) now that this response recorded its cost. Key-matcher
-    // mutate hits both `/threads/{id}/credits` and `/projects/{id}/credits`.
+    // Refresh side panels: credits, project context_store (Workspace), roadmap.
+    // Without the project revalidation the right rail froze until a full reload
+    // even when the agent had just called commit_slice in this turn.
     void globalMutate(
-      key => typeof key === "string" && key.includes("/credits"),
+      key => typeof key === "string" && (
+        key.includes("/credits")
+        || /^\/projects\/[^/]+$/.test(key)
+        || /^\/projects\/[^/]+\/roadmap$/.test(key)
+      ),
       undefined,
       { revalidate: true },
     );

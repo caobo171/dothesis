@@ -745,12 +745,26 @@ export const vi: Record<MessageKey, string> = {
   "context.field.conceptual_model": "Mô hình khái niệm",
   "context.field.hypotheses": "Giả thuyết",
   "context.field.instrument": "Bảng câu hỏi",
+  "context.field.scale": "Thang đo",
   "context.field.research_title": "Tên đề tài",
   "context.field.research_questions": "Câu hỏi nghiên cứu",
   "context.field.chapters": "Chương",
   "context.field.final_sections": "Bản nháp",
   "context.field.literature_sources": "Nguồn tài liệu",
   "context.field.research_gaps": "Khoảng trống nghiên cứu",
+  "context.field.analysis_outline": "Kế hoạch phân tích",
+  "context.field.analysis_results": "Kết quả",
+  "context.field.data_type_detected": "Loại dữ liệu",
+
+  "context.empty.m4NotSet": "Chưa phân tích — mở M4 khi đã có dữ liệu hoặc kết quả SmartPLS.",
+  "context.empty.m4None": "Chưa có dữ liệu M4.",
+  "context.empty.m4SoftLock":
+    "Bạn có thể nhảy vào bất cứ lúc nào — agent sẽ báo nếu còn thiếu bước phía trước.",
+
+  "context.summary.resultTables_one": "{count} bảng",
+  "context.summary.resultTables_other": "{count} bảng",
+  "context.summary.hypothesisTests": "{supported}/{total} giả thuyết được hỗ trợ",
+  "context.summary.sampleSize": "n = {n}",
 
   "context.empty.m3NotSet": "Chưa có phương pháp — mở M3 để thiết kế.",
   "context.empty.m3None": "Chưa có dữ liệu M3.",
@@ -767,11 +781,19 @@ export const vi: Record<MessageKey, string> = {
 
   "context.summary.constructsEdges": "{constructs} biến · {edges} quan hệ",
   "context.summary.moreHypotheses": "+{count} nữa…",
+  "context.uploads.more": "+{count} tệp nữa…",
+  "context.uploads.showLess": "Thu gọn",
   "context.summary.instrumentItems_one": "{count} câu",
   "context.summary.instrumentItems_other": "{count} câu",
   "context.summary.instrumentConstructs_one": "{count} biến",
   "context.summary.instrumentConstructs_other": "{count} biến",
   "context.summary.questionnaireWords": "{count} từ · bấm để xem",
+  "context.summary.instrumentSpecItemsPerConstruct": "{construct}: {count} câu",
+  "context.field.screening_criteria": "Tiêu chí sàng lọc",
+  "context.field.instrument_source": "Nguồn",
+  "context.field.instrument_language": "Ngôn ngữ",
+  "context.empty.instrumentSpecNoText":
+    "Nội dung câu hỏi chưa được lưu trong dự án — chỉ có đặc tả (biến, số câu, thang đo). Hãy nhờ agent commit bảng câu hỏi đầy đủ, hoặc import từ file Word của bạn.",
 
   "context.sample.atLeast": "n ≥ {min}",
   "context.sample.withTarget": "n ≥ {min} (mục tiêu {target})",
@@ -786,6 +808,7 @@ export const vi: Record<MessageKey, string> = {
   "context.modal.hypothesisSubtitle": "Giả thuyết",
   "context.modal.instrumentGrouped": "Câu hỏi theo từng biến",
   "context.modal.instrumentRaw": "Toàn văn bảng câu hỏi",
+  "context.modal.instrumentSpec": "Đặc tả — chưa có văn bản từng câu hỏi",
 
   "context.value.paradigm.positivist": "Thực chứng (positivist)",
   "context.value.paradigm.postpositivist": "Hậu thực chứng",

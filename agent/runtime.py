@@ -188,6 +188,7 @@ from agent.tools.research import parse_reference, quick_sources, research_scout
 from agent.tools.state_tools import make_state_tools
 from agent.tools.stats import check_thresholds, make_stats_tools
 from agent.tools.writing import make_writing_tools
+from agent.artifact_routing import ArtifactRoutingMiddleware
 from agent.usage import extract_usage  # F10: route-independent token accounting
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -232,6 +233,17 @@ A user message may be preceded by a line like:
 
 This is the REAL per-module status from the state store, injected fresh every
 turn. It overrides anything you remember. Rules:
+- `focus` is advisory context for an otherwise unspecified continuation. It is
+  NOT a router, lock, or tool restriction. Route named artifacts to their owning
+  module even when another module is focused, and use any available tools in
+  whatever order completes the student's requested outcome.
+- A private `[WRITE TARGET] {"module":"…","key":"…","artifact":"…"}` line is
+  the canonical destination inferred from the current conversation. Never show
+  it to the student. Any `commit_slice` in that turn must use its module and
+  include its key; a mismatch is rejected so you can retry correctly.
+- You may read or mutate multiple modules in one turn when the requested
+  outcome requires it. Keep each artifact in its owning slice; never put an M3
+  questionnaire into M5 merely because focus is M5.
 - When the user asks about progress, report THESE statuses verbatim — never
   recite a status list from memory.
 - A module is `done` ONLY if it shows `done` here. NEVER tell the user a module
@@ -627,6 +639,7 @@ def build_agent(
         model=model,
         tools=tools,
         system_prompt=SYSTEM_PROMPT,
+        middleware=[ArtifactRoutingMiddleware()],
         skills=["/skills/"],
         backend=backend,
         checkpointer=checkpointer,

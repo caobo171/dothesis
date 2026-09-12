@@ -6,6 +6,7 @@ import useSWR from "swr";
 
 import { Select } from "@/app/components/ui/select";
 import { apiFetch } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 
 import { STATUS, STATUS_LABEL, type ListResp, type PostRow } from "./types";
 
@@ -33,6 +34,7 @@ function when(row: PostRow): string {
 }
 
 export default function BlogAdmin() {
+  const t = useT();
   const [page, setPage] = useState(1);
   const [locale, setLocale] = useState("");
   const [status, setStatus] = useState("");
@@ -105,7 +107,7 @@ export default function BlogAdmin() {
           value={locale}
           onValueChange={(v) => { setLocale(v); setPage(1); }}
           options={[
-            { value: "", label: "All locales" },
+            { value: "", label: t("admin.blog.allLocales") },
             { value: "vi", label: "vi" },
             { value: "en", label: "en" },
           ]}
@@ -115,16 +117,16 @@ export default function BlogAdmin() {
           value={status}
           onValueChange={(v) => { setStatus(v); setPage(1); }}
           options={[
-            { value: "", label: "All statuses" },
-            { value: String(STATUS.DRAFT), label: "Draft" },
-            { value: String(STATUS.PUBLISHED), label: "Published" },
-            { value: String(STATUS.SCHEDULED), label: "Scheduled" },
+            { value: "", label: t("admin.blog.allStatuses") },
+            { value: String(STATUS.DRAFT), label: t("admin.blog.draft") },
+            { value: String(STATUS.PUBLISHED), label: t("admin.blog.published") },
+            { value: String(STATUS.SCHEDULED), label: t("admin.blog.scheduled") },
           ]}
           className="w-40"
         />
         <button type="submit"
                 className="rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">
-          Search
+          {t("admin.blog.search")}
         </button>
         {(q || locale || status) && (
           <button type="button"

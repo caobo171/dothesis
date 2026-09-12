@@ -1,12 +1,61 @@
 from api.app.routers.chat_v3 import (
     _chapter_export_directive,
     _direct_request,
+    _honest_assistant_reply,
+    _save_state_directive,
     _tool_only_reply,
 )
 
 
 def test_direct_vietnamese_confirmation_executes_now():
     assert _direct_request("OK, chốt mô hình và cập nhật giúp tôi")
+
+
+def test_vietnamese_save_to_project_memory_executes_now():
+    assert _direct_request("lưu nó vào bộ nhớ của bài luận")
+
+
+def test_save_state_directive_for_questionnaire():
+    directive = _save_state_directive(
+        "lưu nó vào bộ nhớ của bài luận",
+        ["Bộ câu hỏi khảo sát gồm EXP_1 đến DEC_5."],
+    )
+    assert directive is not None
+    assert '"module":"M3"' in directive
+    assert '"key":"instrument"' in directive
+
+
+def test_save_state_directive_does_not_guess_without_artifact_context():
+    assert _save_state_directive("save it", []) is None
+
+
+def test_explicit_chapter_overrides_questionnaire_history():
+    directive = _save_state_directive(
+        "Save chapter 5",
+        ["The questionnaire contains 40 items."],
+    )
+    assert directive is not None
+    assert '"module":"M5"' in directive
+    assert '"key":"final_sections"' in directive
+
+
+def test_false_saved_claim_is_replaced_when_no_commit():
+    reply = _honest_assistant_reply(
+        "## Đã lưu bộ câu hỏi vào bài luận",
+        [],
+        "lưu nó vào bộ nhớ của bài luận",
+    )
+    assert "Chưa lưu được" in reply
+    assert "Đã lưu" not in reply
+
+
+def test_saved_claim_kept_when_commit_succeeded():
+    reply = _honest_assistant_reply(
+        "## Đã lưu bộ câu hỏi vào bài luận",
+        [("commit_slice", '{"status":"ok"}')],
+        "lưu nó vào bộ nhớ của bài luận",
+    )
+    assert reply.startswith("## Đã lưu")
 
 
 def test_direct_question_executes_now():

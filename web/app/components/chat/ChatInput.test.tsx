@@ -1,7 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
 import { ChatInput } from "./ChatInput";
+
+function renderEn(ui: React.ReactElement) {
+  return render(<LocaleProvider initialLocale="en" hasCookie>{ui}</LocaleProvider>);
+}
 
 
 describe("ChatInput", () => {
@@ -10,7 +15,7 @@ describe("ChatInput", () => {
   // assert through waitFor on the full call.
   test("calls onSubmit with text and clears", async () => {
     const onSubmit = vi.fn();
-    render(<ChatInput onSubmit={onSubmit} onFileDrop={() => {}} disabled={false} />);
+    renderEn(<ChatInput onSubmit={onSubmit} onFileDrop={() => {}} disabled={false} />);
     const textarea = screen.getByRole("textbox");
     await userEvent.type(textarea, "hello world");
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
@@ -19,7 +24,7 @@ describe("ChatInput", () => {
 
   test("Enter submits", async () => {
     const onSubmit = vi.fn();
-    render(<ChatInput onSubmit={onSubmit} onFileDrop={() => {}} disabled={false} />);
+    renderEn(<ChatInput onSubmit={onSubmit} onFileDrop={() => {}} disabled={false} />);
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
     await userEvent.type(textarea, "hello");
     await userEvent.keyboard("{Enter}");
@@ -28,7 +33,7 @@ describe("ChatInput", () => {
 
   test("disabled prevents send", async () => {
     const onSubmit = vi.fn();
-    render(<ChatInput onSubmit={onSubmit} onFileDrop={() => {}} disabled={true} />);
+    renderEn(<ChatInput onSubmit={onSubmit} onFileDrop={() => {}} disabled={true} />);
     expect(screen.getByRole("textbox")).toBeDisabled();
     expect(screen.getByRole("button", { name: /send/i })).toBeDisabled();
   });
@@ -37,7 +42,7 @@ describe("ChatInput", () => {
   // uploads endpoint's makes a supported format look unsupported. .docx is the
   // one that matters most here — it is what a thesis draft arrives as.
   test("Attach offers every format the uploads endpoint extracts", () => {
-    render(<ChatInput onSubmit={() => {}} onFileDrop={() => {}} disabled={false} />);
+    renderEn(<ChatInput onSubmit={() => {}} onFileDrop={() => {}} disabled={false} />);
 
     const created: HTMLInputElement[] = [];
     const realCreate = document.createElement.bind(document);
@@ -66,7 +71,7 @@ describe("ChatInput", () => {
 
   test("paste screenshot attaches image like a file pick", async () => {
     const onFileDrop = vi.fn(async () => ["upload-1"]);
-    render(<ChatInput onSubmit={() => {}} onFileDrop={onFileDrop} disabled={false} />);
+    renderEn(<ChatInput onSubmit={() => {}} onFileDrop={onFileDrop} disabled={false} />);
     const textarea = screen.getByRole("textbox");
     const blob = new File(["img"], "blob", { type: "image/png" });
 
@@ -86,7 +91,7 @@ describe("ChatInput", () => {
 
   test("file drop fires onFileDrop", () => {
     const onFileDrop = vi.fn();
-    render(<ChatInput onSubmit={() => {}} onFileDrop={onFileDrop} disabled={false} />);
+    renderEn(<ChatInput onSubmit={() => {}} onFileDrop={onFileDrop} disabled={false} />);
     const zone = screen.getByTestId("file-drop-zone");
     const file = new File(["x"], "test.pdf", { type: "application/pdf" });
     fireEvent.drop(zone, { dataTransfer: { files: [file] } });
@@ -109,7 +114,7 @@ describe("ChatInput attachments", () => {
     );
     const onSubmit = vi.fn();
 
-    render(<ChatInput onSubmit={onSubmit} onFileDrop={onFileDrop} disabled={false} />);
+    renderEn(<ChatInput onSubmit={onSubmit} onFileDrop={onFileDrop} disabled={false} />);
     drop(new File(["x"], "_Result.docx", { type: "application/octet-stream" }));
     await screen.findByText("_Result.docx");
 
@@ -137,7 +142,7 @@ describe("ChatInput attachments", () => {
     const onFileDrop = vi.fn(async () => [null]);   // no id back = failure
     const onSubmit = vi.fn();
 
-    render(<ChatInput onSubmit={onSubmit} onFileDrop={onFileDrop} disabled={false} />);
+    renderEn(<ChatInput onSubmit={onSubmit} onFileDrop={onFileDrop} disabled={false} />);
     drop(new File(["x"], "broken.docx", { type: "application/octet-stream" }));
     await screen.findByText(/Upload failed/i);
 
@@ -152,7 +157,7 @@ describe("ChatInput attachments", () => {
 
   test("a message with no attachment gets no settle callback", async () => {
     const onSubmit = vi.fn();
-    render(<ChatInput onSubmit={onSubmit} onFileDrop={() => {}} disabled={false} />);
+    renderEn(<ChatInput onSubmit={onSubmit} onFileDrop={() => {}} disabled={false} />);
     await userEvent.type(screen.getByRole("textbox"), "chào shop");
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
     expect(onSubmit).toHaveBeenCalledWith("chào shop", [], undefined);

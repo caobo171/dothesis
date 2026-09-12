@@ -9,7 +9,12 @@
  */
 import { describe, expect, test } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
 import { M3Body, countConstructs, groupItemsByConstruct } from "./ModuleSlices";
+
+function renderEn(ui: React.ReactElement) {
+  return render(<LocaleProvider initialLocale="en" hasCookie>{ui}</LocaleProvider>);
+}
 
 const INSTRUMENT = {
   preamble: "Please rate how much you agree with each statement.",
@@ -48,12 +53,12 @@ describe("groupItemsByConstruct", () => {
 
 describe("M3Body questionnaire row", () => {
   test("summarises a structured instrument by items and constructs", () => {
-    render(<M3Body data={{ instrument: INSTRUMENT }} />);
+    renderEn(<M3Body data={{ instrument: INSTRUMENT }} />);
     expect(screen.getByText(/4 items · 2 constructs/)).toBeTruthy();
   });
 
   test("opens the questionnaire grouped by construct", () => {
-    render(<M3Body data={{ instrument: INSTRUMENT }} />);
+    renderEn(<M3Body data={{ instrument: INSTRUMENT }} />);
     fireEvent.click(screen.getByText(/4 items · 2 constructs/));
 
     expect(screen.getByText(INSTRUMENT.preamble)).toBeTruthy();
@@ -66,32 +71,50 @@ describe("M3Body questionnaire row", () => {
   });
 
   test("an instrument alone is enough to render M3 — no methodology required", () => {
-    render(<M3Body data={{ instrument: INSTRUMENT }} />);
+    renderEn(<M3Body data={{ instrument: INSTRUMENT }} />);
     expect(screen.queryByText(/No M3 data committed yet/)).toBeNull();
   });
 
   test("legacy questionnaire_text still renders as raw text", () => {
-    render(<M3Body data={{ questionnaire_text: "Q1. How old are you?" }} />);
+    renderEn(<M3Body data={{ questionnaire_text: "Q1. How old are you?" }} />);
     const row = screen.getByText(/words · click to view/);
     fireEvent.click(row);
     expect(screen.getByText(/Q1. How old are you\?/)).toBeTruthy();
   });
 
   test("structured items win over a legacy string when both exist", () => {
-    render(<M3Body data={{ instrument: INSTRUMENT,
+    renderEn(<M3Body data={{ instrument: INSTRUMENT,
                            questionnaire_text: "stale legacy text" }} />);
     expect(screen.getByText(/4 items · 2 constructs/)).toBeTruthy();
     expect(screen.queryByText(/words · click to view/)).toBeNull();
   });
 
   test("an instrument carrying only unparsed raw text falls back to it", () => {
-    render(<M3Body data={{ instrument: { raw: "unparsed upload body" } }} />);
+    renderEn(<M3Body data={{ instrument: { raw: "unparsed upload body" } }} />);
     fireEvent.click(screen.getByText(/words · click to view/));
     expect(screen.getByText(/unparsed upload body/)).toBeTruthy();
   });
 
+  test("spec-only instrument (constructs + counts, no item text) still shows questionnaire row", () => {
+    const SPEC = {
+      scale: "Five-point Likert scale",
+      source: "User-provided bilingual questionnaire in attached Word document",
+      language: "vi-en",
+      constructs: ["EXP", "ATT", "DEC"],
+      screening_criteria: ["Uses social media frequently"],
+      items_per_construct: { EXP: 5, ATT: 5, DEC: 5 },
+    };
+    renderEn(<M3Body data={{ methodology: { paradigm: "positivist" }, instrument: SPEC }} />);
+    expect(screen.getAllByText(/Five-point Likert scale/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/3 constructs · 15 items · Five-point Likert scale/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /questionnaire/i }));
+    expect(screen.getByText(/Item wording is not in the project state yet/)).toBeTruthy();
+    expect(screen.getByText(/EXP: 5 items/)).toBeTruthy();
+    expect(screen.getByText(/Uses social media frequently/)).toBeTruthy();
+  });
+
   test("still empty when M3 has nothing at all", () => {
-    render(<M3Body data={{}} />);
-    expect(screen.getByText(/No M3 data committed yet/)).toBeTruthy();
+    renderEn(<M3Body data={{}} />);
+    expect(screen.getByText(/No M3 data committed yet|Chưa có dữ liệu M3/)).toBeTruthy();
   });
 });

@@ -9,7 +9,7 @@ import { FileTypeIcon, fileKindOf } from "./FileTypeIcon";
 // The per-module slice renderers live in ModuleSlices now — the reconstructed-
 // modules card renders the SAME components, so a backfilled M3 looks exactly
 // like a live M3 (mermaid model included) instead of a second, worse view.
-import { EmptyHint, M1Body, M2Body, M3Body, M5Body } from "./ModuleSlices";
+import { EmptyHint, M1Body, M2Body, M3Body, M4Body, M5Body } from "./ModuleSlices";
 import { RoadmapPanel, StepBar, StepList, useRoadmap, type Sub, MODULE_KEY } from "./RoadmapPanel";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
@@ -225,9 +225,7 @@ export function ContextPanel({
               stale={isStale("M4")}
               substeps={substepsOf("M4")}
             >
-              <div className="text-[12.5px] text-ink-500 leading-snug">
-                Soft-locked — you can ask or start; the agent will prompt if a dependency is missing.
-              </div>
+              <M4Body data={contextStore.m4_analysis} />
             </CtxSection>
 
             {/* One writing step, not two — the discussion of findings is
@@ -247,14 +245,7 @@ export function ContextPanel({
 
             {uploads.length > 0 && (
               <CtxSection label={`Context (${uploads.length})`} status="in_progress">
-                <div className="space-y-1.5">
-                  {uploads.slice(0, 5).map(u => <UploadRow key={u.id} upload={u} />)}
-                  {uploads.length > 5 && (
-                    <div className="text-[11.5px] text-ink-400 pt-1">
-                      +{uploads.length - 5} more…
-                    </div>
-                  )}
-                </div>
+                <UploadsList uploads={uploads} />
               </CtxSection>
             )}
           </>
@@ -496,6 +487,32 @@ function ExportRowItem({ row }: { row: ExportRow }) {
 // The icon kind comes from fileKindOf(), which reads the extension: the old
 // `mime.includes("pdf") ? "pdf" : "file"` put every .docx on the generic grey
 // sheet even though FileTypeIcon has drawn a Word badge all along.
+const UPLOADS_PREVIEW = 5;
+
+function UploadsList({ uploads }: { uploads: UploadItem[] }) {
+  const t = useT();
+  const [expanded, setExpanded] = useState(false);
+  const hidden = uploads.length - UPLOADS_PREVIEW;
+  const visible = expanded ? uploads : uploads.slice(0, UPLOADS_PREVIEW);
+
+  return (
+    <div className="space-y-1.5">
+      {visible.map(u => <UploadRow key={u.id} upload={u} />)}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(e => !e)}
+          className="text-[11.5px] text-primary-600 font-medium pt-1 hover:underline"
+        >
+          {expanded
+            ? t("context.uploads.showLess")
+            : t("context.uploads.more", { count: hidden })}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function UploadRow({ upload }: { upload: UploadItem }) {
   const [preview, setPreview] = useState(false);
   const { busy, error, start } = useArtifactDownload();

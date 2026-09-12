@@ -44,8 +44,7 @@ function polishDocxPreview(root: HTMLElement) {
  *  smaller window, a split screen, or just browser zoom, which shrinks the CSS
  *  viewport — clipped the right-hand side of the student's document. Measured
  *  before this fix: a 780px modal overflowed by 144px, a 560px one by 364px,
- *  at every zoom level, with `min-width: max-content` in globals.css
- *  guaranteeing the canvas could never shrink to compensate.
+ *  at every zoom level until the canvas could shrink to compensate.
  *
  *  Scaling rather than reflowing is the point. Dropping `ignoreWidth` would let
  *  paragraphs and tables re-wrap to the panel, which answers a DIFFERENT
@@ -59,23 +58,23 @@ function polishDocxPreview(root: HTMLElement) {
  */
 function fitDocxToWidth(host: HTMLElement): () => void {
   const wrapper = host.querySelector<HTMLElement>(".docx-wrapper");
-  const canvas = host.parentElement;
+  const canvas = host.closest<HTMLElement>("[data-docx-canvas]");
   if (!wrapper || !canvas) return () => {};
 
-  wrapper.style.removeProperty("zoom");
-  const intrinsic = wrapper.scrollWidth;
-  if (!intrinsic) return () => {};
-
   const apply = () => {
-    // Floor at 0.4: past that the text is unreadable, and a horizontal scroll
-    // the student can drag beats a page they cannot read at all.
-    const scale = Math.max(0.4, Math.min(1, canvas.clientWidth / intrinsic));
+    wrapper.style.removeProperty("zoom");
+    const intrinsic = wrapper.scrollWidth;
+    if (!intrinsic) return;
+
+    const pad = 24;
+    const available = Math.max(280, canvas.clientWidth - pad);
+    // Floor at 0.55: below that the page is unreadable; horizontal scroll is
+    // preferable to a postage-stamp preview floating in grey space.
+    const scale = Math.max(0.55, Math.min(1, available / intrinsic));
     wrapper.style.zoom = String(scale);
   };
   apply();
 
-  // The canvas resizes without the component re-rendering — window resize, the
-  // context panel opening, a zoom change — so a one-shot fit would go stale.
   const ro = new ResizeObserver(apply);
   ro.observe(canvas);
   return () => ro.disconnect();
@@ -188,12 +187,16 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
   }
 
   return (
-    <>
-      {busy && <Loading />}
+    <div data-docx-canvas className="relative w-full min-h-[240px]">
+      {busy && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#e9edf2]">
+          <Loading />
+        </div>
+      )}
       {/* docx-preview writes into this node directly. `docx-body` scopes the
           styles in globals.css so they can't leak into the agent's markdown. */}
-      <div ref={host} className="docx-body min-h-full" />
-    </>
+      <div ref={host} className={`docx-body ${busy ? "invisible" : ""}`} />
+    </div>
   );
 }
 
@@ -268,19 +271,19 @@ export function AttachmentPreview({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/50 p-2 backdrop-blur-[2px] sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/55 p-3 backdrop-blur-[2px] sm:p-5 lg:pr-[min(360px,calc(100vw-480px))]"
       role="dialog"
       aria-modal="true"
       aria-label={meta.filename}
       onClick={onClose}
     >
       <div
-        className="flex h-[calc(100dvh-1rem)] w-full max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-white/60 bg-white shadow-[0_24px_80px_rgba(24,31,45,0.28)] sm:h-[calc(100dvh-2rem)]"
+        className="flex h-[min(calc(100dvh-1.5rem),920px)] w-full max-w-[min(1200px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-white/60 bg-white shadow-[0_24px_80px_rgba(24,31,45,0.28)]"
         // The backdrop closes; the panel must not, or selecting text inside it
         // would dismiss the thing being read.
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex min-h-16 shrink-0 items-center gap-3 border-b border-ink-200 bg-white px-4 sm:px-5">
+        <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-ink-200 bg-white px-4 py-3 sm:px-5">
           <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
             <FileText className="h-4.5 w-4.5" aria-hidden />
           </span>
@@ -323,7 +326,7 @@ export function AttachmentPreview({
           </button>
         </header>
 
-        <div className={`min-h-[240px] flex-1 overflow-auto ${
+        <div className={`min-h-0 flex-1 overflow-auto ${
           documentCanvas ? "bg-[#e9edf2]" : "bg-white px-5 py-4"
         }`}>
           {tab === "document" ? <DocumentView meta={meta} /> : <TextView meta={meta} />}

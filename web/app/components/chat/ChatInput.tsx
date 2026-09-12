@@ -11,6 +11,7 @@ import { SkillAvatar, SkillPicker } from "./SkillPicker";
 import { QuickActionsMenu } from "./QuickActionsMenu";
 import { applySkillDirective, type Skill } from "@/app/lib/skills";
 import { Button } from "@/app/components/ui/button";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 
 
 /**
@@ -106,6 +107,7 @@ export function ChatInput({
   exportArtifacts?: { kind: string; download_url: string }[];
   onQuickPrompt?: (text: string) => void;
 }) {
+  const t = useT();
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   // Active skill for THIS turn. Cleared back to `null` after each
@@ -275,8 +277,8 @@ export function ChatInput({
   // have to know which part of it they are in. `focusModule` still drives
   // routing; it just isn't quoted at the student.
   const placeholder = skill
-    ? `${skill.name} will handle this turn`
-    : "Reply to DoThesis — ask anything about your thesis";
+    ? t("chat.composer.placeholderSkill", { skill: skill.name })
+    : t("chat.composer.placeholder");
 
   return (
     <FileDropZone onFileDrop={attachFiles}>
@@ -300,7 +302,7 @@ export function ChatInput({
               <SkillAvatar name={skill.name} size={26} />
               <div className="leading-tight min-w-0">
                 <div className="text-[12.5px] font-bold text-primary-700 truncate">
-                  Using {skill.name}
+                  {t("chat.composer.usingSkill", { skill: skill.name })}
                 </div>
                 <div className="text-[11px] text-primary-700/75 truncate">
                   {skill.description}
@@ -313,7 +315,7 @@ export function ChatInput({
                 className="px-2 py-1 rounded-md text-[11px] font-semibold text-primary-700 hover:bg-primary-100 transition-colors"
                 aria-label="Clear skill"
               >
-                ✕ Clear
+                ✕ {t("chat.composer.clearSkill")}
               </button>
             </div>
           )}
@@ -352,10 +354,10 @@ export function ChatInput({
               type="button"
               onClick={handleSubmit}
               disabled={disabled || !text.trim()}
-              aria-label="Send"
+              aria-label={t("chat.composer.send")}
               className="rounded-full self-end mb-0.5"
             >
-              Send <Send className="w-3.5 h-3.5" />
+              {t("chat.composer.send")} <Send className="w-3.5 h-3.5" />
             </Button>
           </div>
 
@@ -385,7 +387,7 @@ export function ChatInput({
                     <AtSign className="w-3 h-3" />
                   </span>
                 )}
-                <span>{skill ? skill.name : "Skills"}</span>
+                <span>{skill ? skill.name : t("chat.composer.skills")}</span>
                 <ChevronDown className="w-3 h-3 opacity-55" />
               </button>
 
@@ -401,7 +403,7 @@ export function ChatInput({
 
             <ComposerAction
               icon={<Paperclip className="w-3.5 h-3.5" />}
-              label="Attach"
+              label={t("chat.composer.attach")}
               onClick={openFilePicker}
               disabled={disabled}
             />
@@ -435,11 +437,11 @@ export function ChatInput({
         <div className="max-w-[880px] mx-auto flex flex-wrap justify-center items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-ink-400">
           <span className="inline-flex items-center gap-1.5">
             <kbd className="px-1 py-px rounded border border-ink-200 bg-white text-[10px] font-mono">Shift+↵</kbd>
-            <span>for newline</span>
+            <span>{t("chat.composer.hintNewline")}</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
             <kbd className="px-1 py-px rounded border border-ink-200 bg-white text-[10px] font-mono">⌘V</kbd>
-            <span>to paste a screenshot</span>
+            <span>{t("chat.composer.hintPasteScreenshot")}</span>
           </span>
         </div>
       </div>

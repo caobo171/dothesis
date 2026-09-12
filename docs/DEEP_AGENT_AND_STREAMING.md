@@ -22,8 +22,8 @@ M1–M5 agent classes, each with its own prompt assembly and slice schema. The v
 pivot replaces all of that with **one** agent that reads **eight skills** and calls
 a small belt of typed tools:
 
-- One free-roaming Claude/Gemini model does the routing by matching the user's intent
-  against skill descriptions (the v2 router skill content moved into the root skill).
+- One free-roaming Claude/Gemini model chooses the skills, tools, call order, and
+  modules needed for the outcome. `focus` is advisory context, not its router.
 - Domain expertise — M1 topic locking, M2 lit-review phases, M3 model + hypotheses,
   M4 stats, M5 writing — lives in `skills/*/SKILL.md` files (progressive disclosure:
   only name + description is in the system prompt at startup, full SKILL.md is read
@@ -117,9 +117,10 @@ skills/
 └── dothesis-m5-writing/            # ★ wizard, pipeline-backed
 ```
 
-There is **no router skill** — the model does discovery from descriptions. The
-read-vs-mutate semantics the v2 router enforced moved into the root skill (the
-words) and the `commit_slice` tool (the enforcement).
+There is **no focused-module dispatcher**. The model discovers skills from their
+descriptions and can combine them in one turn. The root skill defines state and
+artifact ownership; deterministic middleware guards only the destination of a
+write-like `commit_slice`, without restricting any other tool use.
 
 ---
 
@@ -133,12 +134,26 @@ Critical contract: when `commit_slice(module, writes, reason)` runs, it:
 
 1. Validates the write keys belong to the module's owned slice.
 2. Snapshots a version to `version_history` (capped at 50 entries).
-3. Sets `focus = module`.
+3. Records `focus = module` as the latest working context; this does not route the
+   next turn or constrain tool choice.
 4. Flags downstream modules `needs_review` from the static DAG.
 
 `read_slice` is free and never mutates. The asymmetry the v2 brief cared about
-(read = free, mutate = focus shift + downstream propagation) is enforced at the
-tool boundary — not by model discipline.
+(read = free, mutate records latest focus + downstream propagation) is enforced at
+the tool boundary — not by model discipline. Cross-module work remains allowed.
+
+### Artifact destination guard
+
+Before the turn reaches the model, `chat_v3` derives a write target from an
+explicit artifact request or the nearest unambiguous recent artifact in user and
+assistant dialogue. This makes terse follow-ups such as “save it” retain the
+questionnaire, analysis, or chapter they refer to. The private target marker is
+consumed by `ArtifactRoutingMiddleware` in `agent/artifact_routing.py`.
+
+The guard enforces ownership, not workflow: questionnaire → `M3.instrument`,
+analysis → M4, chapters/prose → M5 (with equivalent mappings for M1 and M2).
+Only a conflicting `commit_slice` is rejected; the agent remains free to use any
+other tool and to work across modules.
 
 ### Two stores, one interface
 

@@ -1,5 +1,11 @@
 # DoThesis — Implementation PRD (for Claude Code)
 
+> **Historical implementation PRD — do not use as the current agent
+> architecture.** Its state-machine handlers and focus-default routing were
+> superseded by the deep-agent design in
+> [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md). Focus is now advisory,
+> tools and module order are agent-selected, and artifact destinations are guarded.
+
 > **How to use this doc.** Build **phase by phase** (§13). Each phase has acceptance criteria — treat them as the definition of done before moving on. **Do not over-build:** the expensive pieces (tiered memory, stats sandbox, qualitative analysis, collaboration) are deliberately deferred. When a phase says "trivial X for now," build the trivial version and move on.
 >
 > **Companion doc:** `dothesis-architecture-brief.md` holds the *rationale* for the core decisions. This PRD is the *buildable spec*. Where they overlap, the types in this PRD are authoritative.
