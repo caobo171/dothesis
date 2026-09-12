@@ -432,9 +432,11 @@ function ProjectCard({ p }: { p: Project }) {
       className="block bg-white rounded-[18px] border border-ink-200 px-[22px] py-5 no-underline text-inherit transition-all hover:border-primary-100 hover:shadow-[var(--shadow-pop)] hover:-translate-y-px"
     >
       <div className="flex items-center gap-2 mb-2.5">
-        <span className="text-[11px] text-ink-500 font-bold tracking-[0.06em] uppercase truncate max-w-[60%]">
-          {p.field ?? t("home.noField")}
-        </span>
+        {p.field ? (
+          <span className="text-[11px] text-ink-500 font-bold tracking-[0.06em] uppercase truncate max-w-[60%]">
+            {p.field}
+          </span>
+        ) : null}
         <span className="flex-1" />
         <span className="text-xs text-ink-500 font-semibold tabular-nums shrink-0">{pct}%</span>
       </div>

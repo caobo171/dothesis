@@ -15,7 +15,7 @@ from ..db import db_session
 from ..deps import current_user
 from ..models import CreditTransaction, Order, Project, Thread, User, sepay_code_seq
 from ..polar_client import PolarError, create_checkout, verify_webhook
-from ..pricing import PACKAGES, PACKAGES_BY_ID
+from ..pricing import CREDITS_PER_AUTO_THESIS, PACKAGES, PACKAGES_BY_ID
 from ..settings import get_settings
 
 router = APIRouter(prefix="/credit", tags=["credit"])
@@ -59,6 +59,10 @@ def packages():
             "price_vnd": sepay_client.usd_cents_to_vnd(p["price_cents"], settings),
             "old_price_vnd": sepay_client.usd_cents_to_vnd(p["old_price_cents"], settings),
             "credits": p["credits"],
+            # Pack credits / CREDITS_PER_AUTO_THESIS. Starter is 1.0 by
+            # construction; Standard 2.5; Expert 6.0. Shown on the card so
+            # a student can translate "25,000 credits" into theses.
+            "auto_thesis_runs": round(p["credits"] / CREDITS_PER_AUTO_THESIS, 1),
         }
         for p in PACKAGES
     ]

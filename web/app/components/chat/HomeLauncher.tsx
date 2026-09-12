@@ -401,7 +401,6 @@ export function HomeLauncher() {
 // the project name (often "Untitled thesis") and not a chat message. The overall
 // % rides top-right as a ring; the M1→M5 progression sits at the card's foot.
 function ThesisCard({ project }: { project: Project }) {
-  const t = useT();
   // The list read whitelists research_title into the m1_topic summary; fall back
   // to the project name, then a generic label, so the card is never blank.
   const brief = project.context_store?.m1_topic?.research_title
@@ -412,10 +411,12 @@ function ThesisCard({ project }: { project: Project }) {
       href={`/chat/projects/${project.id}`}
       className="group flex flex-col gap-1.5 rounded-xl border border-ink-200 bg-white px-3.5 py-3 no-underline hover:border-primary-300 hover:bg-primary-50/30 transition-colors min-h-[104px]"
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-[0.04em] font-bold text-ink-400 truncate">
-          {project.field || t("home.noField")}
-        </span>
+      <div className={`flex items-start gap-2 ${project.field ? "justify-between" : "justify-end"}`}>
+        {project.field ? (
+          <span className="text-[11px] uppercase tracking-[0.04em] font-bold text-ink-400 truncate">
+            {project.field}
+          </span>
+        ) : null}
         <ProgressRing pct={progressPct(project)} />
       </div>
       <span className="text-[12.5px] leading-relaxed text-ink-800 font-semibold line-clamp-3">

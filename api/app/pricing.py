@@ -44,6 +44,12 @@ class Package(TypedDict):
 # the gap is now 13x, not 4x. Decide before the next pricing page ships: raise pack
 # credits, raise pack prices, move to a cheaper default model, or accept the margin.
 # Full evidence: .superpowers/sdd/fix-credit-multiplier-report.md
+# The pack table below is sized on this number (Starter = 10,000 = one run).
+# The credit page and the Auto Thesis estimate both read it so a student is
+# never told "this pack is one thesis" and then blocked at 17,500 credits.
+CREDITS_PER_AUTO_THESIS = 10_000
+
+
 PACKAGES: list[Package] = [
     {
         "id": "starter_package",

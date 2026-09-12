@@ -38,6 +38,11 @@ def test_packages_returns_all_three():
     data = r.json()
     ids = {p["id"] for p in data}
     assert ids == {"starter_package", "standard_package", "expert_package"}
+    by_id = {p["id"]: p for p in data}
+    # Pack sizing: Starter = one Auto Thesis, Standard 2.5, Expert 6.
+    assert by_id["starter_package"]["auto_thesis_runs"] == 1.0
+    assert by_id["standard_package"]["auto_thesis_runs"] == 2.5
+    assert by_id["expert_package"]["auto_thesis_runs"] == 6.0
 
 
 def test_checkout_creates_order_and_returns_url(client_with_user):

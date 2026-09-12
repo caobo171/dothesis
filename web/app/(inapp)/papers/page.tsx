@@ -175,7 +175,7 @@ function DraftRow({ p, index }: { p: Project; index: number }) {
           {p.name || "Untitled"}
         </div>
         <div className="text-[11px] text-ink-500 mt-0.5 uppercase tracking-[0.04em] truncate">
-          {p.field || "No field set"} · {p.language}
+          {[p.field, p.language].filter(Boolean).join(" · ")}
         </div>
       </td>
       <td className="py-4 pr-3"><ModuleMiniBar p={p} /></td>

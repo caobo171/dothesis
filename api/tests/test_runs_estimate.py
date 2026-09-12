@@ -32,6 +32,7 @@ def test_estimate_returns_token_and_credit_info(client):
     r = client.post(f"/api/v1/projects/{pid}/runs/estimate", json={"topic": "Leadership in SMEs"})
     assert r.status_code == 200
     body = r.json()
-    assert body["estimated_tokens"] > 0
+    from app.pricing import CREDITS_PER_AUTO_THESIS
+    assert body["estimated_tokens"] == CREDITS_PER_AUTO_THESIS
     assert "credit_balance" in body
     assert body["credit_balance"] == 10000

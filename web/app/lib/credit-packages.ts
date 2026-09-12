@@ -8,4 +8,6 @@ export type CreditPackage = {
   price_vnd: number;
   old_price_vnd: number;
   credits: number;
+  /** Pack credits / CREDITS_PER_AUTO_THESIS. Starter is 1. */
+  auto_thesis_runs: number;
 };

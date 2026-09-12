@@ -67,13 +67,20 @@ def estimate_run(project_id: uuid.UUID,
                  body: EstimateRunBody,
                  user: User = Depends(current_user),
                  db: Session = Depends(db_session)):
-    """Estimate token cost for an auto-mode run on this topic.
+    """Estimate credit cost for an auto-mode run on this topic.
 
-    Heuristic: ~3500 tokens per module × 5 modules = 17,500 baseline,
-    plus 25 tokens per character of topic.
+    Same number the credit packs are sized on (CREDITS_PER_AUTO_THESIS), so a
+    Starter pack is enough to start the run the pack claims to cover. The
+    field is still called estimated_tokens because that is the wire name the
+    Auto Thesis modal already reads.
     """
+    from ..pricing import CREDITS_PER_AUTO_THESIS  # noqa: PLC0415
+
     _owned_project(db, user, project_id)
-    estimated = 17_500 + len(body.topic) * 25
+    # Topic stays on the wire (the modal always posts it). The quoted cost is
+    # the pack constant, not a function of title length.
+    _ = body.topic
+    estimated = CREDITS_PER_AUTO_THESIS
     return {
         "estimated_tokens": estimated,
         "credit_balance": user.credit,
