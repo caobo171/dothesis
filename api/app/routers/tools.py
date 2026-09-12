@@ -17,7 +17,7 @@ import re
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from ..db import db_session
@@ -738,12 +738,25 @@ def my_tool_runs(body: MyRunsBody, user: User = Depends(current_user),
     Scoped to `user.id` with no override. The admin view is a separate router
     behind require_admin; a filter parameter here is how one becomes the other
     by accident.
+
+    Work done INSIDE a thesis project is excluded. Those runs open a row for the
+    same reason a document walk does — something has to poll their progress —
+    but the student never ran them, cannot re-run them and has no label for
+    them: the mid-journey import put `backfill-modules` and `citation-search`
+    in this list, spelled as raw slugs, next to the tools they actually chose.
+    They remain billed, pollable (/runs/active reads them) and visible to admin.
     """
     from ..models import ToolRun  # noqa: PLC0415
+    from ..tool_billing import PROJECT_ONLY_TOOLS  # noqa: PLC0415
 
     page = max(1, body.page)
     size = min(max(1, body.page_size), 100)
-    where = ToolRun.user_id == user.id
+    where = and_(
+        ToolRun.user_id == user.id,
+        ToolRun.project_id.is_(None),
+        # The rows that predate project_id — see PROJECT_ONLY_TOOLS.
+        ToolRun.tool.not_in(sorted(PROJECT_ONLY_TOOLS)),
+    )
     total = db.scalar(
         select(func.count()).select_from(ToolRun).where(where)) or 0
     rows = db.scalars(

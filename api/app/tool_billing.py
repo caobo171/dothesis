@@ -109,7 +109,7 @@ def tool_cost(tool: str, *, units: int = 0, usage: list[dict] | None = None,
 
 
 def begin_tool_run(db: Session, user: User, *, tool: str, surface: str = "web",
-                   total: int = 0) -> int | None:
+                   total: int = 0, project_id=None) -> int | None:
     """Open a run row BEFORE the work, so its progress can be polled.
 
     This is the one place the ordering in this module's docstring bends. RECORD
@@ -117,6 +117,10 @@ def begin_tool_run(db: Session, user: User, *, tool: str, surface: str = "web",
     that a long document walk now has a row to report against while it is
     running, instead of appearing only once it is over. A 70-batch rewrite is
     several minutes of blank spinner otherwise.
+
+    Pass `project_id` when the run is work inside a thesis project rather than a
+    tool the student ran themselves; it keeps the row out of the standalone tool
+    history without taking it away from the progress poller.
 
     Returns the row id, or None if the write failed — in which case the caller
     simply proceeds without progress, exactly as before. Never raises: this
@@ -127,6 +131,7 @@ def begin_tool_run(db: Session, user: User, *, tool: str, surface: str = "web",
 
     try:
         row = ToolRun(user_id=user.id, surface=surface, tool=tool, ok=False,
+                      project_id=project_id,
                       status="running", progress_total=max(0, total),
                       progress_done=0)
         db.add(row)
@@ -220,6 +225,7 @@ def record_tool_run(
     input_filename: str | None = None,
     metrics: dict | None = None,
     parent_run_id: int | None = None,
+    project_id=None,
 ) -> ToolCharge:
     """Record one tool run, meter its tokens, and debit the caller.
 
@@ -245,7 +251,8 @@ def record_tool_run(
         _write_run(db, user, tool=tool, ok=ok, error=error, units=units,
                    duration_ms=duration_ms, surface=surface, result=result,
                    run_id=run_id, files=files, input_filename=input_filename,
-                   metrics=metrics, parent_run_id=parent_run_id)
+                   metrics=metrics, parent_run_id=parent_run_id,
+                   project_id=project_id)
     except Exception:  # noqa: BLE001
         logger.exception("tool accounting failed outright: tool=%s user=%s",
                          tool, getattr(user, "id", None))
@@ -317,7 +324,7 @@ def _write_run(db: Session, user: User, *, tool: str, ok: bool, error: str | Non
                units: int, duration_ms: int, surface: str,
                result: ToolCharge, run_id: int | None = None, files=None,
                input_filename: str | None = None, metrics: dict | None = None,
-               parent_run_id: int | None = None) -> None:
+               parent_run_id: int | None = None, project_id=None) -> None:
     from .models import ToolRun  # noqa: PLC0415
 
     try:
@@ -346,6 +353,12 @@ def _write_run(db: Session, user: User, *, tool: str, ok: bool, error: str | Non
             row.input_filename = input_filename[:255]
         if parent_run_id:
             row.parent_run_id = parent_run_id
+        # Only ever SET here, never cleared: the row may have been opened by
+        # begin_tool_run with the project already on it, and a closer that did
+        # not repeat the argument would otherwise hand the run back to the
+        # standalone history it was deliberately kept out of.
+        if project_id:
+            row.project_id = project_id
         if files is not None:
             row.input_s3_uri = files.input_uri
             row.output_s3_uri = files.output_uri
@@ -361,6 +374,21 @@ def _write_run(db: Session, user: User, *, tool: str, ok: bool, error: str | Non
 # rather than stored: the header is set by whatever called us, and an audit
 # column that echoes arbitrary caller-supplied text is not an audit column.
 _SURFACES = frozenset({"web", "mcp", "api"})
+
+
+# Slugs that exist ONLY as progress channels for work inside a thesis project —
+# no tools-menu entry, no way for a student to invoke one, no label in the web
+# client (they render as the raw slug, which is how they were spotted).
+#
+# ToolRun.project_id is the real discriminator and is what new code should set.
+# This list is what covers the rows written BEFORE that column existed: their
+# project is not recoverable from anything else on the row, so without it a
+# student who imported a thesis keeps a `backfill-modules` line in their history
+# forever. Keep it to slugs that are never standalone — a tool reachable from
+# BOTH places must be distinguished by project_id, not by its name.
+PROJECT_ONLY_TOOLS: frozenset[str] = frozenset({
+    "backfill-modules", "citation-search",
+})
 
 
 def surface_of(request) -> str:

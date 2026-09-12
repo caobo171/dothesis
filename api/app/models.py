@@ -663,6 +663,20 @@ class ToolRun(Base):
     # The same tool is reachable from the web app, the partner API and the MCP
     # connector, and "who is actually using this" is a different answer per door.
     surface: Mapped[str] = mapped_column(String(16), nullable=False, default="web")
+    # Set when the run was work done INSIDE a thesis project rather than a tool
+    # the student went and ran themselves — the mid-journey import opens rows
+    # here purely as a progress channel for its own reconstruction walk.
+    #
+    # NULL is the standalone case and is what the user-facing history lists;
+    # non-NULL rows are still billed, still polled by /tools/runs/active and
+    # still visible to admin, they are just not answers to "what did I run".
+    # Nullable with no backfill: every row written before this column existed
+    # reads as standalone, and the project it may have belonged to is not
+    # recoverable from anything else on the row.
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True, index=True
+    )
     tool: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     ok: Mapped[bool] = mapped_column(nullable=False, index=True)
     error: Mapped[str | None] = mapped_column(Text)

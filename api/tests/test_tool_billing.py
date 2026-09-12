@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from app.db import get_session_factory
 from app.main import create_app
 from app.models import CreditTransaction, TokenLedger, ToolRun
-from app.tool_billing import record_tool_run, tool_cost
+from app.tool_billing import begin_tool_run, record_tool_run, tool_cost
 from tests.conftest import make_user
 
 USAGE_1K = [{"model": "gemini-2.5-flash", "prompt_tokens": 700, "completion_tokens": 300}]
@@ -286,6 +286,63 @@ def test_a_user_never_sees_another_users_runs(user):
         record_tool_run(s, other, tool="cite-docx", units=5)
         s.commit()
 
+    body = _as(user).post("/api/v1/tools/runs", json={"access_token": "x"}).json()
+    assert body["total"] == 0
+
+
+def _project_of(user_id):
+    """A real project row to hang a project-scoped run off of."""
+    from app.models import Project
+    Session = get_session_factory()
+    with Session() as s:
+        p = Project(user_id=user_id, name="T", current_module="M1", status="draft")
+        s.add(p); s.commit()
+        return p.id
+
+
+def test_a_run_that_belongs_to_a_project_is_not_in_the_tool_history(user):
+    """The history answers "what did I run OUTSIDE a thesis project".
+
+    Work done INSIDE a project opens a run row too — the mid-journey import
+    opens one purely so the screen can poll its progress — but the student never
+    went to the tools menu and ran it, and listing it there invites them to ask
+    what `backfill-modules` is and why it charged them."""
+    s, u = _session_user(user)
+    try:
+        begin_tool_run(s, u, tool="backfill-modules", project_id=_project_of(user.id))
+        record_tool_run(s, u, tool="scan-docx", units=10)
+    finally:
+        s.close()
+    body = _as(user).post("/api/v1/tools/runs", json={"access_token": "x"}).json()
+    assert [i["tool"] for i in body["items"]] == ["scan-docx"]
+    assert body["total"] == 1
+
+
+def test_a_project_run_is_hidden_from_the_history_not_from_the_poller(user):
+    """The row exists so the import screen can report how far along it is.
+    Dropping it from the history must not take that away."""
+    s, u = _session_user(user)
+    try:
+        run_id = begin_tool_run(s, u, tool="citation-search",
+                                project_id=_project_of(user.id))
+    finally:
+        s.close()
+    active = _as(user).post("/api/v1/tools/runs/active",
+                            json={"access_token": "x"}).json()
+    assert (active["id"], active["tool"]) == (str(run_id), "citation-search")
+
+
+def test_the_project_only_tools_stay_out_even_without_a_project_id(user):
+    """Rows written before tool_runs had a project_id cannot be re-linked to the
+    project they came from, and these slugs are never anything but project work
+    — so a student who imported a thesis last month does not keep staring at
+    two rows they cannot act on."""
+    s, u = _session_user(user)
+    try:
+        begin_tool_run(s, u, tool="backfill-modules")
+        begin_tool_run(s, u, tool="citation-search")
+    finally:
+        s.close()
     body = _as(user).post("/api/v1/tools/runs", json={"access_token": "x"}).json()
     assert body["total"] == 0
 

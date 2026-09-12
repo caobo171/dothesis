@@ -162,8 +162,14 @@ def reconstruct_upstream_modules(project_id: str, request: Request,
     # the student already paid for in wall-clock time, so a failure here costs
     # the progress bar and nothing else.
     try:
+        # Stamped with the project so it stays out of the student's standalone
+        # tool history: this row is a progress channel for their import, not
+        # something they went to the tools menu and ran. The raw path value, as
+        # everywhere else in this module — _authorize has already established
+        # that it names a project of theirs.
         run_id = begin_tool_run(db, user, tool="backfill-modules",
-                                surface=_surface_of(request))
+                                surface=_surface_of(request),
+                                project_id=project_id)
     except Exception:
         logger.exception("import: could not open a progress run")
         run_id = None
@@ -253,7 +259,8 @@ def reconstruct_upstream_modules(project_id: str, request: Request,
     try:
         from ..job_runner import spawn_citation_search  # noqa: PLC0415
         cite_run_id = begin_tool_run(db, user, tool="citation-search",
-                                     surface=_surface_of(request))
+                                     surface=_surface_of(request),
+                                     project_id=project_id)
         if not spawn_citation_search(project_id, cite_run_id):
             # Nothing launched, so nothing will ever close that row — and a row
             # left running makes /runs/active report a dead job as live.

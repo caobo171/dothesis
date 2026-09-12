@@ -386,6 +386,10 @@ def test_the_progress_run_is_opened_and_then_closed(monkeypatch):
         row = s.get(ToolRun, run_id)
     assert row.status != "running"            # closed, not left dangling
     assert row.progress_total == 2 and row.progress_done == 2
+    # Stamped with the project it was opened for. That stamp is the only thing
+    # keeping `backfill-modules` — a slug with no tools-menu entry and no label
+    # in the web client — out of the student's standalone tool history.
+    assert row.project_id == pid
 
 
 def test_the_progress_run_is_closed_even_when_the_walk_dies(monkeypatch):
