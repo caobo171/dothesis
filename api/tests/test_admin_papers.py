@@ -60,6 +60,32 @@ def test_admin_papers_lists_projects(admin):
         app.dependency_overrides.clear()
 
 
+def test_admin_papers_search_and_owner_filters(admin):
+    Session = get_session_factory()
+    with Session() as s:
+        u1 = User(email="student@e.com", username="stu", password_hash="x", credit=0)
+        u2 = User(email="partner-system@dothesis.internal", username="partner", password_hash="x", credit=0)
+        s.add_all([u1, u2])
+        s.flush()
+        s.add_all([
+            Project(user_id=u1.id, name="Influencer marketing impact", field="Marketing",
+                    language="en", citation_style="apa", focus="M5", current_module="M1"),
+            Project(user_id=u2.id, name="Partner report", field="Business",
+                    language="en", citation_style="apa", focus="M3", current_module="M1"),
+        ])
+        s.commit()
+
+    client, app = _as(admin)
+    try:
+        q = client.post("/api/v1/admin/papers", json={"q": "influencer"}).json()
+        assert [i["topic"] for i in q["items"]] == ["Influencer marketing impact"]
+
+        owner = client.post("/api/v1/admin/papers", json={"owner": "partner-system"}).json()
+        assert [i["topic"] for i in owner["items"]] == ["Partner report"]
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_admin_papers_module_filter_prefers_focus(admin):
     """focus wins over current_module, matching what the MODULE column shows."""
     _seed_projects([

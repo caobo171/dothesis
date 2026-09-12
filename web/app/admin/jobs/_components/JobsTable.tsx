@@ -4,6 +4,7 @@ import { useState } from "react";
 import useSWR, { mutate } from "swr";
 
 import { AdminTable, type AdminColumn } from "@/app/components/admin/AdminTable";
+import { Select } from "@/app/components/ui/select";
 import { apiFetch, swrFetcher } from "@/app/lib/api";
 
 type Row = {
@@ -65,13 +66,12 @@ export default function JobsTable() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-ink-900">Jobs</h1>
-        <select
+        <Select
           value={status}
-          onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-          className="rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm shadow-sm"
-        >
-          {STATUSES.map((s) => <option key={s} value={s}>{s || "All statuses"}</option>)}
-        </select>
+          onValueChange={(v) => { setStatus(v); setPage(1); }}
+          options={STATUSES.map((s) => ({ value: s, label: s || "All statuses" }))}
+          className="w-44"
+        />
       </div>
       <AdminTable<Row>
         columns={columns}

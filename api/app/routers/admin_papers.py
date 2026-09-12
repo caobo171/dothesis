@@ -35,6 +35,8 @@ class ListPapersBody(BaseModel):
     # M1–M5. Filters on the same coalesce(focus, current_module) the list
     # returns, so what you filter by is what the MODULE column shows.
     module: str | None = None
+    q: str | None = None
+    owner: str | None = None
 
 
 @router.post("")
@@ -54,6 +56,15 @@ def list_papers(body: ListPapersBody, db: Session = Depends(db_session)):
             Project.focus == module,
             (Project.focus.is_(None)) & (Project.current_module == module),
         ))
+    if body.q:
+        like = f"%{body.q.lower()}%"
+        stmt = stmt.where(or_(
+            Project.name.ilike(like),
+            func.coalesce(Project.field, "").ilike(like),
+        ))
+    if body.owner:
+        like = f"%{body.owner.lower()}%"
+        stmt = stmt.where(User.email.ilike(like))
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = db.execute(
         stmt.order_by(desc(Project.created_at)).offset((page - 1) * page_size).limit(page_size)

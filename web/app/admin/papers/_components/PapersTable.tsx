@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 
 import { AdminTable, type AdminColumn } from "@/app/components/admin/AdminTable";
 import { swrFetcher } from "@/app/lib/api";
+import { useQueryString } from "@/app/lib/useQueryString";
+
+import { PaperListFilters } from "./PaperListFilters";
 
 // Mirrors admin_papers.list_papers, which now reads `projects` (the legacy
 // `papers` table it used to read has been empty since the v3 pivot). Project
@@ -18,18 +20,28 @@ type Row = {
 
 type ListResp = { items: Row[]; total: number; page: number; page_size: number };
 
-// Filtering by module, not status: every project in the database is 'draft'
-// (running/done/failed/canceled are *job* statuses), so a status filter can
-// only ever match everything or nothing. Module is the axis with variance.
-const MODULES = ["", "M1", "M2", "M3", "M4", "M5"];
-
 export default function PapersTable() {
   const router = useRouter();
-  const [page, setPage] = useState(1);
-  const [module, setModule] = useState("");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { createMultipleQueryString } = useQueryString();
+
+  const page = Math.max(1, Number(searchParams.get("page") ?? 1));
   const params = new URLSearchParams({ page: String(page), page_size: "20" });
-  if (module) params.set("module", module);
-  const { data, isLoading } = useSWR<ListResp>(`/admin/papers?${params.toString()}`, swrFetcher);
+  for (const key of ["q", "owner", "module", "status"] as const) {
+    const value = searchParams.get(key);
+    if (value) params.set(key, value);
+  }
+  const key = `/admin/papers?${params.toString()}`;
+  const { data, isLoading } = useSWR<ListResp>(key, swrFetcher);
+
+  const onFilterChange = (filterKey: string, value: string) => {
+    router.push(`${pathname}?${createMultipleQueryString({ [filterKey]: value, page: "1" })}`);
+  };
+
+  const onPageChange = (nextPage: number) => {
+    router.push(`${pathname}?${createMultipleQueryString({ page: String(nextPage) })}`);
+  };
 
   const columns: AdminColumn<Row>[] = [
     { key: "topic", header: "Topic", render: (r) => <span className="font-medium truncate block max-w-md">{r.topic}</span> },
@@ -53,16 +65,13 @@ export default function PapersTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div>
         <h1 className="text-2xl font-bold text-ink-900">Papers</h1>
-        <select
-          value={module}
-          onChange={(e) => { setModule(e.target.value); setPage(1); }}
-          className="rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm shadow-sm"
-        >
-          {MODULES.map((m) => <option key={m} value={m}>{m || "All modules"}</option>)}
-        </select>
+        <p className="mt-1 text-sm text-ink-500">Every thesis project across all users.</p>
       </div>
+
+      <PaperListFilters searchParams={searchParams} onFilterChange={onFilterChange} />
+
       {/* A project's detail view IS the chat workspace — there is no separate
           admin detail page, and building one would duplicate the context panel
           and transcript that already exist. Super admins can read any project
@@ -76,7 +85,7 @@ export default function PapersTable() {
         total={data?.total || 0}
         page={page}
         pageSize={20}
-        onPageChange={setPage}
+        onPageChange={onPageChange}
         onRowClick={(r) => router.push(`/chat/projects/${r.id}`)}
         isLoading={isLoading}
       />

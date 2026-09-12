@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import useSWR from "swr";
 
+import { Select } from "@/app/components/ui/select";
 import { apiFetch } from "@/app/lib/api";
 
 import { STATUS, STATUS_LABEL, type ListResp, type PostRow } from "./types";
@@ -100,19 +101,27 @@ export default function BlogAdmin() {
           value={pending}
           onChange={(e) => setPending(e.target.value)}
         />
-        <select className="rounded-lg border border-ink-200 px-3 py-2 text-sm"
-                value={locale} onChange={(e) => { setLocale(e.target.value); setPage(1); }}>
-          <option value="">All locales</option>
-          <option value="vi">vi</option>
-          <option value="en">en</option>
-        </select>
-        <select className="rounded-lg border border-ink-200 px-3 py-2 text-sm"
-                value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-          <option value="">All statuses</option>
-          <option value={STATUS.DRAFT}>Draft</option>
-          <option value={STATUS.PUBLISHED}>Published</option>
-          <option value={STATUS.SCHEDULED}>Scheduled</option>
-        </select>
+        <Select
+          value={locale}
+          onValueChange={(v) => { setLocale(v); setPage(1); }}
+          options={[
+            { value: "", label: "All locales" },
+            { value: "vi", label: "vi" },
+            { value: "en", label: "en" },
+          ]}
+          className="w-36"
+        />
+        <Select
+          value={status}
+          onValueChange={(v) => { setStatus(v); setPage(1); }}
+          options={[
+            { value: "", label: "All statuses" },
+            { value: String(STATUS.DRAFT), label: "Draft" },
+            { value: String(STATUS.PUBLISHED), label: "Published" },
+            { value: String(STATUS.SCHEDULED), label: "Scheduled" },
+          ]}
+          className="w-40"
+        />
         <button type="submit"
                 className="rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">
           Search
