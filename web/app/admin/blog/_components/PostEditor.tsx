@@ -7,6 +7,7 @@ import useSWR from "swr";
 import { slugify } from "@/app/blog/_lib/markdown";
 import { apiFetch, swrFetcher } from "@/app/lib/api";
 
+import { BodyEditor } from "./BodyEditor";
 import { LivePostLink, PostPreview } from "./PostPreview";
 import { STATUS, type AdminPost, type Options, type CategoryRow } from "./types";
 
@@ -278,14 +279,7 @@ export function PostEditor({ postId }: { postId?: string }) {
                         onChange={(e) => set("excerpt", e.target.value)} />
             </Field>
 
-            <Field label="Body (markdown)">
-              <textarea
-                className={`${INPUT} font-mono text-[13px] leading-relaxed`}
-                rows={28}
-                value={form.body}
-                onChange={(e) => set("body", e.target.value)}
-              />
-            </Field>
+            <BodyEditor value={form.body} onChange={(md) => set("body", md)} />
           </div>
 
           {/* --- everything that is not the prose -------------------------- */}
