@@ -906,10 +906,13 @@ button { font: inherit; cursor: pointer; }
 .editor-prose {
   font-family: var(--editor-font-family, var(--font-serif, "Source Serif 4", Georgia, serif));
   font-size: var(--editor-font-size, 16px);
-  line-height: 1.75;
+  line-height: var(--editor-line-height, 1.75);
   color: var(--ink-900);
 }
-.editor-prose > * + * { margin-top: 14px; }
+/* Paragraph spacing is a DISPLAY setting, like the font — markdown has no way
+   to store a blank line, so a student pressing Enter for air between paragraphs
+   was making a change that serialised to nothing and could never be saved. */
+.editor-prose > * + * { margin-top: var(--editor-para-gap, 14px); }
 .editor-prose h1 {
   font-family: inherit;
   font-size: 1.7em;

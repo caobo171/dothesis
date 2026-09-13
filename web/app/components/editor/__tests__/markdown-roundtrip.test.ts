@@ -96,3 +96,28 @@ describe("markdown round-trip (export safety)", () => {
     expect(persisted).not.toContain("\\[\\[DT");
   });
 });
+
+describe("what the markdown store cannot hold", () => {
+  it("drops blank paragraphs, which is why spacing is a display setting", () => {
+    // A student pressing Enter for air between paragraphs is making a change
+    // that serialises to NOTHING: identical markdown, so no Save button and no
+    // way to persist it. Paragraph spacing is therefore a whole-document
+    // setting (EditorToolbar SPACING), the same as the font, not something
+    // typed into the prose.
+    const P = (t?: string) =>
+      t ? { type: "paragraph", content: [{ type: "text", text: t }] }
+        : { type: "paragraph" };
+
+    const spaced = new Editor({
+      extensions: [
+        StarterKit, Markdown.configure({ html: false }), AiPending, CitationMark,
+        Table, TableRow, TableHeader, TableCell, DtPlaceholder,
+      ],
+      content: { type: "doc", content: [P("Đoạn một."), P(), P(), P("Đoạn hai.")] },
+    });
+    const tight = mkEditor("Đoạn một.\n\nĐoạn hai.");
+
+    expect(spaced.storage.markdown.getMarkdown())
+      .toBe(tight.storage.markdown.getMarkdown());
+  });
+});

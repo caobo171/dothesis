@@ -35,12 +35,30 @@ const TEXT_STYLES = [
 ] as const;
 
 
+// Line height + paragraph gap, as named presets. 1.5 and double are what a
+// Vietnamese thesis template asks for; "Thoáng" is the middle ground most
+// students were reaching for when they pressed Enter twice.
+export const SPACING = [
+  { label: "Gọn", lineHeight: 1.5, paraGap: 10 },
+  { label: "Vừa", lineHeight: 1.75, paraGap: 14 },
+  { label: "Thoáng", lineHeight: 2, paraGap: 22 },
+  { label: "Rất thoáng", lineHeight: 2.4, paraGap: 32 },
+];
+
+
 type Props = {
   editor: Editor;
   fontFamily: string;
   fontSize: number;
   onFontFamily: (v: string) => void;
   onFontSize: (n: number) => void;
+  /** Line height and the gap between paragraphs, as ONE choice. Spacing has to
+   *  live here rather than in the document: markdown cannot store a blank line,
+   *  so pressing Enter for air between paragraphs serialised to nothing and
+   *  could never be saved. */
+  lineHeight: number;
+  paraGap: number;
+  onSpacing: (lineHeight: number, paraGap: number) => void;
 };
 
 
@@ -49,7 +67,10 @@ type Props = {
 // setting that survives a save; nothing renders a control it can't back up
 // (no underline/align/table, which the markdown store would drop). See
 // [[feedback_tool_naming_competitor_parity]] — don't show a button that lies.
-export function EditorToolbar({ editor, fontFamily, fontSize, onFontFamily, onFontSize }: Props) {
+export function EditorToolbar({
+  editor, fontFamily, fontSize, onFontFamily, onFontSize,
+  lineHeight, paraGap, onSpacing,
+}: Props) {
   // Subscribe to just the flags the toolbar paints, so a keystroke that flips
   // bold on/off re-renders the bar without re-rendering the whole editor.
   const state = useEditorState({
@@ -147,6 +168,23 @@ export function EditorToolbar({ editor, fontFamily, fontSize, onFontFamily, onFo
       <ToolbarButton label="Tăng cỡ chữ" onClick={() => onFontSize(clampSize(fontSize + 1))}>
         <Plus className="w-4 h-4" />
       </ToolbarButton>
+
+      {/* Spacing presets rather than two number boxes: the choice a student is
+          making is "tighter" or "airier", and a thesis template usually names
+          exactly these. */}
+      <select
+        aria-label="Giãn dòng"
+        value={SPACING.findIndex(o => o.lineHeight === lineHeight && o.paraGap === paraGap)}
+        onChange={e => {
+          const o = SPACING[Number(e.target.value)];
+          if (o) onSpacing(o.lineHeight, o.paraGap);
+        }}
+        className="h-8 rounded-md border border-ink-200 bg-white px-2 text-sm text-ink-800 hover:bg-ink-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
+      >
+        {SPACING.map((o, i) => (
+          <option key={o.label} value={i}>{o.label}</option>
+        ))}
+      </select>
 
       <Divider />
 

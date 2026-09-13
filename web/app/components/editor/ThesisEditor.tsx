@@ -65,6 +65,14 @@ function _toPendingEdits(raw: ChapterDict[string]["pending_edits"]) {
 const chapterAnchor = (name: string) => `ch-${name}`;
 
 
+// Spacing lives with the font because it is the same kind of thing: a whole-
+// document display choice the markdown cannot carry. A stored setting from
+// before spacing existed has neither key, hence the ?? at every read.
+const _DEFAULT_LAYOUT = {
+  family: FONT_FAMILIES[0].value, size: 16, lineHeight: 1.75, paraGap: 14,
+};
+
+
 export function ThesisEditor({ projectId }: { projectId: string }) {
   const url = `/api/v1/projects/${projectId}/m5/chapters`;
   const { data: chapters, mutate } = useSWR<ChapterDict>(url, fetcher);
@@ -88,8 +96,10 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
   // the next save — a whole-document setting is lossless and how a thesis is
   // actually styled. Read lazily to avoid an SSR/client mismatch.
   const fontKey = `dothesis_editor_font_${projectId}`;
-  const [font, setFont] = useState<{ family: string; size: number }>(() => {
-    if (typeof window === "undefined") return { family: FONT_FAMILIES[0].value, size: 16 };
+  const [font, setFont] = useState<{
+    family: string; size: number; lineHeight?: number; paraGap?: number;
+  }>(() => {
+    if (typeof window === "undefined") return _DEFAULT_LAYOUT;
     try {
       const raw = window.localStorage.getItem(fontKey);
       if (raw) {
@@ -97,7 +107,7 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
         if (typeof parsed?.family === "string" && Number.isFinite(parsed?.size)) return parsed;
       }
     } catch { /* corrupt value — fall through to the default */ }
-    return { family: FONT_FAMILIES[0].value, size: 16 };
+    return _DEFAULT_LAYOUT;
   });
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -253,8 +263,11 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
               editor={activeEditor}
               fontFamily={font.family}
               fontSize={font.size}
+              lineHeight={font.lineHeight ?? _DEFAULT_LAYOUT.lineHeight}
+              paraGap={font.paraGap ?? _DEFAULT_LAYOUT.paraGap}
               onFontFamily={family => setFont(f => ({ ...f, family }))}
               onFontSize={size => setFont(f => ({ ...f, size }))}
+              onSpacing={(lineHeight, paraGap) => setFont(f => ({ ...f, lineHeight, paraGap }))}
             />
           )}
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-6 space-y-12">
@@ -278,6 +291,8 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
                     onProseChange={prose => trackProse(name, prose)}
                     fontFamily={font.family}
                     fontSize={font.size}
+                    lineHeight={font.lineHeight ?? _DEFAULT_LAYOUT.lineHeight}
+                    paraGap={font.paraGap ?? _DEFAULT_LAYOUT.paraGap}
                     onActiveEditor={setActiveEditor}
                     onCitationClick={setHighlightedSource}
                   />

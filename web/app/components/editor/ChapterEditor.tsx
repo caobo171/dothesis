@@ -42,6 +42,11 @@ type Props = {
   // across every stacked chapter and drives the single shared toolbar.
   fontFamily: string;
   fontSize: number;
+  /** Line height and the gap between paragraphs. Display settings, not content:
+   *  markdown cannot store a blank line, so spacing typed into the document
+   *  serialises to nothing. */
+  lineHeight: number;
+  paraGap: number;
   // Reports this chapter's editor to the parent when it gains focus, so the one
   // shared toolbar binds to whichever chapter the caret is in.
   onActiveEditor?: (editor: Editor) => void;
@@ -63,7 +68,7 @@ type Props = {
 export function ChapterEditor({
   projectId, chapterName, initialProse, pendingEdits,
   defaultTargetLang, onPendingMutate, onProseChange, onSeed,
-  fontFamily, fontSize, onActiveEditor, onCitationClick,
+  fontFamily, fontSize, lineHeight, paraGap, onActiveEditor, onCitationClick,
 }: Props) {
   // Held in a ref so the useEditor config (built once) always calls the latest
   // handler without re-creating the editor.
@@ -334,6 +339,8 @@ export function ChapterEditor({
         style={{
           ["--editor-font-family" as string]: fontFamily,
           ["--editor-font-size" as string]: `${fontSize}px`,
+          ["--editor-line-height" as string]: String(lineHeight),
+          ["--editor-para-gap" as string]: `${paraGap}px`,
         }}
       >
         <EditorContent editor={editor} />

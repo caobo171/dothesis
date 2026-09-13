@@ -5,13 +5,17 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import { Markdown } from "tiptap-markdown";
-import { EditorToolbar } from "../EditorToolbar";
+import { EditorToolbar, SPACING } from "../EditorToolbar";
 
 
 // The toolbar moved out of ChapterEditor (chapters now stack on one page under
 // a single shared toolbar), so we exercise it against a minimal live editor.
-function Harness({ content = "Hello world." }: { content?: string }) {
-  const [font, setFont] = useState({ family: "serif", size: 16 });
+function Harness({ content = "Hello world.", onSpacing }: {
+  content?: string; onSpacing?: (lh: number, gap: number) => void;
+}) {
+  const [font, setFont] = useState({
+    family: "serif", size: 16, lineHeight: 1.75, paraGap: 14,
+  });
   const editor = useEditor({
     extensions: [
       StarterKit, Markdown.configure({ html: false }),
@@ -29,6 +33,12 @@ function Harness({ content = "Hello world." }: { content?: string }) {
         fontSize={font.size}
         onFontFamily={family => setFont(f => ({ ...f, family }))}
         onFontSize={size => setFont(f => ({ ...f, size }))}
+        lineHeight={font.lineHeight}
+        paraGap={font.paraGap}
+        onSpacing={(lineHeight, paraGap) => {
+          onSpacing?.(lineHeight, paraGap);
+          setFont(f => ({ ...f, lineHeight, paraGap }));
+        }}
       />
       <EditorContent editor={editor} />
     </>
@@ -73,5 +83,21 @@ describe("EditorToolbar", () => {
     const { container } = render(<Harness content="Body." />);
     fireEvent.click(await screen.findByLabelText("Chèn bảng"));
     await waitFor(() => expect(container.querySelector("table")).toBeTruthy());
+  });
+});
+
+describe("paragraph spacing", () => {
+  it("is a document setting, because the markdown store cannot hold blank lines", async () => {
+    const onSpacing = vi.fn();
+    render(<Harness onSpacing={onSpacing} />);
+    await screen.findByRole("toolbar", { name: "Định dạng" });
+
+    const select = screen.getByLabelText("Giãn dòng") as HTMLSelectElement;
+    // The current preset is the one selected — not a blank or the first entry.
+    expect(SPACING[Number(select.value)]).toMatchObject({ lineHeight: 1.75, paraGap: 14 });
+
+    const airy = SPACING.findIndex(o => o.label === "Thoáng");
+    fireEvent.change(select, { target: { value: String(airy) } });
+    expect(onSpacing).toHaveBeenCalledWith(SPACING[airy].lineHeight, SPACING[airy].paraGap);
   });
 });
