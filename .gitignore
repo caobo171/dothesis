@@ -38,6 +38,8 @@ logs/
 
 # Cache files
 .citation_cache_*.json
+# Runtime cache the api writes beside itself (gemini_cache/...).
+api/.dothesis/
 
 # Temporary
 tmp/
