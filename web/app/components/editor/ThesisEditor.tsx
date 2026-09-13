@@ -198,6 +198,7 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
         onReExport={handleReExport}
         exporting={exporting}
         error={exportError}
+        projectId={projectId}
       />
       <div className="flex flex-1 min-h-0">
         {/* Outline click scrolls to the chapter; scrollspy keeps it in sync. */}

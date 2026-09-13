@@ -3,15 +3,18 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 // SWRConfig with an isolated provider map gives each test its own cache —
 // prevents stale data from the "empty chapters" test bleeding into later tests.
 import { SWRConfig } from "swr";
+import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
 import { ThesisEditor } from "../ThesisEditor";
 
 
 // Wrap in a fresh SWR cache per render to prevent cross-test cache bleed.
 function renderWithFreshCache(ui: React.ReactElement) {
   return render(
-    <SWRConfig value={{ provider: () => new Map() }}>
-      {ui}
-    </SWRConfig>
+    <LocaleProvider initialLocale="en" hasCookie>
+      <SWRConfig value={{ provider: () => new Map() }}>
+        {ui}
+      </SWRConfig>
+    </LocaleProvider>
   );
 }
 

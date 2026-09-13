@@ -112,28 +112,41 @@ def list_chapters(
     _owned_project(db, user, project_id)
     cs = db.get(ContextStore, project_id)
     m5 = (cs.m5_writing or {}) if cs else {}
-    chapters = m5.get("chapters") or {}
-    if chapters:
-        normalized = _normalize_stored_chapters(chapters)
-        if normalized is not None and cs is not None:
-            m5["chapters"] = normalized
-            cs.m5_writing = m5
-            flag_modified(cs, "m5_writing")
-            db.commit()
-            return normalized
-        return chapters
+    stored = m5.get("chapters") or {}
+    # `_normalize_stored_chapters` returns None when there is nothing to fold.
+    chapters = (_normalize_stored_chapters(stored) if stored else {})
+    if chapters is None:
+        chapters = dict(stored)
 
+    # Backfill whatever `chapters` is MISSING, not only the all-or-nothing case.
+    #
+    # This used to be `if chapters: return it` — a non-empty dict skipped the
+    # backfill entirely. Chapters are composed per module as each one finishes,
+    # and only some paths write the editor's dict, so a real project reached the
+    # editor holding intro/lit_review/conclusion in `chapters` and methodology
+    # and results only in `final_sections`. The outline greyed both out: two
+    # finished chapters, 45k characters, invisible and uneditable — while the
+    # export path read `final_sections` and shipped them. Editor and document
+    # disagreeing about which chapters exist is the same class of bug the
+    # normalize-on-read above was written for.
+    #
+    # Existing entries always win: the student may have edited them, and
+    # `final_sections` is a snapshot from whenever it was last composed.
     final_sections = m5.get("final_sections") or []
-    if cs and final_sections:
+    added = False
+    if final_sections:
         from orchestrator.tools.m5_writing import chapters_from_final_sections
-        synthesized = chapters_from_final_sections(final_sections)
-        if synthesized:
-            m5["chapters"] = synthesized
-            cs.m5_writing = m5
-            flag_modified(cs, "m5_writing")
-            db.commit()
-            return synthesized
-    return {}
+        for name, body in (chapters_from_final_sections(final_sections) or {}).items():
+            if name not in chapters and body:
+                chapters[name] = body
+                added = True
+
+    if cs is not None and (added or chapters != stored):
+        m5["chapters"] = chapters
+        cs.m5_writing = m5
+        flag_modified(cs, "m5_writing")
+        db.commit()
+    return chapters
 
 
 # ---------------------------------------------------------------------------

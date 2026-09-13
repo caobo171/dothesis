@@ -2,12 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, waitFor, screen, fireEvent } from "@testing-library/react";
 import { SWRConfig } from "swr";
 
+import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
 import { ThesisEditor } from "../ThesisEditor";
 
 
 function renderWithFreshSWR(ui: React.ReactNode) {
   return render(
-    <SWRConfig value={{ provider: () => new Map() }}>{ui}</SWRConfig>
+    <LocaleProvider initialLocale="en" hasCookie>
+      <SWRConfig value={{ provider: () => new Map() }}>{ui}</SWRConfig>
+    </LocaleProvider>
   );
 }
 

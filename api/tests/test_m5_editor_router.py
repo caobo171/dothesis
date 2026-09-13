@@ -1155,3 +1155,48 @@ def test_export_400_when_no_chapters_yet(client):
     r = client.post(f"/api/v1/projects/{pid}/m5/export")
     assert r.status_code == 400, r.text
     assert r.json()["detail"]["error"]["code"] == "no_chapters_yet"
+
+
+def test_get_chapters_tops_up_a_partly_materialised_dict(client):
+    """`if chapters: return it` skipped the backfill whenever the dict was
+    non-empty.
+
+    Chapters are composed per module as each one finishes and only some paths
+    write the editor's dict, so a real project arrived holding
+    intro/lit_review/conclusion in `chapters` with methodology and results only
+    in `final_sections`. The outline greyed both out — two finished chapters,
+    45k characters, invisible and uneditable — while the export path read
+    `final_sections` and shipped them.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "X"})
+    pid = r.json()["id"]
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing = {
+            "chapters": {"intro": {"prose": "Edited in the editor."}},
+            "final_sections": [
+                {"chapter_name": "intro", "prose": "Stale compose snapshot."},
+                {"chapter_name": "methodology", "prose": "Methodology prose."},
+                {"chapter_name": "results", "prose": "Results prose."},
+            ],
+        }
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    data = client.post(f"/api/v1/projects/{pid}/m5/chapters").json()
+
+    assert set(data) == {"intro", "methodology", "results"}
+    assert data["methodology"]["prose"] == "Methodology prose."
+    # An entry already in `chapters` wins — the student may have edited it, and
+    # final_sections is a snapshot from whenever it was last composed.
+    assert data["intro"]["prose"] == "Edited in the editor."
+
+    # Persisted, so the next open does not have to re-derive it.
+    with sf() as db:
+        stored = db.get(ContextStore, uuid.UUID(pid)).m5_writing["chapters"]
+    assert set(stored) == {"intro", "methodology", "results"}
