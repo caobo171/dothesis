@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Download, FileText, Loader2, X } from "lucide-react";
 
 import { apiFetchText, triggerUploadDownload, uploadViewUrl } from "@/app/lib/api";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 import type { AttachmentChipMeta } from "./widgets/types";
 
 type Tab = "document" | "text";
@@ -98,17 +100,26 @@ function _hasDocumentView(kind: Kind): boolean {
   return kind === "pdf" || kind === "docx";
 }
 
-const _SUBTITLE: Record<Kind, string> = {
-  pdf: "PDF preview",
-  docx: "Word document preview",
-  data: "Bộ dữ liệu — xem cấu trúc bên dưới",
-  plain: "Văn bản",
-};
+/** Catalogue keys, not strings: the subtitle is resolved per render so a
+ *  locale switch reaches it. */
+// `as const` so the values stay literal types: useT()'s key parameter is the
+// union of catalogue keys, and a widened `string` doesn't satisfy it.
+const _SUBTITLE_KEY = {
+  pdf: "preview.subtitle.pdf",
+  docx: "preview.subtitle.docx",
+  data: "preview.subtitle.data",
+  plain: "preview.subtitle.plain",
+} as const satisfies Record<Kind, string>;
 
 /** The file as the student wrote it. PDFs go to the browser's own viewer;
  *  .docx is converted to HTML client-side (mammoth), which keeps headings and
- *  — the reason this matters here — real tables. */
-function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
+ *  — the reason this matters here — real tables.
+ *
+ *  `load` is passed in rather than derived from `meta`: the same viewer now
+ *  serves uploads (/uploads/{id}/raw) and exports (/projects/…/exports/…/raw),
+ *  and only the caller knows which URL to mint. */
+function DocumentView({ meta, load }: { meta: AttachmentChipMeta; load: () => Promise<string> }) {
+  const t = useT();
   const kind = _kindOf(meta);
   const [src, setSrc] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
@@ -122,8 +133,8 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
     let stopFit: (() => void) | undefined;
     (async () => {
       try {
-        const url = await uploadViewUrl(meta.upload_id);
-        if (!alive) return;
+        const url = await load();
+        if (!alive || !url) return;
         if (kind === "pdf") {
           setSrc(url);
           setBusy(false);
@@ -164,18 +175,22 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
         if (alive) setBusy(false);
       } catch {
         if (alive) {
-          setError("Không hiển thị được tệp này. Thử tab “Văn bản” hoặc tải xuống.");
+          setError(t("preview.error.render"));
           setBusy(false);
         }
       }
     })();
     return () => { alive = false; stopFit?.(); };
-  }, [meta.upload_id, kind]);
+    // `load` is deliberately NOT a dependency: call sites build it inline, so
+    // depending on it would re-download the file on every parent render.
+    // `meta.upload_id` (or, for an export, the filename) is the file's identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta.upload_id, meta.filename, kind]);
 
   if (error) return <p className="text-[13px] text-[#7A5B2E]">{error}</p>;
 
   if (kind === "plain") {
-    return <p className="text-[13px] text-ink-500">Định dạng này không có bản xem tài liệu — xem tab “Văn bản”.</p>;
+    return <p className="text-[13px] text-ink-500">{t("preview.error.noDocumentView")}</p>;
   }
 
   if (kind === "pdf") {
@@ -201,10 +216,11 @@ function DocumentView({ meta }: { meta: AttachmentChipMeta }) {
 }
 
 function Loading() {
+  const t = useT();
   return (
     <div className="flex items-center gap-2 text-[13px] text-ink-500">
       <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
-      Đang mở tệp…
+      {t("preview.loading")}
     </div>
   );
 }
@@ -213,6 +229,7 @@ function Loading() {
  *  different question from "what does my file look like": if a table is
  *  missing here it was missing from the turn, whatever the document shows. */
 function TextView({ meta }: { meta: AttachmentChipMeta }) {
+  const t = useT();
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -220,20 +237,18 @@ function TextView({ meta }: { meta: AttachmentChipMeta }) {
     let alive = true;
     (async () => {
       try {
-        const t = await apiFetchText(`/uploads/${meta.upload_id}/text`);
-        if (alive) setText(t);
+        // Not `t` — that's the translator in scope here, and shadowing it made
+        // the catch below throw a TDZ ReferenceError over the real failure.
+        const body = await apiFetchText(`/uploads/${meta.upload_id}/text`);
+        if (alive) setText(body);
       } catch (e: unknown) {
         if (!alive) return;
         const status = (e as { status?: number })?.status;
-        setError(
-          status === 404
-            ? "Chưa có bản trích xuất văn bản cho tệp này — tải xuống để mở bằng Word."
-            : "Không đọc được nội dung tệp này.",
-        );
+        setError(t(status === 404 ? "preview.error.noText" : "preview.error.unreadable"));
       }
     })();
     return () => { alive = false; };
-  }, [meta.upload_id]);
+  }, [meta.upload_id, t]);
 
   if (error) return <p className="text-[13px] text-[#7A5B2E]">{error}</p>;
   if (text === null) return <Loading />;
@@ -246,16 +261,31 @@ function TextView({ meta }: { meta: AttachmentChipMeta }) {
   );
 }
 
+/** `load` / `onDownload` / `hasTextTab` default to the UPLOAD behaviour this
+ *  modal was written for, so the chat chips and Context rows pass `meta` alone.
+ *  The Outputs rows pass all three: an export is fetched from a different
+ *  route, downloaded through a different token scope, and has no extracted
+ *  text — we never ran an extraction over a file we generated ourselves, so
+ *  offering the tab would only ever 404 at the student. */
 export function AttachmentPreview({
   meta,
   onClose,
+  load,
+  onDownload,
+  hasTextTab = true,
 }: {
   meta: AttachmentChipMeta;
   onClose: () => void;
+  load?: () => Promise<string>;
+  onDownload?: () => void | Promise<void>;
+  hasTextTab?: boolean;
 }) {
+  const t = useT();
   const kind = _kindOf(meta);
   const hasDocumentView = _hasDocumentView(kind);
   const [tab, setTab] = useState<Tab>(hasDocumentView ? "document" : "text");
+  const loadUrl = load ?? (() => uploadViewUrl(meta.upload_id));
+  const download = onDownload ?? (() => triggerUploadDownload(meta.upload_id));
   const documentCanvas = tab === "document" && hasDocumentView;
 
   useEffect(() => {
@@ -269,7 +299,16 @@ export function AttachmentPreview({
       tab === t ? "bg-ink-100 text-ink-900" : "text-ink-500 hover:text-ink-800"
     }`;
 
-  return (
+  // Portal to <body>, for the same reason SliceModal does: `position: fixed`
+  // resolves against the nearest TRANSFORMED ancestor, not the viewport, and
+  // ChatShellLayout's right pane carries `lg:translate-x-0` (it doubles as a
+  // slide-in drawer on mobile). Opened from a Context row, this overlay was
+  // therefore laid out inside that ~340px column — `inset-0` dimmed only the
+  // sidebar and the document was crushed into a sliver. Opened from a chat
+  // chip it looked fine, because the message column has no transform, which is
+  // why the bug only ever showed up on one of the two entry points.
+  if (typeof document === "undefined") return null;   // SSR guard
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/55 p-3 backdrop-blur-[2px] sm:p-5 lg:pr-[min(360px,calc(100vw-480px))]"
       role="dialog"
@@ -293,33 +332,35 @@ export function AttachmentPreview({
                 not, so in a cramped header the filename stayed on one line
                 while "Word document preview" wrapped to three and shoved
                 itself under the tabs — measured at 460px and below. */}
-            <div className="truncate text-[11px] text-ink-400">{_SUBTITLE[kind]}</div>
+            <div className="truncate text-[11px] text-ink-400">{t(_SUBTITLE_KEY[kind])}</div>
           </div>
           <span className="flex-1" />
           <div className="flex items-center gap-1 shrink-0">
             {hasDocumentView && (
               <button type="button" onClick={() => setTab("document")} className={tabCls("document")}>
-                Tài liệu
+                {t("preview.tab.document")}
               </button>
             )}
             {/* Named for what it is: the text the agent read, not a second copy
                 of the document. */}
-            <button type="button" onClick={() => setTab("text")} className={tabCls("text")}>
-              Văn bản
-            </button>
+            {hasTextTab && (
+              <button type="button" onClick={() => setTab("text")} className={tabCls("text")}>
+                {t("preview.tab.text")}
+              </button>
+            )}
           </div>
           <button
             type="button"
-            onClick={() => void triggerUploadDownload(meta.upload_id)}
+            onClick={() => void download()}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-[12.5px] font-semibold text-primary-600 transition-colors hover:bg-primary-50 active:translate-y-px"
           >
             <Download className="h-3.5 w-3.5" aria-hidden />
-            Tải xuống
+            {t("preview.download.action")}
           </button>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Đóng"
+            aria-label={t("preview.close")}
             className="w-7 h-7 rounded-full text-ink-500 hover:bg-ink-100 inline-flex items-center justify-center shrink-0"
           >
             <X className="w-4 h-4" />
@@ -329,9 +370,12 @@ export function AttachmentPreview({
         <div className={`min-h-0 flex-1 overflow-auto ${
           documentCanvas ? "bg-[#e9edf2]" : "bg-white px-5 py-4"
         }`}>
-          {tab === "document" ? <DocumentView meta={meta} /> : <TextView meta={meta} />}
+          {tab === "document"
+            ? <DocumentView meta={meta} load={loadUrl} />
+            : <TextView meta={meta} />}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

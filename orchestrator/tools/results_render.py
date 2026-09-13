@@ -108,8 +108,19 @@ def next_table_number(prose: str, default: str) -> str:
     return f"{chapter}.{highest + 1}"
 
 
-_SOURCE_LINE = {"en": "*Source: rendered from persisted analysis results (DoThesis).*",
-                "vi": "*Nguồn: kết xuất từ kết quả phân tích đã lưu (DoThesis).*"}
+# The line printed under every rendered table — INSIDE the document the student
+# submits. It used to read "(DoThesis)", which named the service to the examiner
+# and, worse, said nothing a source line is supposed to say: a reader wants the
+# software the numbers came out of, not the tool that typeset them. Provenance
+# is not lost — the sha in the sentinel comment still ties each block to the
+# persisted results, and `verify_rendered_blocks` still re-derives it — and the
+# comment is stripped at export, so it was never the reader's evidence anyway.
+#
+# Worded verbatim as `_MARKDOWN_FORMAT_RULES` tells the writer to word its own
+# source lines, so a chapter reads the same whether a table was woven or typed,
+# and so the dedupe in `weave()` has one string to recognise.
+_SOURCE_LINE = {"en": "*Source: Author's analysis.*",
+                "vi": "*Nguồn: Kết quả phân tích từ SmartPLS/SPSS, tác giả tổng hợp.*"}
 _FIT_THRESHOLDS = {"cfi": "≥ 0.90", "tli": "≥ 0.90", "rmsea": "≤ 0.08",
                    "srmr": "≤ 0.08", "chi2_df": "≤ 3"}
 
@@ -468,7 +479,15 @@ def _measurement_block(ar, family, language, num=None):
         for it in items:
             if not isinstance(it, dict):
                 continue
-            rows.append([name, _fmt(it.get("item")), _fmt(it.get("loading")),
+            # The construct name blanks on continuation rows for the SAME
+            # reason α/CR/AVE already do: it is a property of the construct,
+            # not of the item, and repeating it down five rows reads as five
+            # separate constructs. Markdown has no rowspan, so a blank cell is
+            # how a merged cell is spelled on the way to Word — and it was
+            # already the convention in this very table, applied to every
+            # column except the one the eye lands on first.
+            rows.append([name if first else "", _fmt(it.get("item")),
+                         _fmt(it.get("loading")),
                          alpha if first else "", rho_a if first else "",
                          cr if first else "", ave if first else ""])
             first = False
@@ -814,6 +833,200 @@ def _is_numeric_table(segment: str) -> bool:
     return cells > 0 and numeric >= cells / 2
 
 
+# The caption and source line the WRITER puts around a table. The chapter
+# prompt tells it to caption every statistical table and follow it with a
+# source, and it obeys that around a `[[DT:kind]]` token too — which is wrong
+# twice over, because the token stands for a block that carries its own caption
+# AND its own source line. Tightening the prompt (done, see
+# `_MARKDOWN_FORMAT_RULES`) makes this rarer, not impossible: prompts are
+# probabilistic, and both failures are visible in a document a student submits.
+#
+# The source pattern requires the "Nguồn:"/"Source:" colon so an interpretation
+# paragraph that merely opens with the word "Nguồn" survives; the caption
+# pattern requires a number after "Bảng"/"Table" for the same reason.
+_W_CAPTION = r"[ \t]*\*{0,2}(?:Bảng|Bang|Table)[ \t]*\d[^\n]*\n"
+_W_SOURCE = r"[ \t]*[*_]{0,2}[ \t]*(?:Nguồn|Nguon|Source)[ \t]*:[^\n]*\n?"
+
+_DUP_SOURCE_RE = re.compile(
+    r"(<!--dt-rendered:end kind=[a-z0-9_]+-->)[ \t]*\n\s*\n?" + _W_SOURCE,
+    re.IGNORECASE)
+_DUP_CAPTION_RE = re.compile(
+    r"^" + _W_CAPTION + r"[ \t]*\n?(?=<!--dt-rendered:begin )",
+    re.IGNORECASE | re.MULTILINE)
+
+# A token with no block behind it. `weave` drops it — a placement token is
+# renderer-internal syntax and must never reach Word — but dropping only the
+# token line left the writer's caption and source line standing over the hole:
+# an export shipped "Bảng 4.1: Quy mô mẫu nghiên cứu" directly above "Nguồn:
+# Kết quả phân tích…" with no table between them, because the study carried no
+# descriptives to render. The furniture belongs to the table, so it goes too.
+_ORPHAN_TOKEN_RE = re.compile(
+    r"^(?:" + _W_CAPTION + r"[ \t]*\n?)?"
+    r"[ \t]*\[\[DT:[a-z0-9_]+\]\][ \t]*\n?"
+    r"(?:[ \t]*\n)?"
+    r"(?:" + _W_SOURCE + r")?",
+    re.IGNORECASE | re.MULTILINE)
+
+
+def _drop_writer_duplicates(prose: str) -> str:
+    return _DUP_CAPTION_RE.sub("", _DUP_SOURCE_RE.sub(r"\1\n", prose))
+
+
+def _drop_orphan_tokens(prose: str) -> str:
+    return _ORPHAN_TOKEN_RE.sub("", prose)
+
+
+# The product name must never reach the document a student submits — an examiner
+# who reads "(DoThesis)" under a table knows which service wrote the chapter.
+#
+# `_SOURCE_LINE` fixed that for the blocks WE build, and
+# `test_source_line_never_names_the_product` holds that line. It does not cover
+# the other author: the writer types its OWN caption and source line around any
+# table it builds itself, and one came back as
+#   *Nguồn: kết xuất từ kết quả phân tích đã lưu (DoThesis).*
+# sitting directly above the real source line, so the export shipped both — the
+# brand AND a duplicate. `_DUP_SOURCE_RE` could not catch it: that one keys off
+# a rendered block's end sentinel, and a writer-typed table has none.
+#
+# The `_MARKDOWN_FORMAT_RULES` addition makes this rarer. Rarer is not a
+# guarantee, and the cost of the miss is paid by the student in front of their
+# committee, so the invariant is enforced here — deterministically, on every
+# chapter, on the one path all three export callers share.
+#
+# Spaced form is matched case-SENSITIVE on purpose: `(?i)do thesis` would eat
+# the ordinary English phrase.
+_BRAND_RE = re.compile(r"(?i:\bdothesis\b)|\bDo\s+Thesis\b")
+_SOURCE_LINE_RE = re.compile(
+    r"^[ \t]*[*_]{0,2}[ \t]*(?:Nguồn|Nguon|Source)[ \t]*:.*$",
+    re.IGNORECASE)
+
+
+# Spans the brand sweep must NOT touch. The product name is also the repo
+# directory name, so `![](/Users/…/project/dothesis/var/jobs/…/hinh-09.png)`
+# contains it — and a blind sub turned that into `/Users/…/project//var/jobs/…`,
+# which resolves to nothing and dropped the student's SmartPLS screenshot out of
+# the exported chapter, leaving a caption over empty space. A path, a link
+# target, a code span and our own sentinel comment are all machine-read, never
+# read by the examiner, so none of them is what this sweep is for.
+_BRAND_SAFE_RE = re.compile(
+    r"!?\[[^\]]*\]\([^)]*\)"      # markdown image / link, target included
+    r"|<!--.*?-->"                # dt-rendered sentinels
+    r"|`[^`]*`"                   # inline code
+    r"|<[^>]+>",                  # raw html / autolink
+    re.DOTALL)
+
+
+def _is_source_line(line: str) -> bool:
+    return bool(_SOURCE_LINE_RE.match(line))
+
+
+def _strip_brand(text: str) -> str:
+    """Remove the product name from the parts of `text` a reader actually reads."""
+    def _clean(seg: str) -> str:
+        if not _BRAND_RE.search(seg):
+            return seg
+        seg = _BRAND_RE.sub("", seg)
+        seg = re.sub(r"[ \t]*\(\s*\)", "", seg)
+        seg = re.sub(r"[ \t]{2,}", " ", seg)
+        return re.sub(r"[ \t]+([.,;:)])", r"\1", seg)
+
+    out = []
+    pos = 0
+    for m in _BRAND_SAFE_RE.finditer(text):
+        out.append(_clean(text[pos:m.start()]))
+        out.append(m.group(0))       # verbatim — paths and sentinels are data
+        pos = m.end()
+    out.append(_clean(text[pos:]))
+    return "".join(out)
+
+
+def scrub_document_prose(prose: str, language: str = "vi") -> str:
+    """Strip the product name and collapse stacked source lines.
+
+    Two passes over the writer's own text, neither of which touches a rendered
+    block (those are already clean and already deduped by `weave`):
+
+    1. A source line naming the product is REPLACED with the canonical one
+       rather than edited, because such a line is wrong twice over — it names
+       the typesetter instead of the software the numbers came out of.
+    2. A run of consecutive source lines collapses to the first. Blank lines
+       between them do not break the run; a paragraph of prose does.
+
+    Anything still carrying the brand after that has it removed in place, with
+    an empty parenthetical `()` and its leading space cleaned up so the
+    sentence does not read as if a word were missing.
+
+    Fail-open: returns the input unchanged on a non-string.
+    """
+    if not isinstance(prose, str) or not prose:
+        return prose
+    # The writer's caption/source around a `[[DT:]]` token — the same pass
+    # `weave()` runs. It has to run again HERE because weave only sees a
+    # chapter that still has blocks to splice: once a block is in the prose,
+    # `ensure_rendered` computes `have = rendered_kinds(prose)`, finds nothing
+    # missing, and returns the section untouched. So a chapter woven by an
+    # older build keeps its duplicates forever — which is exactly what shipped:
+    # "**Bảng 4.6: Kết quả kiểm định các đường dẫn cấu trúc**" sitting on top of
+    # the block's own "**Bảng 4.10 — Mô hình cấu trúc**", and the writer's
+    # source line under the end sentinel on top of the block's own.
+    prose = _drop_writer_duplicates(prose)
+    canonical = _SOURCE_LINE.get(language) or _SOURCE_LINE["en"]
+    out: List[str] = []
+    # Index into `out` of the source line the current run started with, or None
+    # when the last non-blank line was not a source line.
+    run_start: int | None = None
+    pending_blanks: List[str] = []
+    for line in prose.split("\n"):
+        if not line.strip():
+            pending_blanks.append(line)
+            continue
+        if _is_source_line(line):
+            if run_start is not None:
+                # Second source line in a row — the writer's duplicate. Drop it
+                # AND the blank lines that were only separating the two.
+                pending_blanks = []
+                continue
+            if _BRAND_RE.search(line):
+                line = canonical
+            out.extend(pending_blanks)
+            pending_blanks = []
+            out.append(line)
+            run_start = len(out) - 1
+            continue
+        run_start = None
+        out.extend(pending_blanks)
+        pending_blanks = []
+        out.append(line)
+    out.extend(pending_blanks)
+    return _strip_brand("\n".join(out))
+
+
+def scrub_sections(sections: List[dict], language: str = "vi") -> List[dict]:
+    """`scrub_document_prose` over every section of a document. Fail-open."""
+    try:
+        out = []
+        for sec in sections or []:
+            if not isinstance(sec, dict):
+                out.append(sec)
+                continue
+            key = "prose" if sec.get("prose") is not None else "content"
+            body = sec.get(key)
+            if not isinstance(body, str):
+                out.append(sec)
+                continue
+            cleaned = scrub_document_prose(body, language)
+            if cleaned == body:
+                out.append(sec)
+            else:
+                new = dict(sec)
+                new[key] = cleaned
+                out.append(new)
+        return out
+    except Exception:
+        logger.debug("scrub_sections failed", exc_info=True)
+        return sections
+
+
 def weave(prose: str, blocks: List[dict], *, drop_llm_tables: bool = False) -> str:
     try:
         if not isinstance(prose, str):
@@ -824,7 +1037,7 @@ def weave(prose: str, blocks: List[dict], *, drop_llm_tables: bool = False) -> s
             # content. When the requested verified block has no source data
             # (e.g. Chapter 3 exported before M4), remove the token instead of
             # leaking ``[[DT:data_cleaning]]`` into Word/PDF.
-            return _TOKEN_RE.sub("", prose)
+            return _drop_orphan_tokens(prose)
         already = rendered_kinds(prose)
         by_kind = {}
         for b in blocks:
@@ -837,10 +1050,14 @@ def weave(prose: str, blocks: List[dict], *, drop_llm_tables: bool = False) -> s
             kind = m.group("kind")
             b = by_kind.get(kind)
             if b is None or kind in used:
-                return ""      # unknown or duplicate token → remove
+                # Unknown or duplicate: leave the token in place and let the
+                # orphan sweep below take it WITH its caption and source line.
+                # Blanking it here would only remove the token line.
+                return m.group(0)
             used.add(kind)
             return b["markdown"]
-        woven = _TOKEN_RE.sub(repl, prose)
+        woven = _drop_writer_duplicates(_TOKEN_RE.sub(repl, prose))
+        woven = _drop_orphan_tokens(woven)
 
         # 4: results-only drop of unmarked numeric pipe tables (only if we wove ≥1)
         if drop_llm_tables and (used - already):

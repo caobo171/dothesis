@@ -13,7 +13,9 @@ import { EmptyHint, M1Body, M2Body, M3Body, M4Body, M5Body } from "./ModuleSlice
 import { RoadmapPanel, StepBar, StepList, useRoadmap, type Sub, MODULE_KEY } from "./RoadmapPanel";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
+import type { MessageKey } from "@/app/lib/i18n/messages/en";
 import {
+  exportViewUrl,
   triggerExportDownload,
   triggerUploadDownload,
   swrFetcher as fetcher,
@@ -148,14 +150,14 @@ export function ContextPanel({
             "Context" for the whole panel would clash with the Context card
             inside it. The context_store.json chip below keeps the underlying
             name visible for anyone who knows it. */}
-        <span className="text-[14px] font-bold shrink-0 whitespace-nowrap">Workspace</span>
+        <span className="text-[14px] font-bold shrink-0 whitespace-nowrap">{t("context.workspace")}</span>
         <span className="inline-flex items-center min-w-0 px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-[11px] font-semibold font-mono truncate">
           context_store.json
         </span>
         <span className="flex-1 min-w-[6px]" />
         {typeof threadCredits === "number" && threadCredits > 0 && (
           <span
-            title="Credits spent in this thread"
+            title={t("context.threadCredits")}
             className="inline-flex items-center gap-1 shrink-0 whitespace-nowrap text-[11px] font-semibold text-amber-600"
           >
             <Coins className="w-3 h-3" aria-hidden />
@@ -165,8 +167,8 @@ export function ContextPanel({
         <button
           type="button"
           onClick={() => setShowRaw(s => !s)}
-          aria-label="Toggle raw JSON"
-          title="Raw JSON"
+          aria-label={t("context.rawJson.toggle")}
+          title={t("context.rawJson")}
           className="w-7 h-7 shrink-0 rounded-md text-ink-500 hover:bg-ink-100 hover:text-ink-900 inline-flex items-center justify-center text-[13px] font-mono transition-colors"
         >
           {"{}"}
@@ -255,13 +257,13 @@ export function ContextPanel({
       {/* Footer */}
       <div className="px-4 py-2.5 border-t border-ink-200 bg-ink-50 flex items-center gap-2 text-[11.5px] text-ink-500">
         <Clock className="w-3 h-3" />
-        <span>Live · auto-saved</span>
+        <span>{t("context.live")}</span>
         <span className="flex-1" />
         <button
           type="button"
           className="text-primary-600 font-semibold text-[12px] hover:underline"
         >
-          View history
+          {t("context.viewHistory")}
         </button>
       </div>
     </aside>
@@ -381,42 +383,65 @@ type ExportRow = {
   download_url: string;
 };
 
-const _SCOPE_LABEL: Record<string, string> = {
-  full: "Toàn bộ luận văn", M1: "M1 · Chủ đề", M2: "M2 · Tổng quan",
-  M3: "M3 · Phương pháp", M4: "M4 · Phân tích", M5: "M5 · Kết luận",
-};
+const _DOCX_MIME =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// Catalogue keys, not labels. An unknown scope still falls through to the raw
+// backend string, which is why these maps stay partial.
+const _SCOPE_KEY = {
+  full: "export.scope.full", M1: "export.scope.M1", M2: "export.scope.M2",
+  M3: "export.scope.M3", M4: "export.scope.M4", M5: "export.scope.M5",
+} as const;
 
 // FIVE chapters, not six: `conclusion` IS Chương 5 now (the discussion of
 // findings is written inside it), so it takes the "Chương 5" tag that used to
 // belong to the retired `discussion` key — matching orchestrator.tools
 // .m5_writing.M5_CHAPTER_TITLES_VI.
-const _CHAPTER_SCOPE_LABEL: Record<string, string> = {
-  intro: "Chương 1", lit_review: "Chương 2", methodology: "Chương 3",
-  results: "Chương 4", conclusion: "Chương 5",
-};
+const _CHAPTER_SCOPE_KEY = {
+  intro: "export.scope.chapter.intro", lit_review: "export.scope.chapter.lit_review",
+  methodology: "export.scope.chapter.methodology", results: "export.scope.chapter.results",
+  conclusion: "export.scope.chapter.conclusion",
+} as const;
 
-export function formatExportScope(scope: string): string {
+/** `scope` is a backend protocol string ("full", "M1,M2", "chapter:intro|…").
+ *
+ *  `t` is passed in rather than pulled from useT() because this is a plain
+ *  function, called from render and asserted directly in tests — the labels
+ *  used to be hardcoded Vietnamese, which an English session read as the name
+ *  of its own thesis.
+ */
+export function formatExportScope(scope: string, t: (key: MessageKey) => string): string {
   const value = (scope || "").trim();
-  if (!value) return "Tài liệu";
-  if (value === "full") return "Toàn bộ luận văn";
+  if (!value) return t("export.scope.document");
+  if (value === "full") return t("export.scope.full");
   if (value.toLowerCase().startsWith("chapter:")) {
     const names = value.slice(8).split("|").map(name => name.trim().toLowerCase()).filter(Boolean);
-    if (names.join("|") === "intro|lit_review|methodology") return "Chương 1–3";
-    return names.map(name => _CHAPTER_SCOPE_LABEL[name] ?? name).join(" + ");
+    if (names.join("|") === "intro|lit_review|methodology") return t("export.scope.chapters1to3");
+    return names.map(name => {
+      const key = _CHAPTER_SCOPE_KEY[name as keyof typeof _CHAPTER_SCOPE_KEY];
+      return key ? t(key) : name;
+    }).join(" + ");
   }
   return value.split(",").map(part => part.trim()).filter(Boolean)
-    .map(module => _SCOPE_LABEL[module] ?? module).join(" + ");
+    .map(module => {
+      const key = _SCOPE_KEY[module as keyof typeof _SCOPE_KEY];
+      return key ? t(key) : module;
+    }).join(" + ");
 }
 
 function ExportsSection({ projectId }: { projectId: string }) {
+  const t = useT();
   // Fetch the project's exports list (newest first). Revalidates on focus so a
   // freshly-agent-generated export shows up without a manual reload.
   const { data } = useSWR<ExportRow[]>(`/projects/${projectId}/exports/list`, fetcher);
   const rows = data ?? [];
   return (
-    <CtxSection label={`Outputs${rows.length ? ` (${rows.length})` : ""}`} status="in_progress">
+    <CtxSection
+      label={`${t("context.section.outputs")}${rows.length ? ` (${rows.length})` : ""}`}
+      status="in_progress"
+    >
       {rows.length === 0 ? (
-        <EmptyHint text="No outputs yet — ask to export a module or the full thesis, or use Quick actions → Export to Word." />
+        <EmptyHint text={t("context.outputs.empty")} />
       ) : (
         <div className="space-y-1.5">
           {rows.map(r => <ExportRowItem key={r.id} row={r} />)}
@@ -426,47 +451,85 @@ function ExportsSection({ projectId }: { projectId: string }) {
   );
 }
 
-function ExportRowItem({ row }: { row: ExportRow }) {
+// Outputs row — the same two-action shape as UploadRow below, for the same
+// reason: the row OPENS the file and a separate button downloads it.
+//
+// These rows are the thesis the student is about to hand in, and the only way
+// to see whether an export was any good used to be "save it, find it, open
+// Word". Reviewing it is the common action; saving it is the one you do once at
+// the end. Same AttachmentPreview as the Context rows, so there is one docx/pdf
+// renderer. The preview reads /exports/{filename}/raw (same-origin, inline);
+// downloading still goes through the 302-to-S3 route, which is what gives the
+// saved file its meaningful name.
+export function ExportRowItem({ row }: { row: ExportRow }) {
   const size =
     row.size_bytes >= 1024 * 1024
       ? `${(row.size_bytes / (1024 * 1024)).toFixed(1)} MB`
       : `${(row.size_bytes / 1024).toFixed(0)} KB`;
+  const t = useT();
+  const [preview, setPreview] = useState(false);
   // Was `void triggerExportDownload(...)`: the token mint showed nothing while
   // in flight and swallowed its own failure. The spinner takes the file icon's
   // slot so the row keeps its width.
   const { busy, error, start } = useArtifactDownload();
+  const label = `${row.kind.toUpperCase()} · ${formatExportScope(row.scope, t)}`;
   return (
     <>
-    <a
-      href={row.download_url}
-      download
-      aria-busy={busy}
-      onClick={(e) => {
-        e.preventDefault();
-        void start(() => triggerExportDownload(row.download_url));
-      }}
-      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-colors ${
-        busy
-          ? "border-primary-300 bg-primary-50 cursor-progress"
-          : "border-ink-200 bg-white hover:border-primary-300 hover:bg-primary-50"
-      }`}
-    >
-      {busy ? (
-        <Loader2 className="w-[18px] h-[22px] shrink-0 text-primary-600 animate-spin" aria-hidden />
-      ) : (
+    <div className="w-full flex items-stretch rounded-lg border border-ink-200 bg-white transition-colors hover:border-primary-300 hover:bg-primary-50">
+      <button
+        type="button"
+        onClick={() => setPreview(true)}
+        aria-label={t("preview.open", { name: label })}
+        title={t("preview.open", { name: label })}
+        className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 text-left rounded-l-lg"
+      >
         <FileTypeIcon kind={row.kind} className="w-[18px] h-[22px] shrink-0" />
-      )}
-      <span className="font-serif text-[12px] font-extrabold text-ink-900 shrink-0">
-        {row.kind.toUpperCase()}
-      </span>
-      <span className="text-[11.5px] font-semibold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded truncate min-w-0">
-        {formatExportScope(row.scope)}
-      </span>
-      <span className="text-ink-400 text-[11.5px] ml-auto shrink-0">{size}</span>
-      <Download className="w-3.5 h-3.5 text-ink-400 shrink-0" aria-hidden />
-    </a>
+        <span className="font-serif text-[12px] font-extrabold text-ink-900 shrink-0">
+          {row.kind.toUpperCase()}
+        </span>
+        <span className="text-[11.5px] font-semibold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded truncate min-w-0">
+          {formatExportScope(row.scope, t)}
+        </span>
+        <span className="text-ink-400 text-[11.5px] ml-auto shrink-0">{size}</span>
+      </button>
+      <button
+        type="button"
+        aria-busy={busy}
+        onClick={() => void start(() => triggerExportDownload(row.download_url))}
+        aria-label={t("preview.download", { name: label })}
+        title={t("preview.download", { name: label })}
+        className={`shrink-0 px-2.5 flex items-center rounded-r-lg transition-colors ${
+          busy ? "text-primary-600 cursor-progress" : "text-ink-400 hover:text-primary-600"
+        }`}
+      >
+        {busy ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+        ) : (
+          <Download className="w-3.5 h-3.5" aria-hidden />
+        )}
+      </button>
+    </div>
     {error && (
       <div className="text-[11px] text-[#8E6B2A] px-2.5 pt-1" role="alert">{error}</div>
+    )}
+    {preview && (
+      <AttachmentPreview
+        // No upload_id: an export is not an upload. The title leads with the
+        // scope label, which is what the student recognises — and because that
+        // puts the real filename in brackets, the name no longer ENDS in
+        // ".docx", so the mime is what has to carry the kind detection.
+        meta={{
+          upload_id: "",
+          filename: `${formatExportScope(row.scope, t)} (${row.filename})`,
+          size_bytes: row.size_bytes,
+          mime_type: row.kind === "pdf" ? "application/pdf" : _DOCX_MIME,
+        }}
+        load={async () => (await exportViewUrl(row.download_url)) ?? ""}
+        onDownload={() => start(() => triggerExportDownload(row.download_url))}
+        // We generated this file; there is no extraction of it to show.
+        hasTextTab={false}
+        onClose={() => setPreview(false)}
+      />
     )}
     </>
   );
@@ -514,6 +577,7 @@ function UploadsList({ uploads }: { uploads: UploadItem[] }) {
 }
 
 function UploadRow({ upload }: { upload: UploadItem }) {
+  const t = useT();
   const [preview, setPreview] = useState(false);
   const { busy, error, start } = useArtifactDownload();
   return (
@@ -525,8 +589,8 @@ function UploadRow({ upload }: { upload: UploadItem }) {
         // Labelled, not left to the filename inside it: the row now holds two
         // buttons over the same file, and "paper.pdf" / "Download paper.pdf"
         // doesn't say which one opens it.
-        aria-label={`Preview ${upload.filename}`}
-        title={`Preview ${upload.filename}`}
+        aria-label={t("preview.open", { name: upload.filename })}
+        title={t("preview.open", { name: upload.filename })}
         className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 text-left rounded-l-lg"
       >
         <FileTypeIcon
@@ -546,8 +610,8 @@ function UploadRow({ upload }: { upload: UploadItem }) {
         type="button"
         aria-busy={busy}
         onClick={() => void start(() => triggerUploadDownload(upload.id))}
-        aria-label={`Download ${upload.filename}`}
-        title={`Download ${upload.filename}`}
+        aria-label={t("preview.download", { name: upload.filename })}
+        title={t("preview.download", { name: upload.filename })}
         className={`shrink-0 px-2.5 flex items-center rounded-r-lg transition-colors ${
           busy ? "text-primary-600 cursor-progress" : "text-ink-400 hover:text-primary-600"
         }`}

@@ -6,6 +6,7 @@ import { Bell, ChevronDown, Download, FileDown, History, Loader2, Sparkles } fro
 import { triggerExportDownload } from "@/app/lib/api";
 import { useArtifactDownload } from "./hooks/useArtifactDownload";
 import { ExportModulesModal } from "./ExportModulesModal";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 
 
 // Export is agent-driven: the user picks any modules in the ExportModulesModal,
@@ -50,6 +51,7 @@ function ExportDownloadButton({
 }) {
   // Above the early return — the disabled branch below is a conditional exit,
   // and a hook after it would change hook order between renders.
+  const t = useT();
   const { busy, error, start } = useArtifactDownload();
   const docx = artifacts?.find(a => a.kind === "docx") ?? artifacts?.[0];
 
@@ -64,12 +66,14 @@ function ExportDownloadButton({
       <button
         type="button"
         disabled
-        title="Chưa có bản xuất — hoàn thành M5 trước"
+        title={t("composer.quickActions.downloadUnavailable")}
         className={`${row} text-ink-400 cursor-not-allowed`}
       >
         <Download className="w-4 h-4 text-ink-300 shrink-0" />
-        <span>Tải luận văn (.docx)</span>
-        <span className="ml-auto text-[11px] text-ink-400">chưa có</span>
+        <span>{t("composer.quickActions.downloadThesis")}</span>
+        <span className="ml-auto text-[11px] text-ink-400">
+          {t("composer.quickActions.downloadNotYet")}
+        </span>
       </button>
     );
   }
@@ -89,10 +93,12 @@ function ExportDownloadButton({
       {busy
         ? <Loader2 className="w-4 h-4 animate-spin text-ink-500 shrink-0" />
         : <Download className="w-4 h-4 text-ink-500 shrink-0" />}
-      <span>Tải luận văn (.docx)</span>
+      <span>{t("composer.quickActions.downloadThesis")}</span>
       {(busy || error) && (
         <span className="ml-auto text-[11px] truncate max-w-[130px]">
-          {error ? `Lỗi: ${error}` : "Đang chuẩn bị…"}
+          {error
+            ? t("composer.quickActions.downloadError", { message: error })
+            : t("composer.quickActions.downloadPreparing")}
         </span>
       )}
     </a>
@@ -128,6 +134,7 @@ export function QuickActionsMenu({
   placement?: "up" | "down";
   disabled?: boolean;
 }) {
+  const t = useT();
   const [quickOpen, setQuickOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -153,7 +160,7 @@ export function QuickActionsMenu({
         }`}
       >
         <Sparkles className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">Quick actions</span>
+        <span className="hidden sm:inline">{t("composer.quickActions")}</span>
         <ChevronDown className={`w-3 h-3 ${placement === "up" ? "rotate-180" : ""}`} />
       </button>
 
@@ -167,7 +174,7 @@ export function QuickActionsMenu({
             onClick={() => setQuickOpen(false)}
           >
             <div className="px-2 pt-1 pb-2 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400">
-              Run
+              {t("composer.quickActions.sectionRun")}
             </div>
             {/* Auto Thesis */}
             <div className="px-1 pb-2">{autoThesisButton}</div>
@@ -175,7 +182,7 @@ export function QuickActionsMenu({
             {onQuickPrompt && (
               <>
                 <div className="px-2 pt-1 pb-1 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400 border-t border-ink-100">
-                  Export to Word
+                  {t("composer.quickActions.sectionExport")}
                 </div>
                 {/* One action → opens the module picker (choose any modules;
                     they're combined into one .docx). */}
@@ -185,32 +192,33 @@ export function QuickActionsMenu({
                   className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-ink-800 hover:bg-ink-50 text-left"
                 >
                   <FileDown className="w-4 h-4 text-ink-500" />
-                  <span>Export modules → .docx…</span>
+                  <span>{t("composer.quickActions.exportModules")}</span>
                 </button>
               </>
             )}
 
             <div className="px-2 pt-1 pb-1 text-[10.5px] uppercase tracking-[0.06em] font-bold text-ink-400 border-t border-ink-100">
-              More
+              {t("composer.quickActions.sectionMore")}
             </div>
             <ExportDownloadButton artifacts={exportArtifacts} />
             <button
               type="button"
-              title="Version history"
+              title={t("composer.quickActions.versionHistory")}
               className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-ink-800 hover:bg-ink-50 text-left"
             >
-              <History className="w-4 h-4 text-ink-500" /> Version history
+              <History className="w-4 h-4 text-ink-500" />{" "}
+              {t("composer.quickActions.versionHistory")}
             </button>
             <button
               type="button"
-              title="Notifications"
+              title={t("composer.quickActions.notifications")}
               className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-ink-800 hover:bg-ink-50 text-left"
             >
               <span className="relative inline-flex">
                 <Bell className="w-4 h-4 text-ink-500" />
                 <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-500" />
               </span>
-              Notifications
+              {t("composer.quickActions.notifications")}
             </button>
           </div>
         </>

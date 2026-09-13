@@ -92,7 +92,7 @@ drilled **question → improved-answer** pairs into a short standalone
 `defense_cheatsheet` and export it via `export_docx()` (the existing writing
 tool). Open the sheet with the readiness line (X must-fix, Y disclosable) and
 group entries by defensibility so the student fixes the blockers first. Tell them
-the file is ready in the Context store panel — never paste the whole cheat-sheet
+the file is ready in the Workspace panel — never paste the whole cheat-sheet
 as a wall of chat text.
 
 ## Boundaries

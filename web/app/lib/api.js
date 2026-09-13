@@ -205,6 +205,28 @@ export async function uploadViewUrl(uploadId) {
 }
 
 /**
+ * Same-origin URL that SHOWS an export rather than saving it.
+ *
+ * Exactly the `uploadViewUrl` trade, for the Outputs panel: the /exports route
+ * 302s to presigned S3 with `attachment`, which downloads instead of rendering
+ * and puts the bytes behind S3's CORS policy, so the fetch() that converts a
+ * .docx for display fails. /raw streams them inline from our own origin, under
+ * the same export-scoped ?st= token the download uses.
+ *
+ * `downloadUrl` is the export_artifacts download_url
+ * (/api/v1/projects/{pid}/exports/{filename}). Returns null for anything that
+ * isn't one — the caller has nothing previewable.
+ */
+export async function exportViewUrl(downloadUrl) {
+  const m = (downloadUrl || "").match(/\/projects\/([^/]+)\/exports\/([^/?]+)/);
+  if (!m) return null;
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
+  const base = apiBase || "/api/v1";
+  const st = await mintStreamToken(`project-export:${m[1]}/${m[2]}`);
+  return `${base}/projects/${m[1]}/exports/${m[2]}/raw?st=${encodeURIComponent(st)}`;
+}
+
+/**
  * Download an M5 export (docx/pdf) given its project-scoped export URL.
  *
  * The /exports route is a browser GET that 302s to a signed S3 URL and still

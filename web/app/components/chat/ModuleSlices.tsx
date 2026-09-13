@@ -20,7 +20,8 @@ import { translateContextValue } from "@/app/lib/i18n/contextSliceI18n";
 import type { MessageKey } from "@/app/lib/i18n/messages/en";
 
 import { SliceModal } from "./SliceModal";
-import { Mermaid } from "./Mermaid";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
+import { ConceptualModelFigure } from "./ConceptualModelFigure";
 // The canonical chapter count for "N/total chapters written" — CHAPTER_ORDER
 // is the same list the outline rail renders, so this can never drift out of
 // sync with the backend's five-chapter model the way a hardcoded `6` did.
@@ -60,10 +61,11 @@ export function ModuleBody({
  *  and it's unreadable besides — so a nested value degrades to a plain count
  *  ("3 items") and the detail lives in chat, where they can just ask. */
 function GenericSlice({ data }: { data: Record<string, any> | null }) {
+  const t = useT();
   const entries = Object.entries(data || {}).filter(
     ([k, v]) => !k.startsWith("_") && k !== "confirmed_at" && !isBlank(v),
   );
-  if (entries.length === 0) return <EmptyHint text="Nothing committed yet." />;
+  if (entries.length === 0) return <EmptyHint text={t("context.empty.nothingCommitted")} />;
   return (
     <div className="space-y-1">
       {entries.map(([k, v], i) => (
@@ -135,13 +137,22 @@ export function FieldLabel({
   // (the default) so they get breathing room between groups.
   top?: boolean;
 }) {
+  const t = useT();
+  // `name` arrives two ways: a bare slice key ("research_gaps") from the
+  // callers that render the store verbatim, or an already-translated label
+  // from the ones that looked it up themselves. Resolve the first kind here —
+  // the raw keys were reaching the panel as "RESEARCH_GAPS (4)" in every
+  // language — and let the second fall through: translate() returns the key
+  // unchanged when there is no entry, which a translated label never matches.
+  const key = `context.field.${name}` as MessageKey;
+  const resolved = t(key);
   return (
     <div
       className={`text-[11px] uppercase tracking-[0.05em] text-ink-500 font-semibold ${
         top ? "" : "mt-3"
       }`}
     >
-      {name}
+      {resolved === key ? name : resolved}
       {count != null && <> ({count})</>}
     </div>
   );
@@ -158,9 +169,10 @@ export function KV({ k, v }: { k: string; v: React.ReactNode }) {
 
 
 export function M5Body({ data }: { data: Record<string, any> | null }) {
+  const t = useT();
   if (!data) {
     return (
-      <EmptyHint text="Not written yet — M5 adds the closing chapter (conclusion). Chapters 1–4 are written by M1–M4 as you finish them, so you can export what exists at any point." />
+      <EmptyHint text={t("context.empty.m5NotWritten")} />
     );
   }
   // Exports moved out of M5 into the dedicated module-agnostic Exports section
@@ -171,7 +183,7 @@ export function M5Body({ data }: { data: Record<string, any> | null }) {
   const finalSections = Array.isArray(data.final_sections) ? data.final_sections : [];
   if (chapterCount === 0 && finalSections.length === 0) {
     return (
-      <EmptyHint text="Not written yet — M5 adds the closing chapter (conclusion). Chapters 1–4 are written by M1–M4 as you finish them, so you can export what exists at any point." />
+      <EmptyHint text={t("context.empty.m5NotWritten")} />
     );
   }
   return (
@@ -180,7 +192,9 @@ export function M5Body({ data }: { data: Record<string, any> | null }) {
         <>
           <FieldLabel name="chapters" count={chapterCount} top />
           <div className="text-[12.5px] text-ink-600 mt-1">
-            {chapterCount}/{CHAPTER_ORDER.length} chapters written
+            {t("context.m5.chaptersWritten", {
+              count: chapterCount, total: CHAPTER_ORDER.length,
+            })}
           </div>
         </>
       )}
@@ -198,15 +212,16 @@ export function M5Body({ data }: { data: Record<string, any> | null }) {
 
 
 export function M1Body({ data }: { data: Record<string, any> | null }) {
+  const t = useT();
   // Click-to-expand like the other slices: the inline card shows title + RQs,
   // but a topic also carries field / scope / objectives that don't fit — open
   // the full detail in the centered SliceModal.
   const [modalOpen, setModalOpen] = useState(false);
-  if (!data) return <EmptyHint text="Topic not set yet — start in M1." />;
+  if (!data) return <EmptyHint text={t("context.empty.m1NotSet")} />;
   const title = data.research_title;
   const rqs = (data.research_questions || []) as string[];
   if (!title && rqs.length === 0) {
-    return <EmptyHint text="No M1 data committed yet." />;
+    return <EmptyHint text={t("context.empty.m1None")} />;
   }
   return (
     <>
@@ -232,7 +247,7 @@ export function M1Body({ data }: { data: Record<string, any> | null }) {
           </>
         )}
         <span className="mt-2 inline-flex items-center gap-1 text-[11.5px] text-primary-600 font-semibold">
-          View full topic <ExternalLink className="w-3 h-3" />
+          {t("context.viewFullTopic")} <ExternalLink className="w-3 h-3" />
         </span>
       </button>
 
@@ -294,7 +309,8 @@ function TopicDetail({ data }: { data: Record<string, any> }) {
 }
 
 export function M2Body({ data }: { data: Record<string, any> | null }) {
-  if (!data) return <EmptyHint text="No literature yet — run M2 scout to gather sources." />;
+  const t = useT();
+  if (!data) return <EmptyHint text={t("context.empty.m2None")} />;
   // Loose shapes: agent + engine wrote these at different times. The current
   // bootstrap/M2 commit shape is `gap_id` + `one_sentence` + `type` +
   // `why_its_a_gap` + `addressable_as`; older paths used `description`/`text`/
@@ -432,7 +448,7 @@ export function M2Body({ data }: { data: Record<string, any> | null }) {
               {sources.length}
             </span>
             <span className="text-[11.5px] text-ink-500 flex-1">
-              papers · click to view
+              {t("context.papersClickToView")}
             </span>
             <ExternalLink className="w-3.5 h-3.5 text-ink-400 group-hover:text-primary-600" />
           </button>
@@ -440,7 +456,7 @@ export function M2Body({ data }: { data: Record<string, any> | null }) {
       )}
 
       {gaps.length === 0 && hypotheses.length === 0 && (!Array.isArray(sources) || sources.length === 0) && (
-        <EmptyHint text="No M2 data committed yet." />
+        <EmptyHint text={t("context.empty.m2DataNone")} />
       )}
 
       {/* Modal — renders the selected gap / hypothesis / source list with
@@ -569,8 +585,9 @@ function HypothesisDetail({ hypothesis, text }: { hypothesis: any; text: string 
 }
 
 function SourceList({ papers }: { papers: any[] }) {
+  const t = useT();
   if (papers.length === 0) {
-    return <EmptyHint text="No sources yet." />;
+    return <EmptyHint text={t("context.empty.noSources")} />;
   }
   return (
     <ul className="space-y-2">
@@ -1126,65 +1143,17 @@ function MethodologyDetail({ meth, sampling }: { meth: any; sampling: any }) {
   );
 }
 
-// Build a Mermaid `flowchart LR` from the model's nodes + edges so the
-// conceptual model renders as an actual diagram (boxes + hypothesis arrows)
-// instead of only two text lists. Tolerant of both edge shapes the codebase
-// emits: design's {from,to,label} and the schema's {source,target,hypothesis}.
-function _mermaidId(raw: unknown, fallback: string): string {
-  const s = String(raw ?? "").trim();
-  // Mermaid node ids must be token-safe — keep alnum/underscore, collapse rest.
-  const id = s.replace(/[^A-Za-z0-9_]/g, "_").replace(/^_+|_+$/g, "");
-  return id || fallback;
-}
-
-function _mermaidLabel(s: unknown): string {
-  // Quotes/pipes/newlines break Mermaid label syntax — neutralize them.
-  return String(s ?? "").replace(/"/g, "'").replace(/\|/g, "/").replace(/\s*\n\s*/g, " ").trim();
-}
-
-function _conceptualMermaid(nodes: any[], edges: any[]): string | null {
-  const lines = ["flowchart LR"];
-  const ids = new Map<string, string>(); // original key -> safe id
-  nodes.forEach((n, i) => {
-    const key = String(n.id ?? n.label ?? `N${i + 1}`);
-    const safe = _mermaidId(n.id ?? n.label, `N${i + 1}`);
-    ids.set(key, safe);
-    // Also map by label so edges referencing either id or label resolve.
-    if (n.label) ids.set(String(n.label), safe);
-    const label = _mermaidLabel(n.label ?? n.id ?? key) || key;
-    lines.push(`  ${safe}["${label}"]`);
-  });
-  let drewEdge = false;
-  edges.forEach(e => {
-    const srcKey = String(e.from ?? e.source ?? "");
-    const tgtKey = String(e.to ?? e.target ?? "");
-    const src = ids.get(srcKey) || (srcKey ? _mermaidId(srcKey, "") : "");
-    const tgt = ids.get(tgtKey) || (tgtKey ? _mermaidId(tgtKey, "") : "");
-    if (!src || !tgt) return;
-    // Prefer a clean hypothesis id; else strip a redundant "X → Y" prefix the
-    // design encodes in the label (the arrow itself already shows direction).
-    let lbl = e.hypothesis
-      ? String(e.hypothesis)
-      : String(e.label ?? "").replace(/^\s*\S+\s*(?:→|->)\s*\S+\s*:?\s*/, "");
-    lbl = _mermaidLabel(lbl);
-    lines.push(lbl ? `  ${src} -->|"${lbl}"| ${tgt}` : `  ${src} --> ${tgt}`);
-    drewEdge = true;
-  });
-  // Only worth a diagram when there's at least one connection to show.
-  return drewEdge ? lines.join("\n") : null;
-}
-
 function ConceptualModelDetail({ model }: { model: { nodes?: any[]; edges?: any[] } | undefined }) {
+  const t = useT();
   const nodes = model?.nodes ?? [];
   const edges = model?.edges ?? [];
-  const diagram = _conceptualMermaid(nodes, edges);
   return (
     <div className="space-y-4">
-      {diagram && (
-        <div className="rounded-xl border border-ink-200 bg-white p-3 overflow-x-auto">
-          <Mermaid source={diagram} />
-        </div>
-      )}
+      {/* Drawn by the exporter's own layout, not Mermaid — so the model a
+          student reads here is the figure their Word document will carry. */}
+      <div className="rounded-xl border border-ink-200 bg-white p-3 overflow-x-auto">
+        <ConceptualModelFigure nodes={nodes} edges={edges} />
+      </div>
       {nodes.length > 0 && (
         <div>
           <FieldLabel name={`constructs (${nodes.length})`} top />
@@ -1257,7 +1226,7 @@ function ConceptualModelDetail({ model }: { model: { nodes?: any[]; edges?: any[
         </div>
       )}
       {nodes.length === 0 && edges.length === 0 && (
-        <EmptyHint text="No conceptual-model graph committed yet." />
+        <EmptyHint text={t("context.empty.noConceptualModel")} />
       )}
     </div>
   );

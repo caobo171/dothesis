@@ -905,6 +905,59 @@ def _is_moderation_label(label: str | None) -> bool:
     return "điều tiết" in low or "moderat" in low
 
 
+# A moderation edge names the node it hangs off, but what it actually moderates
+# is a PATH: "INC moderates INT→DEC" is an arrow onto the INT→DEC arrow, not a
+# second arrow into INT. The stored edge can only hold two node ids, so the path
+# survives in the hypothesis text — parse it back out.
+_MOD_PATH_RE = re.compile(r"([A-Za-z0-9_]+)\s*(?:\u2192|->|=>)\s*([A-Za-z0-9_]+)")
+
+
+def _edge_ends(edge: dict) -> tuple[str, str]:
+    """(source, target) for either edge vocabulary — from/to or source/target."""
+    return (str(edge.get("from") or edge.get("source") or "").strip(),
+            str(edge.get("to") or edge.get("target") or "").strip())
+
+
+def _is_moderation_edge(edge: dict) -> bool:
+    """Only the edge's OWN effect decides.
+
+    This used to also return True for any edge whose SOURCE node was typed
+    `moderator`, which silently swallowed the moderator's own DIRECT effects: a
+    model with both `INC --H8--> DEC` and `INC moderates INT->DEC` drew two
+    dashed "Điều tiết" arrows and lost H8 — a real, tested hypothesis gone from
+    the figure. A moderator is allowed to have direct effects too.
+    """
+    return str(edge.get("effect") or "").lower().startswith("moderat")
+
+
+def _moderated_path(edge: dict, solid_pairs: list[tuple[str, str]],
+                    valid: set[str]) -> tuple[str, str] | None:
+    """The (source, target) path a moderation edge points at, or None."""
+    text = str(edge.get("hypothesis") or edge.get("label") or "")
+    m = _MOD_PATH_RE.search(text)
+    if m and m.group(1) in valid and m.group(2) in valid:
+        return m.group(1), m.group(2)
+    # The label named no path, so the edge target is all we have. A moderator
+    # hung on a node is conventionally read as moderating what leaves it.
+    _, anchor = _edge_ends(edge)
+    for src, tgt in solid_pairs:
+        if src == anchor:
+            return src, tgt
+    for src, tgt in solid_pairs:
+        if tgt == anchor:
+            return src, tgt
+    return None
+
+
+def _mod_short(edge: dict, fallback: str) -> str:
+    """"H9: moderates INT→DEC" -> "H9". Keeps an arrow label readable."""
+    text = str(edge.get("hypothesis") or edge.get("label") or "").strip()
+    head = text.split(":", 1)[0].strip()
+    if re.fullmatch(r"H\d+[a-z]?", head, re.I):
+        return head
+    return fallback
+
+
 def _conceptual_model_to_mermaid(conceptual_model: dict | None,
                                  language: str = "vi") -> str | None:
     """Build a fenced ```mermaid``` flowchart from the STRUCTURED conceptual
@@ -937,26 +990,46 @@ def _conceptual_model_to_mermaid(conceptual_model: dict | None,
         valid.add(nid)
         node_type[nid] = str(n.get("type") or "").lower()
     mod_word = "Điều tiết" if str(language).lower().startswith("vi") else "Moderates"
+    # Two edge vocabularies coexist: headless/tools write from/to, the
+    # interactive FlowChart widget writes source/target. Accept both so the
+    # diagram renders regardless of which runtime authored the model.
+    real = [e for e in edges if isinstance(e, dict)
+            and all(x in valid for x in _edge_ends(e))]
+    solid = [e for e in real if not _is_moderation_edge(e)]
+    solid_pairs = [_edge_ends(e) for e in solid]
+
+    # Mermaid cannot hang an arrow off another arrow, so a moderated path is
+    # SPLIT through a tiny junction node and the moderator points at that. This
+    # is the standard reading of the notation: the arrow lands on the path, not
+    # on the node at either end of it.
+    junction: dict[tuple[str, str], str] = {}
+    mod_lines: list[str] = []
+    for e in real:
+        if not _is_moderation_edge(e):
+            continue
+        src, _ = _edge_ends(e)
+        path = _moderated_path(e, solid_pairs, valid)
+        if path is None:
+            continue
+        jid = junction.setdefault(path, f"MODJ{len(junction) + 1}")
+        mod_lines.append(f'    {src} -.->|{_mod_short(e, mod_word)}| {jid}')
+
     edge_lines: list[str] = []
-    for e in edges:
-        if not isinstance(e, dict):
-            continue
-        # Two edge vocabularies coexist: headless/tools write from/to, the
-        # interactive FlowChart widget writes source/target. Accept both so the
-        # diagram renders regardless of which runtime authored the model.
-        s = str(e.get("from") or e.get("source") or "").strip()
-        t = str(e.get("to") or e.get("target") or "").strip()
-        if s not in valid or t not in valid:
-            continue
-        # A moderator moderates the IV→DV paths — draw it as a DASHED arrow
-        # labelled "Điều tiết", NOT a plain hypothesis arrow like an IV.
-        is_mod = (str(e.get("effect") or "").lower().startswith("moderat")
-                  or node_type.get(s) == "moderator")
-        if is_mod:
-            edge_lines.append(f'    {s} -.->|{mod_word}| {t}')
-            continue
+    for e in solid:
+        src, tgt = _edge_ends(e)
         lbl = str(e.get("label") or e.get("hypothesis") or "").strip()
-        edge_lines.append(f'    {s} -->|{lbl}| {t}' if lbl else f'    {s} --> {t}')
+        jid = junction.get((src, tgt))
+        if jid:
+            # `---` keeps the first leg unarrowed so the path still reads as one
+            # arrow from src to tgt with a point on it.
+            edge_lines.append(f'    {jid}(( ))')
+            edge_lines.append(f'    {src} --- {jid}')
+            edge_lines.append(f'    {jid} -->|{lbl}| {tgt}' if lbl
+                              else f'    {jid} --> {tgt}')
+        else:
+            edge_lines.append(f'    {src} -->|{lbl}| {tgt}' if lbl
+                              else f'    {src} --> {tgt}')
+    edge_lines.extend(mod_lines)
     if not valid or not edge_lines:
         return None
     lines.extend(edge_lines)
@@ -977,6 +1050,27 @@ def _conceptual_model_to_mermaid(conceptual_model: dict | None,
 # _render_mermaid_png and _mermaid_to_prose STAY: they serve a different
 # feature — a ```mermaid``` block the model writes into its own prose.
 
+def _dashed_line(draw, start, end, *, fill: str, width: int,
+                 dash: int = 16, gap: int = 12) -> None:
+    """A dashed segment — Pillow has no dash support of its own.
+
+    Dashed, not solid, because that is how a moderation arrow is told apart
+    from a direct effect at a glance; drawn solid it would read as one more
+    hypothesis into the outcome.
+    """
+    x0, y0 = start
+    x1, y1 = end
+    span = max(1.0, ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5)
+    ux, uy = (x1 - x0) / span, (y1 - y0) / span
+    pos = 0.0
+    while pos < span:
+        seg = min(dash, span - pos)
+        draw.line(((x0 + ux * pos, y0 + uy * pos),
+                   (x0 + ux * (pos + seg), y0 + uy * (pos + seg))),
+                  fill=fill, width=width)
+        pos += dash + gap
+
+
 def _pillow_model_figure(conceptual_model: dict | str | None,
                          language: str = "vi") -> str | None:
     """Dependency-light PNG fallback for a direct-effects research model.
@@ -996,17 +1090,35 @@ def _pillow_model_figure(conceptual_model: dict | str | None,
     types = {str(n["id"]): str(n.get("type") or "").lower() for n in nodes}
 
     solid = []
+    moderations = []
     for edge in edges:
         source = str(edge.get("source") or edge.get("from") or "").strip()
         target = str(edge.get("target") or edge.get("to") or "").strip()
         if source not in labels or target not in labels:
             continue
-        if str(edge.get("effect") or "").lower().startswith("moderat"):
+        if _is_moderation_edge(edge):
+            # Collected, not dropped. These used to be skipped outright, so a
+            # moderated model exported a figure with the moderator's arrow
+            # simply absent — the examiner saw eight hypotheses drawn for a
+            # nine-hypothesis study, and nothing said one was missing.
+            moderations.append(edge)
             continue
         solid.append((source, target,
                       str(edge.get("hypothesis") or edge.get("label") or "").strip()))
     if not solid:
         return None
+    solid_pairs = [(src, tgt) for src, tgt, _ in solid]
+    mod_word = "Điều tiết" if str(language).lower().startswith("vi") else "Moderates"
+    # moderator id -> (moderated path, short label). Resolved once here so the
+    # drawing pass and the prose list below cannot disagree about what is
+    # moderating what.
+    mod_targets = []
+    for edge in moderations:
+        path = _moderated_path(edge, solid_pairs, set(labels))
+        if path is None:
+            continue
+        src, _ = _edge_ends(edge)
+        mod_targets.append((src, path, _mod_short(edge, mod_word)))
 
     # Decision: use a small layered-DAG layout instead of assuming every model
     # is a one-outcome star. Real thesis models commonly contain a mediator or
@@ -1028,7 +1140,9 @@ def _pillow_model_figure(conceptual_model: dict | str | None,
         layers.setdefault(depth[node_id], []).append(node_id)
     ordered_depths = sorted(layers)
 
-    box_w, box_h = 330, 104
+    # 132, not 104: the box now carries an abbreviation line above the name, and
+    # a three-line construct name on top of that overflowed the old height.
+    box_w, box_h = 330, 132
     x_gap, y_gap, margin = 170, 64, 75
     width = max(1200, margin * 2 + len(ordered_depths) * box_w
                 + max(0, len(ordered_depths) - 1) * x_gap)
@@ -1054,7 +1168,13 @@ def _pillow_model_figure(conceptual_model: dict | str | None,
         for row, node_id in enumerate(members):
             positions[node_id] = (x, start_y + row * (box_h + y_gap))
 
-    def box(x: int, y: int, text: str, fill: str) -> None:
+    # The abbreviation line above the construct name. Every table in the thesis
+    # is keyed by these codes (ATT_1, the HTMT matrix, the path list), so the
+    # figure names them too rather than making the reader hold the mapping.
+    code_font = ImageFont.truetype(font_path, 20) if font_path else ImageFont.load_default()
+    CODE_H = 30
+
+    def box(x: int, y: int, text: str, fill: str, code: str = "") -> None:
         draw.rounded_rectangle((x, y, x + box_w, y + box_h), radius=16,
                                fill=fill, outline="#315a9a", width=3)
         words, lines, current = text.split(), [], ""
@@ -1070,7 +1190,13 @@ def _pillow_model_figure(conceptual_model: dict | str | None,
             lines.append(current)
         lines = lines[:3]
         line_h = 32
-        ty = y + (box_h - len(lines) * line_h) // 2
+        block_h = len(lines) * line_h + (CODE_H if code else 0)
+        ty = y + (box_h - block_h) // 2
+        if code:
+            cbox = draw.textbbox((0, 0), code, font=code_font)
+            draw.text((x + (box_w - (cbox[2] - cbox[0])) // 2, ty), code,
+                      fill="#5b7bb4", font=code_font)
+            ty += CODE_H
         for line in lines:
             bbox = draw.textbbox((0, 0), line, font=font)
             tx = x + (box_w - (bbox[2] - bbox[0])) // 2
@@ -1078,6 +1204,7 @@ def _pillow_model_figure(conceptual_model: dict | str | None,
             ty += line_h
 
     # Edges go down first so box fills cover their endpoints cleanly.
+    path_mid: dict[tuple[str, str], tuple[int, int]] = {}
     for source, target, hypothesis in solid:
         sx, sy = positions[source]
         tx, ty = positions[target]
@@ -1091,10 +1218,43 @@ def _pillow_model_figure(conceptual_model: dict | str | None,
             short_hypothesis = hypothesis.split(":", 1)[0].strip() or hypothesis
             draw.text((mx - 24, my - 30), short_hypothesis,
                       fill="#203b67", font=small)
+        path_mid[(source, target)] = ((start[0] + end[0]) // 2,
+                                      (start[1] + end[1]) // 2)
+
+    # A moderator's arrow lands ON the moderated path, at its midpoint — that
+    # is what distinguishes moderation from a second direct effect, and drawing
+    # it into the path's endpoint node would assert the wrong hypothesis.
+    for mod_id, path, short in mod_targets:
+        mid = path_mid.get(path)
+        if mid is None or mod_id not in positions:
+            continue
+        mx0, my0 = positions[mod_id]
+        # Right edge like every other arrow (leaving from the top cut up through
+        # whatever box sat above it), but at QUARTER height, not centre: a
+        # moderator usually also has a direct effect on the same outcome, and
+        # both leaving the same point drew H8 and H9 as one thick line.
+        start = (mx0 + box_w, my0 + box_h // 4)
+        _dashed_line(draw, start, mid, fill="#7a5aa8", width=4)
+        dx, dy = mid[0] - start[0], mid[1] - start[1]
+        norm = max(1.0, (dx * dx + dy * dy) ** 0.5)
+        ux, uy = dx / norm, dy / norm
+        tipx, tipy = mid[0], mid[1]
+        draw.polygon([(tipx, tipy),
+                      (int(tipx - 18 * ux + 9 * uy), int(tipy - 18 * uy - 9 * ux)),
+                      (int(tipx - 18 * ux - 9 * uy), int(tipy - 18 * uy + 9 * ux))],
+                     fill="#7a5aa8")
+        # A THIRD of the way along, not the midpoint, for the same reason: the
+        # direct effect already prints its own label at the midpoint of a line
+        # running alongside this one.
+        lx = start[0] + (mid[0] - start[0]) // 3
+        ly = start[1] + (mid[1] - start[1]) // 3
+        draw.text((lx - 24, ly - 34), short, fill="#5b3f86", font=small)
 
     for node_id, (x, y) in positions.items():
         fill = "#EAF1FF" if types.get(node_id) == "dependent" else "#F5F8FC"
-        box(x, y, labels[node_id], fill)
+        # No code line when the id IS the name — that would just print it twice.
+        box(x, y, labels[node_id], fill,
+            code="" if labels[node_id] == node_id else node_id)
 
     png = _scratch_dir() / f"conceptmodel-{uuid4().hex[:8]}.png"
     image.save(png, format="PNG", optimize=True)
@@ -1103,6 +1263,14 @@ def _pillow_model_figure(conceptual_model: dict | str | None,
     for source, target, hypothesis in solid:
         rel.append(f"- {labels[source]} → {labels[target]}" +
                    (f" ({hypothesis})" if hypothesis else ""))
+    # Listed with the rest, in the reader's words: a moderation the figure draws
+    # but the list omits reads as a hypothesis the study forgot to state.
+    verb = ("điều tiết mối quan hệ" if str(language).lower().startswith("vi")
+            else "moderates the relationship")
+    between = "giữa" if str(language).lower().startswith("vi") else "between"
+    for mod_id, (psrc, ptgt), short in mod_targets:
+        rel.append(f"- {labels[mod_id]} {verb} {between} {labels[psrc]} → "
+                   f"{labels[ptgt]}" + (f" ({short})" if short else ""))
     return f"\n![{alt}]({png})\n\n" + "\n".join(rel) + "\n"
 
 
@@ -1115,33 +1283,55 @@ def _ensure_model_diagram(prose: str, conceptual_model: dict | None,
     SVG (cairosvg) for the common star topology, falling back to the mermaid
     builder for shapes the SVG layout can't draw (or if cairosvg is missing).
     """
+    original = prose
     low = prose.lower()
+    # A diagram the LLM drew by hand is the student's chapter, not ours — leave
+    # it exactly as written.
     if ("```mermaid" in low or "flowchart" in low
-            or re.search(r"\bgraph\s+\w", low)
-            or "![mô hình nghiên cứu]" in low
-            or "![research model]" in low
-            or "conceptmodel-" in low):
+            or re.search(r"\bgraph\s+\w", low)):
         return prose
     # A prior optional renderer could emit the caption + relationship list but
     # no image when Chrome was unavailable. Remove that trailing orphan before
     # inserting the deterministic Pillow image; otherwise exports contain two
     # Figure 3.1 captions and two relationship lists, with the first appearing
     # to point at a missing figure.
+    #
+    # The SAME cut now also refreshes a block we generated EARLIER. That block
+    # is ours end to end — our caption, our PNG, our relationship list — and it
+    # is frozen at whatever the model looked like the day it was composed. Two
+    # things go stale in it, both of which shipped: a moderator added (or, as
+    # here, a moderator the renderer used to drop) never appears, so a
+    # nine-hypothesis study keeps exporting a figure and a list of eight; and
+    # the image path points into the export scratch dir, which does not survive
+    # a reboot, so an old chapter eventually renders with no figure at all.
+    # Regenerating is cheap, deterministic, and cannot lose student prose —
+    # the block is always appended at the END, after everything they wrote.
     captions = ("**Hình 3.1: Mô hình nghiên cứu đề xuất**",
                 "**Figure 3.1: Proposed research model**")
+    ours = False
     for existing_caption in captions:
         marker_at = prose.rfind(existing_caption)
         if marker_at < 0:
             continue
         suffix = prose[marker_at:]
-        if "![" not in suffix and (
-                "Mối quan hệ giả thuyết trong mô hình" in suffix
-                or "Hypothesized relationships" in suffix):
+        generated = "conceptmodel-" in suffix
+        orphan = "![" not in suffix and (
+            "Mối quan hệ giả thuyết trong mô hình" in suffix
+            or "Hypothesized relationships" in suffix)
+        if generated or orphan:
             prose = prose[:marker_at].rstrip()
+            ours = True
             break
+    # An image we did NOT generate (a student's own figure, an imported one)
+    # still counts as the chapter having a model — do not add a second.
+    if not ours and ("![mô hình nghiên cứu]" in low or "![research model]" in low
+                     or "conceptmodel-" in low):
+        return prose
     fig = _pillow_model_figure(conceptual_model, language)
     if not fig:
-        return prose
+        # Nothing to put back — return the ORIGINAL, or refreshing a block we
+        # could not rebuild would silently delete the figure the chapter had.
+        return original if ours else prose
     caption = ("**Hình 3.1: Mô hình nghiên cứu đề xuất**"
                if str(language).lower().startswith("vi")
                else "**Figure 3.1: Proposed research model**")
@@ -1512,7 +1702,16 @@ TABLE CAPTION & SOURCE (match a standard thesis exactly):
 - Immediately AFTER each table, put an italic source line on its OWN line.
   Vietnamese: `*Nguồn: Kết quả phân tích từ SmartPLS/SPSS, tác giả tổng hợp.*`
   English: `*Source: Author's analysis.*`.
+- Use the source wording above VERBATIM. A source line names the SOFTWARE the
+  numbers came out of, never the assistant, the service or the pipeline that
+  typeset them. NEVER write the name of this tool anywhere in the document, and
+  never phrase a source as "exported from saved analysis results" or similar —
+  this document is submitted to an examiner as the student's own work.
 - Number tables sequentially per chapter (Bảng 4.1, 4.2, 4.3 …).
+- EXCEPTION — a `[[DT:...]]` token is NOT a table you caption. It is replaced by
+  a block that already carries its own caption, number and source line. Emit the
+  token alone on its line: no caption above it, no source line below it. A
+  caption or source line you add there is printed a second time.
 """
 
 
@@ -2656,6 +2855,16 @@ def run_export(sections: list[dict], project_id: str,
             sections = _ensure_export_model_diagrams(sections, context_store, language)
         except Exception:
             logger.debug("run_export: export safety nets skipped", exc_info=True)
+    # UNCONDITIONAL, and after the weave: the brand must not reach the examiner
+    # whether or not a context_store was passed, and a chapter the writer typed
+    # its own tables into never goes through weave() at all. This is the one
+    # path all three export callers share, so it is the one place the invariant
+    # can actually be guaranteed.
+    try:
+        from orchestrator.tools.results_render import scrub_sections  # noqa: PLC0415
+        sections = scrub_sections(sections, language)
+    except Exception:
+        logger.debug("run_export: prose scrub skipped", exc_info=True)
     # Take the title off the store when the caller did not pass one — which is
     # ALL SEVEN of them. `title` has been an optional parameter that nothing has
     # ever supplied, so the cover page has been built from None since it was

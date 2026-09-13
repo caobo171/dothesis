@@ -7,8 +7,8 @@ import pytest
 
 from orchestrator.tools.results_render import (
     detect_family, render_cleaning_section, render_limitations,
-    render_results_tables, rendered_kinds, strip_rendered_blocks,
-    verify_rendered_blocks, weave,
+    render_results_tables, rendered_kinds, scrub_document_prose, scrub_sections,
+    strip_rendered_blocks, verify_rendered_blocks, weave,
 )
 from tests.fixtures.renderer_blocks import (
     AGENT_LIST_BLOCK, CBSEM_BLOCK, CBSEM_FIT_PAYLOAD, FREE_TEXT_BLOCK,
@@ -196,6 +196,63 @@ def test_weave_keeps_text_table():
     assert "Theme" in woven             # text-heavy table untouched
 
 
+def test_source_line_never_names_the_product():
+    # This line ships INSIDE the student's submitted thesis, under every table
+    # we render. "(DoThesis)" told the examiner which service wrote the chapter.
+    for md in [b["markdown"] for b in render_results_tables(PLS_BLOCK, language="vi")]:
+        assert "DoThesis" not in md
+    for md in [b["markdown"] for b in render_results_tables(PLS_BLOCK, language="en")]:
+        assert "DoThesis" not in md
+
+
+def test_weave_drops_the_writers_duplicate_source_line():
+    # M5's prompt tells the writer to put a source line after every table, and
+    # it does that around the placement token too — so the woven block's own
+    # source line landed on top of it and the export carried both.
+    blocks = render_results_tables(PLS_BLOCK, language="vi")
+    prose = ("**Bảng 4.1: Mô hình đo lường**\n\n[[DT:measurement_model]]\n\n"
+             "*Nguồn: Kết quả phân tích từ SmartPLS/SPSS, tác giả tổng hợp.*\n\n"
+             "Kết quả cho thấy…")
+    woven = weave(prose, blocks)
+    assert woven.count("Nguồn:") == len(rendered_kinds(woven))
+    assert "Kết quả cho thấy…" in woven
+
+
+def test_weave_takes_the_caption_and_source_with_a_dropped_token():
+    # 4.2 of a real export: the writer emitted a caption, [[DT:descriptives]]
+    # and a source line, the study had no descriptives to render, the token was
+    # dropped — and the document was left with "Bảng 4.1: Quy mô mẫu nghiên
+    # cứu" followed by a source line and no table between them.
+    blocks = render_results_tables(PLS_BLOCK, language="vi")   # carries no model_fit
+    prose = ("Mở đầu.\n\n**Bảng 4.1: Các chỉ số độ phù hợp**\n\n[[DT:model_fit]]\n\n"
+             "*Nguồn: Kết quả phân tích từ SmartPLS/SPSS, tác giả tổng hợp.*\n\n"
+             "Diễn giải.")
+    woven = weave(prose, blocks)
+    assert "Các chỉ số độ phù hợp" not in woven   # orphan caption gone
+    assert "model_fit" not in woven               # token gone, block never existed
+    assert "Mở đầu." in woven and "Diễn giải." in woven
+
+
+def test_weave_takes_the_furniture_when_there_is_nothing_to_weave():
+    # Same orphan, via the no-blocks early return — Chapter 3 exported before M4.
+    prose = ("**Bảng 3.1: Tóm tắt sàng lọc dữ liệu**\n\n[[DT:data_cleaning]]\n\n"
+             "*Nguồn: Kết quả phân tích từ SmartPLS/SPSS, tác giả tổng hợp.*\n\nSau đó.")
+    woven = weave(prose, [])
+    assert "Bảng 3.1" not in woven and "Nguồn:" not in woven
+    assert "Sau đó." in woven
+
+
+def test_weave_drops_the_writers_duplicate_caption():
+    # Every block body opens with its own `**Bảng x.y — …**`, so a caption the
+    # writer put above the token is the same table captioned twice.
+    blocks = render_results_tables(PLS_BLOCK, language="vi")
+    prose = "**Bảng 4.1: Mô hình đo lường**\n\n[[DT:measurement_model]]\n\nDiễn giải."
+    woven = weave(prose, blocks)
+    assert "Bảng 4.1: Mô hình đo lường" not in woven   # writer's copy gone
+    assert "Mô hình đo lường" in woven                 # block's own caption kept
+    assert "Diễn giải." in woven
+
+
 def test_strip_round_trip():
     blocks = render_results_tables(PLS_BLOCK)
     woven = weave("A\n\n[[DT:measurement_model]]\n\nB", blocks)
@@ -335,3 +392,145 @@ def test_rho_a_column_appears_only_when_the_study_has_it():
     # PLS_BLOCK itself carries no rho_a — no column, no dashes pretending to.
     plain = {b["kind"]: b for b in render_results_tables(PLS_BLOCK, "vi")}["measurement_model"]["markdown"]
     assert "rho_A" not in plain
+
+
+# --- the brand must never reach the examiner --------------------------------
+
+def test_a_writer_typed_source_line_naming_the_product_is_replaced():
+    """The leak the source-line rewording did NOT close.
+
+    `_SOURCE_LINE` covers the blocks we build. The writer types its own caption
+    and source around any table it builds itself, and an exported thesis came
+    back with "*Nguồn: kết xuất từ kết quả phân tích đã lưu (DoThesis).*"
+    standing above the real source line — naming the service to the examiner,
+    twice over, on a document submitted as the student's own work.
+    """
+    prose = (
+        "**Bảng 4.5: Ma trận HTMT**\n\n"
+        "| | INT | DEC |\n|---|---|---|\n| INT | | 0.661 |\n\n"
+        "*Nguồn: kết xuất từ kết quả phân tích đã lưu (DoThesis).*\n"
+        "*Nguồn: Kết quả phân tích từ SmartPLS, tác giả tổng hợp.*\n\n"
+        "Giá trị HTMT lớn nhất trong ma trận là 0.661.\n"
+    )
+    out = scrub_document_prose(prose, "vi")
+
+    assert "DoThesis" not in out
+    # One source line, and it is the canonical one — not the survivor of a
+    # string edit that would have left "kết xuất từ kết quả phân tích đã lưu".
+    assert out.count("Nguồn:") == 1
+    assert "*Nguồn: Kết quả phân tích từ SmartPLS/SPSS, tác giả tổng hợp.*" in out
+    assert "kết xuất từ" not in out
+    # The table and its interpretation are untouched.
+    assert "0.661" in out and "Ma trận HTMT" in out
+
+
+def test_two_clean_source_lines_still_collapse_to_one():
+    prose = ("| a |\n|---|\n| 1 |\n\n"
+             "*Nguồn: Kết quả phân tích từ SmartPLS/SPSS, tác giả tổng hợp.*\n\n"
+             "*Nguồn: Kết quả phân tích từ SmartPLS, tác giả tổng hợp.*\n\n"
+             "Diễn giải.\n")
+    out = scrub_document_prose(prose, "vi")
+    assert out.count("Nguồn:") == 1
+    assert "Diễn giải." in out
+
+
+def test_two_tables_each_keep_their_own_source_line():
+    """The collapse must not eat the second table's source — a run is broken by
+    prose, not merely by distance."""
+    prose = ("| a |\n|---|\n| 1 |\n\n*Nguồn: Kết quả phân tích.*\n\n"
+             "Diễn giải bảng thứ nhất.\n\n"
+             "| b |\n|---|\n| 2 |\n\n*Nguồn: Kết quả phân tích.*\n\n"
+             "Diễn giải bảng thứ hai.\n")
+    assert scrub_document_prose(prose, "vi").count("Nguồn:") == 2
+
+
+def test_a_brand_mention_outside_a_source_line_is_removed_cleanly():
+    prose = "Phân tích được thực hiện trên nền tảng (DoThesis) với dữ liệu khảo sát."
+    out = scrub_document_prose(prose, "vi")
+    assert "DoThesis" not in out
+    assert "()" not in out
+    assert "nền tảng với dữ liệu khảo sát." in out
+
+
+def test_the_english_phrase_do_thesis_is_not_mangled():
+    """`(?i)do thesis` would eat ordinary prose; the spaced form is matched
+    case-sensitively so only the brand goes."""
+    prose = "Students who do thesis work in their final year report higher stress."
+    assert scrub_document_prose(prose, "en") == prose
+
+
+def test_scrub_sections_walks_prose_and_content_and_fails_open():
+    secs = [{"chapter": "results", "prose": "x (DoThesis) y"},
+            {"chapter": "intro", "content": "z DoThesis"},
+            {"chapter": "odd", "content": None},
+            "not-a-dict"]
+    out = scrub_sections(secs, "vi")
+    assert "DoThesis" not in out[0]["prose"]
+    assert "DoThesis" not in out[1]["content"]
+    assert out[2]["content"] is None
+    assert out[3] == "not-a-dict"
+
+
+def test_the_brand_sweep_does_not_touch_an_image_path():
+    """The product name is ALSO the repo directory name.
+
+    A blind `sub` turned
+      ![](/Users/x/project/dothesis/var/jobs/…/hinh-09.png)
+    into `/Users/x/project//var/jobs/…`, which resolves to nothing — the
+    student's SmartPLS screenshot vanished from the exported chapter and left a
+    caption standing over empty space.
+    """
+    path = "/Users/x/project/dothesis/var/jobs/p/uploads/_Result.docx.img/hinh-09.png"
+    prose = (f"**Bảng 4.10 — Mô hình cấu trúc**\n\n![]({path})\n\n"
+             "*Nguồn: kết xuất từ kết quả phân tích đã lưu (DoThesis).*\n")
+    out = scrub_document_prose(prose, "vi")
+    assert path in out, "the image path must survive byte-identical"
+    assert "DoThesis" not in out.replace(path, "")
+
+
+def test_a_stale_chapter_still_gets_its_duplicates_dropped_at_export():
+    """weave() runs only while a chapter still has blocks to splice. Once the
+    block is IN the prose, ensure_rendered finds nothing missing and returns the
+    section untouched — so a chapter woven by an older build keeps the writer's
+    caption and source line forever unless the export scrub repeats the pass."""
+    prose = (
+        "Bảng 4.6 trình bày hệ số đường dẫn chuẩn hóa.\n\n"
+        "**Bảng 4.6: Kết quả kiểm định các đường dẫn cấu trúc**\n\n"
+        "<!--dt-rendered:begin kind=structural_paths sha=c1c1ac5a1301-->\n"
+        "**Bảng 4.10 — Mô hình cấu trúc: kiểm định giả thuyết**\n\n"
+        "![](/tmp/hinh-09.png)\n\n"
+        "*Nguồn: kết xuất từ kết quả phân tích đã lưu (DoThesis).*\n"
+        "<!--dt-rendered:end kind=structural_paths-->\n\n"
+        "*Nguồn: Kết quả phân tích từ SmartPLS, tác giả tổng hợp.*\n\n"
+        "H1 giả định rằng EXP có ảnh hưởng tích cực đến INT.\n"
+    )
+    out = scrub_document_prose(prose, "vi")
+
+    assert "Bảng 4.6: Kết quả kiểm định" not in out   # writer's caption goes
+    assert "Bảng 4.10 — Mô hình cấu trúc" in out      # the block's own stays
+    assert out.count("Nguồn:") == 1
+    assert "DoThesis" not in out
+    assert "![](/tmp/hinh-09.png)" in out
+    assert "H1 giả định" in out
+
+
+def test_the_construct_name_does_not_repeat_down_every_item_row():
+    """"bảng này trông không đẹp lắm, các biến quan sát nên được merged lại 1 ô".
+
+    α/CR/AVE already blanked on continuation rows; the construct name did not,
+    so a five-item construct printed ATT, ATT, ATT, ATT, ATT down the first
+    column — the one the eye lands on — reading as five separate constructs.
+    """
+    md = {b["kind"]: b for b in render_results_tables(PLS_BLOCK, "vi")}["measurement_model"]["markdown"]
+    body = [ln for ln in md.splitlines() if ln.startswith("|")]
+    data = [ln for ln in body[2:]]            # past header + separator
+
+    first_col = [ln.split("|")[1].strip() for ln in data]
+    named = [c for c in first_col if c]
+    assert named, "the first row of each construct still carries its name"
+    assert len(named) == len(set(named)), f"a construct name repeats: {first_col}"
+
+    # The items themselves are all still there — this blanks a label, it does
+    # not drop a row.
+    items = [ln.split("|")[2].strip() for ln in data]
+    assert len([i for i in items if i]) == len(data)

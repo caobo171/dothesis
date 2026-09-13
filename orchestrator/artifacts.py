@@ -81,6 +81,79 @@ def dod_topic(slice_: dict) -> DoD:
     return DoD(done=not gaps, gaps=gaps)
 
 
+# M3 stores the same five design facts in TWO shapes. `M3Output` declares them
+# flat (paradigm, design, tool, sampling_strategy, target_sample_size) and the
+# schema path writes them that way; the conversational path commits a nested
+# `methodology` dict instead, and the sample size can also arrive under
+# `sample_plan` (method_advisor/preflight both read `sample_plan.target_n`).
+#
+# Reading only the flat shape made M3 uncompletable on the path the agent
+# actually uses: a project with methodology.paradigm="positivist",
+# methodology.design="cross-sectional survey", methodology.software="SmartPLS"
+# and a full sampling strategy reported "missing paradigm, missing design,
+# missing tool, missing sampling_strategy" — every fact present, none of them
+# where the gate looked.
+#
+# Same class of bug, and the same fix, as `_m5_chapter_prose` below: resolve the
+# fact, don't privilege one storage shape.
+# Paths are walked in order; the first one that holds a value wins.
+_DESIGN_FIELD_FALLBACKS: dict[str, tuple[tuple[str, ...], ...]] = {
+    "paradigm": (("methodology", "paradigm"),),
+    "design": (("methodology", "design"),),
+    # `software` is what the conversational path calls the analysis tool, and
+    # it is the same fact M3Output.tool documents ("SmartPLS, NVivo, SPSS, ...").
+    "tool": (("methodology", "tool"), ("methodology", "software")),
+    "sampling_strategy": (("methodology", "sampling_strategy"),),
+    # A REALIZED sample closes this last, because a study that actually
+    # collected 311 valid responses has answered "how many?" more strongly than
+    # any planned target could. `_dod_satisfied` passes M4's results in for
+    # exactly this, the way it already passes `chapters` through for M5.
+    #
+    # This is not the same as forgiving the gap. A methodology chapter still
+    # owes the examiner a TARGET and its justification ("why n?" at the
+    # defense), and `preflight_check` keeps saying so — "Sample size not
+    # planned / not power-justified" — for as long as `sample_plan.target_n`
+    # and its power analysis are absent. The split is deliberate: the DoD says
+    # whether the work exists, preflight says whether it is defensible, and
+    # only the second one should be nagging a student whose study is finished.
+    "target_sample_size": (("methodology", "target_sample_size"),
+                           ("sample_plan", "target_n"), ("sample_plan", "n"),
+                           ("analysis_results", "sample", "valid"),
+                           ("analysis_results", "sample", "collected")),
+}
+
+
+def _design_field(slice_: dict, field: str):
+    """One M3 design fact, from whichever shape holds it."""
+    direct = (slice_ or {}).get(field)
+    if direct not in (None, "", [], {}):
+        return direct
+    for path in _DESIGN_FIELD_FALLBACKS.get(field, ()):
+        value: object = slice_ or {}
+        for step in path:
+            if not isinstance(value, dict):
+                value = None
+                break
+            value = value.get(step)
+        if value not in (None, "", [], {}):
+            return value
+    return None
+
+
+def _resolved_design(slice_: dict) -> dict:
+    """`slice_` with the five common design fields lifted to the top level.
+
+    Returned as a COPY so the callers below can keep reading the slice plainly
+    and nothing writes a normalised shape back into the store.
+    """
+    out = dict(slice_ or {})
+    for field in _DESIGN_FIELD_FALLBACKS:
+        resolved = _design_field(slice_, field)
+        if resolved is not None:
+            out[field] = resolved
+    return out
+
+
 def dod_design(slice_: dict) -> DoD:
     """M3 design: common fields + paradigm-specific artifacts.
 
@@ -91,8 +164,11 @@ def dod_design(slice_: dict) -> DoD:
     folded the former scale_items field into the flow_chart shape); qualitative
     needs themes + interview_guide + purposive_criteria; mixed needs both plus
     mixed_design_type.
+
+    The five common fields are resolved across both storage shapes first — see
+    `_DESIGN_FIELD_FALLBACKS`.
     """
-    slice_ = slice_ or {}
+    slice_ = _resolved_design(slice_)
     gaps = _missing_strings(slice_, ("paradigm", "design", "tool", "sampling_strategy"))
     size = slice_.get("target_sample_size")
     if not (isinstance(size, int) and not isinstance(size, bool) and size > 0):
@@ -130,7 +206,7 @@ def dod_design_structural(slice_: dict) -> DoD:
     Detail fields the skeleton skips: conceptual_model (flow_chart: paths +
     per-construct Likert items), themes, interview_guide.
     """
-    slice_ = slice_ or {}
+    slice_ = _resolved_design(slice_)
     gaps = _missing_strings(slice_, ("paradigm", "design", "tool", "sampling_strategy"))
     size = slice_.get("target_sample_size")
     if not (isinstance(size, int) and not isinstance(size, bool) and size > 0):
@@ -163,6 +239,16 @@ def dod_literature(slice_: dict) -> DoD:
 _IMPORTED_WRITEUP_MIN = 1500
 
 
+# The tables that mean "the analysis produced something", as opposed to the
+# bookkeeping a slice collects along the way (`source_figures`, the fielded
+# collection id). Kept as a list rather than "any non-bookkeeping key" so a
+# future key added for housekeeping cannot silently start earning a `done`.
+_ANALYSIS_EVIDENCE = (
+    "hypothesis_tests", "structural_model", "measurement_model",
+    "discriminant_validity", "model_fit", "regression", "descriptives",
+)
+
+
 def dod_analysis(slice_: dict) -> DoD:
     """M4 analysis: a detected data type, an outline, ≥1 result.
 
@@ -181,23 +267,32 @@ def dod_analysis(slice_: dict) -> DoD:
     that path must keep the strict DoD or a half-finished run would report done)
     of real length (a stub is not a chapter).
 
-    A PARSED import also passes, under a narrower test. The import used to store
-    the document as that raw string; it now extracts the structured
-    analysis_results block, which is strictly BETTER evidence of a finished
-    analysis — but it is a dict, so the string escape above stopped firing and
-    the module went back to sitting in_progress forever, the exact failure this
-    function was written to end. The dict is accepted only when it carries
-    completed hypothesis tests AND the engine's own keys are absent: a
-    mid-flight engine run always has `analysis_outline`, so it still faces the
-    strict gate below and a half-finished run cannot report done.
+    A STRUCTURED `analysis_results` dict passes too, on the evidence alone.
+
+    That used to carry two extra conditions — no `analysis_outline` and no
+    `data_type_detected` — as a proxy for "this came from an import rather than
+    from the engine". The proxy was wrong about real projects. A student who
+    runs SmartPLS themselves and has the agent commit the output ends up with
+    an outline AND seven populated result tables AND nine completed hypothesis
+    tests, and the proxy sent that slice to the strict gate below, where it
+    failed on `missing data_type_detected` and `results is empty` — the numbers
+    being in `analysis_results`, which is where that path puts them. So the
+    module sat in_progress forever on a demonstrably finished analysis: exactly
+    the failure the escape above was written to end, reintroduced by the guard.
+
+    The product rule is that finished results ARE the definition of done; no
+    separate sign-off is required. So the test is the evidence: any substantive
+    result table present means the analysis produced something. A half-finished
+    engine run still cannot slip through, but for a better reason than a proxy —
+    the engine writes its in-flight output to `results`, never to
+    `analysis_results` (nothing outside this module writes that key; commit_slice
+    does, once, from what the student already has).
     """
     slice_ = slice_ or {}
     imported = slice_.get("analysis_results")
     if isinstance(imported, str) and len(imported.strip()) >= _IMPORTED_WRITEUP_MIN:
         return DoD(done=True, gaps=[])
-    if (isinstance(imported, dict) and imported.get("hypothesis_tests")
-            and not slice_.get("analysis_outline")
-            and not slice_.get("data_type_detected")):
+    if isinstance(imported, dict) and any(imported.get(k) for k in _ANALYSIS_EVIDENCE):
         return DoD(done=True, gaps=[])
     gaps = _missing_strings(slice_, ("data_type_detected",))
     if not slice_.get("analysis_outline"):

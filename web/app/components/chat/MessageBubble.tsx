@@ -629,10 +629,29 @@ const _STATE_LABELS: Record<string, { vi: string; en: string }> = {
   locked: { vi: "chưa bắt đầu", en: "not started" },
 };
 
+// The right-hand panel is labelled "Không gian làm việc" on screen. The skills
+// used to send students to the "Context store panel", which is our internal
+// name for it and appears nowhere in the UI — a student reading "panel Context
+// store" has no idea what to look at. The skills now say Workspace; this is the
+// net for transcripts already written and for the model paraphrasing its way
+// back to the old name.
+const _PANEL_VI = "Không gian làm việc";
+
 export function humanizeTechnicalCopy(text: string): string {
   if (!/[À-ỹĐđ]/.test(text)) return text;
   return text
-    .replace(/^.*\[PROJECT STATE\].*$/gim, "Trạng thái dự án đã được cập nhật.")
+    .replace(/\bpanel\s+context[\s_-]*store\b/gi, _PANEL_VI)
+    .replace(/\bcontext[\s_-]*store\s+panel\b/gi, _PANEL_VI)
+    .replace(/\bpanel\s+["“]?Context store["”]?/gi, _PANEL_VI)
+    // `[PROJECT STATE] focus=M3 | M3:done` is a protocol block the agent
+    // appends to a reply — it is the TAIL of a line, not the line. Replacing
+    // `^.*\[PROJECT STATE\].*$` threw away whatever the agent had actually
+    // said first, so "Tôi sẽ chạy `quick_sources`…" became the bare sentence
+    // below and every other rule here had nothing left to humanize. Keep the
+    // prose, drop the block; only a line that is NOTHING but the block falls
+    // back to the friendly sentence.
+    .replace(/^(.*?)[ \t]*\[PROJECT STATE\].*$/gim, (_whole, before: string) =>
+      before.trim() ? before.trimEnd() : "Trạng thái dự án đã được cập nhật.")
     .replace(/`?focus=M([1-5])\s*\|\s*M\1:in_progress`?/gi, "đang thực hiện M$1")
     .replace(/`?M3\/build_model`?/gi, "bước xây dựng mô hình nghiên cứu")
     .replace(/`?quick_sources`?/gi, "tìm nguồn học thuật")

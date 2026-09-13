@@ -1,4 +1,5 @@
 """Tests for the SP6 M5 export download endpoint."""
+import io
 import os
 import uuid
 from unittest.mock import MagicMock
@@ -73,6 +74,52 @@ def test_download_redirects_to_signed_url(client, monkeypatch):
     call_kwargs = fake_s3.generate_presigned_url.call_args.kwargs
     assert call_kwargs["Params"]["Key"] == f"projects/{pid}/exports/thesis-abc.docx"
     assert call_kwargs["ExpiresIn"] == 300
+
+
+def _stream_token(client, pid, fname: str) -> str:
+    token = client.headers["Authorization"].split(" ", 1)[1]
+    return client.post("/api/v1/auth/stream-token",
+                       json={"access_token": token,
+                             "scope": f"project-export:{pid}/{fname}"}).json()["stream_token"]
+
+
+def test_raw_streams_the_export_inline(client, monkeypatch):
+    """The preview path: same-origin bytes the browser will render.
+
+    /exports/{filename} 302s to presigned S3 with `attachment`, which is right
+    for saving and wrong for showing — `attachment` downloads, and the
+    cross-origin hop puts the bytes behind S3's CORS policy, so the fetch() that
+    converts a .docx for display fails on a setting we don't control. Same
+    reasoning, and the same shape, as /uploads/{id}/raw.
+    """
+    pid, _ = _setup_user_and_project(client)
+    _add_export(pid, "thesis-abc.docx")
+
+    fake_s3 = MagicMock()
+    fake_s3.get_object.return_value = {"Body": io.BytesIO(b"PK\x03\x04docx-bytes")}
+    monkeypatch.setattr("app.routers.exports.s3_from_env", lambda: fake_s3)
+
+    fname = "thesis-abc.docx"
+    st = _stream_token(client, pid, fname)
+    resp = client.get(f"/api/v1/projects/{pid}/exports/{fname}/raw?st={st}")
+
+    assert resp.status_code == 200
+    assert resp.content == b"PK\x03\x04docx-bytes"
+    assert resp.headers["content-disposition"].startswith("inline;")
+    assert "wordprocessingml" in resp.headers["content-type"]
+    assert fake_s3.get_object.call_args.kwargs["Key"] == f"projects/{pid}/exports/{fname}"
+
+
+def test_raw_404_for_an_unrecorded_filename(client, monkeypatch):
+    """Same key-guessing guard as the download route beside it."""
+    pid, _ = _setup_user_and_project(client)
+    _add_export(pid, "thesis-abc.docx")
+    monkeypatch.setattr("app.routers.exports.s3_from_env", lambda: MagicMock())
+
+    fname = "someone-elses.docx"
+    st = _stream_token(client, pid, fname)
+    resp = client.get(f"/api/v1/projects/{pid}/exports/{fname}/raw?st={st}")
+    assert resp.status_code == 404
 
 
 def test_download_404_when_filename_unknown(client, monkeypatch):

@@ -9,22 +9,23 @@ import { ChatSidebarContext } from "./ChatShellLayout";
 import { MODULES } from "./HomeDashboard";
 
 
-// Pill palette for the focus-bar status tag.
-const STATUS_TAG: Record<string, { label: string; cls: string }> = {
-  in_progress:  { label: "In progress",   cls: "bg-primary-50 text-primary-700" },
-  done:         { label: "Done",          cls: "bg-emerald-50 text-emerald-700" },
-  locked:       { label: "Locked",        cls: "bg-ink-100 text-ink-500" },
-};
+// Pill palette for the focus-bar status tag. Catalogue KEYS, not labels —
+// these render beside a Vietnamese module title.
+const STATUS_TAG = {
+  in_progress:  { key: "focus.status.in_progress", cls: "bg-primary-50 text-primary-700" },
+  done:         { key: "focus.status.done",        cls: "bg-emerald-50 text-emerald-700" },
+  locked:       { key: "focus.status.locked",      cls: "bg-ink-100 text-ink-500" },
+} as const;
 
 // Sub-phase label per module (the "· Gap analysis" suffix in the design).
 // Pulled from per-module skill conventions — only the modules with a
 // well-defined sub-phase have one; others fall through silently.
-const PHASE_LABEL: Record<string, string> = {
-  M2: "Gap analysis",
-  M3: "Measurement model",
-  M4: "Analysis pipeline",
-  M5: "Chapter sequence",
-};
+const PHASE_KEY = {
+  M2: "focus.phase.M2",
+  M3: "focus.phase.M3",
+  M4: "focus.phase.M4",
+  M5: "focus.phase.M5",
+} as const;
 
 
 /**
@@ -60,16 +61,19 @@ export function ChatHeader({
   const t = useT();
   const focusKey = MODULES.find(m => m.id === focusModule)?.labelKey;
   const focusLabel = focusKey ? t(focusKey) : undefined;
-  const phase = focusModule ? PHASE_LABEL[focusModule] : undefined;
-  const tag = focusStatus ? STATUS_TAG[focusStatus] ?? STATUS_TAG.in_progress : null;
+  const phaseKey = focusModule ? PHASE_KEY[focusModule as keyof typeof PHASE_KEY] : undefined;
+  const phase = phaseKey ? t(phaseKey) : undefined;
+  const tag = focusStatus
+    ? STATUS_TAG[focusStatus as keyof typeof STATUS_TAG] ?? STATUS_TAG.in_progress
+    : null;
   const me = useMe();
   const sidebar = useContext(ChatSidebarContext);
   const user = me.data;
   const userInitials = user?.email
     ? user.email.slice(0, 2).toUpperCase()
     : "U";
-  const userName = user?.username || user?.email?.split("@")[0] || "You";
-  const userTier = user?.is_super_admin ? "Admin" : "Pro Student";
+  const userName = user?.username || user?.email?.split("@")[0] || t("focus.you");
+  const userTier = t(user?.is_super_admin ? "focus.tier.admin" : "focus.tier.student");
 
   return (
     <header
@@ -80,7 +84,7 @@ export function ChatHeader({
       <button
         type="button"
         onClick={() => sidebar.open()}
-        aria-label="Open menu"
+        aria-label={t("focus.openMenu")}
         className="lg:hidden w-8 h-8 rounded-full bg-ink-100 text-ink-700 hover:bg-ink-200 inline-flex items-center justify-center shrink-0 transition-colors"
       >
         <Menu className="w-4 h-4" />
@@ -89,8 +93,8 @@ export function ChatHeader({
       {/* Back to home */}
       <Link
         href="/"
-        aria-label="Back to home"
-        title="Back to home"
+        aria-label={t("focus.backHome")}
+        title={t("focus.backHome")}
         className="w-8 h-8 rounded-full bg-ink-100 text-ink-700 hover:bg-ink-200 inline-flex items-center justify-center shrink-0 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -115,7 +119,7 @@ export function ChatHeader({
           <span
             className={`shrink-0 px-2.5 py-[3px] rounded-full text-[10.5px] font-bold uppercase tracking-[0.04em] whitespace-nowrap ${tag.cls}`}
           >
-            {tag.label}
+            {t(tag.key)}
           </span>
         )}
         {loading ? (
@@ -124,7 +128,7 @@ export function ChatHeader({
           // punctuation around nothing, which reads as a broken header rather
           // than one that is still loading.
           <span className="h-3 w-40 rounded-full bg-ink-200/80 animate-pulse shrink-0"
-                aria-label="Loading thesis" />
+                aria-label={t("focus.loading")} />
         ) : (
           <>
             <span className="text-ink-300 shrink-0">·</span>
@@ -142,8 +146,8 @@ export function ChatHeader({
         <button
           type="button"
           onClick={() => sidebar.openContext()}
-          aria-label="Open context panel"
-          title="Context panel"
+          aria-label={t("focus.openContext")}
+          title={t("focus.contextPanel")}
           className="lg:hidden w-8 h-8 rounded-full text-ink-500 hover:bg-ink-100 hover:text-ink-900 inline-flex items-center justify-center transition-colors"
         >
           <PanelRight className="w-4 h-4" />
@@ -154,7 +158,7 @@ export function ChatHeader({
             href={`/chat/projects/${projectId}/editor`}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 mr-1 text-[12.5px] font-semibold border-[1.5px] border-primary-600 text-primary-600 rounded-full hover:bg-primary-50 transition-colors"
           >
-            <PenSquare className="w-3 h-3" /> Open editor
+            <PenSquare className="w-3 h-3" /> {t("focus.openEditor")}
           </Link>
         )}
 

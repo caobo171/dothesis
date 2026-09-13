@@ -29,6 +29,7 @@ from agent.state import (
     NON_CONTENT_KEYS,
     SLICE_OWNERSHIP,
     ProjectStateStore,
+    _dod_satisfied,
     strip_reconstruction_meta,
 )
 
@@ -44,6 +45,54 @@ _MODULE_COLUMN = {
     "M4": "m4_analysis",
     "M5": "m5_writing",
 }
+
+
+def flatten_slices(nested: Any) -> dict[str, Any]:
+    """Nested {m1_topic: {...}, …} -> the flat owned-key view the DoDs read."""
+    flat: dict[str, Any] = {}
+    if not nested:
+        return flat
+    get = (nested.get if isinstance(nested, dict)
+           else lambda col, _d=None: getattr(nested, col, None))
+    for module, column in _MODULE_COLUMN.items():
+        slice_dict = get(column) or {}
+        if not isinstance(slice_dict, dict):
+            continue
+        for key in SLICE_OWNERSHIP[module]:
+            if key in slice_dict:
+                flat[key] = slice_dict[key]
+    return flat
+
+
+def heal_module_status(stored: dict | None, nested_cs: Any) -> dict[str, str]:
+    """The stored status, upgraded to match the evidence now in the store.
+
+    `projects.module_status` is a SNAPSHOT: commit_slice writes it and nothing
+    recomputes it on read. So a module whose definition-of-done is met today
+    still reads with whatever status the last commit gave it, and every DoD fix
+    lands only for projects that happen to commit again. Two of those shipped:
+    M3 and M4 reached 5/5 sub-steps with their DoDs satisfied while the module
+    dot stayed blue and the dashboard ring stayed at 80%.
+
+    UPGRADE ONLY. A module never loses `done` here: sign-off is the student's,
+    staleness has its own channel, and the point of confirmed_at outranking the
+    DoD is that an approved-but-imperfect slice must not flap back.
+
+    One function so the agent's store and the HTTP serializer cannot disagree —
+    the panel reading one and the dashboard reading the other is exactly how
+    5/5 came to sit next to 80%.
+    """
+    status = {m: "locked" for m in MODULES}
+    for key, value in (stored or {}).items():
+        if key in status:
+            # Legacy `needs_review` always meant "was done, then invalidated
+            # upstream"; `done` + a stale note is the faithful reading.
+            status[key] = "done" if value == "needs_review" else value
+    flat = flatten_slices(nested_cs)
+    for module in MODULES:
+        if status[module] != "done" and _dod_satisfied(module, flat):
+            status[module] = "done"
+    return status
 
 
 class DbProjectStateStore(ProjectStateStore):
@@ -230,19 +279,33 @@ class DbProjectStateStore(ProjectStateStore):
                 .where(DbContextStore.__table__.c.project_id == self.project_id)
             ).first()
 
-        status = {m: "locked" for m in MODULES}
-        if proj and proj.module_status:
-            # Coerce any legacy `needs_review` on the way in. The migration
-            # rewrites stored rows, but a row can still arrive from a replica
-            # mid-deploy or from a restored backup — and headless snapshots the
-            # status it loads straight back into status_overrides, so an
-            # uncoerced value would write itself back in and quietly resurrect
-            # the state this change removed. It always meant "was done, then
-            # invalidated upstream", so `done` + stale is the faithful reading.
-            status.update({
-                k: ("done" if v == "needs_review" else v)
-                for k, v in proj.module_status.items() if k in status
-            })
+        # Legacy `needs_review` coercion and the DoD upgrade both live in
+        # heal_module_status — the coercion matters because headless snapshots
+        # the status it loads straight back into status_overrides, so an
+        # uncoerced value would write itself back in and resurrect a state that
+        # was removed.
+        status = heal_module_status(proj.module_status if proj else None, cs)
+        # Persist the upgrade, once, when it actually changes something.
+        #
+        # The project LIST deliberately does not load slice bodies (it reads
+        # `confirmed_at` out in SQL — the full slices cost one user a 3.8 MB
+        # response), so it cannot evaluate a DoD and can only serve the stored
+        # column. Healing on read alone would leave the dashboard ring saying
+        # 80% next to a workspace saying 5/5. Writing it back means every
+        # reader is correct without any of them loading a chapter.
+        #
+        # Self-limiting: the condition is false on every subsequent load, so
+        # this is a migration that runs itself the first time a project is
+        # opened rather than a write on every read.
+        if proj and status != (proj.module_status or {}):
+            try:
+                with self.engine.begin() as conn:
+                    conn.execute(
+                        Project.__table__.update()
+                        .where(Project.__table__.c.id == self.project_id)
+                        .values(module_status=status))
+            except Exception:  # noqa: BLE001 — a read must never fail on this
+                logger.debug("module_status heal write skipped", exc_info=True)
 
         flat: dict[str, Any] = {}
         if cs:

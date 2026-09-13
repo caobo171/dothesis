@@ -9,6 +9,10 @@ import { FileTypeIcon } from "./FileTypeIcon";
 import { UPLOAD_ACCEPT } from "./uploadAccept";
 import { SkillAvatar, SkillPicker } from "./SkillPicker";
 import { QuickActionsMenu } from "./QuickActionsMenu";
+import {
+  ContextUsageIndicator,
+  type ContextUsageSnapshot,
+} from "./ContextUsageIndicator";
 import { applySkillDirective, type Skill } from "@/app/lib/skills";
 import { Button } from "@/app/components/ui/button";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
@@ -78,6 +82,7 @@ export function ChatInput({
   autoThesisButton,
   exportArtifacts,
   onQuickPrompt,
+  contextUsage,
 }: {
   /** Submit handler. `attachments` carries the chip metadata (server-side
    *  upload_id + filename + size) so the caller can ship the ids to the
@@ -106,6 +111,8 @@ export function ChatInput({
   autoThesisButton?: ReactNode;
   exportArtifacts?: { kind: string; download_url: string }[];
   onQuickPrompt?: (text: string) => void;
+  /** Latest provider-reported thread context snapshot. */
+  contextUsage?: ContextUsageSnapshot | null;
 }) {
   const t = useT();
   const [text, setText] = useState("");
@@ -435,6 +442,7 @@ export function ChatInput({
         {/* Keyboard-shortcut hint. ⌘K "jump module" was removed — it had no
             handler wired (dead UI) and is meaningless on touch devices. */}
         <div className="max-w-[880px] mx-auto flex flex-wrap justify-center items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-ink-400">
+          <ContextUsageIndicator contextUsage={contextUsage} />
           <span className="inline-flex items-center gap-1.5">
             <kbd className="px-1 py-px rounded border border-ink-200 bg-white text-[10px] font-mono">Shift+↵</kbd>
             <span>{t("chat.composer.hintNewline")}</span>

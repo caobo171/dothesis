@@ -4,6 +4,7 @@ import { Check, Download, Loader2 } from "lucide-react";
 import { mintStreamToken } from "@/app/lib/api";
 import { useArtifactDownload } from "../hooks/useArtifactDownload";
 import { FileTypeIcon } from "../FileTypeIcon";
+import { useT } from "@/app/lib/i18n/LocaleProvider";
 import type { ExportArtifactsHint, ExportArtifact } from "./types";
 
 // Download card shown inside an assistant message after export_docx succeeds
@@ -12,14 +13,15 @@ import type { ExportArtifactsHint, ExportArtifact } from "./types";
 // so we mint a short-lived, scoped stream token on click and navigate with
 // ?st= — the long-lived JWT must never appear in a URL (it'd leak into logs).
 export function ExportArtifactsCard({ hint }: { hint: ExportArtifactsHint }) {
+  const t = useT();
   const artifacts = hint.artifacts || [];
   if (artifacts.length === 0) return null;
   return (
-    // data-testid: the card's visible heading is localized ("LUẬN VĂN ĐÃ
-    // XUẤT") — E2E asserts on a stable hook instead of copy.
+    // data-testid: the heading is localized, so E2E asserts on a stable hook
+    // rather than on copy that changes with the reader's language.
     <div className="mt-3 rounded-xl border border-ink-200 bg-ink-50/60 p-3" data-testid="export-artifacts-card">
       <div className="text-[12px] font-semibold text-ink-500 mb-2 tracking-[0.02em]">
-        LUẬN VĂN ĐÃ XUẤT
+        {t("chat.exportCard.title")}
       </div>
       <div className="flex flex-wrap gap-2">
         {artifacts.map(a => (
@@ -31,6 +33,7 @@ export function ExportArtifactsCard({ hint }: { hint: ExportArtifactsHint }) {
 }
 
 function ArtifactButton({ artifact }: { artifact: ExportArtifact }) {
+  const t = useT();
   const label = (artifact.kind || "file").toUpperCase();
   const size =
     typeof artifact.size_bytes === "number"
@@ -50,7 +53,7 @@ function ArtifactButton({ artifact }: { artifact: ExportArtifact }) {
     e.preventDefault();
     void start(async () => {
       const m = artifact.download_url.match(/\/projects\/([^/]+)\/exports\/([^/?]+)/);
-      if (!m) throw new Error("This artifact has no downloadable URL.");
+      if (!m) throw new Error(t("chat.exportCard.noUrl"));
       const st = await mintStreamToken(`project-export:${m[1]}/${m[2]}`);
       const sep = url.includes("?") ? "&" : "?";
       window.location.href = `${url}${sep}st=${encodeURIComponent(st)}`;
@@ -88,9 +91,9 @@ function ArtifactButton({ artifact }: { artifact: ExportArtifact }) {
         {error ? (
           <span className="text-[#8E6B2A]">{error}</span>
         ) : busy ? (
-          <span className="text-ink-500">Preparing…</span>
+          <span className="text-ink-500">{t("chat.exportCard.preparing")}</span>
         ) : started ? (
-          <span className="text-[#4A6B4F]">Download started</span>
+          <span className="text-[#4A6B4F]">{t("chat.exportCard.started")}</span>
         ) : null}
       </span>
     </span>

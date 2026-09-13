@@ -2,6 +2,7 @@
 
 import { CardGridWidget } from "./CardGridWidget";
 import { ExportArtifactsCard } from "./ExportArtifactsCard";
+import { ContextSummaryCard } from "./ContextSummaryCard";
 import { FlowChartWidget } from "./FlowChartWidget";
 import { ListEditorWidget } from "./ListEditorWidget";
 import { PapersPanel } from "./PapersPanel";
@@ -60,6 +61,10 @@ export function WidgetRenderer({
           }
         />
       );
+    case "context_summary":
+      // Not an answer and not a widget the user acts on — a labelled record
+      // that the thread was compacted, collapsed by default.
+      return <ContextSummaryCard hint={hint} />;
     case "export_artifacts":
       // DOCX/PDF download card rendered inside the assistant message after a
       // successful export (Claude-artifact style). Read-only — no onSelect.

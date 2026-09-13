@@ -155,6 +155,14 @@ export type ReconstructedModulesHint = {
   saved?: { module: string; status: string }[];
 };
 
+/** The auto-compaction summary, kept OUT of the reply and shown as its own
+ *  collapsed card. `text` is the middleware's note verbatim ("## SESSION
+ *  INTENT / ## SUMMARY …"), not prose written for the student. */
+export type ContextSummaryHint = {
+  widget_type: "context_summary";
+  text: string;
+};
+
 // A single turn can emit several widgets (e.g. an export download card AND a
 // papers panel). When there's more than one, the backend wraps them in this so
 // none clobbers another; WidgetRenderer expands it.
@@ -172,6 +180,7 @@ export type WidgetHint =
   | AttachmentsHint
   | ExportArtifactsHint
   | ReconstructedModulesHint
+  | ContextSummaryHint
   | MultiHint;
 
 export type WidgetSelectHandler = (

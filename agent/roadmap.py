@@ -96,6 +96,34 @@ _ARTIFACT_HAS_CONTENT = {
 }
 
 
+def _measured_items(cs: dict) -> bool:
+    """True when M4 holds a measurement model with real indicators."""
+    mm = ((cs.get("analysis_results") or {}) if isinstance(cs.get("analysis_results"), dict)
+          else {}).get("measurement_model")
+    return any(isinstance(c, dict) and c.get("items") for c in (mm or []))
+
+
+# When the artifact itself is absent but the work it stands for is PROVEN
+# elsewhere in the store. Consulted only after the primary check fails.
+#
+# `design_instrument` is the case. A student who arrives with SmartPLS output
+# has an instrument by definition — 42 indicators, each with a loading computed
+# from 311 real responses. What is missing from `instrument.items` is the item
+# WORDING, not the instrument, and the step is labelled "build the scale" — work
+# they demonstrably did. Leaving it at 4/5 asked them to design a questionnaire
+# they had already fielded.
+#
+# This deliberately does NOT touch the fabrication guard the comment above
+# describes: `_generate_scale_items` keys off `instrument.items` directly, so
+# nothing here lets invented wording into a chapter. And `preflight_check` still
+# reports "M3 — no questionnaire instrument yet" off the same empty slice, which
+# is now the one place saying the wording is missing — the roadmap answers "was
+# the scale built", preflight answers "do we have it written down".
+_ARTIFACT_EVIDENCE_ELSEWHERE = {
+    "instrument": _measured_items,
+}
+
+
 def satisfied_substeps(module: str, state: dict) -> set[str]:
     """Backed sub-steps whose artifact is actually present.
 
@@ -111,12 +139,13 @@ def satisfied_substeps(module: str, state: dict) -> set[str]:
     out = set()
     for sid, key in SUBSTEP_ARTIFACT.get(module, {}).items():
         value = cs.get(key)
-        if not value:
-            continue
-        # Present is not the same as filled in — see _ARTIFACT_HAS_CONTENT.
         check = _ARTIFACT_HAS_CONTENT.get(key)
-        if check and not check(value):
-            continue
+        # Present is not the same as filled in — see _ARTIFACT_HAS_CONTENT.
+        filled = bool(value) and (check(value) if check else True)
+        if not filled:
+            elsewhere = _ARTIFACT_EVIDENCE_ELSEWHERE.get(key)
+            if not (elsewhere and elsewhere(cs)):
+                continue
         out.add(sid)
     return out
 

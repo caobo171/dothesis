@@ -1,11 +1,22 @@
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
 import { QuickActionsMenu } from "./QuickActionsMenu";
+
+
+// The menu reads its labels from the catalogue, so it only renders under a
+// provider; pin "en" so the assertions below can match English copy.
+function renderEn(ui: ReactElement) {
+  return render(
+    <LocaleProvider initialLocale="en" hasCookie>{ui}</LocaleProvider>,
+  );
+}
 
 
 describe("QuickActionsMenu", () => {
   it("keeps the menu closed until the trigger is clicked", () => {
-    render(<QuickActionsMenu autoThesisButton={<button>Auto Thesis</button>} />);
+    renderEn(<QuickActionsMenu autoThesisButton={<button>Auto Thesis</button>} />);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /quick actions/i }));
     expect(screen.getByRole("menu")).toBeInTheDocument();
@@ -14,7 +25,7 @@ describe("QuickActionsMenu", () => {
   });
 
   it("opens upward when placement is 'up' so the composer doesn't clip it", () => {
-    render(
+    renderEn(
       <QuickActionsMenu autoThesisButton={<button>Auto Thesis</button>} placement="up" />,
     );
     fireEvent.click(screen.getByRole("button", { name: /quick actions/i }));
@@ -24,13 +35,13 @@ describe("QuickActionsMenu", () => {
   });
 
   it("hides the Export-to-Word action when no onQuickPrompt is wired", () => {
-    render(<QuickActionsMenu autoThesisButton={<button>Auto Thesis</button>} />);
+    renderEn(<QuickActionsMenu autoThesisButton={<button>Auto Thesis</button>} />);
     fireEvent.click(screen.getByRole("button", { name: /quick actions/i }));
     expect(screen.queryByText(/export modules/i)).not.toBeInTheDocument();
   });
 
   it("shows the Export-to-Word action when onQuickPrompt is provided", () => {
-    render(
+    renderEn(
       <QuickActionsMenu
         autoThesisButton={<button>Auto Thesis</button>}
         onQuickPrompt={() => {}}

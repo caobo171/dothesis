@@ -366,6 +366,10 @@ class Message(Base):
     cost_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Latest model-call input size and the deepagents auto-summarization
+    # threshold. Unlike total_tokens these are a context snapshot, not billing.
+    context_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    compact_at_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

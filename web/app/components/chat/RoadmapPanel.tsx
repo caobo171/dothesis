@@ -58,7 +58,7 @@ type NextKind = "blocker" | "substep" | "confirm_module" | "next_module" | "all_
 // `title` / `why` / `cta_options` are the API's English strings. They stay in
 // the type because a `blocker` is agent-authored prose with no translation to
 // find, and because an older API without `kind` must still render.
-type NextAction = {
+export type NextAction = {
   kind?: NextKind; module: string; substep: string;
   title: string; why: string; cta_options: string[];
 };
@@ -135,7 +135,7 @@ export function useRoadmap(projectId: string | undefined, refreshKey = 0, interv
  * agent for one situation, so there is no key to look up and the English is
  * passed through. Only its CTAs, which are fixed, get translated.
  */
-function useNextCopy() {
+export function useNextCopy() {
   const t = useT();
   const substepLabel = useSubstepLabel();
   return (na: NextAction) => {

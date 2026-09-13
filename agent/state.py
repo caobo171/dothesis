@@ -250,6 +250,15 @@ def _dod_satisfied(module: str, context_store: dict) -> bool:
         for extra in ("chapters",):
             if extra in context_store:
                 slice_[extra] = context_store[extra]
+    # M3's target_sample_size is a PLAN, and a study that has already run
+    # answered the same question with a realized n. The results are M4-owned, so
+    # dod_design cannot see them from its own slice — pass them in, read-only,
+    # the same way M5 gets `chapters` above. Without this a finished study sat
+    # in_progress on a planning field it had outgrown. Whether the chapter
+    # actually JUSTIFIES its sample size stays preflight_check's question, not
+    # this gate's.
+    if module == "M3" and "analysis_results" in context_store:
+        slice_["analysis_results"] = context_store["analysis_results"]
     try:
         return bool(dod(slice_).done)
     except Exception:

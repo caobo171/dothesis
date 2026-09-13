@@ -791,6 +791,9 @@ export const en = {
   "chat.composer.clearSkill": "Clear",
   "chat.composer.hintNewline": "for newline",
   "chat.composer.hintPasteScreenshot": "to paste a screenshot",
+  "chat.contextUsage.normal": "Context {used} · compact in {remaining} · {percent}%",
+  "chat.contextUsage.compacting": "Context {used} · compacting automatically…",
+  "chat.contextUsage.title": "Current thread context before automatic compaction",
 
   // --- context panel / module slices (M3 methodology & shared labels) ---
   "context.field.methodology": "Methodology",
@@ -842,6 +845,110 @@ export const en = {
   "context.summary.moreHypotheses": "+{count} more…",
   "context.uploads.more": "+{count} more…",
   "context.uploads.showLess": "Show less",
+
+  // File viewer (uploads from the Context rows and chat chips, exports from
+  // Outputs). Was hardcoded Vietnamese, so an English session opened a Word
+  // file into a modal labelled "Tài liệu / Văn bản".
+  "preview.open": "Preview {name}",
+  "preview.download": "Download {name}",
+  "preview.tab.document": "Document",
+  "preview.tab.text": "Text",
+  "preview.download.action": "Download",
+  "preview.close": "Close",
+  "preview.loading": "Opening file…",
+  "preview.error.render": "This file can't be displayed. Try the “Text” tab, or download it.",
+  "preview.error.noDocumentView": "This format has no document view — see the “Text” tab.",
+  "preview.error.noText": "No extracted text for this file — download it to open in Word.",
+  "preview.error.unreadable": "Couldn't read this file's contents.",
+  "preview.subtitle.pdf": "PDF preview",
+  "preview.subtitle.docx": "Word document preview",
+  "preview.subtitle.data": "Dataset — see the structure below",
+  "preview.subtitle.plain": "Text",
+
+  // Export scope — what an Outputs row is a copy OF. These were hardcoded
+  // Vietnamese inside formatExportScope, so an English session read its own
+  // thesis as "Toàn bộ luận văn". Chapters get one key each rather than a
+  // "{n}" template: only Vietnamese happens to put the number last.
+  "export.scope.document": "Document",
+  "export.scope.full": "Full thesis",
+  "export.scope.M1": "M1 · Topic",
+  "export.scope.M2": "M2 · Literature",
+  "export.scope.M3": "M3 · Methodology",
+  "export.scope.M4": "M4 · Analysis",
+  "export.scope.M5": "M5 · Conclusion",
+  "export.scope.chapter.intro": "Chapter 1",
+  "export.scope.chapter.lit_review": "Chapter 2",
+  "export.scope.chapter.methodology": "Chapter 3",
+  "export.scope.chapter.results": "Chapter 4",
+  "export.scope.chapter.conclusion": "Chapter 5",
+  "export.scope.chapters1to3": "Chapters 1–3",
+
+  // Focus bar (ChatHeader) — status pill, sub-phase suffix, editor link. All
+  // hardcoded English, so a Vietnamese session read "M5 · Chapter sequence
+  // DONE" over its own thesis.
+  "focus.status.in_progress": "In progress",
+  "focus.status.done": "Done",
+  "focus.status.locked": "Locked",
+  "focus.phase.M2": "Gap analysis",
+  "focus.phase.M3": "Measurement model",
+  "focus.phase.M4": "Analysis pipeline",
+  "focus.phase.M5": "Chapter sequence",
+  "focus.openEditor": "Open editor",
+  "focus.backHome": "Back to home",
+  "focus.openMenu": "Open menu",
+  "focus.openContext": "Open context panel",
+  "focus.contextPanel": "Context panel",
+  "focus.loading": "Loading thesis",
+  "focus.tier.admin": "Admin",
+  "focus.tier.student": "Pro Student",
+  "focus.you": "You",
+
+  // Empty thread — the greeting shown before the first message of a session.
+  "chat.empty.pickingUp": "Picking up “{title}”",
+  "chat.empty.continuing": "Continuing your thesis",
+  "chat.empty.upNext": "{module} is up next — {hint} Type below to dive in, or ask about any module.",
+  "chat.empty.coldTitle": "Start your thesis",
+  "chat.empty.coldBody":
+    "Type your research topic below and I'll guide you step by step — or hit Auto Thesis to write the whole thing end-to-end.",
+  "chat.empty.hint.M1": "tell me the broad area you want to study.",
+  "chat.empty.hint.M2": "let's map the literature and find the gaps your hypotheses will plug.",
+  "chat.empty.hint.M3": "time to pick the paradigm, design, and instrument.",
+  "chat.empty.hint.M4": "ready to crunch the data once you have it.",
+  "chat.empty.hint.M5": "let's turn the project into chapters and export.",
+
+  // Workspace panel chrome.
+  "context.workspace": "Workspace",
+  "context.rawJson": "Raw JSON",
+  "context.rawJson.toggle": "Toggle raw JSON",
+  "context.threadCredits": "Credits spent in this thread",
+  "context.live": "Live · auto-saved",
+  "context.viewHistory": "View history",
+  "context.outputs.empty":
+    "No outputs yet — ask to export a module or the full thesis, or use Quick actions → Export to Word.",
+  "context.viewFullTopic": "View full topic",
+  "context.papersClickToView": "papers · click to view",
+  "sidebar.thesisCopilot": "Thesis copilot",
+  "context.m5.chaptersWritten": "{count}/{total} chapters written",
+  "chat.exportCard.title": "EXPORTED THESIS",
+  "chat.exportCard.preparing": "Preparing…",
+  "chat.exportCard.started": "Download started",
+  "chat.exportCard.noUrl": "This file has no download link.",
+  "chat.contextSummary.title": "Conversation summarised to continue",
+  "chat.contextSummary.hint":
+    "The thread got long, so it was condensed into the note below — that note is what the assistant remembers from here on. Worth a glance if something later looks off.",
+  "composer.quickActions": "Quick actions",
+  "composer.quickActions.sectionRun": "Run",
+  "composer.quickActions.sectionExport": "Export to Word",
+  "composer.quickActions.sectionMore": "More",
+  "composer.quickActions.exportModules": "Export modules → .docx…",
+  "composer.quickActions.versionHistory": "Version history",
+  "composer.quickActions.notifications": "Notifications",
+  "composer.quickActions.downloadThesis": "Download thesis (.docx)",
+  "composer.quickActions.downloadUnavailable": "Not exported yet — finish M5 first",
+  "composer.quickActions.downloadNotYet": "not yet",
+  "composer.quickActions.downloadPreparing": "Preparing…",
+  "composer.quickActions.downloadError": "Error: {message}",
+  "context.section.outputs": "Outputs",
   "context.summary.instrumentItems_one": "{count} item",
   "context.summary.instrumentItems_other": "{count} items",
   "context.summary.instrumentConstructs_one": "{count} construct",

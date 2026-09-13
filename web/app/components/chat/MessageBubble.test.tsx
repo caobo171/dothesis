@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MessageBubble, humanizeTechnicalCopy } from "./MessageBubble";
+import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
 import { StreamingBubble } from "./StreamingBubble";
 
 
@@ -171,12 +172,18 @@ const ATTACH = {
 };
 
 function _userWithFile() {
+  // The chip opens AttachmentPreview, whose labels are catalogue-driven now.
+  // The app mounts LocaleProvider in the root layout; a bare render() here
+  // doesn't, and useLocale throws outside it. Pinned to "vi" so the tab name
+  // this test clicks stays the one the assertions were written against.
   return render(
-    <MessageBubble
-      role="user"
-      content="Viết lại bài này bằng Tiếng Anh cho mình"
-      toolCallsJson={{ attachments: [ATTACH] } as never}
-    />,
+    <LocaleProvider initialLocale="vi">
+      <MessageBubble
+        role="user"
+        content="Viết lại bài này bằng Tiếng Anh cho mình"
+        toolCallsJson={{ attachments: [ATTACH] } as never}
+      />
+    </LocaleProvider>,
   );
 }
 
@@ -354,5 +361,27 @@ describe("[OPTIONS] fallback when the message carries no widget", () => {
     );
     expect(container.querySelector("[data-widget], [data-testid*='card']")).toBeNull();
     expect(screen.queryByRole("button", { name: /prose/ })).toBeNull();
+  });
+});
+
+describe("panel naming", () => {
+  // The panel is labelled "Không gian làm việc" on screen. "panel Context
+  // store" is our internal name for it and appears nowhere in the UI, so a
+  // student reading that line has nothing to look for.
+  test("renames the internal Context store panel to what the UI calls it", () => {
+    const out = humanizeTechnicalCopy(
+      "Bản DOCX và PDF mới đã sẵn sàng trong panel Context store.",
+    );
+    expect(out).toBe("Bản DOCX và PDF mới đã sẵn sàng trong Không gian làm việc.");
+  });
+
+  test("catches the reversed word order too", () => {
+    expect(humanizeTechnicalCopy("Tệp nằm ở Context store panel bên phải."))
+      .toBe("Tệp nằm ở Không gian làm việc bên phải.");
+  });
+
+  test("leaves an English reply alone — this pass is Vietnamese-only", () => {
+    const en = "The files are ready in the Workspace panel.";
+    expect(humanizeTechnicalCopy(en)).toBe(en);
   });
 });

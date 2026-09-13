@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from dataclasses import dataclass
 
 from agent.artifact_routing import resolve_write_target, write_target_marker
 from fastapi.responses import StreamingResponse
@@ -28,6 +29,35 @@ from ..sse import sse_pack
 from ..workspace import workspace_dir
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _TurnUsage:
+    """Keep billing totals separate from the latest context occupancy."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    context_tokens: int = 0
+    compact_at_tokens: int = 0
+
+    def add(
+        self,
+        *,
+        input_tokens: int,
+        output_tokens: int,
+        compact_at_tokens: int,
+    ) -> None:
+        step_input = max(0, int(input_tokens or 0))
+        self.input_tokens += step_input
+        self.output_tokens += max(0, int(output_tokens or 0))
+        if step_input:
+            self.context_tokens = step_input
+        if compact_at_tokens > 0:
+            self.compact_at_tokens = int(compact_at_tokens)
+
+    @property
+    def total_tokens(self) -> int:
+        return self.input_tokens + self.output_tokens
 
 
 # Reader of the progress bubble is a thesis student, not an engineer — never
@@ -481,10 +511,9 @@ async def send_message_v3(
     async def gen():
         import time as _time
         _turn_t0 = _time.monotonic()
-        # Accumulate token usage across every LLM step in the turn (tool loops
-        # included) so the per-response cost reflects the whole turn.
-        _usage_in = 0
-        _usage_out = 0
+        # Billing sums every LLM step in the turn; context occupancy is only
+        # the latest step's input size. _TurnUsage keeps those meanings apart.
+        _usage = _TurnUsage()
         # F10: models that actually served steps this turn. On the OpenRouter
         # route the primary can silently fail over to a pricier fallback; we emit
         # a `model_served` analytics signal when the served model != the requested
@@ -583,7 +612,7 @@ async def send_message_v3(
             if _finalized:
                 return None
             _finalized = True
-            total_tokens = _usage_in + _usage_out
+            total_tokens = _usage.total_tokens
             duration_ms = int((_time.monotonic() - _turn_t0) * 1000)
             # Scale credits by the active model's relative cost (see
             # _credit_multiplier) so a Pro turn isn't charged like a Flash turn.
@@ -650,6 +679,8 @@ async def send_message_v3(
                         cost_credits=cost_credits,
                         duration_ms=duration_ms,
                         total_tokens=total_tokens,
+                        context_tokens=_usage.context_tokens,
+                        compact_at_tokens=_usage.compact_at_tokens,
                     ))
                     conn.commit()
 
@@ -693,6 +724,8 @@ async def send_message_v3(
 
             return {"type": "done", "cost_credits": cost_credits,
                     "duration_ms": duration_ms, "total_tokens": total_tokens,
+                    "context_tokens": _usage.context_tokens,
+                    "compact_at_tokens": _usage.compact_at_tokens,
                     "credit_balance": credit_balance}
 
         try:
@@ -764,8 +797,11 @@ async def send_message_v3(
                 elif kind == "usage":
                     # Token usage for this LLM step — accumulate (don't forward
                     # mid-stream; the total is persisted + sent in `done`).
-                    _usage_in += int(ev.get("input_tokens", 0) or 0)
-                    _usage_out += int(ev.get("output_tokens", 0) or 0)
+                    _usage.add(
+                        input_tokens=int(ev.get("input_tokens", 0) or 0),
+                        output_tokens=int(ev.get("output_tokens", 0) or 0),
+                        compact_at_tokens=int(ev.get("compact_at_tokens", 0) or 0),
+                    )
                     if ev.get("model"):
                         _served_models.add(str(ev["model"]))
                 elif kind == "error":

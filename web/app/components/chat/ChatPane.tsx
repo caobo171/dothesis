@@ -24,6 +24,11 @@ import { AnalysisOverlay } from "./AnalysisOverlay";
 import { apiFetch, swrFetcher as fetcher } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
+import type { MessageKey } from "@/app/lib/i18n/messages/en";
+// The roadmap owns the module-name keys and the Next-card copy. Both are
+// reused here so the empty state can't drift from the panel that shows the
+// same facts three inches to the right.
+import { MODULE_KEY, useNextCopy, type NextAction } from "./RoadmapPanel";
 
 
 /**
@@ -54,7 +59,11 @@ function getEmptyStateCopy(project: {
   focus?: string | null;
   current_module?: string;
   module_status?: Record<string, string>;
-}): { title: string; body: string } {
+  // `t` is threaded in rather than read from a hook: this is a plain function
+  // called during render, and its copy used to be hardcoded English — a
+  // Vietnamese session was greeted in English over its own thesis title.
+}, t: (key: MessageKey, params?: Record<string, string | number>) => string,
+): { title: string; body: string } {
   const cs = project.context_store;
   const status = project.module_status ?? {};
   const focus = project.focus ?? project.current_module;
@@ -87,38 +96,36 @@ function getEmptyStateCopy(project: {
     const focusedOn = focus && status[focus] !== "done" ? focus : nextModule;
     return {
       title: title
-        ? `Picking up "${title}"`
-        : `Continuing your thesis`,
-      body:
-        `${MODULE_LABEL[focusedOn]} is up next — ${MODULE_HINT[focusedOn]} ` +
-        `Type below to dive in, or ask about any module.`,
+        ? t("chat.empty.pickingUp", { title })
+        : t("chat.empty.continuing"),
+      body: t("chat.empty.upNext", {
+        module: t(MODULE_LABEL_KEY[focusedOn as Mod]),
+        hint: t(MODULE_HINT_KEY[focusedOn as Mod]),
+      }),
     };
   }
 
   // 4. Cold start.
-  return {
-    title: "Start your thesis",
-    body:
-      "Type your research topic below and I'll guide you step by step — " +
-      "or hit Auto Thesis to write the whole thing end-to-end.",
-  };
+  return { title: t("chat.empty.coldTitle"), body: t("chat.empty.coldBody") };
 }
 
-const MODULE_LABEL: Record<string, string> = {
-  M1: "Topic Discovery",
-  M2: "Literature Review",
-  M3: "Research Design",
-  M4: "Data Analysis",
-  // M5 owns the single closing chapter (MODULE_CHAPTERS)
-  M5: "Conclusion",
+type Mod = "M1" | "M2" | "M3" | "M4" | "M5";
+
+// The module names already have catalogue keys — MODULES owns them, and the
+// focus bar and home cards render from the same source. Reusing them keeps
+// "Research Design" from being one thing here and another there.
+// M5 owns the single closing chapter (MODULE_CHAPTERS).
+const MODULE_LABEL_KEY: Record<Mod, MessageKey> = {
+  M1: MODULE_KEY.M1, M2: MODULE_KEY.M2, M3: MODULE_KEY.M3,
+  M4: MODULE_KEY.M4, M5: MODULE_KEY.M5,
 };
 
-const MODULE_HINT: Record<string, string> = {
-  M1: "tell me the broad area you want to study.",
-  M2: "let's map the literature and find the gaps your hypotheses will plug.",
-  M3: "time to pick the paradigm, design, and instrument.",
-  M4: "ready to crunch the data once you have it.",
-  M5: "let's turn the project into chapters and export.",
+const MODULE_HINT_KEY: Record<Mod, MessageKey> = {
+  M1: "chat.empty.hint.M1",
+  M2: "chat.empty.hint.M2",
+  M3: "chat.empty.hint.M3",
+  M4: "chat.empty.hint.M4",
+  M5: "chat.empty.hint.M5",
 };
 
 
@@ -168,9 +175,10 @@ const RUN_VIEW_STATUSES = new Set([...LIVE_RUN_STATUSES, "done", "failed", "canc
 
 export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
   const t = useT();
+  const nextCopy = useNextCopy();
   const {
     messages, streamingText, streamingProgress, streamingError,
-    messagesLoading, inflight, error: sendError, send,
+    messagesLoading, inflight, error: sendError, send, contextUsage,
   } = useChat(threadId);
 
   // Credit balance drives the out-of-credits CTA. Default to >0 while loading so
@@ -249,9 +257,13 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
     !messagesLoading && messages.length === 0 ? `/projects/${projectId}/roadmap` : null,
     (url: string) => apiFetch(url, { method: "POST" }),
   );
+  // Typed as the roadmap's NextAction so `useNextCopy` can re-compose it in the
+  // reader's language: the API's title and CTAs are English by contract (the
+  // [NEXT] prompt and the agent's tool routing are written against those exact
+  // phrases), so they are translated for DISPLAY and sent back verbatim.
   const emptyStateNextAction =
     roadmap?.next_action && "title" in roadmap.next_action
-      ? (roadmap.next_action as { title: string; cta_options?: string[] })
+      ? (roadmap.next_action as NextAction)
       : null;
   // threadError matters on its own: the project can load fine while the thread
   // itself is gone (stale bookmark, deleted thread). Without it the pane
@@ -688,8 +700,9 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
             </>
           ) : (
             (() => {
-              const copy = getEmptyStateCopy(project);
+              const copy = getEmptyStateCopy(project, t);
               const na = emptyStateNextAction;
+              const naCopy = na ? nextCopy(na) : null;
               return (
                 <>
                   <p className="text-lg font-semibold text-ink-800">{copy.title}</p>
@@ -704,14 +717,15 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
                   {na?.cta_options?.length ? (
                     <div className="mt-5 flex flex-col items-center gap-2">
                       <p className="text-[12px] uppercase tracking-[0.08em] text-ink-400 font-semibold">
-                        {na.title}
+                        {naCopy!.title}
                       </p>
                       <div className="flex flex-wrap justify-center gap-2 max-w-lg">
-                        {na.cta_options.map((c) => (
+                        {naCopy!.ctas.map((c, i) => (
                           <button
                             key={c}
                             type="button"
-                            onClick={() => void send(c)}
+                            // Display translated, SEND the API's English.
+                            onClick={() => void send(na.cta_options![i] ?? c)}
                             className="rounded-full border border-primary-200 bg-primary-50 px-3.5 py-1.5 text-[13px] font-semibold text-primary-700 hover:bg-primary-100 hover:border-primary-400 transition-colors"
                           >
                             {c}
@@ -794,6 +808,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         // no-reply, and points the user at the upgrade CTA above instead.
         disabled={inflight || outOfCredits || readOnlyAdminView}
         focusModule={project ? (project.focus ?? project.current_module) : undefined}
+        contextUsage={contextUsage}
         // Quick actions live in the composer toolbar now (moved out of the
         // header). Same wiring the header used to receive.
         autoThesisButton={

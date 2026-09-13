@@ -148,6 +148,9 @@ _SLICE_COLUMNS = ("m1_topic", "m2_literature", "m3_design",
                   "m4_analysis", "m5_writing")
 
 
+from ..agent_state import heal_module_status
+
+
 def _project_out(p: Project, context_store: dict) -> ProjectOut:
     """Shared column mapping. `context_store` differs by caller: the FULL
     slices for the single-project read, a status-only summary for the list
@@ -162,7 +165,10 @@ def _project_out(p: Project, context_store: dict) -> ProjectOut:
         # the dual-write window; module_status defaults to {} until the
         # first orchestrator turn populates it.
         focus=p.focus,
-        module_status=p.module_status or {},
+        # Healed, not raw. The stored column is a snapshot from the last commit;
+        # serving it straight is what put a blue dot and an 80% ring next to a
+        # module the rest of the system already agreed was finished.
+        module_status=heal_module_status(p.module_status, context_store),
         stale_modules=list(p.stale_modules or []),
         context_store=context_store,
         created_at=p.created_at, updated_at=p.updated_at,
@@ -627,6 +633,8 @@ def list_messages(thread_id: uuid.UUID, body: ListMessagesBody,
          "module_tag": m.module_tag, "tool_calls_json": m.tool_calls_json,
          "cost_credits": m.cost_credits, "duration_ms": m.duration_ms,
          "total_tokens": m.total_tokens,
+         "context_tokens": m.context_tokens,
+         "compact_at_tokens": m.compact_at_tokens,
          "created_at": m.created_at.isoformat()}
         for m in reversed(rows)
     ]

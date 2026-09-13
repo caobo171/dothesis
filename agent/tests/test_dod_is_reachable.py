@@ -150,3 +150,152 @@ def test_a_dod_complete_done_says_nothing(tmp_path):
     out = json.loads(tools["commit_slice"].func(
         module="M2", reason="r", writes=slice_, confirm_done=True))
     assert "done_but_incomplete" not in out
+
+
+def test_committed_smartpls_results_earn_done_without_a_sign_off():
+    """The product rule: finished results ARE done — no separate confirmation.
+
+    A student who runs SmartPLS themselves and has the agent commit the output
+    ends up with an analysis_outline AND populated result tables. The old escape
+    required `not analysis_outline` as a proxy for "this came from an import",
+    so this slice fell through to the strict gate and failed on `missing
+    data_type_detected` + `results is empty` — the numbers being in
+    `analysis_results`, which is where this path puts them. The roadmap showed
+    M4 at 5/5 while its status read in_progress.
+    """
+    from orchestrator.artifacts import dod_analysis
+
+    committed = {
+        "analysis_outline": ["Mô hình đo lường", "Giá trị phân biệt"],
+        "analysis_results": {
+            "sample": {"n": 311},
+            "measurement_model": [{"construct": "ATT", "items": [{"item": "ATT_1"}]}],
+            "hypothesis_tests": [{"hypothesis": "H1", "beta": 0.269, "supported": True}],
+        },
+    }
+    assert dod_analysis(committed).done is True
+
+
+def test_an_analysis_slice_with_only_bookkeeping_is_not_done():
+    """The escape keys off RESULT tables, not "the dict is non-empty" — a slice
+    that has only picked up housekeeping must not earn a done."""
+    from orchestrator.artifacts import dod_analysis
+
+    bookkeeping = {
+        "analysis_outline": ["Mô hình đo lường"],
+        "analysis_results": {"source_figures": {"measurement_model": "/tmp/x.png"}},
+    }
+    d = dod_analysis(bookkeeping)
+    assert d.done is False
+    assert d.gaps
+
+
+def test_a_conversationally_committed_design_is_read_where_it_is_stored():
+    """M3 keeps the same five facts in two shapes.
+
+    `M3Output` declares them flat; the conversational path commits a nested
+    `methodology` dict. The gate read only the flat shape, so a project with
+    every fact present reported "missing paradigm, missing design, missing tool,
+    missing sampling_strategy" — none of them missing, all of them elsewhere.
+    """
+    from orchestrator.artifacts import dod_design
+
+    nested = {
+        "methodology": {
+            "paradigm": "quantitative",
+            "design": "cross-sectional survey",
+            "software": "SmartPLS",          # what this path calls `tool`
+            "sampling_strategy": "purposive sampling of adults in Vietnam",
+        },
+        "sample_plan": {"target_n": 300},
+        "conceptual_model": {"nodes": [{"id": "ATT"}], "edges": []},
+    }
+    assert dod_design(nested).gaps == []
+
+    # The flat shape keeps working, and still wins when both are present.
+    flat = {**nested, "tool": "SPSS"}
+    assert dod_design(flat).done is True
+
+
+def test_a_design_that_names_none_of_the_five_still_reports_them():
+    """The resolver must not turn "look in more places" into "never missing"."""
+    from orchestrator.artifacts import dod_design
+
+    d = dod_design({"methodology": {"analysis_plan": ["bootstrap"]}})
+    assert d.done is False
+    assert set(d.gaps) == {
+        "missing paradigm", "missing design", "missing tool",
+        "missing sampling_strategy", "missing target_sample_size",
+    }
+
+
+def test_a_realized_sample_closes_the_planning_field_but_not_the_warning():
+    """Keep the requirement, satisfy it from what the study actually collected.
+
+    target_sample_size is a PLAN. A study with 311 valid responses has answered
+    "how many?" more strongly than any target could, so it must not sit
+    in_progress on a planning field it has outgrown. What it has NOT answered is
+    "why that many?" — and that stays preflight's question, not this gate's, so
+    the student is told before the defense without being blocked before it.
+    """
+    from agent.preflight import preflight_check
+    from agent.state import _dod_satisfied
+
+    m3 = {
+        "methodology": {"paradigm": "quantitative", "design": "cross-sectional survey",
+                        "software": "SmartPLS", "sampling_strategy": "purposive"},
+        "conceptual_model": {"nodes": [{"id": "ATT"}], "edges": []},
+    }
+    flat_store = {**m3, "analysis_results": {"sample": {"valid": 311, "collected": 332},
+                                             "hypothesis_tests": [{"hypothesis": "H1"}]}}
+
+    assert _dod_satisfied("M3", flat_store) is True
+    # …and without any results, the planning field is still genuinely missing.
+    assert _dod_satisfied("M3", dict(m3)) is False
+
+    warnings = preflight_check({"m3_design": m3})
+    assert any("Sample size not planned" in w for w in warnings), warnings
+
+
+def test_a_fielded_instrument_backs_the_design_step():
+    """A student who arrives with SmartPLS output has an instrument by
+    definition — 42 indicators, each with a loading computed from 311 real
+    responses. `instrument.items` holds the item WORDING, which they never
+    typed in; the step is labelled "build the scale", which they demonstrably
+    did. Leaving it unsatisfied asked them to design a questionnaire they had
+    already fielded.
+    """
+    from agent.preflight import preflight_check
+    from agent.roadmap import satisfied_substeps
+
+    measured = {
+        "instrument": {"items": []},
+        "conceptual_model": {"nodes": [{"id": "ATT"}], "edges": []},
+        "hypotheses": [{"id": "H1"}],
+        "methodology": {"paradigm": "quantitative"},
+        "analysis_results": {"measurement_model": [
+            {"construct": "ATT", "items": [{"item": "ATT_1", "loading": 0.85}]},
+        ]},
+    }
+    assert "design_instrument" in satisfied_substeps("M3", {"contextStore": measured})
+
+    # The wording is still missing, and preflight is now the one place saying so.
+    assert any("questionnaire instrument" in w
+               for w in preflight_check({"m3_design": measured}))
+
+
+def test_an_unmeasured_study_still_has_to_build_its_instrument():
+    """The escape is evidence of MEASUREMENT, not a way around the step. A
+    design-stage project with no data has nothing to stand in for the scale."""
+    from agent.roadmap import satisfied_substeps
+
+    design_stage = {
+        "instrument": {"items": []},
+        "conceptual_model": {"nodes": [{"id": "ATT"}], "edges": []},
+        "analysis_results": {"measurement_model": []},
+    }
+    assert "design_instrument" not in satisfied_substeps("M3", {"contextStore": design_stage})
+    # And a spec with no items is still not an instrument — the original guard.
+    spec_only = {**design_stage,
+                 "instrument": {"constructs": ["ATT"], "items_per_construct": 5}}
+    assert "design_instrument" not in satisfied_substeps("M3", {"contextStore": spec_only})

@@ -2,8 +2,9 @@
 
 import { useRef, useState } from "react";
 import useSWR, { mutate as globalMutate } from "swr";
-import { useStream } from "./useStream";
+import { useStream, type SSEEvent } from "./useStream";
 import type { WidgetHint } from "../widgets/types";
+import type { ContextUsageSnapshot } from "../ContextUsageIndicator";
 // (WidgetHint imported above is reused for the optimistic-message cast
 //  where we pack the attachments-shape variant into tool_calls_json.)
 import { apiFetch } from "@/app/lib/api";
@@ -26,8 +27,45 @@ export type Message = {
   cost_credits?: number;
   duration_ms?: number;
   total_tokens?: number;
+  context_tokens?: number;
+  compact_at_tokens?: number;
   created_at: string;
 };
+
+
+function snapshotOf(value: {
+  context_tokens?: unknown;
+  compact_at_tokens?: unknown;
+}): ContextUsageSnapshot | null {
+  const contextTokens = Number(value.context_tokens ?? 0);
+  const compactAtTokens = Number(value.compact_at_tokens ?? 0);
+  return Number.isFinite(contextTokens)
+    && Number.isFinite(compactAtTokens)
+    && contextTokens > 0
+    && compactAtTokens > 0
+    ? { contextTokens, compactAtTokens }
+    : null;
+}
+
+
+export function selectContextUsage(
+  messages: Message[],
+  events: SSEEvent[],
+): ContextUsageSnapshot | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type !== "done") continue;
+    const snapshot = snapshotOf(event);
+    if (snapshot) return snapshot;
+  }
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const snapshot = snapshotOf(message);
+    if (snapshot) return snapshot;
+  }
+  return null;
+}
 
 
 export function useChat(threadId: string) {
@@ -103,6 +141,7 @@ export function useChat(threadId: string) {
     .filter(e => e.type === "error")
     .map(e => (e as unknown as { message: string }).message)
     .at(-1) ?? null;
+  const contextUsage = selectContextUsage(messages ?? [], stream.state.events);
 
   // An attachment that never uploaded fails the send before any request is
   // made, so it has no stream event to ride on and needs its own slot.
@@ -228,6 +267,7 @@ export function useChat(threadId: string) {
     streamingToolCalls,
     streamingProgress,
     streamingError,
+    contextUsage,
     inflight: stream.state.inflight,
     // An upload that failed is a send that failed, even though no request was
     // made — surface it through the same banner the stream's errors use.

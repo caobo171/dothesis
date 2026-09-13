@@ -1,16 +1,24 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ContextPanel, formatExportScope, type UploadItem } from "./ContextPanel";
+import { ContextPanel, ExportRowItem, formatExportScope, type UploadItem } from "./ContextPanel";
 import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
+import { en as enMessages } from "@/app/lib/i18n/messages/en";
+import { vi as viMessages } from "@/app/lib/i18n/messages/vi";
 
 // The two calls a Context row makes: the token mint behind Download, and the
 // signed URL AttachmentPreview opens the document with.
 const triggerUploadDownload = vi.fn();
 const uploadViewUrl = vi.fn();
+// The same pair for an EXPORT row: the token mint behind its Download, and the
+// same-origin /raw URL its preview renders from.
+const triggerExportDownload = vi.fn();
+const exportViewUrl = vi.fn();
 vi.mock("@/app/lib/api", async (orig) => ({
   ...(await orig() as object),
   triggerUploadDownload: (...a: unknown[]) => triggerUploadDownload(...a),
   uploadViewUrl: (...a: unknown[]) => uploadViewUrl(...a),
+  triggerExportDownload: (...a: unknown[]) => triggerExportDownload(...a),
+  exportViewUrl: (...a: unknown[]) => exportViewUrl(...a),
 }));
 
 
@@ -28,14 +36,34 @@ const _baseCtx = {
 // keep asserting BEHAVIOUR — which step is current, what the panel shows — and
 // don't quietly become a test of the Vietnamese copy.
 function renderEn(ui: React.ReactElement) {
-  return render(<LocaleProvider initialLocale="en">{ui}</LocaleProvider>);
+  // hasCookie, or the provider treats initialLocale as a guess and re-negotiates
+  // back to the "vi" default — the English assertions would be asserting nothing.
+  return render(<LocaleProvider initialLocale="en" hasCookie>{ui}</LocaleProvider>);
 }
 
 describe("export scope labels", () => {
+  // `t` is injected, so these assert the MAPPING — which protocol string means
+  // which label — without pinning the test to one language. The catalogue is
+  // exercised through the rendered rows below.
+  const vi = (k: string) => viMessages[k as keyof typeof viMessages] as string;
+  const en = (k: string) => enMessages[k as keyof typeof enMessages] as string;
+
   test("turns chapter protocol scopes into student-facing names", () => {
-    expect(formatExportScope("chapter:intro|lit_review|methodology")).toBe("Chương 1–3");
-    expect(formatExportScope("chapter:methodology")).toBe("Chương 3");
-    expect(formatExportScope("full")).toBe("Toàn bộ luận văn");
+    expect(formatExportScope("chapter:intro|lit_review|methodology", vi)).toBe("Chương 1–3");
+    expect(formatExportScope("chapter:methodology", vi)).toBe("Chương 3");
+    expect(formatExportScope("full", vi)).toBe("Toàn bộ luận văn");
+  });
+
+  test("and does it in English too — these were hardcoded Vietnamese", () => {
+    expect(formatExportScope("chapter:intro|lit_review|methodology", en)).toBe("Chapters 1–3");
+    expect(formatExportScope("full", en)).toBe("Full thesis");
+    expect(formatExportScope("M1,M2", en)).toBe("M1 · Topic + M2 · Literature");
+  });
+
+  test("an unknown scope falls through to the backend string", () => {
+    expect(formatExportScope("M9", en)).toBe("M9");
+    expect(formatExportScope("chapter:appendix", en)).toBe("appendix");
+    expect(formatExportScope("", en)).toBe("Document");
   });
 });
 
@@ -190,6 +218,9 @@ function _panelWithDocx() {
 describe("Context file rows", () => {
   beforeEach(() => {
     triggerUploadDownload.mockReset();
+    triggerExportDownload.mockReset();
+    triggerExportDownload.mockResolvedValue(undefined);
+    exportViewUrl.mockReset();
     // Resolves never: DocumentView is allowed to sit on "Đang mở tệp…" instead
     // of dragging docx-preview and a network fetch into jsdom. What's under
     // test is that the modal opened, not what it renders inside.
@@ -219,5 +250,44 @@ describe("Context file rows", () => {
     fireEvent.click(screen.getByRole("button", { name: `Download ${DOCX.filename}` }));
     expect(triggerUploadDownload).toHaveBeenCalledWith(DOCX.id);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  test("an Outputs row opens the same viewer, and still downloads from its own button", async () => {
+    // Outputs used to be download-only: the only way to see whether an export
+    // was any good was to save it and open Word. Same reasoning as the Context
+    // rows below — and the same modal, so there is one docx/pdf viewer.
+    exportViewUrl.mockImplementation(() => new Promise<string>(() => {}));
+    renderEn(<ExportRowItem row={{
+      id: "e1", scope: "full", kind: "docx", filename: "thesis-abc.docx",
+      size_bytes: 195_000, created_at: "2026-09-11",
+      download_url: "/api/v1/projects/p1/exports/thesis-abc.docx",
+    }} />);
+
+    // Named by scope, not the storage filename ("thesis-abc.docx" tells the
+    // student nothing). Both row buttons carry that label — [0] opens it,
+    // [1] saves it. Rendered under the "en" provider, so the scope reads in
+    // English: it used to be hardcoded Vietnamese here.
+    const row = () => screen.getAllByRole("button", { name: /DOCX · Full thesis/ });
+    fireEvent.click(row()[0]);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(triggerExportDownload).not.toHaveBeenCalled();
+
+    fireEvent.click(row()[1]);
+    expect(triggerExportDownload).toHaveBeenCalledWith(
+      "/api/v1/projects/p1/exports/thesis-abc.docx");
+  });
+
+  test("the preview overlay escapes the panel column and lands on <body>", () => {
+    // ChatShellLayout gives the right pane `lg:translate-x-0` (it slides in as
+    // a drawer on mobile). A transform — even a zero one — makes that pane the
+    // containing block for `position: fixed` descendants, so the modal's
+    // `fixed inset-0` covered the ~340px panel instead of the viewport: the
+    // student got a sliver of dimmed sidebar with their document crushed into
+    // it. Portalling is the fix, so assert the DOM position, not the classes.
+    const { container } = _panelWithDocx();
+    fireEvent.click(screen.getByRole("button", { name: `Preview ${DOCX.filename}` }));
+    const dialog = screen.getByRole("dialog", { name: DOCX.filename });
+    expect(container.contains(dialog)).toBe(false);
+    expect(dialog.parentElement).toBe(document.body);
   });
 });

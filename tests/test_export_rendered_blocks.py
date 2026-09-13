@@ -36,7 +36,7 @@ _MD = """# Chương 4
 | Khái niệm | CR |
 |---|---|
 | ATT | 0.911 |
-*Nguồn: kết xuất từ kết quả phân tích đã lưu (DoThesis).*
+*Nguồn: Kết quả phân tích từ SmartPLS/SPSS, tác giả tổng hợp.*
 <!--dt-rendered:end kind=measurement_model-->
 """
 

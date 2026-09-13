@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Maximize2, Minus, Plus, RotateCcw, X } from "lucide-react";
 
+import { conceptualModelSvg, parseModelFlowchart } from "./conceptualModelLayout";
+
 /**
  * Lazy-loaded Mermaid renderer.
  *
@@ -79,6 +81,21 @@ export function Mermaid({ source }: { source: string }) {
   useEffect(() => {
     let cancelled = false;
     const id = `mermaid-${++_idCounter}`;
+    // A research model is drawn by OUR layout, not Mermaid's — the same one the
+    // exported thesis uses. The agent writes these diagrams by hand in its
+    // replies, so this was the last surface still showing the old notation: a
+    // moderator as a dashed arrow into the mediator, which is a different
+    // hypothesis from the one its own label claims. Everything else (a
+    // sequence diagram, a subgraph, anything we have no layout for) falls
+    // through to Mermaid untouched, and keeps this viewer's zoom + View full.
+    const model = parseModelFlowchart(source);
+    const ownSvg = model && conceptualModelSvg(model.nodes, model.edges);
+    if (ownSvg) {
+      if (ref.current) ref.current.innerHTML = ownSvg;
+      setSvgMarkup(ownSvg);
+      setError(null);
+      return;
+    }
     const normalizedSource = normalizeMermaidSource(source);
     loadMermaid()
       .then((mermaid) => mermaid.render(id, normalizedSource))
@@ -227,9 +244,15 @@ export function Mermaid({ source }: { source: string }) {
             onWheel={handleCanvasWheel}
             aria-label="Zoomable model canvas"
           >
+            {/* Fit means fit — BOTH axes. Sizing the box by width alone let a
+                tall model (nine constructs stacked in one column) open at
+                roughly twice the viewport height with "Fit" doing nothing but
+                resetting a number. The box is zoom × the canvas in both
+                directions and the diagram is contained inside it, so zoom 100%
+                is genuinely the whole model. */}
             <div
-              className="mx-auto min-h-full rounded-xl border border-ink-200 bg-white p-6 shadow-[0_12px_40px_rgba(40,50,65,0.10)] [&_svg]:h-auto [&_svg]:w-full"
-              style={{ width: `${zoom * 100}%`, minWidth: `${zoom * 900}px` }}
+              className="mx-auto flex items-center justify-center rounded-xl border border-ink-200 bg-white p-6 shadow-[0_12px_40px_rgba(40,50,65,0.10)] [&_svg]:h-auto [&_svg]:w-auto [&_svg]:max-h-full [&_svg]:max-w-full"
+              style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}
               dangerouslySetInnerHTML={{ __html: svgMarkup }}
             />
           </div>

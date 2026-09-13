@@ -20,7 +20,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, List
 
 
 # Matches a single line at the end of an AI message that turns text into
@@ -94,6 +94,47 @@ _PAPERS_RE = re.compile(
     r"\[PAPERS\]\s*(?P<payload>\{.*?\})\s*\[/PAPERS\]",
     re.DOTALL,
 )
+
+
+def _is_summarization_chunk(meta: Any) -> bool:
+    """True when a `messages`-mode chunk belongs to the auto-compaction summary.
+
+    LangGraph merges the runnable config's metadata into what it hands back
+    with each token, so the middleware's `{"lc_source": "summarization"}` marker
+    arrives here. Checked at the top level and under `metadata` because the
+    nesting has moved between langchain versions and a miss means the summary
+    is shown to the student as the answer.
+    """
+    if not isinstance(meta, dict):
+        return False
+    if meta.get("lc_source") == "summarization":
+        return True
+    inner = meta.get("metadata")
+    return isinstance(inner, dict) and inner.get("lc_source") == "summarization"
+
+
+def _chunk_text(msg: Any) -> str:
+    """Plain text of a streamed chunk, for accumulating the compaction summary.
+
+    Reuses `_text_content` so a Gemini 3 list-of-parts content joins the same
+    way it does everywhere else in this module rather than stringifying to
+    `[{'type': 'text', …}]`.
+    """
+    return _text_content(getattr(msg, "content", "")) or ""
+
+
+def _msg_key(m: Any) -> str | None:
+    """Stable per-thread identity for a message seen in an `updates` chunk.
+
+    Used to announce each message exactly once even though deepagents
+    middleware hands back the whole checkpointed list on every step. LangChain
+    stamps `.id` on every message; `tool_call_id` is the fallback for a
+    ToolMessage that somehow arrives without one. None means "can't identify
+    it" — the caller then falls through to the old announce-everything
+    behaviour rather than silently dropping a real event.
+    """
+    key = getattr(m, "id", None) or getattr(m, "tool_call_id", None)
+    return str(key) if key else None
 
 
 def _parse_export_artifacts(content: Any) -> dict | None:
@@ -189,6 +230,11 @@ from agent.tools.state_tools import make_state_tools
 from agent.tools.stats import check_thresholds, make_stats_tools
 from agent.tools.writing import make_writing_tools
 from agent.artifact_routing import ArtifactRoutingMiddleware
+from agent.context_usage import (
+    agent_compact_at_tokens,
+    compact_at_tokens,
+    register_agent_compact_threshold,
+)
 from agent.usage import extract_usage  # F10: route-independent token accounting
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -635,7 +681,7 @@ def build_agent(
         render_model_diagram,
     ]
 
-    return create_deep_agent(
+    compiled_agent = create_deep_agent(
         model=model,
         tools=tools,
         system_prompt=SYSTEM_PROMPT,
@@ -645,6 +691,11 @@ def build_agent(
         checkpointer=checkpointer,
         name="dothesis",
     )
+    # The compiled graph no longer exposes its resolved model. Keep the exact
+    # threshold chosen from that model beside the graph so stream_turn can
+    # report context occupancy without reconstructing or guessing the model.
+    register_agent_compact_threshold(compiled_agent, compact_at_tokens(model))
+    return compiled_agent
 
 
 def _default_model():
@@ -782,6 +833,26 @@ async def stream_turn(
     _mode_counts = {"messages": 0, "updates": 0, "_other": 0}
     _msg_type_counts: dict[str, int] = {}
     _seen_any = False
+    compact_threshold = agent_compact_at_tokens(agent)
+    # Seeded with the messages already in the checkpoint so the replay a
+    # middleware's Overwrite triggers (see the loop below) can't re-announce
+    # or re-bill anything from an earlier turn. A thread on its first turn has
+    # no checkpoint yet, which is simply an empty set.
+    _seen_msgs: set[str] = set()
+    # Text of the auto-compaction summary, kept OUT of the reply and surfaced
+    # as its own labelled card instead. Hiding it outright was the first fix
+    # and it was too quiet: compaction spends the student's credits and decides
+    # what the agent remembers about their thesis, so they get to see it.
+    _summary_parts: List[str] = []
+    try:
+        _prior = await agent.aget_state(config)
+        for _m in (getattr(_prior, "values", None) or {}).get("messages", []) or []:
+            _k = _msg_key(_m)
+            if _k is not None:
+                _seen_msgs.add(_k)
+    except Exception as _e:  # pragma: no cover - checkpointer-specific
+        print(f"[agent.stream] no prior state for {thread_id}: {_e!r}",
+              file=_sys.stderr, flush=True)
     try:
         async for mode, chunk in agent.astream(
             payload, config=config, stream_mode=["messages", "updates"]
@@ -790,6 +861,19 @@ async def stream_turn(
             _mode_counts[mode] = _mode_counts.get(mode, 0) + 1
             if mode == "messages":
                 msg, _meta = chunk
+                # Auto-compaction runs through the SAME model, so the summary
+                # it writes streams out on this channel exactly like a reply —
+                # and chat_v3 accumulates streamed text into the assistant
+                # message. A student who asked to merge the construct cells in
+                # a table got back "## SESSION INTENT / ## SUMMARY / M1: done
+                # …" — the agent's internal notes on their own project, and no
+                # answer. SummarizationMiddleware tags that call
+                # (`lc_source: "summarization"`, langchain/agents/middleware/
+                # summarization.py); it is the only honest way to tell its
+                # tokens from the reply's, since both are plain AI text.
+                if _is_summarization_chunk(_meta):
+                    _summary_parts.append(_chunk_text(msg))
+                    continue
                 # Log the chunk type + content preview so we can see
                 # whether Gemini returned empty strings or no chunks at all.
                 _tname = type(msg).__name__
@@ -818,6 +902,18 @@ async def stream_turn(
                     if isinstance(raw_msgs, _Overwrite):
                         raw_msgs = raw_msgs.value or []
                     for m in raw_msgs:
+                        # An Overwrite carries the WHOLE checkpointed thread,
+                        # not the step's new messages, so everything below
+                        # would re-fire for every past turn: four "exported
+                        # thesis" download cards on one export, duplicate
+                        # tool_start/tool_end beats, and — worst — a second
+                        # billing of usage the ledger already debited. Announce
+                        # each message once per thread.
+                        _key = _msg_key(m)
+                        if _key is not None:
+                            if _key in _seen_msgs:
+                                continue
+                            _seen_msgs.add(_key)
                         m_type = getattr(m, "type", None)
                         if m_type == "tool":
                             _tool_name = getattr(m, "name", "") or ""
@@ -861,6 +957,7 @@ async def stream_turn(
                                     "type": "usage",
                                     "input_tokens": _u["in"],
                                     "output_tokens": _u["out"],
+                                    "compact_at_tokens": compact_threshold,
                                 }
                                 if _served:
                                     _ev["model"] = _served
@@ -901,6 +998,17 @@ async def stream_turn(
                                 )
                                 if hint is not None:
                                     yield {"type": "tool_calls", "payload": hint}
+        if _summary_parts:
+            # Rides the widget channel every other card uses, so it is
+            # persisted in `tool_calls_json` with the message and survives a
+            # reload — a notice that only existed in the live stream would
+            # vanish from the transcript that students actually scroll back
+            # through.
+            _summary = "".join(_summary_parts).strip()
+            if _summary:
+                yield {"type": "tool_calls",
+                       "payload": {"widget_type": "context_summary",
+                                   "text": _summary}}
     except Exception as e:  # surface failures as events — never a dead stream
         import traceback as _tb
         print(f"\n=== agent.astream crashed in stream_turn (thread={thread_id}) ===",

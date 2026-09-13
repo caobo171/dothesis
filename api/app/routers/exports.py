@@ -15,7 +15,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -436,6 +436,47 @@ def download_export(
         ExpiresIn=300,
     )
     return RedirectResponse(url=signed_url, status_code=302)
+
+
+@router.get("/projects/{project_id}/exports/{filename}/raw")
+def raw_export(
+    project_id: uuid.UUID, filename: str,
+    # Same GET-with-?st= shape, and the same scope string, as the download
+    # route above: an <iframe> and a fetch() cannot attach a JSON body.
+    user: User = Depends(stream_user_factory(
+        lambda project_id, filename: f"project-export:{project_id}/{filename}")),
+    db: Session = Depends(db_session),
+):
+    """Stream the artifact itself, INLINE and same-origin — the preview path.
+
+    The Outputs panel opens an export in the same viewer the Context rows use,
+    and /exports/{filename} can't feed it: it 302s to presigned S3 with
+    `attachment`, which downloads rather than renders, and the cross-origin hop
+    puts the bytes behind S3's CORS policy — so the fetch() that converts a
+    .docx for display fails on a setting we don't control from here.
+
+    Proxying costs one hop for a file the student is about to read anyway.
+    Identical reasoning to /uploads/{id}/raw; see its docstring.
+    """
+    _readable_project(db, user, project_id)
+    expected_key = f"projects/{project_id}/exports/{filename}"
+    # Same guard as the download route: only a RECORDED export may be read, so
+    # a stream token can't be pointed at an arbitrary key under the project.
+    row = (
+        db.query(Export)
+        .filter(Export.project_id == project_id, Export.s3_key == expected_key)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(404, detail={"error": {"code": "artifact_not_found"}})
+    bucket = os.environ.get("S3_BUCKET") or os.environ["AWS_S3_BUCKET"]
+    body = s3_from_env().get_object(Bucket=bucket, Key=expected_key)["Body"].read()
+    media = _DOCX_MIME if (row.kind or "").lower() == "docx" else "application/pdf"
+    return Response(
+        content=body,
+        media_type=media,
+        headers={"Content-Disposition": content_disposition(filename, "inline")},
+    )
 
 
 @router.post("/projects/{project_id}/exports/list")

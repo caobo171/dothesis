@@ -1,10 +1,21 @@
 from api.app.routers.chat_v3 import (
+    _TurnUsage,
     _chapter_export_directive,
     _direct_request,
     _honest_assistant_reply,
     _save_state_directive,
     _tool_only_reply,
 )
+
+
+def test_turn_usage_sums_billing_but_keeps_latest_context_snapshot():
+    usage = _TurnUsage()
+    usage.add(input_tokens=10_000, output_tokens=500, compact_at_tokens=170_000)
+    usage.add(input_tokens=12_000, output_tokens=700, compact_at_tokens=170_000)
+
+    assert usage.total_tokens == 23_200
+    assert usage.context_tokens == 12_000
+    assert usage.compact_at_tokens == 170_000
 
 
 def test_direct_vietnamese_confirmation_executes_now():

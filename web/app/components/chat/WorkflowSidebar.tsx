@@ -72,7 +72,7 @@ export function WorkflowSidebar({
         <div className="min-w-0 flex-1">
           <div className="font-extrabold text-[17.5px] tracking-[-0.01em] text-ink-900">DoThesis</div>
           <div className="text-[11px] uppercase tracking-[0.08em] text-ink-500 font-medium mt-px">
-            Thesis copilot
+            {t("sidebar.thesisCopilot")}
           </div>
         </div>
         {/* Was the Unicode glyph "⌂" (U+2302), which renders as a thin,
