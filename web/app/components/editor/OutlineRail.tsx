@@ -14,11 +14,11 @@ export type ChapterName = "intro" | "lit_review" | "methodology" | "results" | "
 // hardcoded `6` is exactly how the retired sixth chapter kept showing up
 // after the backend collapsed to five.
 export const CHAPTER_ORDER: { name: ChapterName; label: string }[] = [
-  { name: "intro",        label: "Ch 1 — Introduction" },
-  { name: "lit_review",   label: "Ch 2 — Literature Review" },
-  { name: "methodology",  label: "Ch 3 — Methodology" },
-  { name: "results",      label: "Ch 4 — Results" },
-  { name: "conclusion",   label: "Ch 5 — Conclusions and Recommendations" },
+  { name: "intro",        label: "Ch 1 - Introduction" },
+  { name: "lit_review",   label: "Ch 2 - Literature Review" },
+  { name: "methodology",  label: "Ch 3 - Methodology" },
+  { name: "results",      label: "Ch 4 - Results" },
+  { name: "conclusion",   label: "Ch 5 - Conclusions and Recommendations" },
 ];
 
 
