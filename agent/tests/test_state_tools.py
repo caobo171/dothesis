@@ -512,3 +512,61 @@ def test_m5_in_chat_is_not_tightened(tmp_path):
                  writes={"final_sections": [{"chapter_name": "conclusion", "prose": "short"}]})
 
     assert store.load()["status"]["M5"] == "done"
+
+
+def test_a_committed_figure_is_stored_as_its_durable_uri(tmp_path, monkeypatch):
+    """What gets persisted must outlive the machine that wrote it.
+
+    The stored value used to be an absolute `var/jobs` path — true only on that
+    box, and only until the next redeploy. The local file still has to exist
+    first: that check is what stops a model-supplied path from naming a file
+    this project does not have.
+    """
+    from agent.tools import state_tools
+
+    project = tmp_path / "4c5f769a-7d96-4056-9a5d-a4e3654116ac"
+    img = project / "uploads" / "r.docx.img"
+    img.mkdir(parents=True)
+    (img / "hinh-09.png").write_bytes(b"png")
+
+    monkeypatch.setattr(state_tools, "_durable_figure",
+                        lambda pid, rel: f"s3://bucket/projects/{pid}/figures/{rel}")
+    out = state_tools._resolve_source_figures(
+        {"structural_paths": "uploads/r.docx.img/hinh-09.png"}, project)
+
+    assert out["structural_paths"] == (
+        "s3://bucket/projects/4c5f769a-7d96-4056-9a5d-a4e3654116ac"
+        "/figures/uploads/r.docx.img/hinh-09.png")
+
+
+def test_without_s3_the_local_path_is_still_what_is_stored(tmp_path, monkeypatch):
+    """Dev has no bucket; the behaviour there must be exactly what it was."""
+    from agent.tools import state_tools
+
+    project = tmp_path / "p1"
+    img = project / "uploads" / "r.docx.img"
+    img.mkdir(parents=True)
+    (img / "hinh-09.png").write_bytes(b"png")
+
+    monkeypatch.setattr(state_tools, "_durable_figure", lambda *_a: None)
+    out = state_tools._resolve_source_figures(
+        {"structural_paths": "uploads/r.docx.img/hinh-09.png"}, project)
+
+    assert out["structural_paths"] == str(img / "hinh-09.png")
+
+
+def test_a_figure_the_project_does_not_have_is_still_dropped(tmp_path, monkeypatch):
+    """The containment check is the point of this function and must survive the
+    S3 change — a path is the one piece of state a model supplies that a later
+    step opens."""
+    from agent.tools import state_tools
+
+    project = tmp_path / "p1"
+    (project / "uploads").mkdir(parents=True)
+    monkeypatch.setattr(state_tools, "_durable_figure",
+                        lambda pid, rel: f"s3://bucket/{rel}")
+
+    assert state_tools._resolve_source_figures(
+        {"a": "uploads/never-extracted.png"}, project) == {}
+    assert state_tools._resolve_source_figures(
+        {"a": "../../../etc/passwd"}, project) == {}

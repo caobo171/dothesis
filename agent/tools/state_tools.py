@@ -101,6 +101,17 @@ def chapter_to_module(chapter: str | None) -> str:
     return _CHAPTER_TO_MODULE.get((chapter or "").lower(), "M5")
 
 
+def _durable_figure(project_id: str, relpath: str) -> str | None:
+    """The figure's `s3://` URI when S3 holds it, else None (keep the path)."""
+    try:
+        from orchestrator.tools.figure_store import exists, figure_uri  # noqa: PLC0415
+
+        return figure_uri(project_id, relpath) if exists(project_id, relpath) else None
+    except Exception:  # noqa: BLE001 — no S3 configured is a normal dev state
+        logger.debug("figure_store unavailable for %s", relpath, exc_info=True)
+        return None
+
+
 def _resolve_source_figures(figures: Any, project_dir: Any) -> dict:
     """Workspace-relative figure paths → absolute paths that exist, dropping
     anything that escapes the workspace.
@@ -121,6 +132,9 @@ def _resolve_source_figures(figures: Any, project_dir: Any) -> dict:
         root = os.path.realpath(str(project_dir))
     except Exception:  # noqa: BLE001
         return {}
+    # The project id is the workspace directory name — the figure store keys by
+    # it, and this is the only place that has both it and the relpath.
+    project_id = os.path.basename(root)
     out: dict = {}
     for kind, rel in figures.items():
         if not isinstance(rel, str) or not rel:
@@ -130,8 +144,15 @@ def _resolve_source_figures(figures: Any, project_dir: Any) -> dict:
             if not (full == root or full.startswith(root + os.sep)):
                 logger.warning("commit_slice: source_figures[%s] escapes the workspace", kind)
                 continue
-            if os.path.isfile(full):
-                out[str(kind)] = full
+            if not os.path.isfile(full):
+                continue
+            # Prefer the S3 copy as the STORED value. An absolute path under
+            # `var/jobs` is only true on the machine that wrote it and only
+            # until the next redeploy; what gets persisted here outlives both.
+            # The local file still has to exist first — that check is what
+            # stops a model-supplied path from naming a file this project does
+            # not have.
+            out[str(kind)] = _durable_figure(project_id, rel) or full
         except Exception:  # noqa: BLE001 — one odd path must not lose the rest
             logger.debug("commit_slice: source_figures[%s] unresolvable", kind, exc_info=True)
     return out

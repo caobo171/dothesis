@@ -534,3 +534,36 @@ def test_the_construct_name_does_not_repeat_down_every_item_row():
     # not drop a row.
     items = [ln.split("|")[2].strip() for ln in data]
     assert len([i for i in items if i]) == len(data)
+
+
+def test_a_figure_stored_as_an_s3_uri_is_fetched_for_the_exporter(tmp_path, monkeypatch):
+    """Pandoc and Pillow both need a real file on disk, so the stored `s3://`
+    value has to become a path before the block is built. The alternative is
+    what shipped: an absolute `var/jobs` path that is true only on the machine
+    that wrote it, and only until the next redeploy."""
+    from orchestrator.tools import figure_store
+
+    fetched = tmp_path / "hinh-09.png"
+    fetched.write_bytes(b"\x89PNG\r\n\x1a\n")
+    monkeypatch.setattr(figure_store, "localize",
+                        lambda v: str(fetched) if v.startswith("s3://") else None)
+
+    ar = {**PLS_BLOCK,
+          "source_figures": {"measurement_model": "s3://b/projects/p/figures/x.png"}}
+    md = {b["kind"]: b for b in render_results_tables(ar, "vi")}["measurement_model"]["markdown"]
+
+    assert f"![]({fetched})" in md
+    assert "| Khái niệm |" not in md, "the screenshot replaces the rebuilt table"
+
+
+def test_an_unreachable_figure_falls_back_to_the_rendered_table(monkeypatch):
+    """Silently, and on purpose — a thesis with a rebuilt table is worth more
+    than one with a broken image, and the numbers are identical either way."""
+    from orchestrator.tools import figure_store
+
+    monkeypatch.setattr(figure_store, "localize", lambda _v: None)
+    ar = {**PLS_BLOCK, "source_figures": {"measurement_model": "s3://b/gone.png"}}
+    md = {b["kind"]: b for b in render_results_tables(ar, "vi")}["measurement_model"]["markdown"]
+
+    assert "![](" not in md
+    assert "| Khái niệm |" in md

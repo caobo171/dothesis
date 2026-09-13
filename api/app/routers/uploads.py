@@ -164,7 +164,11 @@ def _extract_image_text(body: bytes, mime: str,
     if not text or text.upper().startswith("NONE"):
         return ("", 0, [])
     entry = {"figure": 1, "name": stem, "bytes": body, "mime": mime}
-    relpath = f"uploads/{stem}.img/{_figure_filename(entry)}"
+    # Carried ON the entry, not just interpolated into the sidecar text: it is
+    # the key the figure is stored and found under, and the docx path has always
+    # set it. Without it a pasted screenshot reached the uploader as an entry
+    # with no relpath at all.
+    entry["relpath"] = relpath = f"uploads/{stem}.img/{_figure_filename(entry)}"
     return (f"[Hình 1] (ảnh gốc: {relpath})\n{text}", 1, [entry])
 
 
@@ -442,8 +446,24 @@ async def upload_paper(project_id: uuid.UUID,
             img_dir.mkdir(parents=True, exist_ok=True)
             for entry in images:
                 (img_dir / _figure_filename(entry)).write_bytes(entry["bytes"])
-    except Exception as _e:  # noqa: BLE001 — best-effort mirror
-        pass
+    except Exception:  # noqa: BLE001 — best-effort mirror
+        logger.warning("workspace mirror failed for %s", file.filename, exc_info=True)
+
+    # …and to S3, where the document and its extracted text already went. The
+    # local copy above is a scratch mirror: `var/jobs` does not survive a
+    # redeploy, and the absolute path it produces is meaningless on any other
+    # machine. Losing it is silent — Chapter 4 just falls back to a rebuilt
+    # markdown table instead of the student's own SmartPLS screenshot.
+    if images:
+        from orchestrator.tools.figure_store import put_figure  # noqa: PLC0415
+
+        for entry in images:
+            relpath = entry.get("relpath")
+            if not relpath:
+                continue
+            await run_in_threadpool(
+                put_figure, str(project_id), relpath, entry["bytes"],
+                entry.get("mime") or "image/png")
 
     row = PaperUpload(
         id=upload_id,

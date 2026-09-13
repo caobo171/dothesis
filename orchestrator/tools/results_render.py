@@ -158,14 +158,23 @@ def _figure_body(ar: dict, kind: str, caption: str) -> Optional[str]:
     and the caption/numbering is ours either way too.
 
     The path was resolved and contained under the project workspace by
-    `commit_slice`; existence is re-checked here because state outlives files.
+    `commit_slice`; existence is re-checked here because state outlives files —
+    which is the whole reason the stored value is now an `s3://` URI wherever
+    S3 was reachable at commit time.
     """
     try:
         import os  # noqa: PLC0415 — stdlib, keeps this module's import cost flat
 
+        from orchestrator.tools.figure_store import localize  # noqa: PLC0415
+
         figures = ar.get("source_figures")
-        path = figures.get(kind) if isinstance(figures, dict) else None
-        if not (isinstance(path, str) and path and os.path.isfile(path)):
+        stored = figures.get(kind) if isinstance(figures, dict) else None
+        if not (isinstance(stored, str) and stored):
+            return None
+        # Either form: a path written before figures went to S3, or an `s3://`
+        # URI fetched to a local cache here because Pandoc needs a real file.
+        path = localize(stored)
+        if not path:
             return None
         # Caption as its own paragraph ABOVE, image with EMPTY alt text. Both
         # exporters turn a non-empty alt into a caption of their own — Pandoc
