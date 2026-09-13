@@ -11,8 +11,9 @@ import { OutlineRail, CHAPTER_ORDER, type ChapterName } from "./OutlineRail";
 import { ChapterEditor } from "./ChapterEditor";
 import { EditorToolbar, FONT_FAMILIES } from "./EditorToolbar";
 import { SourcesRail } from "./SourcesRail";
-import { ReExportBar } from "./ReExportBar";
+import { ReExportBar, type ExportArtifact } from "./ReExportBar";
 import { SaveBar } from "./SaveBar";
+import { UnsavedDiff, type ChapterChange } from "./UnsavedDiff";
 import { useThesisSave } from "./hooks/useThesisSave";
 import { EmptyState } from "./EmptyState";
 import { EditorSkeleton } from "./EditorSkeleton";
@@ -118,13 +119,27 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
     setEditsSinceExport(n => n + 1);
   }, [thesisSave]);
 
+  const [artifacts, setArtifacts] = useState<ExportArtifact[]>([]);
+  // null = closed. Snapshotted on open so the list cannot shift under the
+  // reader while they are looking at it.
+  const [changes, setChanges] = useState<ChapterChange[] | null>(null);
+
   const handleReExport = useCallback(async () => {
     setExporting(true);
     setExportError(null);
     try {
+      // Save FIRST. The export renders the chapters the SERVER holds, so
+      // exporting while dirty silently produced a document without the edits
+      // the student had just made and was looking at.
+      await thesisSave.save();
       // apiFetch injects access_token + throws ApiError on non-2xx; replaces
       // the bare fetch that used to rely on the dothesis_session cookie.
-      await apiFetch(`/projects/${projectId}/m5/export`, { method: "POST" });
+      // The response is {docx, pdf} — it used to be thrown away, so the button
+      // ran, said nothing, and produced no file the student could reach.
+      const out = (await apiFetch(
+        `/projects/${projectId}/m5/export`, { method: "POST" },
+      )) as { docx?: ExportArtifact; pdf?: ExportArtifact } | null;
+      setArtifacts([out?.docx, out?.pdf].filter(Boolean) as ExportArtifact[]);
       setLastExportAt(new Date());
       setEditsSinceExport(0);
     } catch (e: any) {
@@ -132,7 +147,7 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
     } finally {
       setExporting(false);
     }
-  }, [projectId]);
+  }, [projectId, thesisSave]);
 
   const onPendingMutate = useCallback(() => { void mutate(); }, [mutate]);
 
@@ -206,6 +221,7 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
         exporting={exporting}
         error={exportError}
         projectId={projectId}
+        artifacts={artifacts}
         save={
           <SaveBar
             dirty={thesisSave.dirty}
@@ -213,9 +229,17 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
             lastSavedAt={thesisSave.lastSavedAt}
             error={thesisSave.error}
             onSave={() => { void thesisSave.save(); }}
+            onShowChanges={() => setChanges(thesisSave.changes())}
           />
         }
       />
+      {changes && (
+        <UnsavedDiff
+          changes={changes}
+          onClose={() => setChanges(null)}
+          onSave={() => { void thesisSave.save(); }}
+        />
+      )}
       <div className="flex flex-1 min-h-0">
         {/* Outline click scrolls to the chapter; scrollspy keeps it in sync. */}
         <OutlineRail present={presentNames} active={active} onSelect={scrollToChapter} />
@@ -248,6 +272,7 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
                     projectId={projectId}
                     chapterName={name}
                     initialProse={chapter.prose}
+                    onSeed={prose => thesisSave.seed(name, prose)}
                     pendingEdits={_toPendingEdits(chapter.pending_edits)}
                     onPendingMutate={onPendingMutate}
                     onProseChange={prose => trackProse(name, prose)}

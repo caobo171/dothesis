@@ -21,6 +21,10 @@ import { apiFetch } from "@/app/lib/api";
  */
 export function useThesisSave({ projectId }: { projectId: string }) {
   const pending = useRef<Map<string, string>>(new Map());
+  // What the SERVER holds for each chapter. Seeded when a chapter loads and
+  // replaced on every successful save, so "what have I changed" can be answered
+  // without re-fetching — the editor is the only place that knows both halves.
+  const baseline = useRef<Map<string, string>>(new Map());
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -56,6 +60,7 @@ export function useThesisSave({ projectId }: { projectId: string }) {
             { method: "PATCH", body: { prose } },
           );
           ok = true;
+          baseline.current.set(chapterName, prose);
         } catch (e: any) {
           lastErr = e;
           if (i < 2) await new Promise(res => setTimeout(res, backoff[i]));
@@ -77,12 +82,34 @@ export function useThesisSave({ projectId }: { projectId: string }) {
     setDirty(pending.current.size > 0);
   }, [projectId]);
 
+  /** The chapter as the server has it. Called once, when it loads. */
+  const seed = useCallback((chapterName: string, prose: string) => {
+    if (!baseline.current.has(chapterName)) baseline.current.set(chapterName, prose);
+  }, []);
+
   /** Record an edit to one chapter. No request — that is what `save` is for. */
   const track = useCallback((chapterName: string, prose: string) => {
+    const original = baseline.current.get(chapterName);
+    if (original !== undefined && original === prose) {
+      // Typed and undone, or TipTap re-serialising on mount: nothing to send,
+      // and calling that "unsaved changes" trains the student to ignore the
+      // warning that matters.
+      pending.current.delete(chapterName);
+      setDirty(pending.current.size > 0);
+      return;
+    }
     // Latest value wins: whatever is on screen is what Save sends.
     pending.current.set(chapterName, prose);
     setDirty(true);
   }, []);
 
-  return { track, save, saving, lastSavedAt, error, dirty };
+  /** Every chapter that differs from what the server holds. */
+  const changes = useCallback(
+    (): { chapter: string; before: string; after: string }[] =>
+      [...pending.current.entries()].map(([chapter, after]) => ({
+        chapter, after, before: baseline.current.get(chapter) ?? "",
+      })),
+    []);
+
+  return { seed, track, changes, save, saving, lastSavedAt, error, dirty };
 }

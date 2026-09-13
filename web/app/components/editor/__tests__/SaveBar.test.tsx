@@ -21,10 +21,10 @@ describe("SaveBar", () => {
     // A permanently enabled Save teaches nothing about whether the work is
     // stored, which is the whole point of dropping the per-keystroke autosave.
     renderEn();
-    expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
 
     renderEn({ dirty: true });
-    expect(screen.getByRole("button", { name: /save/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
   });
 
   test("says plainly that changes are unsaved", () => {
@@ -36,7 +36,7 @@ describe("SaveBar", () => {
     renderEn({ dirty: true, saving: true });
     expect(screen.getByText(/saving/i)).toBeTruthy();
     expect(screen.queryByText(/unsaved changes/i)).toBeNull();
-    expect(screen.getByRole("button", { name: /save/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
   test("shows when the last save landed, once clean", () => {
@@ -47,13 +47,28 @@ describe("SaveBar", () => {
   test("a failure is announced and still offers the save", () => {
     renderEn({ dirty: true, error: new Error("network") });
     expect(screen.getByRole("alert").textContent).toMatch(/could not save/i);
-    expect(screen.getByRole("button", { name: /save/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
   });
 
   test("the button calls back", () => {
     const onSave = vi.fn();
     renderEn({ dirty: true, onSave });
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalled();
+  });
+});
+
+
+describe("seeing what changed", () => {
+  test("the unsaved marker opens the diff — knowing THAT something changed is not enough", () => {
+    const onShowChanges = vi.fn();
+    renderEn({ dirty: true, onShowChanges });
+    fireEvent.click(screen.getByRole("button", { name: /unsaved changes/i }));
+    expect(onShowChanges).toHaveBeenCalled();
+  });
+
+  test("stays inert when the host wires no handler", () => {
+    renderEn({ dirty: true });
+    expect(screen.getByRole("button", { name: /unsaved changes/i })).toBeDisabled();
   });
 });

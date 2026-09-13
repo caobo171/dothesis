@@ -1,9 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download, Loader2 } from "lucide-react";
 
+import { triggerExportDownload } from "@/app/lib/api";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
+import { useArtifactDownload } from "@/app/components/chat/hooks/useArtifactDownload";
+
+
+/** What POST /m5/export hands back for each rendered file. */
+export type ExportArtifact = {
+  kind: string;
+  download_url: string;
+  size_bytes?: number | null;
+};
 
 
 type Props = {
@@ -15,6 +25,10 @@ type Props = {
   /** Where "back to chat" goes. The editor replaces the whole workspace, so
    *  without this there is no way out of it but the browser's back button. */
   projectId?: string;
+  /** Files the last export produced. The endpoint has always returned
+   *  {docx, pdf}; the editor threw the response away, so Re-export ran, said
+   *  nothing, and left no file the student could reach. */
+  artifacts?: ExportArtifact[];
   /** The document's Save. Slotted here rather than owned here so this bar stays
    *  about exporting — but it belongs in the one strip that is always on
    *  screen, not down the page next to whichever chapter you happen to be in. */
@@ -38,6 +52,7 @@ function _formatRelative(t: Date | null, tr: T): string {
 // Freshness counter (editsSinceExport) is driven by parent watching useChapterSave.
 export function ReExportBar({
   lastExportAt, editsSinceExport, onReExport, exporting, error, projectId, save,
+  artifacts,
 }: Props) {
   const t = useT() as T;
   return (
@@ -71,6 +86,9 @@ export function ReExportBar({
       <span className="flex-1" />
       {/* Save sits left of Re-export: you save, then you export. */}
       {save}
+      {(artifacts ?? []).map(a => (
+        <DownloadLink key={a.download_url} artifact={a} />
+      ))}
       <button
         type="button"
         disabled={exporting}
@@ -80,5 +98,40 @@ export function ReExportBar({
         {exporting ? t("editor.export.exporting") : t("editor.export.reExport")}
       </button>
     </div>
+  );
+}
+
+
+/**
+ * One produced file, as a download.
+ *
+ * Goes through the same mint-a-scoped-token path every other download button
+ * uses: the /exports route 302s to a signed S3 URL but still needs auth, and a
+ * browser cannot put a body on a navigation — so the long-lived JWT must never
+ * end up in the URL.
+ */
+function DownloadLink({ artifact }: { artifact: ExportArtifact }) {
+  const t = useT();
+  const { busy, error, start } = useArtifactDownload();
+  const label = (artifact.kind || "file").toUpperCase();
+
+  return (
+    <button
+      type="button"
+      onClick={() => { void start(() => triggerExportDownload(artifact.download_url)); }}
+      disabled={busy}
+      title={error || t("editor.export.download", { kind: label })}
+      className={
+        "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-semibold " +
+        (error
+          ? "border-[#E4C98A] bg-[#FBF3E0] text-[#6E5121]"
+          : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50")
+      }
+    >
+      {busy
+        ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+        : <Download className="h-3 w-3" aria-hidden />}
+      {label}
+    </button>
   );
 }

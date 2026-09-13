@@ -30,6 +30,10 @@ type Props = {
   pendingEdits: PendingEdit[];
   defaultTargetLang?: string;
   onPendingMutate: () => void;
+  /** The chapter as the server has it, reported once on mount so the document
+   *  can diff against it. Not `initialProse` directly: TipTap re-serialises the
+   *  markdown, and the round-tripped form is what an edit will be compared to. */
+  onSeed?: (prose: string) => void;
   /** This chapter's markdown, on every edit. Saving is owned by ThesisEditor:
    *  the student reads one continuous document, so there is one Save for it,
    *  not one per chapter. */
@@ -58,7 +62,7 @@ type Props = {
 // six times.
 export function ChapterEditor({
   projectId, chapterName, initialProse, pendingEdits,
-  defaultTargetLang, onPendingMutate, onProseChange,
+  defaultTargetLang, onPendingMutate, onProseChange, onSeed,
   fontFamily, fontSize, onActiveEditor, onCitationClick,
 }: Props) {
   // Held in a ref so the useEditor config (built once) always calls the latest
@@ -130,6 +134,18 @@ export function ChapterEditor({
     // so SSR mismatches are not a concern here.
     immediatelyRender: typeof window !== "undefined",
   });
+
+  // Report the chapter as the SERVER has it, once the editor has parsed it.
+  // Not `initialProse` directly: TipTap re-serialises the markdown on the way
+  // back out, so every future edit is compared against the round-tripped form.
+  // Diffing against the raw stored string instead would show the serializer's
+  // own normalisation as the student's changes.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!editor || seeded.current || !onSeed) return;
+    seeded.current = true;
+    onSeed(preserveDtTokens(editor.storage.markdown.getMarkdown()));
+  }, [editor, onSeed]);
 
   // Apply AiPending marks for every pending edit not already marked.
   // Remove marks whose pending_id is no longer in the list.

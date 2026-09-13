@@ -16,13 +16,17 @@ import { useT } from "@/app/lib/i18n/LocaleProvider";
  * where closing the tab costs them the work.
  */
 export function SaveBar({
-  dirty, saving, lastSavedAt, error, onSave,
+  dirty, saving, lastSavedAt, error, onSave, onShowChanges,
 }: {
   dirty: boolean;
   saving: boolean;
   lastSavedAt: Date | null;
   error: Error | null;
   onSave: () => void;
+  /** Opens the diff. "Unsaved changes" on its own is the same information the
+   *  student already had from having typed; what they need to decide whether to
+   *  save is WHICH changes. */
+  onShowChanges?: () => void;
 }) {
   const t = useT();
 
@@ -35,10 +39,15 @@ export function SaveBar({
             <span className="text-ink-400">{t("editor.save.saving")}</span>
           </>
         ) : dirty ? (
-          <>
+          <button
+            type="button"
+            onClick={onShowChanges}
+            disabled={!onShowChanges}
+            className="inline-flex items-center gap-1.5 rounded px-1 -mx-1 text-[#6E5121] font-medium enabled:hover:bg-[#FBF3E0] enabled:underline enabled:decoration-dotted enabled:underline-offset-2 disabled:cursor-default"
+          >
             <span className="h-1.5 w-1.5 rounded-full bg-[#C9962F]" aria-hidden />
-            <span className="text-[#6E5121] font-medium">{t("editor.save.unsaved")}</span>
-          </>
+            {t("editor.save.unsaved")}
+          </button>
         ) : lastSavedAt ? (
           <>
             <Check className="h-3 w-3 text-ink-400" aria-hidden />

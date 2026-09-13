@@ -151,3 +151,41 @@ describe("one Save for the whole document", () => {
     expect(result.current.dirty).toBe(false);
   });
 });
+
+describe("what has changed since the last save", () => {
+  it("reports the before and after per chapter", async () => {
+    const { result } = renderHook(() => useThesisSave({ projectId: "p1" }));
+    act(() => { result.current.seed("intro", "Sự phát triển nhanh."); });
+    act(() => { result.current.track("intro", "Sự phát triển rất nhanh."); });
+
+    expect(result.current.changes()).toEqual([
+      { chapter: "intro", before: "Sự phát triển nhanh.", after: "Sự phát triển rất nhanh." },
+    ]);
+  });
+
+  it("typing something and undoing it is not an unsaved change", async () => {
+    // TipTap also re-serialises on mount. Calling that "unsaved changes" trains
+    // the student to ignore the warning that matters.
+    const { result } = renderHook(() => useThesisSave({ projectId: "p1" }));
+    act(() => { result.current.seed("intro", "original"); });
+    act(() => { result.current.track("intro", "original typo"); });
+    expect(result.current.dirty).toBe(true);
+
+    act(() => { result.current.track("intro", "original"); });
+    expect(result.current.dirty).toBe(false);
+    expect(result.current.changes()).toEqual([]);
+  });
+
+  it("a saved chapter becomes the new baseline", async () => {
+    const { result } = renderHook(() => useThesisSave({ projectId: "p1" }));
+    act(() => { result.current.seed("intro", "v1"); });
+    act(() => { result.current.track("intro", "v2"); });
+    await act(async () => { await result.current.save(); });
+
+    // Back to v1 is now itself a change, not a return to clean.
+    act(() => { result.current.track("intro", "v1"); });
+    expect(result.current.changes()).toEqual([
+      { chapter: "intro", before: "v2", after: "v1" },
+    ]);
+  });
+});

@@ -75,3 +75,28 @@ describe("the document's Save", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
   });
 });
+
+describe("what an export produced", () => {
+  const docx = { kind: "docx", download_url: "/api/v1/projects/p1/exports/t.docx" };
+
+  it("offers the file, instead of leaving the student with nothing", () => {
+    // POST /m5/export has always returned {docx, pdf}; the editor threw the
+    // response away, so Re-export ran, said nothing, and produced no file
+    // anyone could reach.
+    renderEn(
+      <ReExportBar lastExportAt={new Date()} editsSinceExport={0}
+        onReExport={() => Promise.resolve()} exporting={false}
+        artifacts={[docx, { kind: "pdf", download_url: "/api/v1/projects/p1/exports/t.pdf" }]} />,
+    );
+    expect(screen.getByRole("button", { name: /DOCX/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /PDF/ })).toBeInTheDocument();
+  });
+
+  it("shows nothing before an export has run", () => {
+    renderEn(
+      <ReExportBar lastExportAt={null} editsSinceExport={0}
+        onReExport={() => Promise.resolve()} exporting={false} />,
+    );
+    expect(screen.queryByRole("button", { name: /DOCX/ })).toBeNull();
+  });
+});
