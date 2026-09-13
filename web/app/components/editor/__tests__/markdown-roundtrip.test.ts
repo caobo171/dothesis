@@ -85,12 +85,12 @@ describe("markdown round-trip (export safety)", () => {
     expect(md).toContain("A-->B;");
   });
 
-  it("keeps a [[DT:kind]] token bare after the autosave normalization step", () => {
+  it("keeps a [[DT:kind]] token bare after the save normalization step", () => {
     const src = "Screening summary follows.\n\n[[DT:data_cleaning]]\n\nNext paragraph.";
     const editor = mkEditor(src);
     // The serializer escapes brackets (\[\[DT:…\]\]) — the export matcher would
     // miss that, so ChapterEditor runs preserveDtTokens before persisting. This
-    // is exactly what autosave stores.
+    // is exactly what a save stores.
     const persisted = preserveDtTokens(editor.storage.markdown.getMarkdown());
     expect(persisted).toContain("[[DT:data_cleaning]]");
     expect(persisted).not.toContain("\\[\\[DT");

@@ -56,7 +56,7 @@ function _toPendingEdits(raw: ChapterDict[string]["pending_edits"]) {
 
 
 // Top-level editor surface. Owns chapter selection state, edits-since-export
-// counter, and orchestrates re-export. Per-chapter logic (autosave, AiPending,
+// counter, and orchestrates re-export. Per-chapter logic (save, AiPending,
 // selection toolbar) lives inside ChapterEditor.
 // Stable anchor id for a chapter section, so the outline can scroll to it.
 const chapterAnchor = (name: string) => `ch-${name}`;
@@ -82,7 +82,7 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
   // Document-level font, persisted per project so the choice survives a reload
   // and applies across every stacked chapter. NOT a TipTap mark: chapters are
   // stored as clean markdown (html:false), so a font mark would be dropped on
-  // the next autosave — a whole-document setting is lossless and how a thesis is
+  // the next save — a whole-document setting is lossless and how a thesis is
   // actually styled. Read lazily to avoid an SSR/client mismatch.
   const fontKey = `dothesis_editor_font_${projectId}`;
   const [font, setFont] = useState<{ family: string; size: number }>(() => {
@@ -179,7 +179,7 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
   // Canonical chapters only, in canonical order. Rendering raw Object.keys
   // put a pane on screen for any key the API happened to return — including a
   // pre-branch project's retired `discussion` key, which is typeable but whose
-  // every autosave PATCH 404s (_VALID_CHAPTER_NAMES no longer accepts it) and
+  // every save PATCH 404s (_VALID_CHAPTER_NAMES no longer accepts it) and
   // parks an error the student cannot clear. The backfill now folds that prose
   // into `conclusion`; this makes an unrenderable key impossible regardless.
   const presentNames = CHAPTER_ORDER

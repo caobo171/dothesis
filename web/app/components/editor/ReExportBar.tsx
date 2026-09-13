@@ -31,7 +31,7 @@ function _formatRelative(t: Date | null, tr: T): string {
 
 
 // Pinned at the top of the editor surface. Always visible.
-// Freshness counter (editsSinceExport) is driven by parent watching useChapterAutosave.
+// Freshness counter (editsSinceExport) is driven by parent watching useChapterSave.
 export function ReExportBar({
   lastExportAt, editsSinceExport, onReExport, exporting, error, projectId,
 }: Props) {

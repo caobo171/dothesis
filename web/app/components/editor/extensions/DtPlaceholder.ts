@@ -29,7 +29,7 @@ export function dtLabel(kind: string): string {
 
 
 // tiptap-markdown escapes `[` as `\[` on serialize (it's link syntax), so an
-// edited chapter autosaves `[[DT:kind]]` as `\[\[DT:kind\]\]` — which the
+// edited chapter saves `[[DT:kind]]` as `\[\[DT:kind\]\]` — which the
 // export's token matcher (bare `[[…]]`) would miss, silently dropping the woven
 // block. Normalize DT tokens back to their bare form before persisting. Matches
 // the token whether or not each bracket got escaped.

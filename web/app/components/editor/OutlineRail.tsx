@@ -29,7 +29,7 @@ type Props = {
 };
 
 
-// Left rail. Pure presentation — autosave-flush-before-switch logic lives in
+// Left rail. Pure presentation — save-before-switch logic lives in
 // the parent so the rail stays unit-testable without server coupling.
 export function OutlineRail({ present, active, onSelect }: Props) {
   return (

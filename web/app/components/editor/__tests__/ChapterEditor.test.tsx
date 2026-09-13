@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 
-describe("ChapterEditor — mount + autosave", () => {
+describe("ChapterEditor — mount + save", () => {
   it("renders the chapter prose", async () => {
     render(
       <LocaleProvider initialLocale="en" hasCookie>

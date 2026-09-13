@@ -13,7 +13,7 @@ import type { Editor } from "@tiptap/core";
 // splice ranges in the wrong place once chapters became real markdown.
 //
 // Both directions resolve against editor.storage.markdown.getMarkdown() — the
-// exact string the autosave persists — so a client offset and the server's
+// exact string a save persists — so a client offset and the server's
 // prose[from:to] always reference the same characters.
 export type OffsetMap = {
   md: string;

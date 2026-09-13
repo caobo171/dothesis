@@ -90,7 +90,7 @@ describe("ThesisEditor legacy chapter keys", () => {
   it("renders no pane for a retired chapter key", async () => {
     // A `discussion` pane would render and be typeable, but PATCH
     // /m5/chapters/discussion 404s (_VALID_CHAPTER_NAMES dropped it), so every
-    // autosave retries and parks an error on prose the student can't save.
+    // the save retries and parks an error on prose the student can't store.
     // The backfill no longer produces that key; the editor renders canonical
     // chapters only so a stale row in an old project can't resurrect it.
     (global.fetch as any) = vi.fn().mockImplementation(async (url: string) => {

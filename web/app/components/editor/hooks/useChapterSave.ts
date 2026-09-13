@@ -5,21 +5,32 @@ import { apiFetch } from "@/app/lib/api";
 type Params = {
   projectId: string;
   chapterName: string;
-  debounceMs?: number;
 };
 
 
-// Debounced PATCH /m5/chapters/{name}. Single-flight: the latest queued prose
-// is what gets sent. Retries with exponential backoff (250ms / 1s / 4s) on
-// network errors. After 3 retries, surfaces error via the returned state.
-export function useChapterAutosave({ projectId, chapterName, debounceMs = 1000 }: Params) {
+/**
+ * Explicit save for one chapter — PATCH /m5/chapters/{name}.
+ *
+ * This used to fire on a 1s debounce after every keystroke, which is a write
+ * per sentence per student for as long as the editor is open. `track()` now
+ * only remembers what changed; the request happens when `save()` is called,
+ * which is the Save button.
+ *
+ * Retries with exponential backoff (250ms / 1s / 4s) on network errors and
+ * surfaces the failure after three attempts — losing a save matters more now
+ * that they are deliberate and further apart.
+ */
+export function useChapterSave({ projectId, chapterName }: Params) {
   const pendingProse = useRef<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  // Separate from `pendingProse`, which is cleared for the duration of a save:
+  // this is what the UI asks "is there anything to save?", and it must stay
+  // true while a save is in flight so a failure does not read as clean.
+  const [dirty, setDirty] = useState(false);
 
-  const flush = useCallback(async () => {
+  const save = useCallback(async () => {
     if (pendingProse.current === null) return;
     const prose = pendingProse.current;
     pendingProse.current = null;
@@ -33,7 +44,7 @@ export function useChapterAutosave({ projectId, chapterName, debounceMs = 1000 }
       try {
         // apiFetch, NOT a raw fetch: the POST-only API reads the auth token
         // from the JSON body (no cookies). A bare fetch sent none, so every
-        // autosave 401'd and NOTHING the user typed was persisted. apiFetch
+        // save 401'd and NOTHING the user typed was persisted. apiFetch
         // folds the token in and throws on non-2xx (caught below to retry).
         await apiFetch(
           `/projects/${projectId}/m5/chapters/${chapterName}`,
@@ -42,6 +53,8 @@ export function useChapterAutosave({ projectId, chapterName, debounceMs = 1000 }
         setLastSavedAt(new Date());
         setError(null);
         setSaving(false);
+        // Only clean if nothing was typed while the request was in flight.
+        if (pendingProse.current === null) setDirty(false);
         return;
       } catch (e: any) {
         lastErr = e;
@@ -60,12 +73,12 @@ export function useChapterAutosave({ projectId, chapterName, debounceMs = 1000 }
     setSaving(false);
   }, [projectId, chapterName]);
 
-  const queue = useCallback((prose: string) => {
-    // Latest value wins: overwrite any pending prose before the debounce fires.
+  /** Record an edit. No request — that is what `save` is for. */
+  const track = useCallback((prose: string) => {
+    // Latest value wins: whatever is on screen is what Save sends.
     pendingProse.current = prose;
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(flush, debounceMs);
-  }, [flush, debounceMs]);
+    setDirty(true);
+  }, []);
 
-  return { queue, flush, saving, lastSavedAt, error };
+  return { track, save, saving, lastSavedAt, error, dirty };
 }

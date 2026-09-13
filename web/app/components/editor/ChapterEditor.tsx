@@ -19,8 +19,8 @@ import { SelectionToolbar } from "./SelectionToolbar";
 import { CitePopover } from "./CitePopover";
 import { TranslateMenu } from "./TranslateMenu";
 import { PendingEditRibbon, type PendingEdit } from "./PendingEditRibbon";
-import { AutosaveStatus } from "./AutosaveStatus";
-import { useChapterAutosave } from "./hooks/useChapterAutosave";
+import { SaveBar } from "./SaveBar";
+import { useChapterSave } from "./hooks/useChapterSave";
 import { buildOffsetMap, offsetToPos, posToOffset } from "./markdownOffset";
 import { apiFetch, ApiError } from "@/app/lib/api";
 
@@ -47,7 +47,7 @@ type Props = {
 
 
 // Mounts one TipTap instance per chapter. Owns:
-//   - autosave (PATCH on debounced edit)
+//   - tracking unsaved edits + the explicit Save (PATCH on demand)
 //   - selection toolbar (paraphrase/translate/cite via BubbleMenu)
 //   - pending-edit reconciliation (apply AiPending marks for each server edit,
 //     remove marks no longer on the server, surface accept/reject handlers per ribbon)
@@ -69,7 +69,7 @@ export function ChapterEditor({
   const [staleIds, setStaleIds] = useState<Set<string>>(new Set());
   const selectionRef = useRef<{ from: number; to: number } | null>(null);
 
-  const autosave = useChapterAutosave({ projectId, chapterName });
+  const chapterSave = useChapterSave({ projectId, chapterName });
 
   const editor = useEditor({
     // Markdown extension makes the editor parse `initialProse` (stored markdown)
@@ -78,7 +78,7 @@ export function ChapterEditor({
     // the stored prose (and out of the exporter), so storage stays clean
     // markdown exactly like the exporter already expects.
     // Table + its row/cell nodes: tiptap-markdown serializes them to GFM pipe
-    // tables, which the Pandoc export renders — so tables survive autosave AND
+    // tables, which the Pandoc export renders — so tables survive a save AND
     // land in the docx. resizable so columns can be dragged in the editor.
     // codeBlock:false disables StarterKit's plain code block so MermaidBlock (a
     // CodeBlock subclass, same "codeBlock" node name) takes its place — fenced
@@ -117,8 +117,7 @@ export function ChapterEditor({
       // preserveDtTokens undoes the serializer's bracket-escaping so [[DT:kind]]
       // placement tokens stay intact for the export weave (see DtPlaceholder).
       const text = preserveDtTokens(editor.storage.markdown.getMarkdown());
-      autosave.queue(text);
-      onDirty(true);
+      chapterSave.track(text);
     },
     onSelectionUpdate({ editor }) {
       // Track selection so toolbar action handlers can read from/to without
@@ -251,10 +250,11 @@ export function ChapterEditor({
     }
   }, [projectId, chapterName, onPendingMutate]);
 
-  // Flip dirty flag back to false once autosave confirms a successful write.
+  // Mirror this chapter's dirty state up to ThesisEditor, which owns the
+  // beforeunload guard and the edits-since-export counter.
   useEffect(() => {
-    if (autosave.lastSavedAt) onDirty(false);
-  }, [autosave.lastSavedAt, onDirty]);
+    onDirty(chapterSave.dirty);
+  }, [chapterSave.dirty, onDirty]);
 
   // Bind the shared toolbar to this chapter when it's ready and whenever it
   // gains focus, so formatting acts on the chapter the caret is actually in.
@@ -280,16 +280,15 @@ export function ChapterEditor({
     // Just the chapter body now — no toolbar, no own scroll. The parent stacks
     // these in one shared scroll container so the whole thesis reads as one page.
     <div>
-      {/* There is no Save button because the chapter saves itself — but nothing
-          said so, and nothing said when it DIDN'T. The hook gives up after
-          three attempts and set an `error` no one read: a student typing
-          through a dead session saw a normal-looking editor the whole time.
-          Quiet on success, loud and retryable on failure. */}
-      <AutosaveStatus
-        saving={autosave.saving}
-        lastSavedAt={autosave.lastSavedAt}
-        error={autosave.error}
-        onRetry={() => { void autosave.flush(); }}
+      {/* Saving is explicit: a debounced PATCH per keystroke was a write per
+          sentence per student for as long as the tab was open. This notes that
+          something changed and asks for the save. */}
+      <SaveBar
+        dirty={chapterSave.dirty}
+        saving={chapterSave.saving}
+        lastSavedAt={chapterSave.lastSavedAt}
+        error={chapterSave.error}
+        onSave={() => { void chapterSave.save(); }}
       />
       {/* BubbleMenu appears on text selection; children switch between toolbar
           modes (default → translate picker → citation search). */}

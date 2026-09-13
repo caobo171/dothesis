@@ -11,7 +11,7 @@ import {
 // faculty default, the rest cover the common house styles. Kept as a display
 // setting (see ChapterEditor) rather than an inline mark: the chapter is stored
 // as clean markdown (html:false) so a per-range font mark would be dropped on
-// the very next autosave. A whole-document font matches how a thesis is styled
+// the very next save. A whole-document font matches how a thesis is styled
 // anyway, so we apply it to the editor container instead.
 export const FONT_FAMILIES = [
   { label: "Times New Roman", value: '"Times New Roman", Times, serif' },
@@ -46,7 +46,7 @@ type Props = {
 
 // Persistent formatting bar above the chapter body — the Word-like surface the
 // design calls for. Every control here maps to an editor command or a display
-// setting that survives autosave; nothing renders a control it can't back up
+// setting that survives a save; nothing renders a control it can't back up
 // (no underline/align/table, which the markdown store would drop). See
 // [[feedback_tool_naming_competitor_parity]] — don't show a button that lies.
 export function EditorToolbar({ editor, fontFamily, fontSize, onFontFamily, onFontSize }: Props) {
