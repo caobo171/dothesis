@@ -61,3 +61,17 @@ describe("leaving the editor", () => {
     expect(screen.queryByRole("link")).toBeNull();
   });
 });
+
+describe("the document's Save", () => {
+  it("sits in the always-visible strip, not down the page", () => {
+    // The student reads one continuous document, so there is one Save for it —
+    // and it belongs where it is always on screen rather than next to whichever
+    // chapter the caret happens to be in.
+    renderEn(
+      <ReExportBar lastExportAt={null} editsSinceExport={0}
+        onReExport={() => Promise.resolve()} exporting={false}
+        save={<button type="button">Save</button>} />,
+    );
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+});

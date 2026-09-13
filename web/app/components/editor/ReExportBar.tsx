@@ -15,6 +15,10 @@ type Props = {
   /** Where "back to chat" goes. The editor replaces the whole workspace, so
    *  without this there is no way out of it but the browser's back button. */
   projectId?: string;
+  /** The document's Save. Slotted here rather than owned here so this bar stays
+   *  about exporting — but it belongs in the one strip that is always on
+   *  screen, not down the page next to whichever chapter you happen to be in. */
+  save?: React.ReactNode;
 };
 
 
@@ -33,7 +37,7 @@ function _formatRelative(t: Date | null, tr: T): string {
 // Pinned at the top of the editor surface. Always visible.
 // Freshness counter (editsSinceExport) is driven by parent watching useChapterSave.
 export function ReExportBar({
-  lastExportAt, editsSinceExport, onReExport, exporting, error, projectId,
+  lastExportAt, editsSinceExport, onReExport, exporting, error, projectId, save,
 }: Props) {
   const t = useT() as T;
   return (
@@ -65,6 +69,8 @@ export function ReExportBar({
         )}
       </div>
       <span className="flex-1" />
+      {/* Save sits left of Re-export: you save, then you export. */}
+      {save}
       <button
         type="button"
         disabled={exporting}

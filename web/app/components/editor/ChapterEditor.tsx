@@ -19,8 +19,6 @@ import { SelectionToolbar } from "./SelectionToolbar";
 import { CitePopover } from "./CitePopover";
 import { TranslateMenu } from "./TranslateMenu";
 import { PendingEditRibbon, type PendingEdit } from "./PendingEditRibbon";
-import { SaveBar } from "./SaveBar";
-import { useChapterSave } from "./hooks/useChapterSave";
 import { buildOffsetMap, offsetToPos, posToOffset } from "./markdownOffset";
 import { apiFetch, ApiError } from "@/app/lib/api";
 
@@ -32,7 +30,10 @@ type Props = {
   pendingEdits: PendingEdit[];
   defaultTargetLang?: string;
   onPendingMutate: () => void;
-  onDirty: (dirty: boolean) => void;
+  /** This chapter's markdown, on every edit. Saving is owned by ThesisEditor:
+   *  the student reads one continuous document, so there is one Save for it,
+   *  not one per chapter. */
+  onProseChange: (prose: string) => void;
   // Document font is owned by the parent (ThesisEditor) so one setting applies
   // across every stacked chapter and drives the single shared toolbar.
   fontFamily: string;
@@ -47,7 +48,7 @@ type Props = {
 
 
 // Mounts one TipTap instance per chapter. Owns:
-//   - tracking unsaved edits + the explicit Save (PATCH on demand)
+//   - reporting edits upward (the document's single Save lives in the parent)
 //   - selection toolbar (paraphrase/translate/cite via BubbleMenu)
 //   - pending-edit reconciliation (apply AiPending marks for each server edit,
 //     remove marks no longer on the server, surface accept/reject handlers per ribbon)
@@ -57,7 +58,7 @@ type Props = {
 // six times.
 export function ChapterEditor({
   projectId, chapterName, initialProse, pendingEdits,
-  defaultTargetLang, onPendingMutate, onDirty,
+  defaultTargetLang, onPendingMutate, onProseChange,
   fontFamily, fontSize, onActiveEditor, onCitationClick,
 }: Props) {
   // Held in a ref so the useEditor config (built once) always calls the latest
@@ -69,7 +70,6 @@ export function ChapterEditor({
   const [staleIds, setStaleIds] = useState<Set<string>>(new Set());
   const selectionRef = useRef<{ from: number; to: number } | null>(null);
 
-  const chapterSave = useChapterSave({ projectId, chapterName });
 
   const editor = useEditor({
     // Markdown extension makes the editor parse `initialProse` (stored markdown)
@@ -117,7 +117,7 @@ export function ChapterEditor({
       // preserveDtTokens undoes the serializer's bracket-escaping so [[DT:kind]]
       // placement tokens stay intact for the export weave (see DtPlaceholder).
       const text = preserveDtTokens(editor.storage.markdown.getMarkdown());
-      chapterSave.track(text);
+      onProseChange(text);
     },
     onSelectionUpdate({ editor }) {
       // Track selection so toolbar action handlers can read from/to without
@@ -250,12 +250,6 @@ export function ChapterEditor({
     }
   }, [projectId, chapterName, onPendingMutate]);
 
-  // Mirror this chapter's dirty state up to ThesisEditor, which owns the
-  // beforeunload guard and the edits-since-export counter.
-  useEffect(() => {
-    onDirty(chapterSave.dirty);
-  }, [chapterSave.dirty, onDirty]);
-
   // Bind the shared toolbar to this chapter when it's ready and whenever it
   // gains focus, so formatting acts on the chapter the caret is actually in.
   useEffect(() => {
@@ -280,16 +274,6 @@ export function ChapterEditor({
     // Just the chapter body now — no toolbar, no own scroll. The parent stacks
     // these in one shared scroll container so the whole thesis reads as one page.
     <div>
-      {/* Saving is explicit: a debounced PATCH per keystroke was a write per
-          sentence per student for as long as the tab was open. This notes that
-          something changed and asks for the save. */}
-      <SaveBar
-        dirty={chapterSave.dirty}
-        saving={chapterSave.saving}
-        lastSavedAt={chapterSave.lastSavedAt}
-        error={chapterSave.error}
-        onSave={() => { void chapterSave.save(); }}
-      />
       {/* BubbleMenu appears on text selection; children switch between toolbar
           modes (default → translate picker → citation search). */}
       <BubbleMenu editor={editor}>

@@ -12,6 +12,8 @@ import { ChapterEditor } from "./ChapterEditor";
 import { EditorToolbar, FONT_FAMILIES } from "./EditorToolbar";
 import { SourcesRail } from "./SourcesRail";
 import { ReExportBar } from "./ReExportBar";
+import { SaveBar } from "./SaveBar";
+import { useThesisSave } from "./hooks/useThesisSave";
 import { EmptyState } from "./EmptyState";
 import { EditorSkeleton } from "./EditorSkeleton";
 
@@ -107,9 +109,14 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
     document.getElementById(chapterAnchor(name))?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  const handleDirty = useCallback((dirty: boolean) => {
-    if (dirty) setEditsSinceExport(n => n + 1);
-  }, []);
+  // One save for the whole thesis. Per-chapter state put five "Unsaved
+  // changes · Save" bars down a page the student reads as one document, and
+  // none of them could answer the only question they have: is my thesis saved?
+  const thesisSave = useThesisSave({ projectId });
+  const trackProse = useCallback((name: string, prose: string) => {
+    thesisSave.track(name, prose);
+    setEditsSinceExport(n => n + 1);
+  }, [thesisSave]);
 
   const handleReExport = useCallback(async () => {
     setExporting(true);
@@ -199,6 +206,15 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
         exporting={exporting}
         error={exportError}
         projectId={projectId}
+        save={
+          <SaveBar
+            dirty={thesisSave.dirty}
+            saving={thesisSave.saving}
+            lastSavedAt={thesisSave.lastSavedAt}
+            error={thesisSave.error}
+            onSave={() => { void thesisSave.save(); }}
+          />
+        }
       />
       <div className="flex flex-1 min-h-0">
         {/* Outline click scrolls to the chapter; scrollspy keeps it in sync. */}
@@ -222,17 +238,19 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
               const chapter = chapters[name];
               if (!chapter) return null;
               return (
+                // No chapter heading here. The prose carries its own ("1.1 Bối
+                // cảnh…"), and this printed the raw storage key — INTRO,
+                // LIT_REVIEW — which both leaked an internal name and drew the
+                // seams of a document the student is meant to read straight
+                // through. The outline rail still navigates by these anchors.
                 <section key={name} id={chapterAnchor(name)} data-chapter={name} className="scroll-mt-4">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-400 mb-3">
-                    {chapter.name}
-                  </h2>
                   <ChapterEditor
                     projectId={projectId}
                     chapterName={name}
                     initialProse={chapter.prose}
                     pendingEdits={_toPendingEdits(chapter.pending_edits)}
                     onPendingMutate={onPendingMutate}
-                    onDirty={handleDirty}
+                    onProseChange={prose => trackProse(name, prose)}
                     fontFamily={font.family}
                     fontSize={font.size}
                     onActiveEditor={setActiveEditor}

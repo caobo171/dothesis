@@ -27,7 +27,7 @@ describe("ChapterEditor — mount + save", () => {
         initialProse="Hello world."
         pendingEdits={[]}
         onPendingMutate={() => {}}
-        onDirty={() => {}}
+        onProseChange={() => {}}
         fontFamily="serif"
         fontSize={16}
       />

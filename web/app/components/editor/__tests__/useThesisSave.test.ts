@@ -1,11 +1,14 @@
 /**
- * Saving is EXPLICIT. This used to PATCH on a 1s debounce after every
- * keystroke — a write per sentence, per student, for as long as the tab was
- * open. `track` now only records; `save` is the request.
+ * Saving is EXPLICIT and DOCUMENT-WIDE.
+ *
+ * It used to PATCH on a 1s debounce after every keystroke — a request per
+ * sentence, per student, for as long as the tab was open — and the state lived
+ * per chapter, which put five "Unsaved changes · Save" bars down a page the
+ * student reads as one document.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useChapterSave } from "../hooks/useChapterSave";
+import { useThesisSave } from "../hooks/useThesisSave";
 
 
 beforeEach(() => {
@@ -22,13 +25,13 @@ function _proseOf(call: any): string {
 }
 
 
-describe("useChapterSave", () => {
+describe("useThesisSave", () => {
   it("does not touch the server while the student types", async () => {
     const { result } = renderHook(() =>
-      useChapterSave({ projectId: "p1", chapterName: "intro" }));
+      useThesisSave({ projectId: "p1" }));
 
-    act(() => { result.current.track("first"); });
-    act(() => { result.current.track("second"); });
+    act(() => { result.current.track("intro", "first"); });
+    act(() => { result.current.track("intro", "second"); });
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
 
     expect(fetch).not.toHaveBeenCalled();
@@ -37,10 +40,10 @@ describe("useChapterSave", () => {
 
   it("sends what is on screen when Save is pressed, once", async () => {
     const { result } = renderHook(() =>
-      useChapterSave({ projectId: "p1", chapterName: "intro" }));
+      useThesisSave({ projectId: "p1" }));
 
-    act(() => { result.current.track("first"); });
-    act(() => { result.current.track("latest"); });
+    act(() => { result.current.track("intro", "first"); });
+    act(() => { result.current.track("intro", "latest"); });
     await act(async () => { await result.current.save(); });
 
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -54,7 +57,7 @@ describe("useChapterSave", () => {
 
   it("saving with nothing to save does not hit the server", async () => {
     const { result } = renderHook(() =>
-      useChapterSave({ projectId: "p1", chapterName: "intro" }));
+      useThesisSave({ projectId: "p1" }));
     await act(async () => { await result.current.save(); });
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -71,8 +74,8 @@ describe("useChapterSave", () => {
     });
 
     const { result } = renderHook(() =>
-      useChapterSave({ projectId: "p1", chapterName: "intro" }));
-    act(() => { result.current.track("typed text"); });
+      useThesisSave({ projectId: "p1" }));
+    act(() => { result.current.track("intro", "typed text"); });
 
     // The retry backoff sleeps on setTimeout, so the fake clock has to run
     // while the save is in flight.
@@ -91,15 +94,60 @@ describe("useChapterSave", () => {
 
   it("stays dirty when something is typed while the save is in flight", async () => {
     const { result } = renderHook(() =>
-      useChapterSave({ projectId: "p1", chapterName: "intro" }));
+      useThesisSave({ projectId: "p1" }));
 
-    act(() => { result.current.track("old"); });
+    act(() => { result.current.track("intro", "old"); });
     let pending!: Promise<void>;
     act(() => { pending = result.current.save(); });
-    act(() => { result.current.track("newer"); });
+    act(() => { result.current.track("intro", "newer"); });
     await act(async () => { await pending; });
 
     // The newer text has not been sent, so the chapter is not clean.
     expect(result.current.dirty).toBe(true);
+  });
+});
+
+describe("one Save for the whole document", () => {
+  it("sends every chapter that changed, and only those", async () => {
+    const { result } = renderHook(() => useThesisSave({ projectId: "p1" }));
+
+    act(() => { result.current.track("intro", "intro text"); });
+    act(() => { result.current.track("results", "results text"); });
+    await act(async () => { await result.current.save(); });
+
+    const calls = (fetch as any).mock.calls;
+    expect(calls).toHaveLength(2);
+    const byChapter = Object.fromEntries(
+      calls.map((c: any) => [String(c[0]).split("/").pop(), _proseOf(c)]));
+    expect(byChapter).toEqual({ intro: "intro text", results: "results text" });
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it("keeps only the chapter that failed in the queue", async () => {
+    // A partial failure must not re-send the chapters that landed, and must not
+    // report the document clean either.
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (String(url).endsWith("/results")) throw new Error("network");
+      return { ok: true, json: async () => ({ prose: "x" }) };
+    });
+
+    const { result } = renderHook(() => useThesisSave({ projectId: "p1" }));
+    act(() => { result.current.track("intro", "intro text"); });
+    act(() => { result.current.track("results", "results text"); });
+
+    let first!: Promise<void>;
+    act(() => { first = result.current.save(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); await first; });
+
+    expect(result.current.dirty).toBe(true);
+    expect(result.current.error).toBeTruthy();
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ prose: "x" }) });
+    await act(async () => { await result.current.save(); });
+
+    const retried = (fetch as any).mock.calls;
+    expect(retried).toHaveLength(1);
+    expect(String(retried[0][0])).toContain("/results");
+    expect(result.current.dirty).toBe(false);
   });
 });

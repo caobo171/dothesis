@@ -27,7 +27,7 @@ export function SaveBar({
   const t = useT();
 
   return (
-    <div className="mb-2 flex items-center gap-2 text-[11.5px]" data-testid="save-bar">
+    <div className="flex items-center gap-2 text-[11.5px]" data-testid="save-bar">
       <span className="flex items-center gap-1.5" aria-live="polite">
         {saving ? (
           <>
