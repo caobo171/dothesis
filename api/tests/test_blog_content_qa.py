@@ -103,6 +103,17 @@ def test_every_failing_fixture_is_covered_by_a_case():
     assert on_disk == {name for name, _ in FAILURE_CASES}
 
 
+def test_troubleshoot_requires_an_early_student_question_blockquote():
+    post = _passing_seed()
+    post["archetype"] = "troubleshoot"
+    fails, _, _ = qa.check_post(post, qa.known_slugs(PASSING_DIR))
+    assert any("student-question blockquote" in failure for failure in fails)
+
+    post["body"] = "> “Em chạy ra số bị lỗi, giờ kiểm tra từ đâu ạ?”\n\n" + post["body"]
+    fails, _, _ = qa.check_post(post, qa.known_slugs(PASSING_DIR))
+    assert not any("student-question blockquote" in failure for failure in fails)
+
+
 # ------------------------------------------------------------ every WARN class
 
 

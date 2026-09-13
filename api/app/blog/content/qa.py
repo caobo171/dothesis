@@ -756,6 +756,13 @@ def check_post(post: dict, slugs: set[str] | None = None) -> tuple[list[str], li
     archetype = post.get("archetype")
     if archetype and archetype not in ALLOWED_ARCHETYPES:
         fails.append(f"archetype {archetype!r} is not one of the ten")
+    # Decision: the VOC troubleshooting batch is grounded in a student's real
+    # question, but privacy rules forbid verbatim customer records. Requiring a
+    # visible early blockquote makes that framing durable instead of trusting a
+    # prompt instruction that models occasionally skip.
+    if archetype == "troubleshoot" and not re.search(r"(?m)^>\s+\S", body[:2000]):
+        fails.append("troubleshoot article needs an anonymised paraphrased "
+                     "student-question blockquote near the top")
 
     slug = post.get("slug") or ""
     if slug and (slug != slugify(slug) or len(slug) > SLUG_MAX):

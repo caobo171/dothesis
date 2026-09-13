@@ -361,6 +361,7 @@ ALT_VI: dict[str, str] = {
     "troubleshoot-4": "Sinh viên đứng bên cửa sổ, laptop đã gập kẹp dưới cánh tay, dừng lại một lúc",
     "troubleshoot-5": "Cận cảnh bàn tay bấm một phím trên laptop, trang giấy in nằm hờ dưới máy",
     "troubleshoot-6": "Sinh viên và trợ giảng ngồi cùng bàn trong phòng máy, cả hai nhìn vào một màn hình",
+    "troubleshoot-7": "Điện thoại đặt cạnh laptop trên bàn học, phía trên là những bong bóng hội thoại để trống",
 }
 
 

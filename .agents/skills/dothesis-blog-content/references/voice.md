@@ -34,6 +34,14 @@ keep it.
   cited by nobody and believed by nobody.
 - **Short paragraphs.** Two to four sentences. Students read this on a phone at
   eleven at night.
+- **Troubleshooting starts from the student's words.** Near the top of every
+  `troubleshoot` article, include one Markdown blockquote that paraphrases and
+  anonymises the question a student would actually ask. Keep their natural
+  vocabulary where it fits, such as `chạy ra số`, `số liệu đẹp`, `GVHD`, `hội
+  đồng` or `bảo vệ`. Never use a real name, school, email, phone number, thesis
+  title, screenshot, project or verbatim customer message. The answer must be
+  diagnostic and academically honest, never advice for hiding fabricated data,
+  spoofing timestamps or defeating plagiarism or AI checks.
 - **Say the number, then say where it came from.** `Hệ số tải nhân tố từ 0.5 trở
   lên được xem là đạt (Hair và cộng sự, 2010).` A threshold with no source is the
   exact thing the competitors do.
