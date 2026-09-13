@@ -19,6 +19,7 @@ import { SelectionToolbar } from "./SelectionToolbar";
 import { CitePopover } from "./CitePopover";
 import { TranslateMenu } from "./TranslateMenu";
 import { PendingEditRibbon, type PendingEdit } from "./PendingEditRibbon";
+import { AutosaveStatus } from "./AutosaveStatus";
 import { useChapterAutosave } from "./hooks/useChapterAutosave";
 import { buildOffsetMap, offsetToPos, posToOffset } from "./markdownOffset";
 import { apiFetch, ApiError } from "@/app/lib/api";
@@ -279,6 +280,17 @@ export function ChapterEditor({
     // Just the chapter body now — no toolbar, no own scroll. The parent stacks
     // these in one shared scroll container so the whole thesis reads as one page.
     <div>
+      {/* There is no Save button because the chapter saves itself — but nothing
+          said so, and nothing said when it DIDN'T. The hook gives up after
+          three attempts and set an `error` no one read: a student typing
+          through a dead session saw a normal-looking editor the whole time.
+          Quiet on success, loud and retryable on failure. */}
+      <AutosaveStatus
+        saving={autosave.saving}
+        lastSavedAt={autosave.lastSavedAt}
+        error={autosave.error}
+        onRetry={() => { void autosave.flush(); }}
+      />
       {/* BubbleMenu appears on text selection; children switch between toolbar
           modes (default → translate picker → citation search). */}
       <BubbleMenu editor={editor}>

@@ -50,6 +50,12 @@ export function useChapterAutosave({ projectId, chapterName, debounceMs = 1000 }
         if (i < 2) await new Promise(res => setTimeout(res, backoff[i]));
       }
     }
+    // Put it BACK in the queue. `flush` clears `pendingProse` before the first
+    // attempt, so after three failures the student's text existed only inside
+    // the in-memory TipTap document: a retry no-opped and a reload lost it.
+    // Anything typed during the failed save has already replaced it and wins —
+    // that value is strictly newer.
+    if (pendingProse.current === null) pendingProse.current = prose;
     setError(lastErr);
     setSaving(false);
   }, [projectId, chapterName]);

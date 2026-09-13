@@ -863,6 +863,12 @@ export const vi: Record<MessageKey, string> = {
   "context.papersClickToView": "tài liệu · bấm để xem",
   "sidebar.thesisCopilot": "Trợ lý luận văn",
   "context.m5.chaptersWritten": "Đã viết {count}/{total} chương",
+  "editor.autosave.idle": "Tự động lưu khi bạn gõ",
+  "editor.autosave.saving": "Đang lưu…",
+  "editor.autosave.savedAt": "Đã lưu lúc {time}",
+  "editor.autosave.failed":
+    "Chưa lưu được thay đổi gần nhất. Giữ tab này mở — đóng bây giờ là mất.",
+  "editor.autosave.retry": "Thử lại",
   "editor.backToChat": "Về phòng chat",
   "editor.export.last": "Xuất lần cuối:",
   "editor.export.never": "chưa xuất",

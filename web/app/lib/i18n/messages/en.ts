@@ -929,6 +929,12 @@ export const en = {
   "context.papersClickToView": "papers · click to view",
   "sidebar.thesisCopilot": "Thesis copilot",
   "context.m5.chaptersWritten": "{count}/{total} chapters written",
+  "editor.autosave.idle": "Saves automatically as you type",
+  "editor.autosave.saving": "Saving…",
+  "editor.autosave.savedAt": "Saved at {time}",
+  "editor.autosave.failed":
+    "Your last change could not be saved. Keep this tab open — closing it now would lose it.",
+  "editor.autosave.retry": "Try again",
   "editor.backToChat": "Back to chat",
   "editor.export.last": "Last export:",
   "editor.export.never": "never",

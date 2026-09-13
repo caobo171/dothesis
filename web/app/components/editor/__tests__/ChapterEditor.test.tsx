@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
 import { ChapterEditor } from "../ChapterEditor";
 
 
@@ -19,6 +20,7 @@ afterEach(() => {
 describe("ChapterEditor — mount + autosave", () => {
   it("renders the chapter prose", async () => {
     render(
+      <LocaleProvider initialLocale="en" hasCookie>
       <ChapterEditor
         projectId="p1"
         chapterName="intro"
@@ -29,6 +31,7 @@ describe("ChapterEditor — mount + autosave", () => {
         fontFamily="serif"
         fontSize={16}
       />
+      </LocaleProvider>
     );
     await waitFor(() => expect(screen.getByText(/Hello world/)).toBeInTheDocument());
   });

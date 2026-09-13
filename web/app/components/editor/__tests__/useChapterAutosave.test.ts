@@ -65,3 +65,53 @@ describe("useChapterAutosave", () => {
     expect(calls).toBe(3);
   });
 });
+
+// Mocks `global.fetch` like the tests above — apiFetch folds the auth token in,
+// so the prose is read back out of the request body.
+function _proseOf(call: any): string {
+  return JSON.parse(call[1].body).prose;
+}
+
+
+describe("a save that fails", () => {
+  function _failTwiceThenSucceed(failures: number) {
+    let n = 0;
+    global.fetch = vi.fn().mockImplementation(async () => {
+      n += 1;
+      if (n <= failures) throw new Error("network");
+      return { ok: true, json: async () => ({ prose: "x" }) };
+    });
+  }
+
+  it("keeps the prose so a retry can send it again", async () => {
+    // `flush` clears the queue before the first attempt. After three failures
+    // the text existed only in the in-memory document — a retry no-opped and a
+    // reload lost it.
+    _failTwiceThenSucceed(3);
+    const { result } = renderHook(() =>
+      useChapterAutosave({ projectId: "p1", chapterName: "intro" }));
+
+    act(() => { result.current.queue("typed text"); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
+    expect(result.current.error).toBeTruthy();
+
+    // The retry sends the SAME prose rather than finding an empty queue.
+    await act(async () => { await result.current.flush(); });
+    const calls = (fetch as any).mock.calls;
+    expect(_proseOf(calls.at(-1))).toBe("typed text");
+    expect(result.current.error).toBeNull();
+  });
+
+  it("does not resurrect stale prose over something typed since", async () => {
+    _failTwiceThenSucceed(3);
+    const { result } = renderHook(() =>
+      useChapterAutosave({ projectId: "p1", chapterName: "intro" }));
+
+    act(() => { result.current.queue("old"); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
+    act(() => { result.current.queue("new"); });   // typed while it was failing
+    await act(async () => { await result.current.flush(); });
+
+    expect(_proseOf((fetch as any).mock.calls.at(-1))).toBe("new");
+  });
+});
