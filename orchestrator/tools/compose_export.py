@@ -9,7 +9,6 @@ so this never adds a blocking gate to a headless path.
 from __future__ import annotations
 
 import logging
-import re
 from typing import Callable
 
 # Import the module (not the bound name) so run_export is resolved at CALL time
@@ -29,15 +28,6 @@ logger = logging.getLogger(__name__)
 # progress(idx, chapter_key, title, phase) — phase is "start" or "end".
 ProgressFn = Callable[[int, str, str, str], None]
 
-# The "[3]" / "[1, 4]" source markers a research brief leaves in a gap
-# description. Compiled at module level rather than inline in the f-string
-# below: the inline form was written as r'\\s*\\[[0-9,\\s]+\\]', where the raw
-# string keeps BOTH backslashes — so the pattern demanded a literal backslash
-# before "s" and never matched anything. Nothing caught it because
-# `research_gaps` was unreachable until m2 joined the slice; the moment it went
-# live it would have shipped dangling "[3]" markers into Chapter 1.
-_SOURCE_MARKER_RE = re.compile(r"\s*\[[0-9,\s]+\]")
-
 
 def compose_sections(
     context_store: dict,
@@ -48,41 +38,21 @@ def compose_sections(
     title_overrides: dict[str, str] | None = None,
 ) -> list[dict]:
     """Compose a requested subset of M5 chapters, in canonical order → [{title, prose}]."""
-    m1 = context_store.get("m1_topic") or {}
-    m2 = context_store.get("m2_literature") or {}
-    m3 = context_store.get("m3_design") or {}
-    m4 = context_store.get("m4_analysis") or {}
-    # m2 IS part of the slice. It was the one module left out, which made
-    # `research_gaps` — an M2-OWNED key (agent/state.py SLICE_OWNERSHIP) that
-    # intro.md/lit_review.md/conclusion.md all interpolate and explicitly label
-    # "from M2" — permanently empty, and the gap-rendering block below it dead.
-    # The deleted partner_report_service hid the bug: it wrote the grounded
-    # brief's gaps into a plain `m1_topic` dict with no ownership filter, so its
-    # Introductions were the ONLY ones that ever saw a real gap. Once partner
-    # started writing through commit_slice the gaps landed in m2 where they
-    # belong and silently stopped reaching the composer — same prompt, less
-    # grounded prose. Merging here fixes every surface at once: chat and
-    # auto-mode have been composing Introductions against an empty
-    # {research_gaps} this whole time, which is the bug, not a new feature.
-    # Merge order follows READS (m1 < m2 < m3 < m4) so a downstream module's
-    # value still wins any key collision.
-    context_slice: dict = {**m1, **m2, **m3, **m4}
-    context_slice.setdefault("results", m4.get("analysis_results"))
-    # Render grounded research gaps (list of {description, refs}) into a readable
-    # block the Introduction prompt can ground its problem statement in. Always
-    # set the key ("" when absent) so the `{research_gaps}` placeholder is safe.
-    _gaps = context_slice.get("research_gaps")
-    if isinstance(_gaps, list) and _gaps:
-        # Prose only — DROP the brief's [n] source numbers. Those index the
-        # brief's own scout, not this report's bibliography, so keeping them
-        # would leave dangling "[3]" markers; the Introduction re-cites from the
-        # report's reference pool as (Author, Year) instead.
-        context_slice["research_gaps"] = "\n".join(
-            f"- {_SOURCE_MARKER_RE.sub('', str(g.get('description', ''))).strip()}"
-            for g in _gaps if isinstance(g, dict)
-        )
-    elif not isinstance(_gaps, str):
-        context_slice["research_gaps"] = ""
+    # One slice construction, shared with compose_all_sections — see
+    # m5_writing.compose_context_slice. This function used to build its own,
+    # which is how the two composers ended up feeding the same templates
+    # different `research_gaps` and `paradigm` for the same project.
+    from .m5_writing import compose_context_slice  # noqa: PLC0415
+    context_slice = compose_context_slice(context_store)
+    # `research_gaps` is an M2-OWNED key (agent/state.py SLICE_OWNERSHIP) that
+    # intro.md / lit_review.md / conclusion.md all interpolate and explicitly
+    # label "from M2". The deleted partner_report_service hid its absence: it
+    # wrote the grounded brief's gaps into a plain `m1_topic` dict with no
+    # ownership filter, so its Introductions were the ONLY ones that ever saw a
+    # real gap. Once partner started writing through commit_slice the gaps
+    # landed in m2 where they belong — and the rendering that makes them
+    # readable lived only here, so chat and auto-mode kept composing
+    # Introductions against a raw list. It is shared now.
 
     # Always compose in canonical order regardless of how the caller ordered them.
     ordered = [k for k in M5_CHAPTER_ORDER if k in set(chapters)]
@@ -118,7 +88,11 @@ def compose_sections(
         try:
             draft = compose_chapter.invoke({
                 "chapter_name": name,
-                "paradigm": "",
+                # Was hardcoded "". compose_chapter setdefaults this onto
+                # `{paradigm}`, so a project that stores the paradigm nested
+                # under `methodology` composed its partner chapters against a
+                # blank one while the chat export filled it in.
+                "paradigm": context_slice.get("paradigm") or "",
                 "context_slice": context_slice,
                 "references": references or [],
                 "citation_style": "apa7",

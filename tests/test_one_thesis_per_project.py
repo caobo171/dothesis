@@ -259,6 +259,62 @@ def test_a_written_chapter_is_never_recomposed(monkeypatch):
     assert {s["prose"] for s in sections} == set(EDITED.values())
 
 
+# --- one composer ----------------------------------------------------------
+
+_STORE_FOR_COMPOSE = {
+    "m1_topic": {"research_title": "T", "language": "vi"},
+    "m2_literature": {"research_gaps": [
+        {"description": "Thiếu nghiên cứu về bối cảnh nội địa [3]", "refs": [3]},
+    ]},
+    # The paradigm stored NESTED, which is the shape only one composer handled.
+    "m3_design": {"methodology": {"paradigm": "định lượng"}},
+    "m4_analysis": {},
+}
+
+
+def test_both_composers_fill_the_prompt_from_the_same_slice():
+    """Two composers fed the same chapter templates different inputs for the
+    same project: the partner one rendered `research_gaps` into a readable
+    block and hardcoded `paradigm=""`, the chat/auto-mode one passed the raw
+    gap list and filled the paradigm in. Same prompt, same project, different
+    prose depending on the surface."""
+    import orchestrator.tools.m5_writing as M
+    from orchestrator.tools import compose_export
+
+    seen: list[dict] = []
+
+    def _capture(payload):
+        seen.append(payload)
+        return {"prose": _pad("X")}
+
+    stub = type("C", (), {"invoke": staticmethod(_capture)})()
+    old_m, old_c = M.compose_chapter, compose_export.compose_chapter
+    try:
+        M.compose_chapter = compose_export.compose_chapter = stub
+        M.compose_all_sections(_STORE_FOR_COMPOSE, chapters=["intro"])
+        compose_export.compose_sections(_STORE_FOR_COMPOSE, ["intro"], "vi")
+    finally:
+        M.compose_chapter, compose_export.compose_chapter = old_m, old_c
+
+    assert len(seen) == 2
+    chat, partner = seen
+    assert chat["context_slice"] == partner["context_slice"]
+    assert chat["paradigm"] == partner["paradigm"] == "định lượng"
+    # Gaps arrive as a readable block with the brief's own [n] markers dropped —
+    # they index the brief's scout, not this thesis's bibliography.
+    gaps = chat["context_slice"]["research_gaps"]
+    assert gaps == "- Thiếu nghiên cứu về bối cảnh nội địa"
+
+
+def test_research_gaps_is_always_a_string_for_the_template():
+    """`{research_gaps}` is interpolated into three chapter templates."""
+    from orchestrator.tools.m5_writing import compose_context_slice
+    assert compose_context_slice({})["research_gaps"] == ""
+    assert compose_context_slice(
+        {"m2_literature": {"research_gaps": "already prose"}}
+    )["research_gaps"] == "already prose"
+
+
 def test_partner_export_reuses_the_edited_chapters():
     """compose_sections read `final_sections` ONLY, so the partner report and
     headless auto-mode either shipped the stale snapshot or paid an LLM to

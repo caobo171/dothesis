@@ -2615,6 +2615,55 @@ def _match_language(prose: str, chapter_name: str, language: str) -> str:
         return prose
 
 
+# The "[3]" / "[1, 4]" source markers a research brief leaves in a gap
+# description. They index the BRIEF's own scout, not this report's
+# bibliography, so keeping them leaves dangling "[3]" markers in Chapter 1 —
+# the chapter re-cites from the reference pool as (Author, Year) instead.
+_GAP_SOURCE_MARKER_RE = re.compile(r"\s*\[[0-9,\s]+\]")
+
+
+def compose_context_slice(context_store: dict) -> dict:
+    """The flat slice every chapter prompt is filled from. ONE construction.
+
+    There were two, and they disagreed on the two things the Introduction
+    template reads most:
+
+    - `research_gaps`. M2 owns it as a list of ``{description, refs}``. The
+      partner composer rendered it into a readable bullet block; the chat and
+      auto-mode composer passed the raw list straight into `{research_gaps}`.
+      Same prompt, same project, visibly less grounded prose on two of the three
+      surfaces.
+    - `paradigm`. Only one of the two fell back to `methodology.paradigm`, so a
+      project that stores the paradigm nested (rather than on the top-level M3
+      key) composed its chapters against an empty `{paradigm}` on the other.
+
+    Merge order follows READS (m1 < m2 < m3 < m4) so a downstream module's value
+    still wins a key collision.
+    """
+    m1 = context_store.get("m1_topic") or {}
+    m2 = context_store.get("m2_literature") or {}
+    m3 = context_store.get("m3_design") or {}
+    m4 = context_store.get("m4_analysis") or {}
+
+    slice_: dict = {**m1, **m2, **m3, **m4}
+    # `results` is the engine's key for M4's output; the templates render it.
+    slice_.setdefault("results", m4.get("analysis_results"))
+
+    methodology = m3.get("methodology") if isinstance(m3.get("methodology"), dict) else {}
+    if not str(slice_.get("paradigm") or "").strip():
+        slice_["paradigm"] = (methodology or {}).get("paradigm", "") or ""
+
+    gaps = slice_.get("research_gaps")
+    if isinstance(gaps, list) and gaps:
+        slice_["research_gaps"] = "\n".join(
+            f"- {_GAP_SOURCE_MARKER_RE.sub('', str(g.get('description', ''))).strip()}"
+            for g in gaps if isinstance(g, dict))
+    elif not isinstance(gaps, str):
+        # Always a string, so the `{research_gaps}` placeholder is safe.
+        slice_["research_gaps"] = ""
+    return slice_
+
+
 def compose_all_sections(context_store: dict,
                          chapters: list[str] | None = None) -> list[dict]:
     """Compose all 5 chapters from a nested context_store → [{title, prose}].
@@ -2634,18 +2683,14 @@ def compose_all_sections(context_store: dict,
     m3 = context_store.get("m3_design") or {}
     m4 = context_store.get("m4_analysis") or {}
 
-    methodology = m3.get("methodology") if isinstance(m3.get("methodology"), dict) else {}
-    paradigm = (methodology or {}).get("paradigm", "") or ""
     references = m2_references(m2)
     language = m1.get("language") or "vi"
     citation_style = "apa7"
 
-    # Merge every module's keys into one flat slice for the prompt templates.
-    # compose_chapter JSON-encodes nested values and fills missing keys with
-    # "", so an over-broad merge is safe; we just make sure the canonical
-    # `results` key points at M4's analysis output.
-    context_slice: dict = {**m1, **m2, **m3, **m4}
-    context_slice.setdefault("results", m4.get("analysis_results"))
+    # One slice construction, shared with the partner/auto-mode composer — see
+    # compose_context_slice for the two keys they used to disagree about.
+    context_slice = compose_context_slice(context_store)
+    paradigm = context_slice.get("paradigm") or ""
 
     titles = _chapter_titles(language)
     # Compose only the chapters a partner ordered (interactive leaves the scope
