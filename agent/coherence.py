@@ -414,10 +414,49 @@ def _canonical_chapters(items: dict) -> dict:
     return out
 
 
+def m5_prose(m5) -> dict:
+    """The M5 prose this gate checks, resolved through the ONE rule.
+
+    Was `m5.get("final_sections") or m5.get("chapters") or {}` inline, i.e.
+    preferring the home the editor never writes to. Coherence therefore graded a
+    draft the student had already replaced: a contradictory number they FIXED in
+    the editor still hard-blocked their commit, and one they introduced there
+    was never checked at all.
+
+    Named and module-level so the coherence gate and the exporter can be pinned
+    to the same prose by test (tests/test_one_thesis_per_project.py) instead of
+    the agreement being a coincidence. Lazy + fail-open: coherence must never
+    break because an import failed.
+    """
+    m5 = m5 if isinstance(m5, dict) else {}
+    try:
+        from orchestrator.tools.m5_writing import chapter_prose  # noqa: PLC0415
+        return chapter_prose(m5)
+    except Exception:
+        logger.debug("m5_prose: resolver unavailable", exc_info=True)
+        return m5.get("chapters") or m5.get("final_sections") or {}
+
+
+def _is_chapter_key(key) -> bool:
+    """True when `key` names one of the canonical chapters (or a retired alias).
+
+    The test here was a hardcoded `("results", "discussion", "conclusion",
+    "intro")` membership check, which does not include `lit_review` or
+    `methodology` — so a chapters dict holding only those two resolved to {} and
+    the whole coherence pass silently found nothing to check. Lazy + fail-open,
+    keeping the old literal set as the fallback.
+    """
+    try:
+        from orchestrator.tools.m5_writing import canonical_chapter  # noqa: PLC0415
+        return canonical_chapter(key) is not None
+    except Exception:
+        return key in ("results", "discussion", "conclusion", "intro")
+
+
 def _resolve_chapters(m5) -> dict:
     def _s(d):
         return {k: _strip_rendered(v) for k, v in d.items()}
-    if isinstance(m5, dict) and any(k in m5 for k in ("results", "discussion", "conclusion", "intro")):
+    if isinstance(m5, dict) and any(_is_chapter_key(k) for k in m5):
         # chapter values may be plain strings or {prose: ...} dicts (auto-mode).
         return _s(_canonical_chapters(m5))
     if isinstance(m5, list):
@@ -764,7 +803,7 @@ def validate_coherence(nested: dict) -> dict:
             return v if isinstance(v, dict) else {}
         m2, m3, m4, m5 = _d("m2_literature"), _d("m3_design"), _d("m4_analysis"), _d("m5_writing")
         ar = m4.get("analysis_results")
-        m5src = m5.get("final_sections") or m5.get("chapters") or {}
+        m5src = m5_prose(m5)
         registry = build_registry(m3.get("hypotheses"), m3.get("conceptual_model"), ar, m5src)
         chapters = _resolve_chapters(m5src)
         present = bool((chapters.get("results") and not _is_stub(chapters.get("results")))

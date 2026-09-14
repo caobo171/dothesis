@@ -96,9 +96,15 @@ def test_a_partial_full_export_is_refused_and_names_what_is_missing(monkeypatch,
     import orchestrator.tools.m5_writing as M
     # Composition yields nothing new, so only the preserved two survive.
     monkeypatch.setattr(M, "compose_all_sections",
-                        lambda cs: [{"chapter_name": s["chapter_name"],
-                                     "title": s["title"], "prose": s["prose"]}
-                                    for s in _PRESERVED])
+                        # `chapters=` is the gap list a full export now asks for
+                        # — it composes what is missing rather than rewriting the
+                        # whole thesis. The stub still returns only the preserved
+                        # two, which is what this test is about: composition
+                        # under-delivers and the shortfall must be caught.
+                        lambda cs, chapters=None: [
+                            {"chapter_name": s["chapter_name"],
+                             "title": s["title"], "prose": s["prose"]}
+                            for s in _PRESERVED])
     out = _export_no_force()
     assert out["error"] == "incomplete_export"
     assert set(out["missing_chapters"]) >= {"intro", "lit_review", "methodology"}
@@ -108,9 +114,15 @@ def test_a_partial_full_export_is_refused_and_names_what_is_missing(monkeypatch,
 def test_force_still_allows_an_intentional_partial_export(monkeypatch, captured):
     import orchestrator.tools.m5_writing as M
     monkeypatch.setattr(M, "compose_all_sections",
-                        lambda cs: [{"chapter_name": s["chapter_name"],
-                                     "title": s["title"], "prose": s["prose"]}
-                                    for s in _PRESERVED])
+                        # `chapters=` is the gap list a full export now asks for
+                        # — it composes what is missing rather than rewriting the
+                        # whole thesis. The stub still returns only the preserved
+                        # two, which is what this test is about: composition
+                        # under-delivers and the shortfall must be caught.
+                        lambda cs, chapters=None: [
+                            {"chapter_name": s["chapter_name"],
+                             "title": s["title"], "prose": s["prose"]}
+                            for s in _PRESERVED])
     out = _export()                          # force=True
     assert out.get("error") is None
     assert len(captured["sections"]) == 2

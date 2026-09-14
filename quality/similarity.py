@@ -316,14 +316,20 @@ def _slices(context_store: dict) -> tuple:
     """Tolerate BOTH store shapes: the nested column shape the rubric reads
     (m5_writing/m2_literature/m3_design) and the FLAT contextStore that
     store.load() returns (the documented footgun — same tolerance
-    agent/coherence.py applies)."""
+    agent/coherence.py applies).
+
+    The prose itself comes back already resolved as {chapter: prose} — see
+    m5_writing.chapter_prose. Preferring `final_sections` here (as this did)
+    meant checking a draft the student had replaced: a rewritten chapter would
+    not be checked, and one already deleted still would.
+    """
+    from orchestrator.tools.m5_writing import chapter_prose  # noqa: PLC0415
     cs = context_store if isinstance(context_store, dict) else {}
     if any(k in cs for k in ("m5_writing", "m2_literature", "m3_design")):
-        m5 = cs.get("m5_writing") or {}
-        return (m5.get("final_sections") or m5.get("chapters") or {},
+        return (chapter_prose(cs.get("m5_writing") or {}),
                 (cs.get("m2_literature") or {}).get("literature_sources") or [],
                 (cs.get("m3_design") or {}).get("hypotheses") or [])
-    return (cs.get("final_sections") or cs.get("chapters") or {},
+    return (chapter_prose(cs),
             cs.get("literature_sources") or [], cs.get("hypotheses") or [])
 
 

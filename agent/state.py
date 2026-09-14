@@ -363,7 +363,12 @@ class ProjectStateStore:
             if loader is None:
                 return False
             try:
-                chapters = (loader().get("m5_writing") or {}).get("chapters") or {}
+                # Through the one resolver, so "has M5 produced a thesis?" is
+                # answered from the same prose the exporter renders. A bare
+                # `chapters` read also counted a chapter whose only content is a
+                # "[Composition failed]" stub, which chapter_prose drops.
+                from orchestrator.tools.m5_writing import chapter_prose  # noqa: PLC0415
+                chapters = chapter_prose((loader().get("m5_writing") or {}))
             except Exception:
                 return True
             return bool(chapters)

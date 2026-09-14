@@ -313,30 +313,21 @@ _M5_CLOSING_CHAPTER = "conclusion"
 
 
 def _m5_chapter_prose(slice_: dict) -> dict[str, str]:
-    """Chapter name -> prose, from EITHER M5 shape.
+    """Chapter name -> prose, from EITHER M5 home.
 
     `chapters` is the editor's canonical dict, but it is only materialised when
     the student opens the editor (api/app/routers/m5_editor.py). The
     conversational, compose and import paths all write the flat `final_sections`
-    list instead. Reading only one shape would make M5 completable only after
+    list instead. Reading only one home would make M5 completable only after
     visiting a particular screen.
+
+    Which copy of a chapter wins is `m5_writing.chapter_prose`'s call, not this
+    module's: deciding it here was one of the seven independent answers that let
+    the DoD grade a different draft than the one the exporter rendered.
     """
-    slice_ = slice_ or {}
-    from orchestrator.tools.m5_writing import merge_chapter_prose  # noqa: PLC0415
+    from orchestrator.tools.m5_writing import chapter_prose  # noqa: PLC0415
 
-    chapters = slice_.get("chapters")
-    if isinstance(chapters, dict) and chapters:
-        # The alias/merge rule has ONE home (m5_writing.merge_chapter_prose):
-        # an in-flight project holding both closing chapters gets them
-        # concatenated under `conclusion`, never one silently dropped. This used
-        # to be a third hand-rolled copy of that rule, and it had it backwards.
-        return merge_chapter_prose(
-            (stored, (c or {}).get("prose") if isinstance(c, dict) else "")
-            for stored, c in chapters.items())
-    from orchestrator.tools.m5_writing import chapters_from_final_sections
-
-    mapped = chapters_from_final_sections(slice_.get("final_sections") or [])
-    return {name: (c or {}).get("prose") or "" for name, c in mapped.items()}
+    return chapter_prose(slice_ or {})
 
 
 def dod_writing(slice_: dict) -> DoD:

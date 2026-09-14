@@ -1202,6 +1202,47 @@ def test_get_chapters_tops_up_a_partly_materialised_dict(client):
     assert set(stored) == {"intro", "methodology", "results"}
 
 
+def test_the_editor_opens_the_same_thesis_the_exporter_renders(client):
+    """The editor's backfill and `m5_writing.chapter_prose` must not merely
+    happen to agree — this pins them together.
+
+    They are the same rule written twice: existing `chapters` entries win, the
+    `final_sections` snapshot fills the gaps. The backfill is the one place that
+    HEALS (it commits what it resolves), which is why it stays hand-written; but
+    if it ever drifts from the resolver, the student edits one thesis on screen
+    and downloads another. That is the whole class of bug this pins shut.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from orchestrator.tools.m5_writing import chapter_prose
+
+    _create_user_and_set_cookie(client)
+    pid = client.post("/api/v1/projects", json={"name": "X"}).json()["id"]
+
+    slice_ = {
+        "chapters": {"intro": {"prose": "Edited in the editor."},
+                     "conclusion": {"prose": "Closing chapter, edited."}},
+        "final_sections": [
+            {"chapter_name": "intro", "prose": "Stale compose snapshot."},
+            {"chapter_name": "methodology", "prose": "Methodology prose."},
+            {"title": "References", "prose": "Nguyen, A. (2020)."},
+        ],
+    }
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing = dict(slice_)
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    opened = client.post(f"/api/v1/projects/{pid}/m5/chapters").json()
+    resolved = chapter_prose(slice_)
+
+    assert {name: body["prose"] for name, body in opened.items()} == resolved
+    # And specifically: the editor is not showing the stale snapshot.
+    assert resolved["intro"] == "Edited in the editor."
+
+
 @patch("app.routers.m5_editor.run_export")
 def test_export_records_rows_the_download_route_authorizes_against(mock_run_export, client):
     """Every file the editor's Re-export produced 404'd on click.

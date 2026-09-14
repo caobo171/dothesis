@@ -124,6 +124,35 @@ def _backfill_legacy_m3_for_export(store, context_store: dict) -> tuple[dict, di
     }
 
 
+def _m5_slice_for_export(flat: dict | None, full_cs: dict | None) -> dict:
+    """The m5_writing slice to render, preferring the NESTED store.
+
+    The chat export used to build this out of the flat contextStore alone:
+
+        {"final_sections": flat.get("final_sections"),
+         "chapters":       flat.get("chapters")}
+
+    `chapters` is not in `SLICE_OWNERSHIP["M5"]`, and the flat contextStore is
+    by construction only the owned keys — so `flat.get("chapters")` is ALWAYS
+    None against the database store, and the chat export silently rendered
+    `final_sections` while the editor's Re-export and the M5 auto-export hook
+    read the real column and rendered `chapters`. Same project, two different
+    documents: on the project this was traced from the two copies of the
+    literature review differed by 8.7KB.
+
+    The nested store is the m5_writing column itself, so reading the slice from
+    there is what makes all three surfaces render the same thesis. The flat
+    projection stays as the fallback — `load_full_context_store` is optional on
+    the file-backed store, and there `final_sections` is all there is.
+    """
+    nested = (full_cs or {}).get("m5_writing")
+    if isinstance(nested, dict) and (nested.get("chapters") or nested.get("final_sections")):
+        return nested
+    flat = flat or {}
+    return {"final_sections": flat.get("final_sections"),
+            "chapters": flat.get("chapters")}
+
+
 def make_writing_tools(store) -> list:
     """Build the writing/export tools bound to one project's state store.
 
@@ -286,9 +315,11 @@ def make_writing_tools(store) -> list:
             logger.exception("export_docx: could not import engine exporter")
             return json.dumps({"error": "exporter_unavailable"})
 
-        # Read the M5 slice straight from state. `load()` returns the flat
-        # contextStore; final_sections is the v3 owned key, chapters is the
-        # auto-mode shape — sections_from_m5_slice tolerates both.
+        # `load()` returns the FLAT contextStore — the owned keys only, so
+        # `chapters` is not in it. The slice itself is resolved from the nested
+        # store further down, once it has been loaded and backfilled; see
+        # _m5_slice_for_export for why reading it from `flat` made the chat
+        # export render a different thesis than the editor.
         try:
             state = store.load()
         except Exception:
@@ -296,10 +327,6 @@ def make_writing_tools(store) -> list:
             return json.dumps({"error": "state_read_failed"})
 
         flat = state.get("contextStore", {}) or {}
-        m5_slice = {
-            "final_sections": flat.get("final_sections"),
-            "chapters": flat.get("chapters"),
-        }
         generated = False
 
         # Load the full nested context store once — needed both for the
@@ -337,6 +364,11 @@ def make_writing_tools(store) -> list:
         # here keeps the one precedence rule this repo already settled on; it
         # is only the fallback anyway, since sections_from_m5_slice reads the
         # chapter prose before it trusts any stored setting.
+        #
+        # Resolved from `full_cs` — i.e. after the M3 backfill above — so this
+        # renders the same m5_writing column the editor and the auto-export hook
+        # render, not the lossy flat projection.
+        m5_slice = _m5_slice_for_export(flat, full_cs)
         sections = sections_from_m5_slice(m5_slice, language=language)
 
         # --- Chapter-scoped export (newly written/revised M5 sections) -------
@@ -509,6 +541,14 @@ def make_writing_tools(store) -> list:
                     # Without this the cover of a module-scoped export is built
                     # from title=None. `title` is already resolved above.
                     title=title,
+                    # The last of the seven run_export callers that did not pass
+                    # the store, so a module-scoped export was the one download
+                    # that came back with a bare cover — no institution, no
+                    # degree — while every other button produced the full one.
+                    # The result-table weave is a no-op here by construction:
+                    # these sections are module write-ups titled "M3 — …", so
+                    # ensure_rendered's chapter lookup matches nothing.
+                    context_store=full_cs,
                 )
             except Exception as e:
                 logger.exception("export_docx(scope=%s): run_export failed", scope_tag)
@@ -564,8 +604,39 @@ def make_writing_tools(store) -> list:
                                 "to fill these (run the relevant module) or export "
                                 "anyway with what exists (call again with force).",
                     }, ensure_ascii=False)
-                sections = compose_all_sections(full_cs)
-                generated = True
+                # Compose only what is MISSING and keep the chapters that are
+                # already written, instead of recomposing the whole thesis.
+                #
+                # `compose_all_sections(full_cs)` rewrote every chapter, shipped
+                # that document, and then committed it to `final_sections` — the
+                # home the resolver does NOT prefer. So the next read of the same
+                # project (the editor, the auto-export hook, the partner report)
+                # resolved the OLD `chapters` prose for the chapters that had
+                # some, and the student's next download differed from the one
+                # they had just been handed. Filling gaps keeps the exported
+                # document equal to the resolved one, which is what makes the
+                # two homes stop drifting apart on every export.
+                #
+                # It is also the cheaper half: recomposing a finished chapter is
+                # an LLM call paid to replace prose the student may have edited.
+                _have = {s.get("chapter_name") for s in (sections or [])
+                         if s.get("chapter_name")}
+                _gaps = [n for n in scoped_chapters(list(M5_CHAPTER_ORDER))
+                         if n not in _have]
+                composed = compose_all_sections(full_cs, chapters=_gaps) if _gaps else []
+                _by_name = {s.get("chapter_name"): s for s in composed
+                            if s.get("chapter_name")}
+                # Canonical order, kept chapters first-class: a composed chapter
+                # only ever fills a slot nothing already occupies.
+                merged = [_by_name.get(n) or next(
+                    (s for s in (sections or []) if s.get("chapter_name") == n), None)
+                    for n in scoped_chapters(list(M5_CHAPTER_ORDER))]
+                merged = [s for s in merged if s]
+                # Anything without a canonical name (References, an imported
+                # section) is not a chapter slot — carry it through untouched.
+                merged += [s for s in (sections or []) if not s.get("chapter_name")]
+                sections = merged or composed
+                generated = bool(composed)
 
         if not sections:
             return json.dumps({

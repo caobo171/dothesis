@@ -2125,9 +2125,7 @@ def chapters_from_final_sections(final_sections: list[dict]) -> dict:
     for sec in final_sections or []:
         if not isinstance(sec, dict):
             continue
-        stored = sec.get("chapter_name")
-        if canonical_chapter(stored) is None:
-            stored = title_to_name.get(_title_key(sec.get("title") or sec.get("name")))
+        stored = _stored_chapter_key(sec, title_to_name)
         name = canonical_chapter(stored)
         if name is None:
             continue
@@ -2149,13 +2147,211 @@ def chapters_from_final_sections(final_sections: list[dict]) -> dict:
     return out
 
 
+def _stored_chapter_key(sec: dict, title_to_name: dict[str, str]) -> str | None:
+    """Which chapter a `final_sections` entry IS, from every identity it carries.
+
+    Tried in order, each only when the previous found nothing:
+
+    1. `chapter_name` — what the compose path writes.
+    2. `chapter` — what some producers wrote instead. A live row carries
+       ``{"title": "Chương 4 — Kết quả nghiên cứu", "chapter": "results"}``: the
+       answer was sitting in the row under a key no reader looked at, so the
+       section came back unidentified and rendered as a SIXTH section after the
+       real Chapter 4.
+    3. Exact title lookup (EN, VI and retired headings).
+    4. The numbered prefix. Exact matching is brittle against a heading a
+       producer wrote itself — "Chương 4 — Kết quả nghiên cứu" misses the
+       canonical "Chương 4 — Kết quả" by two words — but "Chương 4" is
+       unambiguous, and M5_CHAPTER_ORDER is the chapter numbering.
+
+    Returns the STORED key (possibly a retired alias, which merge_chapter_prose
+    needs in order to order legacy prose first), or None.
+    """
+    stored = sec.get("chapter_name")
+    if canonical_chapter(stored) is not None:
+        return stored
+    stored = sec.get("chapter")
+    if canonical_chapter(stored) is not None:
+        return stored
+    title = sec.get("title") or sec.get("name")
+    stored = title_to_name.get(_title_key(title))
+    if canonical_chapter(stored) is not None:
+        return stored
+    match = _TITLE_NUMBER_RE.match(str(title or ""))
+    if match:
+        index = int(match.group(1)) - 1
+        if 0 <= index < len(M5_CHAPTER_ORDER):
+            return M5_CHAPTER_ORDER[index]
+    return None
+
+
+def chapter_prose(m5_slice: dict | None) -> dict[str, str]:
+    """THE thesis, as ``{canonical_chapter_name: prose}``. One project, one answer.
+
+    An m5_writing slice has TWO homes for the same chapter:
+
+    - ``chapters`` — what the editor SAVES, and what each module composes into
+      as it completes (the continuous-writing pivot).
+    - ``final_sections`` — the snapshot the conversational export leaves behind.
+
+    Both get written, by different halves of the system, with nothing syncing
+    them: ``chapters`` is absent from ``SLICE_OWNERSHIP["M5"]``, so the agent's
+    flat contextStore cannot carry it and the agent writes ``final_sections``
+    instead. On the live database 11 of the 15 projects holding any prose carry
+    both shapes, and in every one of them EVERY chapter differs between the two
+    copies.
+
+    That drift was survivable; having no single rule for which copy is the
+    thesis was not. Seven readers each rolled their own — the exporter and the
+    DoD preferred ``chapters``, the partner/auto-mode composer read
+    ``final_sections`` and nothing else, and the rubric, the similarity checker
+    and coherence preferred ``final_sections`` — so the document a student got
+    depended on which button they pressed, and the quality score was computed on
+    a third version nobody downloaded. This is that rule, in one place.
+
+    ``chapters`` wins per chapter, because it is where the student's own edits
+    land and where a recomposed module writes; ``final_sections`` FILLS a
+    chapter ``chapters`` does not carry, because one live project's prose exists
+    only there and winner-takes-all would blank it.
+
+    The two copies are never concatenated. They are near-duplicate drafts of the
+    same chapter, so folding both in prints the chapter twice — a visible defect,
+    not "losing nothing". `merge_chapter_prose` still concatenates WITHIN one
+    home; that is the legacy discussion+conclusion rule and it is untouched.
+    """
+    m5 = m5_slice if isinstance(m5_slice, dict) else {}
+
+    edited: dict[str, str] = {}
+    chapters = m5.get("chapters")
+    if isinstance(chapters, dict) and chapters:
+        pairs = []
+        for stored, ch in chapters.items():
+            # Auto-mode has written both `{intro: {prose}}` and `{intro: "…"}`.
+            prose = (ch.get("prose") or ch.get("body") or "") if isinstance(ch, dict) else str(ch or "")
+            pairs.append((stored, prose))
+        edited = merge_chapter_prose(pairs)
+
+    resolved = {
+        name: (entry or {}).get("prose") or ""
+        for name, entry in (chapters_from_final_sections(
+            m5.get("final_sections") or []) or {}).items()
+    }
+    resolved.update(edited)
+    return {name: prose for name, prose in resolved.items() if (prose or "").strip()}
+
+
+def chapter_sources(m5_slice: dict | None) -> dict[str, str]:
+    """The `source` mark per chapter ("import" = the student's own prose).
+
+    Same precedence as `chapter_prose`, and kept beside it so the mark cannot
+    end up resolved from one home while the prose it describes came from the
+    other. A protection that gets separated from what it protects is not one.
+    """
+    m5 = m5_slice if isinstance(m5_slice, dict) else {}
+    out: dict[str, str] = {}
+    for name, entry in (chapters_from_final_sections(
+            m5.get("final_sections") or []) or {}).items():
+        if isinstance(entry, dict) and entry.get("source"):
+            out[name] = entry["source"]
+    chapters = m5.get("chapters")
+    if isinstance(chapters, dict):
+        for stored, ch in chapters.items():
+            name = canonical_chapter(stored)
+            if name and isinstance(ch, dict) and ch.get("source"):
+                out[name] = ch["source"]
+    return out
+
+
+def _is_references_title(title) -> bool:
+    """True for a bibliography heading in any language we emit.
+
+    Reads `_ALL_REFERENCE_TITLES` (defined further down, beside the citeproc
+    path that strips a hand-built bibliography) so the two cannot disagree about
+    what counts as a References section.
+    """
+    return str(title or "").strip().lower() in _ALL_REFERENCE_TITLES
+
+
+def _prose_entries(m5_slice: dict | None) -> list[dict]:
+    """The slice's sections in `final_sections` shape, with `chapter_prose` applied.
+
+    The References section and every non-prose attribute (a section's own
+    heading, `lineage`, the imported-work `source` mark) come from
+    `final_sections`, because the renderer below was written against that shape
+    and only that shape. WHICH prose each chapter carries comes from
+    `chapter_prose`. Chapters come out in canonical order, whichever home each
+    one was stored in, and the bibliography closes the document.
+
+    This is what lets both homes share one renderer. The `chapters` branch used
+    to return early with a thinner render of its own — no `own_title`, no
+    `lineage`, and no References section at all.
+    """
+    m5 = m5_slice if isinstance(m5_slice, dict) else {}
+    canonical = chapter_prose(m5)
+    title_to_name = chapter_title_lookup()
+
+    # First occurrence wins for a chapter's non-prose attributes (its own
+    # heading, lineage, source). `chapter_prose` has already folded every
+    # contribution to that chapter into one string, so later occurrences carry
+    # nothing new — re-emitting them would re-add prose the resolver merged.
+    #
+    # When `chapters` is the live home, a `final_sections` entry that resolves to
+    # NO chapter is a remnant of a superseded draft, not an extra section — the
+    # snapshot only ever held sections of a previously composed thesis. Two live
+    # rows prove the cost of passing them through: a 747-byte "we have no data
+    # yet" closing fragment rendered after the real 32KB conclusion, and a
+    # 4.6KB early Chapter 4 after the real 12KB one. Shipping a thesis that says
+    # the same chapter twice is the defect; losing a superseded fragment is not.
+    #
+    # The References section is the exception, because it is genuinely not a
+    # chapter and the document needs it (the citeproc path regenerates its own,
+    # but the plain fallback does not).
+    #
+    # With NO `chapters`, `final_sections` IS the thesis — an imported one may
+    # carry real extra sections — so everything is passed through, exactly as
+    # before.
+    live_chapters = any(
+        ((c.get("prose") or c.get("body")) if isinstance(c, dict) else c)
+        for c in (m5.get("chapters") or {}).values())
+
+    attrs: dict[str, dict] = {}
+    extras: list[dict] = []
+    for sec in m5.get("final_sections") or []:
+        if not isinstance(sec, dict):
+            continue
+        name = canonical_chapter(_stored_chapter_key(sec, title_to_name))
+        if name is None or name not in canonical:
+            # Not a chapter (References), or a chapter with no usable prose in
+            # either home — pass through and let the renderer judge it.
+            if not live_chapters or _is_references_title(sec.get("title") or sec.get("name")):
+                extras.append(sec)
+        elif name not in attrs:
+            attrs[name] = sec
+
+    # Chapters in CANONICAL order, then everything that is not a chapter.
+    #
+    # Order used to come from `final_sections`' own sequence, which only held
+    # for a slice where that list was the whole thesis. Once `chapters` supplies
+    # some of them, a chapter appended after a References entry rendered AFTER
+    # the bibliography: a real project came out intro, lit_review, methodology,
+    # results, References, conclusion. A thesis is in chapter order by
+    # definition and the bibliography closes it, so neither depends on which
+    # home a chapter happened to be stored in.
+    entries = [{**attrs.get(name, {}), "chapter_name": name, "prose": canonical[name]}
+               for name in M5_CHAPTER_ORDER if name in canonical]
+    return entries + extras
+
+
 def sections_from_m5_slice(m5_slice: dict, language: str | None = None) -> list[dict]:
     """Build exporter sections [{title, prose}] from an m5_writing slice.
 
-    Tolerates both shapes the writers produce:
-    - `chapters: {intro: {prose: "…"}, …}` — the canonical auto-mode shape.
+    Reads both homes the writers produce:
+    - `chapters: {intro: {prose: "…"}, …}` — the editor's saves and the
+      per-module continuous-writing composes.
     - `final_sections: [{title, body|prose}, …]` — the conversational agent
       shape (the M5 skill's DocumentSection list).
+    `chapter_prose` decides which copy of a chapter is the thesis; see its
+    docstring for why they drift and why `chapters` wins.
     Returns [] when neither carries usable prose, so callers can short-circuit
     instead of exporting an empty document.
 
@@ -2163,28 +2359,13 @@ def sections_from_m5_slice(m5_slice: dict, language: str | None = None) -> list[
     language`) and is only a FALLBACK — see `_resolve_title_language`, which
     reads the prose first. It stays optional so a bare call keeps working.
     """
-    chapters = (m5_slice or {}).get("chapters") or {}
-    if chapters:
-        # One rule, one home: a legacy `discussion` entry is concatenated ahead
-        # of a real `conclusion` under the single canonical Chapter 5 rather
-        # than either one being dropped (see merge_chapter_prose).
-        def _prose_of(ch):
-            if isinstance(ch, dict):
-                return ch.get("prose") or ch.get("body") or ""
-            return str(ch or "")
-
-        merged = merge_chapter_prose(
-            (stored, _prose_of(ch)) for stored, ch in chapters.items())
-        # Headings follow the prose, not a hardcoded map: this branch is what
-        # auto-mode, the editor's re-export and the agent's export tool all go
-        # through, and it used to anglicize every Vietnamese thesis.
-        titles = _chapter_titles(_resolve_title_language(merged.values(), language))
-        out = [{"chapter_name": name, "title": titles[name],
-                "prose": merged[name]}
-               for name in M5_CHAPTER_ORDER if merged.get(name)]
-        if out:
-            return out
-    final_sections = (m5_slice or {}).get("final_sections") or []
+    # ONE pass over BOTH homes. `chapters` used to be a branch that returned
+    # early and never looked at `final_sections` — so a chapter stored only in
+    # the snapshot was dropped, the References section disappeared, and neither
+    # `own_title` nor `lineage` applied to an edited chapter. Normalizing into
+    # the `final_sections` shape lets both homes share the renderer below
+    # instead of one of them getting a thinner render of its own.
+    final_sections = _prose_entries(m5_slice)
     # Resolve every section's canonical identity — from `chapter_name` when the
     # producer set one, else from the (retired-title-aware) reverse lookup — so
     # a legacy slice cannot export a sixth chapter. Passing titles through
@@ -2482,13 +2663,18 @@ def compose_all_sections(context_store: dict,
     # Chapter 4 carries the EFA, KMO, correlation and regression tables, and a
     # rewrite from the summarised analysis_results reproduces none of it. Reuse
     # the real chapter and spend the LLM only on what is genuinely missing.
-    preserved = chapters_from_final_sections(
-        (context_store.get("m5_writing") or {}).get("final_sections") or [])
+    #
+    # Through `chapter_prose`, i.e. BOTH homes. This read was
+    # `chapters_from_final_sections` alone, so a chapter living in `chapters` —
+    # everything the editor saves, and everything a module composes as it
+    # completes — counted as "not written" and got recomposed. That is an LLM
+    # call paid to overwrite the student's own edits with a fresh draft.
+    preserved = chapter_prose(context_store.get("m5_writing") or {})
 
     def _one(name):
-        kept = preserved.get(name)
-        if kept and kept.get("prose", "").strip():
-            return name, _match_language(kept["prose"], name, language)
+        kept = (preserved.get(name) or "").strip()
+        if kept:
+            return name, _match_language(kept, name, language)
         try:
             draft = compose_chapter.invoke({
                 "chapter_name": name,
@@ -2529,9 +2715,10 @@ def compose_all_sections(context_store: dict,
     # `source` travels with it for the same reason: a preserved chapter that has
     # only been translated is still the student's work, and the shrink guard at
     # the commit edge can only protect what is still marked.
+    preserved_sources = chapter_sources(context_store.get("m5_writing") or {})
     out: list[dict] = [{"chapter_name": name, "title": titles[name], "prose": proses[name],
-                        **({"source": (preserved.get(name) or {}).get("source")}
-                           if (preserved.get(name) or {}).get("source") else {})}
+                        **({"source": preserved_sources[name]}
+                           if preserved_sources.get(name) else {})}
                        for name in names]
 
     # Append a References section built from the M2 sources, with clickable

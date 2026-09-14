@@ -11,10 +11,22 @@ logger = logging.getLogger(__name__)
 
 
 def _sections(context_store: dict) -> list[dict]:
-    # Decision: tolerate both v3 (final_sections list) and auto-mode (chapters
-    # dict) shapes so the rubric works regardless of how the draft was produced.
-    m5 = context_store.get("m5_writing") or {}
-    return m5.get("final_sections") or list((m5.get("chapters") or {}).values()) or []
+    # Decision: score EXACTLY what ships — this is the exporter's own section
+    # builder, so the rubric can never grade a draft the student did not get.
+    #
+    # It used to read `m5.get("final_sections") or chapters.values()`, i.e. it
+    # preferred the one home the editor never writes to. `final_sections` goes
+    # stale the moment a module recomposes or the student edits a chapter, so
+    # the score was computed on a draft that had already been replaced and did
+    # not match the downloaded document. Reading through the exporter (rather
+    # than chapter_prose directly) also keeps the non-chapter sections and each
+    # section's `title`, which the stub findings below report by name.
+    #
+    # Sections with blank prose are no longer listed, so they no longer count as
+    # stubs — an empty section is not in the exported document either, and a
+    # MISSING chapter was never flagged here in the first place.
+    from orchestrator.tools.m5_writing import sections_from_m5_slice  # noqa: PLC0415
+    return sections_from_m5_slice(context_store.get("m5_writing") or {})
 
 
 def _all_prose(context_store: dict) -> str:

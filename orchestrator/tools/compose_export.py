@@ -88,15 +88,22 @@ def compose_sections(
     ordered = [k for k in M5_CHAPTER_ORDER if k in set(chapters)]
     titles = {**_chapter_titles(language), **(title_overrides or {})}
 
-    # Reuse chapters the deep agent already composed THIS run
-    # (m5_writing.final_sections) instead of re-composing them — the partner
-    # export otherwise pays for the same chapters a second time. Only real prose
-    # is reused (stubs / "[Composition failed]" markers fall through to compose).
-    from orchestrator.tools.m5_writing import chapters_from_final_sections  # noqa: PLC0415
+    # Reuse chapters that are already written instead of re-composing them — the
+    # partner export otherwise pays for the same chapters a second time. Only
+    # real prose is reused (stubs / "[Composition failed]" markers fall through
+    # to compose).
+    #
+    # Via `chapter_prose`, which reads BOTH homes. This read was
+    # `chapters_from_final_sections` alone, and `final_sections` is the one home
+    # the editor never writes to: a student could edit their thesis, order a
+    # partner report, and get either the pre-edit snapshot or a freshly
+    # LLM-composed chapter that discarded their edits entirely — while the same
+    # project's chat and editor exports both rendered the edits.
+    from orchestrator.tools.m5_writing import chapter_prose  # noqa: PLC0415
     _m5 = context_store.get("m5_writing") or {}
     _reuse: dict[str, str] = {}
-    for _k, _v in (chapters_from_final_sections(_m5.get("final_sections") or []) or {}).items():
-        _p = ((_v or {}).get("prose") or "").strip()
+    for _k, _p in (chapter_prose(_m5) or {}).items():
+        _p = (_p or "").strip()
         if _p and not _p.lstrip().startswith("["):
             _reuse[_k] = _p
 
