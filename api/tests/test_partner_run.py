@@ -135,7 +135,7 @@ def test_partner_composer_is_grounded_in_the_research_gaps(tmp_path, monkeypatch
             "research_gaps": [{"description": "no VN evidence [3]", "refs": [3]}]},
     )
 
-    import orchestrator.tools.compose_export as ce
+    import orchestrator.tools.m5_writing as _m5w  # compose resolves here now
 
     import app.partner_run as pr
     seen: dict = {}
@@ -145,7 +145,7 @@ def test_partner_composer_is_grounded_in_the_research_gaps(tmp_path, monkeypatch
             seen.update(payload)
             return {"prose": "PROSE"}
 
-    monkeypatch.setattr(ce, "compose_chapter", _Compose())
+    monkeypatch.setattr(_m5w, "compose_chapter", _Compose())
     monkeypatch.setattr(pr, "run_export", lambda *a, **k: [])
     run_partner_export(store, pid, {"depth": "analysis_report", "language": "en"})
     assert seen["context_slice"]["research_gaps"] == "- no VN evidence"

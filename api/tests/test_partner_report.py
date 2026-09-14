@@ -455,7 +455,7 @@ _GOLDEN = {
 
 @pytest.mark.parametrize("depth,language", sorted(_GOLDEN))
 def test_output_matches_the_deleted_pipeline_golden(client, monkeypatch, depth, language):
-    import orchestrator.tools.compose_export as ce
+    import orchestrator.tools.m5_writing as _m5w  # compose resolves here now
     from app.agent_state import DbProjectStateStore
     from app.partner_run import run_partner_export
     from app.workspace import workspace_dir
@@ -465,7 +465,7 @@ def test_output_matches_the_deleted_pipeline_golden(client, monkeypatch, depth, 
         def invoke(payload):
             return {"prose": f"PROSE[{payload['chapter_name']}]"}
 
-    monkeypatch.setattr(ce, "compose_chapter", _Compose())
+    monkeypatch.setattr(_m5w, "compose_chapter", _Compose())
     monkeypatch.setattr("app.partner_run.run_export",
                         lambda *a, **k: [{"kind": "docx", "s3_key": "projects/FIXED/report.docx"},
                                          {"kind": "pdf", "s3_key": "projects/FIXED/report.pdf"}])

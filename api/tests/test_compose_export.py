@@ -53,14 +53,16 @@ def test_compose_sections_orders_canonically_and_calls_compose(monkeypatch):
     seen = []
 
     # compose_chapter is a LangChain StructuredTool (pydantic) whose .invoke is
-    # not a settable field, so we swap the whole object in the ce namespace that
-    # compose_sections resolves — proving compose is called once per chapter.
+    # not a settable field, so we swap the whole object. It goes in the m5_writing
+    # namespace, not this module's: compose_sections is an adapter over
+    # m5_writing.compose_chapters now, so that is where the call resolves — and
+    # patching there covers the chat/auto-mode entry point too.
     class _FakeTool:
         def invoke(self, payload):
             seen.append(payload["chapter_name"])
             return {"prose": f"prose for {payload['chapter_name']}"}
 
-    monkeypatch.setattr(ce, "compose_chapter", _FakeTool())
+    monkeypatch.setattr(m5, "compose_chapter", _FakeTool())
     store = {"m1_topic": {"research_title": "T"}, "m4_analysis": {"analysis_results": "x"}}
     # Pass chapters OUT of order; expect canonical order in the output.
     out = ce.compose_sections(store, ["results", "intro"], "en")
@@ -83,7 +85,7 @@ def test_context_slice_carries_m2_research_gaps(monkeypatch):
             seen.update(payload)
             return {"prose": "prose"}
 
-    monkeypatch.setattr(ce, "compose_chapter", _FakeTool())
+    monkeypatch.setattr(m5, "compose_chapter", _FakeTool())
     ce.compose_sections(
         {"m1_topic": {"research_title": "T"},
          "m2_literature": {"research_gaps": [{"description": "no VN evidence [3]"}]}},
@@ -104,7 +106,7 @@ def test_context_slice_prefers_downstream_modules_over_m2(monkeypatch):
             seen.update(payload)
             return {"prose": "prose"}
 
-    monkeypatch.setattr(ce, "compose_chapter", _FakeTool())
+    monkeypatch.setattr(m5, "compose_chapter", _FakeTool())
     ce.compose_sections(
         {"m1_topic": {"decisions": ["m1"]}, "m2_literature": {"decisions": ["m2"]},
          "m3_design": {"decisions": ["m3"]}},
@@ -153,7 +155,7 @@ def test_compose_sections_emits_five_chapters_with_no_chapter_six(monkeypatch):
         def invoke(self, payload):
             return {"prose": f"Prose for {payload['chapter_name']}."}
 
-    monkeypatch.setattr(ce, "compose_chapter", _FakeTool())
+    monkeypatch.setattr(m5, "compose_chapter", _FakeTool())
 
     out = ce.compose_sections({}, list(ce.M5_CHAPTER_ORDER), "vi")
 

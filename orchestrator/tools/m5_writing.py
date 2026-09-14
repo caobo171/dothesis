@@ -17,6 +17,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Callable
 from uuid import uuid4
 
 from orchestrator.message_utils import text_of  # flatten Gemini 3.x list content
@@ -2664,44 +2665,63 @@ def compose_context_slice(context_store: dict) -> dict:
     return slice_
 
 
-def compose_all_sections(context_store: dict,
-                         chapters: list[str] | None = None) -> list[dict]:
-    """Compose all 5 chapters from a nested context_store → [{title, prose}].
+def compose_chapters(
+    context_store: dict,
+    *,
+    chapters: list[str] | None = None,
+    language: str | None = None,
+    references: list[dict] | None = None,
+    progress: Callable[[int, str, str, str], None] | None = None,
+    title_overrides: dict[str, str] | None = None,
+    with_references_section: bool = False,
+) -> list[dict]:
+    """Compose thesis chapters from a nested context_store → [{chapter_name, title, prose}].
 
-    `context_store` is the nested module shape ({m1_topic, m2_literature,
-    m3_design, m4_analysis}). Each chapter is written by `compose_chapter`
-    (real LLM composition against the orchestrator/prompts/m5/<name>.md
-    templates), grounded in the project state. On a per-chapter LLM failure
-    we drop in a minimal fallback so one bad chapter can't abort the whole
-    export — but the happy path is full prose, not stubs.
+    THE chapter composer. There were two — this one and
+    `compose_export.compose_sections` — and they were the same function: build
+    the flat slice, reuse what is already written, call `compose_chapter` per
+    chapter on a small thread pool, fall back deterministically, reassemble in
+    canonical order. Everything they genuinely differed in is a parameter now,
+    which is all it ever was:
 
-    Used by the export tool to generate a draft on demand when the user asks
-    for the file but nothing was written yet.
+    - `chapters` — the subset to write. Defaults to the run's scope
+      (`scoped_chapters`), so an analysis-only partner order does not get a
+      fabricated Results chapter. A chat request for Chapters 1-3 passes them
+      explicitly; explicit always wins.
+    - `language` / `references` — derived from M1/M2 when not given, which is
+      what the chat and auto-mode callers relied on. The partner caller resolves
+      them itself and passes them in.
+    - `progress` — the per-chapter callback the headless job uses to stream
+      "writing Chapter 3…". `progress(idx, chapter_key, title, "start"|"end")`.
+    - `title_overrides` — a partner order can name its own chapter headings.
+    - `with_references_section` — append a bibliography built from the M2
+      sources. The full-thesis callers want it; a chapter subset going through
+      run_export's citeproc path gets one generated there instead.
+
+    Keeping them apart is how they drifted: the two fed the same
+    orchestrator/prompts/m5/*.md templates different `research_gaps` and
+    `paradigm` for the same project, one reused prose the other recomposed, and
+    only one carried `chapter_name` forward. Per-chapter LLM failures still fall
+    back so a single bad chapter cannot abort an export.
     """
     m1 = context_store.get("m1_topic") or {}
-    m2 = context_store.get("m2_literature") or {}
-    m3 = context_store.get("m3_design") or {}
-    m4 = context_store.get("m4_analysis") or {}
+    if language is None:
+        language = m1.get("language") or "vi"
+    if references is None:
+        # m2_references, not the raw key: an inferred M2 fills `citation_list`
+        # and leaves `literature_sources` empty.
+        references = m2_references(context_store.get("m2_literature"))
 
-    references = m2_references(m2)
-    language = m1.get("language") or "vi"
-    citation_style = "apa7"
-
-    # One slice construction, shared with the partner/auto-mode composer — see
-    # compose_context_slice for the two keys they used to disagree about.
     context_slice = compose_context_slice(context_store)
     paradigm = context_slice.get("paradigm") or ""
+    citation_style = "apa7"
 
-    titles = _chapter_titles(language)
-    # Compose only the chapters a partner ordered (interactive leaves the scope
-    # unset → the whole thesis) — skips the fabricated Results/Discussion an
-    # analysis-only order never bought.
     from agent.run_context import scoped_chapters  # noqa: PLC0415
-    # A chat request may need complete Chapters 1–3 without fabricating or
-    # composing Results/Discussion. Explicit chapters win; run-context scope
-    # remains the default for auto/partner runs.
-    names = [n for n in (chapters or scoped_chapters(M5_CHAPTER_ORDER))
-             if n in M5_CHAPTER_ORDER]
+    requested = set(chapters) if chapters is not None else set(scoped_chapters(M5_CHAPTER_ORDER))
+    # Canonical order always, whatever order the caller asked in — a thesis is
+    # in chapter order by definition.
+    names = [n for n in M5_CHAPTER_ORDER if n in requested]
+    titles = {**_chapter_titles(language), **(title_overrides or {})}
 
     # Chapters the student already wrote (an imported thesis lands its results
     # and conclusion here verbatim). Composing over them is pure loss: their
@@ -2709,42 +2729,55 @@ def compose_all_sections(context_store: dict,
     # rewrite from the summarised analysis_results reproduces none of it. Reuse
     # the real chapter and spend the LLM only on what is genuinely missing.
     #
-    # Through `chapter_prose`, i.e. BOTH homes. This read was
-    # `chapters_from_final_sections` alone, so a chapter living in `chapters` —
-    # everything the editor saves, and everything a module composes as it
-    # completes — counted as "not written" and got recomposed. That is an LLM
-    # call paid to overwrite the student's own edits with a fresh draft.
-    preserved = chapter_prose(context_store.get("m5_writing") or {})
+    # Through `chapter_prose`, i.e. BOTH homes — everything the editor saves and
+    # everything a module composes as it completes lives in `chapters`, which
+    # this read used to miss entirely.
+    preserved = {
+        name: prose for name, prose in (chapter_prose(
+            context_store.get("m5_writing") or {}) or {}).items()
+        # A "[Composition failed]" remnant is not written work; recompose it.
+        if not prose.lstrip().startswith("[")
+    }
 
-    def _one(name):
+    def _one(idx_name):
+        idx, name = idx_name
         kept = (preserved.get(name) or "").strip()
         if kept:
+            if progress:
+                progress(idx, name, titles[name], "end")
             return name, _match_language(kept, name, language)
+        if progress:
+            progress(idx, name, titles[name], "start")
         try:
             draft = compose_chapter.invoke({
                 "chapter_name": name,
                 "paradigm": paradigm,
                 "context_slice": context_slice,
-                "references": references,
+                "references": references or [],
                 "citation_style": citation_style,
                 "language": language,
             })
             prose = (draft or {}).get("prose") or ""
         except Exception:
-            logger.exception("compose_all_sections: compose_chapter failed for %s", name)
+            logger.exception("compose_chapters: compose_chapter failed for %s", name)
             prose = ""
+        # compose_chapter already sanitizes; the fallback path does not go
+        # through it, so a deterministic fallback keeps the section non-empty.
         if not prose.strip():
             prose = _fallback_section(name, context_store)
+        if progress:
+            progress(idx, name, titles[name], "end")
         return name, prose
 
     # Chapters are independent LLM calls — this per-chapter loop is the ~6-8 min
-    # bottleneck of a partner report. Compose concurrently (capped for the Ofox
+    # bottleneck of a partner report. Compose concurrently (capped for the
     # gateway) and reassemble in canonical order.
     import concurrent.futures as _cf  # noqa: PLC0415
     proses: dict[str, str] = {}
-    with _cf.ThreadPoolExecutor(max_workers=max(1, min(len(names), 5))) as ex:
-        for name, prose in ex.map(_one, names):
+    with _cf.ThreadPoolExecutor(max_workers=max(1, min(len(names) or 1, 5))) as ex:
+        for name, prose in ex.map(_one, list(enumerate(names))):
             proses[name] = prose
+
     # `chapter_name` travels with each section, not just its title.
     #
     # Without it the canonical name is destroyed the first time these sections
@@ -2764,15 +2797,28 @@ def compose_all_sections(context_store: dict,
     out: list[dict] = [{"chapter_name": name, "title": titles[name], "prose": proses[name],
                         **({"source": preserved_sources[name]}
                            if preserved_sources.get(name) else {})}
-                       for name in names]
+                       for name in names if (proses.get(name) or "").strip()]
 
-    # Append a References section built from the M2 sources, with clickable
-    # DOI/URL links. Without this the document has inline "(Author, Year)"
-    # citations but no bibliography to back them.
-    refs_body = _references_section_body(references)
-    if refs_body:
-        out.append({"title": _references_title(language), "prose": refs_body})
+    if with_references_section:
+        # A bibliography built from the M2 sources, with clickable DOI/URL
+        # links. Without it the document has inline "(Author, Year)" citations
+        # and nothing to back them.
+        refs_body = _references_section_body(references)
+        if refs_body:
+            out.append({"title": _references_title(language), "prose": refs_body})
     return out
+
+
+def compose_all_sections(context_store: dict,
+                         chapters: list[str] | None = None) -> list[dict]:
+    """Compose a full thesis (or an explicit chapter subset) with its bibliography.
+
+    The chat / auto-mode entry point into `compose_chapters`: language and
+    references come off M1/M2, and a References section is appended. Kept as a
+    named function because four call sites and their tests use this shape.
+    """
+    return compose_chapters(context_store, chapters=chapters,
+                            with_references_section=True)
 
 
 def compose_module_chapters(context_store: dict, module: str) -> dict:

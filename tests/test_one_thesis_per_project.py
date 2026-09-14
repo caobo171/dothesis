@@ -272,38 +272,35 @@ _STORE_FOR_COMPOSE = {
 }
 
 
-def test_both_composers_fill_the_prompt_from_the_same_slice():
-    """Two composers fed the same chapter templates different inputs for the
-    same project: the partner one rendered `research_gaps` into a readable
-    block and hardcoded `paradigm=""`, the chat/auto-mode one passed the raw
-    gap list and filled the paradigm in. Same prompt, same project, different
-    prose depending on the surface."""
+def test_both_entry_points_fill_the_prompt_from_the_same_slice(monkeypatch):
+    """There were two composers, and they fed the same chapter templates
+    different inputs for the same project: the partner one rendered
+    `research_gaps` into a readable block and hardcoded `paradigm=""`, the
+    chat/auto-mode one passed the raw gap list and filled the paradigm in.
+
+    There is one composer now (`compose_chapters`) with two entry points that
+    differ only in parameters, so this pins what those parameters resolve to.
+    Patching `m5_writing.compose_chapter` alone reaches BOTH — which is itself
+    the property being asserted: before the merge it would only have caught one.
+    """
     import orchestrator.tools.m5_writing as M
     from orchestrator.tools import compose_export
 
     seen: list[dict] = []
+    monkeypatch.setattr(M, "compose_chapter", type("C", (), {
+        "invoke": staticmethod(lambda payload: seen.append(payload) or {"prose": _pad("X")}),
+    })())
 
-    def _capture(payload):
-        seen.append(payload)
-        return {"prose": _pad("X")}
+    M.compose_all_sections(_STORE_FOR_COMPOSE, chapters=["intro"])
+    compose_export.compose_sections(_STORE_FOR_COMPOSE, ["intro"], "vi")
 
-    stub = type("C", (), {"invoke": staticmethod(_capture)})()
-    old_m, old_c = M.compose_chapter, compose_export.compose_chapter
-    try:
-        M.compose_chapter = compose_export.compose_chapter = stub
-        M.compose_all_sections(_STORE_FOR_COMPOSE, chapters=["intro"])
-        compose_export.compose_sections(_STORE_FOR_COMPOSE, ["intro"], "vi")
-    finally:
-        M.compose_chapter, compose_export.compose_chapter = old_m, old_c
-
-    assert len(seen) == 2
+    assert len(seen) == 2, "one of the entry points bypassed the shared composer"
     chat, partner = seen
     assert chat["context_slice"] == partner["context_slice"]
     assert chat["paradigm"] == partner["paradigm"] == "định lượng"
     # Gaps arrive as a readable block with the brief's own [n] markers dropped —
     # they index the brief's scout, not this thesis's bibliography.
-    gaps = chat["context_slice"]["research_gaps"]
-    assert gaps == "- Thiếu nghiên cứu về bối cảnh nội địa"
+    assert chat["context_slice"]["research_gaps"] == "- Thiếu nghiên cứu về bối cảnh nội địa"
 
 
 def test_research_gaps_is_always_a_string_for_the_template():
@@ -315,22 +312,20 @@ def test_research_gaps_is_always_a_string_for_the_template():
     )["research_gaps"] == "already prose"
 
 
-def test_partner_export_reuses_the_edited_chapters():
+def test_partner_export_reuses_the_edited_chapters(monkeypatch):
     """compose_sections read `final_sections` ONLY, so the partner report and
     headless auto-mode either shipped the stale snapshot or paid an LLM to
     recompose a chapter that was already written. Nothing may compose here."""
+    import orchestrator.tools.m5_writing as M
     from orchestrator.tools import compose_export
 
-    def _explode(*a, **kw):
+    def _explode(_payload):
         raise AssertionError("recomposed a chapter that is already written")
 
-    composed = compose_export.compose_chapter
-    try:
-        compose_export.compose_chapter = type("T", (), {"invoke": staticmethod(_explode)})()
-        sections = compose_export.compose_sections(
-            {"m5_writing": _slice(), "m1_topic": {}, "m2_literature": {},
-             "m3_design": {}, "m4_analysis": {}},
-            list(EDITED), "vi")
-    finally:
-        compose_export.compose_chapter = composed
+    monkeypatch.setattr(M, "compose_chapter",
+                        type("T", (), {"invoke": staticmethod(_explode)})())
+    sections = compose_export.compose_sections(
+        {"m5_writing": _slice(), "m1_topic": {}, "m2_literature": {},
+         "m3_design": {}, "m4_analysis": {}},
+        list(EDITED), "vi")
     assert {s["prose"] for s in sections} == set(EDITED.values())
