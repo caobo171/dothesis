@@ -7,7 +7,6 @@ Resolves the s3_key from the project's M5Output.export_artifacts and
 from __future__ import annotations
 
 import io
-import json
 import os
 import re
 import tempfile
@@ -34,11 +33,17 @@ _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 
 # Modules that can be exported on their own as a teacher-report Word doc. M5 is
 # excluded — it already has the full-thesis docx/pdf export.
-_MODULE_EXPORT = {
-    "M1": ("m1_topic", "Topic Discovery"),
-    "M2": ("m2_literature", "Literature Review"),
-    "M3": ("m3_design", "Research Design"),
-    "M4": ("m4_analysis", "Data Analysis"),
+#
+# Only the COLUMN is this route's business. The section label comes from
+# m5_writing.MODULE_SECTION_LABELS, because it is printed at the top of a
+# document a student hands in and it has to read the same as it does everywhere
+# else. This map said "Topic Discovery" for M1 where the chat export said
+# "Introduction" — our internal module name, on submitted work.
+_MODULE_COLUMN = {
+    "M1": "m1_topic",
+    "M2": "m2_literature",
+    "M3": "m3_design",
+    "M4": "m4_analysis",
 }
 
 
@@ -192,57 +197,21 @@ _MODULE_RENDERERS = {"M1": _render_m1, "M2": _render_m2, "M3": _render_m3, "M4":
 # ── "M5-mini" prose composition ──────────────────────────────────────────────
 # Per-module instructions: write the section as flowing academic prose (like the
 # M5 chapter composer, but a short single-module write-up), NOT a field dump.
-_COMPOSE_GUIDE = {
-    "M1": "Write the **Introduction & Research Focus** section: 2-3 short paragraphs "
-          "establishing the background and problem, then state the research title and "
-          "present the research questions in prose (you may list the RQs).",
-    "M2": "Write the **Literature Review** section: synthesize the provided sources into "
-          "flowing paragraphs (what is known, debates, and the research gaps). Use inline "
-          "citations in (Author, Year) form. CITE ONLY the sources provided below — never "
-          "invent a source. Do NOT include a reference list (it is appended automatically).",
-    "M3": "Write the **Research Design & Methodology** section in prose: the conceptual "
-          "model and variables, the hypotheses, the methodology (paradigm, design, "
-          "sampling, planned analysis), and a short description of the instrument. Cite "
-          "(Author, Year) where a construct/scale comes from a source.",
-    "M4": "Write the **Data Analysis** section: describe the analysis plan and report only "
-          "results that are present in the data below. Never invent statistics.",
-}
-
-
-def _llm_text(prompt: str) -> str:
-    """Single LLM call → plain text (flattens Gemini 3.x list content)."""
-    from orchestrator.llm import get_orchestrator_llm
-    # Route through the shared factory so the export composer follows the
-    # configured provider (native/Ofox) instead of a hardcoded Google client —
-    # a hardcoded ChatGoogleGenerativeAI + a provider/model id (e.g. Ofox's
-    # bailian/qwen-plus) would crash. Found by the live E2E tier.
-    llm = get_orchestrator_llm(temperature=0.3, timeout=70)
-    msg = llm.invoke(prompt)
-    c = getattr(msg, "content", "")
-    if isinstance(c, list):
-        return "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in c)
-    return str(c)
 
 
 def _compose_module_prose(module: str, label: str, title: str, slice_: dict) -> str:
-    guide = _COMPOSE_GUIDE.get(module)
-    if not guide:
-        return ""
-    payload = {k: v for k, v in slice_.items() if k not in _SKIP_KEYS and not str(k).startswith("_")}
-    prompt = (
-        "You are writing one section of a Master's thesis for a student to submit to "
-        "their professor. Formal academic register, concise (about 300-600 words). "
-        "Markdown only: use '## ' for the section heading and '### ' for sub-headings, "
-        "'- ' for bullets; no tables.\n\n"
-        f"## Thesis: {title}\n## Section to write: {module} — {label}\n\n"
-        f"Instructions: {guide}\n\n"
-        f"Module data (JSON):\n{json.dumps(payload, ensure_ascii=False, default=str)[:9000]}\n\n"
-        "Write the section now (markdown):"
-    )
-    try:
-        return _llm_text(prompt).strip()
-    except Exception:  # noqa: BLE001 — fall back to structured render
-        return ""
+    """Delegate to the ONE module write-up composer.
+
+    This was a second copy of `m5_writing.compose_module_prose`: identical guide
+    map, identical skip keys, but a different prompt header, temperature 0.3 vs
+    0.4, and no leading-heading strip — so the same module for the same project
+    read differently depending on whether the student asked chat for it or
+    clicked Download here. The only difference that was ever real is that this
+    route hands back a BytesIO instead of an S3 key, and that is delivery, not
+    content; it stays below.
+    """
+    from orchestrator.tools.m5_writing import compose_module_prose  # noqa: PLC0415
+    return compose_module_prose(module, slice_, title, label=label)
 
 
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
@@ -348,10 +317,13 @@ def export_module_docx(
     """
     proj = _owned_project(db, user, project_id)
     module = body.module.upper()
-    if module not in _MODULE_EXPORT:
+    if module not in _MODULE_COLUMN:
         raise HTTPException(400, detail={"error": {"code": "bad_module",
-                                                   "message": f"exportable: {list(_MODULE_EXPORT)}"}})
-    column, label = _MODULE_EXPORT[module]
+                                                   "message": f"exportable: {list(_MODULE_COLUMN)}"}})
+    from orchestrator.tools.m5_writing import MODULE_SECTION_LABELS  # noqa: PLC0415
+
+    column = _MODULE_COLUMN[module]
+    label = MODULE_SECTION_LABELS[module]
     store = DbProjectStateStore(db.bind, project_id, Path(tempfile.gettempdir()))
     slice_ = (store.load_full_context_store().get(column)) or {}
     buf = _build_module_docx(proj.name or "Untitled thesis", module, label, slice_)

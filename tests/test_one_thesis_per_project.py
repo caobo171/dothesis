@@ -152,6 +152,41 @@ def test_every_reader_agrees_on_every_chapter():
                 f"{reader.__name__} disagrees with the exporter on {name}")
 
 
+# --- one module write-up composer -------------------------------------------
+
+def test_the_module_write_up_has_one_composer(monkeypatch):
+    """`/export/module` carried a second copy of `compose_module_prose`:
+    identical guide map and skip keys, but a different prompt header, a
+    different temperature and no leading-heading strip — so the same module for
+    the same project read differently depending on whether the student asked
+    chat for it or clicked Download. S3 vs a direct BytesIO is the only real
+    difference, and that is delivery, not content."""
+    import orchestrator.tools.m5_writing as M
+    from app.routers.exports import _compose_module_prose
+
+    seen: list[str] = []
+    monkeypatch.setattr(M, "_get_llm", lambda: type("L", (), {
+        "invoke": lambda self, prompt: seen.append(prompt) or type(
+            "R", (), {"content": "## X\n\nBody."})(),
+    })())
+
+    M.compose_module_prose("M3", {"hypotheses": ["H1"]}, "T")
+    _compose_module_prose("M3", M.MODULE_SECTION_LABELS["M3"], "T", {"hypotheses": ["H1"]})
+
+    assert len(seen) == 2
+    assert seen[0] == seen[1], "the two surfaces still build different prompts"
+
+
+def test_the_module_label_is_not_internal_jargon():
+    """M1's label was "Introduction" in chat and "Topic Discovery" — our own
+    module name — in the route that prints it at the top of a teacher-ready
+    document. One map now; see [[project_no_brand_in_thesis_output]] for the
+    same class of leak."""
+    from orchestrator.tools.m5_writing import MODULE_SECTION_LABELS
+    assert MODULE_SECTION_LABELS["M1"] == "Introduction"
+    assert "Topic Discovery" not in MODULE_SECTION_LABELS.values()
+
+
 # --- the flows --------------------------------------------------------------
 
 def test_the_bibliography_closes_the_document():

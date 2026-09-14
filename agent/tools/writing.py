@@ -496,8 +496,10 @@ def make_writing_tools(store) -> list:
         if _scope.lower() != "full":
             _COLUMN = {"M1": "m1_topic", "M2": "m2_literature",
                        "M3": "m3_design", "M4": "m4_analysis"}
-            _LABEL = {"M1": "Introduction", "M2": "Literature Review",
-                      "M3": "Research Design", "M4": "Data Analysis"}
+            # Shared with the /export/module download route — the section label
+            # is printed in a document a student hands in, so the two surfaces
+            # cannot call the same module different things.
+            from orchestrator.tools.m5_writing import MODULE_SECTION_LABELS as _LABEL  # noqa: PLC0415
             # Parse + de-dup the requested modules, keep canonical M1→M4 order.
             requested = {m.strip().upper() for m in _scope.split(",") if m.strip()}
             mods = [m for m in ("M1", "M2", "M3", "M4") if m in requested]
@@ -513,7 +515,7 @@ def make_writing_tools(store) -> list:
             thin: list[str] = []
             for _mod in mods:
                 slice_ = (full_cs or {}).get(_COLUMN[_mod]) or {}
-                prose = compose_module_prose(_mod, slice_, title)
+                prose = compose_module_prose(_mod, slice_, title, label=_LABEL[_mod])
                 if not prose.strip() or _is_stub_prose(prose):
                     thin.append(_mod)
                     continue

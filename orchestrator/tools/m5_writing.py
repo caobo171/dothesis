@@ -1761,13 +1761,45 @@ _MODULE_COMPOSE_GUIDE = {
 }
 
 
-def compose_module_prose(module: str, slice_: dict, title: str = "Untitled thesis") -> str:
-    """Compose ONE module's slice as a standalone academic write-up (markdown body,
-    heading stripped — the caller supplies the section title). Real LLM compose;
-    returns "" on unknown module or failure so the caller can flag needs_data."""
+# What a module's write-up is CALLED in the document a student hands in. One
+# map, because there were two and they disagreed about M1: the chat export said
+# "Introduction", the /export/module route said "Topic Discovery" — our internal
+# module name, printed at the top of a teacher-ready file. Same family as the
+# brand leak: a name only we use does not belong in submitted work.
+MODULE_SECTION_LABELS = {
+    "M1": "Introduction",
+    "M2": "Literature Review",
+    "M3": "Research Design",
+    "M4": "Data Analysis",
+}
+
+
+def compose_module_prose(module: str, slice_: dict, title: str = "Untitled thesis",
+                         label: str | None = None, max_seconds: int = 70) -> str:
+    """Compose ONE module's slice as a standalone academic write-up.
+
+    Markdown body, leading heading stripped — the caller supplies the section
+    title. Returns "" on an unknown module or any failure, so the caller can
+    flag needs_data or fall back to a structured render.
+
+    THE module write-up composer. `api/app/routers/exports.py` carried a second
+    copy for the `/export/module` download: identical guide map, identical skip
+    keys, but a different prompt header, a different temperature (0.3 vs 0.4),
+    and no leading-heading strip — so the same module, for the same project,
+    read differently depending on whether you asked the chat for it or clicked
+    Download. S3 versus a direct BytesIO is the only difference that was ever
+    real, and that is delivery, not content; it stays at the caller.
+
+    `max_seconds` is a WALL-CLOCK cap (bounded_invoke), not the client's
+    request-level `timeout=` the export route used to pass — that one does not
+    bound a client whose internal retries blow past it, which is the whole
+    reason bounded_invoke exists. `retries=0`: this call sits inside a
+    synchronous download, so one attempt inside the cap is the contract.
+    """
     guide = _MODULE_COMPOSE_GUIDE.get((module or "").upper())
     if not guide:
         return ""
+    label = label or MODULE_SECTION_LABELS.get((module or "").upper()) or module
     payload = {
         k: v for k, v in (slice_ or {}).items()
         if k not in _MODULE_COMPOSE_SKIP and not str(k).startswith("_")
@@ -1777,19 +1809,17 @@ def compose_module_prose(module: str, slice_: dict, title: str = "Untitled thesi
         "to their professor. Formal academic register, concise (about 300-600 "
         "words). Markdown only: '## ' for the section heading, '### ' for "
         "sub-headings, '- ' for bullets; no tables.\n\n"
-        f"## Thesis: {title}\n## Section: {module}\n\n"
+        f"## Thesis: {title}\n## Section to write: {module} — {label}\n\n"
         f"Instructions: {guide}\n\n"
         f"Module data (JSON):\n{json.dumps(payload, ensure_ascii=False, default=str)[:9000]}\n\n"
         "Write the section now (markdown):"
     )
     try:
-        msg = _get_llm().invoke(prompt)
-        c = getattr(msg, "content", "")
-        text = (
-            "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in c)
-            if isinstance(c, list) else str(c)
-        )
-        return _strip_leading_chapter_heading(text.strip())
+        # Through _get_llm() so the ~30 tests that stub it zero-arg keep working;
+        # the bound rides on the invoke instead of the client construction.
+        from orchestrator.agents.base import bounded_invoke  # noqa: PLC0415
+        msg = bounded_invoke(_get_llm(), prompt, max_seconds=max_seconds, retries=0)
+        return _strip_leading_chapter_heading(text_of(msg).strip())
     except Exception:
         logger.exception("compose_module_prose failed for %s", module)
         return ""
