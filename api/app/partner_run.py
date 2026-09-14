@@ -259,9 +259,13 @@ def run_partner_export(store, project_id, params: dict) -> dict:
     if not sections:
         raise ReportError("compose_failed", "the writing engine produced no sections")
     report_title = (full_cs.get("m1_topic") or {}).get("research_title") or None
+    # `full_cs` is right here and was not being passed: without it run_export
+    # builds no cover fields, weaves none of the verified result tables and adds
+    # no research-model figure — the partner report came out a visibly different
+    # document from the same project's chat export.
     artifacts = run_export(sections, str(project_id),
                            references=references, language=language,
-                           title=report_title)
+                           title=report_title, context_store=full_cs)
     store.persist_export_artifacts(artifacts, scope="partner")
     # Committee-readiness gate summary (roadmap #12) rides the partner export as
     # an advisory field — deterministic + offline. A certificate failure must

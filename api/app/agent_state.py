@@ -64,6 +64,21 @@ def flatten_slices(nested: Any) -> dict[str, Any]:
     return flat
 
 
+def nested_slices(row: Any) -> dict[str, Any]:
+    """{m1_topic: {...}, …} from a ContextStore row — the shape `run_export`
+    reads (cover fields, the tables it weaves, the model figure).
+
+    A plain function because the three run_export callers outside the store
+    class need it too, and two of them were passing nothing at all.
+    """
+    out: dict[str, Any] = {}
+    if row is None:
+        return out
+    for _module, column in _MODULE_COLUMN.items():
+        out[column] = getattr(row, column, None) or {}
+    return out
+
+
 def heal_module_status(stored: dict | None, nested_cs: Any) -> dict[str, str]:
     """The stored status, upgraded to match the evidence now in the store.
 
@@ -586,9 +601,14 @@ class DbProjectStateStore(ProjectStateStore):
                         "draft: %s.", self.project_id, len(sections), missing,
                     )
 
+            # context_store is not optional in practice: without it run_export
+            # builds no cover fields, weaves none of the verified result tables
+            # and adds no research-model figure — a visibly different document
+            # from the one the agent's export_docx produces for the same project.
             artifacts = run_export(sections, str(self.project_id), references=references,
                                    language=language,
-                                   title=(cs.m1_topic or {}).get("research_title"))
+                                   title=(cs.m1_topic or {}).get("research_title"),
+                                   context_store=nested_slices(cs))
             self.persist_export_artifacts(artifacts)
             # F5: auto surface (headless M5 done-hook) export completed. Emitted
             # here rather than in job_runner because this IS the auto-mode export

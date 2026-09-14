@@ -1235,3 +1235,30 @@ def test_export_records_rows_the_download_route_authorizes_against(mock_run_expo
     assert by_kind["docx"].s3_key == "projects/P/exports/thesis-abc.docx"
     assert by_kind["docx"].filename == "thesis-abc.docx"
     assert by_kind["pdf"].size_bytes == 99
+
+
+@patch("app.routers.m5_editor.run_export")
+def test_export_passes_the_store_so_it_renders_the_same_document(mock_run_export, client):
+    """The editor was exporting a visibly different thesis from the chat.
+
+    `run_export(context_store=...)` is what builds the cover fields, weaves the
+    verified result tables into Chapter 4 and adds the research-model figure to
+    Chapter 3. The agent's export_docx passed it; this endpoint did not, so the
+    same project produced two different documents depending on which button the
+    student pressed.
+    """
+    mock_run_export.return_value = [
+        {"kind": "docx", "s3_key": "projects/P/exports/a.docx", "size_bytes": 1,
+         "download_url": "/d", "uri": ""},
+        {"kind": "pdf", "s3_key": "projects/P/exports/a.pdf", "size_bytes": 1,
+         "download_url": "/p", "uri": ""},
+    ]
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    assert client.post(f"/api/v1/projects/{pid}/m5/export").status_code == 200
+
+    store = mock_run_export.call_args.kwargs["context_store"]
+    # The NESTED shape run_export reads — not the flat owned-keys view.
+    assert "m1_topic" in store and "m5_writing" in store
+    assert isinstance(store["m1_topic"], dict)

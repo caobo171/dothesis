@@ -11,6 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from ..db import db_session
 from ..deps import current_user
+from ..agent_state import nested_slices
 from ..models import ContextStore, Export, Project, User
 
 router = APIRouter(tags=["m5_editor"])
@@ -791,8 +792,13 @@ def reexport(
     if not sections:
         raise HTTPException(400, detail={"error": {"code": "no_chapters_yet", "missing": missing}})
     references = (cs.m2_literature or {}).get("literature_sources") or []
+    # Passing the store is what makes this the SAME document the chat export
+    # produces. Without it run_export builds no cover fields, weaves none of the
+    # verified result tables into Chapter 4 and adds no research-model figure to
+    # Chapter 3 — the editor was exporting a visibly different thesis.
     artifacts = run_export(sections, str(project_id), references=references, language=language,
-                           title=m1.get("research_title"))
+                           title=m1.get("research_title"),
+                           context_store=nested_slices(cs))
 
     m5["export_artifacts"] = artifacts
     cs.m5_writing = m5
