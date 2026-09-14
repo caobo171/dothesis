@@ -1200,3 +1200,38 @@ def test_get_chapters_tops_up_a_partly_materialised_dict(client):
     with sf() as db:
         stored = db.get(ContextStore, uuid.UUID(pid)).m5_writing["chapters"]
     assert set(stored) == {"intro", "methodology", "results"}
+
+
+@patch("app.routers.m5_editor.run_export")
+def test_export_records_rows_the_download_route_authorizes_against(mock_run_export, client):
+    """Every file the editor's Re-export produced 404'd on click.
+
+    The download route's source of truth moved from m5_writing.export_artifacts
+    to the `exports` table; this endpoint kept writing only the former, so the
+    artifact existed in S3, the button rendered, and /exports/{filename} said
+    artifact_not_found. Same rows the auto-export hook and the agent's
+    export_docx tool write, so the three cannot drift again.
+    """
+    from app.models import Export
+
+    mock_run_export.return_value = [
+        {"kind": "docx", "s3_key": "projects/P/exports/thesis-abc.docx",
+         "size_bytes": 42, "download_url": "/d", "uri": ""},
+        {"kind": "pdf", "s3_key": "projects/P/exports/thesis-abc.pdf",
+         "size_bytes": 99, "download_url": "/p", "uri": ""},
+    ]
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+
+    assert client.post(f"/api/v1/projects/{pid}/m5/export").status_code == 200
+
+    sf = get_session_factory()
+    with sf() as db:
+        rows = db.query(Export).filter(Export.project_id == uuid.UUID(pid)).all()
+    by_kind = {r.kind: r for r in rows}
+    assert set(by_kind) == {"docx", "pdf"}
+    # The download route looks the artifact up by s3_key, and derives the
+    # filename from the URL — both have to match what run_export produced.
+    assert by_kind["docx"].s3_key == "projects/P/exports/thesis-abc.docx"
+    assert by_kind["docx"].filename == "thesis-abc.docx"
+    assert by_kind["pdf"].size_bytes == 99

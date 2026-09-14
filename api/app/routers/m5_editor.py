@@ -11,7 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from ..db import db_session
 from ..deps import current_user
-from ..models import ContextStore, Project, User
+from ..models import ContextStore, Export, Project, User
 
 router = APIRouter(tags=["m5_editor"])
 
@@ -797,6 +797,26 @@ def reexport(
     m5["export_artifacts"] = artifacts
     cs.m5_writing = m5
     flag_modified(cs, "m5_writing")
+
+    # Record the artifacts as `exports` ROWS as well. That table — not
+    # m5_writing.export_artifacts — is what the download route authorizes
+    # against, and this endpoint was never updated when the source of truth
+    # moved: every file the editor's Re-export produced came back
+    # `artifact_not_found` on click. Same helper the auto-export hook and the
+    # agent's export_docx tool use, so the three cannot drift again.
+    for a in artifacts or []:
+        s3_key = a.get("s3_key")
+        if not s3_key:
+            continue
+        db.add(Export(
+            id=uuid.uuid4(),
+            project_id=project_id,
+            scope="full",
+            kind=a.get("kind") or "docx",
+            s3_key=s3_key,
+            filename=s3_key.rsplit("/", 1)[-1],
+            size_bytes=int(a.get("size_bytes") or 0),
+        ))
     db.commit()
 
     # `missing` lets the UI say "exported 4 of 5 chapters — Conclusion still to
