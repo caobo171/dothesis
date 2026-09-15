@@ -784,6 +784,11 @@ export const en = {
   // --- chat composer ---
   "chat.composer.placeholder": "Reply to DoThesis — ask anything about your thesis",
   "chat.composer.placeholderSkill": "{skill} will handle this turn",
+  // Streaming state. Two phases so the student can tell "the model has not
+  // answered yet" from "it is answering now" — the difference between a
+  // stalled turn and a working one.
+  "chat.stream.thinking": "Thinking…",
+  "chat.stream.answering": "Answering…",
   "chat.composer.send": "Send",
   "chat.composer.skills": "Skills",
   "chat.composer.attach": "Attach",

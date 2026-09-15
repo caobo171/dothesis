@@ -4,6 +4,13 @@ import { MessageBubble, humanizeTechnicalCopy } from "./MessageBubble";
 import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
 import { StreamingBubble } from "./StreamingBubble";
 
+function renderStreaming(ui: React.ReactElement) {
+  // Only the streaming/thinking indicators read the catalogue; the
+  // other bubbles here are provider-free on purpose and assert the
+  // default locale.
+  return render(<LocaleProvider initialLocale="vi" hasCookie>{ui}</LocaleProvider>);
+}
+
 
 describe("MessageBubble", () => {
   test("hides agent protocol vocabulary in Vietnamese replies", () => {
@@ -49,7 +56,7 @@ describe("MessageBubble", () => {
 
 describe("StreamingBubble", () => {
   test("renders text + cursor", () => {
-    render(<StreamingBubble text="streaming…" />);
+    renderStreaming(<StreamingBubble text="streaming…" />);
     expect(screen.getByText("streaming…")).toBeTruthy();
     expect(screen.getByTestId("streaming-cursor")).toBeTruthy();
   });

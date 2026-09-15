@@ -1,5 +1,7 @@
 import { Loader2 } from "lucide-react";
 
+import { useT } from "@/app/lib/i18n/LocaleProvider";
+
 /**
  * Three-dot "agent is thinking" indicator.
  *
@@ -10,6 +12,9 @@ import { Loader2 } from "lucide-react";
  * streaming is seamless.
  */
 export function ThinkingBubble({ moduleTag }: { moduleTag?: string | null }) {
+  // Through the catalogue: this string was hardcoded Vietnamese, so an
+  // English-locale student watched "Đang suy nghĩ…" on every turn.
+  const t = useT();
   return (
     // Same shape as ProgressBubble's headline — spinner + one quiet line — so
     // the hand-off from "thinking" to the first named step is a word changing,
@@ -17,9 +22,10 @@ export function ThinkingBubble({ moduleTag }: { moduleTag?: string | null }) {
     // as a chat app; this reads as the machine working.
     // No module chip — see AssistantFrame.
     <div data-role="assistant" data-testid="thinking-bubble" className="flex flex-col">
-      <div className="flex items-center gap-2 text-[13px] text-ink-500" aria-label="Agent is thinking">
+      <div className="flex items-center gap-2 text-[13px] text-ink-500"
+           aria-label={t("chat.stream.thinking")} aria-live="polite">
         <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" aria-hidden />
-        <span>Đang suy nghĩ…</span>
+        <span>{t("chat.stream.thinking")}</span>
       </div>
     </div>
   );

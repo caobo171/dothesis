@@ -39,6 +39,24 @@ def test_a_confirmed_module_failing_its_dod_is_false_done():
     assert findings, "M4 confirmed with empty results must be FALSE_DONE"
     assert findings[0].payload["module"] == "M4"
     assert findings[0].repair == "deterministic"
+    # Raw DoD gaps stay in the payload for the loop guard...
+    assert "results is empty" in findings[0].payload["gaps"]
+    # ...and never reach the student. A real reply read "M3 đang được đánh dấu
+    # xong nhưng còn thiếu: missing target_sample_size", which names a schema
+    # key the prompt explicitly forbids showing.
+    assert "results is empty" not in findings[0].detail
+    assert "kết quả phân tích" in findings[0].detail
+
+
+def test_an_unmapped_gap_is_dropped_rather_than_printed_raw():
+    inp = DoctorInput(
+        context_store={"m3_design": {"instrument": {"items": [{"text": "q"}]},
+                                     "confirmed_at": "2026-09-15T05:31:59+00:00"}},
+        uploads=[], chapter_prose={},
+    )
+    f = [x for x in diagnose(inp) if x.code == "FALSE_DONE"][0]
+    assert "missing" not in f.detail, f.detail
+    assert "_" not in f.detail, f.detail
 
 
 def test_an_unconfirmed_module_is_not_false_done():

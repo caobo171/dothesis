@@ -1,6 +1,13 @@
 import { describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MessageList } from "./MessageList";
+import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
+
+// MessageList can render the thinking/streaming indicators, which read
+// their label from the catalogue.
+function renderVi(ui: React.ReactElement) {
+  return render(<LocaleProvider initialLocale="vi" hasCookie>{ui}</LocaleProvider>);
+}
 
 
 describe("MessageList", () => {
@@ -9,7 +16,7 @@ describe("MessageList", () => {
       { id: 1, role: "user" as const, content: "Hello", created_at: "2026-05-27" },
       { id: 2, role: "assistant" as const, content: "Hi back", created_at: "2026-05-27", module_tag: "M1" },
     ];
-    render(<MessageList messages={messages} streamingText="" streamingModuleTag={null} />);
+    renderVi(<MessageList messages={messages} streamingText="" streamingModuleTag={null} />);
     expect(screen.getByText("Hello")).toBeTruthy();
     expect(screen.getByText("Hi back")).toBeTruthy();
     // `module_tag` still rides along with the message and still drives routing,
@@ -19,7 +26,7 @@ describe("MessageList", () => {
   });
 
   test("renders streaming bubble when streamingText set", () => {
-    render(<MessageList messages={[]} streamingText="streaming reply" streamingModuleTag="M2" />);
+    renderVi(<MessageList messages={[]} streamingText="streaming reply" streamingModuleTag="M2" />);
     expect(screen.getByText("streaming reply")).toBeTruthy();
     expect(screen.queryByText("M2")).toBeNull();
   });
@@ -27,7 +34,7 @@ describe("MessageList", () => {
   test("renders ProgressBubble when in-flight with progress but no tokens yet", () => {
     // P4: M2 phase2's 30-60s scout used to show only the typing dot. With
     // engine progress streamed, the bubble shows the live line(s).
-    render(
+    renderVi(
       <MessageList
         messages={[]}
         streamingText=""
@@ -48,7 +55,7 @@ describe("MessageList", () => {
   });
 
   test("falls back to ThinkingBubble when in-flight but no progress yet", () => {
-    render(
+    renderVi(
       <MessageList
         messages={[]}
         streamingText=""
@@ -64,7 +71,7 @@ describe("MessageList", () => {
   test("renders ErrorBubble when streamingError is set", () => {
     // P6: backend SSE `type: error` must surface visibly — the M2 msgpack
     // crash showed silent failure is the worst possible UX.
-    render(
+    renderVi(
       <MessageList
         messages={[]}
         streamingText=""
@@ -96,7 +103,7 @@ describe("MessageList widget integration", () => {
         tool_calls_json: hint },
     ];
     const onWidgetSelect = vi.fn();
-    render(<MessageList messages={messages} streamingText="" streamingModuleTag={null} onWidgetSelect={onWidgetSelect} />);
+    renderVi(<MessageList messages={messages} streamingText="" streamingModuleTag={null} onWidgetSelect={onWidgetSelect} />);
     const card = screen.getByTestId("card-Marketing");
     expect(card).not.toBeDisabled();
   });
@@ -107,7 +114,7 @@ describe("MessageList widget integration", () => {
         tool_calls_json: hint },
       { id: 2, role: "user" as const, content: "I'd like to study Marketing.", created_at: "2026-05-27" },
     ];
-    render(<MessageList messages={messages} streamingText="" streamingModuleTag={null} onWidgetSelect={() => {}} />);
+    renderVi(<MessageList messages={messages} streamingText="" streamingModuleTag={null} onWidgetSelect={() => {}} />);
     const card = screen.getByTestId("card-Marketing");
     expect(card).toBeDisabled();
   });
@@ -117,7 +124,7 @@ describe("MessageList widget integration", () => {
       { id: 1, role: "assistant" as const, content: "Pick", created_at: "2026-05-27",
         tool_calls_json: hint },
     ];
-    render(<MessageList messages={messages} streamingText="thinking…" streamingModuleTag={null} onWidgetSelect={() => {}} />);
+    renderVi(<MessageList messages={messages} streamingText="thinking…" streamingModuleTag={null} onWidgetSelect={() => {}} />);
     const card = screen.getByTestId("card-Marketing");
     expect(card).toBeDisabled();
   });

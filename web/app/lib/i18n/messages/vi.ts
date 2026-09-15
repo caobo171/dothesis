@@ -725,6 +725,8 @@ export const vi: Record<MessageKey, string> = {
   // --- chat composer ---
   "chat.composer.placeholder": "Trả lời DoThesis — hỏi bất cứ điều gì về luận văn",
   "chat.composer.placeholderSkill": "{skill} sẽ xử lý lượt này",
+  "chat.stream.thinking": "Đang suy nghĩ…",
+  "chat.stream.answering": "Đang trả lời…",
   "chat.composer.send": "Gửi",
   "chat.composer.skills": "Kỹ năng",
   "chat.composer.attach": "Đính kèm",

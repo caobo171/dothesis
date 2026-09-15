@@ -361,6 +361,35 @@ def _instrument_not_parsed(inp: DoctorInput) -> list[Finding]:
     )]
 
 
+# DoD gaps are internal strings — "missing target_sample_size", "results is
+# empty". They are the right key for the loop guard and the wrong thing to show
+# a student: the prompt forbids exposing schema names such as
+# `target_sample_size` as student-facing prose, and one reached a real reply as
+# "M3 đang được đánh dấu xong nhưng còn thiếu: missing target_sample_size."
+_GAP_VI = {
+    "missing target_sample_size": "cỡ mẫu mục tiêu",
+    "missing paradigm": "hướng tiếp cận nghiên cứu",
+    "missing design": "thiết kế nghiên cứu",
+    "missing tool": "phần mềm phân tích",
+    "missing sampling_strategy": "cách chọn mẫu",
+    "missing analysis_outline": "dàn ý phân tích",
+    "missing data_type_detected": "loại dữ liệu",
+    "results is empty": "kết quả phân tích",
+    "missing research_gaps": "khoảng trống nghiên cứu",
+    "missing verified literature source": "nguồn tài liệu đã kiểm chứng",
+}
+
+
+def _humanize_gaps(gaps: list[str]) -> str:
+    """Plain-language names for what a module is missing, deduped and ordered.
+
+    An unmapped gap is dropped rather than printed raw — a student cannot act
+    on `missing cmb_plan`, and the agent explains the specifics in prose.
+    """
+    named = list(dict.fromkeys(_GAP_VI[g] for g in gaps if g in _GAP_VI))
+    return ", ".join(named)
+
+
 def _false_done(inp: DoctorInput) -> list[Finding]:
     """A module wearing `confirmed_at` while its own DoD says it is not done.
 
@@ -380,10 +409,14 @@ def _false_done(inp: DoctorInput) -> list[Finding]:
             continue
         result = dod(slice_)
         if not result.done:
+            human = _humanize_gaps(list(result.gaps))
             out.append(Finding(
                 code="FALSE_DONE",
-                detail=f"{module} đang được đánh dấu xong nhưng còn thiếu: "
-                       f"{', '.join(result.gaps)}.",
+                detail=(f"{module} chưa hoàn tất — còn thiếu {human}."
+                        if human else f"{module} chưa hoàn tất."),
+                # The RAW gaps stay in the payload: they are what the loop guard
+                # compares before and after a repair, and they must not be
+                # lossy the way the student-facing sentence is.
                 repair="deterministic",
                 payload={"module": module, "gaps": list(result.gaps)},
             ))
