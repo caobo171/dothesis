@@ -33,10 +33,36 @@ export type Message = {
 };
 
 
-function snapshotOf(value: {
+/**
+ * The two fields a context-usage snapshot is read out of.
+ *
+ * `unknown` rather than `number` because the two sources disagree about how
+ * hard the guarantee is: `Message` comes from SWR-parsed JSON and declares them
+ * as numbers, while an `SSEEvent` is an untyped envelope off the wire.
+ * `snapshotOf` coerces and range-checks either way, so the narrower type would
+ * be a promise this function does not need and cannot rely on.
+ */
+type ContextUsageFields = {
   context_tokens?: unknown;
   compact_at_tokens?: unknown;
-}): ContextUsageSnapshot | null {
+};
+
+/**
+ * The `done` frame is the one that carries usage — `chat_v3._finalize` puts
+ * `context_tokens`/`compact_at_tokens` on it and on no other event type.
+ *
+ * A type guard rather than a bare `event.type === "done"` check because
+ * `SSEEvent` declares only `type` plus an index signature, and TypeScript's
+ * weak-type check rejects passing that to a parameter whose properties are all
+ * optional — the two share no DECLARED property, index signature or not. This
+ * narrowing states the thing the string comparison already meant, which beats
+ * casting the objection away at the call site.
+ */
+function isDoneEvent(event: SSEEvent): event is SSEEvent & ContextUsageFields {
+  return event.type === "done";
+}
+
+function snapshotOf(value: ContextUsageFields): ContextUsageSnapshot | null {
   const contextTokens = Number(value.context_tokens ?? 0);
   const compactAtTokens = Number(value.compact_at_tokens ?? 0);
   return Number.isFinite(contextTokens)
@@ -54,7 +80,7 @@ export function selectContextUsage(
 ): ContextUsageSnapshot | null {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
-    if (event.type !== "done") continue;
+    if (!isDoneEvent(event)) continue;
     const snapshot = snapshotOf(event);
     if (snapshot) return snapshot;
   }
