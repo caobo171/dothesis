@@ -743,7 +743,10 @@ export function AssistantFrame({
       {/* Serif body, like the reference: it is what makes multi-paragraph
           reasoning readable at length, and it distinguishes the assistant's
           prose from the UI's sans-serif chrome without needing a container. */}
-      <div className="min-w-0 font-serif text-[16.5px] leading-[1.72] text-ink-800">
+      {/* 16px, not 16.5: the half-pixel rounded inconsistently across the
+          assistant prose and the 16px serif used elsewhere (ModuleSlices), so
+          two serif blocks on the same screen sat at visibly different sizes. */}
+      <div className="min-w-0 font-serif text-[16px] leading-[1.72] text-ink-800">
         {children}
       </div>
       {footer && <div className="block">{footer}</div>}
