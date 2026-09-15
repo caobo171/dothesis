@@ -10,7 +10,9 @@
 import { describe, expect, test } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
-import { M3Body, countConstructs, groupItemsByConstruct } from "./ModuleSlices";
+import {
+  M3Body, countConstructs, groupItemsByConstruct, normalizeInstrumentItems,
+} from "./ModuleSlices";
 
 function renderEn(ui: React.ReactElement) {
   return render(<LocaleProvider initialLocale="en" hasCookie>{ui}</LocaleProvider>);
@@ -116,5 +118,76 @@ describe("M3Body questionnaire row", () => {
   test("still empty when M3 has nothing at all", () => {
     renderEn(<M3Body data={{}} />);
     expect(screen.getByText(/No M3 data committed yet|Chưa có dữ liệu M3/)).toBeTruthy();
+  });
+});
+
+/**
+ * The GROUPED shape, copied verbatim from a live row (project 8738b987).
+ *
+ * `instrument.items` is a list of CONSTRUCT GROUPS carrying item codes, not a
+ * flat list of items. The panel understood only the flat shape, so it counted
+ * eight groups as eight items, found no `text` on any of them, and rendered
+ * "1 —" eight times — a 32-item questionnaire shown as eight blanks, under a
+ * summary claiming "8 items · 8 constructs".
+ */
+const GROUPED = {
+  scale_type: "Likert 5-point",
+  items: [
+    { construct: "KOL", items: ["KOL_1", "KOL_2", "KOL_3", "KOL_4"] },
+    { construct: "HATH", items: ["HATH_1", "HATH_2", "HATH_3"] },
+    { construct: "YD", items: ["YD_1", "YD_2", "YD_3"] },
+  ],
+};
+
+describe("the grouped instrument shape", () => {
+  test("expands construct groups into their real items", () => {
+    const items = normalizeInstrumentItems(GROUPED.items);
+    expect(items).toHaveLength(10);
+    expect(countConstructs(items)).toBe(3);
+    expect(items[0]).toMatchObject({ id: "KOL_1", construct: "KOL" });
+  });
+
+  test("leaves the flat shape untouched", () => {
+    expect(normalizeInstrumentItems(INSTRUMENT.items)).toEqual(INSTRUMENT.items);
+  });
+
+  test("tolerates junk without throwing", () => {
+    expect(normalizeInstrumentItems(undefined)).toEqual([]);
+    expect(normalizeInstrumentItems("nope")).toEqual([]);
+    expect(normalizeInstrumentItems([null, "", { construct: "X", items: [] }])).toEqual([]);
+  });
+
+  test("the summary counts items, not groups", () => {
+    renderEn(<M3Body data={{ instrument: GROUPED }} />);
+    expect(screen.getByText(/10 items/)).toBeTruthy();
+    expect(screen.getByText(/3 constructs/)).toBeTruthy();
+  });
+
+  test("the modal shows the codes and says the wording is missing", () => {
+    renderEn(<M3Body data={{ instrument: GROUPED }} />);
+    fireEvent.click(screen.getByText(/10 items/));
+    // Codes, not a row of dashes.
+    expect(screen.getByText("KOL_1")).toBeTruthy();
+    expect(screen.getByText("YD_3")).toBeTruthy();
+    expect(screen.queryByText("—")).toBeNull();
+    // Said plainly, not implied by a blank.
+    expect(screen.getByText(/wording is not in the project state yet/i)).toBeTruthy();
+    // The response scale heads the form, the way it is printed.
+    expect(screen.getByText(/Likert 5-point/)).toBeTruthy();
+  });
+
+  test("numbers items continuously across constructs", () => {
+    renderEn(<M3Body data={{ instrument: GROUPED }} />);
+    fireEvent.click(screen.getByText(/10 items/));
+    // A respondent sees one form; the last item is 10, not a restarted 3.
+    expect(screen.getByText("10.")).toBeTruthy();
+  });
+
+  test("a questionnaire WITH wording still shows it, plus its code", () => {
+    renderEn(<M3Body data={{ instrument: INSTRUMENT }} />);
+    fireEvent.click(screen.getByText(/4 items/));
+    expect(screen.getByText(/Using the system improves my performance/)).toBeTruthy();
+    expect(screen.getByText("PU1")).toBeTruthy();
+    expect(screen.queryByText(/wording is not in the project state yet/i)).toBeNull();
   });
 });

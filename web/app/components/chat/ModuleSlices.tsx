@@ -711,7 +711,10 @@ export function M3Body({ data }: { data: Record<string, any> | null }) {
   // so every agent-authored project had a questionnaire sitting in the store
   // that this panel silently dropped.
   const instrument = data.instrument as InstrumentSlice | undefined;
-  const instrumentItems = instrument?.items ?? [];
+  // Normalized, because the store holds the grouped shape too — see
+  // normalizeInstrumentItems. Counting the raw array made the summary read
+  // "8 items · 8 constructs" for a 32-item questionnaire.
+  const instrumentItems = normalizeInstrumentItems(instrument?.items);
   const questionnaire = (data.questionnaire_text as string | undefined) || instrument?.raw;
   // Imported / headless projects often commit a SPEC first — constructs,
   // items_per_construct, scale, source — with no item text yet. The panel used
@@ -1280,7 +1283,62 @@ export type InstrumentSlice = {
   items?: InstrumentItem[];
   preamble?: string;
   raw?: string;
+  /** "Likert 5-point" — written by the agent as `scale_type`, and read here
+   *  under both spellings because the store carries both. */
+  scale_type?: string;
+  scale?: string;
 };
+
+/**
+ * Flatten whatever shape `instrument.items` arrived in into real items.
+ *
+ * The store holds at least two, and the panel only understood one:
+ *
+ *   flat   [{ id: "KOL_1", text: "…", construct: "KOL" }, …]
+ *   groups [{ construct: "KOL", items: ["KOL_1", "KOL_2", …] }, …]
+ *
+ * A live project (8738b987) is in the GROUP shape, so the panel counted eight
+ * groups as eight items, found no `text` on any of them and rendered "1 —"
+ * eight times — a questionnaire of 32 coded items displayed as eight blanks,
+ * over a summary that claimed "8 items · 8 constructs".
+ *
+ * A group's entries may be bare code strings or item objects; both expand to
+ * one item each, carrying the group's construct down. An item with a code but
+ * no wording is kept — the code is real information (it is what the analysis
+ * output refers to), and `InstrumentDetail` says plainly that the wording has
+ * not been written rather than printing a dash.
+ */
+export function normalizeInstrumentItems(raw: unknown): InstrumentItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: InstrumentItem[] = [];
+  for (const entry of raw) {
+    if (typeof entry === "string") {
+      if (entry.trim()) out.push({ id: entry.trim() });
+      continue;
+    }
+    if (!entry || typeof entry !== "object") continue;
+    const o = entry as Record<string, unknown>;
+    const nested = o.items;
+    if (Array.isArray(nested)) {
+      const construct = typeof o.construct === "string" ? o.construct : undefined;
+      for (const sub of nested) {
+        if (typeof sub === "string") {
+          if (sub.trim()) out.push({ id: sub.trim(), construct });
+        } else if (sub && typeof sub === "object") {
+          out.push({ construct, ...(sub as InstrumentItem) });
+        }
+      }
+      continue;
+    }
+    out.push(o as InstrumentItem);
+  }
+  return out;
+}
+
+/** True when items exist but not one of them carries wording. */
+export function itemsLackWording(items: InstrumentItem[]): boolean {
+  return items.length > 0 && !items.some((it) => (it.text ?? "").trim());
+}
 
 /** Questionnaire metadata without committed item text (common after import). */
 export type InstrumentSpec = {
@@ -1471,11 +1529,19 @@ function InstrumentDetail({
   text: string;
   spec?: InstrumentSpec | null;
 }) {
-  const { t } = useLocale();
-  const items = instrument?.items ?? [];
+  const { t, tn } = useLocale();
+  const items = normalizeInstrumentItems(instrument?.items);
 
   if (items.length > 0) {
     const groups = groupItemsByConstruct(items);
+    // The response scale belongs at the top of a questionnaire, the way the
+    // student will print it. `scale_type` is what the agent writes; the panel
+    // only ever looked at a per-item `scale` and so never showed it.
+    const scale = (instrument?.scale_type ?? instrument?.scale ?? "").trim();
+    const noWording = itemsLackWording(items);
+    // Continuous numbering across constructs — a respondent sees one form, not
+    // eight restarting lists.
+    let n = 0;
     return (
       <div className="space-y-4">
         {instrument?.preamble && (
@@ -1483,31 +1549,58 @@ function InstrumentDetail({
             {instrument.preamble}
           </p>
         )}
+        {scale && (
+          <div className="text-[12px] text-ink-700 bg-ink-50 rounded px-3 py-2">
+            <span className="uppercase tracking-[0.05em] text-ink-500 font-semibold mr-2">
+              {t("context.field.scale")}
+            </span>
+            {scale}
+          </div>
+        )}
+        {noWording && (
+          <p className="text-[12.5px] leading-relaxed text-ink-600 border-l-2 border-amber-300 pl-3">
+            {t("context.empty.instrumentSpecNoText")}
+          </p>
+        )}
         {groups.map((group) => (
           <div key={group.construct}>
             <div className="text-[11px] uppercase tracking-[0.05em] text-ink-500 font-semibold mb-1.5">
               {group.construct}
               <span className="ml-1.5 normal-case tracking-normal text-ink-400 font-medium">
-                {group.items.length} item{group.items.length === 1 ? "" : "s"}
+                {tn("context.summary.instrumentItems_one",
+                  "context.summary.instrumentItems_other",
+                  group.items.length, { count: group.items.length })}
               </span>
             </div>
             <ol className="space-y-1.5">
-              {group.items.map((item, i) => (
-                <li
-                  key={item.id ?? `${group.construct}-${i}`}
-                  className="text-[13.5px] leading-relaxed text-ink-900 flex gap-2"
-                >
-                  <span className="text-ink-400 font-mono text-[11.5px] pt-0.5 shrink-0">
-                    {item.id ?? i + 1}
-                  </span>
-                  <span>
-                    {item.text ?? "—"}
-                    {item.scale && <ItemFlag label={item.scale} />}
-                    {item.reverse_coded && <ItemFlag label="reverse" />}
-                    {item.attention_check && <ItemFlag label="attention" />}
-                  </span>
-                </li>
-              ))}
+              {group.items.map((item, i) => {
+                n += 1;
+                const wording = (item.text ?? "").trim();
+                return (
+                  <li
+                    key={item.id ?? `${group.construct}-${i}`}
+                    className="text-[13.5px] leading-relaxed text-ink-900 flex gap-2"
+                  >
+                    <span className="text-ink-400 tabular-nums text-[12px] pt-0.5 shrink-0 w-5 text-right">
+                      {n}.
+                    </span>
+                    <span>
+                      {/* The CODE is real information even with no wording —
+                          it is what the analysis tables refer to (KOL_1), so a
+                          student can still match a row to a question. */}
+                      {wording || (
+                        <span className="font-mono text-[12px] text-ink-500">{item.id}</span>
+                      )}
+                      {wording && item.id && (
+                        <span className="ml-1.5 font-mono text-[11px] text-ink-400">{item.id}</span>
+                      )}
+                      {item.scale && <ItemFlag label={item.scale} />}
+                      {item.reverse_coded && <ItemFlag label="reverse" />}
+                      {item.attention_check && <ItemFlag label="attention" />}
+                    </span>
+                  </li>
+                );
+              })}
             </ol>
           </div>
         ))}
