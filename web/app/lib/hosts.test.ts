@@ -59,6 +59,7 @@ describe("marketing host", () => {
       "/blog",
       "/blog/vi",
       "/blog/vi/cfa",
+      "/compare/thesisai",
       "/sitemap.xml",
       "/robots.txt",
       // The og:image the apex's own pages point at. Redirect it to the app
@@ -93,6 +94,9 @@ describe("app host", () => {
     });
     expect(routeForHost("app.dothesis.com", "/landing")).toEqual({
       action: "redirect", to: "https://dothesis.com/", status: 301, external: true,
+    });
+    expect(routeForHost("app.dothesis.com", "/compare/jenni-ai")).toEqual({
+      action: "redirect", to: "https://dothesis.com/compare/jenni-ai", status: 301, external: true,
     });
   });
 

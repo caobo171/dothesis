@@ -1,5 +1,10 @@
 import { BrandLockup } from "./shared";
 
+// `shared.tsx` is a client module because BrandLockup animates; importing a
+// scalar from it into this server component produces a client reference rather
+// than a URL. Keep this build-time routing constant server-local.
+const LANDING_HREF = process.env.NEXT_PUBLIC_MARKETING_HOST ? "/" : "/landing";
+
 /**
  * The design ships every footer link as `href="#"`. Where a real destination
  * exists it is wired up; About and Careers stay as placeholders because those
@@ -24,18 +29,18 @@ function columns(locale?: string): Array<[string, Array<[string, string]>]> {
     [
       "Product",
       [
-        ["Features", "#features"],
-        ["Tools", "#tools"],
-        ["Pricing", "#pricing"],
+        ["Features", `${LANDING_HREF}#features`],
+        ["Tools", `${LANDING_HREF}#tools`],
+        ["Pricing", `${LANDING_HREF}#pricing`],
       ],
     ],
     [
-      "Tools",
+      "Compare",
       [
-        ["Humanize", "#tools"],
-        ["Writing rhythm", "#tools"],
-        ["Citation generator", "#tools"],
-        ["Similarity & citations", "#tools"],
+        ["vs ThesisAI", "/compare/thesisai"],
+        ["vs Jenni AI", "/compare/jenni-ai"],
+        ["vs Paperguide", "/compare/paperguide"],
+        ["All comparisons", "/compare"],
       ],
     ],
     [

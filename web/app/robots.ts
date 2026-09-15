@@ -29,7 +29,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     rules: [
       {
         userAgent: "*",
-        allow: ["/blog", "/landing"],
+        allow: ["/blog", "/compare", "/landing"],
         disallow: ["/chat", "/admin", "/api"],
       },
     ],

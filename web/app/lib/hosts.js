@@ -39,10 +39,10 @@ export const SPLIT_ENABLED = Boolean(MARKETING_HOST && APP_HOST);
  * has no file extension, so it is not spared by the static-file rule in
  * proxy.js — without it here the apex would 308 its own og:image over to the
  * app host, which is exactly the origin robots.txt closes to crawlers. */
-const MARKETING_PREFIXES = ["/blog", "/_next", "/sitemap.xml", "/robots.txt", "/opengraph-image"];
+const MARKETING_PREFIXES = ["/blog", "/compare", "/_next", "/sitemap.xml", "/robots.txt", "/opengraph-image"];
 
 /** Public content, wherever it is asked for, has one home: the marketing host. */
-const PUBLIC_CONTENT_PREFIXES = ["/blog", "/landing"];
+const PUBLIC_CONTENT_PREFIXES = ["/blog", "/compare", "/landing"];
 
 export function hostFromHeader(value) {
   // `Host` carries the port in development and behind some proxies; the port is

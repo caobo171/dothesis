@@ -10,6 +10,7 @@ import type { MetadataRoute } from "next";
 import { LOCALES } from "../../lib/i18n/locale";
 import type { BlogCategory, SitemapEntry } from "./api";
 import { SITE_ORIGIN, blogPath, categoryPath, postPath } from "./site";
+import { COMPETITORS } from "../../compare/_lib/competitors";
 
 /**
  * Both editions, always — NOT `localesToList`, which is derived from the posts
@@ -43,6 +44,21 @@ export function buildBlogSitemap(input: {
       priority: 1,
     },
   ];
+
+  rows.push({
+    url: `${SITE_ORIGIN}/compare`,
+    lastModified: now,
+    changeFrequency: "monthly",
+    priority: 0.8,
+  });
+  for (const competitor of COMPETITORS) {
+    rows.push({
+      url: `${SITE_ORIGIN}/compare/${competitor.slug}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    });
+  }
 
   // Legal and contact, both editions. Listed unconditionally — unlike a blog
   // post, both language editions of these ship in the same source file, so
