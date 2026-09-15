@@ -79,7 +79,9 @@ export function BlogShell({
         </div>
         {children}
       </main>
-      <Footer />
+      {/* The footer's legal links follow the edition being read: a reader on an
+          English post who clicks Privacy should get the English policy. */}
+      <Footer locale={isLocale(locale) ? locale : DEFAULT_LOCALE} />
     </div>
   );
 }

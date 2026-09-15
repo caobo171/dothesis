@@ -2,48 +2,68 @@ import { BrandLockup } from "./shared";
 
 /**
  * The design ships every footer link as `href="#"`. Where a real destination
- * already exists on this page it is wired up; Company and Legal stay as
- * placeholders because those pages do not exist yet — inventing routes here
- * would just move the dead link somewhere harder to notice.
+ * exists it is wired up; About and Careers stay as placeholders because those
+ * pages do not exist yet — inventing routes here would just move the dead link
+ * somewhere harder to notice.
+ *
+ * Legal and Contact stopped being placeholders when `app/{privacy,terms,
+ * contact}` landed. That matters beyond tidiness: these are the URLs a payment
+ * provider's review asks for, and `#` is not an answer to "where are your
+ * terms".
+ *
+ * `Refunds` points at the Terms, where the refund rules actually are, rather
+ * than at a page of its own. One statement of when a run is refunded is easier
+ * to keep true than two.
  */
-const COLUMNS: Array<[string, Array<[string, string]>]> = [
-  [
-    "Product",
+function columns(locale?: string): Array<[string, Array<[string, string]>]> {
+  // Bare `/privacy` 308s to the default edition. Passing a locale skips that
+  // hop AND keeps the reader in the language they were already reading — a
+  // reader on the English blog should not be bounced to Vietnamese terms.
+  const l = locale ? `/${locale}` : "";
+  return [
     [
-      ["Features", "#features"],
-      ["Tools", "#tools"],
-      ["Pricing", "#pricing"],
+      "Product",
+      [
+        ["Features", "#features"],
+        ["Tools", "#tools"],
+        ["Pricing", "#pricing"],
+      ],
     ],
-  ],
-  [
-    "Tools",
     [
-      ["Humanize", "#tools"],
-      ["Writing rhythm", "#tools"],
-      ["Citation generator", "#tools"],
-      ["Similarity & citations", "#tools"],
+      "Tools",
+      [
+        ["Humanize", "#tools"],
+        ["Writing rhythm", "#tools"],
+        ["Citation generator", "#tools"],
+        ["Similarity & citations", "#tools"],
+      ],
     ],
-  ],
-  [
-    "Company",
     [
-      ["About", "#"],
-      ["Blog", "/blog/vi"],
-      ["Careers", "#"],
-      ["Contact", "#"],
+      "Company",
+      [
+        ["About", "#"],
+        ["Blog", `/blog/${locale ?? "vi"}`],
+        ["Careers", "#"],
+        ["Contact", `/contact${l}`],
+      ],
     ],
-  ],
-  [
-    "Legal",
     [
-      ["Terms", "#"],
-      ["Privacy", "#"],
-      ["Refunds", "#"],
+      "Legal",
+      [
+        ["Terms", `/terms${l}`],
+        ["Privacy", `/privacy${l}`],
+        ["Refunds", `/terms${l}`],
+      ],
     ],
-  ],
-];
+  ];
+}
 
-export function Footer() {
+export function Footer({ locale }: { locale?: string } = {}) {
+  const COLUMNS = columns(locale);
+  return <FooterBody columns={COLUMNS} />;
+}
+
+function FooterBody({ columns: COLUMNS }: { columns: ReturnType<typeof columns> }) {
   return (
     <footer
       className="lp-footer"

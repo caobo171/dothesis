@@ -7,8 +7,16 @@
  */
 import type { MetadataRoute } from "next";
 
+import { LOCALES } from "../../lib/i18n/locale";
 import type { BlogCategory, SitemapEntry } from "./api";
 import { SITE_ORIGIN, blogPath, categoryPath, postPath } from "./site";
+
+/**
+ * Both editions, always — NOT `localesToList`, which is derived from the posts
+ * that happen to exist. The legal pages do not depend on the blog having
+ * published anything in a language.
+ */
+const LEGAL_LOCALES = LOCALES;
 
 /** A date Google will accept, or now — an invalid `lastmod` invalidates the entry. */
 function safeDate(value: string | null | undefined): Date {
@@ -35,6 +43,23 @@ export function buildBlogSitemap(input: {
       priority: 1,
     },
   ];
+
+  // Legal and contact, both editions. Listed unconditionally — unlike a blog
+  // post, both language editions of these ship in the same source file, so
+  // there is no publishing schedule to wait on and no chance of listing a URL
+  // that 404s. They change rarely and rank for nothing, but a crawler that can
+  // find them is one signal this is a real operation rather than a parked
+  // domain, and it is the same set a payment provider's review looks for.
+  for (const doc of ["privacy", "terms", "contact"] as const) {
+    for (const locale of LEGAL_LOCALES) {
+      rows.push({
+        url: `${SITE_ORIGIN}/${doc}/${locale}`,
+        lastModified: now,
+        changeFrequency: "yearly",
+        priority: 0.3,
+      });
+    }
+  }
 
   for (const locale of locales) {
     rows.push({

@@ -862,7 +862,20 @@ describe("sitemap and robots", () => {
       http.post("*/api/v1/blog/categories", () => HttpResponse.json({}, { status: 500 })),
     );
     const urls = (await sitemap()).map((r) => r.url);
-    expect(urls).toEqual(["http://localhost:3006/", "http://localhost:3006/blog/vi"]);
+    // The landing page, the legal set, and the Vietnamese listing. The legal
+    // pages are the reason this assertion matters more than it used to: they
+    // are static and do not touch the API at all, so a dead blog API must never
+    // be able to take the terms and the privacy policy out of the sitemap.
+    expect(urls).toEqual([
+      "http://localhost:3006/",
+      "http://localhost:3006/privacy/en",
+      "http://localhost:3006/privacy/vi",
+      "http://localhost:3006/terms/en",
+      "http://localhost:3006/terms/vi",
+      "http://localhost:3006/contact/en",
+      "http://localhost:3006/contact/vi",
+      "http://localhost:3006/blog/vi",
+    ]);
   });
 
   test("robots opens the public surfaces and closes the auth-gated ones", async () => {
