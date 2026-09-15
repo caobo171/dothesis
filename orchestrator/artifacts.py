@@ -257,11 +257,20 @@ def dod_analysis(slice_: dict) -> DoD:
 
     EXCEPT for an imported write-up. A student who uploads a finished thesis has
     demonstrably done the analysis, but their document arrives as one
-    `analysis_results` STRING and none of the structured keys above. Worse,
-    `data_type_detected` and `results` are not M4-owned (agent/state.py), so on
-    the imported path there is no way for them to ever arrive — the module sat
-    in_progress permanently while the agent asked the student to plan an
-    analysis they had already run, and M5 stayed locked behind it.
+    `analysis_results` STRING and none of the structured keys above — so the
+    module sat in_progress permanently while the agent asked the student to plan
+    an analysis they had already run, and M5 stayed locked behind it.
+
+    (This paragraph used to add that `data_type_detected` and `results` "are not
+    M4-owned (agent/state.py)". They ARE — both are in `SLICE_OWNERSHIP["M4"]`,
+    asserted by test_dod_analysis_results_only.py. The claim mattered because
+    the recovery doctor persists parsed `results` through `commit_slice`; if it
+    had been true, every number it recovered would have been silently dropped.)
+
+    Raw data is never a precondition. A student who uploads a SmartPLS/SPSS
+    export has nothing left to collect and nothing left to compute — results ARE
+    the definition of done, and the doctor's parse of that export satisfies this
+    gate on its own.
 
     The escape is deliberately narrow: a STRING (the engine writes a dict, and
     that path must keep the strict DoD or a half-finished run would report done)

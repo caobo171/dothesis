@@ -2493,12 +2493,38 @@ def sections_from_m5_slice(m5_slice: dict, language: str | None = None) -> list[
 # chapter as missing and ask the user to fill the gap instead of shipping it.
 _STUB_MARKERS = ("[Composition failed", "[Auto-generated for", "[Composition failed — please retry]")
 
+# A chapter that OPENS by declining to be a chapter is a stub at any length.
+#
+# The two checks below — bracketed marker, or under 120 characters — assumed a
+# failed composition announces itself or comes out short. It learned to decline
+# at length instead, in fluent Vietnamese. From thread c10f6d13 the methodology
+# slot of an exported thesis held 955 characters beginning "Chưa thể biên soạn
+# Chương 3 theo các yêu cầu đã nêu…", followed by a bulleted list of the
+# internal schema fields it wanted. That cleared the floor, went into
+# `final_sections`, and `chapter_prose` put it in the docx because `chapters`
+# had no methodology to outrank it. The student was never told Chapter 3 was
+# missing — they were handed a thesis containing an apology.
+#
+# Anchored to the opening rather than searched across the body: a real
+# methodology chapter may well say "chưa thể kết luận về quan hệ nhân quả" in
+# its limitations section, and that is a finding, not a refusal. Only the first
+# sentences decide, which is also where a genuine chapter has its heading.
+_REFUSAL_RE = re.compile(
+    r"(?:chưa|không|khong)\s+thể\s+(?:biên\s*soạn|viết|soạn|tạo|hoàn\s*thành)"
+    r"|(?:cannot|could not|can't|unable to)\s+"
+    r"(?:write|compose|draft|produce|generate)\s+(?:this|the)?\s*chapter",
+    re.IGNORECASE,
+)
+_REFUSAL_WINDOW = 300
+
 
 def _is_stub_prose(prose: str) -> bool:
     """True when prose is a placeholder/failure stub, not real chapter content."""
     if not prose or not prose.strip():
         return True
     if any(marker in prose for marker in _STUB_MARKERS):
+        return True
+    if _REFUSAL_RE.search(prose.strip()[:_REFUSAL_WINDOW]):
         return True
     # A real chapter is at least a few sentences; anything tiny is a stub.
     return len(prose.strip()) < 120
