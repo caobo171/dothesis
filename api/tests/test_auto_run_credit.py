@@ -36,7 +36,12 @@ def test_auto_run_charges_actual_tokens_and_is_idempotent():
     sf = get_session_factory()
     with sf() as db:
         u, p, run = _seed(db)
-        _ledger(db, p.id, 2500, 3500)  # 6000 tokens → round(6.0) = 6 credits
+        # Sized in TOKENS_PER_CREDIT, not raw tokens: the point of this test is
+        # that the charge lands once, not what a token costs, and the old raw
+        # 6000 quietly became 1 credit (the max(1, ...) floor) at the 2026-09-14
+        # re-base — which would have kept passing while measuring nothing.
+        from app.pricing import TOKENS_PER_CREDIT
+        _ledger(db, p.id, 2 * TOKENS_PER_CREDIT, 4 * TOKENS_PER_CREDIT)  # → 6 credits
         db.commit()
 
         _charge_auto_thesis_run(db, run); db.commit()
@@ -70,30 +75,24 @@ def test_auto_run_bills_each_model_at_its_own_rate(monkeypatch):
     sf = get_session_factory()
     with sf() as db:
         u, p, run = _seed(db)
-        _ledger(db, p.id, 2000, 2000, model="gemini-2.5-flash")   # 4000 tok @ 1.0  → 4.0
-        _ledger(db, p.id, 1000, 1000, model="gemini-3.5-flash")   # 2000 tok @ 12.9 → 25.7
+        # Sized in credits' worth of tokens rather than raw counts, so the
+        # arithmetic below stays legible at any TOKENS_PER_CREDIT: 4 credits'
+        # worth on the baseline, 2 credits' worth on the pricier model.
+        from app.pricing import TOKENS_PER_CREDIT as _TPC
+        _ledger(db, p.id, 2 * _TPC, 2 * _TPC, model="gemini-2.5-flash")  # 4 @ 1.0  → 4.0
+        _ledger(db, p.id, 1 * _TPC, 1 * _TPC, model="gemini-3.5-flash")  # 2 @ 3.97 → 7.9
         db.commit()
 
         _charge_auto_thesis_run(db, run); db.commit()
         db.refresh(u)
-        # ⚠️ REPRICED, not re-derived: 3.5-flash was 4.0 here (total 12) because the
-        # old multiplier read engine/utils/model_config.py's $0.50/$3.00. That row is
-        # stale (Feb-2026, inferred by analogy from the 3-flash-preview anchor). Both
-        # of quality/model_prices.py's independent sources — July-2026 provider
-        # research AND the live Ofox gateway pull — say $1.50/$9.00, so the honest
-        # rate is 12.86x and 4.0 was a ~3.2x UNDERCHARGE on the production default.
-        # This number is a business decision, not arithmetic: see
-        # .superpowers/sdd/fix-credit-multiplier-report.md before deploying.
         # Derived from the table, not hardcoded: this assertion exists to prove the
         # ENV VAR doesn't leak into the charge, and that property must survive a
-        # repricing. The literal used to be 30 (4.0 + 25.7) when the baseline row
-        # was 3.24x too cheap; after the 2026-08-02 baseline correction it is 12 —
-        # which is exactly the total this test's own comment records it having
-        # BEFORE the stale row landed. A hardcoded number here just re-breaks on
-        # the next price move.
+        # repricing. 12 is 4 credits at the baseline plus 2 at 3.5-flash's 3.97x.
+        # (The old comment here argued for 12.86x off a stale engine/utils/
+        # model_config.py row; quality/model_prices.py corrected the BASELINE on
+        # 2026-08-02, which is what actually moved that number to 3.97x.)
         from app.pricing import credit_multiplier as _cm
-        expected = round(4000 / 1000 * _cm("gemini-2.5-flash")
-                         + 2000 / 1000 * _cm("gemini-3.5-flash"))
+        expected = round(4 * _cm("gemini-2.5-flash") + 2 * _cm("gemini-3.5-flash"))
         assert expected == 12, f"baseline sanity: expected 12 credits, got {expected}"
         assert u.credit == 10000 - expected
 
@@ -178,13 +177,14 @@ def test_headless_meter_event_bills_the_run_at_the_priced_rate(monkeypatch):
     # Derived from the table, not hardcoded, so a repricing moves the assertion
     # with the product: 160k tokens at the baseline + 40k at the configured
     # model's rate (the snapshot id billed as gpt-5.6-luna, not as unknown).
-    expected = round(160_000 / 1000 * credit_multiplier("gemini-2.5-flash")
-                     + 40_000 / 1000 * credit_multiplier("gpt-5.6-luna"))
+    from app.pricing import TOKENS_PER_CREDIT
+    expected = round(160_000 / TOKENS_PER_CREDIT * credit_multiplier("gemini-2.5-flash")
+                     + 40_000 / TOKENS_PER_CREDIT * credit_multiplier("gpt-5.6-luna"))
     assert charged == expected
     assert charged > 0, "a headless run that spent tokens must not be free"
     # The 4.0x-fallback bill for the same tokens, which C1 was producing.
-    assert charged < round(160_000 / 1000 * credit_multiplier("gemini-2.5-flash")
-                           + 40_000 / 1000 * 4.0)
+    assert charged < round(160_000 / TOKENS_PER_CREDIT * credit_multiplier("gemini-2.5-flash")
+                           + 40_000 / TOKENS_PER_CREDIT * 4.0)
 
 
 def test_token_usage_event_becomes_ledger_row_and_gets_charged():

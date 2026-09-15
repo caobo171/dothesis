@@ -59,9 +59,11 @@ def packages():
             "price_vnd": sepay_client.usd_cents_to_vnd(p["price_cents"], settings),
             "old_price_vnd": sepay_client.usd_cents_to_vnd(p["old_price_cents"], settings),
             "credits": p["credits"],
-            # Pack credits / CREDITS_PER_AUTO_THESIS. Starter is 1.0 by
-            # construction; Standard 2.5; Expert 6.0. Shown on the card so
-            # a student can translate "25,000 credits" into theses.
+            # Pack credits / CREDITS_PER_AUTO_THESIS: Starter 0.5, Pro 1.2,
+            # Power 3.3 on Survify's 600-credit run anchor. Shown on the card so
+            # a student can translate "700 credits" into theses. Deliberately
+            # conservative — the configured model bills ~318 credits for a real
+            # run, so every pack goes further than the card claims.
             "auto_thesis_runs": round(p["credits"] / CREDITS_PER_AUTO_THESIS, 1),
         }
         for p in PACKAGES

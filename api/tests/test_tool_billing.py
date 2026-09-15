@@ -16,10 +16,17 @@ from fastapi.testclient import TestClient
 from app.db import get_session_factory
 from app.main import create_app
 from app.models import CreditTransaction, TokenLedger, ToolRun
+from app.pricing import TOOL_COST_PER_UNIT
 from app.tool_billing import begin_tool_run, record_tool_run, tool_cost
 from tests.conftest import make_user
 
 USAGE_1K = [{"model": "gemini-2.5-flash", "prompt_tokens": 700, "completion_tokens": 300}]
+
+# Read the rate rather than restate it. These tests are about the SHAPE of the
+# bill — per-unit scaling, the balance cap, what a failure costs — none of which
+# should need editing when the price moves. They did need editing at the
+# 2026-09-14 Survify re-base, purely because they had the old rate inlined.
+PER_LOOKUP = TOOL_COST_PER_UNIT["verify-citations"]
 
 
 @pytest.fixture
@@ -64,8 +71,8 @@ def _session_user(u):
 def test_a_lookup_tool_is_billed_per_lookup():
     """Checking a 40-entry reference list costs 40x what checking one does. The
     unit is the CrossRef round trip, which is the work actually done."""
-    assert tool_cost("verify-citations", units=1) == 1
-    assert tool_cost("verify-citations", units=40) == 40
+    assert tool_cost("verify-citations", units=1) == PER_LOOKUP
+    assert tool_cost("verify-citations", units=40) == 40 * PER_LOOKUP
 
 
 def test_a_failed_run_bills_its_tokens_but_not_its_lookups():
@@ -139,7 +146,7 @@ def test_the_debit_names_the_tool(user):
     Session = get_session_factory()
     with Session() as s2:
         tx = s2.query(CreditTransaction).filter_by(user_id=user.id).all()
-    assert [(t.reason, t.delta) for t in tx] == [("verify-citations", -5)]
+    assert [(t.reason, t.delta) for t in tx] == [("verify-citations", -5 * PER_LOOKUP)]
 
 
 # --- the balance cap ---------------------------------------------------------
@@ -159,7 +166,7 @@ def test_a_user_at_zero_is_under_billed_not_refused(user):
     finally:
         s.close()
 
-    assert charge.cost == 40
+    assert charge.cost == 40 * PER_LOOKUP
     assert charge.charged == 2          # capped at the balance
     assert charge.under_billed is True
     assert _balance(user.id) == 0
@@ -167,7 +174,7 @@ def test_a_user_at_zero_is_under_billed_not_refused(user):
     row = _runs(user.id)[0]
     # BOTH numbers stored. A table recording only what was collected would hide
     # exactly how much is being given away.
-    assert (row.credits_cost, row.credits_charged) == (40, 2)
+    assert (row.credits_cost, row.credits_charged) == (40 * PER_LOOKUP, 2)
 
 
 def test_billing_failure_never_costs_the_caller_their_result(user, monkeypatch):
@@ -223,7 +230,7 @@ def test_the_list_check_bills_per_reference_reached(user, monkeypatch):
                        json={"access_token": "x", "text": text})
     assert r.status_code == 200
     assert r.json()["checked"] == 2
-    assert r.json()["credits_charged"] == 2
+    assert r.json()["credits_charged"] == 2 * PER_LOOKUP
     assert _runs(user.id)[0].units == 2
 
 
@@ -362,7 +369,7 @@ def test_the_shortfall_is_visible_to_the_user_who_incurred_it(user):
         s.close()
     item = _as(user).post("/api/v1/tools/runs",
                           json={"access_token": "x"}).json()["items"][0]
-    assert (item["credits_cost"], item["credits_charged"]) == (40, 3)
+    assert (item["credits_cost"], item["credits_charged"]) == (40 * PER_LOOKUP, 3)
 
 
 def test_an_unconfigured_similarity_provider_bills_nothing(user, monkeypatch):

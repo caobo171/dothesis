@@ -68,7 +68,10 @@ def _token_cost(usage: list[dict]) -> tuple[int, dict[str, int]]:
     configurable) and one number cannot price that. Same rule as
     job_runner._charge_auto_thesis_run.
     """
-    from .pricing import credit_multiplier  # noqa: PLC0415
+    # TOKENS_PER_CREDIT, not a literal 1000 — see job_runner._charge_auto_thesis_run.
+    # Both charge sites read the one derived rate so a tool turn and a run turn
+    # price the same token identically.
+    from .pricing import TOKENS_PER_CREDIT, credit_multiplier  # noqa: PLC0415
 
     by_model: dict[str, int] = {}
     for u in usage:
@@ -77,7 +80,7 @@ def _token_cost(usage: list[dict]) -> tuple[int, dict[str, int]]:
         by_model[model] = by_model.get(model, 0) + total
     if not by_model or sum(by_model.values()) <= 0:
         return 0, by_model
-    return max(1, round(sum(t / 1000 * credit_multiplier(m)
+    return max(1, round(sum(t / TOKENS_PER_CREDIT * credit_multiplier(m)
                             for m, t in by_model.items()))), by_model
 
 

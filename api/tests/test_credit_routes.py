@@ -39,10 +39,11 @@ def test_packages_returns_all_three():
     ids = {p["id"] for p in data}
     assert ids == {"starter_package", "standard_package", "expert_package"}
     by_id = {p["id"]: p for p in data}
-    # Pack sizing: Starter = one Auto Thesis, Standard 2.5, Expert 6.
-    assert by_id["starter_package"]["auto_thesis_runs"] == 1.0
-    assert by_id["standard_package"]["auto_thesis_runs"] == 2.5
-    assert by_id["expert_package"]["auto_thesis_runs"] == 6.0
+    # Pack sizing on Survify's 600-credit run anchor: Starter half a run, Pro one
+    # run with headroom, Power 3.3.
+    assert by_id["starter_package"]["auto_thesis_runs"] == 0.5
+    assert by_id["standard_package"]["auto_thesis_runs"] == 1.2
+    assert by_id["expert_package"]["auto_thesis_runs"] == 3.3
 
 
 def test_checkout_creates_order_and_returns_url(client_with_user):
@@ -58,8 +59,8 @@ def test_checkout_creates_order_and_returns_url(client_with_user):
         orders = s.scalars(select(Order)).all()
         assert len(orders) == 1
         assert orders[0].polar_checkout_id == "ck_test_123"
-        assert orders[0].credits == 10000
-        assert orders[0].amount_cents == 2499
+        assert orders[0].credits == 300
+        assert orders[0].amount_cents == 900
         assert orders[0].status == "pending"
 
 

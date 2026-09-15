@@ -1,7 +1,9 @@
 """Pricing config: credit packs, paper-cost matrix, tier→model resolution.
 
 PACKAGES values come directly from Survify's PRICING_PACKAGES (USD prices,
-credits per pack). PAPER_COST is a placeholder matrix; tune later.
+credits per pack), and as of 2026-09-14 so does the credit UNIT they are
+denominated in — see the block above CREDITS_PER_AUTO_THESIS. PAPER_COST is a
+placeholder matrix; tune later.
 """
 from __future__ import annotations
 
@@ -25,63 +27,98 @@ class Package(TypedDict):
     credits: int
 
 
-# Prices sized for a 60-70% gross margin over the gemini-2.5-flash API cost,
-# given the charge rate of 1 credit = 1000 tokens. One Auto Thesis run ≈ 10,000
-# credits (~10M tokens, ~$6-9 API cost), so the Starter pack covers exactly one
-# run at ~$0.0025/credit (~66% margin at a 25% output mix). Larger packs apply a
-# modest volume discount but stay ≥60% margin. Re-tune once token_ledger meters
-# real tokens/run and the input:output split.
+# --- the credit unit --------------------------------------------------------
 #
-# ⚠️ STALE since the gemini-3.5-flash switch (2026-06-30), and MORE stale now.
-# The multiplier no longer guesses 4.0 from the model's name — it reads
-# quality/model_prices.py, where 3.5-flash is $1.50/$9.00 (July-2026 research,
-# corroborated by the live Ofox gateway pull), not the $0.50/$3.00 in the stale
-# engine/utils/model_config.py the old guess was based on. The honest rate is
-# ~12.9x, so a 10M-token run debits ~129,000 credits, not the ~40,000 this comment
-# assumed and nowhere near the 10,000 the packs were sized for: the Starter pack
-# now covers ~1/13 of a run. 4.0 was under-billing the production default ~3.2x.
-# The dollar prices/credits below are unchanged (still a business decision), but
-# the gap is now 13x, not 4x. Decide before the next pricing page ships: raise pack
-# credits, raise pack prices, move to a cheaper default model, or accept the margin.
-# Full evidence: .superpowers/sdd/fix-credit-multiplier-report.md
-# The pack table below is sized on this number (Starter = 10,000 = one run).
-# The credit page and the Auto Thesis estimate both read it so a student is
-# never told "this pack is one thesis" and then blocked at 17,500 credits.
-CREDITS_PER_AUTO_THESIS = 10_000
+# Re-based 2026-09-14 onto Survify's credit scale, so the two products that sell
+# the same DoThesis engine quote a student the same numbers. Survify prices a
+# full report at 600 credits (chapters 90+140+120+140+110 in fillform's
+# backend/src/config/brand/survify.ts, `pricing.dothesis.chapters`) and sells
+# 300/700/2000-credit packs. DoThesis called the identical run 10,000 credits and
+# sold 10k/25k/60k packs. Same engine, same tokens — only the unit differed, and
+# one product quoting two different units is how a student gets two prices.
+#
+# The constants below are derived from each other DELIBERATELY. This file used to
+# carry the pack anchor (CREDITS_PER_AUTO_THESIS) and the billing rate (a bare
+# `/ 1000` inlined at both charge sites) as unrelated literals, so the credit page
+# could promise "this pack is one thesis" while billing debited something else
+# entirely. That is precisely the drift the long ⚠️ block that used to live here
+# was reporting. Deriving the rate from the anchor makes it unrepresentable.
+CREDITS_PER_AUTO_THESIS = 600           # Survify's full-report price, verbatim
+TOKENS_PER_AUTO_THESIS = 10_000_000     # measured size of one run; unchanged
+TOKENS_PER_CREDIT = TOKENS_PER_AUTO_THESIS // CREDITS_PER_AUTO_THESIS  # 16,666
+
+# What a credit costs, and what it sells for.
+#
+# Cost per credit is model-INDEPENDENT by construction: a charge is
+# tokens / TOKENS_PER_CREDIT * credit_multiplier(m), and credit_multiplier divides
+# by the BASELINE model's blended price, so the served model cancels out of
+# dollars-per-credit completely. Switching brains moves how many credits a run
+# debits; it cannot move the margin.
+#
+#   cost/credit = TOKENS_PER_CREDIT * blended(BASELINE_MODEL) / 1e6
+#               = 16,666 * $0.85/1M = $0.0142
+#
+#   Starter   $9 /  300 = $0.0300/credit -> 53% margin
+#   Pro      $19 /  700 = $0.0271/credit -> 48% margin
+#   Power    $49 / 2000 = $0.0245/credit -> 42% margin
+#
+# ⚠️ Thinner than the 66/63/61% the old 10,000-credit packs were sized for, and
+# that is the actual price of matching Survify rather than a regression to fix.
+# Nothing about the engine got cheaper or dearer — a full run still burns ~$8.50
+# of baseline tokens — but Survify sells that run for ~$16 (600 credits at the Pro
+# rate) where DoThesis was asking ~$25. If the margin has to come back, raise the
+# pack DOLLARS; raising the credit counts would just re-break parity with Survify.
+#
+# Production bills well UNDER the anchor. The configured default is gpt-5.6-luna
+# ($0.20/$1.20 after the 2026-07-30 cut) = 0.53x baseline, so a real 10M-token run
+# debits ~318 credits, not 600. The anchor stays at Survify's 600 so the credit
+# page under-promises: a student is never told "this pack is one thesis" and then
+# blocked mid-run. Re-tune from token_ledger once it reports real tokens/run.
 
 
 PACKAGES: list[Package] = [
+    # Survify's `packages` array, field for field — fillform/frontend/config/brand/
+    # survify.ts:94-122, mirrored server-side in backend/src/api/routes/order/
+    # polar.ts:8-12. Names included: Survify calls these Starter/Pro/Power, and a
+    # student comparing the two products should not see two different ladders.
     {
         "id": "starter_package",
-        "name": "Starter package",
-        "price_cents": 2499,       # $24.99 → $0.0025/credit, ~66% margin
-        "old_price_cents": 3999,
-        "credits": 10000,          # = one Auto Thesis run
+        "name": "Starter",
+        "price_cents": 900,        # $9  → $0.0300/credit, ~53% margin
+        "old_price_cents": 1500,   # $15
+        "credits": 300,            # ≈ half an Auto Thesis run at the anchor
     },
     {
         "id": "standard_package",
-        "name": "Standard package",
-        "price_cents": 5799,       # $57.99 → $0.00232/credit, ~63% margin
-        "old_price_cents": 9999,
-        "credits": 25000,          # ≈ 2.5 runs
+        "name": "Pro",
+        "price_cents": 1900,       # $19 → $0.0271/credit, ~48% margin
+        "old_price_cents": 3500,   # $35
+        "credits": 700,            # ≈ one full run, with headroom
     },
     {
         "id": "expert_package",
-        "name": "Expert package",
-        "price_cents": 12999,      # $129.99 → $0.00217/credit, ~61% margin
-        "old_price_cents": 24999,
-        "credits": 60000,          # ≈ 6 runs
+        "name": "Power",
+        "price_cents": 4900,       # $49 → $0.0245/credit, ~42% margin
+        "old_price_cents": 10000,  # $100
+        "credits": 2000,           # ≈ 3.3 runs
     },
 ]
 
 PACKAGES_BY_ID: dict[str, Package] = {p["id"]: p for p in PACKAGES}
 
 
+# Re-denominated into the new credit unit with the 2026-09-14 re-base. Survify
+# prices no standalone paper, so there is no number to copy here — these are the
+# OLD figures divided by 15, which keeps every ratio in the matrix exactly intact
+# (premium = 2.5x standard, each level = 2x the one below) while landing on round
+# integers. 15 rather than the unit's true 16.67 for that roundness; the ~11%
+# it leaves on the table errs toward charging more, which is the safe direction
+# for a matrix whose own docstring still calls it a placeholder.
 PAPER_COST: dict[tuple[str, str], int] = {
-    ("research", "standard"):  60, ("research", "premium"):  150,
-    ("bachelor", "standard"): 120, ("bachelor", "premium"):  300,
-    ("master",   "standard"): 240, ("master",   "premium"):  600,
-    ("phd",      "standard"): 480, ("phd",      "premium"): 1200,
+    ("research", "standard"):  4, ("research", "premium"): 10,
+    ("bachelor", "standard"):  8, ("bachelor", "premium"): 20,
+    ("master",   "standard"): 16, ("master",   "premium"): 40,
+    ("phd",      "standard"): 32, ("phd",      "premium"): 80,
 }
 
 
@@ -96,33 +133,38 @@ PAPER_COST: dict[tuple[str, str], int] = {
 # not a decision anyone made — it fell out of billing being wired to token usage
 # and those tools having none. These are the flat rates.
 #
-# THE UNIT IS A LOOKUP. One CrossRef query = 1 credit (~$0.0025 at Starter pack
-# rates), so checking a 40-entry reference list costs 40 credits (~$0.10) and
-# checking one reference costs 1. That keeps the price proportional to the work
+# THE UNIT IS A LOOKUP. One CrossRef query = 3 credits (~$0.09 at Starter pack
+# rates), so checking a 40-entry reference list costs 120 credits (~$3.60) and
+# checking one reference costs 3. That keeps the price proportional to the work
 # without needing a second pricing concept, and it is explainable to a student:
 # you pay per source we go and check.
 #
-# ⚠️ These are a first pass, chosen for shape not for margin. Nobody has costed a
-# CrossRef call against a support ticket. Change the numbers here — every route
-# reads this table, nothing hardcodes a price.
+# 3 is Survify's `citationPerSource`, taken verbatim rather than re-derived — the
+# 2026-09-14 re-base makes the two products' credits the same size, so Survify's
+# number is directly usable and picking our own would only reintroduce the drift.
 TOOL_COST_PER_UNIT: dict[str, int] = {
     # per CrossRef lookup
-    "verify-citation":  1,
-    "verify-citations": 1,
+    "verify-citation":  3,
+    "verify-citations": 3,
     # per distinct source resolved out of the document (phase A). Phase B's
     # model calls are billed on tokens on top of this.
-    "cite-docx":        1,
+    "cite-docx":        3,
 }
 
 TOOL_COST_FLAT: dict[str, int] = {
     # Local stylometry, no network, no model. Priced as a token gesture rather
-    # than free, so the run appears in the ledger like every other one.
+    # than free, so the run appears in the ledger like every other one. Left at 1
+    # through the re-base: the new credit is worth ~12x the old one, so 1 is now a
+    # ~$0.03 gesture instead of a ~$0.0025 rounding error — which is what "token
+    # gesture" was always reaching for. Scaling it up would make it a real fee.
     "writing-rhythm":   1,
     # A vendor similarity check is the one tool with a real per-call invoice
     # attached. Charged only on a successful check — an unconfigured deployment
     # returns provider_not_configured and must not bill for a check it did not
-    # perform.
-    "plagiarism-check": 5,
+    # perform. 50 is Survify's `plagiarismPrice`, verbatim. The old 5 was 5 credits
+    # of the OLD unit — about $0.01 against a vendor bill, which the note below
+    # already flagged as shape-not-margin.
+    "plagiarism-check": 50,
     # The DOCUMENT self-check: no model, no vendor, pure CPU over the student's
     # own file. Priced like writing-rhythm — a token amount so the run lands in
     # the ledger — NOT like plagiarism-check, which carries a real vendor
@@ -130,8 +172,11 @@ TOOL_COST_FLAT: dict[str, int] = {
     # similarity-docx-corpus below.
     "similarity-docx":  2,
     # The surcharge when a corpus provider actually ran. Separate from the base
-    # so an unconfigured deployment charges 2, not 7, for the half it performed.
-    "similarity-docx-corpus": 5,
+    # so an unconfigured deployment charges 2, not 52, for the half it performed.
+    # Tracks plagiarism-check because it buys the same thing — one vendor call —
+    # so 2 + 50 lands a corpus-backed check a hair above the dedicated tool, the
+    # same ordering the old 2 + 5 vs 5 had.
+    "similarity-docx-corpus": 50,
 }
 
 # Charged at zero, deliberately, and listed so it is a decision rather than an

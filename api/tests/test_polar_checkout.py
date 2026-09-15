@@ -31,7 +31,7 @@ EXPERT_UUID = "0020bb12-c950-449f-9392-2363782e1774"
 def _order(package_id: str = "starter_package") -> Order:
     order = Order(
         user_id=uuid.uuid4(), package_id=package_id,
-        credits=10000, amount_cents=2499, status="pending",
+        credits=300, amount_cents=900, status="pending",
     )
     # Unsaved: the UUID default is applied on flush, and create_checkout puts
     # the id in checkout metadata, so give it one without touching a DB.

@@ -37,8 +37,8 @@ def test_admin_orders_exposes_sepay_fields(admin):
         s.flush()
         s.add(Order(
             user_id=buyer.id, package_id="starter_package",
-            credits=10000, amount_cents=2499, currency="VND",
-            provider="sepay", amount_vnd=657237, sepay_memo="DTABC123",
+            credits=300, amount_cents=900, currency="VND",
+            provider="sepay", amount_vnd=236700, sepay_memo="DTABC123",
             external_txn_id="FT4242", status="paid",
         ))
         s.commit()
@@ -50,7 +50,7 @@ def test_admin_orders_exposes_sepay_fields(admin):
         item = next(i for i in r.json()["items"] if i["owner_email"] == "vn@e.com")
         assert item["provider"] == "sepay"
         assert item["currency"] == "VND"
-        assert item["amount_vnd"] == 657237
+        assert item["amount_vnd"] == 236700
         assert item["sepay_memo"] == "DTABC123"
         assert item["external_txn_id"] == "FT4242"
     finally:

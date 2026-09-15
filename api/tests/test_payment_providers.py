@@ -80,14 +80,14 @@ def test_paypal_create_then_capture_grants_once(client_with_user):
     assert r.json()["approval_url"]
 
     order = _grab_order("paypal")
-    assert order.status == "pending" and order.credits == 10000
+    assert order.status == "pending" and order.credits == 300
 
     cap = client.post("/api/v1/credit/paypal/capture", json={"paypal_order_id": ppid})
     assert cap.status_code == 200, cap.text
 
     Session = get_session_factory()
     with Session() as s:
-        assert s.get(User, buyer.id).credit == 10000
+        assert s.get(User, buyer.id).credit == 300
         assert s.get(Order, order.id).status == "paid"
         assert len(s.scalars(select(CreditTransaction).where(
             CreditTransaction.user_id == buyer.id)).all()) == 1
@@ -96,7 +96,7 @@ def test_paypal_create_then_capture_grants_once(client_with_user):
     cap2 = client.post("/api/v1/credit/paypal/capture", json={"paypal_order_id": ppid})
     assert cap2.json().get("already_paid") is True
     with Session() as s:
-        assert s.get(User, buyer.id).credit == 10000
+        assert s.get(User, buyer.id).credit == 300
 
 
 def test_paypal_webhook_grants_via_custom_id(client_with_user):
@@ -112,7 +112,7 @@ def test_paypal_webhook_grants_via_custom_id(client_with_user):
     assert r.status_code == 200, r.text
     Session = get_session_factory()
     with Session() as s:
-        assert s.get(User, buyer.id).credit == 25000
+        assert s.get(User, buyer.id).credit == 700
         assert s.get(Order, order.id).status == "paid"
 
 
@@ -128,8 +128,8 @@ def test_packages_price_vnd_matches_sepay_intent(client_with_user):
     client, _ = client_with_user
     pkgs = client.post("/api/v1/credit/packages").json()
     starter = next(p for p in pkgs if p["id"] == "starter_package")
-    assert starter["price_vnd"] == round(2499 / 100 * 25000)  # $24.99 → 624,750₫
-    assert starter["old_price_vnd"] == round(3999 / 100 * 25000)
+    assert starter["price_vnd"] == round(900 / 100 * 25000)  # $9 → 225,000₫
+    assert starter["old_price_vnd"] == round(1500 / 100 * 25000)
 
     intent = client.post("/api/v1/credit/sepay/intent",
                          json={"package_id": "starter_package"}).json()
@@ -141,7 +141,7 @@ def test_sepay_intent_returns_qr_and_vnd(client_with_user):
     r = client.post("/api/v1/credit/sepay/intent", json={"package_id": "starter_package"})
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["amount_vnd"] == round(2499 / 100 * 25000)  # $24.99 → 624,750₫
+    assert body["amount_vnd"] == round(900 / 100 * 25000)  # $9 → 225,000₫
     # Short + numeric (DTS1234), because a human retypes this into a bank app.
     assert re.fullmatch(r"DTS\d{4,}", body["memo"]), body["memo"]
     assert "qr.sepay.vn/img" in body["qr_url"]
@@ -213,7 +213,7 @@ def test_sepay_webhook_matches_memo_trailed_by_digits(client_with_user):
     assert r.status_code == 200, r.text
     Session = get_session_factory()
     with Session() as s:
-        assert s.get(User, buyer.id).credit == 10000
+        assert s.get(User, buyer.id).credit == 300
 
 
 def test_sepay_webhook_matches_memo_and_grants_once(client_with_user):
@@ -236,7 +236,7 @@ def test_sepay_webhook_matches_memo_and_grants_once(client_with_user):
 
     Session = get_session_factory()
     with Session() as s:
-        assert s.get(User, buyer.id).credit == 10000
+        assert s.get(User, buyer.id).credit == 300
 
     # Duplicate delivery (same referenceCode) → no double-credit.
     r2 = client.post(_webhook_url(), content=payload,
@@ -244,7 +244,7 @@ def test_sepay_webhook_matches_memo_and_grants_once(client_with_user):
                               "Content-Type": "application/json"})
     assert r2.status_code == 200
     with Session() as s:
-        assert s.get(User, buyer.id).credit == 10000
+        assert s.get(User, buyer.id).credit == 300
 
 
 def test_sepay_webhook_path_is_obscure_and_configurable(monkeypatch):

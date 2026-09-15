@@ -101,7 +101,10 @@ def test_the_summary_reports_what_was_not_collected(world):
 def test_the_pricing_table_is_readable_from_admin(world):
     """A price nobody can see from the admin panel is a price nobody revisits."""
     body = _post(world["admin"], "/admin/tools/pricing").json()
-    assert body["per_unit"]["verify-citations"] == 1
+    # Read the table: this asserts the admin view EXPOSES the price, not what
+    # the price is. Pinning the literal made a repricing fail here for no reason.
+    from app.pricing import TOOL_COST_PER_UNIT
+    assert body["per_unit"]["verify-citations"] == TOOL_COST_PER_UNIT["verify-citations"]
     assert "extract-text" in body["free"]
 
 

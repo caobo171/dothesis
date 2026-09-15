@@ -354,8 +354,12 @@ def _charge_auto_thesis_run(db: Session, run: Job) -> None:
     total_tokens = sum(int(t or 0) for _, t in rows)
     if total_tokens <= 0:
         return
-    from .pricing import credit_multiplier
-    cost = max(1, round(sum(int(t or 0) / 1000 * credit_multiplier(m) for m, t in rows)))
+    # TOKENS_PER_CREDIT, not a literal 1000: the rate is derived from
+    # CREDITS_PER_AUTO_THESIS in pricing.py so what the credit page promises per
+    # run and what this line debits per run cannot drift apart.
+    from .pricing import TOKENS_PER_CREDIT, credit_multiplier
+    cost = max(1, round(sum(int(t or 0) / TOKENS_PER_CREDIT * credit_multiplier(m)
+                            for m, t in rows)))
     charge = min(cost, owner.credit or 0)
     if charge > 0:
         debit(db, owner, delta=charge, reason="auto_run", ref_type="run", ref_id=run.id)

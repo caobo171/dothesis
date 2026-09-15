@@ -93,7 +93,10 @@ class Settings(BaseSettings):
     aws_ses_access_key: str = Field(alias="AWS_SES_ACCESS_KEY", default="")
     aws_ses_secret_key: str = Field(alias="AWS_SES_SECRET_KEY", default="")
     google_client_id: str = Field(alias="DOTHESIS_GOOGLE_CLIENT_ID", default="")
-    signup_bonus_credits: int = Field(alias="DOTHESIS_SIGNUP_BONUS_CREDITS", default=100)
+    # Survify's FREE_SIGNUP_CREDITS, verbatim. Was 100 in the old credit unit
+    # (~1% of a run); 30 in the re-based unit is ~5% of one, so the grant got
+    # materially more generous even though the number went down.
+    signup_bonus_credits: int = Field(alias="DOTHESIS_SIGNUP_BONUS_CREDITS", default=30)
     orchestrator_enabled: bool = Field(alias="ORCHESTRATOR_ENABLED", default=False)
     # E2E test-support router switch. Separate from DOTHESIS_E2E_MOCK because
     # the live E2E tier runs the REAL model but still needs user/project

@@ -7,6 +7,15 @@ from fastapi.testclient import TestClient
 from app.db import get_session_factory
 from app.main import create_app
 from app.models import CreditTransaction, Paper, User
+from app.pricing import paper_cost
+
+# Read the matrix rather than restate it. These tests are about the DEBIT — that
+# it happens once, names the paper, and refuses when the balance is short — none
+# of which changes when the matrix is re-tuned. They broke at the 2026-09-14
+# Survify re-base purely because the old figures were inlined.
+STANDARD = paper_cost("master", "standard")
+PREMIUM = paper_cost("master", "premium")
+STARTING_BALANCE = 1000
 
 
 @pytest.fixture
@@ -39,17 +48,17 @@ def _payload(tier: str = "standard", level: str = "master"):
     }
 
 
-def test_create_paper_with_standard_tier_deducts_240_credits(client_for, buyer):
+def test_create_paper_with_standard_tier_deducts_the_matrix_price(client_for, buyer):
     with patch("app.routers.papers.spawn_job"):
         r = client_for.post("/api/v1/papers", json=_payload(tier="standard", level="master"))
     assert r.status_code == 201, r.text
     Session = get_session_factory()
     with Session() as s:
         u = s.get(User, buyer.id)
-        assert u.credit == 760
+        assert u.credit == STARTING_BALANCE - STANDARD
         tx = list(s.scalars(__import__("sqlalchemy").select(CreditTransaction)))
         assert len(tx) == 1
-        assert tx[0].delta == -240
+        assert tx[0].delta == -STANDARD
         assert tx[0].reason == "paper_run"
         assert tx[0].ref_type == "paper"
         assert tx[0].ref_id is not None
@@ -62,7 +71,8 @@ def test_create_paper_with_premium_tier_deducts_more(client_for, buyer):
     Session = get_session_factory()
     with Session() as s:
         u = s.get(User, buyer.id)
-        assert u.credit == 400  # 1000 - 600
+        assert u.credit == STARTING_BALANCE - PREMIUM
+        assert PREMIUM > STANDARD, "premium must cost more, or the tier means nothing"
 
 
 def test_create_paper_returns_402_when_insufficient():
@@ -85,7 +95,7 @@ def test_create_paper_returns_402_when_insufficient():
         assert r.status_code == 402
         body = r.json()
         assert body["detail"]["error"]["code"] == "insufficient_credit"
-        assert body["detail"]["error"]["required"] == 1200
+        assert body["detail"]["error"]["required"] == paper_cost("phd", "premium")
         assert body["detail"]["error"]["balance"] == 10
 
     with Session() as s:

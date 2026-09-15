@@ -10,20 +10,46 @@ from app.pricing import (
 
 
 def test_packages_match_configured_pricing():
-    """Guard the live pack prices. These are no longer Survify's numbers.
+    """Guard the live pack prices. These ARE Survify's numbers again.
 
-    The packs were deliberately re-priced off the margin model documented in
-    pricing.py; this test still asserted the original Survify figures
-    (900¢/300 credits), so it failed on an intentional change. Repricing again
-    is a business decision — update these numbers with it.
+    Re-based 2026-09-14: the packs had been priced off DoThesis's own margin
+    model in a credit unit 16.7x smaller than Survify's, so the two products
+    quoted different numbers for the same engine. Repricing is a business
+    decision — update these numbers with it, and update Survify's
+    `packages` array in fillform with it too, or the two drift again.
     """
     by_id = {p["id"]: p for p in PACKAGES}
-    assert by_id["starter_package"]["price_cents"] == 2499
-    assert by_id["starter_package"]["credits"] == 10000
-    assert by_id["standard_package"]["price_cents"] == 5799
-    assert by_id["standard_package"]["credits"] == 25000
-    assert by_id["expert_package"]["price_cents"] == 12999
-    assert by_id["expert_package"]["credits"] == 60000
+    assert by_id["starter_package"]["price_cents"] == 900
+    assert by_id["starter_package"]["credits"] == 300
+    assert by_id["standard_package"]["price_cents"] == 1900
+    assert by_id["standard_package"]["credits"] == 700
+    assert by_id["expert_package"]["price_cents"] == 4900
+    assert by_id["expert_package"]["credits"] == 2000
+
+
+def test_credit_rate_is_derived_from_the_pack_anchor():
+    """The drift this re-base exists to prevent.
+
+    CREDITS_PER_AUTO_THESIS is what the credit page promises per run;
+    TOKENS_PER_CREDIT is what both charge sites actually debit against. They used
+    to be independent literals (600-ish vs a bare `/ 1000`), which is how the page
+    could advertise one price and billing take another.
+    """
+    from app.pricing import (
+        CREDITS_PER_AUTO_THESIS,
+        TOKENS_PER_AUTO_THESIS,
+        TOKENS_PER_CREDIT,
+    )
+
+    assert CREDITS_PER_AUTO_THESIS == 600, "Survify prices a full report at 600"
+    assert round(TOKENS_PER_AUTO_THESIS / TOKENS_PER_CREDIT) == CREDITS_PER_AUTO_THESIS
+
+
+def test_pro_pack_covers_one_full_report():
+    """Survify's promise: the middle pack buys a thesis. Hold it here."""
+    from app.pricing import CREDITS_PER_AUTO_THESIS, PACKAGES_BY_ID
+
+    assert PACKAGES_BY_ID["standard_package"]["credits"] >= CREDITS_PER_AUTO_THESIS
 
 
 def test_packages_are_discounted_and_scale_with_size():
