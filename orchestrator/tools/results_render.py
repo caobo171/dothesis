@@ -522,8 +522,20 @@ def _measurement_block(ar, family, language, num=None):
 
 def _discriminant_block(ar, language, num=None):
     dv = ar.get("discriminant_validity")
+    caption = _caption("discriminant_validity", language, num)
+    method = dv.get("method", "") if isinstance(dv, dict) else ""
+    full_caption = caption + (f" ({method})" if method else "")
+    figure_body = _figure_body(ar, "discriminant_validity", full_caption)
     if not (isinstance(dv, dict) and isinstance(dv.get("matrix"), list) and dv["matrix"]):
-        return None
+        # Decision: the imported screenshot is itself the primary evidence.
+        # Recovery may link it even when OCR cannot reconstruct a trustworthy
+        # HTMT/Fornell-Larcker matrix; requiring the transcription here made a
+        # valid, durable figure disappear from the exported thesis.
+        figures = ar.get("source_figures") if isinstance(ar.get("source_figures"), dict) else {}
+        return (_wrap("discriminant_validity",
+                      {"source_figure": figures.get("discriminant_validity")},
+                      figure_body, language)
+                if figure_body else None)
     matrix = dv["matrix"]
     labels = matrix[0]
     if not isinstance(labels, list):
@@ -534,11 +546,8 @@ def _discriminant_block(ar, language, num=None):
             continue
         label = _fmt(labels[i]) if i < len(labels) else "—"
         rows.append([label] + [_fmt(c) for c in r])
-    method = dv.get("method", "")
-    caption = _caption("discriminant_validity", language, num)
-    full_caption = caption + (f" ({method})" if method else "")
     title = f"**{full_caption}**"
-    body = _figure_body(ar, "discriminant_validity", full_caption) or (
+    body = figure_body or (
         title + "\n\n" + _table([""] + [_fmt(l) for l in labels], rows))
     return _wrap("discriminant_validity", dv, body, language)
 
@@ -1258,8 +1267,13 @@ def ensure_rendered(sections: list, nested_cs: dict, language: str = "en") -> li
         if not isinstance(sections, list):
             return sections
         cs = nested_cs if isinstance(nested_cs, dict) else {}
-        ar = ((cs.get("m4_analysis") or {}).get("analysis_results")
-              if isinstance(cs.get("m4_analysis"), dict) else None)
+        m4 = cs.get("m4_analysis") if isinstance(cs.get("m4_analysis"), dict) else {}
+        # Decision: recovery/import flows persist their verified M4 artifact as
+        # `results`, while native agent commits use `analysis_results`.  Export
+        # is the compatibility boundary shared by every caller, so accept both
+        # durable shapes here; otherwise a recovered project can retain valid
+        # source_figures in Postgres/S3 while Chapter 4 silently receives none.
+        ar = m4.get("analysis_results") or m4.get("results")
         m3 = cs.get("m3_design") if isinstance(cs.get("m3_design"), dict) else {}
         out = []
         for sec in sections:

@@ -172,6 +172,35 @@ def test_a_composed_vietnamese_chapter_is_covered():
     assert out[0]["prose"].count("dt-rendered:begin") == 3
 
 
+def test_a_recovered_m4_results_block_is_covered():
+    """Recovery doctor owns the legacy `results` key in M4.  The production
+    project that exposed this had four valid source_figures there, but export
+    only looked under `analysis_results`, so it silently emitted a Chapter 4
+    with neither the screenshots nor verified fallback tables."""
+    out = ensure_rendered(
+        [{"chapter_name": "results", "title": "CHƯƠNG 4: KẾT QUẢ",
+          "prose": "Phân tích."}],
+        {"m4_analysis": {"results": _SPSS}}, "vi")
+    assert out[0]["prose"].count("dt-rendered:begin") == 3
+
+
+def test_a_linked_discriminant_figure_survives_without_an_ocr_matrix(tmp_path):
+    """A screenshot is stronger evidence than a guessed matrix.  Recovery can
+    link the former while deliberately omitting the latter; export must not
+    require both representations before it shows the student's own figure."""
+    figure = tmp_path / "htmt.png"
+    figure.write_bytes(b"linked-figure")
+    recovered = dict(_PLS)
+    recovered["source_figures"] = {"discriminant_validity": str(figure)}
+    out = ensure_rendered(
+        [{"chapter_name": "results", "title": "CHƯƠNG 4: KẾT QUẢ",
+          "prose": "Phân tích."}],
+        {"m4_analysis": {"results": recovered}}, "vi")
+    prose = out[0]["prose"]
+    assert "dt-rendered:begin kind=discriminant_validity" in prose
+    assert f"![]({figure})" in prose
+
+
 # A study with a null result — the ordinary case, not an edge one. This is the
 # state that makes `render_limitations` return a block at all, so it is the
 # state that exposes which chapters the limitations branch can reach.
