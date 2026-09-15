@@ -282,6 +282,46 @@ class DbProjectStateStore(ProjectStateStore):
         except Exception:  # noqa: BLE001
             logger.exception("save_writing_anchor failed for project %s", self.project_id)
 
+    def load_doctor_log(self) -> dict[str, Any]:
+        """The recovery doctor's repair ledger, or {} when unset.
+
+        Explicit rather than riding the slice round-trip. `_save` writes only
+        the module columns it knows about, so a column left out of this pair is
+        silently dropped on the next commit — which is how a context_store key
+        has gone dead in production here before.
+        """
+        try:
+            with self.engine.connect() as conn:
+                row = conn.execute(
+                    select(DbContextStore.__table__.c.doctor)
+                    .where(DbContextStore.__table__.c.project_id == self.project_id)
+                ).first()
+            return dict(row[0]) if row is not None and row[0] else {}
+        except Exception:  # noqa: BLE001 — the doctor must never fail a turn
+            logger.exception("load_doctor_log failed for project %s", self.project_id)
+            return {}
+
+    def save_doctor_log(self, log: dict[str, Any]) -> None:
+        """Persist the ledger. Best-effort: losing it costs a repeated repair,
+        not a broken turn."""
+        try:
+            with self.engine.begin() as conn:
+                existing = conn.execute(
+                    select(DbContextStore.__table__.c.project_id)
+                    .where(DbContextStore.__table__.c.project_id == self.project_id)
+                ).first()
+                if existing is None:
+                    conn.execute(DbContextStore.__table__.insert().values(
+                        project_id=self.project_id, doctor=dict(log or {})))
+                else:
+                    conn.execute(
+                        DbContextStore.__table__.update()
+                        .where(DbContextStore.__table__.c.project_id == self.project_id)
+                        .values(doctor=dict(log or {}))
+                    )
+        except Exception:  # noqa: BLE001
+            logger.exception("save_doctor_log failed for project %s", self.project_id)
+
     def load(self) -> dict[str, Any]:
         with self.engine.connect() as conn:
             proj = conn.execute(

@@ -477,6 +477,13 @@ class ContextStore(Base):
     # state) — the DB-backed store only round-trips known columns, so a new
     # context_store key with nowhere to live gets silently dropped in prod.
     coaching: Mapped[dict | None] = mapped_column(JSONB)
+    # The recovery doctor's repair ledger:
+    # {finding_code: {gaps_before, gaps_after, exhausted}}.
+    # Beside `coaching` for the same reason — it is project-scoped state that
+    # belongs to no module. Crucially it is NOT in SLICE_OWNERSHIP, so
+    # commit_slice can never clobber it, and DbProjectStateStore reads/writes
+    # it through its own explicit pair of methods.
+    doctor: Mapped[dict | None] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

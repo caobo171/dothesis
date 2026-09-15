@@ -584,8 +584,27 @@ async def send_message_v3(
                 # honest against the real module statuses.
                 turn_store = DbProjectStateStore(engine, project_id, _workspace_dir(project_id))
                 from agent.runtime import EXECUTE_NOW_MARKER
+                # One doctor pass per turn: reconcile what this project HAS
+                # (uploads on disk, numbers already in prose) against what its
+                # state SAYS, repair what is deterministic, and hand the agent a
+                # directive for what is not. Supersedes the standalone backfill
+                # directive, which answered only one of the five ways a project
+                # goes quietly empty.
+                #
+                # Its own short-lived session: `db` is request-scoped and this
+                # generator outlives the request, so reusing it here would read
+                # through a closed connection on a slow turn.
+                from ..doctor_adapter import run_doctor
+                with Session(engine) as _ddb:
+                    _doc = run_doctor(_ddb, project_id, turn_store,
+                                      _workspace_dir(project_id),
+                                      new_evidence=bool(attachments))
+                for _line in _doc.repaired:
+                    # A silent repair is still a change to the student's thesis.
+                    await events_q.put(("agent", {"type": "token", "text": _line + "\n\n"}))
                 _runtime_text = "\n".join(part for part in (
                     EXECUTE_NOW_MARKER if execute_now else None,
+                    _doc.directive,
                     chapter_directive,
                     save_directive,
                     text,
