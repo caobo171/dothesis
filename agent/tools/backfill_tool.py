@@ -203,6 +203,26 @@ def make_backfill_tool(store):
                 saved.append(store.commit_reconstructed(module, entry.get("candidate") or {}))
             except Exception:
                 logger.exception("backfill: commit_reconstructed %s failed", module)
+                return
+            # Show what LANDED, not what was proposed.
+            #
+            # The candidate is an offer; the commit is the decision. Only owned
+            # keys survive, and reconstruct_upstream's merge lets values that
+            # were already there beat the inference — so the two routinely
+            # differ. On a real project the card advertised a 21-construct,
+            # 23-edge conceptual model beside a context panel reading 12 and 12,
+            # because the inference proposed 21 and the student's existing
+            # 12-construct model won the merge. The student had two numbers for
+            # one model and no way to tell which was theirs.
+            try:
+                from orchestrator.state import _MODULE_TO_FIELD  # noqa: PLC0415
+                field = _MODULE_TO_FIELD.get(module)
+                landed = (loader() or {}).get(field) if field else None
+                if isinstance(landed, dict) and landed:
+                    entry["candidate"] = {k: v for k, v in landed.items()
+                                          if not str(k).startswith("_")}
+            except Exception:  # noqa: BLE001 — a display refinement, never a gate
+                logger.warning("backfill: could not read back %s", module, exc_info=True)
 
         try:
             slices = loader()

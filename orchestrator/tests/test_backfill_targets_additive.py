@@ -126,3 +126,36 @@ def test_reconstruct_upstream_itself_stays_strict():
     reconstruct_upstream(_thread_c10f6d13(), targets=["M4"], llm=_fake_llm(),
                          ground_m2=False, on_module=lambda e: seen.append(e["module"]))
     assert seen == ["M4"]
+
+
+def test_the_card_shows_what_landed_not_what_was_proposed(monkeypatch):
+    """A 21-construct proposal must not be advertised when 12 were saved.
+
+    The candidate is an offer; the commit is the decision. Only owned keys
+    survive and existing values beat the inference, so the two differ routinely.
+    On a real project the chat card read "21 constructs · 23 edges" beside a
+    context panel reading "12 constructs · 12 edges" — same model, two numbers,
+    and the 21 included constructs the student's SmartPLS run never tested.
+    """
+    from agent.tools.backfill_tool import make_backfill_tool
+    import orchestrator.backfill as bf
+
+    landed = {"conceptual_model": {"nodes": [{"id": "n1"}], "edges": []},
+              "paradigm": "quantitative"}
+    store = _Store({"m4_analysis": {"analysis_outline": {"research_design": "Định lượng"}}})
+    # commit_reconstructed "persists" the trimmed slice the store would keep.
+    store.commit_reconstructed = lambda m, c: (
+        store._slices.__setitem__("m3_design", landed) or {"module": m, "status": "done"})
+
+    captured: list[dict] = []
+    monkeypatch.setattr(bf, "reconstruct_upstream", lambda cs, **kw: [
+        kw["on_module"]({"module": "M3", "artifact": "design",
+                         "candidate": {"conceptual_model": {
+                             "nodes": [{"id": f"n{i}"} for i in range(21)],
+                             "edges": [{"from": "a", "to": "b"}] * 23}},
+                         "rationale": None, "ready_to_confirm": True, "review": []})])
+    import json
+    out = json.loads(make_backfill_tool(store).func(targets=["M3"], language="vi"))
+    shown = out["reconstructed"][0]["candidate"]["conceptual_model"]
+    assert len(shown["nodes"]) == 1, "the card advertised the proposal, not the commit"
+    assert shown["edges"] == []

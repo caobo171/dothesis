@@ -320,6 +320,73 @@ def _honest_assistant_reply(
     )
 
 
+# "đã viết lại", "được viết lại", "đã bổ sung trích dẫn", "rewrote", "recomposed".
+# Deliberately about REWRITING existing chapters, not about saving — a "đã lưu"
+# claim is _SAVED_CLAIM_RE's business.
+_REWROTE_CLAIM_RE = re.compile(
+    r"\b(?:đã|da|được|duoc)\s+(?:viết|viet|soạn|soan|biên\s*soạn|bien\s*soan|"
+    r"cập\s*nhật|cap\s*nhat|bổ\s*sung|bo\s*sung)\s*(?:lại|lai)?\b"
+    r"|\b(?:rewrote|rewritten|recomposed|regenerated|updated)\s+(?:the\s+)?"
+    r"(?:chapter|chapters|chương)\b",
+    re.IGNORECASE,
+)
+
+
+def chapter_fingerprint(store) -> dict[str, int]:
+    """Length of every chapter's prose, read through the one resolver.
+
+    Cheap enough to take twice a turn, and length alone is sufficient: a real
+    recompose of a 42,000-character literature review does not land on exactly
+    the same count.
+    """
+    try:
+        from orchestrator.tools.m5_writing import chapter_prose  # noqa: PLC0415
+        cs = store.load_full_context_store() or {}
+        return {k: len(v or "") for k, v in chapter_prose(cs.get("m5_writing") or {}).items()}
+    except Exception:  # noqa: BLE001 — never fail a turn over a diagnostic
+        logger.exception("chapter_fingerprint failed")
+        return {}
+
+
+def _honest_rewrite_reply(full: str, before: dict[str, int], after: dict[str, int],
+                          user_text: str) -> str:
+    """Replace a "I rewrote your chapters" claim when no chapter changed.
+
+    The agent narrated five chapters it had rewritten — M3 reconstructed,
+    Chapters 1 and 2 rewritten with citations, Chapter 3 written in full,
+    Chapter 4 given numbered tables. Nothing had changed: intro 19,071,
+    lit_review 42,258, methodology 955, results 11,197, conclusion 8,864 — byte
+    identical to three turns earlier, across ~700 credits.
+
+    It is not lying on purpose. `agent/tools/writing.py` REUSES any chapter that
+    already has non-stub prose unless `force=True`, so the compose call returns
+    the old text and reports success, and the agent reports what it asked for
+    rather than what it got. A student cannot tell the difference — that is what
+    makes it worth catching here rather than in a prompt.
+
+    Length-only, and deliberately conservative: it fires solely when the reply
+    claims a rewrite AND every chapter is identical in length.
+    """
+    if not full or not _REWROTE_CLAIM_RE.search(full):
+        return full
+    if not before or not after or before != after:
+        return full
+    vi = bool(_VIETNAMESE_RE.search(user_text or full))
+    return (
+        "## Chưa có chương nào được viết lại\n\n"
+        "Mình đã báo là đã viết lại các chương, nhưng thực tế **không chương nào "
+        "thay đổi** — nội dung cũ được dùng lại nguyên vẹn.\n\n"
+        "Hãy gửi: **\"viết lại toàn bộ các chương, ghi đè bản cũ\"** để mình "
+        "soạn lại thật sự thay vì tái sử dụng bản đã có."
+        if vi else
+        "## No chapter was actually rewritten\n\n"
+        "I reported rewriting your chapters, but **nothing changed** — the "
+        "existing text was reused as-is.\n\n"
+        'Ask: **"rewrite every chapter, overwrite the existing draft"** so they '
+        "are genuinely recomposed rather than reused."
+    )
+
+
 def _tool_only_reply(user_text: str, tool_results: list[tuple[str, str]]) -> str:
     """Give a silent tool turn an honest, localized completion message."""
     successful = [name for name, preview in tool_results
@@ -505,6 +572,12 @@ async def send_message_v3(
 
     engine = db.bind
     project_id = t.project_id
+    # Chapter lengths BEFORE the turn, so a "I rewrote your chapters" claim can
+    # be checked against the chapters rather than believed. Taken here, outside
+    # gen(), because by the time the reply is finalized the turn has already
+    # written whatever it was going to write.
+    _chapters_before = chapter_fingerprint(
+        DbProjectStateStore(engine, project_id, _workspace_dir(project_id)))
     thread_pk = t.id
     langgraph_thread_id = t.langgraph_thread_id
 
@@ -677,6 +750,14 @@ async def send_message_v3(
             if not full and _counts.get("error", 0) == 0:
                 full = _tool_only_reply(text, tool_results)
             full = _honest_assistant_reply(full, tool_results, text)
+            # A "saved" claim is checked against commit_slice; a "rewrote your
+            # chapters" claim has to be checked against the chapters, because
+            # the compose path reports success while handing back the old text.
+            full = _honest_rewrite_reply(
+                full, _chapters_before,
+                chapter_fingerprint(DbProjectStateStore(
+                    engine, project_id, _workspace_dir(project_id))),
+                text)
             # Collapse the turn's widget hints into the single tool_calls_json
             # slot: none → null, one → that hint (back-compat), many → a `multi`
             # wrapper the frontend expands so an export card + papers panel both
