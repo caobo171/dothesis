@@ -196,3 +196,104 @@ def test_a_failed_reparse_does_not_stop_other_repairs(monkeypatch):
         code="RESULTS_NOT_IN_STATE", detail="ok", repair="deterministic",
         payload={"results": {"t": []}, "filename": "f.docx", "module": "M4"})])
     assert res.repaired == ["ok"]
+
+
+# --- recompose: the doctor rewrites, instead of asking -----------------------
+
+_RECOMPOSE = Finding(
+    code="CHAPTERS_NEED_RECOMPOSE", detail="Đang viết lại: methodology.",
+    repair="recompose",
+    payload={"chapters": ["methodology"], "stub": ["methodology"],
+             "uncited": [], "tableless": []},
+)
+
+
+class _CsStore(_Store):
+    """A store whose full context has one good chapter and one stub."""
+
+    def load_full_context_store(self):
+        return {"m5_writing": {"final_sections": [
+            {"chapter_name": "intro", "title": "C1", "prose": "Giới thiệu. " * 400},
+            {"chapter_name": "methodology", "title": "C3",
+             "prose": "Chưa thể biên soạn Chương 3 theo các yêu cầu đã nêu."},
+        ]}}
+
+
+def test_a_rewritten_chapter_replaces_the_stub_and_keeps_the_others(monkeypatch):
+    import orchestrator.tools.m5_writing as M
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [
+        {"chapter_name": "methodology", "title": "C3", "prose": "Chương 3 thật. " * 300}])
+    store = _CsStore()
+    apply_findings(store, [_RECOMPOSE])
+
+    module, writes, _reason, _kw = store.commits[0]
+    assert module == "M5"
+    by = {s["chapter_name"]: s for s in writes["final_sections"]}
+    assert "Chương 3 thật." in by["methodology"]["prose"]
+    assert by["intro"]["prose"].startswith("Giới thiệu."), "untouched chapter was lost"
+
+
+def test_chapters_stay_in_canonical_order(monkeypatch):
+    import orchestrator.tools.m5_writing as M
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [
+        {"chapter_name": "methodology", "title": "C3", "prose": "Chương 3 thật. " * 300}])
+    store = _CsStore()
+    apply_findings(store, [_RECOMPOSE])
+    names = [s["chapter_name"] for s in store.commits[0][1]["final_sections"]]
+    assert names == ["intro", "methodology"]
+
+
+def test_a_compose_that_returns_another_stub_is_not_committed(monkeypatch):
+    """A failed compose must not replace a bad chapter with an empty one."""
+    import orchestrator.tools.m5_writing as M
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [
+        {"chapter_name": "methodology", "prose": "Chưa thể biên soạn Chương 3."}])
+    store = _CsStore()
+    res = apply_findings(store, [_RECOMPOSE])
+    assert not store.commits
+    assert res.repaired == []
+
+
+def test_a_compose_returning_nothing_is_not_committed(monkeypatch):
+    import orchestrator.tools.m5_writing as M
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [])
+    store = _CsStore()
+    apply_findings(store, [_RECOMPOSE])
+    assert not store.commits
+
+
+def test_the_same_recompose_asked_twice_is_not_paid_for_twice(monkeypatch):
+    """A rewrite that did not fix the chapter must not run again next turn.
+
+    Recomposing four chapters is the most expensive thing the doctor does. If
+    the result still fails its check, the identical finding arrives next turn —
+    and without this it would be rewritten again, every turn, forever.
+    """
+    import orchestrator.tools.m5_writing as M
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [
+        {"chapter_name": "methodology", "title": "C3", "prose": "Chương 3 thật. " * 300}])
+    store = _CsStore()
+    apply_findings(store, [_RECOMPOSE])
+    assert len(store.commits) == 1
+
+    res = apply_findings(store, [_RECOMPOSE])           # same finding again
+    assert len(store.commits) == 1, "the recompose was paid for twice"
+    assert store.log["CHAPTERS_NEED_RECOMPOSE"]["exhausted"] is True
+    assert res.directive and "Đang viết lại" in res.directive
+
+
+def test_a_recompose_of_DIFFERENT_chapters_still_runs(monkeypatch):
+    import orchestrator.tools.m5_writing as M
+    # Composes whatever it is asked for, so the second call is a real second
+    # repair rather than a stub that happens to return the wrong chapter.
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [
+        {"chapter_name": c, "title": c, "prose": f"Nội dung {c}. " * 300}
+        for c in (chapters or [])])
+    store = _CsStore()
+    apply_findings(store, [_RECOMPOSE])
+    other = Finding(code="CHAPTERS_NEED_RECOMPOSE", detail="Đang viết lại: intro.",
+                    repair="recompose",
+                    payload={"chapters": ["intro"], "stub": ["intro"],
+                             "uncited": [], "tableless": []})
+    apply_findings(store, [other])
+    assert len(store.commits) == 2, "a different set of chapters must still be fixed"

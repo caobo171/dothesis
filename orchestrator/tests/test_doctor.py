@@ -68,7 +68,7 @@ def test_an_unconfirmed_module_is_not_false_done():
     assert "FALSE_DONE" not in _codes(diagnose(inp))
 
 
-def test_a_refusal_chapter_is_flagged_as_a_directive_repair():
+def test_a_refusal_chapter_is_rewritten_not_merely_reported():
     inp = DoctorInput(
         context_store={}, uploads=[],
         chapter_prose={"methodology": (
@@ -77,10 +77,14 @@ def test_a_refusal_chapter_is_flagged_as_a_directive_repair():
             "giá trị cụ thể. Để tạo chương hoàn chỉnh, cần cung cấp paradigm, "
             "research design, analysis tool và sampling strategy.")},
     )
-    findings = [f for f in diagnose(inp) if f.code == "REFUSAL_CHAPTER"]
+    findings = [f for f in diagnose(inp) if f.code == "CHAPTERS_NEED_RECOMPOSE"]
     assert findings
-    assert "methodology" in findings[0].detail
-    assert findings[0].repair == "directive"
+    assert findings[0].payload["stub"] == ["methodology"]
+    # The doctor rewrites it rather than asking. Asking was tried four times:
+    # the agent narrowed the export scope and claimed five chapters rewritten,
+    # and after the honesty guard caught that, the student typed the exact
+    # phrasing they were told to and still nothing moved.
+    assert findings[0].repair == "recompose"
 
 
 def test_a_healthy_project_produces_no_findings():
@@ -101,10 +105,10 @@ def test_a_long_chapter_citing_nothing_is_flagged():
         context_store=_SOURCES, uploads=[],
         chapter_prose={"lit_review": "Tiếp thị người ảnh hưởng là… " * 200},
     )
-    found = [f for f in diagnose(inp) if f.code == "CHAPTERS_WITHOUT_CITATIONS"]
+    found = [f for f in diagnose(inp) if f.code == "CHAPTERS_NEED_RECOMPOSE"]
     assert found
-    assert found[0].payload["chapters"] == ["lit_review"]
-    assert found[0].repair == "directive"
+    assert found[0].payload["uncited"] == ["lit_review"]
+    assert found[0].repair == "recompose"
 
 
 def test_a_chapter_that_cites_is_not_flagged():
@@ -113,27 +117,32 @@ def test_a_chapter_that_cites_is_not_flagged():
             context_store=_SOURCES, uploads=[],
             chapter_prose={"lit_review": ("filler " * 400) + cited},
         )
-        assert not [f for f in diagnose(inp) if f.code == "CHAPTERS_WITHOUT_CITATIONS"], cited
+        assert not [f for f in diagnose(inp) if f.code == "CHAPTERS_NEED_RECOMPOSE"], cited
 
 
 def test_no_flag_when_the_project_has_no_sources_to_cite():
     # Nothing to cite WITH is a backfill problem, not an uncited-chapter one.
     inp = DoctorInput(context_store={}, uploads=[],
                       chapter_prose={"lit_review": "filler " * 400})
-    assert not [f for f in diagnose(inp) if f.code == "CHAPTERS_WITHOUT_CITATIONS"]
+    assert not [f for f in diagnose(inp) if f.code == "CHAPTERS_NEED_RECOMPOSE"]
 
 
-def test_a_short_stub_is_not_judged_on_citations():
+def test_a_short_stub_is_judged_as_a_stub_not_as_uncited():
+    # It still needs rewriting — but because it is a stub. Counting it as
+    # "cites nothing" would tell the student their literature review lacks
+    # citations when in fact it has not been written.
     inp = DoctorInput(context_store=_SOURCES, uploads=[],
                       chapter_prose={"lit_review": "Chưa viết."})
-    assert not [f for f in diagnose(inp) if f.code == "CHAPTERS_WITHOUT_CITATIONS"]
+    f = [x for x in diagnose(inp) if x.code == "CHAPTERS_NEED_RECOMPOSE"][0]
+    assert f.payload["stub"] == ["lit_review"]
+    assert f.payload["uncited"] == []
 
 
 def test_results_and_conclusion_are_not_expected_to_cite():
     inp = DoctorInput(context_store=_SOURCES, uploads=[],
                       chapter_prose={"results": "filler " * 400,
                                      "conclusion": "filler " * 400})
-    assert not [f for f in diagnose(inp) if f.code == "CHAPTERS_WITHOUT_CITATIONS"]
+    assert not [f for f in diagnose(inp) if f.code == "CHAPTERS_NEED_RECOMPOSE"]
 
 
 # --- results stored but unrenderable ---------------------------------------

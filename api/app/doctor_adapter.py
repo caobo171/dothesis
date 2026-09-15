@@ -50,17 +50,33 @@ def apply_findings(store, findings: list[Finding], *,
     directives: list[str] = []
 
     for f in findings:
-        if (log.get(f.code) or {}).get("exhausted"):
+        entry = log.get(f.code) or {}
+        if entry.get("exhausted"):
             asks.append(f.detail)
+            continue
+        # The same repair, asked for again with the same inputs, already ran and
+        # did not fix it. Without this the expensive repairs bill every turn
+        # forever: a recompose of four chapters that comes back still uncited
+        # presents an identical finding next turn, and would be run again.
+        # Cheap deterministic repairs are exempt — re-moving data that is
+        # already where it belongs costs nothing and is idempotent.
+        if f.repair in ("reparse", "recompose") and entry.get("signature") == _signature(f):
+            asks.append(f.detail)
+            log[f.code] = {**entry, "exhausted": True}
             continue
         if f.repair == "directive":
             directives.append(_render_directive(f))
             continue
-        if f.repair not in ("deterministic", "reparse"):
+        if f.repair not in ("deterministic", "reparse", "recompose"):
             asks.append(f.detail)
             continue
         try:
-            _reparse(store, f) if f.repair == "reparse" else _commit(store, f)
+            if f.repair == "reparse":
+                _reparse(store, f)
+            elif f.repair == "recompose":
+                _recompose(store, f)
+            else:
+                _commit(store, f)
         except Exception:  # noqa: BLE001 — one failed repair must not stop the rest
             logger.exception("doctor: repair %s failed", f.code)
             continue
@@ -69,6 +85,7 @@ def apply_findings(store, findings: list[Finding], *,
         after = list((gaps_after or {}).get(f.payload.get("module") or "", before)) \
             if gaps_after is not None else []
         log[f.code] = {"gaps_before": before, "gaps_after": after,
+                       "signature": _signature(f),
                        "exhausted": bool(before) and before == after}
 
     try:
@@ -82,6 +99,17 @@ def apply_findings(store, findings: list[Finding], *,
             "cần gửi gì, đừng viết lời từ chối vào trong chương: " + " ".join(asks))
     res.directive = "\n".join(directives) or None
     return res
+
+
+def _signature(f: Finding) -> str:
+    """What this repair was asked to fix, as a stable string.
+
+    Chapter names for a recompose, the source filename for a re-extract. Two
+    findings with the same signature describe the same broken thing, so the
+    second one arriving means the first repair did not work.
+    """
+    parts = f.payload.get("chapters") or [f.payload.get("filename") or ""]
+    return f"{f.code}:{','.join(sorted(str(p) for p in parts))}"
 
 
 def _commit(store, f: Finding) -> None:
@@ -146,6 +174,56 @@ def _reparse(store, f: Finding) -> None:
     store.commit_slice(
         f.payload.get("module") or "M4", {"results": block},
         reason=f"doctor: đọc lại kết quả từ {f.payload['filename']} để dựng bảng Chương 4")
+
+
+def _recompose(store, f: Finding) -> None:
+    """Rewrite the broken chapters, instead of asking the agent to.
+
+    Asking failed four times. The directive said to recompose with force; the
+    agent called export_docx with a narrow scope and reported five chapters
+    rewritten. Once the honesty guard caught that, the student was told the
+    exact phrasing to force a rewrite, typed it, and still nothing changed —
+    323 credits for a turn that moved zero characters. `agent/tools/writing.py`
+    reuses any chapter with non-stub prose unless force=True, and no caller
+    passes force=True, so "recompose" was never reachable from chat at all.
+
+    compose_all_sections takes the NESTED store and composes exactly the
+    chapters named, so this bypasses the reuse guard by never consulting it —
+    the chapters handed over are the ones the doctor already proved are broken.
+    _weave_verified_blocks runs inside compose_chapter, so Chapter 4 gets its
+    tables from the same pass.
+
+    Only chapters that came back with real content are committed: a compose
+    that fails must not replace a bad chapter with an empty one.
+    """
+    from orchestrator.tools.m5_writing import (  # noqa: PLC0415
+        _is_stub_prose, compose_all_sections)
+
+    chapters = list(f.payload.get("chapters") or [])
+    if not chapters:
+        return
+    cs = store.load_full_context_store() or {}
+    composed = compose_all_sections(cs, chapters=chapters) or []
+
+    kept = [s for s in composed
+            if (s.get("chapter_name") or "") in chapters
+            and not _is_stub_prose(s.get("prose") or "")]
+    if not kept:
+        raise RuntimeError("recompose produced nothing usable")
+
+    # Merge into final_sections by chapter_name: the chapters NOT being rewritten
+    # are the student's own work and must survive untouched.
+    existing = ((cs.get("m5_writing") or {}).get("final_sections") or [])
+    by_name = {(s.get("chapter_name") or ""): s for s in existing if isinstance(s, dict)}
+    for s in kept:
+        by_name[s.get("chapter_name") or ""] = s
+    from orchestrator.tools.m5_writing import M5_CHAPTER_ORDER  # noqa: PLC0415
+    order = list(M5_CHAPTER_ORDER)
+    merged = sorted(by_name.values(),
+                    key=lambda s: order.index(s.get("chapter_name"))
+                    if s.get("chapter_name") in order else 99)
+    store.commit_slice("M5", {"final_sections": merged},
+                       reason="doctor: viết lại các chương chưa đạt")
 
 
 def _render_directive(f: Finding) -> str:

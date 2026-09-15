@@ -423,20 +423,12 @@ def _false_done(inp: DoctorInput) -> list[Finding]:
     return out
 
 
-def _refusal_chapters(inp: DoctorInput) -> list[Finding]:
+def _refusal_chapter_names(inp: DoctorInput) -> list[str]:
     """Chapters that are a placeholder or a refusal rather than content."""
     from orchestrator.tools.m5_writing import _is_stub_prose  # noqa: PLC0415
 
-    out = []
-    for name, prose in (inp.chapter_prose or {}).items():
-        if _is_stub_prose(prose or ""):
-            out.append(Finding(
-                code="REFUSAL_CHAPTER",
-                detail=f"Chương `{name}` hiện không có nội dung thật.",
-                repair="directive",
-                payload={"chapter": name},
-            ))
-    return out
+    return [name for name, prose in (inp.chapter_prose or {}).items()
+            if _is_stub_prose(prose or "")]
 
 
 # A citation in finished prose: "(Nguyen, 2024)", "(Akram và Majeed 2026)", or
@@ -451,7 +443,7 @@ _CITABLE_CHAPTER_CHARS = 2000
 _MUST_CITE = ("intro", "lit_review", "methodology")
 
 
-def _chapters_without_citations(inp: DoctorInput) -> list[Finding]:
+def _uncited_chapter_names(inp: DoctorInput) -> list[str]:
     """Finished prose that cites nothing, on a project that HAS sources.
 
     This is the "uncited bibliography" failure, and it is invisible until an
@@ -481,14 +473,70 @@ def _chapters_without_citations(inp: DoctorInput) -> list[Finding]:
         and len(prose or "") >= _CITABLE_CHAPTER_CHARS
         and not _CITATION_RE.search(prose or "")
     ]
-    if not stale:
+    return stale
+
+
+def _results_chapter_lacks_tables(inp: DoctorInput) -> list[str]:
+    """The results chapter has no tables, on a project whose results DO render.
+
+    Only once `detect_family` recognises the stored block — before that the
+    chapter cannot have tables and saying so is noise.
+    """
+    from orchestrator.tools.results_render import (  # noqa: PLC0415
+        detect_family, normalize_analysis_results, render_results_tables)
+
+    m4 = (inp.context_store or {}).get("m4_analysis") or {}
+    ar = m4.get("results") or m4.get("analysis_results")
+    if not ar:
         return []
+    try:
+        if not detect_family(normalize_analysis_results(ar)):
+            return []
+        if not render_results_tables(ar, "vi"):
+            return []
+    except Exception:  # noqa: BLE001
+        return []
+    prose = (inp.chapter_prose or {}).get("results") or ""
+    if not prose.strip():
+        return []
+    has_table = bool(re.search(r"(?m)^\|.*\|\s*$", prose)) or "dt-rendered:begin" in prose
+    return [] if has_table else ["results"]
+
+
+def _chapters_need_recompose(inp: DoctorInput) -> list[Finding]:
+    """Chapters that are broken in a way only rewriting them fixes.
+
+    One finding rather than three directives, because the repair is the same
+    action and the student should be told once.
+
+    This is `repair="recompose"` — the doctor DOES it — after asking failed
+    repeatedly. The directive version told the agent to recompose with force;
+    it called export_docx with a narrow scope instead and reported five
+    chapters rewritten. When the honesty guard started catching that, the
+    student was told to say "viết lại toàn bộ các chương, ghi đè bản cũ", said
+    exactly that, and still nothing was rewritten — 323 credits for a turn that
+    changed nothing. `agent/tools/writing.py` reuses any chapter with non-stub
+    prose unless force=True, and nothing passes force=True.
+    """
+    stub = _refusal_chapter_names(inp)
+    uncited = _uncited_chapter_names(inp)
+    tableless = _results_chapter_lacks_tables(inp)
+    chapters = [c for c in dict.fromkeys(stub + uncited + tableless)]
+    if not chapters:
+        return []
+    why = []
+    if stub:
+        why.append(f"{', '.join(stub)} chưa có nội dung thật")
+    if uncited:
+        why.append(f"{', '.join(uncited)} chưa trích dẫn nguồn nào")
+    if tableless:
+        why.append("chương kết quả chưa chèn bảng")
     return [Finding(
-        code="CHAPTERS_WITHOUT_CITATIONS",
-        detail=(f"Các chương {', '.join(stale)} chưa trích dẫn nguồn nào, "
-                f"dù dự án đã có {len(sources)} nguồn."),
-        repair="directive",
-        payload={"chapters": stale, "source_count": len(sources)},
+        code="CHAPTERS_NEED_RECOMPOSE",
+        detail=f"Đang viết lại: {', '.join(chapters)} ({'; '.join(why)}).",
+        repair="recompose",
+        payload={"chapters": chapters, "stub": stub,
+                 "uncited": uncited, "tableless": tableless},
     )]
 
 
@@ -525,6 +573,5 @@ def diagnose(inp: DoctorInput) -> list[Finding]:
             + _instrument_not_parsed(inp)
             + _unread_uploads(inp)
             + _false_done(inp)
-            + _refusal_chapters(inp)
-            + _chapters_without_citations(inp)
+            + _chapters_need_recompose(inp)
             + _backfill_available(inp))
