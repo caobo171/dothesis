@@ -24,6 +24,17 @@ const PUBLIC_PATHS = [
   // auth-marker cookie — gating it would 307 the crawler to /login and the
   // whole content bank would be indexed as a sign-in page.
   "/blog",
+  // Public comparison pages are acquisition content, just like the blog. They
+  // must stay crawlable and usable before someone has a DoThesis account.
+  "/compare",
+  // Legal + support. These shipped gated by omission and it made all three
+  // useless: the audience for a privacy policy or a support address is people
+  // who are signed OUT, or who cannot sign in and are writing to say so. A
+  // payment provider's review fetches /terms without an account and would have
+  // been handed a login page, and the sitemap was advertising nine URLs that
+  // 307'd. `startsWith` covers the locale editions (/privacy/vi, /terms/en, …)
+  // and the bare paths that redirect into them.
+  "/privacy", "/terms", "/contact",
   "/_next", "/favicon.ico",
 ];
 

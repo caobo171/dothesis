@@ -175,6 +175,36 @@ describe("legal + contact routes", () => {
     expect(new Set(subjects).size).toBe(subjects.length);
   });
 
+  test("every legal route is reachable signed out", async () => {
+    // Shipped gated by omission: all nine URLs 307'd to /login, which makes a
+    // privacy policy and a support address useless — their whole audience is
+    // signed out, or is signed out BECAUSE something is broken and is writing
+    // to say so. A payment provider's review fetches /terms with no account.
+    const { NextRequest } = await import("next/server");
+    const { proxy } = await import("../../proxy.js");
+
+    const paths = [
+      "/privacy", "/privacy/vi", "/privacy/en",
+      "/terms", "/terms/vi", "/terms/en",
+      "/contact", "/contact/vi", "/contact/en",
+    ];
+    for (const path of paths) {
+      // No auth-marker cookie: exactly the signed-out case.
+      const res = proxy(new NextRequest(`https://app.dothesis.com${path}`));
+      const location = res.headers.get("location");
+      expect(location, `${path} redirected to ${location}`).toBeNull();
+    }
+  });
+
+  test("a genuinely gated route still redirects signed out", async () => {
+    // Guards the guard: if the matcher above passed everything, the previous
+    // test would pass while the whole app were public.
+    const { NextRequest } = await import("next/server");
+    const { proxy } = await import("../../proxy.js");
+    const res = proxy(new NextRequest("https://app.dothesis.com/transactions"));
+    expect(res.headers.get("location")).toContain("/login");
+  });
+
   test("the contact page is not a form", async () => {
     // There is no endpoint behind this page, by decision. A form appearing here
     // would post into nothing and silently drop the message.
