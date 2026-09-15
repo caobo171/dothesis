@@ -430,6 +430,39 @@ def _hand_over(cb, entry: dict) -> None:
                          entry.get("module"))
 
 
+def reconstructable_modules(context_store) -> list[str]:
+    """Modules that have evidence to infer from and are not COMPLETE yet.
+
+    "Everything up to the highest module that has content, minus the ones
+    already finished" — the walk's auto-target, lifted out so callers can ASK
+    the question without paying for the walk. `chat_v3` uses it to notice that
+    a file the student just attached has made earlier modules fillable.
+
+    Not a duplicate of the selection inside `reconstruct_upstream`: that
+    function calls this one. The two answers drifting apart is how a directive
+    ends up promising a backfill the walk then declines to do.
+    """
+    from orchestrator.artifacts import MODULE_TO_ARTIFACT, gate_for
+    from orchestrator.state import _MODULE_TO_FIELD, _slice_has_content
+
+    def _content(module: str) -> bool:
+        v = getattr(context_store, _MODULE_TO_FIELD[module], None)
+        return bool(v) and _slice_has_content(v)
+
+    def _complete(module: str) -> bool:
+        v = getattr(context_store, _MODULE_TO_FIELD[module], None) or {}
+        if not (v and _slice_has_content(v)):
+            return False
+        return gate_for(MODULE_TO_ARTIFACT[module])(v).done
+
+    filled = [m for m in _MODULE_ORDER + ("M5",) if _content(m)]
+    if not filled:
+        return []
+    top = max(_MODULE_ORDER.index(m) for m in filled if m in _MODULE_ORDER) \
+        if any(m in _MODULE_ORDER for m in filled) else len(_MODULE_ORDER)
+    return [m for m in _MODULE_ORDER[:top + 1] if not _complete(m)]
+
+
 def reconstruct_upstream(context_store, targets: list[str] | None = None,
                          llm=None, language: str | None = None,
                          ground_m2: bool | None = None,
@@ -490,13 +523,12 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
 
     # Auto-target: everything up to the highest-with-content module that isn't
     # complete yet. Imported M4 holding only raw results → [M1, M2, M3, M4].
+    # `targets` means exactly what it says HERE. Widening a model-chosen target
+    # list is the tool layer's job (agent/tools/backfill_tool.py), not this
+    # function's: import paths and tests pass `targets` when they genuinely mean
+    # one module, and a walk that silently did more would be the wrong primitive.
     if targets is None:
-        filled = [m for m in _MODULE_ORDER + ("M5",) if _content(m)]
-        if not filled:
-            return []
-        top = max(_MODULE_ORDER.index(m) for m in filled if m in _MODULE_ORDER) \
-            if any(m in _MODULE_ORDER for m in filled) else len(_MODULE_ORDER)
-        targets = [m for m in _MODULE_ORDER[:top + 1] if not _complete(m)]
+        targets = reconstructable_modules(context_store)
     else:
         targets = [m for m in targets if m in MODULE_TO_ARTIFACT]
 

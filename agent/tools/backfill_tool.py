@@ -143,9 +143,16 @@ def make_backfill_tool(store):
 
         Call this when the student wants to fill in / backfill / reconstruct
         earlier steps (Topic M1, Literature M2, Design M3, Analysis M4), or wants
-        to jump ahead but is missing prerequisites. `targets` optionally limits
-        the work to specific module ids (e.g. ["M3"] for just the research
-        design); omit it to reconstruct every missing upstream module.
+        to jump ahead but is missing prerequisites. Call it again whenever new
+        evidence arrives — an attached dataset or results file can fill modules
+        that had nothing to infer from an hour ago.
+
+        `targets` names the modules you care about most (e.g. ["M3"] when the
+        student asked about the research design). It does NOT restrict the work:
+        every other module that is still incomplete and now has evidence is
+        reconstructed too, and modules that are already finished are skipped. So
+        passing a narrow list can only ever cost you nothing — you cannot use it
+        to leave a missing chapter empty. Omit it if you have no preference.
 
         `language` is the language to WRITE the reconstruction in — pass "en" or
         "vi" whenever the student has said which they want ("viết bằng tiếng
@@ -161,7 +168,9 @@ def make_backfill_tool(store):
         loader = getattr(store, "load_full_context_store", None)
         if loader is None:
             return json.dumps({"ok": False, "reconstructed": []})
-        from orchestrator.backfill import reconstruct_upstream  # noqa: PLC0415 — orchestrator core, agent layer
+        from orchestrator.backfill import (  # noqa: PLC0415 — orchestrator core, agent layer
+            reconstruct_upstream, reconstructable_modules,
+        )
         from orchestrator.state import ContextStore  # noqa: PLC0415
         from agent.state import MODULES  # noqa: PLC0415
         # Commit each module the MOMENT it is reconstructed, not after the walk.
@@ -200,6 +209,28 @@ def make_backfill_tool(store):
             cs = ContextStore(**slices)
             # Caller's request first, then the evidence, then the house default.
             lang = language or _language_of_existing_work(slices) or "vi"
+            # `targets` from the MODEL is a hint, never a restriction.
+            #
+            # The model picks these arguments, and on thread c10f6d13 it picked
+            # ["M4"] for a student whose m2_literature was null and whose
+            # m3_design held nothing but a questionnaire — both of which
+            # reconstructable_modules had. What shipped was a Chapter 2 written
+            # with no literature state and a Chapter 3 that was 955 characters
+            # of "Chưa thể biên soạn Chương 3…" sitting in the exported docx,
+            # with nothing said about either.
+            #
+            # The model can reasonably know which module the student ASKED
+            # about. It cannot conclude from that that the other empty modules
+            # should stay empty. So the ask is unioned with everything that is
+            # currently reconstructable; `reconstruct_upstream` still skips
+            # COMPLETE modules, so this only ever adds missing work, never
+            # redoes finished work. `reconstruct_upstream(targets=…)` itself
+            # stays strict — import paths mean it literally.
+            if targets:
+                targets = sorted(
+                    {t for t in targets} | set(reconstructable_modules(cs)),
+                    key=lambda m: MODULES.index(m) if m in MODULES else 99,
+                )
             reconstruct_upstream(cs, targets=targets, language=lang,
                                  on_module=_save_now)
         except Exception:
