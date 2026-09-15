@@ -113,3 +113,43 @@ def test_htmt_is_not_filed_under_reliability():
     # "HTMT" blocks often mention AVE in the same heading; specific wins.
     out = parse_results_tables("HTMT và AVE\n| ATT | 0.81 |\n")
     assert "discriminant_validity" in out, list(out)
+
+
+# --- source figures ---------------------------------------------------------
+
+def test_the_students_own_screenshots_are_mapped_to_figure_kinds(sidecar):
+    """results_render prefers the screenshot over any table we can build —
+    "a SmartPLS screenshot is visibly output from the software, and a
+    supervisor reads that as evidence in a way retyped numbers are not". The
+    mechanism already existed; nothing populated it, so twelve extracted images
+    sat unreferenced while every export rendered retyped tables."""
+    from orchestrator.doctor import parse_source_figures
+    figs = parse_source_figures(sidecar)
+    assert figs["measurement_model"] == "uploads/_Result.docx.img/hinh-02.png"
+    assert figs["discriminant_validity"] == "uploads/_Result.docx.img/hinh-05.png"
+    assert figs["structural_paths"] == "uploads/_Result.docx.img/hinh-09.png"
+    assert figs["r2_q2"] == "uploads/_Result.docx.img/hinh-07.png"
+
+
+def test_a_caption_is_never_mistaken_for_a_heading(sidecar):
+    # The caption sits between the heading and its table. Reading it as the
+    # heading is what once keyed all ten tables to "[Hình N]".
+    from orchestrator.doctor import parse_source_figures
+    assert all(not v.startswith("[") for v in parse_source_figures(sidecar).values())
+
+
+def test_the_first_screenshot_of_a_split_table_wins():
+    # A wide matrix is exported as several overlapping screenshots; the table
+    # should be represented by its first page, not its continuation.
+    from orchestrator.doctor import parse_source_figures
+    raw = ("OUTER LOADINGS\n[Hình 2] (ảnh gốc: uploads/a.img/hinh-02.png)\n"
+           "| ATT_1 | 0.854 |\n"
+           "tiếp theo\n[Hình 3] (ảnh gốc: uploads/a.img/hinh-03.png)\n"
+           "| INSP_1 | 0.835 |\n")
+    assert parse_source_figures(raw)["measurement_model"] == "uploads/a.img/hinh-02.png"
+
+
+def test_a_document_with_no_images_maps_nothing():
+    from orchestrator.doctor import parse_source_figures
+    assert parse_source_figures("OUTER LOADINGS\n| ATT_1 | 0.854 |\n") == {}
+    assert parse_source_figures("") == {}

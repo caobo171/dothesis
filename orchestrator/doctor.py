@@ -226,6 +226,70 @@ def parse_results_tables(sidecar_text: str) -> dict[str, list[dict]]:
     return out
 
 
+# Canonical table name -> the `kind` results_render._figure_body looks up in
+# `results.source_figures`. Two of our tables belong to one figure kind
+# (measurement model covers loadings and reliability); collinearity has no
+# figure slot and is simply not mapped.
+_TABLE_TO_FIGURE_KIND = {
+    "outer_loadings": "measurement_model",
+    "reliability": "measurement_model",
+    "discriminant_validity": "discriminant_validity",
+    "explained_variance": "r2_q2",
+    "path_coefficients": "structural_paths",
+}
+
+# `[Hình 2] (ảnh gốc: uploads/_Result.docx.img/hinh-02.png)` — the caption the
+# .docx extractor writes above each table it pulled an image for. The path is
+# already workspace-relative, which is the form commit_slice resolves.
+_FIGURE_PATH_RE = re.compile(
+    r"^\[\s*(?:hình|hinh|figure|fig)[^\]]*\]\s*\([^:]*:\s*([^)]+\.(?:png|jpg|jpeg))\s*\)",
+    re.IGNORECASE)
+
+
+def parse_source_figures(sidecar_text: str) -> dict[str, str]:
+    """kind -> the student's own screenshot of that table.
+
+    `results_render._figure_body` prefers this image over any table we could
+    render, on purpose: a SmartPLS screenshot is visibly output from the
+    software, and a supervisor reads that as evidence in a way retyped numbers
+    are not. The whole mechanism already existed — nothing was populating it.
+
+    The mapping is in the document. The extractor writes the image caption
+    directly above the table it belongs to, so the same walk that finds a
+    table's heading finds its figure. First figure per kind wins: a wide matrix
+    split across two screenshots should be represented by its first page, not
+    silently replaced by its continuation.
+    """
+    if not (sidecar_text or "").strip():
+        return {}
+    out: dict[str, str] = {}
+    pending: list[str] = []
+    figure = ""
+    heading = ""
+    in_table = False
+    for line in sidecar_text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("|"):
+            if not in_table:
+                in_table = True
+                heading = _pick_heading(pending, previous=heading)
+                kind = _TABLE_TO_FIGURE_KIND.get(_canonical_table(heading))
+                if kind and figure and kind not in out:
+                    out[kind] = figure
+                pending, figure = [], ""
+            continue
+        in_table = False
+        m = _FIGURE_PATH_RE.match(stripped)
+        if m:
+            figure = m.group(1).strip()
+            continue          # a caption is not a heading
+        pending.append(stripped)
+        del pending[:-6]
+    return out
+
+
 def _unread_uploads(inp: DoctorInput) -> list[Finding]:
     """Files whose text was extracted and which no turn ever carried."""
     out = []
@@ -312,6 +376,40 @@ def _results_not_renderable(inp: DoctorInput) -> list[Finding]:
         payload={"module": "M4", "filename": source.filename,
                  "text": source.sidecar_text},
     )]
+
+
+def _figures_not_linked(inp: DoctorInput) -> list[Finding]:
+    """Renderable results, screenshots on disk, and nothing connecting them.
+
+    `results_render._figure_body` prefers the student's own screenshot over any
+    table we can build, and falls back silently when `source_figures` is absent
+    — so an export renders retyped tables while twelve extracted images sit
+    unreferenced in `uploads/<file>.img/`.
+
+    Separate from RESULTS_NOT_RENDERABLE because that one is gated on the block
+    being unreadable. A project whose results were already fixed would never
+    revisit them, and its figures would stay unlinked forever.
+
+    Deterministic and cheap: the caption above each table names its image.
+    """
+    cs = inp.context_store or {}
+    m4 = cs.get("m4_analysis") or {}
+    ar = m4.get("results") or m4.get("analysis_results")
+    if not isinstance(ar, dict) or ar.get("source_figures"):
+        return []
+    for u in inp.uploads:
+        figures = parse_source_figures(u.sidecar_text or "")
+        if not figures:
+            continue
+        return [Finding(
+            code="FIGURES_NOT_LINKED",
+            detail=f"Đã gắn {len(figures)} ảnh kết quả gốc từ {u.filename} "
+                   f"vào chương kết quả.",
+            repair="deterministic",
+            payload={"module": "M4", "results": {**ar, "source_figures": figures},
+                     "filename": u.filename},
+        )]
+    return []
 
 
 def _instrument_not_parsed(inp: DoctorInput) -> list[Finding]:
@@ -570,6 +668,7 @@ def diagnose(inp: DoctorInput) -> list[Finding]:
     """
     return (_results_not_in_state(inp)
             + _results_not_renderable(inp)
+            + _figures_not_linked(inp)
             + _instrument_not_parsed(inp)
             + _unread_uploads(inp)
             + _false_done(inp)

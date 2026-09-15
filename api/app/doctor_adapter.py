@@ -112,13 +112,47 @@ def _signature(f: Finding) -> str:
     return f"{f.code}:{','.join(sorted(str(p) for p in parts))}"
 
 
+def _with_resolved_figures(store, results: dict) -> dict:
+    """Turn workspace-relative figure paths into ones the exporter can open.
+
+    `results_render.localize` does a bare `os.path.isfile`, so a relative path
+    is resolved against the SERVER's working directory and silently fails —
+    the figure block returns None and the export quietly falls back to a
+    rendered table. That is why four correct screenshot paths still produced
+    "NO IMAGE".
+
+    `commit_slice` already does this resolution, including containment against
+    the project workspace and preferring the durable S3 copy, but only when the
+    write names `analysis_results`. The doctor writes the same block under
+    `results`, the other M4-owned key, so it never fired. Reusing the same
+    helper rather than repeating it: this is the one piece of state that a
+    later step OPENS, and its containment check should have exactly one
+    implementation.
+    """
+    figures = (results or {}).get("source_figures")
+    if not isinstance(figures, dict) or not figures:
+        return results
+    try:
+        from agent.tools.state_tools import _resolve_source_figures  # noqa: PLC0415
+        resolved = _resolve_source_figures(figures, getattr(store, "project_dir", None))
+    except Exception:  # noqa: BLE001 — a missing figure degrades to the table
+        logger.exception("doctor: figure resolution failed")
+        return results
+    if not resolved:
+        # Every path dropped: storing an empty map would look like "checked,
+        # none found" to the next run and stop it retrying.
+        return {k: v for k, v in results.items() if k != "source_figures"}
+    return {**results, "source_figures": resolved}
+
+
 def _commit(store, f: Finding) -> None:
     """Apply one deterministic repair. Only moves evidence the student already
     supplied into the state that is supposed to describe it — never writes
     prose, never invents a number."""
     module = f.payload.get("module")
-    if f.code == "RESULTS_NOT_IN_STATE":
-        store.commit_slice(module or "M4", {"results": f.payload["results"]},
+    if f.code in ("RESULTS_NOT_IN_STATE", "FIGURES_NOT_LINKED"):
+        store.commit_slice(module or "M4",
+                           {"results": _with_resolved_figures(store, f.payload["results"])},
                            reason=f"doctor: kết quả đọc từ {f.payload['filename']}")
         return
     if f.code == "INSTRUMENT_NOT_PARSED":
@@ -171,6 +205,21 @@ def _reparse(store, f: Finding) -> None:
         raise RuntimeError("re-extraction produced nothing")
     if not detect_family(normalize_analysis_results(block)):
         raise RuntimeError("re-extraction still not renderable")
+
+    # The student's own screenshots, which results_render prefers over any
+    # table we can build — "a SmartPLS screenshot is visibly output from the
+    # software, and a supervisor reads that as evidence in a way a table of
+    # retyped numbers is not". That whole mechanism already existed and was
+    # simply never populated, so every export fell through to rendered tables
+    # and the twelve extracted images were referenced by nothing.
+    #
+    # Deterministic: the extractor writes each image's caption directly above
+    # the table it belongs to, so the mapping is read out of the document
+    # rather than inferred.
+    from orchestrator.doctor import parse_source_figures  # noqa: PLC0415
+    figures = parse_source_figures(f.payload["text"])
+    if figures:
+        block = {**block, "source_figures": figures}
     store.commit_slice(
         f.payload.get("module") or "M4", {"results": block},
         reason=f"doctor: đọc lại kết quả từ {f.payload['filename']} để dựng bảng Chương 4")
