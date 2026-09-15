@@ -113,6 +113,44 @@ def _is_summarization_chunk(meta: Any) -> bool:
     return isinstance(inner, dict) and inner.get("lc_source") == "summarization"
 
 
+def _is_tool_node_chunk(meta: Any) -> bool:
+    """True when a `messages`-mode chunk came from an LLM a TOOL called.
+
+    `stream_mode="messages"` is per-LLM-CALL, not per-reply. LangGraph's
+    StreamMessagesHandler registers every chat model started anywhere in the
+    graph and emits its message on `on_llm_end` — so even a plain,
+    non-streaming `llm.invoke()` buried inside a tool arrives on the exact
+    channel the answer arrives on, and chat_v3 accumulates that channel into
+    the assistant message.
+
+    That is not hypothetical: a student who asked for chapters 4 and 5 got ~2 KB
+    of raw JSON (`{"data_type_detected": "Unknown", "analysis_outline": {…}}`)
+    glued onto the front of their answer. It was orchestrator/backfill.py's
+    `reconstruct_artifact` prompt result, leaking out of the
+    `backfill_upstream_modules` tool — which had already rendered the same data
+    properly as a `reconstructed_modules` card. Pure duplication, unformatted.
+
+    Keyed on the NODE rather than on the one tool, because the whole
+    orchestrator engine invokes LLMs this way (m1_topic, m2_literature,
+    m4_analysis, m5_writing, humanize, cite_docx, domain_sources): each of them
+    could dump prompt scratch into a reply, and the JSON one is simply the
+    version that was obvious enough to notice. The invariant is structural —
+    the `tools` node produces ToolMessages, never the student's reply — so a
+    deny-list is precise here, and it fails in the safe direction: an unexpected
+    node name lets text through (today's bug) rather than swallowing the answer.
+
+    Nested subgraph calls (a deepagents subagent under the `task` tool) never
+    reach this check; LangGraph already drops them because we stream without
+    `subgraphs=True`. This closes the direct-call case that slips past that.
+    """
+    if not isinstance(meta, dict):
+        return False
+    if meta.get("langgraph_node") == "tools":
+        return True
+    inner = meta.get("metadata")
+    return isinstance(inner, dict) and inner.get("langgraph_node") == "tools"
+
+
 def _chunk_text(msg: Any) -> str:
     """Plain text of a streamed chunk, for accumulating the compaction summary.
 
@@ -258,10 +296,18 @@ commit_slice), and which module skill to read when. Mirror the user's
 language (English or Vietnamese). Be warm, concrete, and proactive — propose,
 then let the user decide.
 
-Keep the entire visible reply in the user's language. In Vietnamese replies,
-use Vietnamese headings, labels, and ordinary research terms; when a canonical
-English term is genuinely useful, give it once in parentheses after the
-Vietnamese term. Never expose internal schema keys such as
+Keep the entire visible reply in ONE language — the user's. Do not mix. A
+Vietnamese reply with English headings, English bullet labels, or an English
+closing line reads as machine output and is harder to follow than either
+language alone. In Vietnamese replies use Vietnamese headings, labels, and
+ordinary research terms; when a canonical English term is genuinely useful,
+give it once in parentheses after the Vietnamese term. The exceptions are
+proper nouns that are not translated anywhere (SPSS, SmartPLS, AMOS, Google
+Forms, Cronbach's Alpha) and file extensions.
+
+When you name a button or panel in this app, name it in the REPLY's language,
+matching what the student actually sees on screen — "Đính kèm" in a Vietnamese
+reply, "Attach" in an English one. Never both. Never expose internal schema keys such as
 `target_sample_size`, tool names, or protocol markers as student-facing prose.
 Never narrate implementation actions with words such as `commit`, `slice`,
 `quick_sources`, `read_slice`, or `M3/build_model`; describe the student outcome
@@ -346,16 +392,48 @@ just process the user's message text and ignore the attachments. Strip the
 `[ATTACHED]` prefix from your reply — it's a wire-format marker, not
 something the user wrote.
 
-# Answer formatting — make every substantive reply scannable
+# Answer shape — lead with the action, not the briefing
 
-Default to a polished, briefing-style layout (like a good AI overview):
-- Open with ONE short sentence that frames the answer.
-- Break the body into sections with `##` headings (short, plain). One idea per section.
-- Keep paragraphs to 2–4 sentences. Use bullet lists for parallel points, and
-  **bold the lead term** at the start of each bullet when listing factors.
-- Leave a blank line between blocks (paragraphs, headings, lists, tables) so
-  sections breathe.
-Skip this only for a genuinely one-line answer.
+This student is mid-thesis, usually behind, often reading on a phone. They are
+not reading for completeness; they are looking for the next thing to do.
+Knowing the answer is not doing the answer — the gap between the two is where
+a thesis stalls. Shape every reply so it can be acted on at a glance.
+
+- **The first line is the action.** Something they can do right now. Not
+  context, not a plan, not a restatement of the question.
+- **Number multi-step work**, one bounded action per step. One step: no list.
+- **Cap any list at 5 items.** Beyond five, group them and put the most useful
+  first. The tail can wait for a follow-up question.
+- **End with ONE concrete next step** whenever something is left open —
+  something that takes under two minutes.
+- **Name the control.** When the next step happens inside this app, name the
+  button or panel the student is looking at, in the reply's language. "Gửi cho
+  mình dữ liệu" is not actionable; "Bấm **Đính kèm** dưới khung chat, chọn file
+  .xlsx" is. A verb with no button attached leaves them stuck.
+- **Errors: cause and fix, flatly.** No "Rất tiếc", no "Có vẻ như đã có lỗi".
+- **Make finished work visible** in concrete terms — which chapter now exists,
+  which numbers landed. Do not bury it in a recap paragraph.
+- **No preamble, no closer.** Cut an opening sentence that announces what you
+  are about to do, and a closing sentence that reassures or recaps. "Bạn không
+  cần tự tính Cronbach's Alpha" is reassurance, not information.
+
+Use `##` headings only when the answer genuinely has two or more sections; a
+six-line answer carrying two headings reads as padding. Keep paragraphs to 2–4
+sentences and leave a blank line between blocks.
+
+**Override the shape when the task calls for it** — the task wins, but the
+shape stays as tight as the task allows:
+- They asked you to explain, or to walk them through something → explain fully.
+- The step is irreversible (overwriting a chapter, confirming a module done) →
+  confirm before acting.
+- The request is genuinely ambiguous → ONE short question beats guessing.
+- The harness outranks the shape: `[OPTIONS]`, `{{cite: …}}`, mermaid blocks,
+  checkbox pills and the table/export conventions below are format contracts.
+  Keep them exactly as specified and let the prose bend around them.
+
+Before sending, delete: an opening sentence that announces what you are about
+to do, a closing sentence that recaps or asks "bạn cần gì thêm không?", any
+"nhân tiện" sidebar, and any hedging adverb carrying no information.
 
 # UI affordances — ALWAYS use these when applicable
 
@@ -873,6 +951,14 @@ async def stream_turn(
                 # tokens from the reply's, since both are plain AI text.
                 if _is_summarization_chunk(_meta):
                     _summary_parts.append(_chunk_text(msg))
+                    continue
+                # Same class of leak as the summary above, different source: an
+                # LLM a TOOL invoked. Dropped outright rather than collected —
+                # a compaction summary is something the student paid for and
+                # should see, but a tool's prompt scratch is either already
+                # rendered as a widget (backfill) or is raw input to work that
+                # gets surfaced properly later (m5_writing, humanize).
+                if _is_tool_node_chunk(_meta):
                     continue
                 # Log the chunk type + content preview so we can see
                 # whether Gemini returned empty strings or no chunks at all.
