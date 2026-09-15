@@ -307,6 +307,56 @@ def test_the_module_label_is_not_internal_jargon():
     assert "Topic Discovery" not in MODULE_SECTION_LABELS.values()
 
 
+# --- what the agent DESCRIBES is what the document IS ------------------------
+
+# A live project's stored `final_sections`, from the six-chapter era.
+_LEGACY_SIX = [
+    {"title": "Chương 1 — Giới thiệu", "prose": _pad("intro")},
+    {"title": "Chương 2 — Tổng quan tài liệu", "prose": _pad("lit")},
+    {"title": "Chương 3 — Phương pháp nghiên cứu", "prose": _pad("method")},
+    {"title": "Chương 4 — Kết quả", "prose": _pad("results")},
+    {"title": "Chương 5 — Thảo luận", "prose": _pad("discussion")},
+    {"title": "Chương 6 — Kết luận", "prose": _pad("conclusion")},
+    {"title": "Tài liệu tham khảo", "prose": "Nguyen, A. (2020)."},
+]
+
+
+def test_the_agent_reads_the_thesis_the_exporter_renders(tmp_path):
+    """`read_slice("M5")` handed the model the raw STORAGE shape, so a project
+    holding the six-chapter `final_sections` made the agent tell the student
+    their thesis had seven chapters — naming a "Chương 5 — Thảo luận" that is
+    not in the file they downloaded, while the exporter collapsed it into the
+    canonical Chapter 5. Traced from a real project (8738b987)."""
+    from agent.state import ProjectStateStore
+
+    store = ProjectStateStore(tmp_path)
+    store.commit_slice("M5", {"final_sections": _LEGACY_SIX}, "seed")
+
+    seen = store.read_slice("M5")["slices"]["final_sections"]
+    titles = [s.get("title") for s in seen]
+
+    assert "Chương 5 — Thảo luận" not in titles
+    assert not any("Chương 6" in (t or "") for t in titles)
+    # Exactly what the exporter would ship from the same slice.
+    assert titles == [s.get("title") for s in
+                      sections_from_m5_slice({"final_sections": _LEGACY_SIX})]
+    # The discussion prose is not lost — it leads the canonical Chapter 5.
+    conclusion = next(s for s in seen if s.get("chapter_name") == "conclusion")
+    assert _pad("discussion") in conclusion["prose"]
+    assert _pad("conclusion") in conclusion["prose"]
+
+
+def test_the_five_chapter_shape_is_what_the_agent_sees(tmp_path):
+    from agent.state import ProjectStateStore
+    from orchestrator.tools.m5_writing import M5_CHAPTER_ORDER
+
+    store = ProjectStateStore(tmp_path)
+    store.commit_slice("M5", {"final_sections": _LEGACY_SIX}, "seed")
+    seen = store.read_slice("M5")["slices"]["final_sections"]
+    chapters = [s["chapter_name"] for s in seen if s.get("chapter_name")]
+    assert chapters == list(M5_CHAPTER_ORDER)
+
+
 # --- the flows --------------------------------------------------------------
 
 def test_the_bibliography_closes_the_document():

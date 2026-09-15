@@ -334,6 +334,29 @@ class ProjectStateStore:
         slices = {
             k: v for k, v in state["contextStore"].items() if k in visible_keys
         }
+        # The model reads the thesis from HERE, and it used to get the raw
+        # STORAGE shape. A live project still holds `final_sections` from the
+        # six-chapter era — "Chương 5 — Thảo luận" AND "Chương 6 — Kết luận" as
+        # two separate entries — while every renderer collapses them into the
+        # one canonical Chapter 5. So the exported document had five chapters
+        # and the agent told the student it had seven, naming a Discussion
+        # chapter that is not in the file they downloaded.
+        #
+        # Resolve it the same way the exporter does: same prose, canonical
+        # identity, canonical order, legacy closing chapters merged. What the
+        # agent describes is then what the document actually is.
+        #
+        # Fail-open and lazy: a state read must never break, and m5_writing is
+        # a heavy import for a module nowhere near M5.
+        if slices.get("final_sections"):
+            try:
+                from orchestrator.tools.m5_writing import (  # noqa: PLC0415
+                    sections_from_m5_slice,
+                )
+                slices = {**slices, "final_sections": sections_from_m5_slice(
+                    {"final_sections": slices["final_sections"]})}
+            except Exception:  # noqa: BLE001 — reading must not fail on this
+                pass
         return {
             "exists": True,
             "module": module,
