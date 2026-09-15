@@ -157,6 +157,12 @@ on S3 by the time you write that sentence.
 ## Quality bars (apply to pipeline output review AND your revisions)
 
 - **Every paragraph cited** in lit review, framework, and discussion.
+- **The bibliography contains used sources, not inventory.** A verified M2 source
+  belongs in References only when an inline citation in the exported prose points
+  to it. Never use a blanket `nocite: @*` to append every available source: that
+  produces an ungrounded bibliography when a recovered/imported chapter contains
+  no citations. A citation-enabled export must preserve the inline author–year
+  citation as a clickable link to its bibliography entry.
 - **Do NOT hand-build the Chapter 4 tables.** Call
   `render_verified_sections("results_tables")` and paste the returned markdown **verbatim,
   sentinels and all** — Tables 4.1–4.3 (and the CB-SEM fit table) are rendered directly from

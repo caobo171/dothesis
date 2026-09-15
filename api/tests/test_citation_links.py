@@ -6,6 +6,7 @@ became clickable links in the export.
 """
 from orchestrator.tools.m5_writing import (
     _assign_citation_keys,
+    _cited_csl_items,
     _convert_inline_citations,
 )
 
@@ -41,6 +42,17 @@ def test_unknown_reference_left_plain():
     ly = _ly()
     # Smith isn't in the pool — leave it exactly as written, don't mangle.
     assert _convert_inline_citations("x (Smith 2099) y", ly) == "x (Smith 2099) y"
+
+
+def test_bibliography_contains_only_sources_cited_in_prose():
+    csl, ly = _assign_citation_keys(_REFS)
+    sections = [{"prose": _convert_inline_citations("text (Hilman, 2024).", ly)}]
+    assert [item["id"] for item in _cited_csl_items(csl, sections)] == ["hilman2024"]
+
+
+def test_uncited_reference_pool_does_not_become_a_bibliography():
+    csl, _ly = _assign_citation_keys(_REFS)
+    assert _cited_csl_items(csl, [{"prose": "No inline citation."}]) == []
 
 
 def test_style_link_runs_adds_blue_underline(tmp_path):

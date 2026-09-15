@@ -2788,12 +2788,21 @@ def compose_chapters(
     # Through `chapter_prose`, i.e. BOTH homes — everything the editor saves and
     # everything a module composes as it completes lives in `chapters`, which
     # this read used to miss entirely.
-    preserved = {
-        name: prose for name, prose in (chapter_prose(
-            context_store.get("m5_writing") or {}) or {}).items()
+    preserved = {}
+    for name, prose in (chapter_prose(context_store.get("m5_writing") or {}) or {}).items():
         # A "[Composition failed]" remnant is not written work; recompose it.
-        if not prose.lstrip().startswith("[")
-    }
+        if prose.lstrip().startswith("["):
+            continue
+        # Decision: recovered prose can be substantial yet contain zero source
+        # attribution. Reusing it forever made every later "rewrite/export"
+        # append a bibliography that no sentence cited. Literature synthesis
+        # and findings discussion must earn preservation with at least one
+        # citation from the verified M2 pool; otherwise the composer repairs it.
+        if name in {"lit_review", "conclusion"} and references:
+            cited, _unknown = validate_citations(prose, references)
+            if not cited:
+                continue
+        preserved[name] = prose
 
     def _one(idx_name):
         idx, name = idx_name
@@ -2985,6 +2994,20 @@ def _convert_inline_citations(prose: str, ly_to_key: dict) -> str:
         return "[" + "; ".join(keys) + "]"
 
     return re.sub(r"\(([^()]*\d{4}[^()]*)\)", _repl, prose)
+
+
+def _cited_csl_items(csl_items: list[dict], sections: list[dict]) -> list[dict]:
+    """Return only bibliography records referenced by pandoc citation syntax.
+
+    A reference pool is permission to cite a source, not evidence that the
+    prose used it. Keeping every pool entry made a recovered thesis with zero
+    inline citations look sourced by appending a detached bibliography.
+    """
+    used: set[str] = set()
+    for section in sections:
+        prose = section.get("prose", "") if isinstance(section, dict) else ""
+        used.update(re.findall(r"(?<![\w@])@([A-Za-z0-9_.:-]+)", prose or ""))
+    return [item for item in csl_items if str(item.get("id") or "") in used]
 
 
 def _populate_docx_toc(docx_path: str) -> None:
@@ -3375,21 +3398,32 @@ def _run_export_citeproc(sections: list[dict], pid: str, references: list[dict],
             "title": s.get("title", ""),
             "prose": _convert_inline_citations(s.get("prose", ""), ly_to_key),
         })
+    cited_items = _cited_csl_items(csl_items, body)
+    if not cited_items:
+        # No inline citation means there is no honest bibliography to print.
+        # Render normally instead of manufacturing one from every source that
+        # merely happens to be available in M2.
+        docx_res = export_docx.invoke({"sections": body, "project_id": pid})
+        pdf_res = compile_pdf.invoke({"sections": body, "project_id": pid})
+        return [
+            _artifact_dict("docx", pid, docx_res["s3_key"], docx_res["size_bytes"]),
+            _artifact_dict("pdf", pid, pdf_res["s3_key"], pdf_res["size_bytes"]),
+        ]
+
     # Trailing heading (in the doc's language) tells pandoc where to place the
     # generated bibliography.
     body.append({"title": _references_title(language), "prose": ""})
 
     bib_path = _scratch_dir() / f"refs-{uuid4().hex[:8]}.json"
-    bib_path.write_text(json.dumps(csl_items, ensure_ascii=False), encoding="utf-8")
+    bib_path.write_text(json.dumps(cited_items, ensure_ascii=False), encoding="utf-8")
 
     docx_name = f"thesis-{uuid4().hex[:8]}.docx"
     docx_local = _scratch_dir() / docx_name
-    # nocite:@* → citeproc prints the FULL bibliography (never an empty heading,
-    # regardless of which inline [@key]s matched). populate_toc → filled TOC.
-    # toc-title makes the TOC heading match the document language.
+    # Citeproc prints only entries actually referenced by inline [@key] markers.
+    # populate_toc → filled TOC; toc-title localizes its heading.
     toc_title = "Mục lục" if str(language).lower().startswith("vi") else "Contents"
     _fm = _title_block_frontmatter_lines(title, language, cover) + \
-        ["nocite: |", "  @*", f'toc-title: "{toc_title}"']
+        [f'toc-title: "{toc_title}"']
     frontmatter = "---\n" + "\n".join(_fm) + "\n---"
     _export_docx_via_engine(body, str(docx_local), bibliography=bib_path,
                             frontmatter=frontmatter, populate_toc=True)
