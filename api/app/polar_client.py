@@ -48,29 +48,26 @@ def _explicit_dummy(settings: Settings | None = None) -> bool:
     return settings.dothesis_payments == "dummy"
 
 
-def _product_id(package_id: str, settings: Settings) -> str:
-    """Resolve a `pricing.PACKAGES` id to the Polar product UUID.
+def _product_id(settings: Settings) -> str:
+    """The one Polar product every pack checks out against.
 
-    These were conflated: the old code passed `order.package_id` straight through
-    as Polar's `product_id`. Polar has never known what "starter_package" is — it
-    keys on a UUID it minted when the product was created — so the call could only
-    ever fail. It went unnoticed because production had no access token and sat in
-    dummy mode, where this code path is never reached.
+    There used to be a `package_id -> UUID` map here, one product per pack. It
+    was replaced because it silently made POLAR the owner of the price: the
+    checkout call named a product and no amount, so a pack cost whatever Polar's
+    product said, and repricing `pricing.PACKAGES` changed only the number on the
+    page. One product plus a per-checkout amount puts price and credits back in
+    the same file. See `create_checkout`.
 
-    Raises rather than returning None: an unmapped pack is an operator error
-    (POLAR_PRODUCT_IDS missing an entry), and the alternative is sending a
-    malformed request and reporting Polar's 422 as our 502.
+    Raises rather than returning "": an unset id is a broken deployment, and the
+    alternative is sending a malformed request and reporting Polar's 422 as our
+    502. Failing the checkout is also strictly better than the old failure mode,
+    which was charging a real card the wrong amount.
     """
-    mapping = dict(
-        pair.split("=", 1)
-        for pair in (p.strip() for p in settings.polar_product_ids.split(","))
-        if pair and "=" in pair
-    )
-    product_id = mapping.get(package_id)
+    product_id = (settings.polar_product_id or "").strip()
     if not product_id:
         raise PolarError(
-            f"no Polar product mapped for package {package_id!r} — "
-            f"add it to POLAR_PRODUCT_IDS"
+            "POLAR_PRODUCT_ID is not set — Polar checkout needs the product UUID "
+            "every pack is billed against"
         )
     return product_id
 
@@ -84,16 +81,35 @@ def create_checkout(order: "Order", *, return_url: str, cancel_url: str) -> tupl
         log.warning("polar dummy mode — order %s gets fake checkout %s", order.id, cid)
         return cid, url
 
-    product_id = _product_id(order.package_id, settings)
+    product_id = _product_id(settings)
 
     from polar_sdk import Polar  # type: ignore
     client = Polar(access_token=settings.polar_access_token, server=settings.polar_server)
     # `products`, plural, is the field the current API requires — a bare
     # `product_id` is dropped and the request 422s on "products: Field required".
-    # One entry: a checkout offering a choice of packs would let the student pick
-    # a pack other than the one the Order was priced and credited for.
+    # One entry: a checkout offering a choice would let the student pick a pack
+    # other than the one the Order was priced and credited for.
+    #
+    # `prices` overrides what that product costs, for this checkout only. Without
+    # it Polar bills the product's own configured price and `order.amount_cents`
+    # is decorative — which is exactly how the 2026-09-14 reprice ended up
+    # advertising $9 while Polar charged $24.99. The amount comes off the Order,
+    # not from `pricing.PACKAGES` directly, so what we charge is the same number
+    # we wrote down and will later reconcile against.
+    #
+    # Same shape Survify sends (fillform .../order/polar.ts), in the Python SDK's
+    # snake_case: ProductPriceFixedCreate is {amount_type, price_amount,
+    # price_currency}. Currency is USD because `Order.amount_cents` is USD cents —
+    # a VND order goes through SePay and never reaches this function.
     resp = client.checkouts.create(request={
         "products": [product_id],
+        "prices": {
+            product_id: [{
+                "amount_type": "fixed",
+                "price_amount": int(order.amount_cents),
+                "price_currency": "usd",
+            }],
+        },
         "success_url": return_url,
         "metadata": {"order_id": str(order.id), "user_id": str(order.user_id)},
     })

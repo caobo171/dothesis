@@ -37,17 +37,23 @@ class Settings(BaseSettings):
     polar_access_token: str = Field(alias="POLAR_ACCESS_TOKEN", default="")
     polar_webhook_secret: str = Field(alias="POLAR_WEBHOOK_SECRET", default="")
     polar_server: str = Field(alias="POLAR_SERVER", default="sandbox")
-    # `pricing.PACKAGES` id -> Polar product UUID, as "starter_package=uuid,...".
+    # ONE Polar product UUID, shared by every pack. Not one product per pack.
     #
-    # Config rather than a constant in pricing.py because the UUIDs are minted per
-    # Polar environment: sandbox and production issue different ids for the same
-    # pack, so hardcoding either one makes the other unusable. Empty is the correct
-    # dev value — `_is_dummy` short-circuits before any lookup.
+    # Replaced the old per-pack `POLAR_PRODUCT_IDS` map on 2026-09-15, matching
+    # how Survify does it (fillform backend/src/api/routes/order/polar.ts — one
+    # `POLAR_PRODUCT_ID`, amount supplied per checkout).
     #
-    # Deliberately does NOT carry credits or price. Polar owns the dollar amount,
-    # `pricing.PACKAGES` owns the credits, and keeping them apart means re-tuning
-    # credits is a code change with no vendor round trip.
-    polar_product_ids: str = Field(alias="POLAR_PRODUCT_IDS", default="")
+    # The map made Polar the owner of the dollar amount, because `checkouts.create`
+    # sent a product id and no amount: Polar charged whatever its product said.
+    # So the 2026-09-14 reprice moved the page to $9 while Polar kept charging
+    # $24.99, and no amount of care in `pricing.py` could have prevented that —
+    # the price simply lived somewhere else. Sending the amount per checkout makes
+    # `pricing.PACKAGES` the single owner of both halves, price AND credits, so the
+    # two can no longer drift.
+    #
+    # Still config rather than a constant: sandbox and production mint different
+    # UUIDs. Empty is the correct dev value — `_is_dummy` short-circuits first.
+    polar_product_id: str = Field(alias="POLAR_PRODUCT_ID", default="")
     dothesis_base_url: str = Field(alias="DOTHESIS_BASE_URL", default="http://localhost:3000")
     # Comma-separated providers offered to users (e.g. "polar,paypal"). SePay is
     # always added on top for UTC+7 users when configured. "dummy" forces every
