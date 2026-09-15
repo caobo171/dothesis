@@ -22,6 +22,8 @@ was computed on a third version nobody downloaded.
 These tests pin the invariant: every reader resolves the same prose, and
 `chapters` wins because it is the copy the student's own edits land in.
 """
+import pytest
+
 from orchestrator.tools.m5_writing import chapter_prose, sections_from_m5_slice
 
 
@@ -150,6 +152,124 @@ def test_every_reader_agrees_on_every_chapter():
         for name in EDITED:
             assert (got.get(name) or "").strip() == baseline[name].strip(), (
                 f"{reader.__name__} disagrees with the exporter on {name}")
+
+
+# --- the store cannot be forgotten ------------------------------------------
+
+def test_run_export_requires_the_context_store():
+    """`context_store` defaulted to None and four of the seven callers quietly
+    omitted it, so the same project exported with a cover, result tables and a
+    model figure from one button and bare from another. It took three separate
+    fixes to find them all, because a default makes an omission invisible.
+
+    Keyword-only with NO default: a new caller cannot forget it, and passing
+    None is a decision a reader can see.
+    """
+    import inspect
+
+    from orchestrator.tools.m5_writing import run_export
+
+    p = inspect.signature(run_export).parameters["context_store"]
+    assert p.default is inspect.Parameter.empty, "a default is back — omitting it is invisible again"
+    assert p.kind is inspect.Parameter.KEYWORD_ONLY, "must be keyword-only, not positional"
+
+    with pytest.raises(TypeError):
+        run_export([], "pid")
+
+
+def test_every_run_export_caller_passes_the_store():
+    """The signature only protects code that is compiled against it. This walks
+    the actual call sites, because the bug was never a wrong value — it was an
+    argument that was not there at all."""
+    import ast
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    skip = {".git", "node_modules", ".venv", "__pycache__", ".next", ".claude", "research", "tests"}
+    missing = []
+    for path in sorted(root.rglob("*.py")):
+        rel = path.relative_to(root)
+        if set(rel.parts) & skip or rel.name.startswith("test_"):
+            continue
+        try:
+            tree = ast.parse(path.read_text(errors="replace"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            name = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
+            if name != "run_export":
+                continue
+            if not any(kw.arg == "context_store" for kw in node.keywords):
+                missing.append(f"{rel}:{node.lineno}")
+    assert not missing, f"run_export called without context_store at: {missing}"
+
+
+# Files allowed to touch the raw prose keys, and why. Everything else must go
+# through `chapter_prose` / `sections_from_m5_slice`: reading a home directly is
+# how seven readers ended up with three different answers about which copy of a
+# chapter is the thesis.
+_RAW_PROSE_ALLOWED = {
+    # The resolver itself, and the renderer built on it.
+    "orchestrator/tools/m5_writing.py": "owns the precedence rule",
+    # WRITERS. Both homes are still written; that is the drift the resolver
+    # absorbs on read. A writer has to name the key it writes.
+    "api/app/routers/m5_editor.py": "editor CRUD + the heal-on-read backfill",
+    "api/app/agent_state.py": "_auto_compose_module writes chapters",
+    "agent/tools/state_tools.py": "commit-edge guard on the incoming writes payload",
+    "agent/tools/backfill_tool.py": "writes final_sections",
+    "api/app/import_work.py": "writes the student's preserved chapters",
+    "quality/model_eval.py": "seeds a fixture slice",
+    # DECLARATIONS that name the key rather than read prose through it.
+    "agent/state.py": "SLICE_OWNERSHIP names the M5-owned key",
+    "agent/roadmap.py": "names the artifact backing M5's writing step",
+    "agent/artifact_routing.py": "WriteTarget routing table",
+    # The documented flat->nested adapter: `chapters` is not an M5-owned key, so
+    # the flat contextStore never carries it (that is the bug it exists to fix).
+    "agent/tools/writing.py": "_m5_slice_for_export",
+    # m5_prose's fail-open fallback when the resolver cannot be imported.
+    "agent/coherence.py": "m5_prose fallback",
+}
+
+# `chapters` is an overloaded word: in a partner order it is the requested
+# chapter LIST, and in the engine it is a word-count target. Those are not prose.
+_NOT_PROSE_RECEIVERS = ("params", "meta", "body", "word_targets", "ctx")
+
+
+def test_nothing_new_reads_the_prose_homes_directly():
+    """A new reader that reaches for `final_sections` or an m5 `chapters` dict
+    is how this bug class comes back. `final_sections` is unambiguous — it only
+    ever means prose. `chapters` is filtered by receiver, because a partner
+    order's chapter list shares the name."""
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    skip = {".git", "node_modules", ".venv", "__pycache__", ".next", ".claude",
+            "research", "tests", "node_modules"}
+    final = re.compile(r"""["']final_sections["']""")
+    chapters = re.compile(r"""(\w+)\s*\.\s*get\(\s*["']chapters["']""")
+
+    offenders = []
+    for path in sorted(root.rglob("*.py")):
+        rel = path.relative_to(root)
+        if set(rel.parts) & skip or rel.name.startswith("test_"):
+            continue
+        if rel.as_posix() in _RAW_PROSE_ALLOWED:
+            continue
+        for i, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+            code = line.split("#", 1)[0]
+            if final.search(code):
+                offenders.append(f"{rel}:{i} (final_sections)")
+            m = chapters.search(code)
+            if m and m.group(1) not in _NOT_PROSE_RECEIVERS:
+                offenders.append(f"{rel}:{i} (chapters off {m.group(1)!r})")
+    assert not offenders, (
+        "read the thesis through m5_writing.chapter_prose (or "
+        "sections_from_m5_slice) instead of a storage key — or add the file to "
+        f"_RAW_PROSE_ALLOWED with a reason:\n  " + "\n  ".join(offenders))
 
 
 # --- one module write-up composer -------------------------------------------

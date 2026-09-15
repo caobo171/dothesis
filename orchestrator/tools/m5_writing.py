@@ -3134,26 +3134,35 @@ def _artifact_dict(kind: str, pid: str, s3_key: str, size_bytes: int) -> dict:
     }
 
 
-def run_export(sections: list[dict], project_id: str,
+def run_export(sections: list[dict], project_id: str, *,
+               context_store: dict | None,
                references: list[dict] | None = None,
-               language: str = "en", title: str | None = None,
-               context_store: dict | None = None) -> list[dict]:
+               language: str = "en", title: str | None = None) -> list[dict]:
     """Render docx + pdf, upload to S3, return ContextPanel-ready artifacts.
 
-    The single export entrypoint shared by the auto-export hook, the
-    /m5/export route, and the agent's export_docx tool.
+    The single export entrypoint, shared by all seven callers: the agent's
+    export_docx tool (full, chapter- and module-scoped), the /m5/export editor
+    route, the M5 auto-export hook, the partner report and compose_and_export.
+
+    `context_store` (the NESTED store) is REQUIRED and keyword-only, with no
+    default. It is what builds the cover page (`cover_fields`), weaves the
+    verified result tables into Chapter 4 (`ensure_rendered`) and puts the
+    research-model figure into Chapter 3 (`_ensure_export_model_diagrams`), and
+    it is where the thesis title is read from when the caller does not name one.
+
+    It used to default to None, and four of the seven callers quietly omitted
+    it — so the same project produced a document with a cover, tables and a
+    figure from one button and a bare one from another. Three separate fixes
+    were needed to find them all. A default is what made omitting it invisible,
+    so there isn't one: passing `None` is now a decision a reader can see, not
+    an oversight. Everything downstream still treats None as "no safety nets",
+    fail-open, exactly as before.
 
     When `references` is provided, renders via the citeproc path so inline
     "(Author, Year)" citations become clickable links to the auto-generated
     References section. `language` keeps the generated References heading
     consistent with the (possibly Vietnamese) document. Falls back to the plain
     render on any citeproc failure so export never breaks.
-
-    When `context_store` (the nested store) is provided, `ensure_rendered` weaves
-    any missing verified-state tables/cleaning/limitations blocks into the
-    chapters before rendering — the export-time safety net for sections that
-    reached export without passing through compose_chapter. `None` → byte-
-    identical to the prior behavior. Fail-open.
     """
     pid = str(project_id)
     if context_store is not None:
