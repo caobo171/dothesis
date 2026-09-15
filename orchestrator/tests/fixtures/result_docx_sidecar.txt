@@ -1,0 +1,228 @@
+Trong bài này ta sẽ coi các biến Age, Edu, Inc là các biến có thang đo linkert 4 để đo đạc ảnh hưởng tới DEC. 
+Mô hình chính sẽ không bao gồm các biến Age, Edu, Gender.
+Ta sẽ tách biệt kiểm định tác động chúng đến Dec bằng boostraping bới Age, Edu và MGA với Gender.
+Biến Inc có tác động điều tiết nên được coi là biến quan trọng để đánh giá mô hình cấu trúc,
+Mô hình chính như sau:
+[Hình 1] (ảnh gốc: uploads/_Result.docx.img/hinh-01.png)
+The image is a path model (Structural Equation Modeling) diagram containing several latent constructs (represented as blue circles) and their indicators (represented as yellow rectangles), along with path coefficients and $R^2$ values.
+
+**Constructs and Indicators:**
+*   **ATT (Attitude):** Measured by indicators ATT_1 (0.854), ATT_2 (0.815), ATT_3 (0.806), ATT_4 (0.803), and ATT_5 (0.817).
+*   **EXP (Experience):** Measured by indicators EXP_1 (0.812), EXP_2 (0.838), EXP_3 (0.766), EXP_4 (0.799), and EXP_5 (0.787).
+*   **ECONN:** Measured by indicators ECONN_1 (0.832), ECONN_2 (0.855), ECONN_3 (0.853), ECONN_4 (0.802), and ECONN_5 (0.853).
+*   **INSP:** Measured by indicators INSP_1 (0.835), INSP_2 (0.838), INSP_3 (0.829), INSP_4 (0.836), and INSP_5 (0.827).
+*   **SIMI:** Measured by indicators SIMI_1 (0.812), SIMI_2 (0.831), SIMI_3 (0.828), SIMI_4 (0.841), and SIMI_5 (0.835).
+*   **TRUST:** Measured by indicators TRUST_1 (0.792), TRUST_2 (0.823), TRUST_3 (0.824), TRUST_4 (0.768), and TRUST_5 (0.801).
+*   **INT (Intention):** Measured by indicators INT_1 (0.844), INT_2 (0.853), INT_3 (0.863), INT_4 (0.848), and INT_5 (0.852). Has an $R^2$ value of $0.527$.
+*   **INC:** Measured by indicator INC (1.000).
+*   **INCxINT:** Moderating effect construct.
+*   **DEC (Decision):** Measured by indicators DEC_1 (0.860), DEC_2 (0.861), DEC_3 (0.859), DEC_4 (0.853), and DEC_5 (0.860). Has an $R^2$ value of $0.575$.
+
+**Structural Paths and Coefficients:**
+*   **EXP -> INT:** path coefficient = $0.269$
+*   **ATT -> INT:** path coefficient = $0.257$
+*   **ECONN -> INT:** path coefficient = $0.382$
+*   **INSP -> INT:** path coefficient = $0.288$
+*   **TRUST -> INT:** path coefficient = $0.318$ (connected via TRUST indicators pointing to INT indirectly, or directly from trust)
+*   **SIMI -> INT:** path coefficient = $0.260$ (from SIMI construct pointing to INT)
+*   **INT -> DEC:** path coefficient = $0.606$
+*   **INC -> DEC:** path coefficient = $0.193$
+*   **INCxINT -> DEC:** path coefficient = $0.446$
+OUTER LOADINGS 
+Outer Loading > 0.7,→ Đạt yêu cầu về độ tin cậy của thang đo (Hair et al., 2017).
+[Hình 2] (ảnh gốc: uploads/_Result.docx.img/hinh-02.png)
+| Matrix | ATT | DEC | ECONN | EXP | INC | INCxINT | INSP | INT | SIMI | TRUST |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| ATT_1 | 0.854 | | | | | | | | | |
+| ATT_2 | 0.815 | | | | | | | | | |
+| ATT_3 | 0.806 | | | | | | | | | |
+| ATT_4 | 0.803 | | | | | | | | | |
+| ATT_5 | 0.817 | | | | | | | | | |
+| DEC_1 | | 0.860 | | | | | | | | |
+| DEC_2 | | 0.861 | | | | | | | | |
+| DEC_3 | | 0.859 | | | | | | | | |
+| DEC_4 | | 0.853 | | | | | | | | |
+| DEC_5 | | 0.860 | | | | | | | | |
+| ECONN_1 | | | 0.832 | | | | | | | |
+| ECONN_2 | | | 0.855 | | | | | | | |
+| ECONN_3 | | | 0.853 | | | | | | | |
+| ECONN_4 | | | 0.802 | | | | | | | |
+| ECONN_5 | | | 0.853 | | | | | | | |
+| EXP_1 | | | | 0.812 | | | | | | |
+| EXP_2 | | | | 0.838 | | | | | | |
+| EXP_3 | | | | 0.766 | | | | | | |
+| EXP_4 | | | | 0.799 | | | | | | |
+| EXP_5 | | | | 0.787 | | | | | | |
+| INC | | | | | 1.000 | | | | | |
+| INSP_1 | | | | | | | 0.835 | | | |
+[Hình 3] (ảnh gốc: uploads/_Result.docx.img/hinh-03.png)
+| | | | | | | |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| INSP_1 | | | | | 0.835 | |
+| INSP_2 | | | | | 0.838 | |
+| INSP_3 | | | | | 0.829 | |
+| INSP_4 | | | | | 0.836 | |
+| INSP_5 | | | | | 0.827 | |
+| INT * INC | | | 0.936 | | | |
+| INT_1 | | | | | | 0.844 |
+| INT_2 | | | | | | 0.853 |
+| INT_3 | | | | | | 0.863 |
+| INT_4 | | | | | | 0.848 |
+| INT_5 | | | | | | 0.852 |
+| SIMI_1 | | | | | | | 0.812 |
+| SIMI_2 | | | | | | | 0.831 |
+| SIMI_3 | | | | | | | 0.828 |
+| SIMI_4 | | | | | | | 0.841 |
+| SIMI_5 | | | | | | | 0.835 |
+| TRUST_1 | | | | | | | | 0.792 |
+| TRUST_2 | | | | | | | | 0.823 |
+| TRUST_3 | | | | | | | | 0.824 |
+| TRUST_4 | | | | | | | | 0.768 |
+| TRUST_5 | | | | | | | | 0.801 |
+Kết quả kiểm định Outer Loadings
+Kết quả outer loadings cho thấy tất cả các biến quan sát đều có hệ số tải lớn hơn 0.7, đạt yêu cầu về độ tin cậy hội tụ (convergent validity),
+Tất cả các biến quan sát đều có giá trị outer loading > 0.7, chứng tỏ:
+Các biến quan sát giải thích tốt cho nhân tố tiềm ẩn của mình.
+Không có biến nào cần loại bỏ.
+Mô hình đạt giá trị hội tụ tốt, thể hiện sự tương quan cao giữa biến quan sát và nhân tố đo lường.
+ĐỘ TIN CẬY
+Tất cả các thang đo đều đạt yêu cầu theo Hair et al. (2017), cụ thể:
+1. Cronbach’s Alpha (≥ 0.7)
+→ Thang đo có độ tin cậy tốt, không có thang đo nào dưới chuẩn.
+2. Composite Reliability – CR (≥ 0.7)
+→ Độ tin cậy tổng hợp rất tốt, thang đo ổn định và nhất quán.
+3. rho_A (≥ 0.7)
+→ Tiếp tục khẳng định độ tin cậy của cấu trúc.
+4. AVE – Average Variance Extracted (≥ 0.5)
+→ Thang đo đạt giá trị hội tụ (các biến quan sát giải thích tốt biến tiềm ẩn). 
+[Hình 4] (ảnh gốc: uploads/_Result.docx.img/hinh-04.png)
+| Matrix | Cronbach's ... | rho_A | Composite ... | Average Va... |
+| :--- | :--- | :--- | :--- | :--- |
+| ATT | 0.878 | 0.894 | 0.911 | 0.671 |
+| DEC | 0.911 | 0.912 | 0.933 | 0.737 |
+| ECONN | 0.895 | 0.899 | 0.923 | 0.704 |
+| EXP | 0.860 | 0.864 | 0.899 | 0.641 |
+| INC | 1.000 | 1.000 | 1.000 | 1.000 |
+| INCxINT | 1.000 | 1.000 | 1.000 | 1.000 |
+| INSP | 0.890 | 0.896 | 0.919 | 0.694 |
+| INT | 0.905 | 0.906 | 0.930 | 0.725 |
+| SIMI | 0.887 | 0.899 | 0.917 | 0.688 |
+| TRUST | 0.862 | 0.869 | 0.900 | 0.643 |
+Tất cả các thang đo trong mô hình đều đạt yêu cầu về độ tin cậy và giá trị hội tụ, thể hiện:
+Mức độ nhất quán nội bộ cao giữa các biến quan sát.
+Sự phù hợp của thang đo trong việc đo lường các khái niệm tiềm ẩn.
+→ Các thang đo đủ điều kiện để tiếp tục phân tích giá trị phân biệt (Discriminant Validity) ở bước kế tiếp.
+GIÁ TRỊ PHÂN BIỆT HTMT 
+Dựa vào bảng kết quả theo tiêu chí Fornell–Larcker Criterion và HTMT (Heterotrait–Monotrait Ratio):
+Giá trị căn bậc hai của AVE (đường chéo in đậm) của từng biến đều lớn hơn hệ số tương quan giữa biến đó với các biến còn lại.
+→ Điều này cho thấy mỗi khái niệm tiềm ẩn có khả năng giải thích tốt hơn cho các biến quan sát của chính nó so với các khái niệm khác.
+Các hệ số HTMT đều nhỏ hơn 0.85, nằm trong giới hạn chấp nhận được theo khuyến nghị của Henseler et al. (2015). → Điều này khẳng định các khái niệm trong mô hình có tính phân biệt rõ ràng, không bị trùng lắp về nội dung đo lường.
+[Hình 5] (ảnh gốc: uploads/_Result.docx.img/hinh-05.png)
+| | ATT | DEC | ECONN | EXP | INC | INCxINT | INSP | INT | SIMI | TRUST |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ATT | | | | | | | | | | |
+| DEC | 0.266 | | | | | | | | | |
+| ECONN | 0.099 | 0.184 | | | | | | | | |
+| EXP | 0.084 | 0.158 | 0.055 | | | | | | | |
+| INC | 0.063 | 0.160 | 0.031 | 0.104 | | | | | | |
+| INCxINT | 0.118 | 0.453 | 0.046 | 0.040 | 0.000 | | | | | |
+| INSP | 0.041 | 0.267 | 0.086 | 0.126 | 0.031 | 0.049 | | | | |
+| INT | 0.303 | 0.661 | 0.385 | 0.324 | 0.069 | 0.037 | 0.386 | | | |
+| SIMI | 0.094 | 0.199 | 0.058 | 0.122 | 0.081 | 0.078 | 0.074 | 0.246 | | |
+| TRUST | 0.048 | 0.134 | 0.127 | 0.070 | 0.110 | 0.127 | 0.056 | 0.301 | 0.055 | |
+ĐA CỘNG TUYẾN 
+Tất cả các biến trong mô hình đều có VIF < 5, cho thấy không xảy ra hiện tượng đa cộng tuyến giữa các biến độc lập.
+Điều này đồng nghĩa với việc các biến độc lập trong mô hình không có mối tương quan tuyến tính cao với nhau và có thể được sử dụng trong phân tích mô hình cấu trúc.
+[Hình 6] (ảnh gốc: uploads/_Result.docx.img/hinh-06.png)
+| | ATT | DEC | ECONN | EXP | INC | INCxINT | INSP | INT | SIMI | TRUST |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ATT | | | | | | | | 1.017 | | |
+| DEC | | | | | | | | | | |
+| ECONN | | | | | | | | 1.025 | | |
+| EXP | | | | | | | | 1.024 | | |
+| INC | | 1.004 | | | | | | | | |
+| INCxINT | | 1.000 | | | | | | | | |
+| INSP | | | | | | | | 1.019 | | |
+| INT | | 1.005 | | | | | | | | |
+| SIMI | | | | | | | | 1.016 | | |
+| TRUST | | | | | | | | 1.017 | | |
+F SQUARE 
+Các mối quan hệ có f² từ xấp xỉ 0.1 đến dưới 0.9 cho thấy mức tác động trung bình đến mạnh.
+Nhìn chung, các biến độc lập đều có ảnh hưởng đáng kể đến biến phụ thuộc trong mô hình.
+Kết luận:
+Kết quả cho thấy các biến trong mô hình đều có đóng góp ý nghĩa vào khả năng giải thích của mô hình cấu trúc.
+[Hình 7] (ảnh gốc: uploads/_Result.docx.img/hinh-07.png)
+| | ATT | DEC | ECONN | EXP | INC | INCxINT | INSP | INT | SIMI | TRUST |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **ATT** | | | | | | | | 0.137 | | |
+| **DEC** | | | | | | | | | | |
+| **ECONN** | | | | | | | | 0.301 | | |
+| **EXP** | | | | | | | | 0.149 | | |
+| **INC** | | 0.088 | | | | | | | | |
+| **INCxINT** | | 0.410 | | | | | | | | |
+| **INSP** | | | | | | | | 0.172 | | |
+| **INT** | | 0.858 | | | | | | | | |
+| **SIMI** | | | | | | | | 0.140 | | |
+| **TRUST** | | | | | | | | 0.210 | | |
+R SQUARE 
+DEC, INT có R2 >0.5 cho thấy mức độ giải thích tót,các biến độc lập có khả năng giải thích đáng kể cho biến phụ thuộc. Các biến giải thích được 57,5% và 52,7% độ biến thiên của biến phụ thuộc
+[Hình 8] (ảnh gốc: uploads/_Result.docx.img/hinh-08.png)
+| Matrix | R Square | R Square A... |
+| :--- | :--- | :--- |
+| DEC | 0.575 | 0.570 |
+| INT | 0.527 | 0.518 |
+BOOSTRAPPING
+Tất cả các P-value 0 < 0.05, nghĩa là toàn bộ các giả thuyết đều được chấp nhận.
+Các mối quan hệ đều mang dấu dương, chứng tỏ các yếu tố này tác động cùng chiều.
+[Hình 9] (ảnh gốc: uploads/_Result.docx.img/hinh-09.png)
+| | Original Sa... | Sample Me... | Standard D... | T Statistics (... | P Values |
+| --- | --- | --- | --- | --- | --- |
+| ATT -> INT | 0.257 | 0.258 | 0.034 | 7.490 | 0.000 |
+| ECONN -> INT | 0.382 | 0.383 | 0.037 | 10.441 | 0.000 |
+| EXP -> INT | 0.269 | 0.270 | 0.039 | 6.892 | 0.000 |
+| INC -> DEC | 0.193 | 0.194 | 0.041 | 4.705 | 0.000 |
+| INCxINT -> DEC | 0.446 | 0.448 | 0.050 | 8.927 | 0.000 |
+| INSP -> INT | 0.288 | 0.286 | 0.038 | 7.594 | 0.000 |
+| INT -> DEC | 0.606 | 0.606 | 0.045 | 13.367 | 0.000 |
+| SIMI -> INT | 0.260 | 0.259 | 0.035 | 7.330 | 0.000 |
+| TRUST -> INT | 0.318 | 0.319 | 0.035 | 8.994 | 0.000 |
+Đánh giá tác động của các nhóm nhân khẩu
+1 Age, Edu 
+Chuẩn nhất là làm Anova trên SPSS, còn trên SmartPLS có thể làm như sau
+[Hình 10] (ảnh gốc: uploads/_Result.docx.img/hinh-10.png)
+This image is a path/model diagram containing the following constructs, indicators, and paths:
+
+* **Constructs (blue circles):**
+  * **Age** (connected to indicator **Age** via an arrow with the number -0.000)
+  * **Edu** (connected to indicator **Edu** via an arrow with the number -0.000)
+  * **DEC** (connected to five indicators on the right with the following outer weights/loadings/t-values):
+    * DEC_1: 58.782
+    * DEC_2: 56.213
+    * DEC_3: 51.592
+    * DEC_4: 51.038
+    * DEC_5: 50.495
+
+* **Paths between constructs:**
+  * An arrow from **Age** to **DEC** with the path coefficient / t-value: **9.048**
+  * An arrow from **Edu** to **DEC** with the path coefficient / t-value: **4.990**
+[Hình 11] (ảnh gốc: uploads/_Result.docx.img/hinh-11.png)
+| Original Sa... | Sample Me... | Standard D... | T Statistics (... | P Values |
+| --- | --- | --- | --- | --- |
+| 0.435 | 0.434 | 0.048 | 9.048 | 0.000 |
+| 0.220 | 0.221 | 0.044 | 4.990 | 0.000 |
+Kết quả boostraping cho thấy Age, Edu có tác động dương có ý nghĩa đến Dec
+2 Gender
+Chuẩn nhất là kiểm định T-test trên spss. với Smartpls Ta làm MGA với mô hình cấu trúc
+[Hình 12] (ảnh gốc: uploads/_Result.docx.img/hinh-12.png)
+| Path Coefficients | Path Coeffic... | p-Value ori... | p-Value ne... |
+| :--- | :---: | :---: | :---: |
+| ATT -> INT | -0.004 | 0.525 | 0.950 |
+| ECONN -> INT | -0.083 | 0.868 | 0.263 |
+| EXP -> INT | -0.050 | 0.737 | 0.526 |
+| INC -> DEC | -0.071 | 0.784 | 0.432 |
+| INCxINT -> DEC | 0.012 | 0.450 | 0.900 |
+| INSP -> INT | -0.061 | 0.787 | 0.426 |
+| INT -> DEC | -0.059 | 0.739 | 0.522 |
+| SIMI -> INT | -0.055 | 0.784 | 0.433 |
+| TRUST -> INT | 0.059 | 0.217 | 0.434 |
+Kết quả cho thấy các nhóm giới tính không có khác biệt có ý nghĩa thống kê ảnh hưởng tới mô hình. Không có tác động đến các biến, giả thuyết.
