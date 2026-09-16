@@ -220,12 +220,13 @@ def translate_markdown(chapter_name: str, target_lang: str, markdown: str) -> st
 def build_citation_text(reference: dict) -> str:
     """Derive canonical (Author, Year) text from an M2 reference record.
 
-    M2 papers carry at least 'author' and 'year' under normal circumstances.
-    Falls back to ('Anonymous', 'n.d.') on either missing piece so that
-    malformed-but-present references still produce a usable citation rather
-    than blowing up the API call.
+    Current M2 papers carry `authors`; older imported records can carry a
+    singular `author`. Reuse M5's export/validator label helper so an editor
+    insertion cannot become `(Anonymous, year)` and then fail its own citation
+    validation merely because it came from the current source shape.
     """
-    author = str(reference.get("author") or "").strip() or "Anonymous"
+    from orchestrator.tools.m5_writing import _ref_author_label  # noqa: PLC0415
+    author = _ref_author_label(reference)
     year_val = reference.get("year")
     year = str(year_val).strip() if year_val not in (None, "") else "n.d."
     return f"({author}, {year})"

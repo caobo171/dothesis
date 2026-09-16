@@ -123,10 +123,11 @@ def _ref_citation_key(ref: dict) -> tuple[str, str]:
     shared by the prompt formatter and the citation validators so they agree."""
     return (_ref_author_label(ref), str(ref.get("year", "")).strip())
 
-# SP6.5: separate regex used by validate_citations_plain for the autosave PATCH
-# endpoint. Broader than _CITE_PATTERN — accepts any author token and n.d. years
-# so the inline autosave validator is tolerant of varied LLM citation styles.
-_CITATION_REGEX = re.compile(r"\(([^)]+?),\s*(\d{4}|n\.d\.)\)")
+# Editor/review validation scans every parenthetical then splits its semicolon
+# groups. A multi-citation is several independent claims of provenance, not one
+# author string ending at the final year.
+_PARENTHETICAL_REGEX = re.compile(r"\(([^()\n]+)\)")
+_CITATION_PART_REGEX = re.compile(r"^(.*?)(?:,\s*|\s+)(\d{4}[a-z]?|n\.d\.)$")
 
 
 def validate_citations_plain(prose: str, reference_pool: list[dict]) -> dict:
@@ -139,21 +140,44 @@ def validate_citations_plain(prose: str, reference_pool: list[dict]) -> dict:
     """
     # Decision: strip whitespace from pool keys so "Smith " and "Smith" match,
     # and convert year to string to align with the regex group (always a string).
-    pool_keys = {_ref_citation_key(r) for r in reference_pool}
+    pool_identities: dict[tuple[str, str], set[str]] = {}
+    for index, ref in enumerate(reference_pool):
+        key = _ref_citation_key(ref)
+        doi = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", str(ref.get("doi") or "").strip(), flags=re.I).lower()
+        title = re.sub(r"[^\w]+", "", str(ref.get("title") or "").casefold())
+        # Repeated provider/import rows for one DOI or title are one source;
+        # author/year-only legacy rows cannot prove that equivalence, so keep
+        # each distinct and surface an ambiguity rather than guessing.
+        identity = (f"doi:{doi}" if doi else
+                    (f"title:{title}|{_ref_author_label(ref).casefold()}|{str(ref.get('year') or '').strip()}"
+                     if title else f"legacy:{index}"))
+        pool_identities.setdefault(key, set()).add(identity)
     seen: dict[str, bool] = {}    # ordered dedupe via insertion-order dict
     citations_used: list[str] = []
     uncited: list[str] = []
-    for match in _CITATION_REGEX.finditer(prose):
-        author, year = match.group(1).strip(), match.group(2).strip()
-        text = f"({author}, {year})"
-        if text in seen:
-            continue
-        seen[text] = True
-        if (author, year) in pool_keys:
-            citations_used.append(text)
-        else:
-            uncited.append(text)
-    return {"citations_used": citations_used, "uncited_warnings": uncited}
+    ambiguous: list[str] = []
+    for parenthetical in _PARENTHETICAL_REGEX.finditer(prose):
+        for part in parenthetical.group(1).split(";"):
+            match = _CITATION_PART_REGEX.match(part.strip())
+            if not match:
+                continue
+            author, year = match.group(1).strip(), match.group(2).strip()
+            text = f"({author}, {year})"
+            if text in seen:
+                continue
+            seen[text] = True
+            identities = pool_identities.get((author, year), set())
+            if len(identities) == 1:
+                citations_used.append(text)
+            elif len(identities) > 1:
+                ambiguous.append(text)
+            else:
+                uncited.append(text)
+    return {
+        "citations_used": citations_used,
+        "uncited_warnings": uncited,
+        "ambiguous_warnings": ambiguous,
+    }
 
 
 def validate_citations(prose: str, references: list[dict]) -> tuple[list[str], list[str]]:
@@ -1544,6 +1568,158 @@ def _safe_format_kwargs(context_slice: dict) -> dict:
     return out
 
 
+def _has_result_payload(value) -> bool:
+    """Whether an M4 result value has content worth preferring over a legacy key."""
+    if isinstance(value, str):
+        return bool(value.strip())
+    return value not in (None, {}, [])
+
+
+def _canonical_results_for_composition(context_slice: dict):
+    """Return M4's canonical result artifact before retired convenience fields.
+
+    `results` and `interpretations` were early composer-only fields. A project
+    can retain them after importing a real report into `analysis_results`; using
+    the former then gives Chapter 4 an obsolete, partial view of the study.
+    """
+    canonical = context_slice.get("analysis_results")
+    return canonical if _has_result_payload(canonical) else context_slice.get("results")
+
+
+_HYPOTHESIS_ID_RE = re.compile(r"\bH\s*[-:]?\s*(\d{1,2})\b", re.I)
+
+
+def _hypothesis_id(value) -> str | None:
+    if isinstance(value, dict):
+        for key in ("id", "hypothesis", "label", "statement", "text"):
+            found = _hypothesis_id(value.get(key))
+            if found:
+                return found
+        return None
+    match = _HYPOTHESIS_ID_RE.search(str(value or ""))
+    return f"H{int(match.group(1))}" if match else None
+
+
+def _canonical_hypothesis_register(hypotheses, conceptual_model, constructs=None) -> tuple[str, str]:
+    """Render the M3 IDs, paths, and labels that Chapters 4–5 must preserve."""
+    cm = conceptual_model if isinstance(conceptual_model, dict) else {}
+    labels: dict[str, str] = {}
+    for node in cm.get("nodes") or []:
+        if isinstance(node, dict):
+            code = str(node.get("id") or node.get("code") or "").strip()
+            label = str(node.get("label") or node.get("name") or code).strip()
+            if code:
+                labels[code] = label
+    # M3's current flat schema stores the same authoritative labels in
+    # `constructs`; imported projects need not have a graph to be grounded.
+    for construct in constructs or []:
+        if isinstance(construct, dict):
+            code = str(construct.get("id") or construct.get("code") or "").strip()
+            label = str(construct.get("label") or construct.get("name") or code).strip()
+            if code:
+                labels[code] = label
+
+    def label_for(code) -> str:
+        raw = str(code or "").strip()
+        label = labels.get(raw, raw)
+        return f"{raw} ({label})" if raw and label and label != raw else (label or raw)
+
+    def path_for(path) -> str:
+        parts = re.split(r"\s*(?:→|->)\s*", str(path or ""), maxsplit=1)
+        return " → ".join(label_for(part) for part in parts) if len(parts) == 2 else str(path or "").strip()
+
+    entries: dict[str, dict] = {}
+    for item in hypotheses or []:
+        hid = _hypothesis_id(item)
+        if not hid:
+            continue
+        statement = (item if isinstance(item, str) else
+                     item.get("statement") or item.get("text") or item.get("hypothesis") or "")
+        entries[hid] = {"statement": str(statement).strip(),
+                        "edge": path_for(item.get("path")) if isinstance(item, dict) else None}
+    for edge in cm.get("edges") or []:
+        if not isinstance(edge, dict):
+            continue
+        hid = _hypothesis_id(edge.get("id")) or _hypothesis_id(edge.get("hypothesis"))
+        if not hid:
+            continue
+        entry = entries.setdefault(hid, {"statement": "", "edge": None})
+        source, target = edge.get("source"), edge.get("target")
+        if source and target and not entry["edge"]:
+            entry["edge"] = f"{label_for(source)} → {label_for(target)}"
+        if not entry["statement"] and edge.get("hypothesis"):
+            entry["statement"] = str(edge["hypothesis"]).strip()
+
+    def order(item: tuple[str, dict]) -> int:
+        return int(item[0][1:])
+
+    lines = []
+    for hid, entry in sorted(entries.items(), key=order):
+        pieces = [hid]
+        if entry["edge"]:
+            pieces.append(f"canonical path: {entry['edge']}")
+        if entry["statement"]:
+            pieces.append(f"M3 statement: {entry['statement']}")
+        lines.append("; ".join(pieces))
+    construct_lines = [f"{code}: {label}" for code, label in labels.items()]
+    return ("\n".join(lines) or "(no canonical hypotheses supplied)",
+            "\n".join(construct_lines) or "(no construct labels supplied)")
+
+
+def _display_p_values(value):
+    """Copy a result payload for prompt display, using conventional rounded-p text."""
+    if isinstance(value, dict):
+        out = {}
+        for key, child in value.items():
+            normalized = str(key).lower().replace("_", "")
+            if normalized in {"p", "pvalue", "sig", "significance"}:
+                text = str(child).strip().replace(",", ".")
+                # Only a reported, three-decimal all-zero string is the usual
+                # rounded-output convention. Numeric zero / `0.0` can carry a
+                # different provenance and must remain untouched.
+                out[key] = "<0.001" if isinstance(child, str) and re.fullmatch(r"0\.0{3,}", text) else child
+            else:
+                out[key] = _display_p_values(child)
+        return out
+    if isinstance(value, list):
+        return [_display_p_values(child) for child in value]
+    return value
+
+
+class CompositionGroundingError(RuntimeError):
+    """Generated prose still makes a definite claim unsupported by M3/M4 state."""
+
+    def __init__(self, findings: list[dict]):
+        self.findings = findings
+        super().__init__("composition_grounding_failed")
+
+
+def _generated_grounding_findings(chapters, context_slice: dict) -> list[dict]:
+    """Ask the shared M5 validator only for writer-repairable findings."""
+    from agent.coherence import validate_m5_sections  # noqa: PLC0415
+    checked = validate_m5_sections(chapters, context_slice)
+    findings = checked.get("findings", []) if isinstance(checked, dict) else []
+    return [finding for finding in findings if isinstance(finding, dict) and
+            (finding.get("severity") == "hard" or
+             finding.get("check") == "coherence.unsupported_diagnostic_claim")]
+
+
+def _grounding_retry_prompt(base_prompt: str, prose: str, findings: list[dict]) -> str:
+    """One bounded repair turn with the exact state-grounded failure details."""
+    return (
+        f"{base_prompt}\n\n"
+        "## Required grounding repair\n"
+        "Rewrite the draft below. Keep only diagnostic pass statements backed by the "
+        "canonical results and preserve the supplied hypothesis IDs, paths, and construct labels. "
+        "Do not state that an unavailable metric passed. For every numeric or decision finding, "
+        "use the exact canonical value and decision in the supplied context; do not round, infer, "
+        "or substitute a nearby path.\n"
+        f"Findings (authoritative):\n{json.dumps(findings, ensure_ascii=False, default=str)}\n\n"
+        f"Draft to repair:\n{prose}\n\n"
+        "Output ONLY the corrected chapter prose."
+    )
+
+
 # Matches ONLY `{valid_python_identifier}` — leaves `{N+1}`, `{"json": 1}`, and
 # any other stray braces in a prompt template untouched.
 _PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
@@ -2225,10 +2401,9 @@ def chapter_prose(m5_slice: dict | None) -> dict[str, str]:
       as it completes (the continuous-writing pivot).
     - ``final_sections`` — the snapshot the conversational export leaves behind.
 
-    Both get written, by different halves of the system, with nothing syncing
-    them: ``chapters`` is absent from ``SLICE_OWNERSHIP["M5"]``, so the agent's
-    flat contextStore cannot carry it and the agent writes ``final_sections``
-    instead. On the live database 11 of the 15 projects holding any prose carry
+    Both get written by different halves of the system. Recovery now commits
+    ``chapters`` through ordinary M5 ownership; conversational drafts may still
+    write ``final_sections``. On the live database 11 of the 15 projects holding any prose carry
     both shapes, and in every one of them EVERY chapter differs between the two
     copies.
 
@@ -2703,8 +2878,13 @@ def compose_context_slice(context_store: dict) -> dict:
     m4 = context_store.get("m4_analysis") or {}
 
     slice_: dict = {**m1, **m2, **m3, **m4}
-    # `results` is the engine's key for M4's output; the templates render it.
-    slice_.setdefault("results", m4.get("analysis_results"))
+    # `results` / `interpretations` are retired composer fields. A populated
+    # `analysis_results` is the student's canonical report and must overwrite
+    # them, rather than letting a partial legacy run erase H1–H9 from prompts.
+    canonical_results = _canonical_results_for_composition(m4)
+    if _has_result_payload(canonical_results):
+        slice_["results"] = canonical_results
+    slice_.pop("interpretations", None)
 
     methodology = m3.get("methodology") if isinstance(m3.get("methodology"), dict) else {}
     if not str(slice_.get("paradigm") or "").strip():
@@ -2730,6 +2910,7 @@ def compose_chapters(
     progress: Callable[[int, str, str, str], None] | None = None,
     title_overrides: dict[str, str] | None = None,
     with_references_section: bool = False,
+    force_recompose: bool = False,
 ) -> list[dict]:
     """Compose thesis chapters from a nested context_store → [{chapter_name, title, prose}].
 
@@ -2753,6 +2934,8 @@ def compose_chapters(
     - `with_references_section` — append a bibliography built from the M2
       sources. The full-thesis callers want it; a chapter subset going through
       run_export's citeproc path gets one generated there instead.
+    - `force_recompose` — discard preserved prose for the explicitly requested
+      chapters. Reserved for repair/rewrite flows where reuse is the defect.
 
     Keeping them apart is how they drifted: the two fed the same
     orchestrator/prompts/m5/*.md templates different `research_gaps` and
@@ -2791,7 +2974,7 @@ def compose_chapters(
     preserved = {}
     for name, prose in (chapter_prose(context_store.get("m5_writing") or {}) or {}).items():
         # A "[Composition failed]" remnant is not written work; recompose it.
-        if prose.lstrip().startswith("["):
+        if prose.lstrip().startswith("[") or (force_recompose and name in requested):
             continue
         # Decision: recovered prose can be substantial yet contain zero source
         # attribution. Reusing it forever made every later "rewrite/export"
@@ -2823,6 +3006,10 @@ def compose_chapters(
                 "language": language,
             })
             prose = (draft or {}).get("prose") or ""
+        except CompositionGroundingError:
+            # Grounding is an actionable generation failure, never a cue to
+            # substitute a generic section that hides the original finding.
+            raise
         except Exception:
             logger.exception("compose_chapters: compose_chapter failed for %s", name)
             prose = ""
@@ -2864,6 +3051,14 @@ def compose_chapters(
                            if preserved_sources.get(name) else {})}
                        for name in names if (proses.get(name) or "").strip()]
 
+    # Validate the assembled document too: preserved student/imported chapters
+    # are never rewritten here, but an explicit unsupported diagnostic claim
+    # must surface before export rather than being silently carried forward.
+    assembled_findings = _generated_grounding_findings(
+        {section["chapter_name"]: section["prose"] for section in out}, context_slice)
+    if assembled_findings:
+        raise CompositionGroundingError(assembled_findings)
+
     if with_references_section:
         # A bibliography built from the M2 sources, with clickable DOI/URL
         # links. Without it the document has inline "(Author, Year)" citations
@@ -2875,7 +3070,8 @@ def compose_chapters(
 
 
 def compose_all_sections(context_store: dict,
-                         chapters: list[str] | None = None) -> list[dict]:
+                         chapters: list[str] | None = None,
+                         force_recompose: bool = False) -> list[dict]:
     """Compose a full thesis (or an explicit chapter subset) with its bibliography.
 
     The chat / auto-mode entry point into `compose_chapters`: language and
@@ -2883,7 +3079,8 @@ def compose_all_sections(context_store: dict,
     named function because four call sites and their tests use this shape.
     """
     return compose_chapters(context_store, chapters=chapters,
-                            with_references_section=True)
+                            with_references_section=True,
+                            force_recompose=force_recompose)
 
 
 def compose_module_chapters(context_store: dict, module: str) -> dict:
@@ -3707,7 +3904,7 @@ def _weave_verified_blocks(chapter_name: str, prose: str, context_slice: dict,
     from orchestrator.tools.results_render import (  # noqa: PLC0415
         render_cleaning_section, render_limitations, render_results_tables, weave)
     cs = context_slice if isinstance(context_slice, dict) else {}
-    ar = cs.get("results") or cs.get("analysis_results")
+    ar = _canonical_results_for_composition(cs)
     blocks = []
     if chapter_name == "results":
         # host_prose so the rendered captions continue the chapter's own table
@@ -3727,6 +3924,21 @@ def _weave_verified_blocks(chapter_name: str, prose: str, context_slice: dict,
     return weave(prose, blocks, drop_llm_tables=(chapter_name == "results"))
 
 
+def _finalize_generated_prose(chapter_name: str, prose: str, references: list[dict],
+                              context_slice: dict, language: str, localized_cm=None) -> tuple[str, list[str], list[str]]:
+    """Apply the same post-processing before each generated-prose validation."""
+    cited_in_pool, uncited = validate_citations(prose, references)
+    prose = sanitize_prose(_strip_uncited_citations(prose, references))
+    if chapter_name == "methodology":
+        prose = _ensure_model_diagram(prose, localized_cm, language)
+    try:
+        prose = _weave_verified_blocks(chapter_name, prose, context_slice, language)
+    except Exception:
+        logger.debug("compose_chapter: verified-block weave skipped for %s", chapter_name,
+                     exc_info=True)
+    return prose, cited_in_pool, uncited
+
+
 @tool
 def compose_chapter(
     chapter_name: str, paradigm: str, context_slice: dict,
@@ -3742,6 +3954,16 @@ def compose_chapter(
     prompt_template = (_PROMPT_DIR / f"{chapter_name}.md").read_text(encoding="utf-8")
     refs_block = _format_references_for_prompt(references)
     safe_kwargs = _safe_format_kwargs(context_slice)
+    canonical_results = _canonical_results_for_composition(context_slice)
+    # Decision: prompt chapters from the canonical M4 report. `results` and
+    # `interpretations` are legacy conveniences and can describe an older run.
+    safe_kwargs["results"] = json.dumps(_display_p_values(canonical_results), ensure_ascii=False, default=str) \
+        if isinstance(canonical_results, (dict, list)) else str(canonical_results or "")
+    register, construct_labels = _canonical_hypothesis_register(
+        context_slice.get("hypotheses"), context_slice.get("conceptual_model"),
+        context_slice.get("constructs"))
+    safe_kwargs["canonical_hypothesis_register"] = register
+    safe_kwargs["construct_labels"] = construct_labels
     safe_kwargs.setdefault("paradigm", paradigm)
     safe_kwargs.setdefault("language", language)
     safe_kwargs.setdefault("citation_style", citation_style)
@@ -3756,7 +3978,7 @@ def compose_chapter(
         "themes", "interview_guide", "purposive_criteria",
         "sampling_strategy", "target_sample_size", "mixed_design_type",
         "data_type_detected", "results", "qual_codes", "qual_themes",
-        "custom_analyses",
+        "custom_analyses", "canonical_hypothesis_register", "construct_labels",
         "language", "citation_style", "references_list",
     )
     for k in expected_keys:
@@ -3799,35 +4021,23 @@ def compose_chapter(
         logger.warning("compose_chapter LLM call failed for %s: %s", chapter_name, e)
         prose = f"# {chapter_name.title()}\n\n[Composition failed — please retry]"
 
-    # Strip any citation the LLM invented that isn't in the reference pool, so
-    # hallucinated "(Anon, 2011)" never reaches the rendered document. The
-    # warning stays as RETURNED metadata (uncited_warnings) for QA/logging — it
-    # must NOT be appended into the prose, which gets rendered verbatim.
-    cited_in_pool, uncited = validate_citations(prose, references)
-    # ALWAYS run the pool-based stripper (not only when the narrow validator
-    # flagged something): it removes every parenthetical citation not backed by
-    # the reference pool — the authoritative cleaner for hallucinated cites.
-    prose = _strip_uncited_citations(prose, references)
-    # Sanitize here so EVERY caller (auto-mode graph, chat agent, partner) ships
-    # normalized prose from one place instead of each surface re-cleaning.
-    prose = sanitize_prose(prose)
-    # Methodology must SHOW the research model. If the LLM didn't draw one,
-    # inject a diagram built from the structured conceptual_model so the figure
-    # ships regardless of the model's diagramming habits.
-    if chapter_name == "methodology":
-        prose = _ensure_model_diagram(
-            prose, localized_cm, safe_kwargs.get("language", "vi"))
-    # Renderer over verified state (vision §3.6): splice the Chapter 4 tables /
-    # cleaning paragraph / limitations bullets — rendered VERBATIM from the
-    # persisted analysis_results — into the LLM's prose at its [[DT:kind]] tokens
-    # (or appended if it omitted them). The numbers ship from the renderer, not
-    # the model. Fail-open: any renderer hiccup → compose exactly as before.
-    try:
-        prose = _weave_verified_blocks(chapter_name, prose, context_slice,
-                                       safe_kwargs.get("language", "en"))
-    except Exception:
-        logger.debug("compose_chapter: verified-block weave skipped for %s", chapter_name,
-                     exc_info=True)
+    prose, cited_in_pool, uncited = _finalize_generated_prose(
+        chapter_name, prose, references, context_slice, safe_kwargs.get("language", "en"), localized_cm)
+    repair_findings = _generated_grounding_findings({chapter_name: prose}, context_slice)
+    if repair_findings:
+        # One retry is enough to correct a prompt-following lapse; looping would
+        # hide a persistent state/prose disagreement behind more model calls.
+        try:
+            repaired = text_of(_get_llm().invoke(_grounding_retry_prompt(prompt, prose, repair_findings))).strip()
+        except Exception as exc:
+            raise CompositionGroundingError(repair_findings) from exc
+        if not repaired or _is_stub_prose(repaired):
+            raise CompositionGroundingError(repair_findings)
+        prose, cited_in_pool, uncited = _finalize_generated_prose(
+            chapter_name, repaired, references, context_slice, safe_kwargs.get("language", "en"), localized_cm)
+        repair_findings = _generated_grounding_findings({chapter_name: prose}, context_slice)
+        if repair_findings:
+            raise CompositionGroundingError(repair_findings)
     return {
         "name": chapter_name,
         "prose": prose,
@@ -3853,6 +4063,14 @@ def rewrite_chapter(
     prompt_template = (_PROMPT_DIR / f"{chapter_name}.md").read_text(encoding="utf-8")
     refs_block = _format_references_for_prompt(references)
     safe_kwargs = _safe_format_kwargs(context_slice)
+    canonical_results = _canonical_results_for_composition(context_slice)
+    safe_kwargs["results"] = json.dumps(_display_p_values(canonical_results), ensure_ascii=False, default=str) \
+        if isinstance(canonical_results, (dict, list)) else str(canonical_results or "")
+    register, construct_labels = _canonical_hypothesis_register(
+        context_slice.get("hypotheses"), context_slice.get("conceptual_model"),
+        context_slice.get("constructs"))
+    safe_kwargs["canonical_hypothesis_register"] = register
+    safe_kwargs["construct_labels"] = construct_labels
     safe_kwargs.setdefault("paradigm", context_slice.get("paradigm", "quantitative"))
     safe_kwargs.setdefault("language", language)
     safe_kwargs.setdefault("citation_style", "apa7")
@@ -3865,7 +4083,7 @@ def rewrite_chapter(
         "themes", "interview_guide", "purposive_criteria",
         "sampling_strategy", "target_sample_size", "mixed_design_type",
         "data_type_detected", "results", "qual_codes", "qual_themes",
-        "custom_analyses",
+        "custom_analyses", "canonical_hypothesis_register", "construct_labels",
         "language", "citation_style", "references_list",
     )
     for k in expected_keys:
@@ -3887,15 +4105,21 @@ def rewrite_chapter(
         logger.warning("rewrite_chapter LLM call failed for %s: %s", chapter_name, e)
         prose = current_prose  # unchanged on failure
 
-    # Strip any citation the LLM invented that isn't in the reference pool, so
-    # hallucinated "(Anon, 2011)" never reaches the rendered document. The
-    # warning stays as RETURNED metadata (uncited_warnings) for QA/logging — it
-    # must NOT be appended into the prose, which gets rendered verbatim.
-    cited_in_pool, uncited = validate_citations(prose, references)
-    # ALWAYS run the pool-based stripper (not only when the narrow validator
-    # flagged something): it removes every parenthetical citation not backed by
-    # the reference pool — the authoritative cleaner for hallucinated cites.
-    prose = _strip_uncited_citations(prose, references)
+    prose, cited_in_pool, uncited = _finalize_generated_prose(
+        chapter_name, prose, references, context_slice, language)
+    repair_findings = _generated_grounding_findings({chapter_name: prose}, context_slice)
+    if repair_findings:
+        try:
+            repaired = text_of(_get_llm().invoke(_grounding_retry_prompt(base_prompt, prose, repair_findings))).strip()
+        except Exception as exc:
+            raise CompositionGroundingError(repair_findings) from exc
+        if not repaired or _is_stub_prose(repaired):
+            raise CompositionGroundingError(repair_findings)
+        prose, cited_in_pool, uncited = _finalize_generated_prose(
+            chapter_name, repaired, references, context_slice, language)
+        repair_findings = _generated_grounding_findings({chapter_name: prose}, context_slice)
+        if repair_findings:
+            raise CompositionGroundingError(repair_findings)
     return {
         "name": chapter_name,
         "prose": prose,

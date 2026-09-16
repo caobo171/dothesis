@@ -252,7 +252,7 @@ def _recompose(store, f: Finding) -> None:
     if not chapters:
         return
     cs = store.load_full_context_store() or {}
-    composed = compose_all_sections(cs, chapters=chapters) or []
+    composed = compose_all_sections(cs, chapters=chapters, force_recompose=True) or []
 
     kept = [s for s in composed
             if (s.get("chapter_name") or "") in chapters
@@ -260,18 +260,16 @@ def _recompose(store, f: Finding) -> None:
     if not kept:
         raise RuntimeError("recompose produced nothing usable")
 
-    # Merge into final_sections by chapter_name: the chapters NOT being rewritten
-    # are the student's own work and must survive untouched.
-    existing = ((cs.get("m5_writing") or {}).get("final_sections") or [])
-    by_name = {(s.get("chapter_name") or ""): s for s in existing if isinstance(s, dict)}
+    # Commit into `chapters`, the resolver's canonical home. Writing the same
+    # prose only to final_sections looks successful but is immediately hidden
+    # by the unchanged chapters copy, so the next export and the honesty
+    # fingerprint both see zero change.
+    existing = dict((cs.get("m5_writing") or {}).get("chapters") or {})
     for s in kept:
-        by_name[s.get("chapter_name") or ""] = s
-    from orchestrator.tools.m5_writing import M5_CHAPTER_ORDER  # noqa: PLC0415
-    order = list(M5_CHAPTER_ORDER)
-    merged = sorted(by_name.values(),
-                    key=lambda s: order.index(s.get("chapter_name"))
-                    if s.get("chapter_name") in order else 99)
-    store.commit_slice("M5", {"final_sections": merged},
+        name = s.get("chapter_name") or ""
+        previous = existing.get(name) if isinstance(existing.get(name), dict) else {}
+        existing[name] = {**previous, **s, "name": name}
+    store.commit_slice("M5", {"chapters": existing},
                        reason="doctor: viết lại các chương chưa đạt")
 
 

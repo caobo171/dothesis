@@ -317,88 +317,45 @@ def _search_topic_of(context_store) -> str:
     return str(m1.get("research_title") or "").strip()
 
 
-def _m2_real_sources(context_store) -> list[dict]:
-    """A bounded REAL literature search to ground the M2 candidate — the deep
-    scout (OpenAlex/Crossref/Semantic Scholar) plus the domain supplement
-    (Europe PMC for medical, ERIC for education). Returns [] on any
-    failure/timeout/no-topic; the caller then keeps the LLM candidate. Read-side
-    only (no commit here). Same no-`with` executor discipline as research_scout:
-    shutdown(wait=False) so a runaway scout thread never blocks the report."""
+def _m2_real_sources(context_store, report: dict | None = None) -> list[dict]:
+    """Discover grounded sources with the same bounded collector used by chat.
+
+    Return candidates only; persistence still belongs to the caller's normal
+    commit boundary. A failed provider must not resurrect model-recalled papers.
+    """
+    from orchestrator.tools.literature_discovery import discover_literature
+    from orchestrator.tools.domain_sources import dedup_sources
     m1 = getattr(context_store, "m1_topic", None) or {}
+    m2 = getattr(context_store, "m2_literature", None) or {}
+    m3 = getattr(context_store, "m3_design", None) or {}
     topic = str(m1.get("research_title") or "").strip()
     if not topic:
-        return []  # M1 not seeded/reconstructed yet — nothing to search on
-    rqs = [str(q) for q in (m1.get("research_questions") or [])]
-
-    import concurrent.futures as _fut
-    from orchestrator.tools.domain_sources import (
-        classify_domain, dedup_sources, domain_supplement, search_query_en)
-
-    # Search in ENGLISH. Crossref / OpenAlex / Semantic Scholar are English
-    # catalogs and our students write Vietnamese titles, so the raw title
-    # matches next to nothing — search_query_en's own docstring says exactly
-    # this, but it was only ever applied to the domain supplement below while
-    # the main scout kept getting the untranslated title. On a real thesis
-    # ("Ảnh hưởng của ... KOLs trên TikTok ...") that was the difference between
-    # one incidental hit and a usable set.
-    #
-    # Degrades to the raw topic on failure (it is self-bounded and returns the
-    # topic unchanged), so this can only add.
-    query = search_query_en(topic, rqs) or topic
-    # Send the query ALONE. The research questions used to be appended as a
-    # "Research questions:\n- ..." block, which pastes Vietnamese prose onto an
-    # English keyword query and poisons it: measured on a real topic, the clean
-    # query returned 7 sources in 10s and the same query with the block
-    # appended returned 3 in 44s — half the results for four times the wait.
-    #
-    # Nothing is lost by dropping it: search_query_en already takes `rqs` and
-    # folds them into the keywords it produces. The block was giving the search
-    # the questions a second time, in the wrong language, as free text.
-    composed = query
-
-    citations = None
-    ex = _fut.ThreadPoolExecutor(max_workers=1)
+        return []
+    existing = dedup_sources((m2.get("literature_sources") or []) + (m2.get("citation_list") or []))
+    concepts = [json.dumps(m3[key], ensure_ascii=False)[:2500]
+                for key in ("conceptual_model", "hypotheses", "methodology") if m3.get(key)]
     try:
-        from orchestrator.tools.m2_literature import scout_citations
-        # Grounding here was silently DEAD before this. At the engine's
-        # defaults the deep planner emitted 249 queries for one thesis title,
-        # each allowed 90s, batched with rate-limit pauses — it could never
-        # finish inside the deadline below, so the future timed out, the except
-        # swallowed it, and every real DOI already found was discarded. On by
-        # default, two minutes of the student's import wall-clock, always [].
-        #
-        # deep=False finishes (~35s) and returns real, DOI-bearing sources, but
-        # only a handful: the three hand-rolled variants are a much weaker plan
-        # than the deep one. Measured on a live project, deep found several
-        # relevant papers before being cut off; shallow finds ~1.
-        #
-        # So this is the honest floor, not the ceiling. Bounding the deep plan
-        # was tried and does NOT work — min_sources_deep does not size the
-        # planner's query count, and deep=True still overran at 12. Getting
-        # good M2 grounding needs the search moved OFF the request path into a
-        # background job, where it can take the ten minutes it actually wants.
-        citations = ex.submit(scout_citations.func, composed, min_n=10,
-                              deep=False).result(
-            timeout=int(os.getenv("DOTHESIS_SCOUT_TIMEOUT_S", "120")))
+        result = discover_literature(
+            topic, research_questions=[str(q) for q in (m1.get("research_questions") or [])],
+            concepts=concepts, existing_sources=existing, min_sources=24,
+            budget_s=float(os.getenv("DOTHESIS_SCOUT_TIMEOUT_S", "120")),
+        )
     except Exception:
-        logger.exception("backfill: M2 deep scout failed/timed out — keeping LLM candidate")
-    finally:
-        ex.shutdown(wait=False, cancel_futures=True)
+        logger.exception("backfill: literature discovery failed")
+        result = {"sources": [], "count": 0, "target": 24, "shortfall": 24,
+                  "complete": False, "warnings": ["Không tìm được nguồn mới; giữ nguyên tài liệu đã có."]}
+    if report is not None:
+        report.update({k: v for k, v in result.items() if k not in ("sources", "unverified_candidates")})
+        report["unverified_count"] = len(result.get("unverified_candidates") or [])
+    return [paper for paper in result.get("sources", []) if paper.get("verified") is True]
 
-    sources = [{
-        "title": c.get("title"), "authors": c.get("authors"), "year": c.get("year"),
-        "venue": c.get("source") or c.get("venue"),  # scout emits `source`
-        "doi": c.get("doi"), "url": c.get("url"),
-        "verified": bool(c.get("doi")),
-    } for c in (citations or []) if (c.get("title") or "").strip()]
 
-    domain = classify_domain(m1.get("field"), topic, rqs)
-    if domain != "general":
-        # Europe PMC / ERIC are English indexes — reuse the query translated
-        # above rather than paying for a second identical LLM call.
-        # Base first so a paper found by both keeps its validated deep-scout row.
-        sources = dedup_sources(sources + domain_supplement(query, domain))
-    return dedup_sources(sources)
+def _grounded_library(existing: dict, found: list[dict]) -> list[dict]:
+    from orchestrator.tools.domain_sources import dedup_sources
+    # Existing user/imported records survive; generated candidate references do
+    # not enter this merge. Both early and late grounding use the same rule.
+    return dedup_sources((existing.get("literature_sources") or []) +
+                         (existing.get("citation_list") or []) + found)
 
 
 def _report_progress(cb, done: int, total: int, module: str | None) -> None:
@@ -542,7 +499,7 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
     # document a student submits under their own name.
     #
     # It costs a bounded search (_m2_real_sources: hard timeout, returns [] on
-    # any failure and the LLM candidate stands). Set
+    # any failure and existing documented sources survive). Set
     # DOTHESIS_BACKFILL_GROUND_M2=0 to go back to LLM-only.
     if ground_m2 is None:
         _env = os.getenv("DOTHESIS_BACKFILL_GROUND_M2", "").strip().lower()
@@ -571,46 +528,21 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
         candidate = reconstruct_artifact(artifact, cs, llm=llm, language=language)
         if not candidate:
             continue
-        if module == "M2" and ground_m2 and _search_topic_of(cs):
-            m2_search_attempted = True
-            # Replace the LLM-recalled sources with real, DOI-bearing ones. Both
-            # keys carry the same normalized dicts: literature_sources is what the
-            # report reads (agent SLICE_OWNERSHIP["M2"]); citation_list is what
-            # dod_literature counts. Empty search → leave the LLM candidate as-is.
-            #
-            # Only when a topic already exists. This walk runs BOTTOM-UP, so on
-            # the dominant real case — a finished thesis that imports as M4
-            # analysis text and nothing else — M1 has not been reconstructed
-            # yet when we get here, and the search has no title to search on.
-            # It is grounded after the walk instead (see below).
-            real = _m2_real_sources(cs)
-            if real:
-                candidate["literature_sources"] = real
-                candidate["citation_list"] = real
-        if module == "M2":
-            # Mirror sources into the citation list when only one side is
-            # filled. dod_literature counts `citation_list`, but the grounded
-            # search that fills it is env-gated and OFF by default, so the LLM
-            # candidate routinely arrived with real `literature_sources` and an
-            # empty `citation_list`. M2 then sat in_progress behind a key
-            # nothing was ever going to fill, while M3/M4/M5 read done — a
-            # student cannot have a finished analysis and an unfinished
-            # literature step, and the two keys are the same normalized dicts
-            # (see above). Never overwrites a citation list that already exists.
-            #
-            # Deliberately ONE direction. Mirroring citations BACK into
-            # literature_sources was tried and reverted: that key means sources
-            # a real search verified, the LLM candidate is unverified recall,
-            # and copying one into the other both launders the distinction and
-            # defeats the ungated late grounding below, which exists precisely
-            # to overwrite recalled sources with real ones.
-            #
-            # The contradiction this was meant to solve — M2 `done` on
-            # citation_list while the export refused for want of
-            # literature_sources — is fixed on the READER side instead, in
-            # m5_writing.m2_references.
-            if not candidate.get("citation_list") and candidate.get("literature_sources"):
-                candidate["citation_list"] = candidate["literature_sources"]
+        source_discovery = {}
+        grounded_sources = None
+        if module == "M2" and ground_m2:
+            existing_m2 = get_module_slice(cs, "M2") or {}
+            real = []
+            if _search_topic_of(cs):
+                m2_search_attempted = True
+                real = _m2_real_sources(cs, source_discovery)
+            # Never keep recalled references on failed/no-topic discovery. The
+            # bottom-up walk can ground them later once M1 has been recovered.
+            grounded_sources = _grounded_library(existing_m2, real)
+            candidate["literature_sources"] = grounded_sources
+            candidate["citation_list"] = grounded_sources
+        elif module == "M2" and not candidate.get("citation_list") and candidate.get("literature_sources"):
+            candidate["citation_list"] = candidate["literature_sources"]
         rationale = candidate.pop("_rationale", None)
         # Completing a partial module must never overwrite it. What is already
         # in the slice is the student's actual work (the imported results, a
@@ -620,6 +552,11 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
             candidate = {**candidate,
                          **{k: v for k, v in existing.items()
                             if v not in (None, "", [], {})}}
+        if grounded_sources is not None:
+            # The generic existing-wins merge must not shrink new discovery back
+            # to the original six references.
+            candidate["literature_sources"] = grounded_sources
+            candidate["citation_list"] = grounded_sources
         # Grade the MERGED slice — that's what gets persisted, so grading the
         # bare candidate would report gaps the student had already filled.
         result = _gate_for(artifact)(candidate)
@@ -628,6 +565,8 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
             "rationale": rationale,
             "ready_to_confirm": result.done, "review": result.gaps,
         }
+        if source_discovery:
+            entry["source_discovery"] = source_discovery
         out.append(entry)
         # Hand it over NOW, not at the end. This is the difference between a
         # cancelled import keeping its finished modules and losing all of them.
@@ -656,11 +595,15 @@ def reconstruct_upstream(context_store, targets: list[str] | None = None,
         # grounding — gating on them would let a fabricated bibliography block
         # the real search that was meant to overwrite it.
         if m2_entry is not None:
-            real = _m2_real_sources(cs)
+            source_discovery = {}
+            real = _m2_real_sources(cs, source_discovery)
+            if source_discovery:
+                m2_entry["source_discovery"] = source_discovery
             if real:
                 cand = m2_entry["candidate"]
-                cand["literature_sources"] = real
-                cand["citation_list"] = real
+                merged = _grounded_library(cand, real)
+                cand["literature_sources"] = merged
+                cand["citation_list"] = merged
                 # Re-grade: the slice changed, so the gaps reported with it must
                 # be recomputed or the widget keeps saying "citation_list is
                 # empty" over a list that is no longer empty.

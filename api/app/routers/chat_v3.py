@@ -14,6 +14,8 @@ and call tools in real time (the PDF session's trust-building beat).
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
 import re
 import uuid
 from dataclasses import dataclass
@@ -89,6 +91,7 @@ _TOOL_LABEL = {
     "research_scout": "Searching for relevant research…",
     "parse_reference": "Reading a reference…",
     "export_docx": "Building your Word document…",
+    "rewrite_thesis": "Writing and checking complete replacement chapters…",
 }
 
 
@@ -276,48 +279,43 @@ def _save_state_directive(
 
 
 def _tool_succeeded(preview: str) -> bool:
-    return not re.search(r'(^|["{\s])error["\s:]', preview or "", re.I)
+    try:
+        result = json.loads(preview)
+    except (ValueError, TypeError):
+        return bool(preview) and not re.search(r'(^|["{\s])error["\s:]', preview, re.I)
+    return isinstance(result, dict) and not result.get("error") and result.get("ok") is not False
 
 
 def _commit_slice_succeeded(tool_results: list[tuple[str, str]]) -> bool:
-    return any(
-        name == "commit_slice" and _tool_succeeded(preview)
-        for name, preview in tool_results
-    )
+    for name, preview in tool_results:
+        if name == "commit_slice" and _tool_succeeded(preview):
+            return True
+        if name in {"rewrite_thesis", "export_docx"}:
+            try:
+                if json.loads(preview).get("persisted") is True:
+                    return True
+            except (ValueError, TypeError, AttributeError):
+                pass
+    return False
 
 
-def _honest_assistant_reply(
-    full: str,
-    tool_results: list[tuple[str, str]],
-    user_text: str,
-) -> str:
-    """Replace false 'saved' claims when commit_slice did not succeed."""
-    if not full or not _SAVED_CLAIM_RE.search(full):
-        return full
-    if _commit_slice_succeeded(tool_results):
+def _honest_assistant_reply(full: str, tool_results: list[tuple[str, str]], user_text: str) -> str:
+    """Distinguish persisted drafts from exported files without inventing retries."""
+    if not full or not _SAVED_CLAIM_RE.search(full) or _commit_slice_succeeded(tool_results):
         return full
     vi = bool(_VIETNAMESE_RE.search(user_text or full))
-    attempted = any(name == "commit_slice" for name, _ in tool_results)
-    if attempted:
-        return (
-            "## Chưa lưu được vào dự án\n\n"
-            "Mình đã thử ghi vào Workspace nhưng lệnh lưu bị từ chối. "
-            "Vui lòng gửi lại — mình sẽ `commit_slice` M3 với `instrument.items` "
-            "đầy đủ trong cùng lượt."
-            if vi else
-            "I tried to save to the project but the commit was rejected. "
-            "Please ask again — I'll commit M3 `instrument.items` in the same turn."
-        )
-    return (
-        "## Chưa lưu được vào dự án\n\n"
-        "Nội dung **chưa được ghi** vào Workspace — lần này mình mới trả lời trong chat. "
-        "Hãy gửi: **\"Commit bộ câu hỏi vào M3 ngay (instrument.items)\"** "
-        "để mình lưu thật vào panel bên phải."
-        if vi else
-        "Nothing was written to the Workspace — that reply was chat-only. "
-        'Ask: **"Commit the questionnaire to M3 now (instrument.items)"** '
-        "so it appears in the right-hand panel."
-    )
+    exported = any(name == "export_docx" and _tool_succeeded(preview)
+                   for name, preview in tool_results)
+    # Decision: a valid artifact must not become a fictitious M3 save failure.
+    if exported:
+        return ("Đã tạo file từ nội dung hiện có. Bạn có thể tải tài liệu từ thẻ tải xuống. "
+                "Chưa xác nhận có nội dung mới được lưu vào bản thảo."
+                if vi else "Created files from the existing content; use the download card. "
+                "No newly saved draft content was confirmed.")
+    return ("Chưa lưu được thay đổi vào dự án. Lượt này chưa có xác nhận lưu thành công; "
+            "không thể coi nội dung vừa đề xuất là bản đã lưu."
+            if vi else "The changes were not confirmed as saved to the project. "
+            "The proposed content must not be treated as a saved draft.")
 
 
 # "đã viết lại", "được viết lại", "đã bổ sung trích dẫn", "rewrote", "recomposed".
@@ -332,66 +330,64 @@ _REWROTE_CLAIM_RE = re.compile(
 )
 
 
-def chapter_fingerprint(store) -> dict[str, int]:
-    """Length of every chapter's prose, read through the one resolver.
-
-    Cheap enough to take twice a turn, and length alone is sufficient: a real
-    recompose of a 42,000-character literature review does not land on exactly
-    the same count.
-    """
+def chapter_fingerprint(store) -> dict[str, str]:
+    """Content hashes detect same-length edits as well as unchanged exports."""
     try:
-        from orchestrator.tools.m5_writing import chapter_prose  # noqa: PLC0415
+        from orchestrator.tools.m5_writing import chapter_prose
         cs = store.load_full_context_store() or {}
-        return {k: len(v or "") for k, v in chapter_prose(cs.get("m5_writing") or {}).items()}
-    except Exception:  # noqa: BLE001 — never fail a turn over a diagnostic
+        return {k: hashlib.sha256((v or "").encode()).hexdigest()
+                for k, v in chapter_prose(cs.get("m5_writing") or {}).items()}
+    except Exception:
         logger.exception("chapter_fingerprint failed")
         return {}
 
 
-def _honest_rewrite_reply(full: str, before: dict[str, int], after: dict[str, int],
-                          user_text: str) -> str:
-    """Replace a "I rewrote your chapters" claim when no chapter changed.
-
-    The agent narrated five chapters it had rewritten — M3 reconstructed,
-    Chapters 1 and 2 rewritten with citations, Chapter 3 written in full,
-    Chapter 4 given numbered tables. Nothing had changed: intro 19,071,
-    lit_review 42,258, methodology 955, results 11,197, conclusion 8,864 — byte
-    identical to three turns earlier, across ~700 credits.
-
-    It is not lying on purpose. `agent/tools/writing.py` REUSES any chapter that
-    already has non-stub prose unless `force=True`, so the compose call returns
-    the old text and reports success, and the agent reports what it asked for
-    rather than what it got. A student cannot tell the difference — that is what
-    makes it worth catching here rather than in a prompt.
-
-    Length-only, and deliberately conservative: it fires solely when the reply
-    claims a rewrite AND every chapter is identical in length.
-    """
-    if not full or not _REWROTE_CLAIM_RE.search(full):
-        return full
-    if not before or not after or before != after:
+def _honest_rewrite_reply(full: str, before: dict, after: dict, user_text: str) -> str:
+    """Correct an unsupported rewrite claim without prescribing destructive commands."""
+    if not full or not _REWROTE_CLAIM_RE.search(full) or not before or not after or before != after:
         return full
     vi = bool(_VIETNAMESE_RE.search(user_text or full))
-    return (
-        "## Chưa có chương nào được viết lại\n\n"
-        "Mình đã báo là đã viết lại các chương, nhưng thực tế **không chương nào "
-        "thay đổi** — nội dung cũ được dùng lại nguyên vẹn.\n\n"
-        "Hãy gửi: **\"viết lại toàn bộ các chương, ghi đè bản cũ\"** để mình "
-        "soạn lại thật sự thay vì tái sử dụng bản đã có."
-        if vi else
-        "## No chapter was actually rewritten\n\n"
-        "I reported rewriting your chapters, but **nothing changed** — the "
-        "existing text was reused as-is.\n\n"
-        'Ask: **"rewrite every chapter, overwrite the existing draft"** so they '
-        "are genuinely recomposed rather than reused."
-    )
+    return ("Chưa có chương nào được viết lại trong lượt này: nội dung bản thảo vẫn giữ nguyên. "
+            "Nếu có file tải xuống, file đó dùng nội dung hiện có. Yêu cầu viết lại chưa hoàn tất."
+            if vi else "No chapter was rewritten in this turn: the draft is unchanged. "
+            "Any download uses the existing content. The rewrite request is not complete.")
+
+
+def _rewrite_directive(text: str, recent_user_texts=()) -> str | None:
+    """Route an authorized rewrite to full composition, never a summary commit."""
+    def requested(value):
+        return bool(re.search(r"viết\s+lại|viet\s+lai|rewrite|recompose|regenerate", value, re.I))
+    thesis_request = bool(re.search(r"chương|chuong|chapter|thesis|luận\s+văn|luan\s+van|bản\s+final|ban\s+final", text, re.I))
+    continuation = bool(re.fullmatch(r"\s*(?:lưu ngay đi|lưu ngay|lưu đi|save it|save now)[.!]?\s*", text, re.I))
+    if (requested(text) and thesis_request) or (continuation and recent_user_texts and requested(recent_user_texts[0])
+            and re.search(r"chương|chuong|chapter|thesis|luận\s+văn|bản\s+final", recent_user_texts[0], re.I)):
+        return ("[REWRITE REQUEST] Use rewrite_thesis for the requested chapter scope "
+                "(full for all chapters). Compose complete replacement prose from M1–M4 before "
+                "committing. Never replace chapters with summaries, delete the old draft first, "
+                "or use export_docx(force=True) as a rewrite. Report persisted and rewritten_chapters "
+                "from the tool result; preserve the current draft on failure.")
+    return None
 
 
 def _tool_only_reply(user_text: str, tool_results: list[tuple[str, str]]) -> str:
     """Give a silent tool turn an honest, localized completion message."""
-    successful = [name for name, preview in tool_results
-                  if not re.search(r'(^|["{\s])error["\s:]', preview or "", re.I)]
+    successful = [name for name, preview in tool_results if _tool_succeeded(preview)]
     vi = bool(_VIETNAMESE_RE.search(user_text or ""))
+    for name, preview in reversed(tool_results):
+        if name != "rewrite_thesis":
+            continue
+        try:
+            outcome = json.loads(preview)
+        except (ValueError, TypeError):
+            continue
+        if outcome.get("persisted") is True:
+            if outcome.get("exported") is True:
+                return ("Đã lưu các chương viết lại và tạo file tải xuống."
+                        if vi else "The rewritten chapters were saved and exported.")
+            if outcome.get("error") == "export_failed":
+                return ("Đã lưu các chương viết lại, nhưng chưa tạo được file xuất."
+                        if vi else "The rewritten chapters were saved, but export failed.")
+            return "Đã lưu các chương viết lại." if vi else "The rewritten chapters were saved."
     if "export_docx" in successful:
         return ("Đã tạo tài liệu. Bạn có thể tải bản DOCX/PDF từ thẻ tải xuống."
                 if vi else
@@ -551,8 +547,9 @@ async def send_message_v3(
     recent_user_texts = tuple(
         row.content for row in recent_rows if row.role == "user")
     recent_messages = tuple(
-        row.content for row in reversed(recent_rows) if row.content)
-    chapter_directive = _chapter_export_directive(text, recent_user_texts)
+        row.content for row in reversed(recent_rows) if row.content and row.role == "user")
+    rewrite_directive = _rewrite_directive(text, recent_user_texts)
+    chapter_directive = None if rewrite_directive else _chapter_export_directive(text, recent_user_texts)
     save_directive = _save_state_directive(text, recent_messages)
 
     db.add(Message(thread_id=t.id, role="user", content=text,
@@ -572,7 +569,7 @@ async def send_message_v3(
 
     engine = db.bind
     project_id = t.project_id
-    # Chapter lengths BEFORE the turn, so a "I rewrote your chapters" claim can
+    # Chapter content fingerprints BEFORE the turn, so a "I rewrote your chapters" claim can
     # be checked against the chapters rather than believed. Taken here, outside
     # gen(), because by the time the reply is finalized the turn has already
     # written whatever it was going to write.
@@ -679,6 +676,7 @@ async def send_message_v3(
                     EXECUTE_NOW_MARKER if execute_now else None,
                     _doc.directive,
                     chapter_directive,
+                    rewrite_directive,
                     save_directive,
                     text,
                 ) if part)
@@ -879,8 +877,11 @@ async def send_message_v3(
                     # (another tool or the reply tokens) supersedes it.
                     print(f"[v3] tool_end name={ev.get('name')!r}",
                           file=_sys.stderr, flush=True)
-                    tool_results.append((str(ev.get("name") or ""),
-                                         str(ev.get("preview") or "")))
+                    # Runtime preserves typed evidence separately from the
+                    # truncated UI preview (chapter hashes/URLs exceed 200 chars).
+                    outcome = ev.get("outcome")
+                    evidence = json.dumps(outcome) if isinstance(outcome, dict) else str(ev.get("preview") or "")
+                    tool_results.append((str(ev.get("name") or ""), evidence))
                 elif kind == "tool_calls":
                     # Interactive widget hint — render as clickable cards
                     # in MessageBubble. Collect every hint this turn emits.

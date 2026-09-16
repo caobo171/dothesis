@@ -237,7 +237,7 @@ if command -v lsof >/dev/null 2>&1; then
 fi
 
 echo "==> starting api on port ${API_PORT:-7100}"
-# Watch api/, engine/, orchestrator/, and the v3 deep agent runtime (agent/) —
+# Watch api/, engine/, orchestrator/, quality/, and the v3 deep agent runtime —
 # uvicorn's --reload only picks up directories listed via --reload-dir.
 # NOT skills/: SKILL.md files are plain markdown the agent reads from disk at
 # turn time (via the filesystem backend), so they take effect WITHOUT a worker
@@ -247,7 +247,7 @@ echo "==> starting api on port ${API_PORT:-7100}"
 # (empty module_status, no assistant reply). Drop it.
 (cd api && venv_run "../$VENV_BIN/uvicorn" app.main:app --reload \
   --reload-dir app --reload-dir ../engine --reload-dir ../orchestrator \
-  --reload-dir ../agent \
+  --reload-dir ../agent --reload-dir ../quality \
   --port "${API_PORT:-7100}") &
 API_PID=$!
 

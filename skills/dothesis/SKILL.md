@@ -67,6 +67,11 @@ Your responsibilities around a commit:
    mutate: *"Heads up: changing the gaps means H1/H2 in M3 may no longer be
    grounded — M3, M4, M5 are flagged for review."*
 3. **Reads need no commit.** If the user only asked about state, answer and stop.
+4. **Report the operation that actually succeeded.** Exporting an existing file
+   is not rewriting chapters. Writing tools may commit internally; use their
+   `persisted` result and changed chapter evidence. If an operation fails, explain
+   the failure and preserve the previous draft. Do not ask the student to repeat
+   a special phrase or switch them to an unrelated artifact to unlock a retry.
 
 ### ⚠ Promise = tool call. Always.
 

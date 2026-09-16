@@ -131,6 +131,20 @@ def test_double_accept_returns_404_on_second(client):
     assert r2.json()["detail"]["error"]["code"] == "edit_not_found"
 
 
+def test_accept_honors_client_document_fingerprint_for_legacy_proposal(client):
+    """Client preconditions protect old pending edits with no server snapshot."""
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    edit = _seed_pending_edit(pid, "intro")
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/pending/{edit['id']}/accept",
+        json={"expected_document_fingerprint": "stale-client-copy"},
+    )
+    assert r.status_code == 409
+    assert r.json()["detail"]["error"]["code"] == "stale_document"
+
+
 def test_patch_after_accept_overwrites_last_writer_wins(client):
     """Documents last-writer-wins: autosave PATCH after accept clobbers
     the spliced prose.

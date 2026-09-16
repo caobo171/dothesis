@@ -14,6 +14,9 @@ is the last chapter of the thesis.
 - Research questions: {research_questions}
 - Research gaps (M2): {research_gaps}
 - Themes / hypotheses results (from Chapter 4): {results} / {qual_themes}
+- Canonical M3 hypothesis register (IDs, paths, labels):
+{canonical_hypothesis_register}
+- Canonical construct labels: {construct_labels}
 - Language: {language}
 - Citation style: {citation_style}
 
@@ -31,6 +34,12 @@ table, and it does not restate the measurement-model diagnostics at all. Refer
 to a finding in words ("the effect of X on Y was the strongest path"), citing
 Chapter 4's table by number where it helps. A table here is a duplicate of
 Chapter 4 and will be read as padding.
+
+Use the canonical M3 register for every hypothesis identifier, path, and
+construct label; do not rename constructs or infer a result for an ID absent
+from `{results}`. Missing rho_A, HTMT, loading, reliability, or validity values
+cannot be described as passed. If a p-value is displayed as `0.000`, format it
+as `p < 0.001`.
 
 - 5.1 Summary of findings (one paragraph per research question; state how each
   objective was met — in prose, no tables)

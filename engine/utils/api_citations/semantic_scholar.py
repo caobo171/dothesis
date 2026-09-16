@@ -135,6 +135,31 @@ class SemanticScholarClient(BaseAPIClient):
             logger.error(f"SemanticScholar: Error parsing response: {e}")
             return None
 
+    def search_papers(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Return multiple ranked Semantic Scholar results.
+
+        Decision: the editor's Find papers flow needs candidates rather than
+        the historical first-hit lookup. Keep the same fields and normalizer so
+        chat research and editor research cannot disagree about metadata.
+        """
+        response = self._make_request(
+            method="GET",
+            endpoint="/graph/v1/paper/search",
+            params={
+                "query": query,
+                "limit": max(1, min(limit, 100)),
+                "fields": "title,authors,year,venue,externalIds,url,citationCount,publicationTypes,abstract",
+            },
+        )
+        if not response:
+            return []
+        out: List[Dict[str, Any]] = []
+        for paper in response.get("data", []):
+            metadata = self._extract_metadata(paper)
+            if metadata:
+                out.append(metadata)
+        return out
+
     def _extract_metadata(self, paper: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Extract and normalize paper metadata from Semantic Scholar response.

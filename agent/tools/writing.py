@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+from hashlib import sha256
 
 from langchain_core.tools import tool
 
@@ -151,6 +152,44 @@ def _m5_slice_for_export(flat: dict | None, full_cs: dict | None) -> dict:
     flat = flat or {}
     return {"final_sections": flat.get("final_sections"),
             "chapters": flat.get("chapters")}
+
+
+def _chapter_hashes(chapters: dict[str, str]) -> dict[str, str]:
+    """Return stable hashes for the *effective* prose, never raw M5 shapes."""
+    return {
+        # `chapter_prose()` canonicalizes persisted entries by trimming prose.
+        # Hash the same effective representation or a harmless trailing newline
+        # from composition would look like a failed persistence verification.
+        name: sha256(prose.strip().encode("utf-8")).hexdigest()
+        for name, prose in chapters.items()
+        if isinstance(prose, str)
+    }
+
+
+def _rewrite_chapter_scope(scope: str, order: list[str]) -> list[str] | None:
+    """Parse the intentionally small rewrite scope grammar.
+
+    Export accepts module scopes because it can render a module report. A rewrite
+    replaces thesis chapters, so accepting only ``full`` or ``chapter:...``
+    prevents an ambiguous request from silently replacing a different draft.
+    """
+    requested = (scope or "full").strip().lower()
+    if requested == "full":
+        return list(order)
+    if not requested.startswith("chapter:"):
+        return None
+    aliases = {
+        "introduction": "intro", "intro": "intro",
+        "literature": "lit_review", "literature_review": "lit_review",
+        "lit_review": "lit_review", "method": "methodology",
+        "methodology": "methodology", "results": "results",
+        "discussion": "conclusion", "conclusion": "conclusion",
+    }
+    names = [aliases.get(part.strip(), part.strip())
+             for part in requested[8:].split("|") if part.strip()]
+    if not names or any(name not in order for name in names):
+        return None
+    return list(dict.fromkeys(names))
 
 
 def make_writing_tools(store) -> list:
@@ -304,6 +343,7 @@ def make_writing_tools(store) -> list:
             from orchestrator.tools.m5_writing import (
                 M5_CHAPTER_ORDER,
                 M5_CHAPTER_TITLES,
+                CompositionGroundingError,
                 assess_export_readiness,
                 compose_all_sections,
                 compose_module_prose,
@@ -328,6 +368,10 @@ def make_writing_tools(store) -> list:
 
         flat = state.get("contextStore", {}) or {}
         generated = False
+        # Export can be read-only. This flag is deliberately separate from
+        # whether files render: the chat guard must only say prose was saved
+        # when this invocation successfully committed generated M5 chapters.
+        persisted_draft = False
 
         # Load the full nested context store once — needed both for the
         # readiness check and to pull M2 references for clickable citations.
@@ -413,7 +457,11 @@ def make_writing_tools(store) -> list:
             if missing and full_cs:
                 readiness = assess_export_readiness(full_cs, chapters=missing)
                 if not readiness or force:
-                    composed = compose_all_sections(full_cs, chapters=missing)
+                    try:
+                        composed = compose_all_sections(full_cs, chapters=missing)
+                    except CompositionGroundingError as exc:
+                        return json.dumps({"error": "composition_grounding_failed",
+                                           "findings": exc.findings}, ensure_ascii=False)
                     composed_by_name = {
                         (section.get("chapter_name") or "").lower(): section
                         for section in composed
@@ -463,8 +511,14 @@ def make_writing_tools(store) -> list:
                         "Composed requested chapters for targeted export",
                         confirm_done=False,
                     )
-                except Exception:
+                    persisted_draft = True
+                except Exception as exc:
                     logger.exception("export_docx: persisting targeted chapters failed")
+                    return json.dumps({
+                        "error": "persistence_failed", "persisted": False,
+                        "detail": str(exc),
+                        "hint": "The composed chapters were not saved, so no export was created.",
+                    }, ensure_ascii=False)
             selected, _hum_report = _maybe_humanize(selected, humanize, language)
             title = ((full_cs or {}).get("m1_topic") or {}).get("research_title") or "Untitled thesis"
             scope_tag = "chapter:" + "|".join(dict.fromkeys(names))
@@ -473,7 +527,8 @@ def make_writing_tools(store) -> list:
                                        language=language, title=title, context_store=full_cs)
             except Exception as exc:
                 logger.exception("export_docx(scope=%s): run_export failed", scope_tag)
-                return json.dumps({"error": "export_failed", "detail": str(exc)})
+                return json.dumps({"error": "export_failed", "persisted": persisted_draft,
+                                   "detail": str(exc)})
             persist = getattr(store, "persist_export_artifacts", None)
             if persist:
                 try:
@@ -481,7 +536,7 @@ def make_writing_tools(store) -> list:
                 except Exception:
                     logger.exception("export_docx: persist chapter artifacts failed")
             return json.dumps({
-                "ok": True, "scope": scope_tag, "artifacts": artifacts,
+                "ok": True, "persisted": persisted_draft, "scope": scope_tag, "artifacts": artifacts,
                 "chapter_titles": [section.get("title") for section in selected],
                 "backfilled": backfilled,
                 "humanized": _hum_report,
@@ -554,7 +609,7 @@ def make_writing_tools(store) -> list:
                 )
             except Exception as e:
                 logger.exception("export_docx(scope=%s): run_export failed", scope_tag)
-                return json.dumps({"error": "export_failed", "detail": str(e)})
+                return json.dumps({"error": "export_failed", "persisted": False, "detail": str(e)})
             persist = getattr(store, "persist_export_artifacts", None)
             if persist:
                 try:
@@ -567,6 +622,7 @@ def make_writing_tools(store) -> list:
                  {"scope": scope_tag, "surface": "chat", "project_id": str(project_id)})
             return json.dumps({
                 "ok": True,
+                "persisted": False,
                 "scope": scope_tag,
                 "artifacts": artifacts,
                 "humanized": _hum_report,
@@ -625,7 +681,11 @@ def make_writing_tools(store) -> list:
                          if s.get("chapter_name")}
                 _gaps = [n for n in scoped_chapters(list(M5_CHAPTER_ORDER))
                          if n not in _have]
-                composed = compose_all_sections(full_cs, chapters=_gaps) if _gaps else []
+                try:
+                    composed = compose_all_sections(full_cs, chapters=_gaps) if _gaps else []
+                except CompositionGroundingError as exc:
+                    return json.dumps({"error": "composition_grounding_failed",
+                                       "findings": exc.findings}, ensure_ascii=False)
                 _by_name = {s.get("chapter_name"): s for s in composed
                             if s.get("chapter_name")}
                 # Canonical order, kept chapters first-class: a composed chapter
@@ -714,8 +774,14 @@ def make_writing_tools(store) -> list:
                     "Drafted chapters to export the thesis",
                     confirm_done=_report_run,
                 )
-            except Exception:
+                persisted_draft = True
+            except Exception as exc:
                 logger.exception("export_docx: persisting generated draft failed")
+                return json.dumps({
+                    "error": "persistence_failed", "persisted": False,
+                    "detail": str(exc),
+                    "hint": "The generated draft was not saved, so no export was created.",
+                }, ensure_ascii=False)
 
         # Humanize the RENDERED copy only — after the commit above, never before.
         # Persisting the rewrite would make it the new source of truth, and the
@@ -731,7 +797,8 @@ def make_writing_tools(store) -> list:
                                    language=language, context_store=full_cs)
         except Exception as e:
             logger.exception("export_docx: run_export failed")
-            return json.dumps({"error": "export_failed", "detail": str(e)})
+            return json.dumps({"error": "export_failed", "persisted": persisted_draft,
+                               "detail": str(e)})
 
         # Persist so the ContextPanel + header Download button light up. The
         # DB store exposes this; the file store doesn't (export still
@@ -774,6 +841,7 @@ def make_writing_tools(store) -> list:
             logger.exception("export_docx: certificate build failed (advisory)")
         return json.dumps({
             "ok": True,
+            "persisted": persisted_draft,
             "generated": generated,
             "artifacts": artifacts,
             "chapters": chapter_titles,
@@ -796,6 +864,216 @@ def make_writing_tools(store) -> list:
                               "UNCHANGED because the rewrite altered a number or "
                               "citation. Never claim the whole document was "
                               "rewritten." if _hum_report else ""),
+        }, ensure_ascii=False)
+
+    @tool
+    def rewrite_thesis(scope: str = "full", export_after: bool = True) -> str:
+        """Explicitly replace a complete thesis draft, then optionally export it.
+
+        This is the only bulk-rewrite tool. It composes requested chapters in
+        memory from committed M1–M4 evidence, validates the complete merged
+        draft, confirms no editor change happened during composition, and then
+        makes one M5 commit. ``scope`` is ``full`` or
+        ``chapter:intro|conclusion``. It never treats export ``force`` as
+        rewrite permission.
+
+        Args:
+            scope: ``full`` or canonical chapter names joined with ``|``.
+            export_after: Export only after the replacement has been committed.
+        """
+        project_id = getattr(store, "project_id", None)
+        loader = getattr(store, "load_full_context_store", None)
+        if project_id is None:
+            return json.dumps({"ok": False, "persisted": False, "error": "no_project"})
+        if loader is None:
+            return json.dumps({"ok": False, "persisted": False,
+                               "error": "state_read_failed",
+                               "hint": "A full project snapshot is required to rewrite safely."})
+        try:
+            from orchestrator.tools.m5_writing import (  # noqa: PLC0415
+                M5_CHAPTER_ORDER,
+                M5_CHAPTER_TITLES,
+                CompositionGroundingError,
+                chapter_prose,
+                compose_all_sections,
+                compose_context_slice,
+                m2_references,
+                run_export,
+                sections_from_m5_slice,
+                _is_stub_prose,
+            )
+            from agent.coherence import validate_m5_sections  # noqa: PLC0415
+        except Exception:
+            logger.exception("rewrite_thesis: could not import writer dependencies")
+            return json.dumps({"ok": False, "persisted": False,
+                               "error": "writer_unavailable"})
+
+        requested = _rewrite_chapter_scope(scope, list(M5_CHAPTER_ORDER))
+        if requested is None:
+            return json.dumps({"ok": False, "persisted": False, "error": "bad_scope",
+                               "hint": "Use full or chapter:intro|lit_review|methodology|results|conclusion."})
+
+        # Snapshot effective chapter prose before any LLM work. `chapters` wins
+        # over legacy final_sections per chapter, so this catches an editor save
+        # even if it changes only one home while composition is in flight.
+        try:
+            before_full = loader() or {}
+            before_flat = (store.load().get("contextStore", {}) or {})
+        except Exception:
+            logger.exception("rewrite_thesis: state snapshot failed")
+            return json.dumps({"ok": False, "persisted": False, "error": "state_read_failed"})
+        before_prose = chapter_prose(_m5_slice_for_export(before_flat, before_full))
+        expected_hashes = _chapter_hashes(before_prose)
+
+        try:
+            composed = compose_all_sections(
+                before_full, chapters=requested, force_recompose=True)
+        except CompositionGroundingError as exc:
+            return json.dumps({"ok": False, "persisted": False,
+                               "error": "composition_grounding_failed",
+                               "findings": exc.findings}, ensure_ascii=False)
+        except Exception as exc:  # The draft never reached state.
+            logger.exception("rewrite_thesis: composition failed")
+            return json.dumps({"ok": False, "persisted": False,
+                               "error": "rewrite_generation_failed", "detail": str(exc)},
+                              ensure_ascii=False)
+
+        replacements = {
+            section.get("chapter_name"): section.get("prose", "")
+            for section in composed if section.get("chapter_name") in requested
+        }
+        missing = [name for name in requested
+                   if not isinstance(replacements.get(name), str)
+                   or _is_stub_prose(replacements[name])]
+        if missing:
+            return json.dumps({"ok": False, "persisted": False,
+                               "error": "rewrite_incomplete", "missing_chapters": missing})
+
+        merged_prose = {**before_prose, **replacements}
+        # A full rewrite must really be a full thesis. A subset only validates
+        # the assembled available prose, avoiding an invented requirement for
+        # chapters the student intentionally has not drafted yet.
+        if scope.strip().lower() == "full":
+            absent = [name for name in M5_CHAPTER_ORDER
+                      if _is_stub_prose(merged_prose.get(name, ""))]
+            if absent:
+                return json.dumps({"ok": False, "persisted": False,
+                                   "error": "rewrite_incomplete", "missing_chapters": absent})
+        try:
+            report = validate_m5_sections(merged_prose, compose_context_slice(before_full))
+            findings = report.get("findings", []) if isinstance(report, dict) else []
+            blocking = [finding for finding in findings if isinstance(finding, dict)
+                        and (finding.get("severity") == "hard"
+                             or finding.get("check") == "coherence.unsupported_diagnostic_claim")]
+        except Exception:
+            # The coherence validator deliberately fails open in state commits;
+            # preserve that availability behavior here as well.
+            logger.exception("rewrite_thesis: final grounding validation failed open")
+            blocking = []
+        if blocking:
+            return json.dumps({"ok": False, "persisted": False,
+                               "error": "composition_grounding_failed",
+                               "findings": blocking}, ensure_ascii=False)
+
+        # Re-read immediately before the one commit. Never replace prose based
+        # on an old snapshot: a concurrent editor/autosave change is a conflict,
+        # not a reason to silently overwrite the student.
+        try:
+            current_full = loader() or {}
+            current_flat = (store.load().get("contextStore", {}) or {})
+            current_prose = chapter_prose(_m5_slice_for_export(current_flat, current_full))
+        except Exception:
+            logger.exception("rewrite_thesis: pre-commit state read failed")
+            return json.dumps({"ok": False, "persisted": False, "error": "state_read_failed"})
+        current_hashes = _chapter_hashes(current_prose)
+        if current_hashes != expected_hashes:
+            return json.dumps({"ok": False, "persisted": False, "error": "rewrite_conflict",
+                               "expected_chapter_hashes": expected_hashes,
+                               "current_chapter_hashes": current_hashes}, ensure_ascii=False)
+
+        # Retain any existing chapter metadata while replacing only prose. This
+        # is one M5 commit; no draft is cleared as a preparatory operation.
+        raw_chapters = ((current_full.get("m5_writing") or {}).get("chapters") or {})
+        # Keep untouched stored entries byte-for-byte. `chapter_prose` trims
+        # presentation whitespace while resolving, and serializing every merged
+        # effective chapter back would turn a subset rewrite into incidental
+        # edits to unrelated student prose.
+        payload_chapters: dict[str, object] = dict(raw_chapters) if isinstance(raw_chapters, dict) else {}
+        for name, prose in merged_prose.items():
+            if name not in requested and isinstance(raw_chapters, dict) and name in raw_chapters:
+                continue
+            previous = raw_chapters.get(name) if isinstance(raw_chapters, dict) else None
+            payload_chapters[name] = {**previous, "prose": prose} if isinstance(previous, dict) else {"prose": prose}
+        try:
+            commit = store.commit_slice(
+                "M5", {"chapters": payload_chapters},
+                "Explicitly rewrote thesis chapters from committed research evidence",
+                confirm_done=False,
+            )
+        except Exception as exc:
+            logger.exception("rewrite_thesis: guarded M5 commit failed")
+            return json.dumps({"ok": False, "persisted": False,
+                               "error": "persistence_failed", "detail": str(exc),
+                               "expected_chapter_hashes": expected_hashes}, ensure_ascii=False)
+
+        # Verify storage rather than claiming a generated draft landed merely
+        # because the write call returned. This is also the evidence exported
+        # below, so the document cannot be the pre-commit in-memory version.
+        try:
+            after_full = loader() or {}
+            after_flat = (store.load().get("contextStore", {}) or {})
+            after_prose = chapter_prose(_m5_slice_for_export(after_flat, after_full))
+            committed_hashes = _chapter_hashes(after_prose)
+        except Exception as exc:
+            logger.exception("rewrite_thesis: commit verification failed")
+            # The sole commit already returned. A follow-up read outage cannot
+            # prove it rolled back, so report the state honestly for the chat
+            # guard instead of falsely saying the draft was not persisted.
+            return json.dumps({"ok": False, "persisted": "unknown",
+                               "error": "persistence_verification_failed", "detail": str(exc)},
+                              ensure_ascii=False)
+        expected_replacement_hashes = _chapter_hashes(replacements)
+        if any(committed_hashes.get(name) != expected_replacement_hashes[name]
+               for name in requested):
+            return json.dumps({"ok": False, "persisted": "unknown",
+                               "error": "persistence_verification_failed",
+                               "expected_chapter_hashes": expected_replacement_hashes,
+                               "committed_chapter_hashes": committed_hashes}, ensure_ascii=False)
+
+        artifacts = None
+        if export_after:
+            language = resolve_output_language(after_full)
+            sections = sections_from_m5_slice((after_full.get("m5_writing") or {}),
+                                               language=language)
+            if scope.strip().lower() != "full":
+                sections = [section for section in sections
+                            if section.get("chapter_name") in requested]
+            try:
+                artifacts = run_export(
+                    sections, str(project_id),
+                    references=m2_references((after_full.get("m2_literature") or {})),
+                    language=language, context_store=after_full,
+                )
+            except Exception as exc:
+                logger.exception("rewrite_thesis: export of committed draft failed")
+                return json.dumps({"ok": False, "persisted": True, "exported": False,
+                                   "error": "export_failed", "detail": str(exc),
+                                   "rewritten_chapters": requested,
+                                   "committed_chapter_hashes": committed_hashes}, ensure_ascii=False)
+            persist = getattr(store, "persist_export_artifacts", None)
+            if persist:
+                try:
+                    persist(artifacts, scope=("full" if scope.strip().lower() == "full" else scope))
+                except Exception:
+                    logger.exception("rewrite_thesis: artifact persistence failed")
+
+        return json.dumps({
+            "ok": True, "persisted": True, "exported": bool(export_after),
+            "rewritten_chapters": requested,
+            "expected_chapter_hashes": expected_hashes,
+            "committed_chapter_hashes": committed_hashes,
+            "commit": commit,
+            "artifacts": artifacts,
         }, ensure_ascii=False)
 
     @tool
@@ -874,4 +1152,4 @@ def make_writing_tools(store) -> list:
             logger.exception("render_verified_sections failed")
             return json.dumps({"ok": False, "reason": "no_data"})
 
-    return [export_docx, review_thesis, render_verified_sections, humanize_text]
+    return [export_docx, rewrite_thesis, review_thesis, render_verified_sections, humanize_text]

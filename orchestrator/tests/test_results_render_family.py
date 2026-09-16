@@ -96,10 +96,11 @@ def test_the_caption_does_not_promise_a_q2_that_is_absent():
     assert "R² / Q²" in _md(_PLS, "r2_q2")
 
 
-def test_the_numbers_themselves_are_untouched():
+def test_rounded_zero_p_values_are_rendered_as_thresholds():
     md = _md(_SPSS, "structural_paths")
-    for n in ("0.371", "11.921", "0.000"):
+    for n in ("0.371", "11.921", "<0.001"):
         assert n in md
+    assert "p = 0.000" not in md
 
 
 # --- which sections the export-time net covers --------------------------------

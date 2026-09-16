@@ -176,7 +176,7 @@ def _msg_key(m: Any) -> str | None:
 
 
 def _parse_export_artifacts(content: Any) -> dict | None:
-    """Shape an export_docx tool result into an `export_artifacts` widget hint.
+    """Shape a successful document tool result into an `export_artifacts` hint.
 
     The tool returns JSON like {"ok": true, "artifacts": [{kind, download_url,
     size_bytes, …}]}. We surface those as a download card in the chat message.
@@ -194,6 +194,32 @@ def _parse_export_artifacts(content: Any) -> dict | None:
     if not artifacts:
         return None
     return {"widget_type": "export_artifacts", "artifacts": artifacts}
+
+
+def _writing_tool_outcome(name: str, content: Any) -> dict | None:
+    """Keep writing persistence evidence intact when a verbose result is previewed.
+
+    Tool-end previews are deliberately truncated for SSE progress. Export and
+    rewrite responses can include URLs and five SHA256 values, while a state
+    commit can carry validation reports. This compact, typed envelope contains
+    only the facts the chat boundary needs to decide whether it may acknowledge
+    saved work.
+    """
+    if not isinstance(content, str):
+        return None
+    try:
+        data = json.loads(content)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    if name == "commit_slice":
+        return {"ok": not bool(data.get("error")), "persisted": not bool(data.get("error")),
+                **({"error": data["error"]} if data.get("error") else {})}
+    if name not in {"export_docx", "rewrite_thesis"}:
+        return None
+    keys = ("ok", "persisted", "exported", "error", "rewritten_chapters")
+    return {key: data[key] for key in keys if key in data}
 
 
 def _parse_reconstructed(content: Any) -> dict | None:
@@ -858,7 +884,7 @@ async def stream_turn(
     Event vocabulary (matches the web client's existing SSE handling):
       {"type": "token", "text": str}          — assistant text delta
       {"type": "tool_start", "name": str, "args": dict}
-      {"type": "tool_end", "name": str, "preview": str}
+      {"type": "tool_end", "name": str, "preview": str, "outcome"?: dict}
       {"type": "error", "message": str}
       {"type": "done"}
 
@@ -1003,16 +1029,21 @@ async def stream_turn(
                         m_type = getattr(m, "type", None)
                         if m_type == "tool":
                             _tool_name = getattr(m, "name", "") or ""
-                            yield {
+                            _tool_end = {
                                 "type": "tool_end",
                                 "name": _tool_name,
                                 "preview": _preview(m.content),
                             }
+                            if _tool_name in {"commit_slice", "export_docx", "rewrite_thesis"}:
+                                _outcome = _writing_tool_outcome(_tool_name, m.content)
+                                if _outcome is not None:
+                                    _tool_end["outcome"] = _outcome
+                            yield _tool_end
                             # When the export tool succeeds, surface its
                             # artifacts as a download card in the chat message
                             # (Claude-artifact style) — not just the Context
                             # store panel. Parsed from the tool's JSON result.
-                            if _tool_name == "export_docx":
+                            if _tool_name in {"export_docx", "rewrite_thesis"}:
                                 hint = _parse_export_artifacts(m.content)
                                 if hint is not None:
                                     yield {"type": "tool_calls", "payload": hint}

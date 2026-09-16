@@ -12,6 +12,9 @@ You are writing Chapter 4 (Results) of a master's thesis.
 - Qualitative codes (from M4): {qual_codes}
 - Qualitative themes (from M4): {qual_themes}
 - Custom ad-hoc analyses: {custom_analyses}
+- Canonical M3 hypothesis register (IDs, paths, labels):
+{canonical_hypothesis_register}
+- Canonical construct labels: {construct_labels}
 - Language: {language}
 - Citation style: {citation_style}
 
@@ -28,6 +31,13 @@ You are writing Chapter 4 (Results) of a master's thesis.
   acceptable; a fabricated one is not.
 - Do NOT present illustrative/simulated figures as if they were collected. Every
   reported statistic must trace to `{results}`.
+- Preserve every hypothesis ID, path, and construct label in the canonical M3
+  register. Do not substitute a similarly named construct. Give a hypothesis
+  decision only when that exact ID has a matching result in `{results}`.
+- A missing loading, rho_A, HTMT, reliability, or validity value is not evidence
+  that the diagnostic passed. Omit the unsupported pass claim or say only that
+  the metric was not reported. When a reported p-value is `0.000`, write
+  `p < 0.001`, never `p = 0.000`.
 
 ## Method consistency — report ONLY metrics that match `{tool}`
 Different analysis methods produce different statistics. Report the family that
@@ -142,7 +152,7 @@ table standing alone. Adapt these model sentences (fill the brackets from `{resu
   Cronbach's α above 0.70, meeting the threshold."* If an item was dropped:
   *"Item [X] was removed because its corrected item-total correlation fell below 0.30."*
 - EFA: *"The EFA returned KMO = [value] (> 0.5), a significant Bartlett's test
-  (Sig = 0.000), and total variance explained of [%] (> 50%)."*
+  (p < 0.001), and total variance explained of [%] (> 50%)."*
 - Correlation: *"All independent variables correlate with the dependent variable
   at the 1% significance level (Sig < 0.01)."*
 - Regression / structural: *"The model explains [%] of the variance in the

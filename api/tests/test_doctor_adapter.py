@@ -221,32 +221,30 @@ class _CsStore(_Store):
 
 def test_a_rewritten_chapter_replaces_the_stub_and_keeps_the_others(monkeypatch):
     import orchestrator.tools.m5_writing as M
-    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None, **kw: [
         {"chapter_name": "methodology", "title": "C3", "prose": "Chương 3 thật. " * 300}])
     store = _CsStore()
     apply_findings(store, [_RECOMPOSE])
 
     module, writes, _reason, _kw = store.commits[0]
     assert module == "M5"
-    by = {s["chapter_name"]: s for s in writes["final_sections"]}
-    assert "Chương 3 thật." in by["methodology"]["prose"]
-    assert by["intro"]["prose"].startswith("Giới thiệu."), "untouched chapter was lost"
+    assert "Chương 3 thật." in writes["chapters"]["methodology"]["prose"]
 
 
 def test_chapters_stay_in_canonical_order(monkeypatch):
     import orchestrator.tools.m5_writing as M
-    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None, **kw: [
         {"chapter_name": "methodology", "title": "C3", "prose": "Chương 3 thật. " * 300}])
     store = _CsStore()
     apply_findings(store, [_RECOMPOSE])
-    names = [s["chapter_name"] for s in store.commits[0][1]["final_sections"]]
-    assert names == ["intro", "methodology"]
+    names = list(store.commits[0][1]["chapters"])
+    assert names == ["methodology"]
 
 
 def test_a_compose_that_returns_another_stub_is_not_committed(monkeypatch):
     """A failed compose must not replace a bad chapter with an empty one."""
     import orchestrator.tools.m5_writing as M
-    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None, **kw: [
         {"chapter_name": "methodology", "prose": "Chưa thể biên soạn Chương 3."}])
     store = _CsStore()
     res = apply_findings(store, [_RECOMPOSE])
@@ -256,7 +254,7 @@ def test_a_compose_that_returns_another_stub_is_not_committed(monkeypatch):
 
 def test_a_compose_returning_nothing_is_not_committed(monkeypatch):
     import orchestrator.tools.m5_writing as M
-    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [])
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None, **kw: [])
     store = _CsStore()
     apply_findings(store, [_RECOMPOSE])
     assert not store.commits
@@ -270,7 +268,7 @@ def test_the_same_recompose_asked_twice_is_not_paid_for_twice(monkeypatch):
     and without this it would be rewritten again, every turn, forever.
     """
     import orchestrator.tools.m5_writing as M
-    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None, **kw: [
         {"chapter_name": "methodology", "title": "C3", "prose": "Chương 3 thật. " * 300}])
     store = _CsStore()
     apply_findings(store, [_RECOMPOSE])
@@ -286,7 +284,7 @@ def test_a_recompose_of_DIFFERENT_chapters_still_runs(monkeypatch):
     import orchestrator.tools.m5_writing as M
     # Composes whatever it is asked for, so the second call is a real second
     # repair rather than a stub that happens to return the wrong chapter.
-    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None: [
+    monkeypatch.setattr(M, "compose_all_sections", lambda cs, chapters=None, **kw: [
         {"chapter_name": c, "title": c, "prose": f"Nội dung {c}. " * 300}
         for c in (chapters or [])])
     store = _CsStore()

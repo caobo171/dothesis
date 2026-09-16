@@ -466,6 +466,120 @@ def test_interactive_chat_is_not_tightened(tmp_path):
 _CONCLUSION = ("Nghiên cứu này kiểm định tác động của kỳ vọng hiệu năng ứng dụng. " * 40)
 
 
+def _full_m5_chapters(chars=2_000):
+    return {name: {"prose": (f"{name} substantive thesis prose. " * chars)[:chars]}
+            for name in ("intro", "lit_review", "methodology", "results", "conclusion")}
+
+
+def _full_m5_sections(chars=2_000):
+    return [{"chapter_name": name, "prose": prose["prose"]}
+            for name, prose in _full_m5_chapters(chars).items()]
+
+
+def _m5_text(value, chapter):
+    if isinstance(value, dict):
+        item = value[chapter]
+        return item.get("prose") if isinstance(item, dict) else item
+    return next(item["prose"] for item in value if item.get("chapter_name") == chapter)
+
+
+@pytest.mark.parametrize("key,seed,replacement", [
+    ("chapters", _full_m5_chapters, lambda: {name: {"prose": "summary" * 20}
+                                               for name in _full_m5_chapters()}),
+    ("final_sections", _full_m5_sections, lambda: [{"chapter_name": sec["chapter_name"],
+                                                       "prose": "summary" * 20}
+                                                      for sec in _full_m5_sections()]),
+])
+def test_m5_summary_overwrite_is_rejected_atomically(tmp_path, key, seed, replacement):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store)}
+    store.commit_slice("M5", {key: seed()}, "seed full draft")
+    before = store.load()
+
+    out = json.loads(tools["commit_slice"].func(
+        module="M5", writes={key: replacement()}, reason="rewrite all chapters"))
+
+    assert "m5_chapter_truncation" in out["error"]
+    assert "intro:" in out["error"] and "→" in out["error"]
+    after = store.load()
+    assert after["contextStore"][key] == before["contextStore"][key]
+    assert after["status"] == before["status"]
+    assert after["versionHistory"] == before["versionHistory"]
+
+
+@pytest.mark.parametrize("key,seed,rewrite", [
+    ("chapters", _full_m5_chapters, _full_m5_chapters),
+    ("final_sections", _full_m5_sections, _full_m5_sections),
+])
+def test_m5_full_rewrite_with_substantive_replacement_passes(tmp_path, key, seed, rewrite):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store)}
+    store.commit_slice("M5", {key: seed(2_000)}, "seed full draft")
+
+    out = json.loads(tools["commit_slice"].func(
+        module="M5", writes={key: rewrite(1_400)}, reason="rewrite all chapters"))
+
+    assert "error" not in out
+    assert len(_m5_text(store.load()["contextStore"][key], "results")) == 1_400
+
+
+def test_m5_final_sections_to_chapters_summary_cannot_bypass_guard(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store)}
+    store.commit_slice("M5", {"final_sections": _full_m5_sections(2_000)}, "seed legacy draft")
+
+    out = json.loads(tools["commit_slice"].func(
+        module="M5", writes={"chapters": {name: {"prose": "summary" * 80}
+                                         for name in _full_m5_chapters()}}, reason="rewrite all"))
+
+    assert "m5_chapter_truncation" in out["error"]
+
+
+def test_m5_final_sections_summary_does_not_block_when_chapters_remain_canonical(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store)}
+    store.commit_slice("M5", {"chapters": _full_m5_chapters(2_000)}, "seed editor draft")
+
+    out = json.loads(tools["commit_slice"].func(
+        module="M5", writes={"final_sections": [{"chapter_name": name, "prose": "summary" * 80}
+                                                   for name in _full_m5_chapters()]}, reason="legacy snapshot"))
+
+    assert "error" not in out
+
+
+def test_m5_sixty_thousand_character_chapter_cannot_become_six_hundred_characters(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store)}
+    store.commit_slice("M5", {"chapters": {"results": {"prose": "x" * 60_000}}}, "seed long draft")
+
+    out = json.loads(tools["commit_slice"].func(
+        module="M5", writes={"chapters": {"results": {"prose": "summary " * 75}}}, reason="rewrite results"))
+
+    assert "m5_chapter_truncation" in out["error"]
+
+
+def test_m5_explicit_tiny_stub_cannot_disappear_from_canonical_reader(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store)}
+    store.commit_slice("M5", {"chapters": {"results": {"prose": "x" * 2_000}}}, "seed draft")
+
+    out = json.loads(tools["commit_slice"].func(
+        module="M5", writes={"chapters": {"results": {"prose": "short"}}}, reason="rewrite results"))
+
+    assert "m5_chapter_truncation" in out["error"]
+
+
+def test_m5_small_normal_reduction_is_not_treated_as_summary(tmp_path):
+    store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
+    tools = {t.name: t for t in make_state_tools(store)}
+    store.commit_slice("M5", {"chapters": {"results": {"prose": "x" * 1_300}}}, "seed draft")
+
+    out = json.loads(tools["commit_slice"].func(
+        module="M5", writes={"chapters": {"results": {"prose": "y" * 1_199}}}, reason="edit results"))
+
+    assert "error" not in out
+
+
 def test_m5_cannot_be_done_without_a_conclusion(tmp_path):
     store = ProjectStateStore(tmp_path / f"p-{uuid.uuid4().hex}")
     tools = {t.name: t for t in make_state_tools(store, strict_gates=True)}

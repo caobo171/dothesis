@@ -1,202 +1,105 @@
-"""Report-only grounding of the M2 backfill with a REAL literature search.
-
-The headless report populates M2 via reconstruct_upstream (pure LLM recall) — no
-DOIs. With the report opt-in (ground_m2 / env DOTHESIS_BACKFILL_GROUND_M2) the M2
-candidate is grounded with a real deep scout + domain supplement. Chat/import
-backfill (no opt-in) stays LLM-fast. No network/LLM — everything is faked.
-"""
+"""Initial and late backfill share discovery without losing existing sources."""
 from unittest.mock import MagicMock
+import copy
 
 import orchestrator.backfill as B
-import orchestrator.tools.domain_sources as DS
-import orchestrator.tools.m2_literature as M2mod
+import orchestrator.tools.literature_discovery as discovery
 from orchestrator.state import ContextStore
 
-# A valid-enough M2 candidate JSON so reconstruct_artifact returns non-empty.
-_M2_LLM_JSON = ('{"citation_list": [{"title": "LLM recalled", "authors": ["X"], '
-                '"year": 2019}], "research_gaps": [{"description": "a gap"}], '
-                # The same blob answers M1 too, and the post-walk grounding needs
-                # a research_title to search on — without it these tests would
-                # pass/fail for the wrong reason.
-                '"research_title": "KOL credibility and purchase intent"}')
+
+def paper(i):
+    return {'title':f'Paper {i}','doi':f'10.1234/{i}','authors':['Nguyen'],'year':2023,
+            'verified':True,'abstract':f'Retrieved evidence {i}.'}
 
 
-def _fake_llm(content=_M2_LLM_JSON) -> MagicMock:
-    llm = MagicMock()
-    llm.invoke.return_value.content = content
+def state(existing=None, topic=True):
+    return ContextStore(m1_topic={'research_title':'Influencer credibility and travel intention','research_questions':['How does trust affect intentions?']} if topic else {},
+                        m2_literature=existing or {}, m4_analysis={'analysis_results':'PLS-SEM findings. '*150})
+
+
+def mock_model():
+    llm=MagicMock()
+    llm.invoke.return_value.content='{"research_title":"Influencer credibility and travel intention","citation_list":[{"title":"Invented recalled paper","verified":true}],"research_gaps":[{"description":"A gap"}]}'
     return llm
 
 
-class _CountingScout:
-    def __init__(self, rows=None, raises=False):
-        self.calls = 0
-        self.rows = rows or []
-        self.raises = raises
-
-    def func(self, topic, min_n=10, **kwargs):
-        self.calls += 1
-        self.kwargs = kwargs          # what the caller asked the planner for
-        if self.raises:
-            raise RuntimeError("scout blew up")
-        return self.rows
+def patch_search(monkeypatch, sources=None, raises=False):
+    calls=[]
+    def discover(topic,**kw):
+        calls.append({'topic':topic,**kw})
+        if raises: raise RuntimeError('provider failure')
+        rows=copy.deepcopy(sources or [])
+        return {'sources':rows,'count':len(rows),'target':24,'shortfall':max(0,24-len(rows)),
+                'complete':len(rows)>=24,'warnings':[],'coverage':{'queries_completed':4}}
+    monkeypatch.setattr(discovery,'discover_literature',discover)
+    return calls
 
 
-class _FakeERIC:
-    def search_papers(self, q, limit=10):
-        return [{"title": "ERIC edu row", "authors": ["Tran"], "year": 2020,
-                 "doi": "", "url": "https://eric.ed.gov/?id=EJ9"}]
+def entry(out):return next(e for e in out if e['module']=='M2')
 
 
-def _edu_cs():
-    return ContextStore(
-        m1_topic={"research_title": "Language learning via Duolingo in education",
-                  "field": "Education", "research_questions": ["RQ1 teaching methods"]},
-        m4_analysis={"data_type_detected": "Quantitative", "results": {"n": 1}},
-    )
+def test_backfill_uses_shared_discovery_and_preserves_evidence(monkeypatch):
+    calls=patch_search(monkeypatch,[paper(1)])
+    e=entry(B.reconstruct_upstream(state(),targets=['M2'],llm=mock_model()))
+    assert len(calls)==1 and calls[0]['min_sources']==24
+    assert calls[0]['research_questions']==['How does trust affect intentions?']
+    assert e['candidate']['literature_sources']==[paper(1)]
+    assert e['candidate']['citation_list']==[paper(1)]
+    assert e['source_discovery']['shortfall']==23
 
 
-def _m2_entry(out):
-    return next(e for e in out if e["module"] == "M2")
+def test_six_existing_sources_are_enriched_not_overwritten(monkeypatch):
+    old=[paper(i) for i in range(6)]
+    old[0]['abstract']=''; old[0]['curated_note']='Keep my note'
+    calls=patch_search(monkeypatch,[paper(i) for i in range(30)])
+    cs=state({'literature_sources':old,'citation_list':old,'research_gaps':[{'description':'Existing gap'}]})
+    e=entry(B.reconstruct_upstream(cs,targets=['M2'],llm=mock_model()))
+    sources=e['candidate']['literature_sources']
+    assert len(sources)==30 and sources[0]['curated_note']=='Keep my note'
+    assert sources[0]['abstract']=='Retrieved evidence 0.'
+    assert {p['doi'] for p in old} <= {p['doi'] for p in sources}
+    assert e['candidate']['research_gaps']==[{'description':'Existing gap'}]
+    assert cs.m2_literature['literature_sources'][0]['abstract']==''  # pure read
+    assert len(calls[0]['existing_sources'])==6
 
 
-def _patch_search(monkeypatch, scout, eric=True):
-    monkeypatch.setattr(M2mod, "scout_citations", scout)
-    monkeypatch.setattr(DS, "search_query_en", lambda t, rq: "duolingo language learning")
-    if eric:
-        monkeypatch.setattr(DS, "EricClient", _FakeERIC)
+def test_failure_preserves_existing_but_never_promotes_recall(monkeypatch):
+    patch_search(monkeypatch,raises=True)
+    e=entry(B.reconstruct_upstream(state({'literature_sources':[paper(1)]}),targets=['M2'],llm=mock_model()))
+    assert e['candidate']['citation_list']==[paper(1)]
+    assert e['source_discovery']['complete'] is False
 
 
-def test_report_optin_grounds_m2_with_real_dois(monkeypatch):
-    scout = _CountingScout([{"title": "Real edtech", "authors": ["Ng"], "year": 2021,
-                             "source": "OpenAlex", "doi": "10.1/real", "url": "u"}])
-    _patch_search(monkeypatch, scout)
-    out = B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm(), ground_m2=True)
-    cand = _m2_entry(out)["candidate"]
-    dois = {s.get("doi") for s in cand["literature_sources"]}
-    assert scout.calls == 1
-    assert "10.1/real" in dois                       # real base DOI
-    assert any(s["title"] == "ERIC edu row" for s in cand["literature_sources"])  # domain supp
-    assert cand["citation_list"] == cand["literature_sources"]  # both keys carry the real list
+def test_empty_search_does_not_publish_model_references(monkeypatch):
+    patch_search(monkeypatch)
+    e=entry(B.reconstruct_upstream(state(),targets=['M2'],llm=mock_model()))
+    assert e['candidate']['literature_sources']==[] and e['candidate']['citation_list']==[]
+    assert not e['ready_to_confirm']
 
 
-def test_chat_backfill_is_grounded_too(monkeypatch):
-    """Was `test_chat_backfill_stays_llm_only` — grounding is now the default.
-
-    The old behaviour traded correctness for latency: an ungrounded backfill
-    ships whatever sources the MODEL recalled, and those entries become the
-    citation_list, i.e. the bibliography of a document the student submits under
-    their own name. A model's recollection of citations is not citations, and a
-    thesis is the last place to guess. The search is bounded and degrades to the
-    LLM candidate on failure (see test_search_failure_degrades_to_llm), so the
-    cost of being wrong here is a slower import, not a broken one."""
-    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
-    _patch_search(monkeypatch, scout)
-    monkeypatch.delenv("DOTHESIS_BACKFILL_GROUND_M2", raising=False)
-    out = B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm())  # ground_m2 unset
-    cand = _m2_entry(out)["candidate"]
-    assert scout.calls == 1                           # scouted without being asked
-    assert any(s.get("doi") == "10.1/x" for s in cand["literature_sources"])
-    assert cand["citation_list"] == cand["literature_sources"]
+def test_unverified_discovered_candidates_do_not_become_grounded(monkeypatch):
+    p=paper(1);p['verified']=False
+    patch_search(monkeypatch,[p])
+    assert B._m2_real_sources(state())==[]
 
 
-def test_env_var_triggers_grounding(monkeypatch):
-    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
-    _patch_search(monkeypatch, scout)
-    monkeypatch.setenv("DOTHESIS_BACKFILL_GROUND_M2", "1")
-    B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm())
-    assert scout.calls == 1
+def test_no_topic_makes_no_provider_calls(monkeypatch):
+    calls=patch_search(monkeypatch,[paper(1)])
+    assert B._m2_real_sources(state(topic=False))==[] and not calls
 
 
-def test_search_failure_degrades_to_llm(monkeypatch):
-    # general-domain topic (no supplement) + scout raises → keep the LLM candidate
-    cs = ContextStore(
-        m1_topic={"research_title": "Brand loyalty in e-commerce", "field": "Marketing",
-                  "research_questions": ["RQ1"]},
-        m4_analysis={"data_type_detected": "Quantitative", "results": {"n": 1}})
-    scout = _CountingScout(raises=True)
-    monkeypatch.setattr(M2mod, "scout_citations", scout)
-    monkeypatch.setattr(DS, "search_query_en", lambda t, rq: "brand loyalty")
-    out = B.reconstruct_upstream(cs, targets=["M2"], llm=_fake_llm(), ground_m2=True)
-    cand = _m2_entry(out)["candidate"]
-    assert scout.calls == 1
-    assert "literature_sources" not in cand           # empty real search → untouched
-    assert cand["citation_list"][0]["title"] == "LLM recalled"
+def test_late_grounding_is_saved_again_and_never_keeps_recall(monkeypatch):
+    calls=patch_search(monkeypatch,[paper(1)])
+    handed=[]
+    out=B.reconstruct_upstream(state(topic=False),llm=mock_model(),on_module=lambda e:handed.append(copy.deepcopy(e)))
+    m2=[e for e in handed if e['module']=='M2']
+    assert len(calls)==1 and len(m2)==2
+    assert m2[0]['candidate']['literature_sources']==[]
+    assert m2[1]['candidate']['literature_sources']==[paper(1)]
+    assert entry(out)['candidate']['citation_list']==[paper(1)]
 
 
-def test_no_topic_skips_search(monkeypatch):
-    scout = _CountingScout([{"title": "Real", "doi": "10.1/x"}])
-    monkeypatch.setattr(M2mod, "scout_citations", scout)
-    cs = ContextStore(m4_analysis={"data_type_detected": "Quantitative", "results": {"n": 1}})
-    assert B._m2_real_sources(cs) == []               # no research_title
-    assert scout.calls == 0
-
-
-def test_the_backfill_asks_for_a_plan_that_can_finish(monkeypatch):
-    """The grounded search must not use the deep planner from inside a request.
-
-    At the engine's defaults the deep planner emitted 249 queries for one
-    thesis title, each allowed 90s. It could never finish inside
-    _m2_real_sources' deadline, so the future timed out, the except swallowed
-    it, and every real DOI already found was discarded — grounding was on by
-    default, cost two minutes of the student's import, and always returned [].
-    """
-    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
-    _patch_search(monkeypatch, scout)
-    B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm(), ground_m2=True)
-    assert scout.calls == 1
-    assert scout.kwargs.get("deep") is False
-
-
-def test_an_imported_thesis_still_gets_its_citations_searched(monkeypatch):
-    """The case that actually happens, and the one grounding never ran on.
-
-    A finished thesis imports as M4 analysis text and nothing else, so M1 is
-    empty when the walk starts. The walk is BOTTOM-UP (M4->M3->M2->M1), so M2
-    was reconstructed before M1 existed, and _m2_real_sources returns [] on its
-    first line when there is no research_title. Measured on a live import, the
-    scout was called ZERO times: the search wasn't slow or unlucky, it never
-    ran, and every imported thesis landed with citation_list empty.
-
-    M1 is reconstructed by the end of the walk, so M2 is grounded there.
-    """
-    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
-    _patch_search(monkeypatch, scout, eric=False)
-    # No m1_topic — exactly what import_existing_work leaves for a full draft.
-    cs = ContextStore(m4_analysis={"analysis_results": "PLS-SEM A -> B, R2=0.41. " * 60})
-    out = B.reconstruct_upstream(cs, llm=_fake_llm(), ground_m2=True)
-
-    assert scout.calls == 1                          # it ran at all
-    cand = _m2_entry(out)["candidate"]
-    assert any(s.get("doi") == "10.1/x" for s in cand["literature_sources"])
-    assert cand["citation_list"] == cand["literature_sources"]
-
-
-def test_the_late_grounding_is_handed_over_so_it_gets_saved(monkeypatch):
-    """Grounding after the walk is worthless if nobody persists it.
-
-    M2 is committed during the walk, before its sources exist, so the late
-    grounding must hand M2 over a SECOND time — keyed by module, so the caller
-    updates the saved M2 instead of showing two literature modules.
-    """
-    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
-    _patch_search(monkeypatch, scout, eric=False)
-    seen: list[dict] = []
-    cs = ContextStore(m4_analysis={"analysis_results": "PLS-SEM A -> B. " * 60})
-    B.reconstruct_upstream(cs, llm=_fake_llm(), ground_m2=True,
-                           on_module=lambda e: seen.append(
-                               {"module": e["module"],
-                                "n": len(e["candidate"].get("literature_sources") or [])}))
-
-    m2_handovers = [s for s in seen if s["module"] == "M2"]
-    assert len(m2_handovers) == 2                    # once bare, once grounded
-    assert m2_handovers[0]["n"] == 0
-    assert m2_handovers[1]["n"] == 1
-
-
-def test_a_topic_that_already_exists_is_not_searched_twice(monkeypatch):
-    """When M1 is already there the walk grounds M2 inline, and the post-pass
-    must not pay for a second search."""
-    scout = _CountingScout([{"title": "Real", "doi": "10.1/x", "source": "OpenAlex"}])
-    _patch_search(monkeypatch, scout)
-    B.reconstruct_upstream(_edu_cs(), targets=["M2"], llm=_fake_llm(), ground_m2=True)
-    assert scout.calls == 1
+def test_existing_topic_not_searched_twice(monkeypatch):
+    calls=patch_search(monkeypatch,[paper(1)])
+    B.reconstruct_upstream(state(),targets=['M2'],llm=mock_model())
+    assert len(calls)==1

@@ -1,185 +1,96 @@
-"""M2 research tool tests — the Crossref fallback path.
+"""M2 broad discovery delegates to the shared bounded discovery seam.
 
-No network, no real LLM: httpx and the LLM factory are both stubbed. The
-fallback is the degraded path that runs when the deep scout is unavailable, so
-its query string and its zero-source signal are the two things worth pinning.
+No provider or LLM calls run here. Provider fan-out, deadlines, and query planning
+belong to ``orchestrator.tools.literature_discovery``; this boundary only shapes
+agent-visible metadata and retains domain supplements.
 """
 from __future__ import annotations
 
 import json
 
-import pytest
-
 from agent.tools import research
 
 
-class _FakeResp:
-    def __init__(self, items):
-        self._items = items
+def test_scout_uses_shared_discovery_default_target_and_preserves_evidence(monkeypatch):
+    seen = {}
 
-    def json(self):
-        return {"message": {"items": self._items}}
+    def discover(topic, **kwargs):
+        seen["topic"] = topic
+        seen.update(kwargs)
+        return {
+            "sources": [{
+                "title": "A candidate paper", "authors": ["Nguyen"], "year": 2024,
+                "doi": "10.1/example", "url": "https://doi.org/10.1/example",
+                "abstract": "Provider-supplied abstract evidence.", "provider": "semantic_scholar",
+                # The helper deliberately never verifies metadata candidates.
+                "verified": False,
+            }],
+            "count": 2, "verified_count": 2, "relevant_verified_count": 1,
+            "new_count": 1, "unverified_count": 4,
+            "existing_needs_review": [{"title": "Off-topic inherited source", "reason": "not relevant"}],
+            "target": 24, "shortfall": 23,
+            "queries": ["digital banking adoption"], "warnings": ["openalex timeout"], "complete": False,
+        }
 
-
-class _FakeLLMResp:
-    def __init__(self, content):
-        self.content = content
-
-
-@pytest.fixture
-def crossref_calls(monkeypatch):
-    """Stub research.httpx.get; record the params every call was made with."""
-    calls: list[dict] = []
-    items: list[dict] = []
-
-    class _FakeHttpx:
-        @staticmethod
-        def get(url, params=None, **kw):
-            calls.append({"url": url, "params": params or {}})
-            return _FakeResp(items)
-
-    monkeypatch.setattr(research, "httpx", _FakeHttpx)
-    return {"calls": calls, "items": items}
-
-
-@pytest.fixture
-def dead_scout(monkeypatch):
-    """Force the deep scout to fail so every test lands in the fallback."""
-    from orchestrator.tools import m2_literature
-
-    class _Boom:
-        @staticmethod
-        def func(*a, **kw):
-            raise RuntimeError("scout unavailable")
-
-    monkeypatch.setattr(m2_literature, "scout_citations", _Boom)
-
-
-@pytest.fixture
-def fake_llm(monkeypatch):
-    """Stub the translation LLM. Real calls cost money — never hit the gateway."""
-    seen: list[str] = []
-
-    def _factory():
-        class _LLM:
-            @staticmethod
-            def invoke(prompt):
-                seen.append(prompt)
-                return _FakeLLMResp("technology acceptance model online banking Vietnam")
-        return _LLM()
-
-    from orchestrator.tools import m5_writing
-    monkeypatch.setattr(m5_writing, "_get_llm", _factory)
-    return seen
-
-
-def _one_item():
-    return {
-        "title": ["A Real Paper"],
-        "author": [{"family": "Nguyen"}],
-        "issued": {"date-parts": [[2020]]},
-        "container-title": ["Journal of Things"],
-        "DOI": "10.1/abc",
-        "URL": "https://doi.org/10.1/abc",
-    }
-
-
-# --- fix 1: what query actually reaches Crossref ------------------------------
-
-def test_crossref_gets_translated_topic_not_the_composed_scaffold(
-    crossref_calls, dead_scout, fake_llm
-):
-    crossref_calls["items"].append(_one_item())
-
-    research.research_scout.func(
-        topic="Ý định sử dụng ngân hàng số của sinh viên Việt Nam",
-        research_questions=["RQ1: Yếu tố nào ảnh hưởng?"],
+    monkeypatch.setattr(research, "discover_literature", discover)
+    out = json.loads(research.research_scout.func(
+        topic="digital banking adoption", research_questions=["What predicts adoption?"],
         seed_refs=["Davis 1989"],
-    )
+    ))
 
-    assert len(crossref_calls["calls"]) == 1
-    q = crossref_calls["calls"][0]["params"]["query.bibliographic"]
-    # The scaffold labels are prompt furniture, not search terms. Sending them
-    # to a bibliographic index poisons the query in every language.
-    assert "Research questions:" not in q
-    assert "Seed references:" not in q
-    assert "RQ1" not in q
-    assert "Davis 1989" not in q
-    # English keywords, from the translation hop — Crossref is an English index.
-    assert q == "technology acceptance model online banking Vietnam"
-
-
-def test_translation_hop_sees_the_bare_topic_and_the_rqs(
-    crossref_calls, dead_scout, fake_llm
-):
-    research.research_scout.func(
-        topic="Ý định sử dụng ngân hàng số",
-        research_questions=["RQ1: Yếu tố nào?"],
-    )
-    assert len(fake_llm) == 1
-    assert "Ý định sử dụng ngân hàng số" in fake_llm[0]
-    assert "RQ1: Yếu tố nào?" in fake_llm[0]
+    assert seen["topic"] == "digital banking adoption"
+    assert seen["research_questions"] == ["What predicts adoption?"]
+    assert seen["min_sources"] == 24
+    assert seen["concepts"] == ["Davis 1989"]
+    assert out["count"] == 2 and out["target"] == 24 and out["shortfall"] == 23
+    assert out["verified_count"] == 2 and out["relevant_verified_count"] == 1
+    assert out["new_count"] == 1 and out["unverified_count"] == 4
+    assert out["existing_needs_review"] == [{"title": "Off-topic inherited source", "reason": "not relevant"}]
+    assert out["coverage"] == {
+        "queries": ["digital banking adoption"], "query_coverage": {}, "query_hits": {},
+        "complete": False, "warnings": ["openalex timeout"], "requests_completed": 0, "providers": [],
+    }
+    assert out["sources"][0]["abstract"] == "Provider-supplied abstract evidence."
+    assert out["sources"][0]["provider"] == "semantic_scholar"
+    assert out["sources"][0]["verified"] is False
 
 
-def test_translation_failure_degrades_to_raw_topic(crossref_calls, dead_scout, monkeypatch):
-    from orchestrator.tools import m5_writing
+def test_scout_honestly_returns_partial_empty_discovery(monkeypatch):
+    monkeypatch.setattr(research, "discover_literature", lambda *_args, **_kwargs: {
+        "sources": [], "count": 0, "target": 7, "shortfall": 7,
+        "queries": ["narrow topic"], "warnings": ["crossref unavailable"], "complete": False,
+    })
 
-    def _boom():
-        raise RuntimeError("gateway down")
+    out = json.loads(research.research_scout.func(topic="narrow topic", min_sources=7))
 
-    monkeypatch.setattr(m5_writing, "_get_llm", _boom)
-    crossref_calls["items"].append(_one_item())
-
-    research.research_scout.func(topic="digital banking adoption")
-
-    q = crossref_calls["calls"][0]["params"]["query.bibliographic"]
-    assert q == "digital banking adoption"
-
-
-def test_translation_hop_is_time_bounded(crossref_calls, dead_scout, monkeypatch):
-    """A hung LLM in the recovery path must not become the new stall."""
-    import time
-
-    from orchestrator.tools import m5_writing
-
-    def _factory():
-        class _LLM:
-            @staticmethod
-            def invoke(prompt):
-                time.sleep(5)
-                return _FakeLLMResp("never arrives")
-        return _LLM()
-
-    monkeypatch.setattr(m5_writing, "_get_llm", _factory)
-    monkeypatch.setenv("DOTHESIS_TRANSLATE_TIMEOUT_S", "1")
-    crossref_calls["items"].append(_one_item())
-
-    started = time.monotonic()
-    research.research_scout.func(topic="digital banking adoption")
-    elapsed = time.monotonic() - started
-
-    assert elapsed < 4
-    assert crossref_calls["calls"][0]["params"]["query.bibliographic"] == "digital banking adoption"
-
-
-# --- fix 2: the zero-source outcome must be unmistakable ----------------------
-
-def test_empty_crossref_yields_actionable_zero_signal(crossref_calls, dead_scout, fake_llm):
-    out = json.loads(research.research_scout.func(topic="a topic with no matches"))
-
-    assert out["count"] == 0
     assert out["sources"] == []
-    # A zero-source fallback must not read like a successful one.
-    assert out["note"] != "budgeted fallback (Crossref)"
-    assert "hint" in out
-    hint = out["hint"].lower()
-    assert "doi" in hint or "upload" in hint
+    assert out["count"] == 0 and out["target"] == 7 and out["shortfall"] == 7
+    assert out["coverage"]["complete"] is False
+    assert "Không được viết" in out["hint"]
 
 
-def test_nonempty_fallback_keeps_the_honesty_marker(crossref_calls, dead_scout, fake_llm):
-    crossref_calls["items"].append(_one_item())
-    out = json.loads(research.research_scout.func(topic="digital banking"))
+def test_scout_passes_specialized_domain_to_shared_collector(monkeypatch):
+    seen = {}
 
-    assert out["count"] == 1
-    assert "fallback" in out["note"].lower()
-    assert out["sources"][0]["doi"] == "10.1/abc"
+    def discover(*_args, **kwargs):
+        seen.update(kwargs)
+        return {
+            "sources": [
+                {"title": "Universal", "doi": "10.base/1", "provider": "openalex", "verified": True},
+                {"title": "Medical index", "doi": "10.med/1", "provider": "medical", "abstract": "Indexed abstract", "verified": True},
+            ],
+            "count": 2, "verified_count": 2, "new_count": 2,
+            "target": 3, "shortfall": 1, "queries": ["diabetes telemedicine"],
+            "coverage": {"construct": True}, "query_hits": {"diabetes telemedicine": 2},
+            "complete": False, "warnings": [], "requests_completed": 4, "providers": ["medical", "openalex"],
+        }
+
+    monkeypatch.setattr(research, "discover_literature", discover)
+    out = json.loads(research._research_scout_impl(
+        "telemedicine glycemic control in diabetes patients", min_sources=3,
+    ))
+
+    assert seen["domain"] == "medical"
+    assert {source["doi"] for source in out["sources"]} == {"10.base/1", "10.med/1"}
+    assert out["sources"][1]["abstract"] == "Indexed abstract"
+    assert out["verified_count"] == 2 and out["target"] == 3 and out["shortfall"] == 1

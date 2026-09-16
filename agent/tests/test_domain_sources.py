@@ -106,7 +106,7 @@ def test_medical_routes_to_europe_pmc(fakes):
     epmc, eric = fakes
     out = R._domain_supplement("q", "medical")
     assert epmc.called == 1 and eric.called == 0
-    assert out[0]["doi"] == "10.med/1" and out[0]["verified"] is True
+    assert out[0]["doi"] == "10.med/1" and out[0]["verified"] is False
 
 
 def test_education_routes_to_eric(fakes):
@@ -148,20 +148,24 @@ def test_dedup_by_doi_title_and_backfill():
 
 # --- end-to-end fallback path merges supplement -----------------------------
 
-def test_research_scout_fallback_merges_supplement(monkeypatch):
-    # Force the deep scout to fail so the Crossref fallback path runs.
-    import orchestrator.tools.m2_literature as m2
-    monkeypatch.setattr(m2.scout_citations, "func", lambda *a, **k: None)
-    # Deterministic query + base refs, and a fake medical index.
-    monkeypatch.setattr(R, "_search_query_en", lambda t, rq: "diabetes telemedicine")
-    monkeypatch.setattr(R, "_crossref_fallback",
-                        lambda q, n=8: [{"title": "Base", "doi": "10.base/1", "verified": True}])
-    monkeypatch.setattr(R, "EuropePmcClient", _FakeEPMC)
-    _FakeEPMC.called = 0
+def test_research_scout_passes_medical_domain_to_shared_discovery(monkeypatch):
+    seen = {}
 
+    def discover(*_args, **kwargs):
+        seen.update(kwargs)
+        return {
+            "sources": [
+                {"title": "Base", "doi": "10.base/1", "verified": True},
+                {"title": "Med", "doi": "10.med/1", "provider": "medical", "verified": True},
+            ],
+            "count": 2, "verified_count": 2, "target": 5, "shortfall": 3,
+            "queries": ["telemedicine diabetes"], "coverage": {}, "complete": False, "warnings": [],
+        }
+
+    monkeypatch.setattr(R, "discover_literature", discover)
     res = json.loads(R.research_scout.func(
         topic="telemedicine glycemic control in diabetes patients", min_sources=5))
-    dois = {s["doi"] for s in res["sources"]}
-    assert "10.base/1" in dois and "10.med/1" in dois       # base + supplement merged
-    assert res["note"].startswith("budgeted fallback")      # honesty marker preserved
-    assert _FakeEPMC.called == 1
+
+    assert seen["domain"] == "medical"
+    assert {s["doi"] for s in res["sources"]} == {"10.base/1", "10.med/1"}
+    assert res["target"] == 5 and res["verified_count"] == 2 and res["shortfall"] == 3

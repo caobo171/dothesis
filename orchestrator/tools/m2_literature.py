@@ -435,6 +435,13 @@ def scout_citations(topic: str, min_n: int = 20, deep: bool = True,
             # this field. Try api_source first; keep `source` as a back-compat
             # path in case anything else (or a dict ingest) uses it.
             "source": _field(c, "api_source") or _field(c, "source"),
+            "provider": _field(c, "api_source"),
+            "venue": _field(c, "journal") or _field(c, "venue"),
+            # Evidence retrieved by the engine must reach the writer unchanged;
+            # an API provider name is not the paper's publication venue.
+            "abstract": _field(c, "abstract"),
+            "citation_count": _field(c, "citation_count"),
+            "verified": _field(c, "verified") is True,
             "url": _field(c, "url"),
             "doi": _field(c, "doi"),
         }

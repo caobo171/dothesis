@@ -129,7 +129,7 @@ def _decision_word(sentence: str) -> Optional[str]:
 
 _NUM = re.compile(
     r"(?P<metric>β|ß|\bbeta\b|hệ số\s*(?:hồi quy|đường dẫn|tác động)?|r²|r\^?2|\bt\b|f²|f\^?2|\bp\b)"
-    r"\s*(?P<op>[<>=≤≥]?)\s*(?P<val>[-−–]?\s*\d*[.,]?\d+)", re.I)
+    r"\s*(?P<op><=|>=|[<>=≤≥]?)\s*(?P<val>[-−–]?\s*\d*[.,]?\d+)", re.I)
 
 
 def _metric_of(raw: str) -> Optional[str]:
@@ -171,9 +171,9 @@ def extract_number_claims(sentence: str) -> list[dict]:
         if val is None:
             continue
         claim = {"kind": "number", "metric": metric, "value": val, "decimals": dec,
-                 "sentence": sentence[:160]}
-        if metric == "p" and m.group("op") in ("<", "≤"):
-            claim["threshold"] = True
+                 "sentence": sentence[:160], "operator": m.group("op") or "="}
+        if metric == "p" and claim["operator"] in ("<", "≤"):
+            claim["threshold"] = True  # legacy consumers; use operator below.
         out.append(claim)
     return out
 
@@ -241,6 +241,7 @@ def extract_table_claims(prose: str) -> list[dict]:
                         continue
                     out.append({"kind": "number", "metric": metric, "value": val,
                                 "decimals": dec, "hid": hid,
+                                "row_line": row_line,
                                 "sentence": f"(table) {header} | {cells}"[:160]})
             i += 2
         else:
@@ -262,6 +263,182 @@ def _node_labels(cm: dict) -> dict:
     return labels
 
 
+_PATH_ARROW = r"(?:→|->|⇒|=>)"
+_SUBGROUP_CONTEXT = re.compile(
+    r"\b(?:mga|multi[- ]?group|subgroup|group\s*(?:difference|comparison)|"
+    r"between\s+groups)\b|"
+    r"(?:kiểm\s*định|so\s*sánh|khác\s*biệt|chênh\s*lệch)\s*(?:đa\s*)?nhóm|"
+    r"\bchênh\s*lệch\s*(?:hệ\s*số|giữa\s*các\s*nhóm)|điều\s*tiết",
+    re.I,
+)
+
+
+def _section_sentences(prose: str):
+    """Yield sentences with the context of their nearest markdown/plain heading.
+
+    Multi-group tables and prose can legitimately reuse an H label and a main
+    path.  They are not the pooled M4 estimate, so do not turn that evidence
+    into a contradictory main-effect claim merely because it follows an MGA
+    heading.
+    """
+    subgroup = False
+    pending: list[str] = []
+
+    def flush():
+        nonlocal pending
+        text = "\n".join(pending)
+        pending = []
+        return [(sent, subgroup) for sent in segment_sentences(text)]
+
+    for line in str(prose or "").splitlines():
+        stripped = line.strip()
+        is_heading = bool(re.match(r"^(?:#{1,6}\s+|(?:mga|multi[- ]?group|subgroup|"
+                                   r"kiểm\s*định.*nhóm|so\s*sánh.*nhóm)\b)", stripped, re.I))
+        if is_heading:
+            yield from flush()
+            subgroup = bool(_SUBGROUP_CONTEXT.search(stripped))
+        else:
+            pending.append(line)
+    yield from flush()
+
+
+def _table_is_in_subgroup_section(prose: str, row_line: str) -> bool:
+    """Use the closest preceding heading for markdown-table attribution."""
+    pos = prose.find(row_line) if row_line else -1
+    if pos < 0:
+        return False
+    subgroup = False
+    for line in prose[:pos].splitlines():
+        stripped = line.strip()
+        if re.match(r"^(?:#{1,6}\s+|(?:mga|multi[- ]?group|subgroup|"
+                    r"kiểm\s*định.*nhóm|so\s*sánh.*nhóm)\b)", stripped, re.I):
+            subgroup = bool(_SUBGROUP_CONTEXT.search(stripped))
+    return subgroup
+
+
+def _section_paragraphs(prose: str):
+    """Yield blank-line-delimited paragraphs with their heading context."""
+    subgroup = False
+    pending: list[str] = []
+
+    def flush():
+        nonlocal pending
+        text = "\n".join(pending).strip()
+        pending = []
+        return [(part.strip(), subgroup) for part in re.split(r"\n\s*\n", text) if part.strip()]
+
+    for line in str(prose or "").splitlines():
+        stripped = line.strip()
+        is_heading = bool(re.match(r"^(?:#{1,6}\s+|(?:mga|multi[- ]?group|subgroup|"
+                                   r"kiểm\s*định.*nhóm|so\s*sánh.*nhóm)\b)", stripped, re.I))
+        if is_heading:
+            yield from flush()
+            subgroup = bool(_SUBGROUP_CONTEXT.search(stripped))
+        else:
+            pending.append(line)
+    yield from flush()
+
+
+_RAW_PATH = re.compile(
+    rf"(?<![\w-])[\w-]+(?:\s*(?:×|\*|\bx\b)\s*[\w-]+)?\s*{_PATH_ARROW}\s*[\w-]+(?![\w-])",
+    re.I,
+)
+
+
+def _resolve_paragraph_main_effect(paragraph: str, entries: dict[str, dict], *, subgroup_section: bool):
+    """Find one unambiguous pooled result target within one paragraph only."""
+    sentences = segment_sentences(paragraph)
+    if subgroup_section or _SUBGROUP_CONTEXT.search(paragraph):
+        return None
+    anchors = {hid for sent in sentences for hid in _anchors(sent) if hid in entries}
+    paths = {hid for sent in sentences for hid in _path_candidates(sent, entries)}
+    candidates = anchors | paths
+    # A second raw arrow may name an unregistered control or a competing path.
+    # Do not guess which value belongs to the registered path in that case.
+    raw_paths = _RAW_PATH.findall(paragraph)
+    if len(candidates) != 1 or len(raw_paths) > 1:
+        return None
+    return next(iter(candidates))
+
+
+def _numeric_result_polarity(sentence: str) -> Optional[str]:
+    """Direction wording that describes an estimated relation, not an action."""
+    s = _nfc(sentence)
+    if re.search(r"(?:tác động|ảnh hưởng|effect)\s+(?:dương|tích cực|positive)", s):
+        return "positive"
+    if re.search(r"(?:tác động|ảnh hưởng|effect)\s+(?:âm|tiêu cực|negative)", s):
+        return "negative"
+    return None
+
+
+def _path_mentioned(sentence: str, edge: dict | None) -> bool:
+    """Whether prose names this exact registered directed path.
+
+    Results prose often says ``ATT → INT`` rather than repeating ``H1``. That
+    is sufficient evidence of discussion only when it matches the M3 edge in
+    its stored direction. We intentionally do not use a loose co-occurrence of
+    construct names: it would attribute reverse paths and MGA/interaction rows
+    to a main effect merely because they share a target.
+    """
+    if not isinstance(edge, dict) or not isinstance(sentence, str):
+        return False
+    source = str(edge.get("source") or "").strip()
+    target = str(edge.get("target") or "").strip()
+    if not source or not target:
+        return False
+    # Preserve an interaction source as an interaction. A main-effect pattern
+    # such as ATT → INT must not consume ATT × EXP → INT.
+    # `x` is an interaction separator only when it is a standalone token;
+    # splitting every letter x turned EXP into E/P and broke real moderation
+    # paths. Unicode × and * remain unambiguous separators.
+    source_parts = [p.strip() for p in re.split(r"\s*(?:×|\*|\bx\b)\s*", source, flags=re.I) if p.strip()]
+    if len(source_parts) > 1:
+        source_pattern = r"\s*(?:×|x|\*)\s*".join(re.escape(part) for part in source_parts)
+    else:
+        source_pattern = re.escape(source)
+    pattern = rf"(?<![\w-]){source_pattern}\s*{_PATH_ARROW}\s*{re.escape(target)}(?![\w-])"
+    for match in re.finditer(pattern, sentence, flags=re.I):
+        # Do not let the second operand of `INC × INT → DEC` masquerade as
+        # the main-effect `INT → DEC`. Interaction rows have a separator and
+        # another operand immediately before this candidate path.
+        if re.search(r"\b[\w-]+\s*(?:×|\*|\bx\b)\s*$", sentence[:match.start()], flags=re.I):
+            continue
+        return True
+    return False
+
+
+def _path_candidates(sentence: str, entries: dict[str, dict]) -> list[str]:
+    return sorted(hid for hid, entry in entries.items()
+                  if any(_path_mentioned(sentence, alias)
+                         for alias in [entry.get("edge"), *(entry.get("path_aliases") or [])]))
+
+
+def _resolve_main_effect(sentence: str, entries: dict[str, dict], *, subgroup_section: bool):
+    """Return a unique main-effect id, otherwise a safe reason for skipping.
+
+    An explicit H remains useful, but never overrides a conflicting directed
+    path or an MGA/subgroup context.  This makes the hard numeric boundary
+    evidence-based rather than guessing which of several reported estimates
+    belongs to the pooled result.
+    """
+    anchors = sorted({hid for hid in _anchors(sentence) if hid in entries})
+    paths = _path_candidates(sentence, entries)
+    candidates = sorted(set(anchors + paths))
+    if subgroup_section or _SUBGROUP_CONTEXT.search(sentence):
+        return None, "subgroup_context", candidates
+    if len(anchors) > 1:
+        return None, "multiple_hypotheses", candidates
+    if len(paths) > 1:
+        return None, "multiple_paths", candidates
+    if anchors and paths and anchors[0] != paths[0]:
+        return None, "hypothesis_path_conflict", candidates
+    if anchors:
+        return anchors[0], None, anchors
+    if paths:
+        return paths[0], None, paths
+    return None, None, candidates
+
+
 def build_registry(hypotheses, conceptual_model, analysis_results, m5) -> list[dict]:
     cm = conceptual_model if isinstance(conceptual_model, dict) else {}
     labels = _node_labels(cm)
@@ -277,7 +454,9 @@ def build_registry(hypotheses, conceptual_model, analysis_results, m5) -> list[d
     def _entry(hid):
         return entries.setdefault(hid, {"id": hid, "in_m3": False, "statement": None,
                                         "direction": None, "direction_source": None,
-                                        "edge": None, "m4": {"present": False}, "m5": {"mentioned_in": [], "claims": []}})
+                                        "edge": None, "path_aliases": [],
+                                        "m4": {"present": False},
+                                        "m5": {"mentioned_in": [], "claims": [], "attribution_warnings": []}})
 
     for h in (hypotheses or []):
         hid = normalize_hypothesis_id(h)
@@ -289,6 +468,14 @@ def build_registry(hypotheses, conceptual_model, analysis_results, m5) -> list[d
             e["statement"] = re.sub(r"^\s*h\d{1,2}\s*[:.-]?\s*", "", h, flags=re.I).strip() or None
         elif isinstance(h, dict):
             e["statement"] = h.get("statement") or h.get("text") or h.get("hypothesis")
+            # Current M3 contract may carry a structured hypothesis path even
+            # when conceptual_model has not been normalized into graph edges.
+            # Keep it as the path alias used by M5 coverage rather than making
+            # a finished, explicit ATT → INT discussion look undiscussed.
+            path = str(h.get("path") or "").strip()
+            pm = re.match(r"^\s*(.+?)\s*(?:→|->|⇒|=>)\s*(.+?)\s*$", path)
+            if pm:
+                e["path_aliases"].append({"source": pm.group(1).strip(), "target": pm.group(2).strip()})
 
     for hid, e in list(entries.items()):
         edge = edge_by_id.get(hid)
@@ -298,6 +485,10 @@ def build_registry(hypotheses, conceptual_model, analysis_results, m5) -> list[d
                 e["direction"], e["direction_source"] = et, "edge_effect_type"
             src, tgt = edge.get("source"), edge.get("target")
             e["edge"] = {"source": labels.get(src, src), "target": labels.get(tgt, tgt)}
+            # A graph may label ATT as a Vietnamese display name while M5
+            # correctly discusses its stored code. Keep both aliases.
+            if src and tgt:
+                e["path_aliases"].append({"source": str(src), "target": str(tgt)})
             if not e["statement"] and edge.get("hypothesis"):
                 e["statement"] = edge["hypothesis"]
         if e["direction"] is None and e["statement"]:
@@ -340,35 +531,92 @@ def build_registry(hypotheses, conceptual_model, analysis_results, m5) -> list[d
 
     # M5 side.
     chapters = _resolve_chapters(m5)
+    attribution_warning_keys: set[tuple[str, str, str]] = set()
+    attributed_number_keys: set[tuple[str, str, str, float, str]] = set()
     for chap in _RESULT_CHAPTERS:
         prose = chapters.get(chap)
         if not prose or _is_stub(prose):
             continue
-        for sent in segment_sentences(prose):
-            anchors = _anchors(sent)
-            for hid in set(anchors):
-                if hid in entries and chap not in entries[hid]["m5"]["mentioned_in"]:
-                    entries[hid]["m5"]["mentioned_in"].append(chap)
-            if len(set(anchors)) == 1:
-                hid = anchors[0]
-                if hid not in entries:
-                    continue
-                for nc in extract_number_claims(sent):
+        for sent, subgroup_section in _section_sentences(prose):
+            hid, skip_reason, candidates = _resolve_main_effect(
+                sent, entries, subgroup_section=subgroup_section)
+            if hid and chap not in entries[hid]["m5"]["mentioned_in"]:
+                entries[hid]["m5"]["mentioned_in"].append(chap)
+
+            numbers = extract_number_claims(sent)
+            pol, dec = _polarity(sent), _decision_word(sent)
+            if not hid:
+                # Only report skipped evidence which otherwise resembles a
+                # result claim. Generic textbook thresholds have no registered
+                # H/path candidate and remain quiet.
+                # MGA/subgroup evidence is intentionally outside the pooled
+                # M4 comparison scope. It is valid reporting, not a warning.
+                # Other unresolved attribution is actionable because a reader
+                # cannot tell which registered pooled result the value means.
+                if (skip_reason and skip_reason != "subgroup_context" and candidates
+                        and (numbers or pol or dec)):
+                    sample = numbers[0] if numbers else {}
+                    target = entries[candidates[0]]["m5"]["attribution_warnings"]
+                    key = (chap, skip_reason, _nfc(sent))
+                    # Repeated boilerplate should not dominate the review.
+                    # Keep up to three distinct examples per hypothesis.
+                    if key in attribution_warning_keys or len(target) >= 3:
+                        continue
+                    attribution_warning_keys.add(key)
+                    target.append(_finding(
+                        "coherence.ambiguous_path_attribution", "soft",
+                        "Skipped a prose result claim because it cannot be assigned to one "
+                        f"pooled hypothesis ({skip_reason.replace('_', ' ')}).",
+                        hypothesis=candidates[0], chapter=chap, sentence=sent[:160],
+                        observed={"metric": sample.get("metric"), "value": sample.get("value"),
+                                  "sentence": sent[:160]},
+                        expected="one uniquely registered main-effect path", source="parsed"))
+                continue
+            for nc in numbers:
+                nc.update({"chapter": chap, "attribution": "strong"})
+                entries[hid]["m5"]["claims"].append(nc)
+                attributed_number_keys.add((chap, nc["sentence"], nc["metric"], nc["value"],
+                                            nc.get("operator", "=")))
+            if pol:
+                entries[hid]["m5"]["claims"].append({"kind": "direction", "value": pol,
+                                                     "chapter": chap, "attribution": "strong", "sentence": sent[:160]})
+            if dec:
+                entries[hid]["m5"]["claims"].append({"kind": "decision", "value": dec,
+                                                    "chapter": chap, "attribution": "strong", "sentence": sent[:160]})
+        # Results writers often state β/t/p in the first sentence and name the
+        # exact hypothesis/path in the next. Associate only within this single
+        # paragraph when it contains one registered directed result and no
+        # competing raw arrow or MGA/group context.
+        for paragraph, subgroup_section in _section_paragraphs(prose):
+            paragraph_hid = _resolve_paragraph_main_effect(
+                paragraph, entries, subgroup_section=subgroup_section)
+            if not paragraph_hid:
+                continue
+            for sent in segment_sentences(paragraph):
+                detached_numbers = extract_number_claims(sent)
+                for nc in detached_numbers:
+                    key = (chap, nc["sentence"], nc["metric"], nc["value"], nc.get("operator", "="))
+                    if key in attributed_number_keys:
+                        continue
                     nc.update({"chapter": chap, "attribution": "strong"})
-                    entries[hid]["m5"]["claims"].append(nc)
-                pol = _polarity(sent)
-                if pol:
-                    entries[hid]["m5"]["claims"].append({"kind": "direction", "value": pol,
-                                                         "chapter": chap, "attribution": "strong", "sentence": sent[:160]})
-                dec = _decision_word(sent)
-                if dec:
-                    entries[hid]["m5"]["claims"].append({"kind": "decision", "value": dec,
-                                                        "chapter": chap, "attribution": "strong", "sentence": sent[:160]})
+                    entries[paragraph_hid]["m5"]["claims"].append(nc)
+                    attributed_number_keys.add(key)
+                # Do not borrow decisions or generic sentiment from the rest
+                # of a paragraph. A direction can accompany detached numbers
+                # only when this very sentence explicitly describes an effect.
+                sent_hid, _, _ = _resolve_main_effect(
+                    sent, entries, subgroup_section=subgroup_section)
+                relation_polarity = _numeric_result_polarity(sent) if detached_numbers and not sent_hid else None
+                if relation_polarity:
+                    entries[paragraph_hid]["m5"]["claims"].append({
+                        "kind": "direction", "value": relation_polarity, "chapter": chap,
+                        "attribution": "strong", "sentence": sent[:160],
+                    })
         # Hand-typed markdown tables in this chapter (gap 4) — route each row's
         # cells to the hypothesis the row names, feeding the same _number_checks.
         for tc in extract_table_claims(prose):
             hid = tc.pop("hid")
-            if hid in entries:
+            if hid in entries and not _table_is_in_subgroup_section(prose, tc.get("row_line")):
                 tc.update({"chapter": chap, "attribution": "strong"})
                 entries[hid]["m5"]["claims"].append(tc)
     return list(entries.values())
@@ -540,28 +788,59 @@ def _number_checks(entry) -> list[dict]:
         if metric == "p":
             ok = _p_agrees(claim, stored, nums.get("p_is_threshold"))
             if not ok:
+                op = claim.get("operator", "=")
                 out.append(_finding(check, sev,
-                                    f"{entry['id']}: prose quotes p {'<' if claim.get('threshold') else '='} "
+                                    f"{entry['id']}: prose quotes p {op} "
                                     f"{claim['value']} but the persisted p is {stored}.",
                                     hypothesis=entry["id"], chapter=claim.get("chapter"),
-                                    observed={"sentence": claim["sentence"], "value": claim["value"]},
+                                    sentence=claim["sentence"],
+                                    observed={"metric": metric, "sentence": claim["sentence"],
+                                              "value": claim["value"]},
                                     expected=stored, tolerance=eps))
             continue
         if abs(float(stored) - claim["value"]) > eps:
             out.append(_finding(check, sev,
                                 f"{entry['id']}: prose quotes {metric} = {claim['value']} but the persisted "
                                 f"value is {stored}.", hypothesis=entry["id"], chapter=claim.get("chapter"),
-                                observed={"sentence": claim["sentence"], "value": claim["value"]},
+                                sentence=claim["sentence"],
+                                observed={"metric": metric, "sentence": claim["sentence"],
+                                          "value": claim["value"]},
                                 expected=stored, tolerance=eps))
     return out
 
 
 def _p_agrees(claim, stored, stored_is_threshold) -> bool:
-    if claim.get("threshold"):  # prose "p < X"
-        thr = claim["value"]
-        return float(stored) < thr + _eps(claim["decimals"])
-    # prose "p = X" exact
-    return abs(float(stored) - claim["value"]) <= _eps(claim["decimals"])
+    """Whether a prose p relation overlaps the persisted p evidence.
+
+    A source value stored as ``< .05`` means p lies somewhere in (0, .05),
+    not p=.05.  Hard-block only when that interval and the prose relation are
+    disjoint; a narrower prose upper bound is inconclusive, not contradictory.
+    """
+    try:
+        value, bound = claim["value"], float(stored)
+    except (KeyError, TypeError, ValueError):
+        return True
+    # Retain compatibility with claims using the older threshold flag rather
+    # than reinterpreting `< .001` as an equality.
+    raw_op = claim.get("operator") or ("<" if claim.get("threshold") else "=")
+    op = {"≤": "<=", "≥": ">="}.get(raw_op, raw_op)
+    if stored_is_threshold:
+        # Persisted evidence is 0 < p < bound. Only lower-bound/equality prose
+        # at or beyond that upper limit is provably impossible.
+        if op in (">", ">=", "="):
+            return value < bound
+        return True
+    # Exact persisted p: strict inequalities are checked as strict relations,
+    # while equality retains display-precision tolerance.
+    if op == "<":
+        return bound < value
+    if op == "<=":
+        return bound <= value
+    if op == ">":
+        return bound > value
+    if op == ">=":
+        return bound >= value
+    return abs(bound - value) <= _eps(claim["decimals"])
 
 
 def _direction_checks(entry) -> list[dict]:
@@ -585,7 +864,8 @@ def _direction_checks(entry) -> list[dict]:
                 out.append(_finding("coherence.direction_prose", "soft",
                                     f"{entry['id']}: prose describes a {c['value']} effect but the persisted "
                                     f"β = {beta} is {bsign}.", hypothesis=entry["id"], chapter=c.get("chapter"),
-                                    observed={"sentence": c["sentence"]}, expected=f"{bsign} β"))
+                                    sentence=c["sentence"], observed={"sentence": c["sentence"]},
+                                    expected=f"{bsign} β"))
     return out
 
 
@@ -603,7 +883,7 @@ def _decision_checks(entry) -> list[dict]:
                                 f"{entry['id']}: prose says {'supported' if prose_sup else 'not supported'} "
                                 f"but the recorded decision is {'supported' if supp else 'not supported'}.",
                                 hypothesis=entry["id"], chapter=c.get("chapter"),
-                                observed={"sentence": c["sentence"]},
+                                sentence=c["sentence"], observed={"sentence": c["sentence"]},
                                 expected=f"decision_supported={supp}"))
     return out
 
@@ -627,11 +907,27 @@ def check_coherence(registry, m3_hypotheses=None, analysis_results=None, chapter
     if m3_hypotheses is not None or analysis_results is not None:
         findings += coverage_findings(m3_hypotheses, analysis_results)
     for e in registry:
+        findings += e["m5"].get("attribution_warnings", [])
         findings += _co3(e, chapters_present)
         findings += _direction_checks(e)
         findings += _decision_checks(e)
         findings += _number_checks(e)
     return findings
+
+
+def _grounding_findings(chapters: dict, flat_context: dict) -> list[dict]:
+    """Optional writing-grounding checks, isolated from the hard gate.
+
+    The helper intentionally has no coherence dependency; import it lazily so a
+    partially deployed advisory checker can never make M5 persistence fail.
+    """
+    try:
+        from agent.writing_grounding import grounding_findings  # noqa: PLC0415
+        findings = grounding_findings(chapters, flat_context)
+        return findings if isinstance(findings, list) else []
+    except Exception:
+        logger.debug("writing grounding skipped", exc_info=True)
+        return []
 
 
 # --- entry points (never raise) ---------------------------------------------
@@ -647,6 +943,7 @@ def validate_m5_sections(final_sections, flat_context: dict) -> dict:
                        and (chapters.get("conclusion") and not _is_stub(chapters.get("conclusion"))))
         findings = check_coherence(registry, hyps, ar, present)
         findings += percent_variance_findings(chapters, ar)   # gap 4: percent R²
+        findings += _grounding_findings(chapters, flat_context)
         return _agg(findings)
     except Exception:
         logger.exception("validate_m5_sections crashed")
@@ -811,6 +1108,14 @@ def validate_coherence(nested: dict) -> dict:
         findings = check_coherence(registry, m3.get("hypotheses"), ar, present)
         findings += traceability_findings(m2, m3, chapters)
         findings += percent_variance_findings(chapters, ar)   # gap 4: percent R²
+        findings += _grounding_findings(chapters, {
+            "hypotheses": m3.get("hypotheses"),
+            "conceptual_model": m3.get("conceptual_model"),
+            "constructs": m3.get("constructs"),
+            "analysis_results": ar,
+            "m3_design": m3,
+            "m4_analysis": m4,
+        })
         return _agg(findings)
     except Exception:
         logger.exception("validate_coherence crashed")

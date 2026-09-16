@@ -10,6 +10,10 @@ description: Use when writing thesis chapters — drafting intro, lit review, me
 You own this slice:
 - `final_sections: DocumentSection[]` — one entry per chapter/section, with title,
   body, and lineage to M1–M4
+- `chapters: {chapter_name: {prose, ...}}` — the canonical editor/continuous-writing
+  home. Internal repair flows must update this shape when it already exists;
+  writing only `final_sections` leaves the repaired prose hidden behind the
+  canonical `chapters` copy during export.
 
 You are the **synthesizer**. Everything written must trace to a fact in the project
 state. No invention. You read **all of M1–M4**.
@@ -20,6 +24,7 @@ state. No invention. You read **all of M1–M4**.
 |---|---|
 | **Auto Thesis button** (server-side, deterministic) | Optional UI path for the whole thesis from scratch. Mention it only as an alternative; never redirect a chat request to it. |
 | `export_docx(citation_style, scope)` (tool) | Required chat path for full or targeted writing. It renders DOCX + PDF and surfaces download links in the Workspace panel. |
+| `rewrite_thesis(scope, export_after)` (tool) | The only bulk replacement path for an existing thesis. It composes in memory, checks for concurrent editor changes, commits once, then exports the committed draft. |
 
 You own the wizard: what to write, in what order, and surgical revisions. You do
 NOT hand-build OOXML or paste whole chapters into chat — the file is the artifact.
@@ -34,6 +39,16 @@ That single tool call does everything: if no chapters exist yet it composes all
 five from M1–M4, persists them, renders DOCX + PDF, and surfaces download links in
 the Workspace panel. You do NOT need to compose chapters yourself first, and
 you do NOT need `commit_slice` — the tool handles persistence.
+
+When the student explicitly asks to **replace/rewrite an already substantive
+whole thesis** (rather than export the draft already in state), call
+`rewrite_thesis(scope="full", export_after=True)`. For named chapters use
+`rewrite_thesis(scope="chapter:intro|conclusion", export_after=True)`. Never
+use `export_docx(force=True)` as a rewrite command: `force` only authorizes an
+otherwise incomplete export. The rewrite tool preserves the old draft unless a
+complete replacement passes grounding and its pre-write chapter snapshot is
+still current; report its structured conflict/failure instead of claiming an
+export succeeded.
 
 - Do NOT tell the user to click a button instead of acting. The message path
   must produce the file on its own.
@@ -129,6 +144,10 @@ read the section from the slice, revise it yourself under the quality bars below
 show the change, commit, then export that chapter. Keep lineage; append, don't
 silently overwrite.
 
+When replacing existing substantive chapters, compose replacement chapter prose
+at full draft length. A short outline or summary is not a rewrite and must never
+replace a completed chapter, even when the student requested a full rewrite.
+
 ### Phase 4 — Export (automatic on done)
 
 For a direct file request, call `export_docx` in the same turn. For targeted
@@ -156,6 +175,90 @@ on S3 by the time you write that sentence.
 
 ## Quality bars (apply to pipeline output review AND your revisions)
 
+### Editor review actions
+
+The editor may run focused, read-only reviews over the current canonical
+`chapters` draft. These actions report findings and suggested fixes; they never
+rewrite prose or commit state automatically:
+
+- **Claim confidence** — verify that author–year claims resolve to the project
+  reference pool and surface unsupported or cross-chapter-inconsistent claims.
+  It scans every canonical chapter in bounded chunks and may suggest a citation
+  only after a retrieved source contains a checked supporting passage. It never
+  invents a paper, DOI, abstract, quote, or citation insertion; title-only
+  matches remain `unverifiable` rather than evidence. While a chunk is running,
+  the editor may show its actual bounded activity (analysis, search query,
+  identity verification, or evidence evaluation) and completed counts. This
+  status is read-only progress, never a claim that a cache/provider/model step
+  succeeded before it has returned.
+  Evidence choices are judged in small bounded batches after all claims in the
+  chunk have their retrieved candidates. Every returned judgment must identify
+  its claim and candidate and quote a literal retrieved passage; malformed,
+  missing, or duplicate judgment IDs are retryable failures, never silently
+  omitted claims or a per-claim paid fallback.
+  Independent, uniquely anchorable search queries may be retrieved and
+  identity-checked concurrently in a small bounded worker pool. Keep query
+  ordering deterministic for the later evidence prompt, deduplicate a paper's
+  identity before checking it, and let the coordinator record only factual
+  parallel-search, query, verification, and partial-failure progress. Model
+  extraction and evidence judgments remain sequential so credit checkpoints
+  and charged usage stay authoritative.
+  A complete DOI/title/authors/year record returned directly by the trusted
+  OpenAlex or Crossref search adapter may supply identity metadata without a
+  second resolver request only when the server has marked it and no merged
+  same-DOI record conflicts. That proves bibliography identity only, never
+  evidence: a literal retrieved abstract or passage is still required before
+  any claim can be supported or cited. Missing, conflicting, user-supplied, or
+  Semantic Scholar-only metadata always follows the exact resolver path.
+  A cache hit is free. Each real model invocation is recorded and charged from
+  its reported token usage, including a response that later fails structured
+  validation; never estimate or invent usage. The review stops before another
+  paid call when its configured credit checkpoint is exhausted, preserving the
+  completed chunks for a later resume.
+- **Peer review** — run the complete committee-readiness rubric across structure,
+  methodology, results, citations, statistics, coherence, similarity, advisor
+  feedback, and institutional requirements.
+- **Source quality** — inspect citation metadata, DOI syntax/existence when the
+  verifier is enabled, author sanity, retraction/preprint risks available in the
+  stored source metadata, and reference completeness.
+- **Tone of voice** — judge academic register, objectivity, clarity, hedging, and
+  consistency without changing technical meaning, statistics, or citations.
+- **Proofread** — find grammar, spelling, punctuation, agreement, and awkward
+  wording at document scope. A finding must name its likely chapter and propose
+  a correction; applying a correction remains an explicit editor action.
+
+Focused reviews must reuse the same validators and current project-scoped
+`context_store` as chat/export. Do not create a parallel UI-only score, and do
+not persist review output into M5 content.
+
+### Inline AI edit proposals
+
+Selection-scoped AI actions in the editor are review-first. They must create a
+`PendingEdit`; they never rewrite chapter prose until the student explicitly
+accepts the proposal.
+
+- Keep the original selection, proposed replacement, source action, offsets,
+  processing duration, and a short explanation of what changed and why.
+- Show a visible planning/processing state. A long model call must never look
+  like a dead button.
+- The proposal UI must let the student toggle an inline word diff, inspect the
+  rationale, replace the selection, insert the proposal below it, retry the
+  same action, or discard it.
+- Red/struck text means removal and green text means insertion. Diff markup is
+  display-only and must never enter stored markdown or exported files.
+- Accepting still uses the stale-offset guard. If chapter prose changed since
+  proposal creation, fail closed and ask the student to discard/retry instead
+  of applying at the wrong location.
+- A cited source's visible author-year label must be derived from the canonical
+  M2 `authors` data and must match the export validator. Never substitute
+  `Anonymous` merely because a current source uses `authors` rather than a
+  legacy singular `author` field.
+- Editor prose mutations, including accepting a zero-length citation insertion,
+  go through `commit_slice("M5", {chapters: …})`. An edit proposal records the
+  chapter document fingerprint at creation; acceptance fails closed when the
+  whole chapter changed, not only when its selected range still happens to
+  match.
+
 - **Every paragraph cited** in lit review, framework, and discussion.
 - **The bibliography contains used sources, not inventory.** A verified M2 source
   belongs in References only when an inline citation in the exported prose points
@@ -180,6 +283,20 @@ on S3 by the time you write that sentence.
   the analysis itself changed, recommit M4 first. Soft `coherence_warnings` (a direction/
   decision wording mismatch, or an undiscussed hypothesis) don't block — acknowledge them
   before `confirm_done`.
+- **Use the canonical M3 hypothesis register** — preserve each H id, its stated path, and its
+  construct labels from `conceptual_model`; never rename a construct or swap a path from a
+  similarly named variable. In Chapters 4–5, report a hypothesis decision only when the
+  canonical M4 `analysis_results` carries that hypothesis. Missing result metrics are not a
+  pass: omit the unsupported diagnostic or state only that it was not reported.
+- **Treat rounded zero p-values as thresholds** — a report value displayed as `0.000` means
+  `p < 0.001`, never `p = 0.000`. Do not claim rho_A, HTMT, loading, reliability, or validity
+  passed unless the corresponding values are present in canonical `analysis_results`.
+- **Generated-prose grounding is fail-closed** — after a composition or AI rewrite, DoThesis
+  checks numeric contradictions and explicit unsupported diagnostic-pass claims against canonical
+  M3/M4 state. It may retry once with the exact findings; if they remain, it returns the
+  actionable findings instead of silently shipping the prose. This never auto-rewrites a chapter
+  the student already authored or imported. Construct-name and broader semantic concerns remain
+  advisory review findings; inspect them rather than treating a clean numeric check as proof of meaning.
 - **Hypotheses stated verbatim** in the discussion of findings (5.2), then "supported" / "not supported"
   — never "kind of supported".
 - **Nothing from outside the project state.** *"Add context about COVID's impact on

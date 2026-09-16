@@ -16,6 +16,8 @@ conversation checkpointer.
 """
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -34,7 +36,7 @@ from agent.state import (
 )
 
 from .models import ContextStore as DbContextStore
-from .models import Project
+from .models import Project, VersionHistory
 
 logger = logging.getLogger(__name__)
 
@@ -111,11 +113,20 @@ def heal_module_status(stored: dict | None, nested_cs: Any) -> dict[str, str]:
 
 
 class DbProjectStateStore(ProjectStateStore):
-    def __init__(self, engine, project_id: uuid.UUID, workspace_dir):
+    def __init__(self, engine, project_id: uuid.UUID, workspace_dir, *, connection=None):
         # workspace_dir only anchors uploads/exports; state lives in the DB.
         super().__init__(workspace_dir)
         self.engine = engine
         self.project_id = project_id
+        # Decision: editor citation acceptance owns one transaction spanning
+        # M2 and M5; each still passes through commit_slice and durable history.
+        self._connection = connection
+
+    def _read_connection(self):
+        return nullcontext(self._connection) if self._connection is not None else self.engine.connect()
+
+    def _write_connection(self):
+        return nullcontext(self._connection) if self._connection is not None else self.engine.begin()
 
     def commit_slice(
         self,
@@ -323,7 +334,7 @@ class DbProjectStateStore(ProjectStateStore):
             logger.exception("save_doctor_log failed for project %s", self.project_id)
 
     def load(self) -> dict[str, Any]:
-        with self.engine.connect() as conn:
+        with self._read_connection() as conn:
             proj = conn.execute(
                 select(Project.__table__.c.focus, Project.__table__.c.module_status,
                        Project.__table__.c.stale_modules)
@@ -354,7 +365,7 @@ class DbProjectStateStore(ProjectStateStore):
         # opened rather than a write on every read.
         if proj and status != (proj.module_status or {}):
             try:
-                with self.engine.begin() as conn:
+                with self._write_connection() as conn:
                     conn.execute(
                         Project.__table__.update()
                         .where(Project.__table__.c.id == self.project_id)
@@ -400,9 +411,8 @@ class DbProjectStateStore(ProjectStateStore):
             "stale": stale,
             "focus": proj.focus if proj else None,
             "contextStore": flat,
-            # Version snapshots are in-turn only for now; durable history
-            # lands in the version_history table in a follow-up (the agent's
-            # semantics don't depend on it).
+            # Durable snapshots are queried by the recovery/history API rather
+            # than loaded into every agent turn (chapter JSON can be large).
             "versionHistory": [],
         }
 
@@ -411,7 +421,7 @@ class DbProjectStateStore(ProjectStateStore):
         need WHOLE module slices (e.g. the engine chapter composers), not the
         flattened owned-keys view `load()` returns.
         """
-        with self.engine.connect() as conn:
+        with self._read_connection() as conn:
             cs = conn.execute(
                 select(DbContextStore.__table__)
                 .where(DbContextStore.__table__.c.project_id == self.project_id)
@@ -430,16 +440,24 @@ class DbProjectStateStore(ProjectStateStore):
         prev_status = prev_state["status"]
         flat = state["contextStore"]
         now = datetime.now(timezone.utc).isoformat()
-        with self.engine.connect() as conn:
+        # Slice writes, project status, and durable undo snapshots must share
+        # one transaction. A snapshot without its matching slice_after (or the
+        # reverse) makes recovery actively misleading.
+        with self._write_connection() as conn:
             # Build each module's slice column from its owned flat keys,
             # merging over the existing column so legacy keys survive.
             existing = conn.execute(
                 select(DbContextStore.__table__)
                 .where(DbContextStore.__table__.c.project_id == self.project_id)
+                # Serialize first-history seeding: concurrent first mutations
+                # must see one predecessor and append in a stable order.
+                .with_for_update()
             ).first()
             values: dict[str, Any] = {}
+            changed_slices: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
             for module, column in _MODULE_COLUMN.items():
-                current = dict(getattr(existing, column, None) or {}) if existing else {}
+                prior = dict(getattr(existing, column, None) or {}) if existing else {}
+                current = dict(prior)
                 touched = False
                 for key in SLICE_OWNERSHIP[module]:
                     if key in flat:
@@ -450,8 +468,9 @@ class DbProjectStateStore(ProjectStateStore):
                 if state["status"].get(module) == "done" and not current.get("confirmed_at"):
                     current["confirmed_at"] = now
                     touched = True
-                if touched or current:
+                if current != prior:
                     values[column] = current or None
+                    changed_slices[column] = (prior, current)
             # Coaching keys get their own merge-over-existing pass — MERGE,
             # never rebuild, same reasoning as the per-module columns above:
             # a rebuild from `flat` alone would wipe any coaching key not
@@ -478,7 +497,21 @@ class DbProjectStateStore(ProjectStateStore):
                 .values(focus=state["focus"], module_status=state["status"],
                         stale_modules=list(state.get("stale") or []))
             )
-            conn.commit()
+            for column, (prior, current) in changed_slices.items():
+                has_history = conn.execute(
+                    select(VersionHistory.__table__.c.id)
+                    .where(VersionHistory.__table__.c.project_id == self.project_id,
+                           VersionHistory.__table__.c.slice_field == column)
+                    .limit(1)
+                ).first()
+                # Pre-history projects otherwise have no recoverable "before"
+                # state. Seed that legacy slice once, then append the changed
+                # slice; later mutations append their after-state only.
+                if has_history is None:
+                    conn.execute(VersionHistory.__table__.insert().values(
+                        project_id=self.project_id, slice_field=column, slice_after=prior))
+                conn.execute(VersionHistory.__table__.insert().values(
+                    project_id=self.project_id, slice_field=column, slice_after=current))
 
         # Continuous writing: the thesis is composed chapter by chapter as each
         # module completes — NOT only when the user reaches M5. When this commit
@@ -486,6 +519,10 @@ class DbProjectStateStore(ProjectStateStore):
         # owns into the m5_writing slice, then (re)render the docx/pdf from every
         # chapter written so far. So a student who has finished M1–M3 already has
         # a 3-chapter thesis to download, and each later module extends it.
+        if self._connection is not None:
+            # The transaction owner is applying an editor edit, not requesting
+            # generation/export. Never start external work before it commits.
+            return
         newly_done = [
             m for m in ("M1", "M2", "M3", "M4", "M5")
             if prev_status.get(m) != "done" and state["status"].get(m) == "done"

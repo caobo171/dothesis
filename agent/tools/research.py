@@ -1,20 +1,17 @@
-"""M2 research tools — the agent's hands into the EXISTING research strategy.
+"""M2 research tools — bounded shared discovery plus fast/read-only helpers.
 
-Architecture §2.1: the M2 skill keeps its procedure, the engine keeps the
-muscle. `research_scout` reuses the same engine call path the graph_v2 M2
-phase used (orchestrator/tools/m2_literature.scout_citations → engine
-deep_research planner + api_citations orchestrator + validators), so the
-agent pivot does not change research quality or progress streaming.
+The agent delegates broad M2 discovery to ``literature_discovery`` so chat and
+backfill use the same provider fan-out, deadline, deduplication, and honest
+partial-coverage contract. ``quick_sources`` and ``parse_reference`` retain
+their narrow, existing roles.
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
-import re
 from pathlib import Path
 
-import httpx  # module-level so tests can monkeypatch research.httpx
 from langchain_core.tools import tool
 
 # Module-level so tests can monkeypatch research.EuropePmcClient / research.EricClient.
@@ -51,50 +48,7 @@ def _domain_supplement(query: str, domain: str, n: int = 8) -> list[dict]:
                                  clients={"medical": EuropePmcClient, "education": EricClient})
 
 
-# Wall-clock discipline promoted from partner's _budgeted_scout (spec §3): the
-# deep scout can run minutes / rate-limit into a hang, and a hung tool is the
-# stall mode headless cannot distinguish from thinking. Cap it, fall back to a
-# direct Crossref query so a turn never hangs and never ships zero references.
-# Default 120s (not partner's old 45s): chat's scout legitimately runs 30-90s,
-# and the run-level wall clock now owns the per-report budget.
-_SCOUT_FALLBACK_N = 8
-
-
-def _crossref_fallback(query: str, n: int = _SCOUT_FALLBACK_N) -> list[dict]:
-    """Direct Crossref query — real peer-reviewed sources + DOIs in ~2s."""
-    try:
-        r = httpx.get(
-            "https://api.crossref.org/works",
-            params={
-                "query.bibliographic": query,
-                "rows": n,
-                "select": "title,author,issued,DOI,container-title,URL",
-                "filter": "type:journal-article,has-abstract:true",
-                "sort": "relevance",
-            },
-            timeout=20,
-            headers={"User-Agent": "DoThesis/1.0 (mailto:cao.nv17@gmail.com)"},
-        )
-        items = r.json().get("message", {}).get("items", [])
-    except Exception:
-        logger.exception("crossref fallback failed (returning no sources)")
-        return []
-    refs: list[dict] = []
-    for it in items:
-        title = (it.get("title") or [""])[0].strip()
-        if not title:
-            continue
-        parts = (it.get("issued", {}).get("date-parts") or [[None]])
-        refs.append({
-            "title": title,
-            "authors": [str(a.get("family")).strip() for a in it.get("author", []) if a.get("family")],
-            "year": parts[0][0] if parts and parts[0] else None,
-            "venue": (it.get("container-title") or [None])[0],
-            "doi": it.get("DOI"),
-            "url": it.get("URL"),
-            "verified": bool(it.get("DOI")),
-        })
-    return refs[:n]
+from orchestrator.tools.literature_discovery import discover_literature
 
 
 
@@ -104,28 +58,21 @@ def research_scout(
     topic: str,
     research_questions: list[str] | None = None,
     seed_refs: list[str] | None = None,
-    min_sources: int = 10,
+    min_sources: int = 24,
 ) -> str:
     """Deep literature search through the DoThesis research pipeline.
 
-    Plans queries from the topic + research questions, searches academic APIs
-    (Semantic Scholar, Crossref, OpenAlex, grounded search), validates and
-    quality-filters citations, and returns verified sources. Slow (30–90s);
-    progress streams to the user automatically. Scope it tightly — see the M2
-    skill's search playbook.
-
-    Capped by a wall clock (DOTHESIS_SCOUT_TIMEOUT_S, default 120s). If the deep
-    scout times out or fails, the result's `note` starts with "budgeted fallback
-    (Crossref)" and holds lighter, unvalidated-but-real Crossref sources — say so
-    to the user and offer a retry rather than presenting them as the deep
-    search's output. If that fallback also comes back empty the note says so and
-    a `hint` explains what to do: never write the section anyway on `count: 0`.
+    Plans bounded query facets from the topic + research questions and searches
+    OpenAlex, Crossref, and Semantic Scholar concurrently within a shared budget.
+    It returns metadata candidates, their provider provenance, and abstract text
+    when a provider supplies it. An exact identity check may mark metadata as
+    verified; that still does NOT establish support for a particular thesis claim.
 
     Args:
         topic: One narrow sentence (population + platform + context beats a bare construct).
         research_questions: The M1 RQs verbatim — drives query planning.
         seed_refs: Titles/DOIs of already-confirmed sources to expand from.
-        min_sources: Minimum citations to aim for (default 10).
+        min_sources: Broad discovery target (default 24; partial results report a shortfall).
     """
     return _research_scout_impl(topic, research_questions, seed_refs, min_sources)
 
@@ -134,7 +81,7 @@ def _research_scout_impl(
     topic: str,
     research_questions: list[str] | None = None,
     seed_refs: list[str] | None = None,
-    min_sources: int = 10,
+    min_sources: int = 24,
     domain: str | None = None,
 ) -> str:
     # Medical/education theses ALSO get a domain-specialized index (Europe PMC /
@@ -142,90 +89,63 @@ def _research_scout_impl(
     # a store-bound tool supplies it; otherwise classify from the topic text.
     domain = domain or _classify_domain(None, topic, research_questions)
 
-    # Compose the scout topic the way the engine planner expects: a focused
-    # statement, with RQs appended as context lines (the planner extracts
-    # query families from them).
-    composed = topic
-    if research_questions:
-        composed += "\nResearch questions:\n" + "\n".join(f"- {q}" for q in research_questions)
-    if seed_refs:
-        composed += "\nSeed references:\n" + "\n".join(f"- {r}" for r in seed_refs)
-
-    import concurrent.futures as _fut
-
-    # This tool is sync, so run_headless's asyncio.wait_for (agent/headless.py)
-    # cannot interrupt a search in flight: a run can overrun its wall_clock_s by
-    # up to this cap. Harmless at defaults (120s vs 1800s), but any profile with
-    # wall_clock_s <= 120 is really governed by this number, not by its budget.
-    timeout_s = int(os.getenv("DOTHESIS_SCOUT_TIMEOUT_S", "120"))
-    citations = None
-    # NOTE: do NOT use `with ThreadPoolExecutor(...)`. Its __exit__ calls
-    # shutdown(wait=True), which BLOCKS until the (possibly runaway) scout
-    # thread finishes — a result(timeout=...) that fires would still wait
-    # minutes for the hung thread, defeating the cap entirely (the lesson
-    # partner's _budgeted_scout learned on a Semantic Scholar 429 storm).
-    ex = _fut.ThreadPoolExecutor(max_workers=1)
+    target = max(1, int(min_sources or 24))
     try:
-        # Reuse the proven graph_v2 wrapper (engine-native model, quality
-        # gate, progress emitter chain) instead of re-wiring the engine here.
-        from orchestrator.tools.m2_literature import scout_citations
-        future = ex.submit(scout_citations.func, composed, min_n=min_sources)
-        citations = future.result(timeout=timeout_s)
-    except Exception:
-        # TimeoutError, engine failure, rate limit — all degrade to Crossref.
-        logger.exception("research_scout: deep scout failed/timed out; Crossref fallback")
-    finally:
-        ex.shutdown(wait=False, cancel_futures=True)
-
-    if not citations:
-        # `composed` is scaffolding for the engine's *planner*, which reads the
-        # "Research questions:" / "Seed references:" labels as structure. A
-        # bibliographic index reads them as search terms, so Crossref gets the
-        # bare topic, translated to English.
-        q = _search_query_en(topic, research_questions)
-        refs = _crossref_fallback(q)
-        if domain != "general":
-            # Europe PMC / ERIC are English indexes — feed the translated query.
-            refs = _dedup_sources(refs + _domain_supplement(q, domain))
-        out = {
-            "sources": refs, "count": len(refs),
-            # Honesty marker: the agent should tell the user this was the
-            # light fallback, not the deep validated scout.
-            "note": "budgeted fallback (Crossref)",
-        }
-        if not refs:
-            # A `count: 0` that reads identically to a successful fallback is
-            # how a thesis ends up composed from stubs — on the headless
-            # surface there is no human to notice the empty list. Say what
-            # happened and what to do instead.
-            out["note"] = "budgeted fallback (Crossref) returned NO sources — search failed"
-            out["hint"] = (
-                "Do NOT proceed as if literature was found and do not invent citations. "
-                "Tell the user the search came back empty and offer to retry, narrow the "
-                "topic, or add papers by upload/DOI instead."
-            )
-        return json.dumps(out, ensure_ascii=False)
-
-    # Normalize to the M2 Source shape; ids are assigned when the agent
-    # commits the user-curated selection to the slice.
-    sources = [
-        {
-            "title": c.get("title"),
-            "authors": c.get("authors"),
-            "year": c.get("year"),
-            "venue": c.get("source") or c.get("venue"),
-            "doi": c.get("doi"),
-            "url": c.get("url"),
-            "verified": bool(c.get("verified", c.get("doi") is not None)),
-        }
-        for c in (citations or [])
-    ]
-    # Base sources FIRST so a paper found by both keeps its validated deep-scout row.
-    if domain != "general":
-        supplement = _domain_supplement(_search_query_en(topic, research_questions), domain)
-        if supplement:
-            sources = _dedup_sources(sources + supplement)
-    return json.dumps({"sources": sources, "count": len(sources)}, ensure_ascii=False)
+        discovered = discover_literature(
+            topic, research_questions=research_questions, min_sources=target,
+            # Seed papers are additional facets, not asserted evidence. The
+            # helper deduplicates provider output against the search itself.
+            concepts=seed_refs,
+            # Keep the shared helper bounded even when an agent turn is otherwise
+            # long. It returns honest partial coverage instead of a second fallback.
+            budget_s=float(os.getenv("DOTHESIS_SCOUT_TIMEOUT_S", "120")),
+            # The collector owns specialized provider work too, so every
+            # provider shares one deadline and verification policy.
+            domain=domain,
+        )
+    except Exception as exc:
+        logger.exception("research_scout: bounded discovery failed")
+        return json.dumps({
+            "sources": [], "count": 0, "target": target, "shortfall": target,
+            "verified_count": 0, "relevant_verified_count": 0, "new_count": 0,
+            "unverified_count": 0, "existing_needs_review": [],
+            "coverage": {"queries": [], "query_coverage": {}, "complete": False,
+                         "warnings": ["Không thể kết nối dịch vụ tìm kiếm."]},
+            "hint": "Không tìm thấy nguồn. Không được viết như đã có literature; hãy thử lại hoặc thêm DOI/PDF.",
+            "detail": str(exc),
+        }, ensure_ascii=False)
+    sources = [dict(source) for source in (discovered.get("sources") or []) if isinstance(source, dict)]
+    # Preserve the shared resolver's exact-identity result and its richer
+    # abstracts/provider fields. Verification means metadata identity only; it
+    # is never evidence that this paper supports a thesis claim.
+    # `complete` and `shortfall` are grounded in the collector's verified,
+    # facet-balanced result. Display rows alone can include existing sources,
+    # so never recompute those decisions here.
+    count = int(discovered.get("count", len(sources)))
+    verified_count = int(discovered.get("verified_count", sum(source.get("verified") is True for source in sources)))
+    relevant_verified_count = int(discovered.get("relevant_verified_count", verified_count))
+    shortfall = int(discovered.get("shortfall", max(0, target - relevant_verified_count)))
+    out = {
+        "sources": sources, "count": count,
+        "verified_count": verified_count,
+        "relevant_verified_count": relevant_verified_count,
+        "new_count": int(discovered.get("new_count", 0)),
+        "unverified_count": int(discovered.get("unverified_count", len(discovered.get("unverified_candidates") or []))),
+        "existing_needs_review": discovered.get("existing_needs_review") or [],
+        "target": int(discovered.get("target", target)), "shortfall": shortfall,
+        "coverage": {
+            "queries": discovered.get("queries") or [],
+            "query_coverage": discovered.get("coverage") or {},
+            "query_hits": discovered.get("query_hits") or {},
+            "complete": bool(discovered.get("complete", False)),
+            "warnings": discovered.get("warnings") or [],
+            "requests_completed": int(discovered.get("requests_completed", 0)),
+            "providers": discovered.get("providers") or [],
+        },
+    }
+    if count == 0:
+        out["hint"] = "Không tìm thấy nguồn. Không được viết như đã có literature; hãy thử lại, thu hẹp chủ đề, hoặc thêm DOI/PDF."
+    return json.dumps(out, ensure_ascii=False)
 
 
 @tool

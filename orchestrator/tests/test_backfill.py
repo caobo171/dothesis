@@ -284,7 +284,7 @@ def test_m2_citation_list_mirrors_the_sources_it_already_has(monkeypatch):
         "literature_review_doc": "d", "research_gaps": [{"gap": "g"}],
         "literature_sources": sources, "citation_list": [],
     })
-    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    cs = ContextStore(m2_literature={"literature_sources": sources}, m4_analysis={"analysis_results": "x" * 2000})
     out = bf.reconstruct_upstream(cs, targets=["M2"], llm=_fake_llm("{}"))
     cand = next(i["candidate"] for i in out if i["module"] == "M2")
     assert cand["citation_list"] == sources
@@ -299,7 +299,7 @@ def test_a_real_citation_list_is_never_overwritten(monkeypatch):
         "literature_sources": [{"title": "Scouted", "doi": "10.1/x"}],
         "citation_list": real,
     })
-    cs = ContextStore(m4_analysis={"analysis_results": "x" * 2000})
+    cs = ContextStore(m2_literature={"citation_list": real}, m4_analysis={"analysis_results": "x" * 2000})
     out = bf.reconstruct_upstream(cs, targets=["M2"], llm=_fake_llm("{}"))
     cand = next(i["candidate"] for i in out if i["module"] == "M2")
     assert cand["citation_list"] == real
@@ -312,7 +312,7 @@ def test_m2_is_grounded_in_a_real_search_by_default(monkeypatch):
     import orchestrator.backfill as bf
     monkeypatch.delenv("DOTHESIS_BACKFILL_GROUND_M2", raising=False)
     real = [{"title": "Real paper", "doi": "10.1000/real", "year": 2021}]
-    monkeypatch.setattr(bf, "_m2_real_sources", lambda cs: real)
+    monkeypatch.setattr(bf, "_m2_real_sources", lambda cs, report=None: real)
     monkeypatch.setattr(bf, "reconstruct_artifact", lambda *a, **k: {
         "research_state_summary": "s", "theoretical_framework": "t",
         "literature_review_doc": "d", "research_gaps": [{"gap": "g"}],

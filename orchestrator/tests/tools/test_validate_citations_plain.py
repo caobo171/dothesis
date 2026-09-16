@@ -31,3 +31,16 @@ def test_validate_citations_plain_supports_nd_year():
     )
     assert result["citations_used"] == ["(Smith, n.d.)"]
     assert result["uncited_warnings"] == []
+
+
+def test_validate_citations_plain_splits_semicolon_groups():
+    """Each valid source in a grouped citation is resolved independently."""
+    result = validate_citations_plain(
+        prose="Evidence supports this (Cohen et al., 2013; Buckley, 2012).",
+        reference_pool=[
+            {"authors": ["Cohen", "Prayag"], "year": 2013},
+            {"authors": ["Buckley"], "year": 2012},
+        ],
+    )
+    assert result["citations_used"] == ["(Cohen et al., 2013)", "(Buckley, 2012)"]
+    assert result["uncited_warnings"] == []

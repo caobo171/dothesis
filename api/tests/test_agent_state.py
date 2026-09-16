@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.agent_state import DbProjectStateStore
 from app.db import get_engine
-from app.models import ContextStore, Project
+from app.models import ContextStore, Project, VersionHistory
 
 # project_id fixture lives in conftest.py — shared with test_agent_state_coaching.py.
 
@@ -50,6 +50,55 @@ def test_commit_lands_in_slice_columns_and_project_row(project_id, tmp_path):
     assert cs.m1_topic["confirmed_at"]
     assert p.focus == "M1"
     assert p.module_status["M1"] == "done"
+
+
+def test_slice_history_seeds_legacy_before_then_appends_only_changed_slice(project_id, tmp_path):
+    """The first durable row keeps the before state needed to undo legacy data."""
+    engine = get_engine()
+    with Session(engine) as s:
+        s.add(ContextStore(project_id=project_id, m1_topic={"research_title": "legacy"}))
+        s.commit()
+
+    store = _store(project_id, tmp_path)
+    store.commit_slice("M1", {"research_title": "revised"}, reason="revise title")
+    store.commit_slice("M1", {"research_title": "final"}, reason="finalize title")
+
+    with Session(engine) as s:
+        rows = s.query(VersionHistory).filter_by(project_id=project_id, slice_field="m1_topic") \
+            .order_by(VersionHistory.id).all()
+        all_rows = s.query(VersionHistory).filter_by(project_id=project_id).all()
+    assert [row.slice_after["research_title"] for row in rows] == ["legacy", "revised", "final"]
+    assert len(all_rows) == 3  # M2–M5 did not change, so they have no history rows.
+
+
+def test_history_insert_failure_rolls_back_slice_and_project_state(project_id, tmp_path, monkeypatch):
+    """A recovery row is useless if it can commit separately from its slice."""
+    from sqlalchemy.engine import Connection
+
+    original_execute = Connection.execute
+
+    def fail_history_insert(connection, statement, *args, **kwargs):
+        if getattr(statement, "table", None) is VersionHistory.__table__:
+            raise RuntimeError("history storage unavailable")
+        return original_execute(connection, statement, *args, **kwargs)
+
+    store = _store(project_id, tmp_path)
+    store.load()  # Existing read-heal may normalize an empty status map once.
+    with Session(get_engine()) as s:
+        before = s.get(Project, project_id)
+        before_focus = before.focus
+        before_status = dict(before.module_status or {})
+    monkeypatch.setattr(Connection, "execute", fail_history_insert)
+
+    with pytest.raises(RuntimeError, match="history storage unavailable"):
+        store.commit_slice("M1", {"research_title": "must roll back"}, reason="r")
+
+    with Session(get_engine()) as s:
+        assert s.get(ContextStore, project_id) is None
+        after = s.get(Project, project_id)
+        assert after.focus == before_focus
+        assert (after.module_status or {}) == before_status
+        assert s.query(VersionHistory).filter_by(project_id=project_id).count() == 0
 
 
 def test_propagation_marks_stale_without_demoting_status(project_id, tmp_path):

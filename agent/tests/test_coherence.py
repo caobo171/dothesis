@@ -101,6 +101,34 @@ def test_p_threshold_agreement():
     assert not any(f["check"] == "coherence.number_mismatch" for f in check_coherence(reg))
 
 
+def _p_registry(stored_p, prose):
+    return build_registry(
+        [{"id": "H1", "path": "ATT -> INT"}], {},
+        {"hypothesis_tests": [{"hypothesis": "H1", "numbers": {"p": stored_p}}]},
+        {"results": prose, "conclusion": "Kết luận tổng hợp."},
+    )
+
+
+def test_p_greater_than_relation_is_preserved_and_can_match_exact_source():
+    findings = check_coherence(_p_registry(0.03, "ATT → INT has p > 0.001."))
+    assert not any(f["check"] == "coherence.number_mismatch" for f in findings)
+
+
+def test_p_strict_upper_bound_wrong_against_exact_source_is_hard():
+    findings = check_coherence(_p_registry(0.03, "ATT → INT has p < 0.001."))
+    assert any(f["check"] == "coherence.number_mismatch" and f["severity"] == "hard" for f in findings)
+
+
+def test_p_narrower_claim_than_stored_upper_bound_is_inconclusive():
+    findings = check_coherence(_p_registry("<0.05", "ATT → INT has p < 0.001."))
+    assert not any(f["check"] == "coherence.number_mismatch" for f in findings)
+
+
+def test_p_exact_claim_outside_stored_upper_bound_is_hard():
+    findings = check_coherence(_p_registry("<0.001", "ATT → INT has p = 0.05."))
+    assert any(f["check"] == "coherence.number_mismatch" and f["severity"] == "hard" for f in findings)
+
+
 # --- direction / decision (soft) --------------------------------------------
 
 def test_direction_m3_m4_soft():
@@ -148,6 +176,197 @@ def test_undiscussed_hypothesis_still_flagged_when_mentioned_nowhere():
     reg = build_registry(HYPS, CM, AR, chapters)
     findings = check_coherence(reg, HYPS, AR, True)
     assert any(f["check"] == "coherence.undiscussed_hypothesis" for f in findings)
+
+
+def test_explicit_registered_path_counts_as_discussion_without_h_label():
+    """Generated results prose commonly uses ATT → INT rather than H1."""
+    hyps = ["H1: ATT positively affects INT"]
+    cm = {"nodes": [{"id": "att", "label": "ATT"}, {"id": "int", "label": "INT"}],
+          "edges": [{"id": "H1", "source": "att", "target": "int"}]}
+    ar = {"hypothesis_tests": [{"hypothesis": "H1", "path": "ATT → INT", "numbers": {}}]}
+    reg = build_registry(hyps, cm, ar, {
+        "results": "The ATT → INT path was examined in the structural model.",
+        "conclusion": "The conclusion summarizes the model.",
+    })
+    assert not any(f["check"] == "coherence.undiscussed_hypothesis"
+                   for f in check_coherence(reg, hyps, ar, True))
+
+
+def test_reverse_or_interaction_path_does_not_cover_main_effect():
+    """Path aliases must retain direction and cannot consume an MGA interaction."""
+    hyps = ["H1: ATT positively affects INT"]
+    cm = {"nodes": [{"id": "att", "label": "ATT"}, {"id": "int", "label": "INT"}],
+          "edges": [{"id": "H1", "source": "att", "target": "int"}]}
+    ar = {"hypothesis_tests": [{"hypothesis": "H1", "path": "ATT → INT", "numbers": {}}]}
+    reg = build_registry(hyps, cm, ar, {
+        "results": "The MGA interaction ATT × EXP → INT differs between groups. INT → ATT is also reported.",
+        "conclusion": "The conclusion summarizes the model.",
+    })
+    assert any(f["check"] == "coherence.undiscussed_hypothesis"
+               for f in check_coherence(reg, hyps, ar, True))
+
+
+def test_registered_interaction_path_requires_both_operands():
+    hyps = ["H9: ATT × EXP affects INT"]
+    cm = {"nodes": [{"id": "interaction", "label": "ATT × EXP"}, {"id": "int", "label": "INT"}],
+          "edges": [{"id": "H9", "source": "interaction", "target": "int"}]}
+    ar = {"hypothesis_tests": [{"hypothesis": "H9", "path": "ATT × EXP → INT", "numbers": {}}]}
+    reg = build_registry(hyps, cm, ar, {
+        "results": "The ATT × EXP → INT interaction was significant.",
+        "conclusion": "The conclusion summarizes the model.",
+    })
+    assert not any(f["check"] == "coherence.undiscussed_hypothesis"
+                   for f in check_coherence(reg, hyps, ar, True))
+
+
+def test_structured_hypothesis_path_covers_without_conceptual_model_edge():
+    """Live M3 records can be dict paths before graph normalization runs."""
+    hyps = [{"id": "H1", "path": "ATT -> INT", "direction": "dương"}]
+    ar = {"hypothesis_tests": [{"hypothesis": "H1", "path": "ATT -> INT", "numbers": {}}]}
+    reg = build_registry(hyps, {}, ar, {
+        "results": "Kết quả của đường dẫn ATT → INT được trình bày trong mô hình.",
+        "conclusion": "Kết luận tổng hợp các kết quả.",
+    })
+    assert not any(f["check"] == "coherence.undiscussed_hypothesis"
+                   for f in check_coherence(reg, hyps, ar, True))
+
+
+def test_interaction_tail_cannot_cover_its_second_operand_main_effect():
+    hyps = [{"id": "H1", "path": "INT -> DEC"}]
+    ar = {"hypothesis_tests": [{"hypothesis": "H1", "path": "INT -> DEC", "numbers": {}}]}
+    reg = build_registry(hyps, {}, ar, {
+        "results": "MGA reports the moderation INC × INT → DEC for one group.",
+        "conclusion": "The conclusion summarizes the model.",
+    })
+    assert any(f["check"] == "coherence.undiscussed_hypothesis"
+               for f in check_coherence(reg, hyps, ar, True))
+
+
+def test_ascii_x_interaction_tail_cannot_cover_main_effect():
+    hyps = [{"id": "H1", "path": "INT -> DEC"}]
+    ar = {"hypothesis_tests": [{"hypothesis": "H1", "path": "INT -> DEC", "numbers": {}}]}
+    reg = build_registry(hyps, {}, ar, {
+        "results": "MGA reports INC x INT → DEC in one group.",
+        "conclusion": "The conclusion summarizes the model.",
+    })
+    assert any(f["check"] == "coherence.undiscussed_hypothesis"
+               for f in check_coherence(reg, hyps, ar, True))
+
+
+def test_graph_display_labels_do_not_overwrite_structured_code_path_alias():
+    hyps = [{"id": "H1", "path": "ATT -> INT"}]
+    cm = {"nodes": [{"id": "ATT", "label": "Thái độ"}, {"id": "INT", "label": "Ý định"}],
+          "edges": [{"id": "H1", "source": "ATT", "target": "INT"}]}
+    ar = {"hypothesis_tests": [{"hypothesis": "H1", "path": "ATT -> INT", "numbers": {}}]}
+    reg = build_registry(hyps, cm, ar, {
+        "results": "Đường dẫn ATT → INT có ý nghĩa trong mô hình.",
+        "conclusion": "The conclusion summarizes the model.",
+    })
+    assert not any(f["check"] == "coherence.undiscussed_hypothesis"
+                   for f in check_coherence(reg, hyps, ar, True))
+
+
+def test_unique_path_without_h_anchor_hard_checks_comma_decimal():
+    reg = build_registry(
+        [{"id": "H1", "path": "ATT -> INT"}], {},
+        {"hypothesis_tests": [{"hypothesis": "H1", "numbers": {"beta": 0.31}, "decision": "supported"}]},
+        {"results": "Đường dẫn ATT → INT có β = 0,45.", "conclusion": "Kết luận tổng hợp."},
+    )
+    findings = check_coherence(reg)
+    mismatch = next(f for f in findings if f["check"] == "coherence.number_mismatch")
+    assert mismatch["severity"] == "hard"
+    assert mismatch["observed"] == {"metric": "beta", "sentence": "Đường dẫn ATT → INT có β = 0,45.", "value": 0.45}
+    assert mismatch["expected"] == 0.31
+
+
+def test_multiple_paths_do_not_assign_one_beta_to_a_main_effect():
+    hyps = [{"id": "H1", "path": "ATT -> INT"}, {"id": "H2", "path": "EXP -> INT"}]
+    ar = {"hypothesis_tests": [
+        {"hypothesis": "H1", "numbers": {"beta": 0.31}},
+        {"hypothesis": "H2", "numbers": {"beta": 0.22}},
+    ]}
+    reg = build_registry(hyps, {}, ar, {
+        "results": "ATT → INT and EXP → INT have β = 0.99.", "conclusion": "Kết luận tổng hợp.",
+    })
+    findings = check_coherence(reg)
+    assert not any(f["check"] == "coherence.number_mismatch" for f in findings)
+    assert any(f["check"] == "coherence.ambiguous_path_attribution" for f in findings)
+
+
+def test_mga_heading_suppresses_h_anchored_numeric_claim_until_next_heading():
+    reg = build_registry(HYPS, CM, AR, {
+        "results": "# MGA results\nH1 has β = 0.99 for group A.\n# Pooled results\nH1 has β = 0.34.",
+        "conclusion": "Kết luận tổng hợp.",
+    })
+    findings = check_coherence(reg)
+    assert not any(f["check"] == "coherence.number_mismatch" for f in findings)
+    assert not any(f["check"] == "coherence.ambiguous_path_attribution" for f in findings)
+
+
+def test_group_coefficient_difference_sentence_is_not_a_pooled_beta():
+    reg = build_registry(HYPS, CM, AR, {
+        "results": "For LS → PI, chênh lệch hệ số giữa các nhóm là β = -0,004.",
+        "conclusion": "Kết luận tổng hợp.",
+    })
+    findings = check_coherence(reg)
+    assert not any(f["check"] == "coherence.number_mismatch" for f in findings)
+    assert not any(f["check"] == "coherence.ambiguous_path_attribution" for f in findings)
+
+
+def test_h_anchor_conflicting_with_path_is_soft_and_not_misattributed():
+    hyps = [{"id": "H1", "path": "ATT -> INT"}, {"id": "H2", "path": "EXP -> INT"}]
+    ar = {"hypothesis_tests": [
+        {"hypothesis": "H1", "numbers": {"beta": 0.31}},
+        {"hypothesis": "H2", "numbers": {"beta": 0.22}},
+    ]}
+    reg = build_registry(hyps, {}, ar, {
+        "results": "H1, path EXP → INT, has β = 0.99.", "conclusion": "Kết luận tổng hợp.",
+    })
+    findings = check_coherence(reg)
+    assert not any(f["check"] == "coherence.number_mismatch" for f in findings)
+    assert any("hypothesis path conflict" in f["message"] for f in findings)
+
+
+def test_unique_path_in_same_paragraph_attributes_preceding_statistics():
+    hyps = [{"id": "H1", "path": "ATT -> INT"}]
+    ar = {"hypothesis_tests": [{"hypothesis": "H1", "numbers": {"beta": 0.257, "t": 7.49, "p": 0.0}}]}
+    matching = ("Kết quả cho thấy ATT có tác động dương đến INT với β = 0,257, t = 7,490 và p = 0,000. "
+                "Do đó, giả thuyết ATT → INT được ủng hộ.")
+    reg = build_registry(hyps, {}, ar, {"results": matching, "conclusion": "Kết luận tổng hợp."})
+    assert not any(f["check"] == "coherence.number_mismatch" for f in check_coherence(reg))
+
+    tampered = matching.replace("β = 0,257", "β = 0,999", 1)
+    reg = build_registry(hyps, {}, ar, {"results": tampered, "conclusion": "Kết luận tổng hợp."})
+    assert any(f["check"] == "coherence.number_mismatch" and f["severity"] == "hard"
+               for f in check_coherence(reg))
+
+
+def test_unique_path_in_same_paragraph_attributes_direction_word():
+    hyps = [{"id": "H1", "path": "ATT -> INT"}]
+    ar = {"hypothesis_tests": [{"hypothesis": "H1", "numbers": {"beta": -0.257}}]}
+    prose = "ATT có tác động tích cực đến INT với β = -0,257. Giả thuyết ATT → INT được trình bày."
+    reg = build_registry(hyps, {}, ar, {"results": prose, "conclusion": "Kết luận tổng hợp."})
+    assert any(f["check"] == "coherence.direction_prose" for f in check_coherence(reg))
+
+
+def test_paragraph_does_not_borrow_managerial_recommendation_as_direction():
+    hyps = [{"id": "H7", "path": "INT -> DEC"}]
+    ar = {"hypothesis_tests": [{"hypothesis": "H7", "numbers": {"beta": 0.606}}]}
+    prose = ("Kết quả cho thấy β = 0,606. Giả thuyết INT → DEC được ủng hộ. "
+             "Vì vậy, doanh nghiệp cần giảm các rào cản đối với khách hàng.")
+    reg = build_registry(hyps, {}, ar, {"results": prose, "conclusion": "Kết luận tổng hợp."})
+    assert not any(f["check"] == "coherence.direction_prose" for f in check_coherence(reg))
+
+
+def test_paragraph_with_competing_paths_does_not_associate_detached_statistics():
+    hyps = [{"id": "H1", "path": "ATT -> INT"}, {"id": "H2", "path": "EXP -> INT"}]
+    ar = {"hypothesis_tests": [
+        {"hypothesis": "H1", "numbers": {"beta": 0.257}},
+        {"hypothesis": "H2", "numbers": {"beta": 0.269}},
+    ]}
+    prose = "Kết quả cho thấy β = 0,999. Các đường dẫn ATT → INT và EXP → INT được ủng hộ."
+    reg = build_registry(hyps, {}, ar, {"results": prose, "conclusion": "Kết luận tổng hợp."})
+    assert not any(f["check"] == "coherence.number_mismatch" for f in check_coherence(reg))
 
 
 # --- severity + determinism contracts ---------------------------------------

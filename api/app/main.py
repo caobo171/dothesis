@@ -181,6 +181,7 @@ def create_app() -> FastAPI:
     if settings.orchestrator_enabled:
         from .routers import chat as chat_router
         from .routers import exports as exports_router  # SP6: M5 export download
+        from .routers import claim_reviews as claim_reviews_router
         from .routers import m5_editor as m5_editor_router  # SP6.5: editor surface
         from .routers import partner_report as partner_report_router  # partner cross-product report
         from .routers import partner_humanize as partner_humanize_router  # partner .docx humanize
@@ -195,6 +196,7 @@ def create_app() -> FastAPI:
         from .routers import skills as skills_router      # chat skill picker catalogue
         app.include_router(chat_router.router, prefix="/api/v1")
         app.include_router(exports_router.router, prefix="/api/v1")  # SP6
+        app.include_router(claim_reviews_router.router, prefix="/api/v1")
         app.include_router(m5_editor_router.router, prefix="/api/v1")  # SP6.5
         app.include_router(runs_router.router, prefix="/api/v1")
         app.include_router(uploads_router.router, prefix="/api/v1")

@@ -4,6 +4,7 @@ import pytest
 from tests.fixtures.renderer_blocks import PLS_BLOCK, SCREENING_BLOCK
 
 m5 = pytest.importorskip("orchestrator.tools.m5_writing")
+_REPAIRED = "This repaired chapter prose is sufficiently detailed to remain a real draft after the grounding check. " * 2
 
 
 def _mock_llm(monkeypatch, text):
@@ -57,6 +58,182 @@ def test_empty_results_no_weave(monkeypatch):
     out = m5.compose_chapter.func("results", "quantitative",
                              _slice(results=None), references=[], citation_style="apa7", language="en")
     assert "dt-rendered" not in out["prose"]
+
+
+def test_real_path_validator_drives_composition_repair(monkeypatch):
+    calls = []
+    drafts = iter([
+        "Kết quả ATT → INT có β = 0,999; t = 7,490; p < 0,001.",
+        "Kết quả ATT → INT có β = 0,257; t = 7,490; p < 0,001. "
+        "Kết quả được diễn giải trong phạm vi mẫu khảo sát. Thiết kế cắt ngang chưa đủ để khẳng định quan hệ nhân quả.",
+    ])
+    class Response:
+        def __init__(self, content): self.content = content
+    monkeypatch.setattr(m5, "_get_llm", lambda: type("LLM", (), {
+        "invoke": lambda self, prompt: (calls.append(prompt), Response(next(drafts)))[1],
+    })())
+    context = {
+        "hypotheses": [{"id": "H1", "path": "ATT -> INT"}],
+        "analysis_results": {"hypothesis_tests": [{"hypothesis": "H1", "path": "ATT -> INT",
+            "numbers": {"beta": 0.257, "t": 7.49, "p": "0.000"}, "decision": "supported"}]},
+    }
+    out = m5.compose_chapter.func("results", "quantitative", context, [], "apa7", "vi")
+    assert len(calls) == 2
+    assert "coherence.number_mismatch" in calls[1]
+    assert "0,999" not in out["prose"] and "0,257" in out["prose"]
+
+
+def test_results_and_conclusion_prompts_prefer_canonical_m4_and_m3_register(monkeypatch):
+    prompts = []
+
+    class _R:
+        content = "Grounded prose."
+
+    monkeypatch.setattr(m5, "_get_llm", lambda: type("L", (), {
+        "invoke": lambda self, prompt: (prompts.append(prompt), _R())[1],
+    })())
+    context = {
+        "results": {"hypothesis_tests": [{"id": "H1", "path": "OLD -> PATH"}]},
+        "analysis_results": {"hypothesis_tests": [{"id": "H1", "path": "ATT -> INT",
+            "numbers": {"beta": 0.31, "p": "0.000"}, "decision": "supported"}]},
+        "hypotheses": [{"id": "H1", "path": "ATT -> INT", "direction": "positive"}],
+        "constructs": [
+            {"id": "ATT", "label": "Thái độ đối với du lịch nội địa"},
+            {"id": "INT", "label": "Ý định du lịch nội địa"},
+        ],
+        "conceptual_model": {"nodes": [], "edges": []},
+    }
+
+    for chapter in ("results", "conclusion"):
+        m5.compose_chapter.func(chapter, "quantitative", context, references=[], citation_style="apa7", language="vi")
+
+    assert len(prompts) == 2
+    for prompt in prompts:
+        assert "H1; canonical path: ATT (Thái độ đối với du lịch nội địa) → INT (Ý định du lịch nội địa)" in prompt
+        assert '"path": "ATT -> INT"' in prompt
+        assert '"p": "<0.001"' in prompt
+        assert "OLD -> PATH" not in prompt
+
+
+def test_only_reported_three_decimal_zero_p_values_become_threshold_text():
+    assert m5._display_p_values({"p": "0.000", "other": {"p": "0.0000"}}) == {
+        "p": "<0.001", "other": {"p": "<0.001"},
+    }
+    assert m5._display_p_values({"p": 0, "p_value": "0.0"}) == {"p": 0, "p_value": "0.0"}
+
+
+def test_composer_repairs_one_grounding_failure(monkeypatch):
+    calls = []
+
+    class _R:
+        def __init__(self, content): self.content = content
+
+    monkeypatch.setattr(m5, "_get_llm", lambda: type("L", (), {
+        "invoke": lambda self, prompt: (calls.append(prompt), _R("bad claim" if len(calls) == 1 else _REPAIRED))[1],
+    })())
+    monkeypatch.setattr(m5, "_generated_grounding_findings",
+                        lambda chapters, _context: [{"check": "coherence.unsupported_diagnostic_claim"}]
+                        if "bad claim" in next(iter(chapters.values())) else [])
+
+    out = m5.compose_chapter.func("results", "quantitative", _slice(), references=[], citation_style="apa7", language="en")
+    assert out["prose"].startswith("This repaired chapter prose")
+    assert len(calls) == 2 and "Required grounding repair" in calls[1]
+
+
+def test_composer_repairs_a_hard_numeric_mismatch_once(monkeypatch):
+    calls = []
+
+    class _R:
+        def __init__(self, content): self.content = content
+
+    monkeypatch.setattr(m5, "_get_llm", lambda: type("L", (), {
+        "invoke": lambda self, prompt: (calls.append(prompt), _R("wrong beta" if len(calls) == 1 else f"β = 0.34. {_REPAIRED}"))[1],
+    })())
+    numeric = [{"check": "coherence.number_mismatch", "severity": "hard",
+                "expected": {"beta": 0.34}}]
+    monkeypatch.setattr(m5, "_generated_grounding_findings",
+                        lambda chapters, _context: numeric if "wrong beta" in next(iter(chapters.values())) else [])
+
+    out = m5.compose_chapter.func("results", "quantitative", _slice(), references=[], citation_style="apa7", language="en")
+    assert "0.34" in out["prose"] and len(calls) == 2
+    assert "exact canonical value and decision" in calls[1]
+
+
+def test_composer_refuses_a_second_grounding_failure(monkeypatch):
+    class _R:
+        content = "bad claim"
+
+    monkeypatch.setattr(m5, "_get_llm", lambda: type("L", (), {"invoke": lambda self, _prompt: _R()})())
+    monkeypatch.setattr(m5, "_generated_grounding_findings",
+                        lambda *_args: [{"check": "coherence.unsupported_diagnostic_claim"}])
+
+    with pytest.raises(m5.CompositionGroundingError):
+        m5.compose_chapter.func("results", "quantitative", _slice(), references=[], citation_style="apa7", language="en")
+
+
+def test_composer_refuses_a_second_hard_numeric_mismatch_or_empty_repair(monkeypatch):
+    class _R:
+        content = "wrong beta"
+
+    numeric = [{"check": "coherence.number_mismatch", "severity": "hard"}]
+    monkeypatch.setattr(m5, "_get_llm", lambda: type("L", (), {"invoke": lambda self, _prompt: _R()})())
+    monkeypatch.setattr(m5, "_generated_grounding_findings", lambda *_args: numeric)
+    with pytest.raises(m5.CompositionGroundingError):
+        m5.compose_chapter.func("results", "quantitative", _slice(), references=[], citation_style="apa7", language="en")
+
+    class _Empty:
+        content = ""
+    empty_calls = []
+    monkeypatch.setattr(m5, "_get_llm", lambda: type("L", (), {
+        "invoke": lambda self, _prompt: (empty_calls.append(1), _R() if len(empty_calls) == 1 else _Empty())[1],
+    })())
+    with pytest.raises(m5.CompositionGroundingError):
+        m5.compose_chapter.func("results", "quantitative", _slice(), references=[], citation_style="apa7", language="en")
+
+
+def test_rewriter_uses_the_same_single_grounding_repair(monkeypatch):
+    calls = []
+
+    class _R:
+        def __init__(self, content): self.content = content
+
+    monkeypatch.setattr(m5, "_get_llm", lambda: type("L", (), {
+        "invoke": lambda self, prompt: (calls.append(prompt), _R("bad claim" if len(calls) == 1 else _REPAIRED))[1],
+    })())
+    monkeypatch.setattr(m5, "_generated_grounding_findings",
+                        lambda chapters, _context: [{"check": "coherence.unsupported_diagnostic_claim"}]
+                        if "bad claim" in next(iter(chapters.values())) else [])
+
+    out = m5.rewrite_chapter.func("results", "current prose", "improve wording", _slice(), [], "en")
+    assert out["prose"].startswith("This repaired chapter prose")
+    assert len(calls) == 2 and "Required grounding repair" in calls[1]
+
+
+def test_rewriter_repairs_a_hard_numeric_mismatch(monkeypatch):
+    calls = []
+
+    class _R:
+        def __init__(self, content): self.content = content
+
+    monkeypatch.setattr(m5, "_get_llm", lambda: type("L", (), {
+        "invoke": lambda self, prompt: (calls.append(prompt), _R("wrong beta" if len(calls) == 1 else f"β = 0.34. {_REPAIRED}"))[1],
+    })())
+    numeric = [{"check": "coherence.number_mismatch", "severity": "hard"}]
+    monkeypatch.setattr(m5, "_generated_grounding_findings",
+                        lambda chapters, _context: numeric if "wrong beta" in next(iter(chapters.values())) else [])
+    out = m5.rewrite_chapter.func("results", "current prose", "improve wording", _slice(), [], "en")
+    assert "0.34" in out["prose"] and len(calls) == 2
+
+
+def test_compose_chapters_does_not_fallback_after_a_grounding_error(monkeypatch):
+    class _Composer:
+        def invoke(self, _payload):
+            raise m5.CompositionGroundingError([{"check": "coherence.unsupported_diagnostic_claim"}])
+
+    monkeypatch.setattr(m5, "compose_chapter", _Composer())
+    monkeypatch.setattr(m5, "_fallback_section", lambda *_args: (_ for _ in ()).throw(AssertionError("fallback used")))
+    with pytest.raises(m5.CompositionGroundingError):
+        m5.compose_chapters({"m4_analysis": {"analysis_results": {}}}, chapters=["results"])
 
 
 # --- the moderator must appear, and on the right arrow ----------------------

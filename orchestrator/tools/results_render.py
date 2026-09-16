@@ -142,6 +142,12 @@ def _fmt(v: Any) -> str:
     return str(v)
 
 
+def _fmt_p(v: Any) -> str:
+    """Display a report's rounded-zero p-value as a threshold, never equality."""
+    text = str(v).strip().replace(",", ".")
+    return "<0.001" if isinstance(v, str) and re.fullmatch(r"0\.0{3,}", text) else _fmt(v)
+
+
 def _sha12(sub: Any) -> str:
     return hashlib.sha256(
         json.dumps(sub, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:12]
@@ -591,7 +597,7 @@ def _structural_block(ar, family, language, num=None):
             row.append(f"{_fmt(se)} / {_fmt(z)}")
         else:
             row.append(_fmt(nums.get("t")))
-        row.append(_fmt(nums.get("p")))
+        row.append(_fmt_p(nums.get("p")))
         if not is_cb:
             row.append(_fmt(nums.get("f2")))
         row.append(_fmt(t.get("decision")))
@@ -777,7 +783,7 @@ def render_limitations(nested_cs: dict, *, rubric_findings: Optional[list] = Non
                 nums = t.get("numbers") or {}
                 bullets.append((1, f"{_fmt(t.get('id') or t.get('hypothesis'))} "
                                 f"({_fmt(t.get('path'))}, β={_fmt(nums.get('beta'))}, "
-                                f"p={_fmt(nums.get('p'))}) was not supported — a substantive finding "
+                                f"p={_fmt_p(nums.get('p'))}) was not supported — a substantive finding "
                                 "discussed theoretically above, not a data artifact."))
 
         # screening removals

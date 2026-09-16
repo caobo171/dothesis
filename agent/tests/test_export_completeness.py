@@ -29,6 +29,9 @@ _PRESERVED = [
 class _Store:
     project_id = "11111111-2222-3333-4444-555555555555"
 
+    def __init__(self):
+        self.commits = []
+
     def load(self):
         return {"contextStore": {"final_sections": _PRESERVED, "language": "en"}}
 
@@ -41,6 +44,10 @@ class _Store:
             "m4_analysis": {"analysis_results": {"hypothesis_tests": [{"id": "H1"}]}},
             "m5_writing": {"final_sections": _PRESERVED},
         }
+
+    def commit_slice(self, *args, **kwargs):
+        self.commits.append((args, kwargs))
+        return {"ok": True}
 
 
 @pytest.fixture
@@ -126,6 +133,18 @@ def test_force_still_allows_an_intentional_partial_export(monkeypatch, captured)
     out = _export()                          # force=True
     assert out.get("error") is None
     assert len(captured["sections"]) == 2
+
+
+def test_generated_export_fails_closed_when_draft_persistence_fails(captured):
+    """An in-memory generated draft must never be exported as if it landed."""
+    store = _Store()
+    store.commit_slice = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("DB unavailable"))
+
+    out = _export(store)
+
+    assert out["error"] == "persistence_failed"
+    assert out["persisted"] is False
+    assert "sections" not in captured
 
 
 def _export_no_force(store=None):

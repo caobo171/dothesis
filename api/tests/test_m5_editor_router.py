@@ -19,6 +19,13 @@ def client(monkeypatch):
     return TestClient(create_app(), follow_redirects=False)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_research_cache(monkeypatch, tmp_path):
+    # Cache behavior is tested locally; never let another test or a developer's
+    # persisted search result suppress this test's mocked provider call.
+    monkeypatch.setenv("DOTHESIS_RESEARCH_CACHE_DIR", str(tmp_path / "research-cache"))
+
+
 def _create_user_and_set_cookie(client: TestClient) -> uuid.UUID:
     """Create a fresh user, set its session cookie on `client`, return user id."""
     sf = get_session_factory()
@@ -75,6 +82,65 @@ def test_get_chapters_returns_all(client):
     data = r.json()
     assert "intro" in data
     assert data["intro"]["prose"] == "Hello world."
+
+
+def test_get_chapters_attaches_reversible_image_preview(client, tmp_path):
+    """Local export artifacts render in editor without rewriting stored prose."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "X"})
+    pid = r.json()["id"]
+    image = tmp_path / "model.png"
+    image.write_bytes(b"\x89PNG\r\n\x1a\npreview")
+    prose = f"**Figure 3.1**\n\n![Research model]({image})"
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing = {"chapters": {"methodology": {
+            "name": "methodology", "prose": prose, "pending_edits": [],
+        }}}
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters")
+    assert r.status_code == 200
+    chapter = r.json()["methodology"]
+    assert chapter["prose"] == prose
+    assert chapter["media"][0]["source"] == str(image)
+    assert chapter["media"][0]["preview_url"].startswith("data:image/png;base64,")
+    assert chapter["renderable_tokens"] == []
+
+    with sf() as db:
+        stored = (db.get(ContextStore, uuid.UUID(pid)).m5_writing or {})["chapters"]
+        assert stored["methodology"]["prose"] == prose
+        assert "media" not in stored["methodology"]
+        assert "renderable_tokens" not in stored["methodology"]
+
+
+def test_get_chapters_marks_data_cleaning_renderable_only_with_verified_state(client):
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "X"})
+    pid = r.json()["id"]
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing = {"chapters": {"methodology": {
+            "name": "methodology", "prose": "[[DT:data_cleaning]]", "pending_edits": [],
+        }}}
+        cs.m4_analysis = {"analysis_results": {"data_screening": {
+            "n_before": 300, "n_after": 286, "missing_removed": 14,
+        }}}
+        flag_modified(cs, "m5_writing")
+        flag_modified(cs, "m4_analysis")
+        db.commit()
+
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters")
+    assert r.status_code == 200
+    assert r.json()["methodology"]["renderable_tokens"] == ["data_cleaning"]
 
 
 def test_get_chapters_returns_empty_dict_when_no_m5(client):
@@ -376,6 +442,29 @@ def test_patch_chapter_revalidates_citations(client):
     assert body["uncited_warnings"] == ["(Unknown, 2023)"]
 
 
+def test_patch_chapter_blocks_hard_coherence_finding_before_commit(client, monkeypatch):
+    """Editor saves use the M5 coherence boundary, not raw JSONB assignment."""
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    monkeypatch.setattr(
+        "agent.coherence.validate_m5_sections",
+        lambda *args: {"hard": 1, "crashed": False, "findings": [
+            {"severity": "hard", "check": "coherence.number_mismatch"},
+        ], "findings_hard": [{"severity": "hard", "check": "coherence.number_mismatch"}]},
+    )
+    r = client.patch(
+        f"/api/v1/projects/{pid}/m5/chapters/intro",
+        json={"prose": "This must not persist."},
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"]["error"]["code"] == "coherence_violation"
+    assert r.json()["detail"]["error"]["findings"] == [{"severity": "hard", "check": "coherence.number_mismatch"}]
+
+    sf = get_session_factory()
+    with sf() as db:
+        assert db.get(ContextStore, uuid.UUID(pid)).m5_writing["chapters"]["intro"]["prose"] == "Hello world."
+
+
 def test_patch_unknown_chapter_returns_404(client):
     """Patching a chapter name not yet drafted (or unknown) returns 404."""
     _create_user_and_set_cookie(client)
@@ -455,6 +544,40 @@ def test_get_references_returns_dedup_m2_pool(client):
     assert authors_years == {("Smith", "2024"), ("Jones", "2023")}
 
 
+def test_get_references_reads_canonical_literature_sources(client):
+    """Editor must show the same canonical M2 sources counted by the roadmap."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    r = client.post("/api/v1/projects", json={"name": "X"})
+    assert r.status_code == 200
+    pid = r.json()["id"]
+
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m2_literature = {
+            "literature_sources": [
+                {"authors": ["Cohen", "Prayag", "Moıtal"], "year": "2013", "title": "Tourism behavior"},
+                {"authors": ["Leung", "Law"], "year": "2013", "title": "Social media in tourism"},
+            ],
+            # This mirrors the reported project: canonical sources exist, while
+            # gaps do not duplicate them as supporting_papers.
+            "research_gaps": [],
+        }
+        flag_modified(cs, "m2_literature")
+        db.commit()
+
+    r = client.post(f"/api/v1/projects/{pid}/m5/references")
+    assert r.status_code == 200
+    refs = r.json()
+    assert [(ref["author"], ref["year"]) for ref in refs] == [
+        ("Cohen et al.", "2013"),
+        ("Leung et al.", "2013"),
+    ]
+    assert all(ref.get("id") for ref in refs)
+
+
 def test_get_references_returns_empty_when_no_m2(client):
     """GET /m5/references returns [] when no M2 pool exists."""
     # Create authenticated user + project (no M2 seeding)
@@ -467,6 +590,149 @@ def test_get_references_returns_empty_when_no_m2(client):
     r = client.post(f"/api/v1/projects/{pid}/m5/references")
     assert r.status_code == 200
     assert r.json() == []
+
+
+def test_editor_reference_search_merges_dedupes_and_ranks(client, monkeypatch):
+    """Find papers combines both indexes but returns one DOI-deduped row."""
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    shared = {
+        "title": "Influencer marketing and tourist intention",
+        "authors": ["Nguyen", "Tran"], "year": 2024,
+        "doi": "10.1234/tourism.1", "url": "https://doi.org/10.1234/tourism.1",
+        "journal": "Tourism Review", "abstract": "Influencer credibility predicts tourist intention.",
+        "citation_count": 42,
+    }
+    monkeypatch.setattr(
+        "engine.utils.api_citations.openalex.OpenAlexClient.search_papers",
+        lambda self, query, limit=10: [shared],
+    )
+    monkeypatch.setattr(
+        "engine.utils.api_citations.semantic_scholar.SemanticScholarClient.search_papers",
+        lambda self, query, limit=10: [{**shared, "citation_count": 50}],
+    )
+    monkeypatch.setattr(
+        "app.routers.m5_editor._crossref_paper_search",
+        lambda query, limit: [shared],
+    )
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/references/search",
+        json={"query": "influencer credibility tourist intention", "limit": 10},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["count"] == 1
+    assert body["results"][0]["doi"] == "10.1234/tourism.1"
+    assert set(body["providers"]) == {"OpenAlex", "Semantic Scholar", "Crossref"}
+    assert body["results"][0]["abstract_preview"]
+    assert body["results"][0]["verified"] is False
+    assert body["results"][0]["doi_available"] is True
+
+
+def test_editor_add_reference_verifies_and_commits_to_m2(client, monkeypatch):
+    """A chosen paper enters the canonical M2 slice through commit_slice."""
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    verified = {
+        "id": "provider-owned-id",
+        "title": "Influencer marketing and tourist intention",
+        "authors": ["Nguyen", "Tran"], "year": 2024,
+        "doi": "10.1234/tourism.1", "url": "https://doi.org/10.1234/tourism.1",
+        "journal": "Tourism Review", "abstract": "Verified abstract.",
+    }
+    monkeypatch.setattr(
+        "engine.utils.api_citations.openalex.OpenAlexClient.get_paper_by_doi",
+        lambda self, doi: verified,
+    )
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/references/add",
+        json={"doi": "10.1234/tourism.1"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["verified"] is True
+    assert r.json()["id"] != "provider-owned-id"
+
+    sf = get_session_factory()
+    with sf() as db:
+        sources = (db.get(ContextStore, uuid.UUID(pid)).m2_literature or {}).get("literature_sources")
+        assert len(sources) == 1
+        assert sources[0]["doi"] == "10.1234/tourism.1"
+
+
+def test_editor_add_reference_rejects_different_resolved_doi(client, monkeypatch):
+    """A DOI lookup must verify the selected DOI, not a plausible near match."""
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    monkeypatch.setattr(
+        "engine.utils.api_citations.openalex.OpenAlexClient.get_paper_by_doi",
+        lambda self, doi: {"title": "Different paper", "doi": "10.9999/different"},
+    )
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/references/add",
+        json={"doi": "10.1234/requested"},
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"]["error"]["code"] == "reference_not_verified"
+
+
+def test_editor_add_reference_does_not_claim_success_when_commit_rejects(client, monkeypatch):
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    monkeypatch.setattr(
+        "engine.utils.api_citations.openalex.OpenAlexClient.get_paper_by_doi",
+        lambda self, doi: {"title": "Verified", "doi": doi, "authors": ["Smith"], "year": 2024},
+    )
+    monkeypatch.setattr(
+        "app.agent_state.DbProjectStateStore.commit_slice",
+        lambda *args, **kwargs: {"error": "database_rejected"},
+    )
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/references/add",
+        json={"doi": "10.1234/requested"},
+    )
+    assert r.status_code == 500
+    assert r.json()["detail"]["error"]["code"] == "reference_add_failed"
+
+
+def test_editor_reference_ids_distinguish_same_author_and_year(client):
+    """Author/year is citation display metadata, never source identity."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m2_literature = {"literature_sources": [
+            {"authors": ["Smith"], "year": 2024, "title": "Paper one", "doi": "10.1/one"},
+            {"authors": ["Smith"], "year": 2024, "title": "Paper two", "doi": "10.1/two"},
+        ]}
+        flag_modified(cs, "m2_literature")
+        db.commit()
+
+    refs = client.post(f"/api/v1/projects/{pid}/m5/references").json()
+    assert len(refs) == 2
+    assert len({r["id"] for r in refs}) == 2
+    assert all(not r["ambiguous"] for r in refs)
+
+
+def test_editor_reference_ids_distinguish_same_title_different_editions(client):
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m2_literature = {"literature_sources": [
+            {"authors": ["Cohen"], "year": 2007, "title": "Consumer Behaviour in Tourism"},
+            {"authors": ["Cohen"], "year": 2016, "title": "Consumer Behaviour in Tourism"},
+        ]}
+        flag_modified(cs, "m2_literature")
+        db.commit()
+    refs = client.post(f"/api/v1/projects/{pid}/m5/references").json()
+    assert len(refs) == 2
+    assert len({r["id"] for r in refs}) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -740,6 +1006,94 @@ def test_cite_inserts_pending_edit_with_canonical_text(client):
         assert pending[0]["metadata"]["reference_id"] == ref_id
 
 
+def test_cite_uses_current_m2_authors_not_anonymous(client):
+    """Editor citations must use the same label as M5 validation/export."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m2_literature = {"literature_sources": [{
+            "authors": ["Nguyen", "Tran"], "year": 2024,
+            "title": "Current source", "doi": "10.1/current",
+        }]}
+        flag_modified(cs, "m2_literature")
+        db.commit()
+
+    ref_id = client.post(f"/api/v1/projects/{pid}/m5/references").json()[0]["id"]
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/cite",
+        json={"at_offset": 5, "reference_id": ref_id},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["new_text"] == " (Nguyen et al., 2024)"
+    assert r.json()["metadata"]["document_fingerprint"]
+
+
+def test_cite_honors_document_fingerprint_precondition(client):
+    """Stale client selection never creates a proposal; a matching one does."""
+    import hashlib
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m2_literature = {"literature_sources": [{
+            "authors": ["Smith"], "year": 2024, "title": "Source", "doi": "10.1/source",
+        }]}
+        flag_modified(cs, "m2_literature")
+        db.commit()
+    ref_id = client.post(f"/api/v1/projects/{pid}/m5/references").json()[0]["id"]
+    stale = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/cite",
+        json={"at_offset": 5, "reference_id": ref_id, "expected_document_fingerprint": "stale"},
+    )
+    assert stale.status_code == 409
+    with sf() as db:
+        assert db.get(ContextStore, uuid.UUID(pid)).m5_writing["chapters"]["intro"]["pending_edits"] == []
+
+    current = hashlib.sha256(b"Hello world.").hexdigest()
+    accepted = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/cite",
+        json={"at_offset": 5, "reference_id": ref_id, "expected_document_fingerprint": current},
+    )
+    assert accepted.status_code == 200
+
+
+def test_accept_citation_rejects_whole_document_change(client):
+    """A zero-length citation insertion must not survive an unrelated edit."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m2_literature = {"literature_sources": [{
+            "authors": ["Smith"], "year": 2024, "title": "Source", "doi": "10.1/source",
+        }]}
+        flag_modified(cs, "m2_literature")
+        db.commit()
+    ref_id = client.post(f"/api/v1/projects/{pid}/m5/references").json()[0]["id"]
+    edit = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/cite",
+        json={"at_offset": 5, "reference_id": ref_id},
+    ).json()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing["chapters"]["intro"]["prose"] = "An unrelated edit."
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    r = client.post(f"/api/v1/projects/{pid}/m5/chapters/intro/pending/{edit['id']}/accept")
+    assert r.status_code == 409
+    assert r.json()["detail"]["error"]["code"] == "stale_document"
+
+
 def test_cite_404_on_unknown_reference(client):
     """POSTing cite with a nonexistent reference_id returns 404.
 
@@ -754,6 +1108,32 @@ def test_cite_404_on_unknown_reference(client):
         json={"at_offset": 0, "reference_id": "nonexistent"},
     )
     assert r.status_code == 404
+
+
+def test_cite_rejects_ambiguous_legacy_reference_id(client):
+    """Old author/year-only records are never resolved by arbitrary list order."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    sf = get_session_factory()
+    with sf() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m2_literature = {"literature_sources": [
+            {"author": "Smith", "year": 2024},
+            {"author": "Smith", "year": 2024},
+        ]}
+        flag_modified(cs, "m2_literature")
+        db.commit()
+    ref = client.post(f"/api/v1/projects/{pid}/m5/references").json()[0]
+    assert ref["ambiguous"] is True
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/cite",
+        json={"at_offset": 0, "reference_id": ref["id"]},
+    )
+    assert r.status_code == 409
+    assert r.json()["detail"]["error"]["code"] == "reference_ambiguous"
 
 
 # ---------------------------------------------------------------------------
@@ -1303,3 +1683,38 @@ def test_export_passes_the_store_so_it_renders_the_same_document(mock_run_export
     # The NESTED shape run_export reads — not the flat owned-keys view.
     assert "m1_topic" in store and "m5_writing" in store
     assert isinstance(store["m1_topic"], dict)
+
+
+def test_editor_reference_search_reuses_normalized_provider_cache(client, monkeypatch, tmp_path):
+    """A repeated query uses cached raw rows without calling any index again."""
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    monkeypatch.setenv("DOTHESIS_RESEARCH_CACHE_DIR", str(tmp_path / "research-cache"))
+    calls = {"openalex": 0, "semantic": 0, "crossref": 0}
+    paper = {
+        "title": "Cacheable tourism evidence", "authors": ["Nguyen"], "year": 2024,
+        "doi": "10.1234/cacheable", "abstract": "Tourism evidence.", "citation_count": 1,
+    }
+
+    def openalex(self, query, limit=10):
+        calls["openalex"] += 1
+        return [paper]
+
+    def semantic(self, query, limit=10):
+        calls["semantic"] += 1
+        return [paper]
+
+    def crossref(query, limit):
+        calls["crossref"] += 1
+        return [paper]
+
+    monkeypatch.setattr("engine.utils.api_citations.openalex.OpenAlexClient.search_papers", openalex)
+    monkeypatch.setattr("engine.utils.api_citations.semantic_scholar.SemanticScholarClient.search_papers", semantic)
+    monkeypatch.setattr("app.routers.m5_editor._crossref_paper_search", crossref)
+
+    first = client.post(f"/api/v1/projects/{pid}/m5/references/search", json={"query": "  Tourism   Evidence ", "limit": 5})
+    second = client.post(f"/api/v1/projects/{pid}/m5/references/search", json={"query": "tourism evidence", "limit": 5})
+
+    assert first.status_code == second.status_code == 200
+    assert first.json()["count"] == second.json()["count"] == 1
+    assert calls == {"openalex": 1, "semantic": 1, "crossref": 1}

@@ -88,7 +88,10 @@ SLICE_OWNERSHIP: dict[str, list[str]] = {
            "results", "qual_codes", "qual_themes",
            "field_it_collection_id", "field_it_responses", "field_it_quality",
            "analysis_provenance", "decisions"],
-    "M5": ["final_sections", "decisions"],
+    # `chapters` is the canonical editor/continuous-writing home. Keeping it
+    # outside ownership forced recovery repairs into `final_sections`, which
+    # the resolver then hid behind the unchanged canonical copy.
+    "M5": ["final_sections", "chapters", "decisions"],
 }
 # "decisions" (headless auto-decision audit trail, convergence spec §4) is
 # owned by EVERY module: the runner records each choice under whichever module
@@ -165,6 +168,116 @@ NON_EARNING_KEYS = {
 VERSION_HISTORY_CAP = 50
 
 STATE_FILENAME = "context_store.json"
+
+# A completed chapter being replaced by a two-paragraph summary is data loss,
+# irrespective of whether the prose originated in an import, the composer, or
+# the editor. These deliberately conservative floors leave normal edits and
+# real rewrites alone while catching the observed 10k-character -> 110-character
+# overwrite before a snapshot/status transition makes it durable.
+_M5_SUBSTANTIVE_CHARS = 1_200
+# A completed chapter floor is 1,200 characters. A 600-character outline is
+# still a summary even when the original was tens of thousands of characters.
+_M5_SUMMARY_CHARS = 1_200
+_M5_SMALL_REPLACEMENT_RATIO = 0.50
+_M5_SEVERE_TRUNCATION_RATIO = 0.20
+
+
+def _m5_chapter_prose(value: Any) -> dict[str, str]:
+    """Return addressable chapter prose from either supported M5 layout."""
+    out: dict[str, str] = {}
+
+    def add(name: Any, item: Any) -> None:
+        key = str(name or "").strip().lower()
+        if key == "discussion":
+            key = "conclusion"
+        prose = item.get("prose") if isinstance(item, dict) else item
+        if key and isinstance(prose, str):
+            out[key] = prose
+
+    if isinstance(value, dict):
+        # `chapters` is a key -> {prose} map. Some legacy callers provide a
+        # single section dict; handle it without confusing its metadata keys
+        # for chapters.
+        if any(k in value for k in ("prose", "content", "chapter_name", "title")):
+            add(value.get("chapter_name") or value.get("name") or value.get("title"),
+                value.get("prose") or value.get("content"))
+        else:
+            for name, item in value.items():
+                add(name, item)
+    elif isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict):
+                add(item.get("chapter_name") or item.get("name") or item.get("title"),
+                    item.get("prose") or item.get("content") or item.get("body"))
+    return out
+
+
+def _m5_truncation_error(current: dict[str, Any], writes: dict[str, Any]) -> str | None:
+    """Return an actionable error before an M5 summary can replace a chapter."""
+    def effective(value: dict[str, Any]) -> dict[str, str]:
+        try:
+            # The exporter/editor precedence is the contract: `chapters` wins
+            # per chapter and final_sections fills gaps. Comparing each layout
+            # in isolation lets a new chapters summary bypass a full legacy
+            # final_sections chapter.
+            from orchestrator.tools.m5_writing import chapter_prose  # noqa: PLC0415
+            return chapter_prose(value)
+        except Exception:
+            # Fail closed only on known prose: this fallback preserves the same
+            # chapters-over-final_sections precedence without an import wall.
+            return {**_m5_chapter_prose(value.get("final_sections")),
+                    **_m5_chapter_prose(value.get("chapters"))}
+
+    def explicit_nonempty_replacements(value: dict[str, Any]) -> dict[str, str]:
+        """Names supplied by this write, including prose too short to export."""
+        out: dict[str, str] = {}
+        try:
+            from orchestrator.tools.m5_writing import (  # noqa: PLC0415
+                canonical_chapter, chapters_from_final_sections,
+            )
+            chapters = value.get("chapters")
+            if isinstance(chapters, dict):
+                for stored, item in chapters.items():
+                    name = canonical_chapter(stored)
+                    prose = (item.get("prose") or item.get("body") or "") if isinstance(item, dict) else item
+                    if name and isinstance(prose, str) and prose.strip():
+                        out[name] = prose
+            sections = value.get("final_sections")
+            if isinstance(sections, list):
+                for name, item in chapters_from_final_sections(sections).items():
+                    prose = (item or {}).get("prose") if isinstance(item, dict) else item
+                    if isinstance(prose, str) and prose.strip():
+                        out.setdefault(name, prose)
+        except Exception:
+            for key in ("final_sections", "chapters"):
+                for name, prose in _m5_chapter_prose(value.get(key)).items():
+                    if prose.strip():
+                        out[name] = prose
+        return out
+
+    before = effective(current)
+    after = effective({**current, **writes})
+    # Canonical readers may discard a recognized stub. It was nevertheless an
+    # explicit replacement in this mutation, so compare it rather than treating
+    # it like an omitted chapter/delete request.
+    for chapter, prose in explicit_nonempty_replacements(writes).items():
+        after.setdefault(chapter, prose)
+    losses: list[tuple[str, int, int]] = []
+    for chapter, old_prose in before.items():
+        new_prose = after.get(chapter)
+        if new_prose is None:
+            continue  # Partial chapter writes/deletions have separate APIs.
+        old_len, new_len = len(old_prose.strip()), len(new_prose.strip())
+        if (old_len >= _M5_SUBSTANTIVE_CHARS and
+                ((new_len < _M5_SUMMARY_CHARS and new_len < old_len * _M5_SMALL_REPLACEMENT_RATIO)
+                 or new_len < old_len * _M5_SEVERE_TRUNCATION_RATIO)):
+            losses.append((chapter, old_len, new_len))
+    if not losses:
+        return None
+    counts = ", ".join(f"{chapter}: {before}→{after} chars" for chapter, before, after in losses)
+    return ("m5_chapter_truncation — refusing to replace substantive chapter prose with a summary "
+            f"({counts}). Compose full replacement chapter draft(s) before committing; a full-rewrite "
+            "request does not authorize summaries or bypass flags.")
 
 # Project-scoped coaching/memory keys that live OUTSIDE the module slice map.
 # Persisted by DbProjectStateStore in the `coaching` JSONB column (see
@@ -244,12 +357,9 @@ def _dod_satisfied(module: str, context_store: dict) -> bool:
         return False
     keys = SLICE_OWNERSHIP.get(module, [])
     slice_ = {k: context_store[k] for k in keys if k in context_store}
-    # M5's chapters live under keys the ownership map does not list (they are
-    # written by the editor route, not commit_slice), so pass those through too.
-    if module == "M5":
-        for extra in ("chapters",):
-            if extra in context_store:
-                slice_[extra] = context_store[extra]
+    # M5 `chapters` now travels through ordinary ownership. Recovery repairs
+    # need the same canonical write path as editor/continuous-writing output;
+    # treating it as a read-only exception left repaired final_sections hidden.
     # M3's target_sample_size is a PLAN, and a study that has already run
     # answered the same question with a realized n. The results are M4-owned, so
     # dod_design cannot see them from its own slice — pass them in, read-only,
@@ -419,6 +529,14 @@ class ProjectStateStore:
             )
 
         state = self.load()
+
+        if module == "M5":
+            truncation_error = _m5_truncation_error(state["contextStore"], writes)
+            if truncation_error:
+                # Decision: reject before version history/status mutation. A
+                # summary is neither an edit nor a full rewrite of a completed
+                # chapter, and must not become recoverable only by an undo.
+                raise ValueError(truncation_error)
 
         # Strict done-gate: "done" must be earned, not narrated. A module can
         # only be marked done if it has actually produced its owned output —

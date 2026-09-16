@@ -1,6 +1,6 @@
 import pytest
 
-from quality.rubric import score_thesis, deterministic_dimensions
+from quality.rubric import score_thesis, deterministic_dimensions, _detect_method
 from quality.rubric import results_validity_dimension, apply_institution_overlay, METHOD_CRITERIA
 
 
@@ -57,6 +57,20 @@ def test_spss_uses_different_criteria():
     assert set(METHOD_CRITERIA["spss"]) != set(METHOD_CRITERIA["pls-sem"])
 
 
+@pytest.mark.parametrize(
+    ("methodology", "expected"),
+    [
+        ({"design": "PLS-SEM", "software": "SmartPLS 4"}, "pls-sem"),
+        ({"analysis_plan": ["multiple regression", "ANOVA"], "tool": "SPSS"}, "spss"),
+        ({"family": {"name": "covariance based", "software": "AMOS"}}, "cb-sem"),
+        ({"paradigm": "quantitative", "design": "cross-sectional survey"}, "generic"),
+    ],
+)
+def test_detect_method_supports_structured_methodology(methodology, expected):
+    """Real M3 state is structured; editor review must never assume prose."""
+    assert _detect_method({"m3_design": {"methodology": methodology}}) == expected
+
+
 def test_institution_min_references_adds_hard_finding():
     dims = [{"name": "citations", "weight": 0.2, "score": 1.0, "findings": []}]
     cs = {"m2_literature": {"literature_sources": [{"title": "a"}] * 12}}
@@ -81,7 +95,7 @@ def test_judge_dimension_survives_bad_json(monkeypatch):
     class _Resp:
         content = "not json at all"
     monkeypatch.setattr(m5, "_get_llm", lambda: type("L", (), {"invoke": lambda self, p: _Resp()})())
-    d = judge_dimension("writing", 0.10, "prompt", {})
+    d = judge_dimension("writing", 0.10, "prompt", {"m1_topic": {"language": "en"}})
     assert 0.0 <= d["score"] <= 1.0
     assert any("could not evaluate" in f["issue"].lower() for f in d["findings"])
 

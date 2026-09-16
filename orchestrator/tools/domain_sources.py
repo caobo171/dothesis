@@ -9,6 +9,7 @@ universal base; for two segments we ALSO query a specialized index — Europe PM
 """
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import re
@@ -111,10 +112,13 @@ def norm_source(p: dict) -> dict:
         "title": p.get("title"),
         "authors": p.get("authors"),
         "year": p.get("year"),
-        "venue": p.get("journal") or p.get("publisher"),
+        "venue": p.get("venue") or p.get("journal") or p.get("publisher"),
+        "abstract": p.get("abstract"),
+        "provider": p.get("provider") or p.get("api_source"),
+        "citation_count": p.get("citation_count"),
         "doi": p.get("doi"),
         "url": p.get("url"),
-        "verified": bool(p.get("doi")),
+        "verified": p.get("verified") is True,
     }
 
 
@@ -164,32 +168,45 @@ def _doi_key(doi) -> str:
 
 
 def _title_key(title) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", str(title or "").lower()).strip()
+    return re.sub(r"[^\w]+", " ", str(title or "").casefold()).strip()
 
 
 def dedup_sources(sources: list[dict]) -> list[dict]:
-    """First-wins dedup by DOI (fallback normalized title). Base sources should be
-    listed FIRST so a paper found by both a validated base source and a supplement
-    keeps the base row; a DOI-less kept row is backfilled from a later duplicate
-    that does carry a DOI (keep-most-complete-metadata)."""
+    """Preserve curated fields and enrich missing evidence without conflating DOIs.
+
+    Decision: a same-title record with a different DOI is a different work.
+    Return copies so research cannot mutate the existing project slice.
+    """
     out: list[dict] = []
     by_doi: dict[str, dict] = {}
-    by_title: dict[str, dict] = {}
-    for s in sources or []:
-        dk = _doi_key(s.get("doi"))
-        tk = _title_key(s.get("title"))
+    by_title: dict[str, list[dict]] = {}
+    for source in sources or []:
+        if not isinstance(source, dict):
+            continue
+        s = copy.deepcopy(source)
+        dk, tk = _doi_key(s.get("doi")), _title_key(s.get("title"))
+        if not (dk or tk):
+            continue
         keep = by_doi.get(dk) if dk else None
         if keep is None and tk:
-            keep = by_title.get(tk)
+            matches = [p for p in by_title.get(tk, [])
+                       if not dk or not _doi_key(p.get("doi")) or _doi_key(p.get("doi")) == dk]
+            # An identifier-less title cannot pick between distinct editions.
+            if len(matches) == 1:
+                keep = matches[0]
         if keep is not None:
-            if not _doi_key(keep.get("doi")) and dk:
-                keep["doi"] = s.get("doi")
+            for key, value in s.items():
+                if key != "verified" and keep.get(key) in (None, "", [], {}) and value not in (None, "", [], {}):
+                    keep[key] = value
+            # Verification comes from the resolver, never DOI presence alone.
+            if s.get("verified") is True:
                 keep["verified"] = True
+            if dk:
                 by_doi[dk] = keep
             continue
         out.append(s)
         if dk:
             by_doi[dk] = s
         if tk:
-            by_title[tk] = s
+            by_title.setdefault(tk, []).append(s)
     return out

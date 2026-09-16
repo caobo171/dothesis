@@ -114,3 +114,57 @@ def test_new_chapter_request_does_not_inherit_old_scope():
         "xuất chương 4",
         ["viết đầy đủ chương 1,2,3"],
     ) is None
+
+
+def test_internal_writing_commit_is_valid_save_evidence():
+    reply = "Đã lưu bản thảo mới"
+    for tool in ("rewrite_thesis", "export_docx"):
+        assert _honest_assistant_reply(reply, [(tool, '{"ok":true,"persisted":true}')], "lưu ngay") == reply
+        assert _honest_assistant_reply(reply, [(tool, '{"ok":false,"persisted":false,"error":"failed"}')], "lưu ngay") != reply
+
+
+def test_export_does_not_invent_questionnaire_failure_or_magic_phrase():
+    reply = _honest_assistant_reply("Đã lưu bản final", [("export_docx", '{"ok":true,"generated":false}')], "export lại bản final")
+    assert "tải" in reply
+    assert "M3" not in reply and "bộ câu hỏi" not in reply and "Hãy gửi" not in reply
+
+
+def test_rewrite_claim_does_not_ask_for_destructive_retry():
+    from api.app.routers.chat_v3 import _honest_rewrite_reply
+    reply = _honest_rewrite_reply("Đã viết lại các chương", {"intro":"same"}, {"intro":"same"}, "viết lại")
+    assert "chưa hoàn tất" in reply
+    assert "ghi đè" not in reply and "Hãy gửi" not in reply
+
+
+def test_fingerprint_detects_same_length_edit():
+    from api.app.routers.chat_v3 import chapter_fingerprint
+    class Store:
+        prose = "abc"
+        def load_full_context_store(self):
+            return {"m5_writing":{"chapters":{"intro":{"prose":self.prose}}}}
+    store = Store()
+    before = chapter_fingerprint(store)
+    store.prose = "xyz"
+    assert before != chapter_fingerprint(store)
+
+
+def test_full_rewrite_and_immediate_save_use_writing_tool():
+    from api.app.routers.chat_v3 import _rewrite_directive
+    assert "rewrite_thesis" in _rewrite_directive("viết lại toàn bộ các chương, ghi đè bản cũ")
+    assert "rewrite_thesis" in _rewrite_directive("Lưu ngay đi", ["Giờ hãy viết lại export lại bản final 1 lần nữa đi ạ"])
+    assert _rewrite_directive("Xuất file hiện có") is None
+
+
+def test_saved_draft_survives_export_failure():
+    text = "Đã lưu chương mới, nhưng xuất file thất bại"
+    assert _honest_assistant_reply(text, [("rewrite_thesis", '{"ok":false,"persisted":true,"error":"export_failed"}')], "viết lại các chương") == text
+
+
+def test_questionnaire_rewrite_is_not_routed_to_thesis_composer():
+    from api.app.routers.chat_v3 import _rewrite_directive
+    assert _rewrite_directive("viết lại bộ câu hỏi") is None
+
+
+def test_tool_only_rewrite_distinguishes_saved_from_exported():
+    reply = _tool_only_reply("viết lại các chương", [("rewrite_thesis", '{"ok":false,"persisted":true,"exported":false,"error":"export_failed"}')])
+    assert "Đã lưu" in reply and "chưa tạo được file" in reply

@@ -46,6 +46,32 @@ user works through the literature.
 | `research_scout(topic, research_questions, seed_refs?, scope?)` | Deep literature search: plans queries, searches academic APIs, validates citations, returns verified sources with metadata. Streams progress to the user automatically. |
 | `parse_reference(file or DOI)` | Extract structured metadata + page-anchored content from an uploaded PDF or a DOI. |
 
+Broad initial discovery plans several conceptual facets and may return partial
+provider-resolved candidates under a deadline. Treat those as metadata leads:
+a DOI string or provider record is not source verification or claim evidence
+until the identity/evidence validator completes.
+
+The editor's **Find papers** surface is a focused interactive entry into the
+same M2 library. It searches academic indexes for the selected claim, presents
+metadata and an abstract-derived relevance preview, and adds only the paper the
+student chooses. Adding it must go through `commit_slice("M2", …)` so downstream
+review flags and project-scoped state stay identical to chat research. Search
+results alone are read-only and never become references automatically.
+
+Claim confidence can search for evidence across the saved thesis in bounded
+batches. Each suggestion must identify the exact claim and a literal excerpt
+from a retrieved abstract or full-text passage, clearly labeling which was read.
+A resolved DOI verifies identity, not support for the claim. Only an accepted,
+evidence-backed proposal adds a source to M2 and its citation to M5; these two
+commits must succeed together. Never use external papers to fill missing measured
+results from the student's own study.
+
+Editor source identity is DOI-first, then a normalized title when no DOI exists;
+author and year are display metadata, never a unique key. Treat a source as
+verified only after the selected DOI resolves to that exact normalized DOI, or a
+title-only lookup returns a strict title match. A search result merely carrying a
+DOI string is not verification.
+
 Every source in the slice comes from one of these two tools or the user's own upload —
 **never from your training memory**. See `references/search-playbook.md` for when and
 how to scope scout calls.
@@ -137,6 +163,26 @@ If the user rejects an output ("these gaps are too generic"):
     Phase 3 (scout first if the slice lacks supporting sources) → confirm → commit.
 
 ## Quality bars
+
+Initial research and import/backfill use the same bounded discovery workflow.
+Reuse the persistent research cache before repeating provider searches, DOI
+resolution, query planning, or evidence/relevance model calls. Keys must include
+all effective inputs and model/prompt versions; a changed thesis/claim/evidence
+must not reuse an old judgment. Reuse valid results across requests and process
+restarts, coalesce simultaneous identical work, and never cache failed calls as
+successful empty results. Cached discovery remains read-only project state.
+Search distinct English query families for the topic, research questions,
+construct relationships, relevant theory, context, and methodology. A broad
+thesis search should aim for at least 20 distinct relevant sources unless the
+user specifies a narrower scope; this is a retrieval target, never permission
+to pad a bibliography. Retain real results as each search completes, deduplicate
+identities, preserve retrieved abstracts and provenance, and spend the remaining
+budget on uncovered query families instead of repeating one broad title query.
+Return the target, actual yield, missing coverage, and provider/budget warnings.
+An incomplete search must not be described as a complete literature review.
+Backfill preserves existing real/uploaded references and appends verified new
+sources; a failed search must never promote model-recalled citations to verified
+references. Metadata verification does not establish support for a claim.
 
 - Every claim cited inline `[Author Year, p.X]`. No uncited assertions.
 - No gap with fewer than 2 supporting papers. No gap unlinked to an RQ.

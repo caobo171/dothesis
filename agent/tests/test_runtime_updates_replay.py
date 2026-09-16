@@ -37,9 +37,26 @@ class _Msg:
 
 def _export(id, size):
     return _Msg(id, "tool", name="export_docx", content=json.dumps({
-        "ok": True,
+        "ok": True, "persisted": False,
         "artifacts": [{"kind": "docx", "download_url": f"/x/{id}", "size_bytes": size}],
     }))
+
+
+def _rewrite(id, size):
+    # Hashes make a real rewrite payload far longer than a tool-end preview.
+    return _Msg(id, "tool", name="rewrite_thesis", content=json.dumps({
+        "ok": True, "persisted": True, "exported": True,
+        "rewritten_chapters": ["intro", "lit_review", "methodology", "results", "conclusion"],
+        "committed_chapter_hashes": {str(n): "a" * 64 for n in range(5)},
+        "artifacts": [{"kind": "docx", "download_url": f"/x/{id}", "size_bytes": size}],
+    }))
+
+
+def _commit(id, *, error=None):
+    payload = {"module": "M5", "version": 7}
+    if error:
+        payload = {"error": error}
+    return _Msg(id, "tool", name="commit_slice", content=json.dumps(payload))
 
 
 class _State:
@@ -101,6 +118,30 @@ def test_the_same_message_arriving_twice_in_one_turn_announces_once():
 
     assert len([e for e in events if e["type"] == "tool_calls"]) == 1
     assert len([e for e in events if e["type"] == "tool_end"]) == 1
+
+
+def test_rewrite_tool_end_keeps_persistence_evidence_and_surfaces_artifacts():
+    events = _drain(_Agent([], [_rewrite("rewrite-1", 195_000)]))
+
+    end = next(e for e in events if e["type"] == "tool_end")
+    assert end["preview"] != ""  # Human-facing progress remains bounded separately.
+    assert end["outcome"] == {
+        "ok": True, "persisted": True, "exported": True,
+        "rewritten_chapters": ["intro", "lit_review", "methodology", "results", "conclusion"],
+    }
+    hints = [e["payload"] for e in events if e["type"] == "tool_calls"]
+    assert hints == [{"widget_type": "export_artifacts", "artifacts": [
+        {"kind": "docx", "download_url": "/x/rewrite-1", "size_bytes": 195_000}
+    ]}]
+
+
+def test_export_and_state_commit_have_typed_outcomes_not_preview_inference():
+    events = _drain(_Agent([], [_export("read-only", 11), _commit("commit-1")]))
+    outcomes = {event["name"]: event["outcome"] for event in events
+                if event["type"] == "tool_end"}
+
+    assert outcomes["export_docx"] == {"ok": True, "persisted": False}
+    assert outcomes["commit_slice"] == {"ok": True, "persisted": True}
 
 
 # --- the compaction summary is not the answer -------------------------------

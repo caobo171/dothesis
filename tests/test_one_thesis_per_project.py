@@ -231,6 +231,13 @@ _RAW_PROSE_ALLOWED = {
     "agent/tools/writing.py": "_m5_slice_for_export",
     # m5_prose's fail-open fallback when the resolver cannot be imported.
     "agent/coherence.py": "m5_prose fallback",
+    # Editor anchors require original whitespace; the canonical resolver is
+    # still used to fill chapters absent from the persisted editor map.
+    "quality/claim_confidence.py": "raw editor offsets plus canonical legacy fallback",
+    # Finding.payload.chapters is a list of requested repair targets, not prose.
+    "api/app/doctor_adapter.py": "repair target names; composition uses the resolver",
+    # A data migration must inspect both storage keys to canonicalize old rows.
+    "api/migrations/versions/20260915_canonical_final_sections.py": "canonical prose storage migration",
 }
 
 # `chapters` is an overloaded word: in a partner order it is the requested

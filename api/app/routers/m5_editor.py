@@ -1,13 +1,24 @@
 """SP6.5: editor API — chapter prose CRUD, inline AI tools, accept/reject."""
 from __future__ import annotations
 
+import base64
+import concurrent.futures
 import hashlib
+import logging
+import math
+import mimetypes
+import re
+import time
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
+
+from orchestrator.tools.research_cache import cached_call
 
 from ..db import db_session
 from ..deps import current_user
@@ -15,6 +26,110 @@ from ..agent_state import nested_slices
 from ..models import ContextStore, Export, Project, User
 
 router = APIRouter(tags=["m5_editor"])
+logger = logging.getLogger(__name__)
+
+
+_MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
+
+
+def _data_image(path: str) -> str | None:
+    """Encode a localised artifact for the authenticated editor response."""
+    try:
+        file = Path(path)
+        if not file.is_file() or file.stat().st_size <= 0:
+            return None
+        mime = mimetypes.guess_type(file.name)[0] or "image/png"
+        return f"data:{mime};base64,{base64.b64encode(file.read_bytes()).decode('ascii')}"
+    except OSError:
+        return None
+
+
+def _chapter_media_previews(chapters: dict, cs: ContextStore | None) -> dict:
+    """Attach transient browser previews without changing stored markdown.
+
+    Chapter prose intentionally keeps exporter-readable local/S3 image paths.
+    Browsers cannot read either. The response therefore carries a reversible
+    source-to-data-URL mapping; the web editor swaps it only for display and
+    maps it back before autosave.
+    """
+    if not chapters:
+        return chapters
+
+    m4 = (cs.m4_analysis or {}) if cs else {}
+    analysis = m4.get("analysis_results") or m4.get("results") or {}
+    figures = analysis.get("source_figures") if isinstance(analysis, dict) else {}
+    durable: dict[str, str] = {}
+    if isinstance(figures, dict):
+        from orchestrator.tools.figure_store import localize
+        for uri in figures.values():
+            local = localize(str(uri or ""))
+            if local:
+                durable[Path(local).name] = local
+
+    response: dict = {}
+    for name, raw in chapters.items():
+        entry = dict(raw) if isinstance(raw, dict) else {"name": name, "prose": str(raw or "")}
+        prose = str(entry.get("prose") or "")
+        sources = _MARKDOWN_IMAGE_RE.findall(prose)
+        media = []
+        for source in sources:
+            local = source if Path(source).is_file() else durable.get(Path(source).name)
+            preview = _data_image(local) if local else None
+            if preview:
+                media.append({"source": source, "preview_url": preview})
+
+        # A model image is generated into scratch storage. If that file has
+        # expired, rebuild the same structured M3 artifact for preview only;
+        # the original source string remains in prose and therefore in saves.
+        if name == "methodology" and len(media) < len(sources):
+            m3 = (cs.m3_design or {}) if cs else {}
+            conceptual_model = m3.get("conceptual_model") if isinstance(m3, dict) else None
+            if conceptual_model:
+                from orchestrator.tools.m5_writing import _pillow_model_figure
+                generated = _pillow_model_figure(conceptual_model, "vi")
+                generated_sources = _MARKDOWN_IMAGE_RE.findall(generated or "")
+                generated_preview = _data_image(generated_sources[0]) if generated_sources else None
+                if generated_preview:
+                    mapped = {item["source"] for item in media}
+                    for source in sources:
+                        if source not in mapped:
+                            media.append({"source": source, "preview_url": generated_preview})
+        entry["media"] = media
+        # Tell the editor which placement tokens can actually be materialised
+        # from verified state. A token is retained for future data, but the UI
+        # must not promise "generated at export" when export will correctly
+        # remove it rather than fabricate a table.
+        renderable: set[str] = set()
+        try:
+            from orchestrator.tools.results_render import (
+                render_cleaning_section, render_limitations, render_results_tables,
+            )
+            if name == "methodology":
+                block = render_cleaning_section(analysis, "vi")
+                if block:
+                    renderable.add(block["kind"])
+            elif name == "results":
+                renderable.update(
+                    block["kind"] for block in render_results_tables(analysis, "vi", host_prose=prose)
+                )
+            elif name == "conclusion":
+                nested = {
+                    "m3_design": (cs.m3_design or {}) if cs else {},
+                    "m4_analysis": {"analysis_results": analysis},
+                }
+                block = render_limitations(nested, language="vi")
+                if block:
+                    renderable.add(block["kind"])
+        except Exception:
+            # Preview metadata is advisory; chapter reading must remain fail-open.
+            pass
+        entry["renderable_tokens"] = sorted(renderable)
+        # Transient optimistic-concurrency token, never stored in the markdown.
+        # It makes a proposal reject if another edit moved a zero-width citation
+        # insertion while its selected range still happens to be empty.
+        entry["document_fingerprint"] = _chapter_fingerprint(prose)
+        response[name] = entry
+    return response
 
 
 def _owned_project(db: Session, user: User, project_id: uuid.UUID) -> Project:
@@ -25,10 +140,402 @@ def _owned_project(db: Session, user: User, project_id: uuid.UUID) -> Project:
     return p
 
 
+def _chapter_fingerprint(prose: str) -> str:
+    return hashlib.sha256(prose.encode("utf-8")).hexdigest()
+
+
 def _m5_slice(db: Session, project_id: uuid.UUID) -> dict:
     """Return the m5_writing JSONB blob, or {} if not yet seeded."""
     cs = db.get(ContextStore, project_id)
     return (cs.m5_writing or {}) if cs else {}
+
+
+class ReviewBody(BaseModel):
+    kind: str = "peer_review"
+
+
+class ReferenceSearchBody(BaseModel):
+    query: str
+    limit: int = 10
+
+
+class AddReferenceBody(BaseModel):
+    doi: str | None = None
+    title: str | None = None
+
+
+def _normalized_doi(value: object) -> str:
+    """Canonical DOI identity; display URLs are deliberately not identities."""
+    return re.sub(r"^https?://(?:dx\.)?doi\.org/", "", str(value or "").strip(), flags=re.I).lower()
+
+
+def _normalized_title(value: object) -> str:
+    """Stable fallback identity for sources without a DOI."""
+    return re.sub(r"[^\w]+", "", str(value or "").casefold())
+
+
+def _paper_key(paper: dict) -> str:
+    doi = _normalized_doi(paper.get("doi"))
+    if doi:
+        return f"doi:{doi}"
+    title = _normalized_title(paper.get("title"))
+    if title:
+        # Editions and conference revisions can share a title without a DOI.
+        # Bibliographic author/year keeps them distinct while still collapsing
+        # duplicate provider records for the same work.
+        return f"title:{title}|{_reference_author(paper).casefold()}|{str(paper.get('year') or '').strip()}"
+    # Imported pre-editor records sometimes only have an author/year. Keep
+    # their old selection surface working, but never pretend this is unique.
+    return f"legacy:{_reference_author(paper).casefold()}|{str(paper.get('year') or '').strip()}"
+
+
+_TRUSTED_INDEX_PROVIDERS = {"OpenAlex", "Crossref"}
+_TRUSTED_INDEX_DOI = re.compile(r"^10\.\d{4,9}/\S+$", re.I)
+
+
+def _index_identity(paper: dict) -> dict | None:
+    """Return complete identity only for a row produced by a trusted adapter."""
+    if paper.get("provider") not in _TRUSTED_INDEX_PROVIDERS:
+        return None
+    doi = _normalized_doi(paper.get("doi"))
+    title = str(paper.get("title") or "").strip()
+    authors = paper.get("authors")
+    if isinstance(authors, str):
+        authors = [authors]
+    authors = [author.strip() for author in authors if isinstance(author, str) and author.strip()] if isinstance(authors, (list, tuple)) else []
+    try:
+        year = int(paper.get("year"))
+    except (TypeError, ValueError):
+        return None
+    if (not _TRUSTED_INDEX_DOI.fullmatch(doi) or not title or not any(authors)
+            or year < 1600 or year > datetime.now(timezone.utc).year + 1):
+        return None
+    return {"doi": doi, "title": title, "authors": authors, "year": year}
+
+
+def _identity_conflicts(rows: list[dict]) -> bool:
+    """Fail closed when merged same-DOI metadata disagrees materially."""
+    titles = {_normalized_title(row.get("title")) for row in rows if str(row.get("title") or "").strip()}
+    years = {str(row.get("year")).strip() for row in rows if row.get("year") not in (None, "")}
+    author_sets = {
+        tuple(re.sub(r"\W+", "", str(author).casefold()) for author in (row.get("authors") or []) if str(author).strip())
+        for row in rows if isinstance(row.get("authors"), (list, tuple)) and row.get("authors")
+    }
+    return len(titles) > 1 or len(years) > 1 or len(author_sets) > 1
+
+
+def _trusted_index_marker(rows: list[dict]) -> dict | None:
+    """Attach server-derived identity metadata after provider rows are merged."""
+    identities = [identity for row in rows if (identity := _index_identity(row))]
+    if not identities:
+        return None
+    return {"identity": identities[0], "conflict": _identity_conflicts(rows)}
+
+
+def _paper_score(paper: dict, query: str) -> float:
+    """Transparent ranking for the editor search results.
+
+    Title overlap carries most of the relevance signal; abstract overlap helps
+    claim-level searches, and citation count is log-scaled so famous but weakly
+    related papers cannot drown out a close topical match.
+    """
+    words = {w for w in re.findall(r"[\wÀ-ỹ]{3,}", query.lower())}
+    title = str(paper.get("title") or "").lower()
+    abstract = str(paper.get("abstract") or "").lower()
+    title_hits = sum(1 for w in words if w in title)
+    abstract_hits = sum(1 for w in words if w in abstract)
+    citations = int(paper.get("citation_count") or 0)
+    return title_hits * 5 + abstract_hits * 1.25 + math.log10(citations + 1)
+
+
+def _crossref_paper_search(query: str, limit: int) -> list[dict]:
+    """Reliable third leg for editor search when free indexes rate-limit."""
+    import httpx  # local: keeps editor import/startup light
+    response = httpx.get(
+        "https://api.crossref.org/works",
+        params={
+            "query.bibliographic": query,
+            "rows": limit,
+            "select": "title,author,issued,DOI,container-title,URL,abstract,is-referenced-by-count",
+            "filter": "type:journal-article",
+        },
+        headers={"User-Agent": "DoThesis/1.0 (mailto:dothesis@users.noreply.github.com)"},
+        timeout=14,
+    )
+    response.raise_for_status()
+    out = []
+    for item in response.json().get("message", {}).get("items", []):
+        title = str((item.get("title") or [""])[0]).strip()
+        date_parts = item.get("issued", {}).get("date-parts") or [[None]]
+        year = date_parts[0][0] if date_parts and date_parts[0] else None
+        authors = [str(a.get("family") or "").strip() for a in item.get("author", [])]
+        authors = [a for a in authors if a]
+        if not title or not authors or not year:
+            continue
+        abstract = re.sub(r"<[^>]+>", " ", str(item.get("abstract") or ""))
+        abstract = re.sub(r"\s+", " ", abstract).strip()
+        out.append({
+            "title": title, "authors": authors, "year": year,
+            "doi": item.get("DOI"), "url": item.get("URL"),
+            "journal": (item.get("container-title") or [None])[0],
+            "abstract": abstract,
+            "citation_count": int(item.get("is-referenced-by-count") or 0),
+            "source_type": "journal", "confidence": 0.9 if item.get("DOI") else 0.7,
+        })
+    return out
+
+
+def _cached_editor_provider_search(provider: str, query: str, limit: int, compute) -> list[dict]:
+    """Cache only non-empty raw provider rows under a non-secret stable key.
+
+    The persistent cache hashes this key before writing it.  Keeping provider
+    payloads separate avoids treating a Crossref row as an OpenAlex response,
+    whose metadata shapes and freshness characteristics differ.
+    """
+    key = {"provider": provider, "query": " ".join(query.casefold().split()), "limit": limit}
+    return cached_call(
+        "scholarly-search-v1", key, compute, ttl_s=7 * 86400,
+        cache_if=lambda rows: isinstance(rows, list) and bool(rows),
+    )
+
+
+def search_scholarly_references(query: str, limit: int = 5) -> dict:
+    """Run a read-only scholarly lookup without project or database access.
+
+    The editor endpoint owns authorization. Claim review can safely call this
+    pure provider helper from bounded workers without sharing its SQLAlchemy
+    session across threads.
+    """
+    query = str(query or "").strip()
+    if len(query) < 3:
+        raise ValueError("query_too_short")
+    limit = max(3, min(int(limit), 20))
+
+    from engine.utils.api_citations.openalex import OpenAlexClient
+    from engine.utils.api_citations.semantic_scholar import SemanticScholarClient
+
+    def openalex():
+        return _cached_editor_provider_search(
+            "openalex", query, limit,
+            lambda: OpenAlexClient(timeout=10, max_retries=1).search_papers(query, limit=limit),
+        )
+
+    def semantic():
+        return _cached_editor_provider_search(
+            "semantic_scholar", query, limit,
+            lambda: SemanticScholarClient(timeout=10, max_retries=1).search_papers(query, limit=limit),
+        )
+
+    def crossref():
+        return _cached_editor_provider_search(
+            "crossref", query, limit, lambda: _crossref_paper_search(query, limit),
+        )
+
+    rows: list[dict] = []
+    providers: list[str] = []
+    responded_providers: list[str] = []
+    # One slow/rate-limited provider must not block useful results from the
+    # other. Each client already fails closed to [], so partial success is a
+    # normal response and the UI reports which indexes answered.
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=3)
+    try:
+        futures = {
+            pool.submit(openalex): "OpenAlex",
+            pool.submit(semantic): "Semantic Scholar",
+            pool.submit(crossref): "Crossref",
+        }
+        done, _ = concurrent.futures.wait(futures, timeout=14)
+        for future, provider in futures.items():
+            if future not in done:
+                future.cancel()
+                logger.warning("editor reference search timed out for %s", provider)
+                continue
+            try:
+                found = future.result() or []
+                responded_providers.append(provider)
+                if found:
+                    providers.append(provider)
+                for paper in found:
+                    rows.append({**paper, "provider": provider})
+            except Exception:
+                logger.exception("editor reference search failed for %s", provider)
+    finally:
+        # Do not let a misbehaving remote client turn the caller's timeout
+        # into a hidden executor-context wait. Provider clients have their own
+        # network limits and any stragglers cannot mutate this response.
+        pool.shutdown(wait=False, cancel_futures=True)
+
+    grouped: dict[str, list[dict]] = {}
+    for paper in rows:
+        key = _paper_key(paper)
+        if key.endswith("title:"):
+            continue
+        grouped.setdefault(key, []).append(paper)
+
+    deduped: dict[str, dict] = {}
+    for key, variants in grouped.items():
+        # Keep Semantic Scholar's richer abstract when it wins ranking, while
+        # carrying only a separately derived trusted index identity marker.
+        selected = max(variants, key=lambda paper: len(str(paper.get("abstract") or "")))
+        marker = _trusted_index_marker(variants)
+        deduped[key] = {**selected, **({"_identity_from_index": marker} if marker else {})}
+
+    ranked = sorted(deduped.values(), key=lambda p: _paper_score(p, query), reverse=True)[:limit]
+    results = []
+    for paper in ranked:
+        abstract = str(paper.get("abstract") or "").strip()
+        results.append({
+            "id": _reference_id(paper),
+            "title": paper.get("title"),
+            "authors": paper.get("authors") or [],
+            "author": _reference_author(paper),
+            "year": paper.get("year"),
+            "venue": paper.get("journal") or paper.get("venue"),
+            "doi": paper.get("doi"),
+            "url": paper.get("url"),
+            "abstract": abstract,
+            "abstract_preview": abstract[:360],
+            "citation_count": int(paper.get("citation_count") or 0),
+            # Search indexes expose candidate metadata only. A DOI string is
+            # useful for the follow-up lookup, but becomes `verified: true`
+            # only after `/references/add` resolves this exact selected source.
+            "verified": False,
+            "doi_available": bool(_normalized_doi(paper.get("doi"))),
+            "provider": paper.get("provider"),
+            "relevance_score": round(_paper_score(paper, query), 2),
+            # Internal server provenance. The claim-review worker may opt in
+            # only after this helper created it; browser add-reference flows
+            # never treat it as a substitute for exact resolver verification.
+            "_identity_from_index": paper.get("_identity_from_index"),
+        })
+    return {"results": results, "count": len(results), "providers": providers,
+            "responded_providers": responded_providers, "query": query}
+
+
+@router.post("/projects/{project_id}/m5/references/search")
+def search_editor_references(
+    project_id: uuid.UUID,
+    body: ReferenceSearchBody,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """Search academic indexes after enforcing the project boundary."""
+    _owned_project(db, user, project_id)
+    try:
+        result = search_scholarly_references(body.query, body.limit)
+        # Provider-derived identity provenance is for the in-process claim
+        # worker. Do not expose it as a browser-selectable verification flag.
+        result["results"] = [{key: value for key, value in paper.items() if key != "_identity_from_index"}
+                             for paper in result["results"]]
+        return result
+    except ValueError as exc:
+        if str(exc) == "query_too_short":
+            raise HTTPException(400, detail={"error": {"code": "query_too_short"}}) from exc
+        raise
+
+
+@router.post("/projects/{project_id}/m5/references/add")
+def add_editor_reference(
+    project_id: uuid.UUID,
+    body: AddReferenceBody,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """Verify one selected search result and add it through commit_slice."""
+    _owned_project(db, user, project_id)
+    lookup = (body.doi or body.title or "").strip()
+    if not lookup:
+        raise HTTPException(400, detail={"error": {"code": "reference_identifier_required"}})
+
+    from engine.utils.api_citations.openalex import OpenAlexClient
+    from engine.utils.api_citations import CrossrefClient
+
+    verified = None
+    doi = _normalized_doi(body.doi)
+    if doi:
+        verified = OpenAlexClient(timeout=10, max_retries=1).get_paper_by_doi(doi)
+        if not verified:
+            verified = CrossrefClient().search_paper(doi)
+        # A result that happens to have a DOI is not verification of the DOI
+        # the student chose. Near matches would poison the project library.
+        if not verified or _normalized_doi(verified.get("doi")) != doi:
+            raise HTTPException(422, detail={"error": {"code": "reference_not_verified"}})
+    else:
+        verified = CrossrefClient().search_paper(lookup)
+        # A title-only request has no immutable external identifier, so accept
+        # only a strict normalized title match rather than a ranked near match.
+        if not verified or _normalized_title(verified.get("title")) != _normalized_title(lookup):
+            raise HTTPException(422, detail={"error": {"code": "reference_not_verified"}})
+    if not verified or not verified.get("title"):
+        raise HTTPException(422, detail={"error": {"code": "reference_not_verified"}})
+    verified["verified"] = True
+
+    cs = db.get(ContextStore, project_id)
+    current = list(((cs.m2_literature or {}).get("literature_sources") or []) if cs else [])
+    target_key = _paper_key(verified)
+    existing = next((source for source in current if _paper_key(source) == target_key), None)
+    if existing is None:
+        from ..agent_state import DbProjectStateStore
+        store = DbProjectStateStore(db.get_bind(), project_id, Path("."))
+        store.user_id = user.id
+        try:
+            commit = store.commit_slice(
+                "M2", {"literature_sources": current + [verified]},
+                reason="Student added a verified paper from editor search",
+                confirm_done=False,
+            )
+            if not isinstance(commit, dict) or commit.get("error"):
+                raise RuntimeError(f"M2 commit rejected: {commit!r}")
+        except Exception:
+            # Never return a successful add when the only legal state write
+            # failed; the student can retry without a phantom library source.
+            logger.exception("editor reference add commit failed")
+            raise HTTPException(500, detail={"error": {"code": "reference_add_failed"}})
+        source = verified
+    else:
+        source = existing
+    return {**source, "id": _reference_id(source), "author": _reference_author(source)}
+
+
+@router.post("/projects/{project_id}/m5/review")
+def review_thesis_document(
+    project_id: uuid.UUID,
+    body: ReviewBody,
+    user: User = Depends(current_user),
+    db: Session = Depends(db_session),
+):
+    """Run the existing committee-readiness rubric from the editor.
+
+    Decision: this is read-only over the project-scoped context store. The
+    editor and chat `review_thesis` tool therefore grade the same chapters,
+    citations, statistics, advisor comments and institutional requirements;
+    there is no second, UI-only reviewer that can drift from the agent.
+    """
+    _owned_project(db, user, project_id)
+    cs = db.get(ContextStore, project_id)
+    if cs is None or not (cs.m5_writing or {}).get("chapters"):
+        raise HTTPException(400, detail={"error": {"code": "no_chapters_yet"}})
+
+    from quality.rubric import focused_review
+
+    allowed = {"claim_confidence", "peer_review", "source_quality", "tone_of_voice", "proofread"}
+    if body.kind not in allowed:
+        raise HTTPException(400, detail={"error": {"code": "unknown_review_kind"}})
+
+    context = nested_slices(cs)
+    coaching = cs.coaching or {}
+    result = focused_review(
+        context,
+        body.kind,
+        institution_profile=coaching.get("institution_profile") or None,
+        advisor_feedback=coaching.get("advisor_feedback") or [],
+    )
+    return {
+        **result,
+        "reviewed_at": datetime.now(timezone.utc).isoformat(),
+        "review_id": str(uuid.uuid4()),
+        "review_kind": body.kind,
+    }
 
 
 def _normalize_stored_chapters(chapters: dict) -> dict | None:
@@ -147,7 +654,7 @@ def list_chapters(
         cs.m5_writing = m5
         flag_modified(cs, "m5_writing")
         db.commit()
-    return chapters
+    return _chapter_media_previews(chapters, cs)
 
 
 # ---------------------------------------------------------------------------
@@ -163,22 +670,86 @@ _VALID_CHAPTER_NAMES = {
 
 class PatchChapterBody(BaseModel):
     prose: str
+    expected_document_fingerprint: str | None = None
+
+
+def _reference_author(ref: dict) -> str:
+    """Return the citation/display author for either current or legacy M2 data."""
+    authors = ref.get("authors")
+    if isinstance(authors, list) and authors:
+        first = str(authors[0]).strip()
+        surname = first.split()[-1] if first else ""
+        if surname:
+            return f"{surname} et al." if len(authors) > 1 else surname
+    return str(ref.get("author") or "").strip() or "Anon"
 
 
 def _collect_reference_pool(cs: ContextStore) -> list[dict]:
-    """Mirror M5Agent._collect_references: dedupe by (author, year) preserving order.
+    """Collect the canonical M2 sources, plus references embedded in legacy gaps.
 
-    Decision: centralised here so the PATCH endpoint and the agent share identical
-    pool-building logic without duplicating it or importing from the agent layer.
+    Decision: ``literature_sources`` is the project-level source of truth and is
+    what the roadmap displays. Older projects may only carry papers inside
+    ``research_gaps``, so retain that path as a compatibility fallback/addition.
+    Dedupe by (author, year) while preserving canonical-source order.
     """
     m2 = (cs.m2_literature or {}) if cs else {}
-    seen: dict[tuple, dict] = {}
+    seen: dict[str, dict] = {}
+    for paper in m2.get("literature_sources", []) or []:
+        key = _paper_key(paper)
+        if key.startswith("legacy:"):
+            # Without DOI/title there is no evidence these records denote the
+            # same work. Retain each one so cite can reject their shared legacy
+            # id explicitly instead of silently choosing the first.
+            key = f"{key}#{len(seen)}"
+        if key not in seen:
+            seen[key] = paper
     for gap in m2.get("research_gaps", []) or []:
         for paper in (gap.get("supporting_papers") or []):
-            key = (str(paper.get("author", "")), str(paper.get("year", "")))
+            key = _paper_key(paper)
+            if key.startswith("legacy:"):
+                key = f"{key}#{len(seen)}"
             if key not in seen:
                 seen[key] = paper
     return list(seen.values())
+
+
+def _commit_editor_chapters(
+    db: Session, user: User, project_id: uuid.UUID, chapters: dict, reason: str,
+) -> None:
+    """Persist editor prose through the one M5 state-write boundary.
+
+    The editor used to assign JSONB directly, bypassing focus, snapshot and
+    downstream semantics. Passing the full canonical chapter map avoids a
+    lossy per-chapter merge while `commit_slice` retains unrelated M5 keys.
+    """
+    from ..agent_state import DbProjectStateStore
+
+    store = DbProjectStateStore(db.get_bind(), project_id, Path("."))
+    store.user_id = user.id
+    try:
+        from agent.coherence import validate_m5_sections  # noqa: PLC0415
+        coherence = validate_m5_sections(chapters, (store.load() or {}).get("contextStore", {}))
+        if not coherence.get("crashed") and coherence.get("hard", 0):
+            hard = coherence.get("findings_hard") or [
+                f for f in coherence.get("findings", []) if f.get("severity") == "hard"
+            ]
+            raise HTTPException(422, detail={"error": {
+                "code": "coherence_violation", "findings": hard,
+            }})
+    except HTTPException:
+        raise
+    except Exception:
+        # The established coherence boundary fails open when its optional
+        # validator cannot run; a broken advisory dependency must not eat prose.
+        logger.exception("editor coherence validation unavailable; saving fail-open")
+    try:
+        committed = store.commit_slice("M5", {"chapters": chapters}, reason=reason, confirm_done=False)
+    except Exception:
+        logger.exception("editor M5 chapter commit failed")
+        raise HTTPException(500, detail={"error": {"code": "chapter_save_failed"}})
+    if not isinstance(committed, dict) or committed.get("error"):
+        logger.error("editor M5 chapter commit rejected: %r", committed)
+        raise HTTPException(500, detail={"error": {"code": "chapter_save_failed"}})
 
 
 @router.patch("/projects/{project_id}/m5/chapters/{chapter_name}")
@@ -206,6 +777,11 @@ def patch_chapter(
     if chapter_name not in chapters:
         raise HTTPException(404, detail={"error": {"code": "chapter_not_drafted"}})
 
+    current_prose = str(chapters[chapter_name].get("prose") or "")
+    if (body.expected_document_fingerprint
+            and body.expected_document_fingerprint != _chapter_fingerprint(current_prose)):
+        raise HTTPException(409, detail={"error": {"code": "stale_document"}})
+
     # Re-validate citations so the front-end always has fresh used/uncited lists
     from orchestrator.tools.m5_writing import validate_citations_plain
     pool = _collect_reference_pool(cs)
@@ -214,13 +790,9 @@ def patch_chapter(
     chapters[chapter_name]["prose"] = body.prose
     chapters[chapter_name]["citations_used"] = validation["citations_used"]
     chapters[chapter_name]["uncited_warnings"] = validation["uncited_warnings"]
-    m5["chapters"] = chapters
-    cs.m5_writing = m5
-    # Decision: flag_modified is required for SQLAlchemy to detect mutations of
-    # JSONB columns assigned via dict (not detected by Python identity checks).
-    flag_modified(cs, "m5_writing")
-    db.commit()
-    return chapters[chapter_name]
+    chapters[chapter_name]["ambiguous_citation_warnings"] = validation["ambiguous_warnings"]
+    _commit_editor_chapters(db, user, project_id, chapters, "Student autosaved chapter prose")
+    return {**chapters[chapter_name], "document_fingerprint": _chapter_fingerprint(body.prose)}
 
 
 # ---------------------------------------------------------------------------
@@ -229,14 +801,8 @@ def patch_chapter(
 
 
 def _reference_id(ref: dict) -> str:
-    """Stable derived id: sha1(author + year). Keeps the wire shape stable
-    across server restarts without forcing a DB schema for references.
-
-    Decision: Truncate to 16 hex chars for brevity while maintaining collision
-    resistance for practical reference pool sizes. The cite endpoint (Task 13)
-    uses the same function to map ref_id back to the paper.
-    """
-    raw = f"{ref.get('author', '')}|{ref.get('year', '')}".encode("utf-8")
+    """Stable source id based on DOI/title, never merely rendered author/year."""
+    raw = _paper_key(ref).encode("utf-8")
     return hashlib.sha1(raw).hexdigest()[:16]
 
 
@@ -255,7 +821,14 @@ def list_references(
     _owned_project(db, user, project_id)
     cs = db.get(ContextStore, project_id)
     pool = _collect_reference_pool(cs) if cs else []
-    return [{"id": _reference_id(r), **r} for r in pool]
+    # Current M2 records use ``authors: list[str]`` while the editor's compact
+    # wire contract uses a ready-to-render singular ``author`` label.
+    ids = [_reference_id(r) for r in pool]
+    return [
+        {**r, "id": source_id, "author": _reference_author(r),
+         "ambiguous": ids.count(source_id) > 1}
+        for r, source_id in zip(pool, ids)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +846,7 @@ class ParaphraseBody(BaseModel):
     from_offset: int
     to_offset: int
     style: str = ""
+    expected_document_fingerprint: str | None = None
 
 
 # The "practical inline actions" (jenni-style) share ONE endpoint shape: rewrite
@@ -283,6 +857,7 @@ class ParaphraseBody(BaseModel):
 class RewriteBody(BaseModel):
     from_offset: int
     to_offset: int
+    expected_document_fingerprint: str | None = None
 
 
 _INLINE_INSTRUCTIONS: dict[str, str] = {
@@ -313,6 +888,33 @@ _INLINE_INSTRUCTIONS: dict[str, str] = {
 }
 
 
+_EDIT_EXPLANATIONS: dict[str, str] = {
+    "paraphrase": "Diễn đạt lại để câu văn tự nhiên và học thuật hơn, đồng thời giữ nguyên ý nghĩa, số liệu và trích dẫn.",
+    "proofread": "Sửa ngữ pháp, chính tả, dấu câu và cách dùng từ chưa tự nhiên mà không làm thay đổi nội dung học thuật.",
+    "improve": "Tăng độ chính xác, mạch lạc và trang trọng của văn phong học thuật; giữ nguyên luận điểm, số liệu và trích dẫn.",
+    "humanize": "Giảm cách diễn đạt máy móc và lặp cấu trúc để đoạn văn có nhịp điệu tự nhiên hơn nhưng không đổi hàm ý.",
+    "expand": "Bổ sung giải thích và liên kết lập luận để ý chính đầy đủ hơn, không tự tạo dữ liệu hoặc nguồn mới.",
+    "shorten": "Loại bỏ phần lặp và từ đệm để câu cô đọng hơn, đồng thời giữ lại toàn bộ nội dung có ý nghĩa.",
+    "translate": "Chuyển ngữ đoạn đã chọn và giữ nguyên thuật ngữ chuyên môn, số liệu cùng trích dẫn.",
+    "cite": "Chèn trích dẫn từ thư viện nguồn của dự án tại vị trí đã chọn.",
+}
+
+
+def _proposal_metadata(kind: str, started: float, extra: dict | None = None) -> dict:
+    """Build the review metadata displayed with a PendingEdit.
+
+    Decision: the rationale is deliberately bounded and action-specific. The
+    proposed text already contains the model's substantive work; a second LLM
+    call just to narrate it would double latency/cost and could invent a reason
+    unrelated to the actual diff.
+    """
+    return {
+        **(extra or {}),
+        "explanation": _EDIT_EXPLANATIONS.get(kind, _EDIT_EXPLANATIONS["improve"]),
+        "processing_ms": max(1, round((time.perf_counter() - started) * 1000)),
+    }
+
+
 def _validate_range(prose: str, from_offset: int, to_offset: int) -> None:
     """Raise 400 when the selection window is outside the current prose length.
 
@@ -321,6 +923,11 @@ def _validate_range(prose: str, from_offset: int, to_offset: int) -> None:
     """
     if from_offset < 0 or to_offset < from_offset or to_offset > len(prose):
         raise HTTPException(400, detail={"error": {"code": "offset_out_of_range"}})
+
+
+def _validate_document_precondition(prose: str, expected: str | None) -> None:
+    if expected and expected != _chapter_fingerprint(prose):
+        raise HTTPException(409, detail={"error": {"code": "stale_document"}})
 
 
 def _surrounding_context(prose: str, from_offset: int, to_offset: int) -> tuple[str, str]:
@@ -389,10 +996,12 @@ def paraphrase_chapter_selection(
     cs = db.get(ContextStore, project_id)
     ch = _load_chapter_or_404(cs, chapter_name)
     prose = ch.get("prose", "")
+    _validate_document_precondition(prose, body.expected_document_fingerprint)
     _validate_range(prose, body.from_offset, body.to_offset)
     before, after = _surrounding_context(prose, body.from_offset, body.to_offset)
     selection = prose[body.from_offset: body.to_offset]
     language = ((cs.m1_topic or {}).get("language", "en")) if cs else "en"
+    started = time.perf_counter()
     new_text = paraphrase_selection.invoke({
         "chapter_name": chapter_name,
         "language": language,
@@ -410,7 +1019,10 @@ def paraphrase_chapter_selection(
         new_text=new_text,
         source="paraphrase",
         pending_at=datetime.now(timezone.utc),
-        metadata={"style": body.style} if body.style else {},
+        metadata=_proposal_metadata("paraphrase", started, {
+            **({"style": body.style} if body.style else {}),
+            "document_fingerprint": _chapter_fingerprint(prose),
+        }),
     )
     edit_dict = _append_pending_edit(cs, chapter_name, pe)
     db.commit()
@@ -430,10 +1042,12 @@ def _rewrite_selection_edit(
     cs = db.get(ContextStore, project_id)
     ch = _load_chapter_or_404(cs, chapter_name)
     prose = ch.get("prose", "")
+    _validate_document_precondition(prose, body.expected_document_fingerprint)
     _validate_range(prose, body.from_offset, body.to_offset)
     before, after = _surrounding_context(prose, body.from_offset, body.to_offset)
     selection = prose[body.from_offset: body.to_offset]
     language = ((cs.m1_topic or {}).get("language", "en")) if cs else "en"
+    started = time.perf_counter()
     new_text = rewrite_selection.invoke({
         "chapter_name": chapter_name,
         "language": language,
@@ -451,6 +1065,9 @@ def _rewrite_selection_edit(
         new_text=new_text,
         source=kind,
         pending_at=datetime.now(timezone.utc),
+        metadata=_proposal_metadata(kind, started, {
+            "document_fingerprint": _chapter_fingerprint(prose),
+        }),
     )
     edit_dict = _append_pending_edit(cs, chapter_name, pe)
     db.commit()
@@ -511,6 +1128,7 @@ class TranslateBody(BaseModel):
     from_offset: int
     to_offset: int
     target_lang: str
+    expected_document_fingerprint: str | None = None
 
 
 @router.post("/projects/{project_id}/m5/chapters/{chapter_name}/translate")
@@ -532,9 +1150,11 @@ def translate_chapter_selection(
     cs = db.get(ContextStore, project_id)
     ch = _load_chapter_or_404(cs, chapter_name)
     prose = ch.get("prose", "")
+    _validate_document_precondition(prose, body.expected_document_fingerprint)
     _validate_range(prose, body.from_offset, body.to_offset)
     before, after = _surrounding_context(prose, body.from_offset, body.to_offset)
     selection = prose[body.from_offset: body.to_offset]
+    started = time.perf_counter()
     new_text = translate_selection.invoke({
         "chapter_name": chapter_name,
         "target_lang": body.target_lang,
@@ -551,7 +1171,10 @@ def translate_chapter_selection(
         new_text=new_text,
         source="translate",
         pending_at=datetime.now(timezone.utc),
-        metadata={"target_lang": body.target_lang},
+        metadata=_proposal_metadata("translate", started, {
+            "target_lang": body.target_lang,
+            "document_fingerprint": _chapter_fingerprint(prose),
+        }),
     )
     edit_dict = _append_pending_edit(cs, chapter_name, pe)
     db.commit()
@@ -566,6 +1189,7 @@ def translate_chapter_selection(
 class CiteBody(BaseModel):
     at_offset: int
     reference_id: str
+    expected_document_fingerprint: str | None = None
 
 
 @router.post("/projects/{project_id}/m5/chapters/{chapter_name}/cite")
@@ -590,13 +1214,20 @@ def cite_chapter(
     cs = db.get(ContextStore, project_id)
     ch = _load_chapter_or_404(cs, chapter_name)
     prose = ch.get("prose", "")
+    _validate_document_precondition(prose, body.expected_document_fingerprint)
     if body.at_offset < 0 or body.at_offset > len(prose):
         raise HTTPException(400, detail={"error": {"code": "offset_out_of_range"}})
     pool = _collect_reference_pool(cs)
-    target = next((r for r in pool if _reference_id(r) == body.reference_id), None)
-    if target is None:
+    matches = [r for r in pool if _reference_id(r) == body.reference_id]
+    if not matches:
         raise HTTPException(404, detail={"error": {"code": "reference_not_found"}})
+    if len(matches) > 1:
+        # Legacy author/year-only records can share an id. Choosing whichever
+        # happened to arrive first would cite the wrong paper silently.
+        raise HTTPException(409, detail={"error": {"code": "reference_ambiguous"}})
+    target = matches[0]
     citation = " " + build_citation_text(target)
+    started = time.perf_counter()
     pe = PendingEdit(
         id=uuid4().hex,
         chapter_name=chapter_name,
@@ -606,7 +1237,10 @@ def cite_chapter(
         new_text=citation,
         source="cite",
         pending_at=datetime.now(timezone.utc),
-        metadata={"reference_id": body.reference_id},
+        metadata=_proposal_metadata("cite", started, {
+            "reference_id": body.reference_id,
+            "document_fingerprint": _chapter_fingerprint(prose),
+        }),
     )
     edit_dict = _append_pending_edit(cs, chapter_name, pe)
     db.commit()
@@ -640,11 +1274,17 @@ def _find_and_pop_edit(chapter_dict: dict, edit_id: str) -> dict | None:
     return None
 
 
+class AcceptPendingBody(BaseModel):
+    mode: str = "replace"
+    expected_document_fingerprint: str | None = None
+
+
 @router.post("/projects/{project_id}/m5/chapters/{chapter_name}/pending/{edit_id}/accept")
 def accept_pending_edit(
     project_id: uuid.UUID,
     chapter_name: str,
     edit_id: str,
+    body: AcceptPendingBody = AcceptPendingBody(),
     user: User = Depends(current_user),
     db: Session = Depends(db_session),
 ):
@@ -675,6 +1315,23 @@ def accept_pending_edit(
     if target.get("chapter_name") != chapter_name:
         raise HTTPException(404, detail={"error": {"code": "edit_not_found"}})
 
+    proposal_fingerprint = (target.get("metadata") or {}).get("document_fingerprint")
+    if (body.expected_document_fingerprint
+            and body.expected_document_fingerprint != _chapter_fingerprint(prose)):
+        # Older proposals have no stored snapshot. The client's explicit token
+        # still makes acceptance fail closed instead of relying on range text.
+        raise HTTPException(
+            409,
+            detail={"error": {"code": "stale_document", "edit_id": edit_id}},
+        )
+    if proposal_fingerprint and proposal_fingerprint != _chapter_fingerprint(prose):
+        # Range equality is insufficient for a zero-length cite: an unrelated
+        # insertion can move its intended location while old_text remains "".
+        raise HTTPException(
+            409,
+            detail={"error": {"code": "stale_document", "edit_id": edit_id}},
+        )
+
     from_offset = target["from_offset"]
     to_offset = target["to_offset"]
     # Critical concurrency check: if the prose changed since the edit was created
@@ -685,9 +1342,18 @@ def accept_pending_edit(
             detail={"error": {"code": "stale_offsets", "edit_id": edit_id}},
         )
 
-    # Offsets validated — now pop and splice
+    if body.mode not in {"replace", "insert_after"}:
+        raise HTTPException(400, detail={"error": {"code": "unknown_accept_mode"}})
+
+    # Offsets validated — now pop and splice. Insert-below keeps the source and
+    # adds the proposal after it; this mirrors the editor review menu without
+    # weakening the same stale-offset/concurrency guard used by replacement.
     _find_and_pop_edit(ch, edit_id)
-    new_prose = _splice(prose, from_offset, to_offset, target["new_text"])
+    if body.mode == "insert_after":
+        insertion = ("\n\n" if to_offset and not prose[:to_offset].endswith("\n") else "") + target["new_text"]
+        new_prose = _splice(prose, to_offset, to_offset, insertion)
+    else:
+        new_prose = _splice(prose, from_offset, to_offset, target["new_text"])
     ch["prose"] = new_prose
 
     # Re-validate citations so the chapter's used/uncited lists stay current
@@ -695,10 +1361,11 @@ def accept_pending_edit(
     validation = validate_citations_plain(new_prose, pool)
     ch["citations_used"] = validation["citations_used"]
     ch["uncited_warnings"] = validation["uncited_warnings"]
+    ch["ambiguous_citation_warnings"] = validation["ambiguous_warnings"]
 
-    flag_modified(cs, "m5_writing")
-    db.commit()
-    return ch
+    chapters = (cs.m5_writing or {}).get("chapters") or {}
+    _commit_editor_chapters(db, user, project_id, chapters, "Student accepted editor proposal")
+    return {**ch, "document_fingerprint": _chapter_fingerprint(new_prose)}
 
 
 # ---------------------------------------------------------------------------
