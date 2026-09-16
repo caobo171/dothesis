@@ -144,7 +144,7 @@ export function ContextPanel({
       aria-busy={loading || undefined}
     >
       {/* Header */}
-      <div className="px-[18px] py-3.5 border-b border-ink-200 flex items-center gap-2">
+      <div className="flex h-[60px] min-h-[60px] items-center gap-2 border-b border-ink-200 px-[18px] py-0">
         {/* "Workspace", not "Context store": the panel is the container for two
             file groups now labelled Context (inputs) and Outputs, so reusing
             "Context" for the whole panel would clash with the Context card

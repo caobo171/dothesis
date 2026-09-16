@@ -42,10 +42,15 @@ export function preserveDtTokens(md: string): string {
 // labeled "generated at export" card. Purely presentational — the token text is
 // untouched in the document, so it still round-trips to markdown and the export
 // weave finds it exactly as before (see [[project_export_pipeline]]).
-export const DtPlaceholder = Extension.create({
+export const DtPlaceholder = Extension.create<{ availableKinds: string[] }>({
   name: "dtPlaceholder",
 
+  addOptions() {
+    return { availableKinds: [] };
+  },
+
   addProseMirrorPlugins() {
+    const available = new Set(this.options.availableKinds);
     return [
       new Plugin({
         props: {
@@ -55,10 +60,14 @@ export const DtPlaceholder = Extension.create({
               if (!node.isTextblock) return true;
               const m = DT_TOKEN_RE.exec(node.textContent);
               if (m) {
+                const ready = available.has(m[1]);
                 decos.push(
                   Decoration.node(pos, pos + node.nodeSize, {
-                    class: "dt-token",
+                    class: ready ? "dt-token" : "dt-token dt-token-unavailable",
                     "data-dt-label": dtLabel(m[1]),
+                    "data-dt-prefix": ready
+                      ? "⚙ Tạo tự động khi export"
+                      : "Chưa xuất được: thiếu dữ liệu kiểm chứng",
                   }),
                 );
               }

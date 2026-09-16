@@ -909,6 +909,94 @@ button { font: inherit; cursor: pointer; }
   line-height: var(--editor-line-height, 1.75);
   color: var(--ink-900);
 }
+.editor-workspace {
+  --editor-desk: #f3f3f1;
+}
+.editor-canvas {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.82), transparent 34rem),
+    var(--editor-desk);
+  scrollbar-gutter: stable;
+}
+.editor-paper {
+  border-radius: 2px;
+}
+.editor-paper .ProseMirror {
+  min-height: 12rem;
+  caret-color: var(--blue-600, #1c2eff);
+}
+.editor-paper .ProseMirror::selection,
+.editor-paper .ProseMirror *::selection {
+  background: rgba(68, 86, 255, 0.16);
+}
+.document-toc {
+  margin: 0 0 4rem;
+  padding-bottom: 4rem;
+  border-bottom: 1px solid var(--ink-100);
+  font-family: var(--font-sans);
+}
+.document-toc-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 1.75rem;
+  color: var(--blue-600, #1c2eff);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.document-toc h1 {
+  margin: 0;
+  color: var(--ink-900);
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: clamp(2rem, 4vw, 3.3rem);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+.document-toc h2 {
+  margin: 2.5rem 0 1.25rem;
+  color: var(--ink-400);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.document-toc ol { margin: 0; padding: 0; list-style: none; }
+.document-toc li { margin: 0; }
+.document-toc-chapter + .document-toc-chapter { margin-top: 12px; }
+.document-toc-chapter > button { color: var(--ink-800); font-weight: 700; }
+.document-toc-chapter > ol { margin-top: 2px; }
+.document-toc button {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: 8px;
+  border-radius: 7px;
+  padding: 5px 6px;
+  color: var(--ink-600);
+  text-align: left;
+  transition: color 160ms ease, background 160ms ease;
+}
+.document-toc button:hover { background: var(--ink-50); color: var(--blue-700, #0a1ee0); }
+.document-toc-leader {
+  min-width: 24px;
+  flex: 1;
+  border-bottom: 1px dotted var(--ink-200);
+  transform: translateY(-3px);
+}
+@media (max-width: 1100px) {
+  .editor-side-panel { width: 330px; }
+  .editor-outline-rail { width: 196px; }
+}
+@media (max-width: 850px) {
+  .editor-side-panel { display: none; }
+  .editor-outline-rail { width: 168px; }
+  .editor-canvas { padding-inline: 12px; }
+  .editor-paper { padding-inline: 28px; }
+}
 /* Paragraph spacing is a DISPLAY setting, like the font — markdown has no way
    to store a blank line, so a student pressing Enter for air between paragraphs
    was making a change that serialised to nothing and could never be saved. */
@@ -973,6 +1061,111 @@ button { font: inherit; cursor: pointer; }
   color: var(--ink-700);
   font-style: italic;
 }
+.editor-prose img {
+  display: block;
+  max-width: min(100%, 920px);
+  height: auto;
+  margin: 1.25rem auto;
+  border: 1px solid var(--ink-100, #e5e7eb);
+  border-radius: 8px;
+  background: white;
+}
+/* Markdown images are first-class Figure blocks in the editor. The node stays
+   an `image` in TipTap so it still serializes to ![caption](source) for Pandoc;
+   this chrome is editor-only and never leaks into the thesis. */
+.editor-prose .figure-block {
+  margin: 1.5rem 0;
+  overflow: hidden;
+  border: 1px solid var(--ink-200);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 30px rgba(24, 31, 50, 0.06);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+.editor-prose .figure-block-selected {
+  border-color: var(--blue-500, #3a4dff);
+  box-shadow: 0 0 0 3px rgba(58, 77, 255, 0.10), 0 10px 34px rgba(24, 31, 50, 0.08);
+}
+.editor-prose .figure-block-toolbar {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--ink-100);
+  background: var(--ink-50);
+  padding: 0 10px 0 12px;
+  font-family: var(--font-sans);
+}
+.editor-prose .figure-block-kind,
+.editor-prose .figure-block-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-500);
+  font-size: 11px;
+  font-weight: 650;
+}
+.editor-prose .figure-block-kind { color: var(--blue-700, #0a1ee0); }
+.editor-prose .figure-block-source {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-prose .figure-block-delete {
+  margin-left: auto;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: var(--ink-400);
+  transition: color 160ms ease, background 160ms ease;
+}
+.editor-prose .figure-block-delete:hover { color: #b42318; background: #fff0ee; }
+.editor-prose .figure-block-preview {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  background: #fff;
+}
+.editor-prose .figure-block-preview img {
+  max-width: 100%;
+  max-height: 680px;
+  margin: 0;
+  border: 0;
+  border-radius: 8px;
+  object-fit: contain;
+}
+.editor-prose .figure-block-caption-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--ink-100);
+  padding: 9px 12px;
+  font-family: var(--font-sans);
+}
+.editor-prose .figure-block-caption-label {
+  color: var(--ink-400);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.editor-prose .figure-block-caption-input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--ink-700);
+  font-size: 12px;
+  line-height: 1.5;
+  outline: none;
+}
+.editor-prose .figure-block-caption-input::placeholder { color: var(--ink-300); }
 .editor-prose table {
   width: 100%;
   border-collapse: collapse;
@@ -1038,7 +1231,7 @@ button { font: inherit; cursor: pointer; }
   font-size: 12.5px;
 }
 .editor-prose .dt-token::before {
-  content: "⚙ Tạo tự động khi export · " attr(data-dt-label);
+  content: attr(data-dt-prefix) " · " attr(data-dt-label);
   display: block;
   margin-bottom: 4px;
   color: var(--blue-700, #0a1ee0);
@@ -1046,6 +1239,51 @@ button { font: inherit; cursor: pointer; }
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
+}
+.editor-prose .dt-token-unavailable {
+  border-color: var(--ink-300, #cbd0da);
+  background: var(--ink-50, #f7f8fa);
+}
+.editor-prose .dt-token-unavailable::before {
+  color: var(--ink-600, #5d6472);
+}
+/* Verified result regions carry HTML-comment sentinels in stored Markdown.
+   They are integrity metadata, not thesis prose: visually suppress the exact
+   marker span and expose a generated-result boundary instead. */
+.editor-prose .dt-rendered-marker { display: none; }
+.editor-prose .dt-rendered-start {
+  position: relative;
+  margin-top: 2rem;
+  padding-top: 42px;
+  border: 1px solid var(--ink-200);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  background: #fff;
+}
+.editor-prose .dt-rendered-start::before {
+  content: "Generated result · " attr(data-dt-label);
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  height: 34px;
+  align-items: center;
+  border-bottom: 1px solid var(--ink-100);
+  border-radius: 14px 14px 0 0;
+  background: var(--ink-50);
+  padding: 0 12px;
+  color: var(--blue-700, #0a1ee0);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.editor-prose .dt-rendered-end {
+  margin-bottom: 2rem;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--ink-200);
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  background: #fff;
 }
 .editor-prose .mermaid-error {
   color: var(--stop-fg, #d22a2a);

@@ -49,12 +49,22 @@ export function SelectionToolbar({
     { label: "Shorten", Icon: ScissorsIcon, on: onShorten },
   ];
 
-  const barBtn = "inline-flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-ink-100 transition-colors";
+  const barBtn = "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 hover:bg-ink-100 active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-200";
 
   return (
-    <div className="relative inline-flex items-center gap-0.5 bg-white border border-ink-200 rounded-lg shadow-lg p-1 text-[13px] font-medium text-ink-800">
+    <div
+      className="relative inline-flex items-center gap-0.5 rounded-xl border border-ink-200 bg-white/95 p-1.5 text-[13px] font-medium text-ink-800 shadow-[0_12px_35px_rgba(24,31,50,0.16)] backdrop-blur"
+      // TipTap listens above this portal and otherwise tears the BubbleMenu
+      // down before a button receives its click. Treat interaction inside the
+      // toolbar as editor interaction and keep the saved selection intact.
+      onPointerDownCapture={event => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
       <button
         type="button"
+        onPointerDownCapture={event => event.preventDefault()}
         onClick={() => setAiOpen(o => !o)}
         aria-haspopup="menu"
         aria-expanded={aiOpen}
@@ -67,11 +77,21 @@ export function SelectionToolbar({
 
       <span className="w-px h-4 bg-ink-200 mx-0.5" aria-hidden />
 
-      <button type="button" onClick={onTranslate} className={barBtn}>
+      <button
+        type="button"
+        onClick={onTranslate}
+        onKeyDown={event => { if (event.key === "Enter" || event.key === " ") onTranslate(); }}
+        className={barBtn}
+      >
         <LanguageIcon className="w-4 h-4 text-ink-500" />
         Translate
       </button>
-      <button type="button" onClick={onCite} className={barBtn}>
+      <button
+        type="button"
+        onClick={onCite}
+        onKeyDown={event => { if (event.key === "Enter" || event.key === " ") onCite(); }}
+        className={barBtn}
+      >
         <PaperClipIcon className="w-4 h-4 text-ink-500" />
         Cite
       </button>
@@ -82,15 +102,16 @@ export function SelectionToolbar({
           <div className="fixed inset-0 z-40" onClick={() => setAiOpen(false)} aria-hidden />
           <div
             role="menu"
-            className="absolute left-0 top-full mt-1 z-50 w-52 bg-white border border-ink-200 rounded-xl shadow-xl p-1"
+            className="absolute left-0 top-full mt-2 z-50 w-56 rounded-xl border border-ink-100 bg-white p-1.5 shadow-[0_18px_45px_rgba(24,31,50,0.18)]"
           >
             {aiActions.map(({ label, Icon, on }) => (
               <button
                 key={label}
                 type="button"
                 role="menuitem"
+                onPointerDownCapture={event => event.preventDefault()}
                 onClick={() => { on(); setAiOpen(false); }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md hover:bg-ink-50 text-left text-ink-800"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-ink-50 text-left text-ink-800 transition-colors"
               >
                 <Icon className="w-4 h-4 text-ink-500 shrink-0" />
                 {label}

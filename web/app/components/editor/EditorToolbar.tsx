@@ -1,10 +1,13 @@
 "use client";
 
 import { useEditorState, type Editor } from "@tiptap/react";
+import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
 import {
   Undo2, Redo2, Bold, Italic, Strikethrough,
   List, ListOrdered, Quote, Minus, Plus, Table as TableIcon, Workflow,
+  Check, ChevronDown, Code2, Heading1, Heading2, Heading3, Heading4, Pilcrow,
 } from "lucide-react";
+import { Select } from "@/app/components/ui/select";
 
 
 // Fonts a Vietnamese thesis is actually submitted in — Times New Roman is the
@@ -24,14 +27,17 @@ export const FONT_FAMILIES = [
 const MIN_SIZE = 8;
 const MAX_SIZE = 72;
 
-// The "Văn bản" (text-style) dropdown. Only headings the markdown serializer
-// round-trips (# / ## / ###) plus the default paragraph — nothing here can be
-// silently lost on save.
-const TEXT_STYLES = [
-  { label: "Văn bản", value: "paragraph" },
-  { label: "Tiêu đề 1", value: "h1" },
-  { label: "Tiêu đề 2", value: "h2" },
-  { label: "Tiêu đề 3", value: "h3" },
+const BLOCK_TYPES = [
+  { label: "Văn bản", value: "paragraph", Icon: Pilcrow },
+  { label: "Tiêu đề 1", value: "h1", Icon: Heading1 },
+  { label: "Tiêu đề 2", value: "h2", Icon: Heading2 },
+  { label: "Tiêu đề 3", value: "h3", Icon: Heading3 },
+  { label: "Tiêu đề 4", value: "h4", Icon: Heading4 },
+  { label: "Danh sách đánh số", value: "orderedList", Icon: ListOrdered },
+  { label: "Danh sách dấu đầu dòng", value: "bulletList", Icon: List },
+  { label: "Khối mã", value: "codeBlock", Icon: Code2 },
+  { label: "Bảng", value: "table", Icon: TableIcon },
+  { label: "Trích dẫn khối", value: "blockquote", Icon: Quote },
 ] as const;
 
 
@@ -41,7 +47,6 @@ const TEXT_STYLES = [
 export const SPACING = [
   { label: "Gọn", lineHeight: 1.5, paraGap: 10 },
   { label: "Vừa", lineHeight: 1.75, paraGap: 14 },
-  { label: "Thoáng", lineHeight: 2, paraGap: 22 },
   { label: "Rất thoáng", lineHeight: 2.4, paraGap: 32 },
 ];
 
@@ -75,7 +80,17 @@ export function EditorToolbar({
   // bold on/off re-renders the bar without re-rendering the whole editor.
   const state = useEditorState({
     editor,
-    selector: ({ editor }) => ({
+    selector: ({ editor }) => {
+      // A chapter TipTap instance can be replaced during SWR refresh/HMR. The
+      // toolbar subscription briefly receives a null/destroyed editor in that
+      // hand-off; treating it as an idle toolbar prevents editor mode itself
+      // from crashing while the next active chapter registers.
+      if (!editor || editor.isDestroyed) return {
+        bold: false, italic: false, strike: false, bulletList: false,
+        orderedList: false, blockquote: false, canUndo: false, canRedo: false,
+        textStyle: "paragraph", words: 0,
+      };
+      return ({
       bold: editor.isActive("bold"),
       italic: editor.isActive("italic"),
       strike: editor.isActive("strike"),
@@ -90,21 +105,36 @@ export function EditorToolbar({
           ? "h2"
           : editor.isActive("heading", { level: 3 })
             ? "h3"
-            : "paragraph",
+            : editor.isActive("heading", { level: 4 })
+              ? "h4"
+              : editor.isActive("orderedList")
+                ? "orderedList"
+                : editor.isActive("bulletList")
+                  ? "bulletList"
+                  : editor.isActive("codeBlock")
+                    ? "codeBlock"
+                    : editor.isActive("table")
+                      ? "table"
+                      : editor.isActive("blockquote")
+                        ? "blockquote"
+                        : "paragraph",
       // getText() joins block text with "\n"; splitting on whitespace gives a
       // good-enough word count for the header readout (matches the mock's "N từ").
       words: editor.getText().trim().split(/\s+/).filter(Boolean).length,
-    }),
+      });
+    },
   });
 
   const applyTextStyle = (value: string) => {
     const chain = editor.chain().focus();
-    if (value === "paragraph") {
-      chain.setParagraph().run();
-    } else {
-      const level = Number(value.slice(1)) as 1 | 2 | 3;
-      chain.toggleHeading({ level }).run();
-    }
+    if (value === "paragraph") chain.setParagraph().run();
+    else if (/^h[1-4]$/.test(value)) {
+      chain.toggleHeading({ level: Number(value.slice(1)) as 1 | 2 | 3 | 4 }).run();
+    } else if (value === "orderedList") chain.toggleOrderedList().run();
+    else if (value === "bulletList") chain.toggleBulletList().run();
+    else if (value === "codeBlock") chain.toggleCodeBlock().run();
+    else if (value === "blockquote") chain.toggleBlockquote().run();
+    else if (value === "table") chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   };
 
   const clampSize = (n: number) => Math.max(MIN_SIZE, Math.min(MAX_SIZE, n));
@@ -113,7 +143,7 @@ export function EditorToolbar({
     <div
       role="toolbar"
       aria-label="Định dạng"
-      className="flex flex-wrap items-center gap-1 border-b border-ink-200 bg-white px-3 py-1.5"
+      className="z-10 flex min-h-[48px] flex-wrap items-center gap-1 border-b border-ink-100 bg-white/95 px-4 py-2 shadow-[0_1px_0_rgba(24,31,50,0.03)] backdrop-blur"
     >
       {/* Undo / redo */}
       <ToolbarButton
@@ -134,18 +164,14 @@ export function EditorToolbar({
       <Divider />
 
       {/* Font family (document display setting) */}
-      <select
-        aria-label="Phông chữ"
+      <Select
+        ariaLabel="Phông chữ"
         value={fontFamily}
-        onChange={e => onFontFamily(e.target.value)}
-        className="h-8 rounded-md border border-ink-200 bg-white px-2 text-sm text-ink-800 hover:bg-ink-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
-      >
-        {FONT_FAMILIES.map(f => (
-          <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
-            {f.label}
-          </option>
-        ))}
-      </select>
+        onValueChange={onFontFamily}
+        options={FONT_FAMILIES}
+        size="sm"
+        className="w-44 [&_button]:h-8 [&_button]:border-ink-200 [&_button]:shadow-none"
+      />
 
       <Divider />
 
@@ -163,7 +189,7 @@ export function EditorToolbar({
           const n = Number(e.target.value);
           if (Number.isFinite(n)) onFontSize(clampSize(n));
         }}
-        className="h-8 w-12 rounded-md border border-ink-200 bg-white px-1 text-center text-sm text-ink-800 focus:outline-none focus:ring-1 focus:ring-primary-500 tabular-nums"
+        className="h-8 w-12 rounded-lg border border-ink-200 bg-white px-1 text-center text-sm text-ink-800 focus:outline-none focus:ring-2 focus:ring-primary-100 tabular-nums"
       />
       <ToolbarButton label="Tăng cỡ chữ" onClick={() => onFontSize(clampSize(fontSize + 1))}>
         <Plus className="w-4 h-4" />
@@ -172,33 +198,22 @@ export function EditorToolbar({
       {/* Spacing presets rather than two number boxes: the choice a student is
           making is "tighter" or "airier", and a thesis template usually names
           exactly these. */}
-      <select
-        aria-label="Giãn dòng"
-        value={SPACING.findIndex(o => o.lineHeight === lineHeight && o.paraGap === paraGap)}
-        onChange={e => {
-          const o = SPACING[Number(e.target.value)];
+      <Select
+        ariaLabel="Giãn dòng"
+        value={String(SPACING.findIndex(o => o.lineHeight === lineHeight && o.paraGap === paraGap))}
+        onValueChange={value => {
+          const o = SPACING[Number(value)];
           if (o) onSpacing(o.lineHeight, o.paraGap);
         }}
-        className="h-8 rounded-md border border-ink-200 bg-white px-2 text-sm text-ink-800 hover:bg-ink-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
-      >
-        {SPACING.map((o, i) => (
-          <option key={o.label} value={i}>{o.label}</option>
-        ))}
-      </select>
+        options={SPACING.map((option, index) => ({ value: String(index), label: option.label }))}
+        size="sm"
+        className="w-32 [&_button]:h-8 [&_button]:border-ink-200 [&_button]:shadow-none"
+      />
 
       <Divider />
 
       {/* Text style */}
-      <select
-        aria-label="Kiểu văn bản"
-        value={state?.textStyle ?? "paragraph"}
-        onChange={e => applyTextStyle(e.target.value)}
-        className="h-8 rounded-md border border-ink-200 bg-white px-2 text-sm text-ink-800 hover:bg-ink-50 focus:outline-none focus:ring-1 focus:ring-primary-500"
-      >
-        {TEXT_STYLES.map(s => (
-          <option key={s.value} value={s.value}>{s.label}</option>
-        ))}
-      </select>
+      <BlockTypeMenu value={state?.textStyle ?? "paragraph"} onChange={applyTextStyle} />
 
       <Divider />
 
@@ -260,6 +275,37 @@ export function EditorToolbar({
   );
 }
 
+function BlockTypeMenu({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const current = BLOCK_TYPES.find(type => type.value === value) ?? BLOCK_TYPES[0];
+  const CurrentIcon = current.Icon;
+  return (
+    <Listbox value={value} onChange={onChange}>
+      <div className="relative w-40">
+        <ListboxButton aria-label="Kiểu văn bản"
+          className="flex h-8 w-full items-center gap-2 rounded-lg border border-ink-200 bg-white px-2.5 text-left text-sm text-ink-800 transition hover:bg-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-100">
+          <CurrentIcon className="h-4 w-4 shrink-0 text-ink-500" aria-hidden />
+          <span className="min-w-0 flex-1 truncate">{current.label}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ink-400" aria-hidden />
+        </ListboxButton>
+        <ListboxOptions anchor="bottom start" transition
+          className="z-50 mt-1 w-64 origin-top overflow-hidden rounded-xl border border-ink-100 bg-white p-1.5 shadow-[0_18px_48px_rgba(24,31,50,0.18)] transition duration-150 ease-out data-[closed]:-translate-y-1 data-[closed]:scale-[0.98] data-[closed]:opacity-0">
+          {BLOCK_TYPES.map(type => {
+            const Icon = type.Icon;
+            return (
+              <ListboxOption key={type.value} value={type.value}
+                className="group flex cursor-default select-none items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-ink-800 transition-colors data-[focus]:bg-primary-50 data-[selected]:font-semibold data-[selected]:text-primary-700">
+                <Icon className="h-4 w-4 shrink-0 text-ink-500 group-data-[selected]:text-primary-600" aria-hidden />
+                <span className="flex-1">{type.label}</span>
+                <Check className="h-4 w-4 text-primary-600 opacity-0 group-data-[selected]:opacity-100" aria-hidden />
+              </ListboxOption>
+            );
+          })}
+        </ListboxOptions>
+      </div>
+    </Listbox>
+  );
+}
+
 
 function Divider() {
   return <span className="mx-1 h-5 w-px bg-ink-200" aria-hidden="true" />;
@@ -284,12 +330,12 @@ function ToolbarButton({
       disabled={disabled}
       onClick={onClick}
       className={
-        "inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors " +
+        "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-200 " +
         (disabled
           ? "text-ink-300 cursor-not-allowed"
           : active
             ? "bg-primary-100 text-primary-700"
-            : "text-ink-600 hover:bg-ink-100")
+            : "text-ink-600 hover:bg-ink-100 hover:text-ink-900 active:scale-95")
       }
     >
       {children}

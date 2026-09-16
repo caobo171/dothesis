@@ -14,11 +14,11 @@ describe("OutlineRail", () => {
     );
     const items = screen.getAllByRole("button");
     expect(items.map(b => b.textContent)).toEqual([
-      "Ch 1 - Introduction",
-      "Ch 2 - Literature Review",
-      "Ch 3 - Methodology",
-      "Ch 4 - Results",
-      "Ch 5 - Conclusions and Recommendations",
+      "1IntroductionChapter 1",
+      "2Literature ReviewChapter 2",
+      "3MethodologyChapter 3",
+      "4ResultsChapter 4",
+      "5Conclusions and RecommendationsChapter 5",
     ]);
   });
 

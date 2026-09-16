@@ -2,7 +2,6 @@ import Link from "next/link";
 import { useContext } from "react";
 import { ArrowLeft, Menu, PanelRight, PenSquare } from "lucide-react";
 
-import { useMe } from "@/app/lib/use-me";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
 
 import { ChatSidebarContext } from "./ChatShellLayout";
@@ -35,9 +34,9 @@ const PHASE_KEY = {
  *
  * Left cluster: back-to-home circle, serif module chip, module label,
  * optional sub-phase label, status pill.
- * Right cluster: Open editor link, vertical divider, user avatar + name +
- * tier. Quick actions (Auto Thesis, export, history, notifications) moved to
- * the bottom composer — see QuickActionsMenu.
+ * Right cluster: editor and panel controls only. Account identity lives in
+ * the persistent left workspace rail, rather than turning into a detached
+ * initial-circle at the far edge of every chat header.
  */
 export function ChatHeader({
   projectName,
@@ -47,6 +46,7 @@ export function ChatHeader({
   focusModule,
   focusStatus,
   loading = false,
+  onOpenEditor,
 }: {
   projectName: string;
   threadName: string;
@@ -57,6 +57,7 @@ export function ChatHeader({
   hasChapters?: boolean;
   focusModule?: string;
   focusStatus?: string;
+  onOpenEditor?: () => void;
 }) {
   const t = useT();
   const focusKey = MODULES.find(m => m.id === focusModule)?.labelKey;
@@ -66,19 +67,11 @@ export function ChatHeader({
   const tag = focusStatus
     ? STATUS_TAG[focusStatus as keyof typeof STATUS_TAG] ?? STATUS_TAG.in_progress
     : null;
-  const me = useMe();
   const sidebar = useContext(ChatSidebarContext);
-  const user = me.data;
-  const userInitials = user?.email
-    ? user.email.slice(0, 2).toUpperCase()
-    : "U";
-  const userName = user?.username || user?.email?.split("@")[0] || t("focus.you");
-  const userTier = t(user?.is_super_admin ? "focus.tier.admin" : "focus.tier.student");
 
   return (
     <header
-      className="sticky top-0 z-10 bg-white border-b border-ink-200 px-[22px] py-3 flex items-center gap-3"
-      style={{ minHeight: 60 }}
+      className="sticky top-0 z-10 flex h-[60px] min-h-[60px] items-center gap-3 border-b border-ink-200 bg-white px-[22px] py-0"
     >
       {/* Open threads/workflow drawer — mobile only */}
       <button
@@ -154,29 +147,27 @@ export function ChatHeader({
         </button>
 
         {hasChapters && projectId && (
-          <Link
-            href={`/chat/projects/${projectId}/editor`}
+          onOpenEditor ? (
+          <button
+            type="button"
+            onClick={onOpenEditor}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 mr-1 text-[12.5px] font-semibold border-[1.5px] border-primary-600 text-primary-600 rounded-full hover:bg-primary-50 transition-colors"
           >
             <PenSquare className="w-3 h-3" /> {t("focus.openEditor")}
-          </Link>
+          </button>
+          ) : (
+            <Link
+              href={`/chat/projects/${projectId}/editor`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 mr-1 text-[12.5px] font-semibold border-[1.5px] border-primary-600 text-primary-600 rounded-full hover:bg-primary-50 transition-colors"
+            >
+              <PenSquare className="w-3 h-3" /> {t("focus.openEditor")}
+            </Link>
+          )
         )}
 
         {/* Quick actions moved to the bottom composer (ChatInput →
             QuickActionsMenu) to free header space; see that component. */}
 
-        <span className="hidden lg:block w-px h-[22px] bg-ink-200 mx-1" />
-
-        {/* User identity — avatar only. The name + tier text was long and
-            redundant in the header, so it's dropped; the full name + tier show
-            on hover (title) and stay on the account page. */}
-        <span
-          className="w-[30px] h-[30px] rounded-full bg-ink-800 inline-flex items-center justify-center text-white font-bold text-[12px] shrink-0 ml-1"
-          title={`${userName} · ${userTier}`}
-          aria-label={`${userName}, ${userTier}`}
-        >
-          {userInitials}
-        </span>
       </div>
     </header>
   );

@@ -188,4 +188,45 @@ describe("what has changed since the last save", () => {
       { chapter: "intro", before: "v2", after: "v1" },
     ]);
   });
+
+  it("adopts accepted server prose so a later Save cannot revert it", async () => {
+    const { result } = renderHook(() => useThesisSave({ projectId: "p1" }));
+    act(() => { result.current.seed("intro", "Original", "fp-original"); });
+    // This models the inline PATCH before a proposal is accepted. Without the
+    // reconciliation, the old queue overwrote the accepted citation/prose.
+    act(() => { result.current.track("intro", "Original local edit"); });
+    act(() => { result.current.reconcileServer("intro", "Accepted server edit", "fp-accepted"); });
+    await act(async () => { await result.current.save(); });
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(result.current.dirty).toBe(false);
+    expect(result.current.changes()).toEqual([]);
+  });
+
+  it("does not retry a stale document response", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ detail: { error: { code: "stale_document" } } }),
+    });
+    const { result } = renderHook(() => useThesisSave({ projectId: "p1" }));
+    act(() => { result.current.seed("intro", "Original", "fp-original"); result.current.track("intro", "New local prose"); });
+    await act(async () => { await result.current.save(); });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse((fetch as any).mock.calls[0][1].body)).toMatchObject({ expected_document_fingerprint: "fp-original" });
+    expect(result.current.dirty).toBe(true);
+  });
+
+  it("keeps typing made after an inline PATCH and saves it against the new revision", async () => {
+    const { result } = renderHook(() => useThesisSave({ projectId: "p1" }));
+    act(() => { result.current.seed("intro", "Original", "fp-original"); });
+    // The child PATCH saved this version while the student kept typing a newer
+    // version. Updating the base must retain (not clear) that newer draft.
+    act(() => { result.current.track("intro", "Original plus newer typing"); result.current.updateServerBaseline("intro", "Original inline save", "fp-inline"); });
+    await act(async () => { await result.current.save(); });
+
+    expect(_proseOf((fetch as any).mock.calls[0])).toBe("Original plus newer typing");
+    expect(JSON.parse((fetch as any).mock.calls[0][1].body)).toMatchObject({ expected_document_fingerprint: "fp-inline" });
+  });
 });

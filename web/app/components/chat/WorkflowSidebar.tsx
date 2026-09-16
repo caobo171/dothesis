@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Home, MessageSquare, Plus } from "lucide-react";
+import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
+import { ChevronUp, Home, LogOut, MessageSquare, Plus } from "lucide-react";
 
 import { LocaleSwitcher } from "../LocaleSwitcher";
 import { BrandMark } from "../layout/Brand";
+import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n/LocaleProvider";
+import { tokenStore } from "../../lib/tokenStore";
+import { useMe } from "../../lib/use-me";
 import type { Thread } from "./ThreadsSidebar";
 
 
@@ -57,6 +61,16 @@ export function WorkflowSidebar({
   hideThreads?: boolean;
 }) {
   const t = useT();
+  const me = useMe();
+  const userName = me.data?.username || me.data?.email?.split("@")[0] || t("focus.you");
+  const userEmail = me.data?.email;
+  const userInitial = userName.charAt(0).toUpperCase();
+
+  const signOut = async () => {
+    try { await apiFetch("/auth/logout", { method: "POST", auth: false }); } catch { /* clear local auth either way */ }
+    tokenStore.clear();
+    window.location.href = "/login";
+  };
   return (
     <aside
       className="w-[296px] min-w-[296px] flex flex-col h-full bg-white border-r border-ink-200 shrink-0"
@@ -162,11 +176,39 @@ export function WorkflowSidebar({
         </div>
       )}
 
-      {/* Language lives here because this rail is on screen for the whole
-          working session — a student who got the wrong auto-detected language
-          shouldn't have to hunt through settings to fix it. */}
-      <div className="px-4 pb-3 pt-1">
-        <LocaleSwitcher />
+      {/* Account belongs to the workspace rail: it stays available across
+          threads and doesn't compete with document actions in the chat header. */}
+      <div className="mx-[14px] border-t border-ink-200 pt-2.5">
+        <Menu as="div" className="relative">
+          <MenuButton className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-ink-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-ink-900 text-[11px] font-bold text-white">
+              {userInitial}
+            </span>
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block truncate text-[12px] font-semibold text-ink-800">{userName}</span>
+              {userEmail && <span className="block truncate pt-0.5 text-[10.5px] text-ink-500">{userEmail}</span>}
+            </span>
+            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-ink-400" aria-hidden />
+          </MenuButton>
+          <MenuItems anchor="top start" className="z-50 mb-2 w-[268px] origin-bottom-left rounded-xl border border-ink-200 bg-white p-1.5 shadow-lg shadow-ink-900/10 focus:outline-none">
+            <div className="border-b border-ink-100 px-2.5 py-2">
+              <p className="m-0 truncate text-[12px] font-semibold text-ink-900">{userName}</p>
+              {userEmail && <p className="m-0 truncate pt-0.5 text-[11px] text-ink-500">{userEmail}</p>}
+            </div>
+            <MenuItem>
+              <button type="button" onClick={() => void signOut()} className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-ink-700 data-[focus]:bg-ink-50 data-[focus]:text-ink-900">
+                <LogOut className="h-3.5 w-3.5" aria-hidden />
+                {t("shell.signOut")}
+              </button>
+            </MenuItem>
+          </MenuItems>
+        </Menu>
+
+        {/* Language lives in the same persistent workspace footer so a student
+            can correct locale without leaving the active thesis. */}
+        <div className="px-2 pb-3 pt-1.5">
+          <LocaleSwitcher />
+        </div>
       </div>
     </aside>
   );

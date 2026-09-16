@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { type Editor } from "@tiptap/react";
-import useSWR from "swr";
+import useSWR, { mutate as revalidate } from "swr";
 
 import { apiFetch } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
@@ -10,7 +10,9 @@ import { tokenStore } from "@/app/lib/tokenStore";
 import { OutlineRail, CHAPTER_ORDER, type ChapterName } from "./OutlineRail";
 import { ChapterEditor } from "./ChapterEditor";
 import { EditorToolbar, FONT_FAMILIES } from "./EditorToolbar";
-import { SourcesRail } from "./SourcesRail";
+import { EditorSidePanel } from "./EditorSidePanel";
+import type { ClaimAcceptedChapter } from "./ClaimConfidencePanel";
+import { DocumentToc } from "./DocumentToc";
 import { ReExportBar, type ExportArtifact } from "./ReExportBar";
 import { SaveBar } from "./SaveBar";
 import { UnsavedDiff, type ChapterChange } from "./UnsavedDiff";
@@ -33,6 +35,9 @@ const fetcher = (url: string) =>
 type ChapterDict = Record<string, {
   name: string;
   prose: string;
+  media?: Array<{ source: string; preview_url: string }>;
+  renderable_tokens?: string[];
+  document_fingerprint?: string;
   pending_edits: Array<{
     id: string;
     source: "paraphrase" | "translate" | "cite" | "chat_rewrite" | "proofread" | "improve" | "humanize" | "expand" | "shorten";
@@ -40,6 +45,7 @@ type ChapterDict = Record<string, {
     new_text: string;
     from_offset: number;
     to_offset: number;
+    metadata?: { explanation?: string; processing_ms?: number; target_lang?: string; reference_id?: string; style?: string; document_fingerprint?: string };
   }>;
 }>;
 
@@ -54,6 +60,9 @@ function _toPendingEdits(raw: ChapterDict[string]["pending_edits"]) {
     newText: e.new_text,
     from_offset: e.from_offset,
     to_offset: e.to_offset,
+    explanation: e.metadata?.explanation,
+    processingMs: e.metadata?.processing_ms,
+    metadata: e.metadata,
   }));
 }
 
@@ -65,6 +74,28 @@ function _toPendingEdits(raw: ChapterDict[string]["pending_edits"]) {
 const chapterAnchor = (name: string) => `ch-${name}`;
 
 
+function _headingContents(chapters: ChapterDict) {
+  const items: Array<{ chapter: ChapterName; level: number; text: string; index: number }> = [];
+  CHAPTER_ORDER.forEach(({ name }) => {
+    const prose = chapters[name]?.prose ?? "";
+    let index = 0;
+    for (const line of prose.split(/\r?\n/)) {
+      const match = /^(#{1,4})\s+(.+?)\s*$/.exec(line);
+      if (!match) continue;
+      // Remove the lightweight inline Markdown that would otherwise show up
+      // in the navigation label. The editor heading itself remains untouched.
+      const text = match[2]
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+        .replace(/[*_`~]/g, "")
+        .trim();
+      if (text) items.push({ chapter: name, level: match[1].length, text, index });
+      index += 1;
+    }
+  });
+  return items;
+}
+
+
 // Spacing lives with the font because it is the same kind of thing: a whole-
 // document display choice the markdown cannot carry. A stored setting from
 // before spacing existed has neither key, hence the ?? at every read.
@@ -73,9 +104,14 @@ const _DEFAULT_LAYOUT = {
 };
 
 
-export function ThesisEditor({ projectId }: { projectId: string }) {
+export function ThesisEditor({ projectId, onBackToChat }: { projectId: string; onBackToChat?: () => void }) {
   const url = `/api/v1/projects/${projectId}/m5/chapters`;
   const { data: chapters, mutate } = useSWR<ChapterDict>(url, fetcher);
+  const { data: projectMeta } = useSWR<{
+    name?: string;
+    context_store?: { m1_topic?: { research_title?: string } | null };
+  }>(`/api/v1/projects/${projectId}`, fetcher);
+  const [liveProse, setLiveProse] = useState<Record<string, string>>({});
   const [active, setActive] = useState<ChapterName>("intro");
   const [lastExportAt, setLastExportAt] = useState<Date | null>(null);
   const [editsSinceExport, setEditsSinceExport] = useState(0);
@@ -88,6 +124,7 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
   // Reference id of the citation the user last clicked — highlights it in the
   // SourcesRail so a citation acts as a jump-to-source.
   const [highlightedSource, setHighlightedSource] = useState<string | null>(null);
+  const [claimUpdates, setClaimUpdates] = useState<Record<string, ClaimAcceptedChapter>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Document-level font, persisted per project so the choice survives a reload
@@ -119,6 +156,12 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
     setActive(name);
     document.getElementById(chapterAnchor(name))?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
+  const scrollToHeading = useCallback((name: ChapterName, index: number) => {
+    setActive(name);
+    const section = document.getElementById(chapterAnchor(name));
+    const heading = section?.querySelectorAll("h1, h2, h3, h4").item(index) as HTMLElement | null;
+    (heading ?? section)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   // One save for the whole thesis. Per-chapter state put five "Unsaved
   // changes · Save" bars down a page the student reads as one document, and
@@ -126,6 +169,9 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
   const thesisSave = useThesisSave({ projectId });
   const trackProse = useCallback((name: string, prose: string) => {
     thesisSave.track(name, prose);
+    // Feeds the document TOC immediately when a heading is renamed. The TOC is
+    // derived, never stored, so it cannot drift from unsaved editor content.
+    setLiveProse(current => current[name] === prose ? current : { ...current, [name]: prose });
     setEditsSinceExport(n => n + 1);
   }, [thesisSave]);
 
@@ -160,6 +206,16 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
   }, [projectId, thesisSave]);
 
   const onPendingMutate = useCallback(() => { void mutate(); }, [mutate]);
+  const onClaimAccepted = useCallback((update: ClaimAcceptedChapter) => {
+    // Let the mounted chapter decide whether it can safely adopt this server
+    // revision. SWR then revalidates side data/pending anchors without remounting
+    // TipTap over any words typed while the acceptance was in flight.
+    setClaimUpdates(current => ({ ...current, [update.chapterName]: update }));
+    // Accepted citations change both the export and the source library.
+    setEditsSinceExport(current => current + 1);
+    void revalidate(`/api/v1/projects/${projectId}/m5/references`);
+    void mutate();
+  }, [mutate, projectId]);
 
   // beforeunload warning if dirty — prevents data loss if user navigates away
   // without re-exporting unsaved prose changes.
@@ -217,13 +273,18 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
   const presentNames = CHAPTER_ORDER
     .map(c => c.name)
     .filter(name => chapters[name]) as ChapterName[];
+  const tocChapters = Object.fromEntries(Object.entries(chapters).map(([name, chapter]) => [
+    name,
+    { ...chapter, prose: liveProse[name] ?? chapter.prose },
+  ])) as ChapterDict;
+  const contents = _headingContents(tocChapters);
 
   return (
     // h-full (not min-h-screen) so this fills the bounded shell exactly; the
     // body row gets min-h-0 so it can shrink below its content height, which is
     // what lets the shared scroll container take over instead of the whole
     // column overflowing the clipped (overflow-hidden) shell.
-    <div className="flex flex-col h-full">
+    <div className="editor-workspace flex h-full flex-col bg-[#f3f3f1]">
       <ReExportBar
         lastExportAt={lastExportAt}
         editsSinceExport={editsSinceExport}
@@ -242,6 +303,7 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
             onShowChanges={() => setChanges(thesisSave.changes())}
           />
         }
+        onBackToChat={onBackToChat}
       />
       {changes && (
         <UnsavedDiff
@@ -250,15 +312,21 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
           onSave={() => { void thesisSave.save(); }}
         />
       )}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex min-h-0 flex-1">
         {/* Outline click scrolls to the chapter; scrollspy keeps it in sync. */}
-        <OutlineRail present={presentNames} active={active} onSelect={scrollToChapter} />
+        <OutlineRail
+          present={presentNames}
+          active={active}
+          onSelect={scrollToChapter}
+          contents={contents}
+          onSelectHeading={scrollToHeading}
+        />
 
         {/* Center column: one shared toolbar pinned on top, every chapter
             stacked in a single scroll container below — the whole thesis reads
             as one continuous page. */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {activeEditor && (
+        <main className="min-w-0 flex-1 flex flex-col min-h-0">
+          {activeEditor && !activeEditor.isDestroyed && (
             <EditorToolbar
               editor={activeEditor}
               fontFamily={font.family}
@@ -270,8 +338,15 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
               onSpacing={(lineHeight, paraGap) => setFont(f => ({ ...f, lineHeight, paraGap }))}
             />
           )}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-6 space-y-12">
-            {presentNames.map(name => {
+          <div ref={scrollRef} className="editor-canvas flex-1 overflow-y-auto px-6 py-8 lg:px-10">
+            <article className="editor-paper mx-auto min-h-full max-w-[900px] bg-white px-[clamp(2rem,7vw,6.25rem)] py-[clamp(2.5rem,6vw,5.5rem)] shadow-[0_1px_2px_rgba(24,31,50,0.08),0_18px_55px_rgba(24,31,50,0.08)] ring-1 ring-black/[0.04]">
+            <DocumentToc
+              title={projectMeta?.context_store?.m1_topic?.research_title || projectMeta?.name || "Luận văn"}
+              items={contents}
+              onSelect={scrollToHeading}
+              onSelectChapter={scrollToChapter}
+            />
+            {presentNames.map((name, index) => {
               const chapter = chapters[name];
               if (!chapter) return null;
               return (
@@ -280,12 +355,18 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
                 // LIT_REVIEW — which both leaked an internal name and drew the
                 // seams of a document the student is meant to read straight
                 // through. The outline rail still navigates by these anchors.
-                <section key={name} id={chapterAnchor(name)} data-chapter={name} className="scroll-mt-4">
+                <section key={name} id={chapterAnchor(name)} data-chapter={name} className="mt-16 border-t border-ink-100 pt-14 scroll-mt-8">
                   <ChapterEditor
                     projectId={projectId}
                     chapterName={name}
                     initialProse={chapter.prose}
-                    onSeed={prose => thesisSave.seed(name, prose)}
+                    media={chapter.media ?? []}
+                    renderableTokens={chapter.renderable_tokens ?? []}
+                    documentFingerprint={chapter.document_fingerprint}
+                    claimServerUpdate={claimUpdates[name] ?? null}
+                    onSeed={(prose, fingerprint) => thesisSave.seed(name, prose, fingerprint)}
+                    onServerProse={(prose, fingerprint) => thesisSave.reconcileServer(name, prose, fingerprint)}
+                    onServerBaseline={(prose, fingerprint) => thesisSave.updateServerBaseline(name, prose, fingerprint)}
                     pendingEdits={_toPendingEdits(chapter.pending_edits)}
                     onPendingMutate={onPendingMutate}
                     onProseChange={prose => trackProse(name, prose)}
@@ -299,10 +380,12 @@ export function ThesisEditor({ projectId }: { projectId: string }) {
                 </section>
               );
             })}
+            </article>
           </div>
-        </div>
+        </main>
 
-        <SourcesRail projectId={projectId} highlightedId={highlightedSource} />
+        <EditorSidePanel projectId={projectId} highlightedSource={highlightedSource} onSelectChapter={scrollToChapter}
+          onFlush={thesisSave.save} onClaimAccepted={onClaimAccepted} />
       </div>
     </div>
   );

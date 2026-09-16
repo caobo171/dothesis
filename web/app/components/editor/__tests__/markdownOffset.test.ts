@@ -5,7 +5,7 @@ import { Markdown } from "tiptap-markdown";
 
 import { CitationMark } from "../extensions/CitationMark";
 import { AiPending } from "../extensions/AiPending";
-import { buildOffsetMap, offsetToPos, posToOffset } from "../markdownOffset";
+import { buildOffsetMap, offsetToPos, posToOffset, previewOffsetToStored } from "../markdownOffset";
 
 
 function mkEditor(markdown: string) {
@@ -79,5 +79,19 @@ describe("markdownOffset — markdown char offset <-> PM position", () => {
     const covered = editor.state.doc.textBetween(from, to, " ");
     expect(covered).toContain("First.");
     expect(covered).toContain("Second.");
+  });
+
+  it("removes artifact preview URL length from server selection offsets", () => {
+    const source = "/tmp/model.png";
+    const preview = "data:image/png;base64," + "A".repeat(10_000);
+    const stored = `Before.\n\n![Model](${source})\n\nSelected text.`;
+    const displayed = stored.replace(source, preview);
+    const displayedStart = displayed.indexOf("Selected text");
+    const displayedEnd = displayedStart + "Selected text".length;
+    const media = [{ source, preview_url: preview }];
+
+    const from = previewOffsetToStored(displayed, displayedStart, media);
+    const to = previewOffsetToStored(displayed, displayedEnd, media);
+    expect(stored.slice(from, to)).toBe("Selected text");
   });
 });

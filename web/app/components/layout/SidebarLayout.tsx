@@ -13,10 +13,11 @@ import {
 import {
   Bars3Icon,
   BellIcon,
+  ArrowRightStartOnRectangleIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
+  ChevronUpIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
@@ -229,6 +230,54 @@ export function SidebarLayout({
   }
 
   const userInitial = (me.data?.username || me.data?.email || "?").charAt(0).toUpperCase();
+  const userName = me.data?.username || me.data?.email?.split("@")[0] || "—";
+
+  function renderAccountMenu(collapsed = false) {
+    return (
+      <Menu as="div" className="relative">
+        <MenuButton
+          className={clsx(
+            "flex w-full items-center rounded-xl py-2 text-left transition-colors hover:bg-ink-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500",
+            collapsed ? "justify-center px-2" : "gap-2.5 px-2",
+          )}
+          aria-label={t("shell.userMenu")}
+          title={collapsed ? userName : undefined}
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-ink-900 text-[11px] font-bold text-white">
+            {userInitial}
+          </span>
+          {!collapsed && (
+            <>
+              <span className="min-w-0 flex-1 leading-tight">
+                <span className="block truncate text-[12px] font-semibold text-ink-800">{userName}</span>
+                {me.data?.email && <span className="block truncate pt-0.5 text-[10.5px] text-ink-500">{me.data.email}</span>}
+              </span>
+              <ChevronUpIcon className="h-3.5 w-3.5 shrink-0 text-ink-400" aria-hidden="true" />
+            </>
+          )}
+        </MenuButton>
+        <MenuItems
+          anchor="top start"
+          className="z-50 mb-2 w-64 origin-bottom-left rounded-xl border border-ink-200 bg-white p-1.5 shadow-lg shadow-ink-900/10 focus:outline-none"
+        >
+          <div className="border-b border-ink-100 px-2.5 py-2">
+            <p className="m-0 truncate text-[12px] font-semibold text-ink-900">{userName}</p>
+            {me.data?.email && <p className="m-0 truncate pt-0.5 text-[11px] text-ink-500">{me.data.email}</p>}
+          </div>
+          <MenuItem>
+            <button
+              type="button"
+              onClick={logout}
+              className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-ink-700 data-[focus]:bg-ink-50 data-[focus]:text-ink-900"
+            >
+              <ArrowRightStartOnRectangleIcon className="h-4 w-4" aria-hidden="true" />
+              {t("shell.signOut")}
+            </button>
+          </MenuItem>
+        </MenuItems>
+      </Menu>
+    );
+  }
 
   return (
     <div>
@@ -275,7 +324,10 @@ export function SidebarLayout({
                 </TransitionChild>
                 <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 py-4">
                   <Brand />
-                  <nav className="flex flex-1 flex-col">{renderSections(false)}</nav>
+                  <nav className="flex flex-1 flex-col">
+                    {renderSections(false)}
+                    <div className="mt-auto border-t border-ink-200 pt-2.5">{renderAccountMenu(false)}</div>
+                  </nav>
                 </div>
               </DialogPanel>
             </TransitionChild>
@@ -309,6 +361,9 @@ export function SidebarLayout({
             {renderSections(sidebarCollapsed)}
 
             <div className="mt-auto pt-4">
+              <div className="mb-2 border-t border-ink-200 pt-2.5">
+                {renderAccountMenu(sidebarCollapsed)}
+              </div>
               <button
                 type="button"
                 onClick={() => setSidebarCollapsed((prev) => !prev)}
@@ -364,33 +419,6 @@ export function SidebarLayout({
                   <BellIcon className="h-6 w-6" aria-hidden="true" />
                 </button>
 
-                <div className="hidden lg:block lg:h-6 lg:w-px lg:bg-ink-200" aria-hidden="true" />
-
-                <Menu as="div" className="relative">
-                  <MenuButton className="relative flex items-center gap-3">
-                    <span className="sr-only">{t("shell.userMenu")}</span>
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-50 text-primary-600 font-semibold border border-ink-100">
-                      {userInitial}
-                    </div>
-                    <div className="hidden lg:flex flex-col items-start leading-tight">
-                      <span className="text-sm font-semibold text-ink-900">
-                        {me.data?.username || me.data?.email?.split("@")[0] || "—"}
-                      </span>
-                      <span className="text-xs text-ink-500">{me.data?.email}</span>
-                    </div>
-                    <ChevronDownIcon className="hidden lg:block h-4 w-4 text-ink-400" aria-hidden="true" />
-                  </MenuButton>
-                  <MenuItems className="absolute right-0 z-10 mt-2.5 w-40 origin-top-right rounded-md bg-white py-2 shadow-lg outline outline-1 outline-ink-200">
-                    <MenuItem>
-                      <button
-                        onClick={logout}
-                        className="block w-full px-3 py-1 text-left text-sm text-ink-900 data-[focus]:bg-ink-50"
-                      >
-                        {t("shell.signOut")}
-                      </button>
-                    </MenuItem>
-                  </MenuItems>
-                </Menu>
               </div>
             </div>
           </div>

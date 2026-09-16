@@ -25,6 +25,11 @@ export function useThesisSave({ projectId }: { projectId: string }) {
   // replaced on every successful save, so "what have I changed" can be answered
   // without re-fetching — the editor is the only place that knows both halves.
   const baseline = useRef<Map<string, string>>(new Map());
+  // The API accepts this optional optimistic-concurrency token. Keeping it next
+  // to the baseline means an older tab can never replace prose saved by a
+  // pending-edit acceptance or another editor session.
+  const fingerprints = useRef<Map<string, string>>(new Map());
+  const saveInFlight = useRef<Promise<void> | null>(null);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -34,10 +39,18 @@ export function useThesisSave({ projectId }: { projectId: string }) {
   const [dirty, setDirty] = useState(false);
 
   const save = useCallback(async () => {
+    // SaveBar disables itself while saving, but this guard also covers two
+    // keyboard/programmatic submissions in the same React turn.
+    if (saveInFlight.current) return saveInFlight.current;
+    const run = async () => {
     if (pending.current.size === 0) return;
     // Drained, not read: anything typed while the request is in flight lands in
     // a fresh map and is still unsaved afterwards.
-    const batch = [...pending.current.entries()];
+    const batch = [...pending.current.entries()].map(([chapterName, prose]) => ({
+      chapterName,
+      prose,
+      fingerprint: fingerprints.current.get(chapterName),
+    }));
     pending.current = new Map();
     setSaving(true);
 
@@ -47,7 +60,7 @@ export function useThesisSave({ projectId }: { projectId: string }) {
     const failed: [string, string][] = [];
     let lastErr: Error | null = null;
 
-    for (const [chapterName, prose] of batch) {
+    for (const { chapterName, prose, fingerprint } of batch) {
       let ok = false;
       for (let i = 0; i < 3 && !ok; i++) {
         try {
@@ -55,15 +68,26 @@ export function useThesisSave({ projectId }: { projectId: string }) {
           // from the JSON body (no cookies). A bare fetch sent none, so every
           // save 401'd and NOTHING the user typed was persisted. apiFetch
           // folds the token in and throws on non-2xx (caught below to retry).
-          await apiFetch(
+          const saved: any = await apiFetch(
             `/projects/${projectId}/m5/chapters/${chapterName}`,
-            { method: "PATCH", body: { prose } },
+            { method: "PATCH", body: {
+              prose,
+              ...(fingerprint ? { expected_document_fingerprint: fingerprint } : {}),
+            } },
           );
           ok = true;
           baseline.current.set(chapterName, prose);
+          if (typeof saved?.document_fingerprint === "string") {
+            fingerprints.current.set(chapterName, saved.document_fingerprint);
+          }
         } catch (e: any) {
           lastErr = e;
-          if (i < 2) await new Promise(res => setTimeout(res, backoff[i]));
+          // A 4xx is a real response, especially stale_document (409). Retrying
+          // it would merely delay the conflict while keeping the student's local
+          // prose safely queued for an intentional resolution.
+          const retryable = typeof e?.status !== "number" || e.status >= 500;
+          if (i < 2 && retryable) await new Promise(res => setTimeout(res, backoff[i]));
+          if (!retryable) break;
         }
       }
       // A chapter that never landed goes BACK in the queue — after three
@@ -80,11 +104,41 @@ export function useThesisSave({ projectId }: { projectId: string }) {
     setError(lastErr && failed.length ? lastErr : null);
     if (failed.length === 0 && batch.length) setLastSavedAt(new Date());
     setDirty(pending.current.size > 0);
+    };
+    const promise = run();
+    saveInFlight.current = promise;
+    try {
+      await promise;
+    } finally {
+      saveInFlight.current = null;
+    }
   }, [projectId]);
 
   /** The chapter as the server has it. Called once, when it loads. */
-  const seed = useCallback((chapterName: string, prose: string) => {
+  const seed = useCallback((chapterName: string, prose: string, fingerprint?: string) => {
     if (!baseline.current.has(chapterName)) baseline.current.set(chapterName, prose);
+    if (fingerprint && !fingerprints.current.has(chapterName)) fingerprints.current.set(chapterName, fingerprint);
+  }, []);
+
+  /**
+   * Adopt server prose only after the mounted editor has already decided that
+   * it is safe to display it. This clears an older queued PATCH after an inline
+   * action/acceptance, preventing a later document-wide Save from reverting it.
+   */
+  const reconcileServer = useCallback((chapterName: string, prose: string, fingerprint?: string) => {
+    baseline.current.set(chapterName, prose);
+    pending.current.delete(chapterName);
+    if (fingerprint) fingerprints.current.set(chapterName, fingerprint);
+    setDirty(pending.current.size > 0);
+    setError(null);
+  }, []);
+
+  /** Update the saved base after a child-side inline PATCH while keeping prose
+   * typed after that request in the pending queue. */
+  const updateServerBaseline = useCallback((chapterName: string, prose: string, fingerprint?: string) => {
+    baseline.current.set(chapterName, prose);
+    if (fingerprint) fingerprints.current.set(chapterName, fingerprint);
+    setDirty(pending.current.size > 0);
   }, []);
 
   /** Record an edit to one chapter. No request — that is what `save` is for. */
@@ -111,5 +165,5 @@ export function useThesisSave({ projectId }: { projectId: string }) {
       })),
     []);
 
-  return { seed, track, changes, save, saving, lastSavedAt, error, dirty };
+  return { seed, reconcileServer, updateServerBaseline, track, changes, save, saving, lastSavedAt, error, dirty };
 }

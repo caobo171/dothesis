@@ -37,6 +37,10 @@ const ITEMS: SlashItem[] = [
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).setNode("heading", { level: 3 }).run(),
   },
   {
+    title: "Heading 4", subtitle: "Compact subsection title", icon: "H4", aliases: ["h4"],
+    command: ({ editor, range }) => editor.chain().focus().deleteRange(range).setNode("heading", { level: 4 }).run(),
+  },
+  {
     title: "Bullet list", subtitle: "Unordered list", icon: "•", aliases: ["ul", "unordered", "bullets"],
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleBulletList().run(),
   },
@@ -51,6 +55,10 @@ const ITEMS: SlashItem[] = [
   {
     title: "Code block", subtitle: "Monospaced code", icon: "</>", aliases: ["code", "pre", "snippet"],
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
+  },
+  {
+    title: "Table", subtitle: "Insert a 3 × 3 table", icon: "▦", aliases: ["grid", "rows", "columns"],
+    command: ({ editor, range }) => editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
   },
   {
     title: "Divider", subtitle: "Horizontal rule", icon: "—", aliases: ["hr", "rule", "separator"],

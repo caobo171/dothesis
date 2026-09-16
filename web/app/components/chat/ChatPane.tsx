@@ -173,13 +173,20 @@ const LIVE_RUN_STATUSES = new Set(["queued", "running", "paused"]);
 const RUN_VIEW_STATUSES = new Set([...LIVE_RUN_STATUSES, "done", "failed", "canceled"]);
 
 
-export function ChatPane({ projectId, threadId }: { projectId: string; threadId: string }) {
+export function ChatPane({ projectId, threadId, compact = false, onOpenEditor, autoPrompt }: { projectId: string; threadId: string; compact?: boolean; onOpenEditor?: () => void; autoPrompt?: { id: string; text: string } | null }) {
   const t = useT();
   const nextCopy = useNextCopy();
   const {
     messages, streamingText, streamingProgress, streamingError,
     messagesLoading, inflight, error: sendError, send, contextUsage,
   } = useChat(threadId);
+  const consumedAutoPrompt = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!autoPrompt || inflight || consumedAutoPrompt.current === autoPrompt.id) return;
+    consumedAutoPrompt.current = autoPrompt.id;
+    void send(autoPrompt.text);
+  }, [autoPrompt, inflight, send]);
 
   // Credit balance drives the out-of-credits CTA. Default to >0 while loading so
   // the upgrade banner doesn't flash for paying users on first paint. The
@@ -614,7 +621,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
   }
 
   return (
-    <>
+    <div className={compact ? "flex h-full min-h-0 flex-col bg-white" : "contents"}>
       {analyzing && (
         <AnalysisOverlay
           phase={analyzePhase}
@@ -627,7 +634,7 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
           outOfCredits={outOfCredits}
         />
       )}
-      <ChatHeader
+      {!compact && <ChatHeader
         projectName={project?.name ?? ""}
         threadName={thread?.name ?? ""}
         loading={!project}
@@ -639,7 +646,8 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         }
         projectId={projectId}
         hasChapters={hasChapters}
-      />
+        onOpenEditor={onOpenEditor}
+      />}
       {runViewDismissed && activeRun && runStatusNow && RUN_VIEW_STATUSES.has(runStatusNow) && (
         <div
           className={`flex items-center gap-2 px-[22px] py-2 border-b ${
@@ -811,13 +819,13 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         contextUsage={contextUsage}
         // Quick actions live in the composer toolbar now (moved out of the
         // header). Same wiring the header used to receive.
-        autoThesisButton={
+        autoThesisButton={compact ? undefined : (
           <AutoThesisButton
             runStatus={activeRun?.status ?? null}
             onClick={onAutoThesisClick}
             ready={autoThesisReady}
           />
-        }
+        )}
         exportArtifacts={project?.context_store?.m5_writing?.export_artifacts}
         // Export-to-Word quick actions → agent prompt (export_docx scope=Mx),
         // which files the export under its module scope, not M5.
@@ -834,6 +842,6 @@ export function ChatPane({ projectId, threadId }: { projectId: string; threadId:
         onClose={() => setModalOpen(false)}
         onConfirm={confirmAutoThesis}
       />
-    </>
+    </div>
   );
 }

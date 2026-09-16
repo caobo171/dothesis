@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Loader2, FileText } from "lucide-react";
 
 import { triggerExportDownload } from "@/app/lib/api";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
@@ -33,6 +33,7 @@ type Props = {
    *  about exporting — but it belongs in the one strip that is always on
    *  screen, not down the page next to whichever chapter you happen to be in. */
   save?: React.ReactNode;
+  onBackToChat?: () => void;
 };
 
 
@@ -53,14 +54,24 @@ function _formatRelative(t: Date | null, tr: T): string {
 export function ReExportBar({
   lastExportAt, editsSinceExport, onReExport, exporting, error, projectId, save,
   artifacts,
+  onBackToChat,
 }: Props) {
   const t = useT() as T;
   return (
-    <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-3 bg-white">
+    <header className="flex min-h-[64px] items-center gap-3 border-b border-ink-100 bg-white px-5 py-2.5 shadow-[0_1px_0_rgba(24,31,50,0.03)]">
       {/* The editor takes over the workspace — the chat, the context panel and
           the composer all go. Leaving without this meant the browser back
           button or retyping the URL. */}
-      {projectId && (
+      {projectId && (onBackToChat ? (
+        <button
+          type="button"
+          onClick={onBackToChat}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-[12.5px] font-semibold text-ink-700 hover:bg-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+          {t("editor.backToChat")}
+        </button>
+      ) : (
         <Link
           href={`/chat/projects/${projectId}`}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-[12.5px] font-semibold text-ink-700 hover:bg-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
@@ -68,7 +79,17 @@ export function ReExportBar({
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
           {t("editor.backToChat")}
         </Link>
-      )}
+      ))}
+      <span className="hidden h-8 w-px bg-ink-100 sm:block" aria-hidden />
+      <div className="hidden min-w-0 items-center gap-2 md:flex">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
+          <FileText className="h-4 w-4" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <div className="truncate text-[13px] font-semibold text-ink-900">Thesis editor</div>
+          <div className="text-[10px] text-ink-400">Academic writing workspace</div>
+        </div>
+      </div>
       <div className="text-sm">
         <span className="text-gray-500">{t("editor.export.last")} </span>
         <span className="font-medium text-gray-900">{_formatRelative(lastExportAt, t)}</span>
@@ -93,11 +114,11 @@ export function ReExportBar({
         type="button"
         disabled={exporting}
         onClick={onReExport}
-        className="text-sm px-4 py-1.5 bg-primary-600 text-white rounded-md font-medium hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed"
+        className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-px hover:bg-primary-700 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {exporting ? t("editor.export.exporting") : t("editor.export.reExport")}
       </button>
-    </div>
+    </header>
   );
 }
 

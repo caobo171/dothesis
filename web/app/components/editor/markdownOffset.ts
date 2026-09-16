@@ -66,3 +66,24 @@ export function posToOffset(map: OffsetMap, pos: number): number {
   }
   return map.md.length;
 }
+
+
+/** Convert an offset in display markdown back to the canonical stored prose.
+ *
+ * Artifact previews replace short filesystem/S3 targets with large data URLs.
+ * ProseMirror positions therefore map into the display string, while the API
+ * validates offsets against the original chapter string. Rewriting only the
+ * prefix preserves the exact cursor boundary and removes every preview-length
+ * delta before it.
+ */
+export function previewOffsetToStored(
+  displayedMarkdown: string,
+  offset: number,
+  media: Array<{ source: string; preview_url: string }>,
+): number {
+  const prefix = displayedMarkdown.slice(0, Math.max(0, offset));
+  return media.reduce(
+    (text, item) => text.split(`](${item.preview_url})`).join(`](${item.source})`),
+    prefix,
+  ).length;
+}

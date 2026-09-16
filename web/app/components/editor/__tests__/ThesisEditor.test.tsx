@@ -30,6 +30,9 @@ beforeEach(() => {
     if (typeof url === "string" && url.includes("/m5/references")) {
       return { ok: true, json: async () => [] };
     }
+    if (typeof url === "string" && url.includes("/threads/list")) {
+      return { ok: true, json: async () => [] };
+    }
     if (typeof url === "string" && url.includes("/m5/chapters/")) {
       return { ok: true, json: async () => ({ name: "intro", prose: "Intro prose.", pending_edits: [] }) };
     }
@@ -55,8 +58,8 @@ describe("ThesisEditor", () => {
 
   it("renders OutlineRail with present chapters when populated", async () => {
     renderWithFreshCache(<ThesisEditor projectId="p1" />);
-    await waitFor(() => expect(screen.getByText(/Ch 1 - Introduction/)).toBeInTheDocument());
-    expect(screen.getByText(/Ch 2 - Literature Review/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Introduction/)).toBeInTheDocument());
+    expect(screen.getByText(/Literature Review/)).toBeInTheDocument();
   });
 
   it("stacks every chapter on one page with anchor ids", async () => {
@@ -72,7 +75,7 @@ describe("ThesisEditor", () => {
   it("scrolls to a chapter when its outline entry is clicked", async () => {
     const spy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {});
     renderWithFreshCache(<ThesisEditor projectId="p1" />);
-    const entry = await screen.findByText(/Ch 2 - Literature Review/);
+    const entry = await screen.findByText(/Literature Review/);
     fireEvent.click(entry);
     await waitFor(() => expect(spy).toHaveBeenCalled());
   });

@@ -36,13 +36,21 @@ describe("CitePopover", () => {
     const onSelect = vi.fn();
     render(<CitePopover projectId="p1" onSelect={onSelect} onClose={() => {}} />);
     await waitFor(() => expect(screen.getByText(/Smith/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByText(/Smith/i).closest("button")!);
+    fireEvent.click(screen.getAllByRole("button", { name: "Cite" })[0]);
     expect(onSelect).toHaveBeenCalledWith("r1");
   });
 
   it("shows empty-pool CTA when references list is empty", async () => {
     (global.fetch as any) = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
     render(<CitePopover projectId="p1" onSelect={() => {}} onClose={() => {}} />);
-    await waitFor(() => expect(screen.getByText(/No references/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Thư viện chưa có nguồn/i)).toBeInTheDocument());
+  });
+
+  it("uses selected prose to seed Find papers without filtering the library", async () => {
+    render(<CitePopover projectId="p1" selectedText="A long claim that is not a paper title" onSelect={() => {}} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/Smith/i)).toBeInTheDocument());
+    expect(screen.getByText(/Jones/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Find papers" }));
+    expect(screen.getByRole("textbox")).toHaveValue("A long claim that is not a paper title");
   });
 });

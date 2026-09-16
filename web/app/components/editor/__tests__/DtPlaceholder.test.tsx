@@ -6,9 +6,10 @@ import { Markdown } from "tiptap-markdown";
 import { DtPlaceholder, dtLabel } from "../extensions/DtPlaceholder";
 
 
-function Harness({ content }: { content: string }) {
+function Harness({ content, available = [] }: { content: string; available?: string[] }) {
   const editor = useEditor({
-    extensions: [StarterKit, Markdown.configure({ html: false }), DtPlaceholder],
+    extensions: [StarterKit, Markdown.configure({ html: false }),
+      DtPlaceholder.configure({ availableKinds: available })],
     content,
     immediatelyRender: true,
   });
@@ -29,6 +30,19 @@ describe("DtPlaceholder", () => {
       const el = container.querySelector(".dt-token");
       expect(el).toBeTruthy();
       expect(el?.getAttribute("data-dt-label")).toBe("Tóm tắt sàng lọc dữ liệu");
+      expect(el?.getAttribute("data-dt-prefix")).toContain("thiếu dữ liệu kiểm chứng");
+      expect(el?.classList.contains("dt-token-unavailable")).toBe(true);
+    });
+  });
+
+  it("promises export generation only when the verified block is available", async () => {
+    const { container } = render(
+      <Harness content={"[[DT:data_cleaning]]"} available={["data_cleaning"]} />,
+    );
+    await waitFor(() => {
+      const el = container.querySelector(".dt-token");
+      expect(el?.getAttribute("data-dt-prefix")).toContain("Tạo tự động khi export");
+      expect(el?.classList.contains("dt-token-unavailable")).toBe(false);
     });
   });
 

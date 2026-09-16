@@ -42,8 +42,8 @@ describe("editor flow — chat rewrite → pending edit visible", () => {
       if (typeof url === "string" && url.endsWith("/m5/references")) {
         return { ok: true, json: async () => [] };
       }
-      if (typeof url === "string" && url.endsWith("/m5/chapters/intro")) {
-        return { ok: true, json: async () => chapter };
+      if (typeof url === "string" && url.includes("/threads/list")) {
+        return { ok: true, json: async () => [] };
       }
       if (typeof url === "string" && url.includes("/pending/e1/accept")) {
         chapter = { ...chapter, prose: "Greetings, world.", pending_edits: [] };
@@ -53,6 +53,9 @@ describe("editor flow — chat rewrite → pending edit visible", () => {
         chapter = { ...chapter, pending_edits: [] };
         return { ok: true, json: async () => chapter };
       }
+      if (typeof url === "string" && url.endsWith("/m5/chapters/intro")) {
+        return { ok: true, json: async () => chapter };
+      }
       return { ok: true, json: async () => ({}) };
     });
   });
@@ -60,20 +63,22 @@ describe("editor flow — chat rewrite → pending edit visible", () => {
 
   it("renders chat-rewrite pending edit + accepts it", async () => {
     renderWithFreshSWR(<ThesisEditor projectId="p1" />);
-    await waitFor(() => expect(screen.getByText(/Pending edits/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/AI edit proposals/i)).toBeInTheDocument());
     expect(screen.getByText(/Greetings, world/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /accept/i }));
     await waitFor(() => {
-      expect(screen.queryByText(/Pending edits/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/AI edit proposals/i)).not.toBeInTheDocument();
+      expect(screen.getByText("Greetings, world.")).toBeInTheDocument();
     });
   });
 
   it("rejects the pending edit and keeps prose untouched", async () => {
     renderWithFreshSWR(<ThesisEditor projectId="p1" />);
-    await waitFor(() => expect(screen.getByText(/Pending edits/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/AI edit proposals/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /reject/i }));
     await waitFor(() => {
-      expect(screen.queryByText(/Pending edits/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/AI edit proposals/i)).not.toBeInTheDocument();
+      expect(screen.getByText("Hello world.")).toBeInTheDocument();
     });
   });
 });

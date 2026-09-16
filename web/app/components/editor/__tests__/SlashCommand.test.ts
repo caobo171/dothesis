@@ -11,7 +11,7 @@ describe("getSlashItems — slash menu filter", () => {
 
   it("matches on title (case-insensitive)", () => {
     const items = getSlashItems("head");
-    expect(items.map(i => i.title)).toEqual(["Heading 1", "Heading 2", "Heading 3"]);
+    expect(items.map(i => i.title)).toEqual(["Heading 1", "Heading 2", "Heading 3", "Heading 4"]);
   });
 
   it("matches on aliases", () => {

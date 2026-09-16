@@ -2,6 +2,7 @@
 
 import { createContext, ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 
 // Lets the chat header (rendered deep inside `children`) open the threads
 // sidebar drawer (left) and the context panel drawer (right) on mobile without
@@ -9,6 +10,15 @@ import { usePathname } from "next/navigation";
 export const ChatSidebarContext = createContext<{ open: () => void; openContext: () => void }>({
   open: () => {},
   openContext: () => {},
+});
+
+// Thread pages can promote the editor without navigating away. The project
+// layout owns the context rail, so it needs this tiny signal to reclaim that
+// width while editor mode is primary. Both chat and editor remain mounted in
+// the thread page; this context changes layout only, never conversation state.
+export const WorkspaceModeContext = createContext<{ editorMode: boolean; setEditorMode: (value: boolean) => void }>({
+  editorMode: false,
+  setEditorMode: () => {},
 });
 
 
@@ -20,6 +30,7 @@ const RIGHT_MIN = 280;
 const RIGHT_MAX = 560;
 const RIGHT_DEFAULT = 340;
 const STORAGE_KEY = "dothesis_right_pane_width";
+const COLLAPSED_KEY = "dothesis_right_pane_collapsed";
 
 
 /**
@@ -54,6 +65,7 @@ export function ChatShellLayout({
 }) {
   const hasRightPane = rightPane != null;
   const [rightWidth, setRightWidth] = useState<number>(RIGHT_DEFAULT);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   // Mobile: the left sidebar is an off-canvas drawer. Close it on navigation
@@ -74,6 +86,17 @@ export function ChatShellLayout({
       setRightWidth(n);
     }
   }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setRightCollapsed(window.localStorage.getItem(COLLAPSED_KEY) === "1");
+  }, []);
+
+  const setCollapsed = (value: boolean) => {
+    setRightCollapsed(value);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(COLLAPSED_KEY, value ? "1" : "0");
+    }
+  };
 
   // Mousemove + mouseup listeners only mount during an active drag so
   // ordinary navigation doesn't pay the cost.
@@ -141,17 +164,28 @@ export function ChatShellLayout({
           pane shows at all. The handle is 6px wide so it's easy to hit
           without dominating the gap visually. Hidden with the pane in editor
           mode so there's no dangling divider against the window edge. */}
-      {hasRightPane && (
+      {hasRightPane && !rightCollapsed && (
+      <div className="relative hidden w-1.5 shrink-0 lg:block">
       <div
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize context panel"
         onPointerDown={startDrag}
         onDoubleClick={resetWidth}
-        className="hidden lg:flex w-1.5 cursor-col-resize bg-ink-200 hover:bg-primary-300 active:bg-primary-400 transition-colors group items-center justify-center"
+        className="flex h-full w-1.5 cursor-col-resize bg-ink-200 hover:bg-primary-300 active:bg-primary-400 transition-colors group items-center justify-center"
       >
         {/* Visual grip — small ribbon that fades in on hover. */}
         <span className="block w-px h-8 bg-ink-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+      </div>
+      <button
+        type="button"
+        onClick={() => setCollapsed(true)}
+        aria-label="Collapse workspace panel"
+        title="Collapse workspace panel"
+        className="absolute left-[-17px] top-[14px] z-20 flex h-8 w-8 items-center justify-center rounded-lg border border-ink-200 bg-white text-ink-500 shadow-sm transition hover:bg-ink-50 hover:text-primary-700"
+      >
+        <PanelRightClose className="h-4 w-4" aria-hidden />
+      </button>
       </div>
       )}
 
@@ -166,7 +200,22 @@ export function ChatShellLayout({
       {/* Right pane — static width-controlled column on lg+, slide-in drawer
           from the right on mobile (opened via the header's panel button).
           Omitted entirely in editor mode (rightPane == null). */}
-      {hasRightPane && (
+      {hasRightPane && rightCollapsed && (
+        <aside className="hidden w-12 shrink-0 flex-col items-center border-l border-ink-200 bg-white lg:flex">
+          <div className="flex h-[60px] w-full items-center justify-center border-b border-ink-200">
+            <button
+              type="button"
+              onClick={() => setCollapsed(false)}
+              aria-label="Expand workspace panel"
+              title="Expand workspace panel"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 transition hover:bg-primary-50 hover:text-primary-700"
+            >
+              <PanelRightOpen className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        </aside>
+      )}
+      {hasRightPane && !rightCollapsed && (
       <div
         className={`fixed inset-y-0 right-0 z-50 flex bg-white shadow-xl transition-transform duration-300 lg:static lg:z-auto lg:shadow-none lg:flex-shrink-0 lg:translate-x-0 ${
           contextOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"

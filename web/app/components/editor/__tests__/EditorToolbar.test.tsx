@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -92,12 +93,12 @@ describe("paragraph spacing", () => {
     render(<Harness onSpacing={onSpacing} />);
     await screen.findByRole("toolbar", { name: "Định dạng" });
 
-    const select = screen.getByLabelText("Giãn dòng") as HTMLSelectElement;
-    // The current preset is the one selected — not a blank or the first entry.
-    expect(SPACING[Number(select.value)]).toMatchObject({ lineHeight: 1.75, paraGap: 14 });
+    const select = screen.getByLabelText("Giãn dòng");
+    expect(select).toHaveTextContent("Vừa");
 
-    const airy = SPACING.findIndex(o => o.label === "Thoáng");
-    fireEvent.change(select, { target: { value: String(airy) } });
+    const airy = SPACING.findIndex(o => o.label === "Rất thoáng");
+    await userEvent.click(select);
+    await userEvent.click(await screen.findByRole("option", { name: "Rất thoáng" }));
     expect(onSpacing).toHaveBeenCalledWith(SPACING[airy].lineHeight, SPACING[airy].paraGap);
   });
 });

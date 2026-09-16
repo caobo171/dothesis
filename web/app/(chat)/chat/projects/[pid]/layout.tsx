@@ -1,11 +1,11 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
-import { ChatShellLayout } from "@/app/components/chat/ChatShellLayout";
+import { ChatShellLayout, WorkspaceModeContext } from "@/app/components/chat/ChatShellLayout";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
 import type { Thread } from "@/app/components/chat/ThreadsSidebar";
 import { WorkflowSidebar } from "@/app/components/chat/WorkflowSidebar";
@@ -105,6 +105,8 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
   // redundancy there.
   const pathname = usePathname();
   const isEditor = pathname?.endsWith("/editor") ?? false;
+  const [inlineEditorMode, setInlineEditorMode] = useState(false);
+  useEffect(() => { setInlineEditorMode(false); }, [pathname]);
 
   // Is a run in flight? Drives the polling below and the right rail's own.
   // Cheap: the same key ChatPane polls, so SWR serves both from one request.
@@ -176,6 +178,7 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
   }
 
   return (
+    <WorkspaceModeContext.Provider value={{ editorMode: isEditor || inlineEditorMode, setEditorMode: setInlineEditorMode }}>
     <ChatShellLayout
       // Project sidebar — brand + project chip + Threads/Workflow tab toggle.
       // Threads tab carries the thread list; Workflow tab carries the M1-M5
@@ -193,7 +196,7 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
         />
       }
       rightPane={
-        isEditor ? null : (
+        (isEditor || inlineEditorMode) ? null : (
           <ContextPanel
             projectId={pid}
             loading={!project}
@@ -212,5 +215,6 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
     >
       {children}
     </ChatShellLayout>
+    </WorkspaceModeContext.Provider>
   );
 }
