@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   SparklesIcon,
   ChevronDownIcon,
@@ -39,6 +40,24 @@ export function SelectionToolbar({
   onProofread, onImprove, onHumanize, onExpand, onShorten,
 }: Props) {
   const [aiOpen, setAiOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<{ left: number; top: number; placement: "top" | "bottom" } | null>(null);
+  const askButtonRef = useRef<HTMLButtonElement>(null);
+
+  const toggleAiMenu = () => {
+    if (aiOpen) { setAiOpen(false); return; }
+    const rect = askButtonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const menuWidth = 224;
+    const menuHeight = 304;
+    const gap = 8;
+    const opensBelow = rect.bottom + gap + menuHeight <= window.innerHeight - 12;
+    setMenuAnchor({
+      left: Math.max(12, Math.min(window.innerWidth - menuWidth - 12, rect.left)),
+      top: opensBelow ? rect.bottom + gap : Math.max(12, rect.top - menuHeight - gap),
+      placement: opensBelow ? "bottom" : "top",
+    });
+    setAiOpen(true);
+  };
 
   const aiActions: { label: string; Icon: typeof SparklesIcon; on: () => void }[] = [
     { label: "Paraphrase", Icon: ArrowPathIcon, on: onParaphrase },
@@ -63,9 +82,10 @@ export function SelectionToolbar({
       }}
     >
       <button
+        ref={askButtonRef}
         type="button"
         onPointerDownCapture={event => event.preventDefault()}
-        onClick={() => setAiOpen(o => !o)}
+        onClick={toggleAiMenu}
         aria-haspopup="menu"
         aria-expanded={aiOpen}
         className={`${barBtn} ${aiOpen ? "bg-ink-100" : ""}`}
@@ -96,13 +116,19 @@ export function SelectionToolbar({
         Cite
       </button>
 
-      {aiOpen && (
+      {aiOpen && menuAnchor && typeof document !== "undefined" && createPortal(
         <>
           {/* click-away */}
-          <div className="fixed inset-0 z-40" onClick={() => setAiOpen(false)} aria-hidden />
+          <div className="fixed inset-0 z-[90]" onClick={() => setAiOpen(false)} aria-hidden />
           <div
             role="menu"
-            className="absolute left-0 top-full mt-2 z-50 w-56 rounded-xl border border-ink-100 bg-white p-1.5 shadow-[0_18px_45px_rgba(24,31,50,0.18)]"
+            data-placement={menuAnchor.placement}
+            style={{ left: menuAnchor.left, top: menuAnchor.top }}
+            className="fixed z-[100] w-56 rounded-xl border border-ink-100 bg-white p-1.5 shadow-[0_18px_45px_rgba(24,31,50,0.18)]"
+            onPointerDownCapture={event => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
           >
             {aiActions.map(({ label, Icon, on }) => (
               <button
@@ -118,7 +144,8 @@ export function SelectionToolbar({
               </button>
             ))}
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );

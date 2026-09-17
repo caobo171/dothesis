@@ -28,6 +28,20 @@ describe("SelectionToolbar", () => {
     }
   });
 
+  it("portals and flips the dropdown above the toolbar near the viewport bottom", () => {
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      x: 120, y: 700, left: 120, top: 700, right: 220, bottom: 736,
+      width: 100, height: 36, toJSON: () => ({}),
+    } as DOMRect);
+    render(<SelectionToolbar {...handlers()} />);
+    fireEvent.click(screen.getByRole("button", { name: /ask ai/i }));
+    const menu = screen.getByRole("menu");
+    expect(menu).toHaveAttribute("data-placement", "top");
+    expect(menu.parentElement).toBe(document.body);
+    expect(menu).toHaveClass("fixed");
+    rect.mockRestore();
+  });
+
   it.each([
     ["onParaphrase", /paraphrase/i],
     ["onImprove", /improve/i],
