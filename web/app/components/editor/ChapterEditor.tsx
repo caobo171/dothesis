@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { BookOpen, Check, ExternalLink, ShieldCheck, X } from "lucide-react";
 
 import { AiPending } from "./extensions/AiPending";
+import { AiProcessing } from "./extensions/AiProcessing";
 import { CitationMark } from "./extensions/CitationMark";
 import { SlashCommand } from "./extensions/SlashCommand";
 import { MermaidBlock } from "./extensions/MermaidBlock";
@@ -193,7 +194,7 @@ export function ChapterEditor({
     // live diagram preview.
     extensions: [
       StarterKit.configure({ codeBlock: false }),
-      Markdown.configure({ html: false }), AiPending, CitationMark, SlashCommand,
+      Markdown.configure({ html: false }), AiPending, AiProcessing, CitationMark, SlashCommand,
       FigureBlock.configure({ inline: false, allowBase64: true }),
       Table.configure({ resizable: true }), TableRow, TableHeader, TableCell,
       MermaidBlock, DtPlaceholder.configure({ availableKinds: renderableTokens }),
@@ -469,6 +470,10 @@ export function ChapterEditor({
     const payload = kind === "cite"
       ? { at_offset: storedOffset(citePos), ...body }
       : { from_offset: fromOffset, to_offset: toOffset, ...body };
+    const processingMark = editor.schema.marks.aiProcessing;
+    if (sel && processingMark) {
+      editor.view.dispatch(editor.state.tr.addMark(sel.from, sel.to, processingMark.create()));
+    }
     actionInFlight.current = true;
     setInlineAction({ state: "loading", message: "Đang xử lý đoạn đã chọn bằng AI…" });
     try {
@@ -513,6 +518,8 @@ export function ChapterEditor({
         ...(message.startsWith("Bản trên máy chủ đã có nội dung khác") ? { action: "reload_chapter" as const } : {}),
       });
     } finally {
+      const mark = editor.schema.marks.aiProcessing;
+      if (mark) editor.view.dispatch(editor.state.tr.removeMark(0, editor.state.doc.content.size, mark));
       actionInFlight.current = false;
     }
   }, [projectId, chapterName, editor, onPendingMutate, onServerProse, onServerBaseline]);

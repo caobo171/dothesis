@@ -271,6 +271,9 @@ accepts the proposal.
 - Capture the non-empty editor selection before an AI composer or picker takes
   focus, and keep that range until the action is submitted or cancelled. Never
   call a rewrite model with an empty selection.
+- While an inline AI request is running, keep the captured range visibly
+  highlighted in the editor. This processing highlight is transient UI state:
+  remove it on success or failure and never serialize it into chapter prose.
 - The proposal UI must let the student toggle an inline word diff, inspect the
   rationale, replace the selection, insert the proposal below it, retry the
   same action, or discard it.
