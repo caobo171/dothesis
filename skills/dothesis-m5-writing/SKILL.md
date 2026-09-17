@@ -296,6 +296,9 @@ accepts the proposal.
 - Accepting still uses the stale-offset guard. If chapter prose changed since
   proposal creation, fail closed and ask the student to discard/retry instead
   of applying at the wrong location.
+- A non-empty replacement may rebase after unrelated edits only when its exact
+  captured `old_text` occurs once in the current chapter. Duplicate/missing
+  anchors and zero-length citation insertions remain stale and fail closed.
 - A cited source's visible author-year label must be derived from the canonical
   M2 `authors` data and must match the export validator. Never substitute
   `Anonymous` merely because a current source uses `authors` rather than a

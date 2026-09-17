@@ -1242,6 +1242,38 @@ def test_accept_splices_new_text_and_drops_edit(client):
         assert ch["pending_edits"] == []
 
 
+def test_accept_rebases_unique_selection_after_unrelated_prefix_edit(client):
+    """An autosave may insert prose before a proposal without changing its
+    selected text. A unique exact anchor is safe to relocate and accept."""
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.routers.m5_editor import _chapter_fingerprint
+
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    original = "Hello world."
+    edit = _seed_pending_edit(
+        pid,
+        "intro",
+        from_offset=0,
+        to_offset=5,
+        old_text="Hello",
+        new_text="Greetings",
+        metadata={"document_fingerprint": _chapter_fingerprint(original)},
+    )
+    with get_session_factory()() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing["chapters"]["intro"]["prose"] = "Preface. " + original
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/pending/{edit['id']}/accept",
+        json={"expected_document_fingerprint": _chapter_fingerprint(original)},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["prose"] == "Preface. Greetings world."
+
+
 def test_accept_409_on_stale_offsets(client):
     """1. Seed pending_edit (old_text='Hello') but mutate prose AFTER (e.g. 'DIFFERENT world.').
     2. POST .../accept

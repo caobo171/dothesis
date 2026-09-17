@@ -1333,25 +1333,30 @@ def accept_pending_edit(
     if target.get("chapter_name") != chapter_name:
         raise HTTPException(404, detail={"error": {"code": "edit_not_found"}})
 
+    actual_fingerprint = _chapter_fingerprint(prose)
     proposal_fingerprint = (target.get("metadata") or {}).get("document_fingerprint")
-    if (body.expected_document_fingerprint
-            and body.expected_document_fingerprint != _chapter_fingerprint(prose)):
-        # Older proposals have no stored snapshot. The client's explicit token
-        # still makes acceptance fail closed instead of relying on range text.
-        raise HTTPException(
-            409,
-            detail={"error": {"code": "stale_document", "edit_id": edit_id}},
-        )
-    if proposal_fingerprint and proposal_fingerprint != _chapter_fingerprint(prose):
-        # Range equality is insufficient for a zero-length cite: an unrelated
-        # insertion can move its intended location while old_text remains "".
-        raise HTTPException(
-            409,
-            detail={"error": {"code": "stale_document", "edit_id": edit_id}},
-        )
-
     from_offset = target["from_offset"]
     to_offset = target["to_offset"]
+    fingerprint_changed = bool(
+        (proposal_fingerprint and proposal_fingerprint != actual_fingerprint)
+        or (not proposal_fingerprint and body.expected_document_fingerprint
+            and body.expected_document_fingerprint != actual_fingerprint)
+    )
+    if fingerprint_changed:
+        # Decision: autosave or another accepted edit can shift a still-valid
+        # selection. Rebase only on one exact, non-empty anchor. This preserves
+        # concurrency safety while avoiding a false stale error for unrelated
+        # insertions before the proposal. Empty cite anchors cannot be rebased.
+        old_text = target.get("old_text") or ""
+        first = prose.find(old_text) if old_text else -1
+        unique = first >= 0 and prose.find(old_text, first + 1) == -1
+        if not unique:
+            raise HTTPException(
+                409,
+                detail={"error": {"code": "stale_document", "edit_id": edit_id}},
+            )
+        from_offset, to_offset = first, first + len(old_text)
+
     # Critical concurrency check: if the prose changed since the edit was created
     # the offsets are stale and splicing would corrupt the document.
     if from_offset > len(prose) or to_offset > len(prose) or prose[from_offset:to_offset] != target["old_text"]:
