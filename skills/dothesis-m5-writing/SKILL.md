@@ -280,6 +280,9 @@ accepts the proposal.
 - Open the completed proposal immediately in a comparison panel in the editing
   flow. Do not make the student hunt for it at the end of the chapter; show the
   proposed text, old/new diff, rationale, and review actions before prose changes.
+- Prefer inline approval over a blocking modal: keep the affected prose marked
+  in the editor and show a compact bottom review bar. Detailed diff/rationale
+  expands only on request and must not add a backdrop over the document.
 - Inline AI actions are editable prompt presets, not commands that run on
   selection. Choosing Paraphrase, Improve, Proofread, Humanize, Expand, or
   Shorten fills a composer; the student may change the instruction before

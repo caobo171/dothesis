@@ -164,6 +164,7 @@ export function ChapterEditor({
   const [selectionAnchor, setSelectionAnchor] = useState<{ left: number; top: number } | null>(null);
   const [staleIds, setStaleIds] = useState<Set<string>>(new Set());
   const [activePendingEdit, setActivePendingEdit] = useState<PendingEdit | null>(null);
+  const [activeReviewExpanded, setActiveReviewExpanded] = useState(false);
   const [inlineAction, setInlineAction] = useState<
     { state: "loading" | "success" | "error"; message: string; action?: "reload_chapter" } | null
   >(null);
@@ -505,7 +506,17 @@ export function ChapterEditor({
       const created = pendingEditFromApi(
         await apiFetch(path, { method: "POST", body: payload }) as PendingEditApi,
       );
+      const pendingMark = editor.schema.marks.aiPending;
+      if (sel && pendingMark) {
+        editor.view.dispatch(editor.state.tr.addMark(sel.from, sel.to, pendingMark.create({
+          pendingId: created.id,
+          source: created.source,
+          oldText: created.oldText,
+          newText: created.newText,
+        })));
+      }
       setActivePendingEdit(created);
+      setActiveReviewExpanded(false);
       setInlineAction(null);
       onPendingMutate();
     } catch (e) {
@@ -630,6 +641,7 @@ export function ChapterEditor({
       ) as PendingEditApi);
       await apiFetch(`/projects/${projectId}/m5/chapters/${chapterName}/pending/${edit.id}/reject`, { method: "POST" });
       setActivePendingEdit(replacement);
+      setActiveReviewExpanded(false);
       setInlineAction(null);
       onPendingMutate();
     } catch (e) {
@@ -837,36 +849,34 @@ export function ChapterEditor({
       )}
 
       {activePendingEdit && typeof document !== "undefined" && createPortal(
-        <div
-          className="fixed inset-0 z-[95] flex items-center justify-center bg-ink-950/20 px-4 py-6 backdrop-blur-[1px]"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setActivePendingEdit(null);
-          }}
+        <aside
+          aria-label="Duyệt đề xuất AI"
+          className="fixed bottom-4 left-1/2 z-[95] w-[min(900px,calc(100vw-2rem))] -translate-x-1/2"
         >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label="So sánh đề xuất AI"
-            className="relative max-h-full w-[min(760px,100%)] overflow-y-auto overscroll-contain rounded-2xl"
-          >
-            <button
-              type="button"
-              aria-label="Đóng bảng so sánh"
-              onClick={() => setActivePendingEdit(null)}
-              className="absolute right-3 top-3 z-10 rounded-lg bg-white/90 p-2 text-ink-500 shadow-sm transition hover:bg-ink-50 hover:text-ink-900"
-            >
-              <X className="h-4 w-4" />
+          {activeReviewExpanded && (
+            <div className="mb-2 max-h-[min(62vh,620px)] overflow-y-auto overscroll-contain rounded-2xl">
+              <PendingEditRibbon
+                edit={activePendingEdit}
+                onAccept={handleAccept}
+                onReject={handleReject}
+                onRetry={activePendingEdit.source === "chat_rewrite" ? undefined : handleRetry}
+                stale={staleIds.has(activePendingEdit.id)}
+                busy={busyEditIds.has(activePendingEdit.id)}
+              />
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-ink-200 bg-white/95 p-2.5 shadow-[0_18px_55px_rgba(24,31,50,0.20)] backdrop-blur">
+            <span className="rounded-lg bg-primary-50 px-3 py-2 text-sm font-semibold capitalize text-primary-700">{(activePendingEdit.source || "AI edit").replace("_", " ")}</span>
+            <button type="button" aria-expanded={activeReviewExpanded} onClick={() => setActiveReviewExpanded(value => !value)} className="rounded-lg px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+              {activeReviewExpanded ? "Ẩn thay đổi" : "Xem thay đổi"}
             </button>
-            <PendingEditRibbon
-              edit={activePendingEdit}
-              onAccept={handleAccept}
-              onReject={handleReject}
-              onRetry={activePendingEdit.source === "chat_rewrite" ? undefined : handleRetry}
-              stale={staleIds.has(activePendingEdit.id)}
-              busy={busyEditIds.has(activePendingEdit.id)}
-            />
-          </section>
-        </div>,
+            <div className="ml-auto flex items-center gap-2">
+              <button type="button" disabled={busyEditIds.has(activePendingEdit.id)} onClick={() => void handleReject(activePendingEdit.id)} className="rounded-lg px-3 py-2 text-sm font-semibold text-ink-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-50">Bỏ</button>
+              <button type="button" disabled={busyEditIds.has(activePendingEdit.id)} onClick={() => void handleAccept(activePendingEdit.id)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"><Check className="h-4 w-4" />Chấp nhận</button>
+              <button type="button" aria-label="Đóng thanh duyệt" onClick={() => setActivePendingEdit(null)} className="rounded-lg p-2 text-ink-400 hover:bg-ink-50 hover:text-ink-800"><X className="h-4 w-4" /></button>
+            </div>
+          </div>
+        </aside>,
         document.body,
       )}
 
