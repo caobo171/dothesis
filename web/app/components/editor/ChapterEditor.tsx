@@ -73,6 +73,25 @@ type Props = {
   onClaimDecision?: (suggestion: ClaimSuggestion, action: "accept" | "reject") => Promise<void>;
 };
 
+export async function syncChapterForInlineAction({ projectId, chapterName, prose, fingerprint }: {
+  projectId: string; chapterName: string; prose: string; fingerprint?: string;
+}) {
+  try {
+    return await apiFetch(`/projects/${projectId}/m5/chapters/${chapterName}`, {
+      method: "PATCH", body: { prose, ...(fingerprint ? { expected_document_fingerprint: fingerprint } : {}) },
+    }) as { prose?: string; document_fingerprint?: string };
+  } catch (error) {
+    const detail = error instanceof ApiError ? error.body?.error : undefined;
+    if (!(error instanceof ApiError) || error.status !== 409 || detail?.code !== "stale_document") throw error;
+    const chapters = await apiFetch(`/projects/${projectId}/m5/chapters`, { method: "POST" }) as Record<string, { prose?: string; document_fingerprint?: string }>;
+    const latest = chapters?.[chapterName];
+    if (!latest || latest.prose !== prose || !latest.document_fingerprint) {
+      throw new Error("Bản trên máy chủ đã có nội dung khác. Hãy tải lại chương rồi chọn lại đoạn cần xử lý.");
+    }
+    return latest;
+  }
+}
+
 
 // Mounts one TipTap instance per chapter. Owns:
 //   - reporting edits upward (the document's single Save lives in the parent)
@@ -406,12 +425,10 @@ export function ChapterEditor({
       // request's offsets are validated against the same bytes they came from.
       // Without this handshake, even ordinary heading/table normalisation can
       // make every inline action fail with offset_out_of_range.
-      const patched: any = await apiFetch(`/projects/${projectId}/m5/chapters/${chapterName}`, {
-        method: "PATCH", body: {
-          prose: canonicalMarkdown,
-          ...(fingerprintRef.current ? { expected_document_fingerprint: fingerprintRef.current } : {}),
-        },
-      });
+      // The chapter may have been saved by the document-level Save or a claim
+      // acceptance after this TipTap instance mounted. A stale revision is
+      // refreshed only when the exact canonical prose still agrees.
+      const patched = await syncChapterForInlineAction({ projectId, chapterName, prose: canonicalMarkdown, fingerprint: fingerprintRef.current });
       // A user may keep typing while the PATCH is in flight. Those new words
       // have no stable offset yet, so never create a proposal against them.
       if (lastEmittedProseRef.current !== canonicalMarkdown) {

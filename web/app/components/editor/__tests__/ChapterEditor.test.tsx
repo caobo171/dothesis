@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
-import { ChapterEditor } from "../ChapterEditor";
+import { ChapterEditor, syncChapterForInlineAction } from "../ChapterEditor";
 
 
 beforeEach(() => {
@@ -124,5 +124,16 @@ describe("ChapterEditor — mount + save", () => {
     expect(JSON.parse((fetch as any).mock.calls[0][1].body)).toMatchObject({
       expected_document_fingerprint: "proposal-revision",
     });
+  });
+
+  it("refreshes an outdated fingerprint before creating an inline AI proposal", async () => {
+    const stale = { ok: false, status: 409, json: async () => ({ detail: { error: { code: "stale_document" } } }) };
+    (global.fetch as any) = vi.fn()
+      .mockResolvedValueOnce(stale)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ intro: { prose: "Trust affects travel.", document_fingerprint: "fresh" } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    const result = await syncChapterForInlineAction({ projectId: "p1", chapterName: "intro", prose: "Trust affects travel.", fingerprint: "old" });
+    expect(result.document_fingerprint).toBe("fresh");
+    expect((global.fetch as any).mock.calls).toHaveLength(2);
   });
 });
