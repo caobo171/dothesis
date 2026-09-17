@@ -136,4 +136,13 @@ describe("ChapterEditor — mount + save", () => {
     expect(result.document_fingerprint).toBe("fresh");
     expect((global.fetch as any).mock.calls).toHaveLength(2);
   });
+
+  it("keeps a real server prose conflict closed and explains that reload is required", async () => {
+    const stale = { ok: false, status: 409, json: async () => ({ detail: { error: { code: "stale_document" } } }) };
+    (global.fetch as any) = vi.fn()
+      .mockResolvedValueOnce(stale)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ intro: { prose: "Newer server prose.", document_fingerprint: "fresh" } }) });
+    await expect(syncChapterForInlineAction({ projectId: "p1", chapterName: "intro", prose: "Local prose.", fingerprint: "old" }))
+      .rejects.toThrow(/tải lại chương/i);
+  });
 });

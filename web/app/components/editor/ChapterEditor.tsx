@@ -135,7 +135,7 @@ export function ChapterEditor({
   const [selectionAnchor, setSelectionAnchor] = useState<{ left: number; top: number } | null>(null);
   const [staleIds, setStaleIds] = useState<Set<string>>(new Set());
   const [inlineAction, setInlineAction] = useState<
-    { state: "loading" | "success" | "error"; message: string } | null
+    { state: "loading" | "success" | "error"; message: string; action?: "reload_chapter" } | null
   >(null);
   const [activeClaim, setActiveClaim] = useState<{ id: string; left: number; top: number } | null>(null);
   const [busyClaim, setBusyClaim] = useState<string | null>(null);
@@ -455,7 +455,11 @@ export function ChapterEditor({
       // Keep the selection intact so the student can retry, but never turn a
       // server failure into a button that appears to do nothing.
       const message = e instanceof Error ? e.message : "Không thể xử lý đoạn đã chọn.";
-      setInlineAction({ state: "error", message });
+      setInlineAction({
+        state: "error",
+        message,
+        ...(message.startsWith("Bản trên máy chủ đã có nội dung khác") ? { action: "reload_chapter" as const } : {}),
+      });
     } finally {
       actionInFlight.current = false;
     }
@@ -576,6 +580,32 @@ export function ChapterEditor({
       setBusyClaim(null);
     }
   }, [busyClaim, onClaimDecision]);
+
+  const reloadChapterFromServer = useCallback(async () => {
+    if (!editor) return;
+    setInlineAction({ state: "loading", message: "Đang tải bản chương mới nhất…" });
+    try {
+      const chapters = await apiFetch(`/projects/${projectId}/m5/chapters`, { method: "POST" }) as Record<string, { prose?: string; document_fingerprint?: string }>;
+      const latest = chapters?.[chapterName];
+      if (!latest || typeof latest.prose !== "string") throw new Error("Không tải được chương mới nhất.");
+      const displayed = mediaRef.current.reduce(
+        (prose, item) => prose.split(`](${item.source})`).join(`](${item.preview_url})`),
+        latest.prose,
+      );
+      editor.commands.setContent(displayed, { emitUpdate: false });
+      const canonical = mediaRef.current.reduce(
+        (prose, item) => prose.split(`](${item.preview_url})`).join(`](${item.source})`),
+        preserveDtTokens(editor.storage.markdown.getMarkdown()),
+      );
+      lastEmittedProseRef.current = canonical;
+      serverProseRef.current = canonical;
+      fingerprintRef.current = latest.document_fingerprint ?? fingerprintRef.current;
+      onServerProse?.(canonical, fingerprintRef.current);
+      setInlineAction({ state: "success", message: "Đã tải bản chương mới nhất. Hãy chọn lại đoạn cần xử lý." });
+    } catch (error) {
+      setInlineAction({ state: "error", message: error instanceof Error ? error.message : "Không tải được chương mới nhất.", action: "reload_chapter" });
+    }
+  }, [chapterName, editor, onServerProse, projectId]);
 
   // Bind the shared toolbar to this chapter when it's ready and whenever it
   // gains focus, so formatting acts on the chapter the caret is actually in.
@@ -721,7 +751,16 @@ export function ChapterEditor({
           <span className={inlineAction.state === "loading" ? "animate-pulse motion-reduce:animate-none" : ""}>
             {inlineAction.message}
           </span>
-          {inlineAction.state !== "loading" && (
+          {inlineAction.action === "reload_chapter" && (
+            <button
+              type="button"
+              onClick={() => void reloadChapterFromServer()}
+              className="ml-auto shrink-0 rounded-lg bg-red-700 px-3 py-1.5 font-semibold text-white hover:bg-red-800 active:translate-y-px"
+            >
+              Tải lại chương
+            </button>
+          )}
+          {inlineAction.state !== "loading" && !inlineAction.action && (
             <button
               type="button"
               onClick={() => setInlineAction(null)}
