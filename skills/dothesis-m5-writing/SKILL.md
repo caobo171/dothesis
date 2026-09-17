@@ -278,6 +278,10 @@ accepts the proposal.
   selection. Choosing Paraphrase, Improve, Proofread, Humanize, Expand, or
   Shorten fills a composer; the student may change the instruction before
   submitting, or write a free-form editing instruction from scratch.
+- Organize useful presets by intent: strengthen writing (fluency, simplify,
+  argument, counterargument), transform structure (tense, bullets, numbered
+  list, prose, table, translation), and academic style (formality, technical
+  precision, stronger claim, hedged claim). Every preset remains editable.
 - Red/struck text means removal and green text means insertion. Diff markup is
   display-only and must never enter stored markdown or exported files.
 - Accepting still uses the stale-offset guard. If chapter prose changed since

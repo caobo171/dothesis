@@ -24,13 +24,35 @@ type Props = {
 
 export type RewriteKind = "paraphrase" | "improve" | "proofread" | "humanize" | "expand" | "shorten";
 
-const PRESETS: Array<{ kind: RewriteKind; label: string; prompt: string; Icon: typeof SparklesIcon }> = [
-  { kind: "paraphrase", label: "Paraphrase", prompt: "Diễn đạt lại đoạn này tự nhiên và học thuật hơn, giữ nguyên ý nghĩa.", Icon: ArrowPathIcon },
-  { kind: "improve", label: "Improve", prompt: "Cải thiện độ rõ ràng, mạch lạc và văn phong học thuật của đoạn này.", Icon: ArrowTrendingUpIcon },
-  { kind: "proofread", label: "Proofread", prompt: "Sửa ngữ pháp, chính tả, dấu câu và cách dùng từ chưa tự nhiên.", Icon: CheckCircleIcon },
-  { kind: "humanize", label: "Humanize", prompt: "Viết tự nhiên hơn, giảm cách diễn đạt máy móc và lặp cấu trúc.", Icon: UserIcon },
-  { kind: "expand", label: "Expand", prompt: "Mở rộng đoạn này bằng giải thích và liên kết lập luận cần thiết.", Icon: ArrowsPointingOutIcon },
-  { kind: "shorten", label: "Shorten", prompt: "Rút gọn đoạn này, loại bỏ phần lặp và giữ nguyên nội dung chính.", Icon: ScissorsIcon },
+type Preset = { kind: RewriteKind; label: string; prompt: string; Icon: typeof SparklesIcon };
+const PRESET_GROUPS: Array<{ label: string; items: Preset[] }> = [
+  { label: "Strengthen writing", items: [
+    { kind: "improve", label: "Improve fluency", prompt: "Cải thiện độ trôi chảy và liên kết giữa các câu, giữ nguyên nội dung học thuật.", Icon: ArrowTrendingUpIcon },
+    { kind: "paraphrase", label: "Paraphrase", prompt: "Diễn đạt lại đoạn này tự nhiên và học thuật hơn, giữ nguyên ý nghĩa.", Icon: ArrowPathIcon },
+    { kind: "shorten", label: "Simplify", prompt: "Đơn giản hóa cách diễn đạt để dễ hiểu hơn mà không làm mất nội dung quan trọng.", Icon: ScissorsIcon },
+    { kind: "expand", label: "Strengthen argument", prompt: "Củng cố lập luận bằng cách làm rõ logic, tiền đề và mối liên hệ giữa các ý.", Icon: ArrowsPointingOutIcon },
+    { kind: "expand", label: "Add a counter argument", prompt: "Bổ sung một phản biện hợp lý và giải thích cách lập luận hiện tại trả lời phản biện đó. Không bịa nguồn hoặc dữ liệu.", Icon: ArrowsPointingOutIcon },
+  ] },
+  { label: "Transform", items: [
+    { kind: "improve", label: "Change tense", prompt: "Đổi thì của đoạn văn cho nhất quán. Hãy thay chỉ dẫn này bằng thì mong muốn.", Icon: ArrowPathIcon },
+    { kind: "improve", label: "Convert to bullet list", prompt: "Chuyển nội dung thành danh sách gạch đầu dòng rõ ràng, giữ nguyên mọi dữ kiện và citation.", Icon: ArrowPathIcon },
+    { kind: "improve", label: "Convert to numbered list", prompt: "Chuyển nội dung thành danh sách đánh số theo trình tự logic, giữ nguyên mọi dữ kiện và citation.", Icon: ArrowPathIcon },
+    { kind: "improve", label: "Convert to prose", prompt: "Chuyển nội dung thành các câu văn học thuật liền mạch, không dùng danh sách.", Icon: ArrowPathIcon },
+    { kind: "improve", label: "Convert to table", prompt: "Chuyển nội dung thành bảng Markdown có tiêu đề cột rõ ràng, giữ nguyên mọi dữ kiện và citation.", Icon: ArrowPathIcon },
+    { kind: "improve", label: "Translate", prompt: "Dịch đoạn này sang ngôn ngữ mong muốn. Hãy thay chỉ dẫn này bằng ngôn ngữ đích.", Icon: LanguageIcon },
+  ] },
+  { label: "Academic style", items: [
+    { kind: "improve", label: "Increase formality", prompt: "Tăng mức độ trang trọng và khách quan của văn phong học thuật.", Icon: ArrowTrendingUpIcon },
+    { kind: "improve", label: "Technical precision", prompt: "Tăng độ chính xác về thuật ngữ và phạm vi diễn đạt; tránh từ ngữ mơ hồ.", Icon: CheckCircleIcon },
+    { kind: "improve", label: "Increase claim confidence", prompt: "Làm nhận định dứt khoát hơn nhưng chỉ trong phạm vi bằng chứng và citation hiện có.", Icon: CheckCircleIcon },
+    { kind: "improve", label: "Hedge claim confidence", prompt: "Điều chỉnh mức độ chắc chắn của nhận định bằng ngôn ngữ thận trọng, phù hợp với giới hạn bằng chứng.", Icon: CheckCircleIcon },
+  ] },
+  { label: "More", items: [
+    { kind: "proofread", label: "Proofread", prompt: "Sửa ngữ pháp, chính tả, dấu câu và cách dùng từ chưa tự nhiên.", Icon: CheckCircleIcon },
+    { kind: "humanize", label: "Humanize", prompt: "Viết tự nhiên hơn, giảm cách diễn đạt máy móc và lặp cấu trúc.", Icon: UserIcon },
+    { kind: "expand", label: "Expand", prompt: "Mở rộng đoạn này bằng giải thích và liên kết lập luận cần thiết.", Icon: ArrowsPointingOutIcon },
+    { kind: "shorten", label: "Shorten", prompt: "Rút gọn đoạn này, loại bỏ phần lặp và giữ nguyên nội dung chính.", Icon: ScissorsIcon },
+  ] },
 ];
 
 
@@ -54,8 +76,8 @@ export function SelectionToolbar({
     if (aiOpen) { setAiOpen(false); return; }
     const rect = askButtonRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const menuWidth = 360;
-    const menuHeight = 430;
+    const menuWidth = 400;
+    const menuHeight = Math.min(620, window.innerHeight - 24);
     const gap = 8;
     const opensBelow = rect.bottom + gap + menuHeight <= window.innerHeight - 12;
     setMenuAnchor({
@@ -129,7 +151,7 @@ export function SelectionToolbar({
             role="menu"
             data-placement={menuAnchor.placement}
             style={{ left: menuAnchor.left, top: menuAnchor.top }}
-            className="fixed z-[100] w-[min(360px,calc(100vw-24px))] rounded-2xl border border-ink-100 bg-white p-3 shadow-[0_18px_45px_rgba(24,31,50,0.18)]"
+            className="fixed z-[100] max-h-[calc(100vh-24px)] w-[min(400px,calc(100vw-24px))] overflow-y-auto rounded-2xl border border-ink-100 bg-white p-3 shadow-[0_18px_45px_rgba(24,31,50,0.18)]"
             onPointerDownCapture={event => {
               event.stopPropagation();
             }}
@@ -148,9 +170,11 @@ export function SelectionToolbar({
               placeholder="Ví dụ: Viết rõ hơn mối quan hệ giữa hai khái niệm, giữ nguyên citation…"
               className="mt-2 w-full resize-none rounded-xl border border-ink-200 px-3 py-2.5 text-sm leading-5 text-ink-900 outline-none placeholder:text-ink-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
             />
-            <p className="mb-1 mt-3 text-[11px] font-semibold uppercase tracking-wide text-ink-400">Prompt mẫu</p>
-            <div className="grid grid-cols-2 gap-1">
-            {PRESETS.map(({ kind, label, Icon, prompt: presetPrompt }) => (
+            <div className="mt-3 space-y-3">
+            {PRESET_GROUPS.map(group => <section key={group.label}>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-400">{group.label}</p>
+              <div className="grid grid-cols-2 gap-1">
+              {group.items.map(({ kind, label, Icon, prompt: presetPrompt }) => (
               <button
                 key={label}
                 type="button"
@@ -161,7 +185,9 @@ export function SelectionToolbar({
                 <Icon className="w-4 h-4 text-ink-500 shrink-0" />
                 {label}
               </button>
-            ))}
+              ))}
+              </div>
+            </section>)}
             </div>
             <div className="mt-3 flex items-center justify-between border-t border-ink-100 pt-3">
               <span className="text-[11px] text-ink-400">⌘ Enter để gửi</span>

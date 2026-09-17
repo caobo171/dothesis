@@ -24,6 +24,12 @@ describe("SelectionToolbar", () => {
     for (const name of [/paraphrase/i, /improve/i, /proofread/i, /humanize/i, /expand/i, /shorten/i]) {
       expect(screen.getByRole("menuitem", { name })).toBeInTheDocument();
     }
+    for (const name of [
+      /simplify/i, /strengthen argument/i, /counter argument/i, /change tense/i,
+      /bullet list/i, /numbered list/i, /convert to prose/i, /convert to table/i,
+      /translate/i, /increase formality/i, /technical precision/i,
+      /increase claim confidence/i, /hedge claim confidence/i,
+    ]) expect(screen.getByRole("menuitem", { name })).toBeInTheDocument();
   });
 
   it("portals and flips the dropdown above the toolbar near the viewport bottom", () => {

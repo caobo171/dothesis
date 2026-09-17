@@ -13,8 +13,9 @@ specific instruction for how to change it.
 
 ## Rules
 Rewrite ONLY the selection, following the instruction. Write in the same
-language as the selection ({language}) and match the academic register of the
-surrounding context so the result reads seamlessly in place.
+language as the selection ({language}) unless the instruction explicitly asks
+for translation. Match the academic register of the surrounding context so the
+result reads seamlessly in place.
 
 Unless the instruction explicitly says otherwise:
 - Preserve the meaning.
