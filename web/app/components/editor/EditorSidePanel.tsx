@@ -29,6 +29,7 @@ export function EditorSidePanel({
   onClaimAccepted,
   onClaimReviewChange,
   claimReview,
+  onOpenClaimReview,
 }: {
   projectId: string;
   highlightedSource?: string | null;
@@ -37,6 +38,7 @@ export function EditorSidePanel({
   onClaimAccepted: (chapter: ClaimAcceptedChapter) => void;
   onClaimReviewChange?: (review: ClaimReview | null) => void;
   claimReview?: ClaimReview | null;
+  onOpenClaimReview?: () => void;
 }) {
   const [mode, setMode] = useState<Mode>("sources");
   const [agentPrompt, setAgentPrompt] = useState<{ id: string; text: string } | null>(null);
@@ -109,6 +111,7 @@ export function EditorSidePanel({
             onSelectChapter={onSelectChapter}
             onReviewChange={onClaimReviewChange}
             reviewSnapshot={claimReview}
+            onOpenReview={onOpenClaimReview}
           />
         ) : (
           <div className="flex h-full min-h-0 flex-col">

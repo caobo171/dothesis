@@ -206,6 +206,11 @@ rewrite prose or commit state automatically:
   continues without a paid fallback or an invented unsupported verdict.
   Extraction failures remain retryable chunk-level failures because claim
   coverage is unknown.
+  Review mode may offer Reject All and Accept All for pending actionable
+  suggestions. Bulk acceptance must apply suggestions sequentially against the
+  latest rebased anchors, preserve the same verified-source/coherence gates as
+  one-at-a-time acceptance, and stop presenting any item that becomes stale.
+  Bulk rejection changes review status only and never edits thesis prose.
   Independent, uniquely anchorable search queries may be retrieved and
   identity-checked concurrently in a small bounded worker pool. Keep query
   ordering deterministic for the later evidence prompt, deduplicate a paper's

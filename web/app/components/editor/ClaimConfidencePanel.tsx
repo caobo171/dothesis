@@ -61,7 +61,7 @@ const labels: Record<string, string> = {
 const evidenceLabels: Record<ClaimEvidence["relation"], string> = { supports: "Hỗ trợ", partial: "Hỗ trợ một phần", contradicts: "Mâu thuẫn", irrelevant: "Không liên quan" };
 const chapterLabels: Record<string, string> = { intro: "Mở đầu", lit_review: "Tổng quan tài liệu", methodology: "Phương pháp", results: "Kết quả", conclusion: "Kết luận" };
 
-export function ClaimConfidencePanel({ projectId, onBack, onFlush, onAccepted, onSelectChapter, onReviewChange, reviewSnapshot }: {
+export function ClaimConfidencePanel({ projectId, onBack, onFlush, onAccepted, onSelectChapter, onReviewChange, reviewSnapshot, onOpenReview }: {
   projectId: string;
   onBack: () => void;
   onFlush: () => Promise<void>;
@@ -69,6 +69,7 @@ export function ClaimConfidencePanel({ projectId, onBack, onFlush, onAccepted, o
   onSelectChapter?: (chapter: ChapterName) => void;
   onReviewChange?: (review: ClaimReview | null) => void;
   reviewSnapshot?: ClaimReview | null;
+  onOpenReview?: () => void;
 }) {
   const [review, setReview] = useState<ClaimReview | null>(() => claimSessionCache.get(cacheKey(projectId)) ?? null);
   const onReviewChangeRef = useRef(onReviewChange);
@@ -426,6 +427,7 @@ export function ClaimConfidencePanel({ projectId, onBack, onFlush, onAccepted, o
     {review && suggestions.length > 0 && <ReviewBreakdown review={review} running={running}
       onReview={() => {
         const first = pendingSuggestions.find(item => item.actionable) ?? pendingSuggestions[0] ?? suggestions[0];
+        onOpenReview?.();
         if (first) onSelectChapter?.(first.chapter);
       }} />}
     {review && !suggestions.length && review.status === "completed" && <p className="mt-4 rounded-xl border border-ink-100 bg-white p-4 text-center text-[12px] text-ink-500">Không có đề xuất chỉnh sửa cho các nhận định đã đánh giá.</p>}

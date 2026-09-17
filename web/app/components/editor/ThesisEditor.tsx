@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { type Editor } from "@tiptap/react";
 import useSWR, { mutate as revalidate } from "swr";
+import { Check, ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
 
 import { apiFetch } from "@/app/lib/api";
 import { tokenStore } from "@/app/lib/tokenStore";
@@ -129,6 +130,10 @@ export function ThesisEditor({ projectId, onBackToChat }: { projectId: string; o
   const [highlightedSource, setHighlightedSource] = useState<string | null>(null);
   const [claimUpdates, setClaimUpdates] = useState<Record<string, ClaimAcceptedChapter>>({});
   const [claimReview, setClaimReview] = useState<ClaimReview | null>(null);
+  const [claimReviewOpen, setClaimReviewOpen] = useState(false);
+  const [claimCursor, setClaimCursor] = useState(0);
+  const [claimBulkBusy, setClaimBulkBusy] = useState<"accept" | "reject" | null>(null);
+  const [claimActionError, setClaimActionError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Document-level font, persisted per project so the choice survives a reload
@@ -240,6 +245,43 @@ export function ThesisEditor({ projectId, onBackToChat }: { projectId: string; o
     }
   }, [claimReview, onClaimAccepted, projectId, thesisSave]);
 
+  const decideClaimsBulk = useCallback(async (action: "accept" | "reject") => {
+    if (!claimReview || claimBulkBusy) return;
+    const items = claimReview.suggestions.filter(item => item.status === "pending" && item.actionable && (action === "reject" || Boolean(item.proposed_text)));
+    if (!items.length) return;
+    setClaimBulkBusy(action);
+    setClaimActionError(null);
+    try {
+      // Decision: save once, then keep the server's sequential rebase contract.
+      // Parallel accepts would all target the same old offsets and corrupt or
+      // stale later suggestions in the same chapter.
+      await thesisSave.save();
+      let latestReview = claimReview;
+      for (const item of items) {
+        const latestItem = latestReview.suggestions.find(candidate => candidate.id === item.id);
+        // An earlier acceptance can intentionally stale an overlapping anchor.
+        // Skip it rather than turning a safe bulk run into a 409 halfway through.
+        if (!latestItem || latestItem.status !== "pending" || !latestItem.actionable) continue;
+        const response = await apiFetch(
+          `/projects/${projectId}/m5/claims/${claimReview.review_id}/suggestions/${item.id}/${action}`,
+          { method: "POST" },
+        ) as { review?: ClaimReview; chapter_name?: ChapterName; chapter?: { prose?: string; document_fingerprint?: string } };
+        if (response.review) {
+          latestReview = response.review;
+          setClaimReview(response.review);
+        }
+        if (action === "accept" && response.chapter_name && typeof response.chapter?.prose === "string") {
+          onClaimAccepted({ revision: `${item.id}:${Date.now()}`, chapterName: response.chapter_name,
+            prose: response.chapter.prose, documentFingerprint: response.chapter.document_fingerprint });
+        }
+      }
+    } catch (error) {
+      setClaimActionError(error instanceof Error ? error.message : "Không thể xử lý toàn bộ đề xuất.");
+    } finally {
+      setClaimBulkBusy(null);
+    }
+  }, [claimBulkBusy, claimReview, onClaimAccepted, projectId, thesisSave]);
+
   // beforeunload warning if dirty — prevents data loss if user navigates away
   // without re-exporting unsaved prose changes.
   useEffect(() => {
@@ -301,6 +343,17 @@ export function ThesisEditor({ projectId, onBackToChat }: { projectId: string; o
     { ...chapter, prose: liveProse[name] ?? chapter.prose },
   ])) as ChapterDict;
   const contents = _headingContents(tocChapters);
+  const reviewSuggestions = (claimReview?.suggestions ?? []).filter(
+    item => item.status === "pending" && item.actionable,
+  );
+  const reviewPosition = Math.min(claimCursor, Math.max(reviewSuggestions.length - 1, 0));
+  const currentReviewSuggestion = reviewSuggestions[reviewPosition];
+  const goToReviewSuggestion = (next: number) => {
+    const bounded = Math.max(0, Math.min(reviewSuggestions.length - 1, next));
+    setClaimCursor(bounded);
+    const item = reviewSuggestions[bounded];
+    if (item) scrollToChapter(item.chapter);
+  };
 
   return (
     // h-full (not min-h-screen) so this fills the bounded shell exactly; the
@@ -399,7 +452,7 @@ export function ThesisEditor({ projectId, onBackToChat }: { projectId: string; o
                     paraGap={font.paraGap ?? _DEFAULT_LAYOUT.paraGap}
                     onActiveEditor={setActiveEditor}
                     onCitationClick={setHighlightedSource}
-                    claimSuggestions={(claimReview?.suggestions ?? []).filter(item => item.chapter === name && item.actionable && item.status === "pending")}
+                    claimSuggestions={claimReviewOpen ? reviewSuggestions.filter(item => item.chapter === name) : []}
                     onClaimDecision={decideClaimInline}
                   />
                 </section>
@@ -407,10 +460,26 @@ export function ThesisEditor({ projectId, onBackToChat }: { projectId: string; o
             })}
             </article>
           </div>
+          {claimReviewOpen && currentReviewSuggestion && <div className="z-40 flex shrink-0 items-center justify-center border-t border-ink-200 bg-white/95 px-4 py-2.5 shadow-[0_-8px_30px_rgba(24,31,50,0.08)] backdrop-blur">
+            <div className="flex w-full max-w-[900px] items-center gap-2 text-xs">
+              <button type="button" onClick={() => setClaimReviewOpen(false)} className="mr-auto inline-flex h-9 items-center gap-1.5 rounded-lg px-3 font-semibold text-ink-700 hover:bg-ink-50"><X className="h-4 w-4" />Tiếp tục chỉnh sửa</button>
+              <button type="button" disabled={Boolean(claimBulkBusy)} onClick={() => void decideClaimsBulk("reject")} className="h-9 rounded-lg px-3 font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-45">Bỏ qua tất cả</button>
+              <button type="button" disabled={Boolean(claimBulkBusy)} onClick={() => void decideClaimsBulk("accept")} className="h-9 rounded-lg px-3 font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-45">{claimBulkBusy === "accept" ? "Đang áp dụng…" : "Chấp nhận tất cả"}</button>
+              <span className="mx-1 h-6 w-px bg-ink-200" />
+              <button type="button" aria-label="Đề xuất trước" disabled={reviewPosition === 0 || Boolean(claimBulkBusy)} onClick={() => goToReviewSuggestion(reviewPosition - 1)} className="rounded-lg p-2 text-ink-600 hover:bg-ink-50 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button>
+              <span className="min-w-[56px] text-center font-semibold tabular-nums text-ink-700">{reviewPosition + 1}/{reviewSuggestions.length}</span>
+              <button type="button" aria-label="Đề xuất tiếp" disabled={reviewPosition >= reviewSuggestions.length - 1 || Boolean(claimBulkBusy)} onClick={() => goToReviewSuggestion(reviewPosition + 1)} className="rounded-lg p-2 text-ink-600 hover:bg-ink-50 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
+              <span className="mx-1 h-6 w-px bg-ink-200" />
+              <button type="button" disabled={Boolean(claimBulkBusy)} onClick={() => void decideClaimInline(currentReviewSuggestion, "reject")} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-45"><X className="h-4 w-4" />Bỏ qua</button>
+              <button type="button" disabled={Boolean(claimBulkBusy)} onClick={() => void decideClaimInline(currentReviewSuggestion, "accept")} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary-600 px-4 font-semibold text-white hover:bg-primary-700 disabled:opacity-45">{claimBulkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Chấp nhận</button>
+            </div>
+          </div>}
+          {claimActionError && <p role="alert" className="m-0 shrink-0 border-t border-red-100 bg-red-50 px-4 py-2 text-center text-xs text-red-700">{claimActionError}</p>}
         </main>
 
         <EditorSidePanel projectId={projectId} highlightedSource={highlightedSource} onSelectChapter={scrollToChapter}
-          onFlush={thesisSave.save} onClaimAccepted={onClaimAccepted} onClaimReviewChange={setClaimReview} claimReview={claimReview} />
+          onFlush={thesisSave.save} onClaimAccepted={onClaimAccepted} onClaimReviewChange={setClaimReview} claimReview={claimReview}
+          onOpenClaimReview={() => { setClaimReviewOpen(true); setClaimCursor(0); }} />
       </div>
     </div>
   );
