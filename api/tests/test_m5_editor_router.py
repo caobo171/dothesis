@@ -869,6 +869,31 @@ def test_paraphrase_offsets_out_of_range_returns_400(client):
     assert r.status_code == 400
 
 
+@pytest.mark.parametrize(
+    ("kind", "extra"),
+    [
+        ("paraphrase", {}),
+        ("proofread", {}),
+        ("improve", {}),
+        ("humanize", {}),
+        ("expand", {}),
+        ("shorten", {}),
+        ("translate", {"target_lang": "en"}),
+    ],
+)
+@patch("orchestrator.tools.m5_inline._call_llm")
+def test_inline_ai_rejects_empty_selection_before_model_call(mock_llm, client, kind, extra):
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    r = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/{kind}",
+        json={"from_offset": 3, "to_offset": 3, **extra},
+    )
+    assert r.status_code == 400
+    assert r.json()["detail"]["error"]["code"] == "empty_selection"
+    mock_llm.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # POST /projects/{pid}/m5/chapters/{chapter_name}/translate — inline AI
 # ---------------------------------------------------------------------------

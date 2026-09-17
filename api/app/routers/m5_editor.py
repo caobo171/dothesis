@@ -927,6 +927,12 @@ def _validate_range(prose: str, from_offset: int, to_offset: int) -> None:
         raise HTTPException(400, detail={"error": {"code": "offset_out_of_range"}})
 
 
+def _validate_nonempty_selection(from_offset: int, to_offset: int) -> None:
+    """Reject collapsed rewrite ranges before they incur an LLM call."""
+    if from_offset == to_offset:
+        raise HTTPException(400, detail={"error": {"code": "empty_selection"}})
+
+
 def _validate_document_precondition(prose: str, expected: str | None) -> None:
     if expected and expected != _chapter_fingerprint(prose):
         raise HTTPException(409, detail={"error": {"code": "stale_document"}})
@@ -1000,6 +1006,7 @@ def paraphrase_chapter_selection(
     prose = ch.get("prose", "")
     _validate_document_precondition(prose, body.expected_document_fingerprint)
     _validate_range(prose, body.from_offset, body.to_offset)
+    _validate_nonempty_selection(body.from_offset, body.to_offset)
     before, after = _surrounding_context(prose, body.from_offset, body.to_offset)
     selection = prose[body.from_offset: body.to_offset]
     language = ((cs.m1_topic or {}).get("language", "en")) if cs else "en"
@@ -1046,6 +1053,7 @@ def _rewrite_selection_edit(
     prose = ch.get("prose", "")
     _validate_document_precondition(prose, body.expected_document_fingerprint)
     _validate_range(prose, body.from_offset, body.to_offset)
+    _validate_nonempty_selection(body.from_offset, body.to_offset)
     before, after = _surrounding_context(prose, body.from_offset, body.to_offset)
     selection = prose[body.from_offset: body.to_offset]
     language = ((cs.m1_topic or {}).get("language", "en")) if cs else "en"
@@ -1161,6 +1169,7 @@ def translate_chapter_selection(
     prose = ch.get("prose", "")
     _validate_document_precondition(prose, body.expected_document_fingerprint)
     _validate_range(prose, body.from_offset, body.to_offset)
+    _validate_nonempty_selection(body.from_offset, body.to_offset)
     before, after = _surrounding_context(prose, body.from_offset, body.to_offset)
     selection = prose[body.from_offset: body.to_offset]
     started = time.perf_counter()

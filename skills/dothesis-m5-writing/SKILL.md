@@ -268,6 +268,9 @@ accepts the proposal.
   processing duration, and a short explanation of what changed and why.
 - Show a visible planning/processing state. A long model call must never look
   like a dead button.
+- Capture the non-empty editor selection before an AI composer or picker takes
+  focus, and keep that range until the action is submitted or cancelled. Never
+  call a rewrite model with an empty selection.
 - The proposal UI must let the student toggle an inline word diff, inspect the
   rationale, replace the selection, insert the proposal below it, retry the
   same action, or discard it.

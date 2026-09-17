@@ -168,7 +168,7 @@ export function ChapterEditor({
   >(null);
   const [activeClaim, setActiveClaim] = useState<{ id: string; left: number; top: number } | null>(null);
   const [busyClaim, setBusyClaim] = useState<string | null>(null);
-  const selectionRef = useRef<{ from: number; to: number } | null>(null);
+  const selectionRef = useRef<{ from: number; to: number; text: string } | null>(null);
 
   const claimSourceUrl = (suggestion: ClaimSuggestion) => {
     const direct = suggestion.source?.url;
@@ -257,12 +257,19 @@ export function ChapterEditor({
     },
     onSelectionUpdate({ editor }) {
       // Track selection so toolbar action handlers can read from/to without
-      // closing over a stale editor state reference.
+      // closing over a stale editor state reference. Keep the last non-empty
+      // range when a portal textarea takes focus: TipTap may collapse its live
+      // selection at that point, but the composer still belongs to the range
+      // that opened it.
       const { from, to } = editor.state.selection;
-      selectionRef.current = from === to ? null : { from, to };
       if (from === to) {
         setSelectionAnchor(null);
       } else {
+        selectionRef.current = {
+          from,
+          to,
+          text: editor.state.doc.textBetween(from, to, "\n\n", ""),
+        };
         const start = editor.view.coordsAtPos(from);
         const end = editor.view.coordsAtPos(to);
         setSelectionAnchor({
@@ -443,9 +450,25 @@ export function ChapterEditor({
       const trailing = selected.match(/\s*([.!?。！？])\s*$/u);
       if (trailing) citePos = Math.max(sel.from, sel.to - trailing[0].length);
     }
+    let fromOffset = sel ? storedOffset(sel.from) : storedOffset(citePos);
+    let toOffset = sel ? storedOffset(sel.to) : fromOffset;
+    if (kind !== "cite" && sel && (fromOffset === toOffset || !canonicalMarkdown.slice(fromOffset, toOffset).trim())) {
+      // Some rich selections cross syntax runs that the markdown serializer
+      // cannot align one-to-one. Recover only when the captured selection text
+      // occurs exactly once; guessing between duplicate paragraphs would edit
+      // the wrong passage.
+      const first = canonicalMarkdown.indexOf(sel.text);
+      const unique = first >= 0 && canonicalMarkdown.indexOf(sel.text, first + 1) === -1;
+      if (!unique) {
+        setInlineAction({ state: "error", message: "Không xác định được chính xác đoạn đã chọn. Hãy chọn lại một đoạn ngắn hơn rồi thử lại." });
+        return;
+      }
+      fromOffset = first;
+      toOffset = first + sel.text.length;
+    }
     const payload = kind === "cite"
       ? { at_offset: storedOffset(citePos), ...body }
-      : { from_offset: storedOffset(sel!.from), to_offset: storedOffset(sel!.to), ...body };
+      : { from_offset: fromOffset, to_offset: toOffset, ...body };
     actionInFlight.current = true;
     setInlineAction({ state: "loading", message: "Đang xử lý đoạn đã chọn bằng AI…" });
     try {
@@ -739,9 +762,7 @@ export function ChapterEditor({
         <div className="fixed left-1/2 top-24 z-[80] -translate-x-1/2">
           <CitePopover
             projectId={projectId}
-            selectedText={selectionRef.current
-              ? editor.state.doc.textBetween(selectionRef.current.from, selectionRef.current.to, " ")
-              : ""}
+            selectedText={selectionRef.current?.text || ""}
             onSelect={(refId) => {
               void _withSelection("cite", { reference_id: refId });
               setShowCite(false);
