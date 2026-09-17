@@ -8,7 +8,7 @@ const suggestion = (status: "pending" | "accepted" | "rejected" = "pending") => 
   source: { id: "r1", title: "Nguồn minh hoạ", authors: ["Nguyễn A."], year: 2024, doi: "10.1/example", verified: true, provider: "Crossref" },
   evidence: { kind: "abstract", text: "Đoạn tóm tắt hỗ trợ claim.", relation: "supports", source_url: "https://example.test/evidence" }, status, actionable: true,
 });
-const billing = (overrides: Partial<{ credits_charged: number; credits_limit: number; prompt_tokens: number; completion_tokens: number; credit_balance: number }> = {}) => ({
+const billing = (overrides: Partial<{ credits_charged: number; credits_limit: number; prompt_tokens: number; completion_tokens: number; credit_balance: number; pending_calls: number }> = {}) => ({
   credits_charged: 3, credits_limit: 20, prompt_tokens: 120, completion_tokens: 30, credit_balance: 97, ...overrides,
 });
 const running = (completed = 0, billingData = billing()) => ({ review_id: "r1", status: completed >= 2 ? "completed" : "running", chunks_total: 2, chunks_completed: completed, suggestions: [suggestion()], warnings: [], coverage: { chars_total: 100, chars_processed: completed * 50, claims_total: 2, claims_assessed: completed, claims_unresolved: 0 }, sources_verified_unique: 1, billing: billingData });
@@ -16,6 +16,9 @@ const running = (completed = 0, billingData = billing()) => ({ review_id: "r1", 
 beforeEach(() => { global.fetch = vi.fn(); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 const response = (data: unknown) => ({ ok: true, json: async () => data });
+const failedResponse = (status: number, code: string, message: string, retryable?: boolean, metadata: Record<string, unknown> = {}) => ({
+  ok: false, status, json: async () => ({ detail: { error: { code, message, ...(retryable === undefined ? {} : { retryable }), ...metadata } } }),
+});
 
 function panel(props: any = {}) {
   const onFlush = props.onFlush ?? vi.fn().mockResolvedValue(undefined);
@@ -24,7 +27,7 @@ function panel(props: any = {}) {
 }
 
 describe("ClaimConfidencePanel", () => {
-  it("flushes then processes one chunk at a time and renders source evidence", async () => {
+  it("flushes then processes one chunk at a time and renders the review summary", async () => {
     (global.fetch as any)
       .mockResolvedValueOnce(response({ review: null }))
       .mockResolvedValueOnce(response(running(0)))
@@ -33,23 +36,43 @@ describe("ClaimConfidencePanel", () => {
     const view = panel();
     expect(await screen.findByRole("button", { name: /Bắt đầu đánh giá/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Bắt đầu đánh giá/i }));
-    expect(await screen.findByText("Nguồn minh hoạ")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Xem đề xuất trong bài/i })).toBeInTheDocument();
     expect(view.onFlush).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/2\/2 đoạn/)).toBeInTheDocument();
-    expect(screen.getByText("Đoạn tóm tắt hỗ trợ claim.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Xem bằng chứng/i })).toHaveAttribute("href", "https://example.test/evidence");
+    expect(screen.getByText("Chưa có bằng chứng")).toBeInTheDocument();
+    expect(screen.getByText("Tất cả đề xuất")).toBeInTheDocument();
   });
 
-  it("accepts only after flush, applies returned chapter data, and updates cumulative review", async () => {
-    (global.fetch as any)
-      .mockResolvedValueOnce(response({ review: running(2) }))
-      .mockResolvedValueOnce(response({ chapter_name: "intro", chapter: { prose: "Nội dung đã cập nhật.", document_fingerprint: "fp2" }, suggestion_id: "s1", status: "accepted", review: { ...running(2), suggestions: [suggestion("accepted")] } }));
-    const view = panel();
-    expect(await screen.findByRole("button", { name: "Chấp nhận" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Chấp nhận" }));
-    await waitFor(() => expect(view.onAccepted).toHaveBeenCalledWith(expect.objectContaining({ chapterName: "intro", prose: "Nội dung đã cập nhật.", documentFingerprint: "fp2" })));
-    expect(view.onFlush).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Đã chấp nhận")).toBeInTheDocument();
+  it("opens the first pending suggestion in the editor", async () => {
+    (global.fetch as any).mockResolvedValueOnce(response({ review: running(2) }));
+    const onSelectChapter = vi.fn();
+    panel({ onSelectChapter });
+    fireEvent.click(await screen.findByRole("button", { name: /Xem đề xuất trong bài/i }));
+    expect(onSelectChapter).toHaveBeenCalledWith("intro");
+  });
+
+  it("shows failed evidence assessments without claiming the completed scan assessed them", async () => {
+    const failed = {
+      ...running(2),
+      coverage: { chars_total: 100, chars_processed: 100, claims_total: 2, claims_assessed: 1, claims_unresolved: 1, claims_failed: 1 },
+      suggestions: [{ ...suggestion(), classification: "assessment_failed", proposed_text: null, source: null, evidence: null, actionable: false,
+        rationale_vi: "Chưa đánh giá được nhận định này: Trích dẫn bằng chứng không khớp nguyên văn nguồn đã truy xuất. Hệ thống không tạo đề xuất trích dẫn." }],
+    };
+    (global.fetch as any).mockResolvedValueOnce(response({ review: failed }));
+    panel({ projectId: "failed-assessment" });
+    expect(await screen.findByText("Chưa thể xác minh")).toBeInTheDocument();
+    expect(screen.getByText(/Đã quét 2\/2 đoạn/)).toBeInTheDocument();
+    expect(screen.getByText(/1 chưa đánh giá được/)).toBeInTheDocument();
+    expect(screen.getByText("Tất cả đề xuất")).toBeInTheDocument();
+  });
+
+  it("explains that an unverified source was already excluded and needs no action", async () => {
+    const reviewed = { ...running(2), warnings: ["Một nguồn chưa xác minh được metadata; không tự động đề xuất chèn citation từ nguồn này."] };
+    (global.fetch as any).mockResolvedValueOnce(response({ review: reviewed }));
+    panel({ projectId: "friendly-warning" });
+    expect(await screen.findByText("Nguồn thiếu thông tin đã được tự động loại")).toBeInTheDocument();
+    expect(screen.getByText(/Bạn không cần làm gì/)).toBeInTheDocument();
+    expect(screen.getByText(/không xuất hiện trong các đề xuất có thể chấp nhận/)).toBeInTheDocument();
   });
 
   it("resumes a latest running review without starting a new one", async () => {
@@ -114,6 +137,168 @@ describe("ClaimConfidencePanel", () => {
     expect(budgetCall[1].method).toBe("POST");
     expect(JSON.parse(budgetCall[1].body)).toMatchObject({ credit_limit: 75 });
     expect((global.fetch as any).mock.calls.filter((call: any[]) => String(call[0]).includes("/start") || String(call[0]).includes("/next"))).toHaveLength(0);
+  });
+
+  it("retries one retryable chunk once and continues from the same checkpoint", async () => {
+    vi.useFakeTimers();
+    let nextCalls = 0;
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes("/latest")) return Promise.resolve(response({ review: null }));
+      if (url.includes("/start")) return Promise.resolve(response(running(0)));
+      if (url.includes("/progress")) return Promise.resolve(response({ review_id: "r1", status: "running", activities: [] }));
+      if (url.includes("/next")) {
+        nextCalls += 1;
+        if (nextCalls === 1) return Promise.resolve(failedResponse(503, "claim_review_failed", "Mô hình trả về dữ liệu không hợp lệ; đoạn chưa được đánh giá.", true));
+        return Promise.resolve(response(running(nextCalls === 2 ? 1 : 2)));
+      }
+      throw new Error(`Unexpected ${url}`);
+    });
+    panel({ projectId: "retry-once" });
+    fireEvent.click(await screen.findByRole("button", { name: /Bắt đầu đánh giá/i }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(await screen.findByText(/Đang thử lại đoạn 1 \(1\/1\)/)).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    await screen.findByText(/2\/2 đoạn/);
+    expect(nextCalls).toBe(3);
+  });
+
+  it("stops after the second retryable failure and labels it as an error", async () => {
+    vi.useFakeTimers();
+    let nextCalls = 0;
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes("/latest")) return Promise.resolve(response({ review: null }));
+      if (url.includes("/start")) return Promise.resolve(response(running(0)));
+      if (url.includes("/progress")) return Promise.resolve(response({ review_id: "r1", status: "running", activities: [] }));
+      if (url.includes("/next")) {
+        nextCalls += 1;
+        return Promise.resolve(failedResponse(503, "claim_review_failed", "Lượt kiểm tra đã hết thời gian chờ; đoạn chưa được đánh giá.", true));
+      }
+      throw new Error(`Unexpected ${url}`);
+    });
+    panel({ projectId: "retry-stops" });
+    fireEvent.click(await screen.findByRole("button", { name: /Bắt đầu đánh giá/i }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await screen.findByText(/Đang thử lại đoạn 1 \(1\/1\)/);
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(await screen.findByText(/Đã dừng do lỗi 0\/2 đoạn/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/hết thời gian chờ/i);
+    expect(nextCalls).toBe(2);
+  });
+
+  it("does not retry a credit checkpoint rejection", async () => {
+    let nextCalls = 0;
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes("/latest")) return Promise.resolve(response({ review: null }));
+      if (url.includes("/start")) return Promise.resolve(response(running(0)));
+      if (url.includes("/progress")) return Promise.resolve(response({ review_id: "r1", status: "running", activities: [] }));
+      if (url.includes("/next")) {
+        nextCalls += 1;
+        return Promise.resolve(failedResponse(402, "claim_review_budget", "Đã đạt ngưỡng tín dụng."));
+      }
+      throw new Error(`Unexpected ${url}`);
+    });
+    panel({ projectId: "budget-no-retry" });
+    fireEvent.click(await screen.findByRole("button", { name: /Bắt đầu đánh giá/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Đã chạm ngưỡng credit/i);
+    expect(nextCalls).toBe(1);
+  });
+
+  it("cancels the scheduled retry when the user stops", async () => {
+    vi.useFakeTimers();
+    let nextCalls = 0;
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes("/latest")) return Promise.resolve(response({ review: null }));
+      if (url.includes("/start")) return Promise.resolve(response(running(0)));
+      if (url.includes("/progress")) return Promise.resolve(response({ review_id: "r1", status: "running", activities: [] }));
+      if (url.includes("/next")) {
+        nextCalls += 1;
+        return Promise.resolve(failedResponse(503, "claim_review_failed", "Mô hình trả về dữ liệu không hợp lệ; đoạn chưa được đánh giá.", true));
+      }
+      throw new Error(`Unexpected ${url}`);
+    });
+    panel({ projectId: "retry-cancel" });
+    fireEvent.click(await screen.findByRole("button", { name: /Bắt đầu đánh giá/i }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await screen.findByText(/Đang thử lại đoạn 1 \(1\/1\)/);
+    fireEvent.click(screen.getByRole("button", { name: /Dừng sau đoạn này/i }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(nextCalls).toBe(1);
+  });
+
+  it("waits read-only for a pending billing receipt, then resumes the same checkpoint", async () => {
+    vi.useFakeTimers();
+    let nextCalls = 0;
+    let progressCalls = 0;
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes("/latest")) return Promise.resolve(response({ review: null }));
+      if (url.includes("/start")) return Promise.resolve(response(running(0)));
+      if (url.includes("/next")) {
+        nextCalls += 1;
+        if (nextCalls === 1) return Promise.resolve(failedResponse(409, "claim_review_pending", "Lượt gọi trước vẫn đang hoàn tất."));
+        return Promise.resolve(response(running(nextCalls === 2 ? 1 : 2)));
+      }
+      if (url.includes("/progress")) {
+        progressCalls += 1;
+        return Promise.resolve(response({ review_id: "r1", status: "running", activities: [], billing: billing({ pending_calls: progressCalls < 3 ? 1 : 0 }) }));
+      }
+      throw new Error(`Unexpected ${url}`);
+    });
+    panel({ projectId: "pending-receipt" });
+    fireEvent.click(await screen.findByRole("button", { name: /Bắt đầu đánh giá/i }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+    expect(await screen.findByText(/Đang chờ mô hình hoàn tất/i)).toBeInTheDocument();
+    expect(nextCalls).toBe(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3_000); });
+    await screen.findByText(/2\/2 đoạn/);
+    expect(nextCalls).toBe(3);
+    expect(progressCalls).toBeGreaterThanOrEqual(3);
+  });
+
+  it("waits for a pending receipt after a timeout response instead of scheduling a model retry", async () => {
+    vi.useFakeTimers();
+    let nextCalls = 0;
+    let progressCalls = 0;
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes("/latest")) return Promise.resolve(response({ review: null }));
+      if (url.includes("/start")) return Promise.resolve(response(running(0)));
+      if (url.includes("/next")) {
+        nextCalls += 1;
+        if (nextCalls === 1) return Promise.resolve(failedResponse(503, "claim_review_failed", "Lượt kiểm tra đã hết thời gian chờ.", true, { kind: "timeout" }));
+        return Promise.resolve(response(running(2)));
+      }
+      if (url.includes("/progress")) {
+        progressCalls += 1;
+        return Promise.resolve(response({ review_id: "r1", status: "running", activities: [], billing: billing({ pending_calls: progressCalls === 1 ? 1 : 0 }) }));
+      }
+      throw new Error(`Unexpected ${url}`);
+    });
+    panel({ projectId: "timeout-pending-receipt" });
+    fireEvent.click(await screen.findByRole("button", { name: /Bắt đầu đánh giá/i }));
+    await screen.findByText(/2\/2 đoạn/);
+    expect(nextCalls).toBe(2);
+    expect(progressCalls).toBe(2);
+  });
+
+  it("stops a pending billing wait without issuing another next request", async () => {
+    vi.useFakeTimers();
+    let nextCalls = 0;
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes("/latest")) return Promise.resolve(response({ review: null }));
+      if (url.includes("/start")) return Promise.resolve(response(running(0)));
+      if (url.includes("/next")) {
+        nextCalls += 1;
+        return Promise.resolve(failedResponse(409, "claim_review_pending", "Lượt gọi trước vẫn đang hoàn tất."));
+      }
+      if (url.includes("/progress")) return Promise.resolve(response({ review_id: "r1", status: "running", activities: [], billing: billing({ pending_calls: 1 }) }));
+      throw new Error(`Unexpected ${url}`);
+    });
+    panel({ projectId: "pending-stop" });
+    fireEvent.click(await screen.findByRole("button", { name: /Bắt đầu đánh giá/i }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+    await screen.findByText(/Đang chờ mô hình hoàn tất/i);
+    fireEvent.click(screen.getByRole("button", { name: /Dừng sau đoạn này/i }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    expect(nextCalls).toBe(1);
   });
 });
 

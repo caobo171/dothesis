@@ -10,7 +10,7 @@ import type { Thread } from "@/app/components/chat/ThreadsSidebar";
 import { SourcesRail } from "./SourcesRail";
 import { Select } from "@/app/components/ui/select";
 import { ReviewPanel } from "./ReviewPanel";
-import { ClaimConfidencePanel, type ClaimAcceptedChapter } from "./ClaimConfidencePanel";
+import { ClaimConfidencePanel, type ClaimAcceptedChapter, type ClaimReview } from "./ClaimConfidencePanel";
 import type { ChapterName } from "./OutlineRail";
 
 type Mode = "sources" | "review" | "claims" | "agent";
@@ -27,12 +27,16 @@ export function EditorSidePanel({
   onSelectChapter,
   onFlush,
   onClaimAccepted,
+  onClaimReviewChange,
+  claimReview,
 }: {
   projectId: string;
   highlightedSource?: string | null;
   onSelectChapter?: (chapter: ChapterName) => void;
   onFlush: () => Promise<void>;
   onClaimAccepted: (chapter: ClaimAcceptedChapter) => void;
+  onClaimReviewChange?: (review: ClaimReview | null) => void;
+  claimReview?: ClaimReview | null;
 }) {
   const [mode, setMode] = useState<Mode>("sources");
   const [agentPrompt, setAgentPrompt] = useState<{ id: string; text: string } | null>(null);
@@ -103,6 +107,8 @@ export function EditorSidePanel({
             onFlush={onFlush}
             onAccepted={onClaimAccepted}
             onSelectChapter={onSelectChapter}
+            onReviewChange={onClaimReviewChange}
+            reviewSnapshot={claimReview}
           />
         ) : (
           <div className="flex h-full min-h-0 flex-col">

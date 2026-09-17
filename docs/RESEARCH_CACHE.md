@@ -43,8 +43,14 @@ the project context store or automatically insert citations.
 Claim review extracts every relevant claim in each saved chunk, then evaluates
 retrieved evidence in batches of at most six claims. Larger sets use additional
 batches; claims are never sampled away to reduce cost. Candidate ownership,
-complete claim coverage and verbatim supporting quotes are validated before a
-batch is accepted. Existing reviews keep their saved chunk boundaries.
+complete claim coverage and verbatim supporting quotes are validated for each
+returned judgment. Invalid or missing judgments become explicit, non-actionable
+`assessment_failed` findings, excluded from `claims_assessed` and counted in
+`claims_failed` and `claims_unresolved`. Valid judgments are retained and later
+chunks continue without an extra model repair call. A completed scan can therefore
+still contain unassessed claims; it is not proof that every claim was checked.
+Extraction failures, billing limits and transport failures still stop the run.
+Existing reviews keep their saved chunk boundaries.
 
 Independent claim queries are fetched with at most three query workers. Source
 identities are deduplicated across those results, then verified with at most
@@ -68,7 +74,18 @@ per review with the existing model rate. The user debit and attributed token
 ledger are settled once under database locks, before JSON parsing. Cached results
 are free; malformed paid responses still consume usage. A request timeout does
 not discard a later provider response's usage, and pending work blocks another
-paid dispatch for that review.
+paid dispatch for that review. Valid responses are published atomically from the
+worker before its pending receipt is cleared, including responses arriving after
+the route timeout. The editor can wait read-only for up to two minutes and resume
+without another model call for a cached response. Provider calls use a 90-second
+request timeout without client retries. New receipts identify their API process through a PostgreSQL session advisory
+lock. Startup and dispatch checks reconcile a started receipt when its owning
+process lock is gone, without waiting for an age threshold. A live lock owned by
+another API worker remains protected. Older receipts without ownership metadata
+retain the ten-minute fallback. Interrupted receipts preserve unknown usage for
+reconciliation; a real late response can still settle that receipt exactly once.
+A restart does not recreate a lost provider response or resume the browser by
+itself: the existing review checkpoint and cache remain available for continuation.
 
 The default review credit threshold is 20, editable from 1 to 500. Reaching it or
 running out of credits stops the next paid call. An in-flight call can consume

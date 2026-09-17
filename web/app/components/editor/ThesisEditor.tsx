@@ -11,7 +11,7 @@ import { OutlineRail, CHAPTER_ORDER, type ChapterName } from "./OutlineRail";
 import { ChapterEditor } from "./ChapterEditor";
 import { EditorToolbar, FONT_FAMILIES } from "./EditorToolbar";
 import { EditorSidePanel } from "./EditorSidePanel";
-import type { ClaimAcceptedChapter } from "./ClaimConfidencePanel";
+import type { ClaimAcceptedChapter, ClaimReview, ClaimSuggestion } from "./ClaimConfidencePanel";
 import { DocumentToc } from "./DocumentToc";
 import { ReExportBar, type ExportArtifact } from "./ReExportBar";
 import { SaveBar } from "./SaveBar";
@@ -111,6 +111,9 @@ export function ThesisEditor({ projectId, onBackToChat }: { projectId: string; o
     name?: string;
     context_store?: { m1_topic?: { research_title?: string } | null };
   }>(`/api/v1/projects/${projectId}`, fetcher);
+  const { data: latestClaimReview } = useSWR<{ review?: ClaimReview | null }>(
+    `/api/v1/projects/${projectId}/m5/claims/latest`, fetcher,
+  );
   const [liveProse, setLiveProse] = useState<Record<string, string>>({});
   const [active, setActive] = useState<ChapterName>("intro");
   const [lastExportAt, setLastExportAt] = useState<Date | null>(null);
@@ -125,6 +128,7 @@ export function ThesisEditor({ projectId, onBackToChat }: { projectId: string; o
   // SourcesRail so a citation acts as a jump-to-source.
   const [highlightedSource, setHighlightedSource] = useState<string | null>(null);
   const [claimUpdates, setClaimUpdates] = useState<Record<string, ClaimAcceptedChapter>>({});
+  const [claimReview, setClaimReview] = useState<ClaimReview | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Document-level font, persisted per project so the choice survives a reload
@@ -216,6 +220,25 @@ export function ThesisEditor({ projectId, onBackToChat }: { projectId: string; o
     void revalidate(`/api/v1/projects/${projectId}/m5/references`);
     void mutate();
   }, [mutate, projectId]);
+  useEffect(() => {
+    if (latestClaimReview && "review" in latestClaimReview) setClaimReview(latestClaimReview.review ?? null);
+  }, [latestClaimReview]);
+
+  const decideClaimInline = useCallback(async (suggestion: ClaimSuggestion, action: "accept" | "reject") => {
+    if (!claimReview) return;
+    // The endpoint validates the anchor fingerprint. Flush first so an inline
+    // action cannot race unsaved editor prose and land on a shifted sentence.
+    await thesisSave.save();
+    const response = await apiFetch(
+      `/projects/${projectId}/m5/claims/${claimReview.review_id}/suggestions/${suggestion.id}/${action}`,
+      { method: "POST" },
+    ) as { review?: ClaimReview; chapter_name?: ChapterName; chapter?: { prose?: string; document_fingerprint?: string } };
+    if (response.review) setClaimReview(response.review);
+    if (action === "accept" && response.chapter_name && typeof response.chapter?.prose === "string") {
+      onClaimAccepted({ revision: `${suggestion.id}:${Date.now()}`, chapterName: response.chapter_name,
+        prose: response.chapter.prose, documentFingerprint: response.chapter.document_fingerprint });
+    }
+  }, [claimReview, onClaimAccepted, projectId, thesisSave]);
 
   // beforeunload warning if dirty — prevents data loss if user navigates away
   // without re-exporting unsaved prose changes.
@@ -376,6 +399,8 @@ export function ThesisEditor({ projectId, onBackToChat }: { projectId: string; o
                     paraGap={font.paraGap ?? _DEFAULT_LAYOUT.paraGap}
                     onActiveEditor={setActiveEditor}
                     onCitationClick={setHighlightedSource}
+                    claimSuggestions={(claimReview?.suggestions ?? []).filter(item => item.chapter === name && item.actionable && item.status === "pending")}
+                    onClaimDecision={decideClaimInline}
                   />
                 </section>
               );
@@ -385,7 +410,7 @@ export function ThesisEditor({ projectId, onBackToChat }: { projectId: string; o
         </main>
 
         <EditorSidePanel projectId={projectId} highlightedSource={highlightedSource} onSelectChapter={scrollToChapter}
-          onFlush={thesisSave.save} onClaimAccepted={onClaimAccepted} />
+          onFlush={thesisSave.save} onClaimAccepted={onClaimAccepted} onClaimReviewChange={setClaimReview} claimReview={claimReview} />
       </div>
     </div>
   );

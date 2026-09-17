@@ -195,6 +195,24 @@ def _prune(directory: Path, now: float) -> None:
         pass
 
 
+def store_completed_result(namespace: str, key: Any, value: Any, *, ttl_s: float = DEFAULT_TTL_S) -> None:
+    """Publish an already validated late response without taking its caller's lock.
+
+    The miss coordinator may still hold that lock while waiting on this worker.
+    Atomic replacement keeps readers safe; this function never computes or pays.
+    """
+    try:
+        directory = _cache_dir()
+        _prepare(directory)
+        now = time.time()
+        path = directory / f"{_digest(namespace, key)}.json"
+        _write(path, {"cache_version": CACHE_VERSION, "created_at": now,
+                      "expires_at": now + ttl_s, "value": value})
+        _prune(directory, now)
+    except (OSError, ValueError, TypeError):
+        pass
+
+
 def cached_call(namespace: str, key: Any, compute: Callable[[], T], *, ttl_s: float = DEFAULT_TTL_S,
                 cache_if: Callable[[T], bool] | None = None, wait_s: float = 20) -> T:
     """Return a cached JSON result or calculate it once while peers wait.

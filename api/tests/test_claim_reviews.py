@@ -109,6 +109,33 @@ def test_review_is_read_only_and_reopens(review,monkeypatch):
         assert cr.latest(pid,db.get(User,uid),db)['review']['review_id']==data['review_id']
 
 
+def test_review_persists_scoped_assessment_failures_in_coverage(review, monkeypatch):
+    pid, uid = review
+    import quality.claim_confidence as engine
+    failure = {
+        'id': 'failed', 'chapter': 'intro',
+        'anchor': {'from_offset': 0, 'to_offset': 4, 'old_text': 'Text', 'document_fingerprint': cr._chapter_fingerprint(TEXT)},
+        'classification': 'assessment_failed',
+        'rationale_vi': 'Chưa đánh giá được nhận định này: phản hồi không đúng định dạng JSON.',
+        'proposed_text': None, 'source': None, 'evidence': None, 'status': 'pending', 'actionable': False,
+    }
+    monkeypatch.setattr(engine, 'review_chunk', lambda *args, **kwargs: {
+        'suggestions': [failure],
+        'metrics': {'claims_total': 1, 'claims_assessed': 0, 'claims_unresolved': 1, 'claims_failed': 1},
+        'warnings': [],
+    })
+    with Session(get_engine()) as db:
+        user = db.get(User, uid)
+        started = cr.start(pid, cr.StartBody(), user, db)
+        completed = cr.next_chunk(pid, uuid.UUID(started['review_id']), user, db)
+        latest = cr.latest(pid, user, db)['review']
+    for review_data in (completed, latest):
+        assert review_data['coverage']['claims_assessed'] == 0
+        assert review_data['coverage']['claims_unresolved'] == 1
+        assert review_data['coverage']['claims_failed'] == 1
+        assert review_data['suggestions'][0]['classification'] == 'assessment_failed'
+
+
 def test_two_acceptances_rebase_and_dedupe_source(review,monkeypatch):
     pid,uid=review;data=_started(review,monkeypatch);rid=uuid.UUID(data['review_id'])
     with Session(get_engine()) as db:
@@ -168,7 +195,60 @@ def test_failed_scan_keeps_cursor_and_partial_results(review,monkeypatch):
         user=db.get(User,uid);data=cr.start(pid,cr.StartBody(),user,db)
         with pytest.raises(HTTPException) as exc:cr.next_chunk(pid,uuid.UUID(data['review_id']),user,db)
         assert exc.value.status_code==503
-    assert cr._read(pid,uid,data['review_id'])['chunks_completed']==0
+        assert exc.value.detail['error'] == {
+            'code': 'claim_review_failed', 'kind': 'timeout', 'retryable': True,
+            'message': 'Lượt kiểm tra đã hết thời gian chờ; đoạn chưa được đánh giá.',
+        }
+    saved = cr._read(pid,uid,data['review_id'])
+    assert saved['chunks_completed']==0
+    assert saved['failure'] == {'kind': 'timeout', 'retryable': True,
+                                'message': 'Lượt kiểm tra đã hết thời gian chờ; đoạn chưa được đánh giá.',
+                                'chunk_index': 0}
+
+
+def test_invalid_model_response_is_retryable_and_persisted_without_model_content(review, monkeypatch):
+    pid, uid = review
+    import quality.claim_confidence as engine
+    monkeypatch.setattr(engine, 'review_chunk', lambda *_args, **_kwargs: (_ for _ in ()).throw(engine.ClaimConfidenceLLMError('raw model text must not be saved')))
+    with Session(get_engine()) as db:
+        user = db.get(User, uid)
+        data = cr.start(pid, cr.StartBody(), user, db)
+        with pytest.raises(HTTPException) as exc:
+            cr.next_chunk(pid, uuid.UUID(data['review_id']), user, db)
+    error = exc.value.detail['error']
+    assert error['code'] == 'claim_review_failed' and error['kind'] == 'invalid_model_response'
+    assert error['retryable'] is True and 'raw model text' not in error['message']
+    assert cr._read(pid, uid, data['review_id'])['failure']['kind'] == 'invalid_model_response'
+
+
+def test_unexpected_failure_is_persisted_as_nonretryable_without_exception_text(review, monkeypatch):
+    pid, uid = review
+    import quality.claim_confidence as engine
+    monkeypatch.setattr(engine, 'review_chunk', lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError('raw source must not reach client')))
+    with Session(get_engine()) as db:
+        user = db.get(User, uid)
+        data = cr.start(pid, cr.StartBody(), user, db)
+        with pytest.raises(HTTPException) as exc:
+            cr.next_chunk(pid, uuid.UUID(data['review_id']), user, db)
+    error = exc.value.detail['error']
+    assert error['kind'] == 'unexpected' and error['retryable'] is False
+    assert 'raw source' not in error['message']
+    assert cr._read(pid, uid, data['review_id'])['failure']['retryable'] is False
+
+
+def test_pending_billing_returns_conflict_without_claiming_budget_exhaustion(review, monkeypatch):
+    pid, uid = review
+    import quality.claim_confidence as engine
+    from app.claim_review_billing import ClaimReviewPending
+    monkeypatch.setattr(engine, 'review_chunk', lambda *_args, **_kwargs: (_ for _ in ()).throw(ClaimReviewPending('receipt still settling')))
+    with Session(get_engine()) as db:
+        user = db.get(User, uid)
+        data = cr.start(pid, cr.StartBody(), user, db)
+        with pytest.raises(HTTPException) as exc:
+            cr.next_chunk(pid, uuid.UUID(data['review_id']), user, db)
+    assert exc.value.status_code == 409
+    assert exc.value.detail['error']['code'] == 'claim_review_pending'
+    assert 'ngưỡng' not in exc.value.detail['error']['message'].casefold()
 
 
 def test_other_user_cannot_read_review(review,monkeypatch):
@@ -393,3 +473,24 @@ def test_budget_can_change_without_restarting_review(review):
         assert changed['chunks_completed'] == 0
         assert changed['billing']['credits_limit'] == 30
         assert changed['billing']['credits_charged'] == 0
+
+
+def test_late_valid_response_is_cached_without_a_second_billing_call(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from orchestrator.tools import m5_writing
+    monkeypatch.setenv('DOTHESIS_RESEARCH_CACHE_DIR', str(tmp_path))
+    monkeypatch.setattr(m5_writing, '_get_llm', lambda: object())
+    callbacks = []
+    class DeferredBilling:
+        calls = 0
+        def invoke(self, *args, **kwargs):
+            self.calls += 1
+            callbacks.append(kwargs['on_response'])
+            raise TimeoutError('worker continues')
+    billing = DeferredBilling()
+    prompt = 'Extract cached late claims uniquely'
+    with pytest.raises(TimeoutError):
+        cr._claim_llm(prompt, billing=billing)
+    callbacks[0](SimpleNamespace(content='[{"text":"A claim.","query":"claim evidence"}]'))
+    assert cr._claim_llm(prompt, billing=billing) == [{'text': 'A claim.', 'query': 'claim evidence'}]
+    assert billing.calls == 1

@@ -5,6 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { BookOpen, Check, ExternalLink, ShieldCheck, X } from "lucide-react";
 
 import { AiPending } from "./extensions/AiPending";
 import { CitationMark } from "./extensions/CitationMark";
@@ -14,12 +15,14 @@ import { DtPlaceholder, preserveDtTokens } from "./extensions/DtPlaceholder";
 import { CitationHighlight } from "./extensions/CitationHighlight";
 import { FigureBlock } from "./extensions/FigureBlock";
 import { RenderedArtifactBlock } from "./extensions/RenderedArtifactBlock";
+import { ClaimReviewMark } from "./extensions/ClaimReviewMark";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { CitePopover } from "./CitePopover";
 import { TranslateMenu } from "./TranslateMenu";
 import { PendingEditRibbon, type PendingEdit } from "./PendingEditRibbon";
 import { buildOffsetMap, offsetToPos, posToOffset, previewOffsetToStored } from "./markdownOffset";
 import { apiFetch, ApiError } from "@/app/lib/api";
+import type { ClaimSuggestion } from "./ClaimConfidencePanel";
 
 
 type Props = {
@@ -66,6 +69,8 @@ type Props = {
   // Clicking an inserted citation reports its reference id so the parent can
   // highlight the matching source in the rail.
   onCitationClick?: (referenceId: string) => void;
+  claimSuggestions?: ClaimSuggestion[];
+  onClaimDecision?: (suggestion: ClaimSuggestion, action: "accept" | "reject") => Promise<void>;
 };
 
 
@@ -82,11 +87,14 @@ export function ChapterEditor({
   projectId, chapterName, initialProse, media = [], renderableTokens = [], pendingEdits,
   defaultTargetLang, onPendingMutate, onProseChange, onSeed, onServerProse, onServerBaseline, documentFingerprint, claimServerUpdate,
   fontFamily, fontSize, lineHeight, paraGap, onActiveEditor, onCitationClick,
+  claimSuggestions = [], onClaimDecision,
 }: Props) {
   // Held in a ref so the useEditor config (built once) always calls the latest
   // handler without re-creating the editor.
   const citationClickRef = useRef(onCitationClick);
   citationClickRef.current = onCitationClick;
+  const claimSuggestionsRef = useRef(claimSuggestions);
+  claimSuggestionsRef.current = claimSuggestions;
   const mediaRef = useRef(media);
   mediaRef.current = media;
   // TipTap calls `onUpdate` for document transactions, including mark-only
@@ -110,7 +118,16 @@ export function ChapterEditor({
   const [inlineAction, setInlineAction] = useState<
     { state: "loading" | "success" | "error"; message: string } | null
   >(null);
+  const [activeClaim, setActiveClaim] = useState<{ id: string; left: number; top: number } | null>(null);
+  const [busyClaim, setBusyClaim] = useState<string | null>(null);
   const selectionRef = useRef<{ from: number; to: number } | null>(null);
+
+  const claimSourceUrl = (suggestion: ClaimSuggestion) => {
+    const direct = suggestion.source?.url;
+    if (direct && /^https?:\/\//i.test(direct)) return direct;
+    const doi = suggestion.source?.doi?.replace(/^https?:\/\/doi\.org\//i, "");
+    return doi ? `https://doi.org/${doi}` : undefined;
+  };
 
 
   const editor = useEditor({
@@ -132,7 +149,7 @@ export function ChapterEditor({
       FigureBlock.configure({ inline: false, allowBase64: true }),
       Table.configure({ resizable: true }), TableRow, TableHeader, TableCell,
       MermaidBlock, DtPlaceholder.configure({ availableKinds: renderableTokens }),
-      RenderedArtifactBlock, CitationHighlight,
+      RenderedArtifactBlock, CitationHighlight, ClaimReviewMark,
     ],
     // Apply prose styling + suppress the browser's default focus outline on the
     // contenteditable node itself. Putting the class here (not on EditorContent)
@@ -146,10 +163,28 @@ export function ChapterEditor({
       // Clicking an inserted citation surfaces its source in the rail. Reads the
       // citation mark at the click position; non-citation clicks fall through.
       handleClick(view, pos) {
+        const claim = view.state.doc.resolve(pos).marks().find(mark => mark.type.name === "claimReview");
+        const suggestionId = claim?.attrs.suggestionId as string | undefined;
+        if (suggestionId && claimSuggestionsRef.current.some(item => item.id === suggestionId)) {
+          const coords = view.coordsAtPos(pos);
+          setActiveClaim({ id: suggestionId, left: Math.min(window.innerWidth - 330, Math.max(330, coords.left)), top: Math.max(16, Math.min(window.innerHeight - 580, coords.bottom + 10)) });
+          return true;
+        }
         const cm = view.state.doc.resolve(pos).marks().find(m => m.type.name === "citation");
         const refId = cm?.attrs.referenceId as string | undefined;
         if (refId) { citationClickRef.current?.(refId); return true; }
         return false;
+      },
+      handleKeyDown(view, event) {
+        if (event.key !== "Enter" && event.key !== " ") return false;
+        const pos = view.state.selection.head;
+        const claim = view.state.doc.resolve(pos).marks().find(mark => mark.type.name === "claimReview");
+        const suggestionId = claim?.attrs.suggestionId as string | undefined;
+        if (!suggestionId || !claimSuggestionsRef.current.some(item => item.id === suggestionId)) return false;
+        const coords = view.coordsAtPos(pos);
+        setActiveClaim({ id: suggestionId, left: Math.min(window.innerWidth - 330, Math.max(330, coords.left)), top: Math.max(16, Math.min(window.innerHeight - 580, coords.bottom + 10)) });
+        event.preventDefault();
+        return true;
       },
     },
     content: media.reduce(
@@ -303,6 +338,29 @@ export function ChapterEditor({
       }
     });
   }, [editor, pendingEdits]);
+
+  // Claim review anchors are server markdown offsets. Render them as transient
+  // marks only while the exact captured text is still present; stale anchors
+  // stay visible in the sidebar rather than highlighting the wrong sentence.
+  useEffect(() => {
+    if (!editor) return;
+    const markType = editor.schema.marks.claimReview;
+    let transaction = editor.state.tr.removeMark(0, editor.state.doc.content.size, markType);
+    const offsetMap = buildOffsetMap(editor);
+    const docSize = editor.state.doc.content.size;
+    for (const suggestion of claimSuggestions) {
+      if (suggestion.status !== "pending") continue;
+      const { from_offset: fromOffset, to_offset: toOffset, old_text: oldText } = suggestion.anchor;
+      if (!oldText || offsetMap.md.slice(fromOffset, toOffset) !== oldText) continue;
+      const from = offsetToPos(offsetMap, docSize, fromOffset);
+      const to = offsetToPos(offsetMap, docSize, toOffset);
+      if (from < to && to <= docSize) {
+        transaction = transaction.addMark(from, to, markType.create({ suggestionId: suggestion.id, actionable: suggestion.actionable }));
+      }
+    }
+    if (transaction.docChanged || transaction.steps.length) editor.view.dispatch(transaction);
+    if (activeClaim && !claimSuggestions.some(item => item.id === activeClaim.id && item.status === "pending")) setActiveClaim(null);
+  }, [activeClaim, claimSuggestions, editor]);
 
   // Action handlers — each one captures the current selection then POSTs the relevant endpoint.
   const _withSelection = useCallback(async (kind: "paraphrase" | "translate" | "cite" | "proofread" | "improve" | "humanize" | "expand" | "shorten", body: any) => {
@@ -489,6 +547,19 @@ export function ChapterEditor({
     }
   }, [projectId, chapterName, defaultTargetLang, onPendingMutate]);
 
+  const decideActiveClaim = useCallback(async (suggestion: ClaimSuggestion, action: "accept" | "reject") => {
+    if (!onClaimDecision || busyClaim) return;
+    setBusyClaim(suggestion.id);
+    try {
+      await onClaimDecision(suggestion, action);
+      setActiveClaim(null);
+    } catch (error) {
+      setInlineAction({ state: "error", message: error instanceof Error ? error.message : "Không thể cập nhật đề xuất citation." });
+    } finally {
+      setBusyClaim(null);
+    }
+  }, [busyClaim, onClaimDecision]);
+
   // Bind the shared toolbar to this chapter when it's ready and whenever it
   // gains focus, so formatting acts on the chapter the caret is actually in.
   useEffect(() => {
@@ -513,6 +584,36 @@ export function ChapterEditor({
     // Just the chapter body now — no toolbar, no own scroll. The parent stacks
     // these in one shared scroll container so the whole thesis reads as one page.
     <div>
+      {activeClaim && (() => {
+        const suggestion = claimSuggestions.find(item => item.id === activeClaim.id);
+        if (!suggestion) return null;
+        return (
+          <aside role="dialog" aria-label="Đề xuất citation" className="fixed top-1/2 z-[85] flex max-h-[calc(100vh-2rem)] w-[min(620px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_24px_70px_rgba(24,31,50,0.22)]"
+            style={{ left: activeClaim.left }}>
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-ink-100 px-5 py-4">
+              <div className="min-w-0"><p className="m-0 flex items-center gap-2 text-sm font-semibold text-ink-900"><span className="h-2.5 w-2.5 rounded-full bg-red-500" />{suggestion.actionable ? "Chưa có bằng chứng" : "Cần xem xét thêm"}</p>
+                <p className="mb-0 mt-2 text-[13px] leading-5 text-ink-600">{suggestion.rationale_vi}</p></div>
+              <button type="button" onClick={() => setActiveClaim(null)} aria-label="Đóng đề xuất" className="shrink-0 rounded-lg p-1.5 text-ink-400 hover:bg-ink-50 hover:text-ink-800"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+              {suggestion.source && <section aria-label="Nguồn tham khảo"><p className="m-0 text-xs font-semibold text-ink-800">Nguồn tham khảo</p>
+                <div className="mt-3 rounded-xl border border-ink-200 bg-ink-50/70 p-4">
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[.04em] text-ink-500"><span>Bài báo</span>{suggestion.source.verified && <span className="inline-flex items-center gap-1 text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" />Đã xác minh</span>}{suggestion.evidence?.kind === "full_text" && <span className="text-primary-700">Có toàn văn</span>}</div>
+                  <p className="mb-0 mt-3 text-sm font-semibold leading-5 text-ink-900">{suggestion.source.title}</p>
+                  <p className="mb-0 mt-1 text-xs text-ink-500">{suggestion.source.authors?.join(", ")}{suggestion.source.year ? ` · ${suggestion.source.year}` : ""}{suggestion.source.venue ? ` · ${suggestion.source.venue}` : ""}</p>
+                  {suggestion.evidence?.text && <blockquote className="mb-0 mt-3 border-l-2 border-primary-300 pl-3 text-xs leading-5 text-ink-600">{suggestion.evidence.text}</blockquote>}
+                  {claimSourceUrl(suggestion) && <a href={claimSourceUrl(suggestion)} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700 hover:underline"><BookOpen className="h-3.5 w-3.5" />Mở nguồn <ExternalLink className="h-3 w-3" /></a>}
+                </div>
+              </section>}
+              {suggestion.proposed_text && <section className="mt-4"><p className="m-0 text-xs font-semibold text-ink-800">Nội dung sau khi chấp nhận</p><p className="mb-0 mt-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-xs leading-5 text-emerald-900">{suggestion.proposed_text}</p></section>}
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-ink-100 bg-white px-5 py-3.5">
+              <button type="button" disabled={busyClaim === suggestion.id} onClick={() => void decideActiveClaim(suggestion, "reject")} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-45"><X className="h-4 w-4" />Bỏ qua</button>
+              <button type="button" disabled={!suggestion.actionable || busyClaim === suggestion.id} onClick={() => void decideActiveClaim(suggestion, "accept")} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary-600 px-4 text-xs font-semibold text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-45"><Check className="h-4 w-4" />{busyClaim === suggestion.id ? "Đang áp dụng…" : "Chấp nhận"}</button>
+            </div>
+          </aside>
+        );
+      })()}
       {/* Render outside TipTap's BubbleMenu lifecycle. BubbleMenu can be
           destroyed during pointer focus before nested actions finish their
           click. Editor coordinates retain contextual placement while the

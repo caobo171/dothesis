@@ -10,13 +10,16 @@ from __future__ import annotations
 import logging
 import hashlib
 import copy
+import os
+import threading
 import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Iterator
 
-from sqlalchemy import select
+from sqlalchemy import bindparam, select, text
 
 from agent.usage import extract_usage
 from orchestrator.agents.base import bounded_invoke
@@ -32,10 +35,113 @@ from .tool_billing import tool_cost
 logger = logging.getLogger(__name__)
 TOOL = "claim-review-llm"
 DEFAULT_CREDIT_LIMIT = 20
+PENDING_LEASE_SECONDS = 600
+
+# This connection is intentionally outside request/session lifecycle. PostgreSQL
+# advisory locks are session-scoped, so returning it to SQLAlchemy's pool would
+# make a receipt look owned by an unrelated future request.
+_OWNER_STATE_LOCK = threading.Lock()
+_owner_connection = None
+_owner_engine = None
+_owner_lock_id: int | None = None
+_owner_pid: int | None = None
 
 
 class ClaimReviewBudgetExceeded(RuntimeError):
     """The resumable review reached its configured soft credit checkpoint."""
+
+
+class ClaimReviewPending(ClaimReviewBudgetExceeded):
+    """A previous model invocation is still settling, not a credit shortage."""
+
+
+class ClaimReviewOwnerUnavailable(RuntimeError):
+    """The process cannot safely prove ownership of a newly billed call."""
+
+
+def _reset_owner_state(*, close: bool) -> None:
+    """Forget a process owner; only engine replacement may close it deliberately."""
+    global _owner_connection, _owner_engine, _owner_lock_id, _owner_pid
+    connection = _owner_connection
+    _owner_connection = _owner_engine = None
+    _owner_lock_id = _owner_pid = None
+    if close and connection is not None:
+        try:
+            connection.close()
+        except Exception:
+            pass
+
+
+def _connection_is_healthy(connection) -> bool:
+    try:
+        cursor = connection.cursor()
+        try:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+            connection.commit()
+        finally:
+            cursor.close()
+        return True
+    except Exception:
+        return False
+
+
+def _ensure_process_owner_lock() -> int | None:
+    """Return this process's live advisory-lock identity for a new receipt.
+
+    A dead owner connection is not silently re-registered with a new ID. Its
+    late worker may still settle a started receipt, and swapping identities
+    would make that active work appear orphaned. A fresh process (or a test's
+    replaced engine) receives a fresh key instead.
+    """
+    global _owner_connection, _owner_engine, _owner_lock_id, _owner_pid
+    from .db import get_engine  # lazy: test engines can be rebound
+    engine = get_engine()
+    if engine.dialect.name != "postgresql":
+        return None
+    pid = os.getpid()
+    with _OWNER_STATE_LOCK:
+        if _owner_pid is not None and _owner_pid != pid:
+            # Forked children inherit Python globals but not process ownership.
+            # Do not close the inherited descriptor: it belongs to the parent.
+            _reset_owner_state(close=False)
+        elif _owner_engine is not None and _owner_engine is not engine:
+            _reset_owner_state(close=True)
+        if _owner_connection is not None:
+            if _connection_is_healthy(_owner_connection):
+                return _owner_lock_id
+            raise ClaimReviewOwnerUnavailable("Không thể xác thực phiên sở hữu lượt gọi đang hoạt động.")
+
+        # A positive signed 63-bit key maps cleanly to pg_locks' classid/objid.
+        lock_id = uuid.uuid4().int & ((1 << 63) - 1)
+        if lock_id == 0:
+            lock_id = 1
+        connection = engine.raw_connection()
+        try:
+            cursor = connection.cursor()
+            try:
+                cursor.execute("SELECT pg_try_advisory_lock(%s)", (lock_id,))
+                acquired = cursor.fetchone()[0]
+                if not acquired:
+                    raise ClaimReviewOwnerUnavailable("Không thể đăng ký phiên sở hữu lượt gọi.")
+                # Advisory locks are session-scoped, but commit avoids retaining
+                # an idle transaction for this process-lifetime connection.
+                connection.commit()
+            finally:
+                cursor.close()
+            # Detach so normal pool cleanup cannot close or reuse this session.
+            connection.detach()
+        except Exception:
+            try:
+                connection.close()
+            except Exception:
+                pass
+            raise
+        _owner_connection = connection
+        _owner_engine = engine
+        _owner_lock_id = lock_id
+        _owner_pid = pid
+        return lock_id
 
 
 def _metrics(row: ToolRun) -> dict[str, Any]:
@@ -68,6 +174,71 @@ def _usage_row(metrics: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _expired(row: ToolRun) -> bool:
+    created = row.created_at
+    if created is None:
+        return False
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - created).total_seconds() > PENDING_LEASE_SECONDS
+
+
+def _owner_id(metrics: dict[str, Any]) -> int | None:
+    try:
+        value = int(metrics.get("owner_lock_id"))
+    except (TypeError, ValueError):
+        return None
+    return value if 0 < value < (1 << 63) else None
+
+
+def _active_owner_lock_ids(session, owner_ids: set[int]) -> set[int] | None:
+    """Read all relevant process locks in one query, failing closed on errors."""
+    if not owner_ids or session.bind is None or session.bind.dialect.name != "postgresql":
+        return None
+    statement = text("""
+        SELECT ((classid::bigint << 32) + objid::bigint) AS owner_lock_id
+        FROM pg_locks
+        WHERE locktype = 'advisory' AND granted = true AND objsubid = 1
+          AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+          AND ((classid::bigint << 32) + objid::bigint) IN :owner_ids
+    """).bindparams(bindparam("owner_ids", expanding=True))
+    try:
+        return {int(row.owner_lock_id) for row in session.execute(statement, {"owner_ids": sorted(owner_ids)})}
+    except Exception:
+        # A database visibility problem must block new dispatch, not declare an
+        # active worker dead and risk a second paid provider request.
+        logger.warning("claim review owner-lock check unavailable; retaining pending receipts")
+        return None
+
+
+def _interrupt_receipt(row: ToolRun, metrics: dict[str, Any], *, orphaned_owner: bool) -> None:
+    row.metrics = {**metrics, "status": "interrupted", "usage_unknown": True,
+                   **({"orphaned_owner": True} if orphaned_owner else {})}
+    row.status = "failed"
+
+
+def _reconcile_started_receipts(session, rows: list[ToolRun]) -> int:
+    """Clear only receipts whose recorded owner is provably gone.
+
+    Owner-marked rows never use age as a liveness signal. Rows created before
+    this rollout have no durable owner identity, so they retain the bounded TTL
+    fallback that prevents a legacy permanent dispatch lock.
+    """
+    started = [(row, _metrics(row)) for row in rows if _metrics(row).get("status") == "started"]
+    active = _active_owner_lock_ids(session, {owner for _, metrics in started if (owner := _owner_id(metrics)) is not None})
+    changed = 0
+    for row, metrics in started:
+        owner = _owner_id(metrics)
+        if owner is not None:
+            if active is not None and owner not in active:
+                _interrupt_receipt(row, metrics, orphaned_owner=True)
+                changed += 1
+        elif _expired(row):
+            _interrupt_receipt(row, metrics, orphaned_owner=False)
+            changed += 1
+    return changed
+
+
 def _summary(rows: list[ToolRun], *, credit_limit: int, balance: int | None = None) -> dict[str, Any]:
     usage = [item for row in rows if (item := _usage_row(_metrics(row))) is not None]
     cost = tool_cost(TOOL, usage=usage, ok=True)
@@ -77,6 +248,9 @@ def _summary(rows: list[ToolRun], *, credit_limit: int, balance: int | None = No
     # per short call would make a 166-chunk review cost far more than its tokens.
     return {
         "calls": len(rows), "settled_calls": completed,
+        # Owner-marked receipts are pending until their process lock is proven
+        # absent. Age remains only the compatibility fallback for legacy rows.
+        "pending_calls": sum(_metrics(row).get("status") == "started" for row in rows),
         "prompt_tokens": sum(item["prompt_tokens"] for item in usage),
         "completion_tokens": sum(item["completion_tokens"] for item in usage),
         "credits_cost": cost, "credits_charged": charged,
@@ -88,12 +262,22 @@ def _summary(rows: list[ToolRun], *, credit_limit: int, balance: int | None = No
 
 def get_review_billing(project_id: uuid.UUID, user_id: uuid.UUID, review_id: str,
                        credit_limit: int = DEFAULT_CREDIT_LIMIT) -> dict[str, Any]:
-    """Read-only compact accounting payload safe for the review UI."""
+    """Return compact billing data, reconciling durable orphan metadata only."""
     Session = get_session_factory()
-    with Session() as session:
+    with Session.begin() as session:
         user = session.get(User, user_id)
-        return _summary(_receipt_rows(session, project_id=project_id, user_id=user_id, review_id=str(review_id)),
+        rows = _receipt_rows(session, project_id=project_id, user_id=user_id, review_id=str(review_id), lock=True)
+        _reconcile_started_receipts(session, rows)
+        return _summary(rows,
                         credit_limit=credit_limit, balance=(user.credit if user else 0))
+
+
+def reconcile_claim_review_orphans() -> int:
+    """Startup/preflight recovery for receipts whose owning API process died."""
+    Session = get_session_factory()
+    with Session.begin() as session:
+        rows = session.scalars(select(ToolRun).where(ToolRun.tool == TOOL, ToolRun.status == "running").with_for_update()).all()
+        return _reconcile_started_receipts(session, list(rows))
 
 
 @dataclass
@@ -115,13 +299,14 @@ class ClaimReviewBilling:
             raise ClaimReviewBudgetExceeded("Không đủ tín dụng để tiếp tục kiểm tra nhận định.")
         rows = _receipt_rows(session, project_id=self.project_id, user_id=self.user_id,
                              review_id=self.review_id, lock=True)
+        _reconcile_started_receipts(session, rows)
         summary = _summary(rows, credit_limit=self.credit_limit, balance=user.credit)
         if self.credit_limit > 0 and summary["credits_cost"] >= self.credit_limit:
             raise ClaimReviewBudgetExceeded("Đã đạt ngưỡng tín dụng của lượt kiểm tra; bạn có thể tiếp tục sau.")
         if any(_metrics(row).get("status") == "started" for row in rows):
             # bounded_invoke cannot kill its timed-out thread. Waiting for
             # that receipt avoids dispatching a duplicate paid request.
-            raise ClaimReviewBudgetExceeded("Lượt gọi trước vẫn đang hoàn tất; vui lòng thử lại sau.")
+            raise ClaimReviewPending("Lượt gọi trước vẫn đang hoàn tất; vui lòng thử lại sau.")
 
     def preflight(self) -> None:
         """Public read/check boundary for callers that need an early status."""
@@ -130,6 +315,7 @@ class ClaimReviewBilling:
             self._check_locked(session)
 
     def _begin(self, *, stage: str, prompt_key: str) -> int:
+        owner_lock_id = _ensure_process_owner_lock()
         Session = get_session_factory()
         with Session.begin() as session:
             # Decision: validation and receipt creation are one lock-held
@@ -138,7 +324,8 @@ class ClaimReviewBilling:
             row = ToolRun(user_id=self.user_id, project_id=self.project_id, tool=TOOL,
                           surface="web", ok=False, status="running", progress_done=0, progress_total=1,
                           metrics={"review_id": self.review_id, "chunk_index": self.chunk_index,
-                                   "stage": stage, "prompt_key": prompt_key, "status": "started"})
+                                   "stage": stage, "prompt_key": prompt_key, "status": "started",
+                                   **({"owner_lock_id": owner_lock_id} if owner_lock_id is not None else {})})
             session.add(row)
             session.flush()
             return int(row.id)
@@ -210,7 +397,7 @@ class ClaimReviewBilling:
             logger.exception("claim review billing failure receipt update failed receipt=%s", receipt_id)
 
     def invoke(self, llm: Any, prompt: Any, *, stage: str = "review", prompt_key: str = "",
-               max_seconds: int = 45) -> Any:
+               max_seconds: int = 45, on_response=None) -> Any:
         """Invoke with late-worker settlement rather than post-timeout billing."""
         prompt_key = prompt_key or hashlib.sha256(str(prompt).encode("utf-8")).hexdigest()
         receipt_id = self._begin(stage=stage, prompt_key=prompt_key)
@@ -236,7 +423,13 @@ class ClaimReviewBilling:
                 except Exception:
                     billing._fail(receipt_id, int((time.monotonic() - started) * 1000))
                     raise
-                billing._settle(receipt_id, response, int((time.monotonic() - started) * 1000))
+                # Cache publication precedes clearing pending so a resumed request
+                # can consume a late response instead of buying it again.
+                try:
+                    if on_response is not None:
+                        on_response(response)
+                finally:
+                    billing._settle(receipt_id, response, int((time.monotonic() - started) * 1000))
                 return response
 
         return bounded_invoke(SettlingLLM(), prompt, max_seconds=max_seconds, retries=0)

@@ -5,6 +5,7 @@ import copy
 import concurrent.futures
 import fcntl
 import json
+import logging
 import os
 import re
 import time
@@ -28,9 +29,10 @@ from .m5_editor import (
     _normalized_doi, _normalized_title, _reference_author,
     search_scholarly_references,
 )
-from orchestrator.tools.research_cache import cached_call, model_cache_key
+from orchestrator.tools.research_cache import cached_call, model_cache_key, store_completed_result
 
 router = APIRouter(tags=["claim_reviews"])
+logger = logging.getLogger(__name__)
 TTL = 7 * 86400
 MAX_REVIEWS = 5
 MAX_PROGRESS_ACTIVITIES = 12
@@ -52,16 +54,17 @@ def _valid_claim_llm_result(value, prompt: str = "") -> bool:
                 return False
             seen = set()
             for row in rows:
-                claim_id = row.get("claim_id")
+                claim_id = str(row.get("claim_id")) if row.get("claim_id") is not None else ""
                 if claim_id not in expected or claim_id in seen:
                     return False
                 seen.add(claim_id)
                 if not _valid_claim_llm_result(row):
                     return False
                 if row["status"] != "unverifiable":
-                    passages = {c["candidate_id"]: c["passage"] for c in expected[claim_id]["candidates"]}
+                    passages = {str(c["candidate_id"]): c["passage"] for c in expected[claim_id]["candidates"]}
                     quote = str(row.get("supporting_quote") or "").strip()
-                    if not quote or quote not in passages.get(row.get("candidate_id"), ""):
+                    candidate_id = str(row.get("candidate_id")) if row.get("candidate_id") is not None else ""
+                    if not quote or quote not in passages.get(candidate_id, ""):
                         return False
             return seen == set(expected)
         except (IndexError, KeyError, TypeError, ValueError, AttributeError):
@@ -79,7 +82,8 @@ def _valid_claim_llm_result(value, prompt: str = "") -> bool:
     if status not in {"supported", "weakly_supported", "unverifiable"}:
         return False
     if status in {"supported", "weakly_supported"}:
-        return bool(str(value.get("candidate_id") or "").strip() and str(value.get("supporting_quote") or "").strip())
+        candidate_id = value.get("candidate_id")
+        return bool((str(candidate_id) if candidate_id is not None else "").strip() and str(value.get("supporting_quote") or "").strip())
     return True
 
 
@@ -91,15 +95,10 @@ def _claim_llm(prompt, *, billing=None):
     """
     full_prompt = _CLAIM_SAFETY_PREFIX + prompt
 
-    def compute():
-        from orchestrator.tools.m5_writing import _get_llm
-        from orchestrator.agents.base import bounded_invoke
-        if billing is not None:
-            response = billing.invoke(_get_llm(), full_prompt,
-                                      stage="evaluate" if "\nCLAIMS: " in prompt else "extract",
-                                      max_seconds=45)
-        else:
-            response = bounded_invoke(_get_llm(), full_prompt, max_seconds=45, retries=0)
+    namespace = "claim-llm-v2" if "\nCLAIMS: " in prompt else "claim-llm-v1"
+    key = model_cache_key(full_prompt)
+
+    def parse_response(response):
         content = getattr(response, "content", response)
         if isinstance(content, list):
             content = "".join(str(p.get("text", "")) if isinstance(p, dict) else str(p) for p in content)
@@ -108,16 +107,53 @@ def _claim_llm(prompt, *, billing=None):
             text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
         return json.loads(text)
 
+    def retain_response(response):
+        try:
+            value = parse_response(response)
+            if _valid_claim_llm_result(value, prompt):
+                store_completed_result(namespace, key, value, ttl_s=7 * 86400)
+        except (ValueError, TypeError):
+            # Malformed paid output is accounted for, never cached as evidence.
+            pass
+
+    def compute():
+        from orchestrator.tools.m5_writing import _get_llm
+        from orchestrator.agents.base import bounded_invoke
+        model = _get_llm()
+        # Bound the actual provider, not only the thread waiting for its result.
+        # Disable client retries so one receipt represents one paid invocation.
+        if hasattr(model, "model_copy"):
+            fields = type(model).model_fields
+            updates = {k: v for k, v in {"request_timeout": 90, "timeout": 90, "max_retries": 0}.items() if k in fields}
+            model = model.model_copy(update=updates)
+        if billing is not None:
+            response = billing.invoke(model, full_prompt,
+                                      stage="evaluate" if "\nCLAIMS: " in prompt else "extract",
+                                      max_seconds=45, on_response=retain_response)
+        else:
+            response = bounded_invoke(model, full_prompt, max_seconds=45, retries=0)
+        return parse_response(response)
+
     return cached_call(
         # Extraction is unchanged: preserve its paid cache across the rollout.
-        "claim-llm-v2" if "\nCLAIMS: " in prompt else "claim-llm-v1",
-        model_cache_key(full_prompt), compute, ttl_s=7 * 86400,
+        namespace,
+        key, compute, ttl_s=7 * 86400,
         cache_if=lambda value: _valid_claim_llm_result(value, prompt),
     )
 
 
-def _error(status, code, message):
-    raise HTTPException(status, detail={"error": {"code": code, "message": message}})
+def _error(status, code, message, **metadata):
+    raise HTTPException(status, detail={"error": {"code": code, "message": message, **metadata}})
+
+
+def _failure_details(exc: Exception) -> dict:
+    """Classify safe retry metadata without retaining model/provider content."""
+    from quality.claim_confidence import ClaimConfidenceLLMError
+    if isinstance(exc, (ClaimConfidenceLLMError, json.JSONDecodeError)):
+        return {"kind": "invalid_model_response", "message": "Mô hình trả về dữ liệu không hợp lệ; đoạn chưa được đánh giá.", "retryable": True}
+    if isinstance(exc, TimeoutError):
+        return {"kind": "timeout", "message": "Lượt kiểm tra đã hết thời gian chờ; đoạn chưa được đánh giá.", "retryable": True}
+    return {"kind": "unexpected", "message": "Đã xảy ra lỗi không thể tự thử lại; đoạn chưa được đánh giá.", "retryable": False}
 
 
 def _root(pid, uid):
@@ -215,6 +251,11 @@ def _read(pid, uid, rid):
 
 def _public(data):
     result = {key: value for key, value in data.items() if not key.startswith("_") and key not in {"project_id", "user_id"}}
+    coverage = result.get("coverage")
+    if isinstance(coverage, dict):
+        # A review saved before scoped assessment failures existed must still
+        # satisfy the current read contract without rewriting its private file.
+        result["coverage"] = {**coverage, "claims_failed": coverage.get("claims_failed", 0)}
     result["billing"] = _billing_summary(data)
     return result
 
@@ -365,7 +406,8 @@ def start(project_id: uuid.UUID, body: StartBody = StartBody(), user: User = Dep
         "status": "running", "reviewed_at": datetime.now(timezone.utc).isoformat(),
         "chunks_total": len(chunks), "chunks_completed": 0, "suggestions": [], "warnings": [],
         "coverage": {"chars_total": sum(len(c["text"]) for c in chunks), "chars_processed": 0,
-                     "claims_total": 0, "claims_assessed": 0, "claims_unresolved": 0},
+                     "claims_total": 0, "claims_assessed": 0, "claims_unresolved": 0,
+                     "claims_failed": 0},
         "sources_verified_unique": 0, "_chunks": chunks, "_library": library,
         "credit_limit": body.credit_limit,
         "_queries": {}, "_papers": {}, "_applied": [],
@@ -423,7 +465,7 @@ def _rebase(suggestion, applied):
 def next_chunk(project_id: uuid.UUID, review_id: uuid.UUID, user: User = Depends(current_user), db: Session = Depends(db_session)):
     _owned_project(db, user, project_id)
     from quality.claim_confidence import review_chunk
-    from ..claim_review_billing import claim_review_billing, ClaimReviewBudgetExceeded
+    from ..claim_review_billing import claim_review_billing, ClaimReviewBudgetExceeded, ClaimReviewPending
     with _locked(project_id, user.id):
         data = _read(project_id, user.id, review_id)
         if data["status"] == "completed":
@@ -544,7 +586,10 @@ def next_chunk(project_id: uuid.UUID, review_id: uuid.UUID, user: User = Depends
                     if verified:
                         results.append(_overlay_query_provenance(candidate, verified))
                     else:
-                        warnings.append("Một nguồn chưa xác minh được metadata; không tự động đề xuất chèn citation từ nguồn này.")
+                        # Decision: this is an automatically handled exclusion,
+                        # not a task for the student. Say what happened and make
+                        # the absence of required action explicit.
+                        warnings.append("Đã loại một nguồn không xác minh được thông tin xuất bản khỏi đề xuất citation. Bạn không cần làm gì; các đề xuất còn lại vẫn dùng nguồn đã xác minh.")
                 payload = {"results": results, "warnings": list(dict.fromkeys(map(str, warnings))),
                            "providers": found.get("providers", []) if isinstance(found, dict) else []}
                 output[key] = payload
@@ -566,31 +611,47 @@ def next_chunk(project_id: uuid.UUID, review_id: uuid.UUID, user: User = Depends
                 result = review_chunk(chunk, data["_library"], search_fn=search,
                                       llm_fn=lambda prompt: _claim_llm(prompt, billing=billing), progress_fn=report,
                                       search_many_fn=search_many)
+        except ClaimReviewPending as exc:
+            # A timed-out model worker may still settle its durable receipt.
+            # Do not dispatch a second paid call or present this as a budget hit.
+            _write(project_id, user.id, data)
+            _record_progress(project_id, user.id, review_id, {"stage": "pending_billing"})
+            _error(409, "claim_review_pending", "Lượt gọi trước vẫn đang hoàn tất; vui lòng thử lại sau.")
         except ClaimReviewBudgetExceeded as exc:
             # Completed calls are already settled; preserve this chunk's cached
             # searches without pretending an unfinished assessment is complete.
             _write(project_id, user.id, data)
             _record_progress(project_id, user.id, review_id, {"stage": "budget_paused"})
             _error(402, "claim_review_budget", str(exc))
-        except Exception:
+        except Exception as exc:
             # Preserve useful provider cache on retry, but do not advance the
             # cursor or report the failed text as successfully checked.
+            failure = _failure_details(exc)
+            data["failure"] = {**failure, "chunk_index": data["chunks_completed"]}
             _write(project_id, user.id, data)
             _record_progress(project_id, user.id, review_id, {"stage": "error"}, status="running")
-            _error(503, "claim_review_failed", "Chưa kiểm tra xong đoạn này. Bạn có thể tiếp tục mà không mất kết quả trước đó.")
+            # Log type and checkpoint only. Exception text can contain model
+            # output, prompts, or source metadata and must not enter logs.
+            logger.error("claim review failed kind=%s type=%s review=%s chunk=%s", failure["kind"],
+                         type(exc).__name__, review_id, data["chunks_completed"])
+            _error(503, "claim_review_failed", failure["message"], kind=failure["kind"], retryable=failure["retryable"])
         suggestions = result.get("suggestions", [])
         for suggestion in suggestions:
             _rebase(suggestion, data["_applied"])
         data["suggestions"].extend(suggestions)
         data["warnings"] = list(dict.fromkeys(data["warnings"] + result.get("warnings", [])))
         metrics = result.get("metrics", {})
-        for key in ("claims_total", "claims_assessed", "claims_unresolved"):
+        # Older persisted reviews have no failed-assessment counter. Preserve
+        # their recorded coverage while exposing the new truthful zero default.
+        data["coverage"].setdefault("claims_failed", 0)
+        for key in ("claims_total", "claims_assessed", "claims_unresolved", "claims_failed"):
             data["coverage"][key] += int(metrics.get(key, 0))
         data["coverage"]["chars_processed"] += len(chunk["text"])
         data["chunks_completed"] += 1
         data["sources_verified_unique"] = len({_paper_key(s["source"]) for s in data["suggestions"] if (s.get("source") or {}).get("verified")})
         if data["chunks_completed"] == data["chunks_total"]:
             data["status"] = "completed"
+        data.pop("failure", None)
         _write(project_id, user.id, data)
         progress_data = _record_progress(project_id, user.id, review_id, {
             "stage": "chunk_done", "count": data["chunks_completed"],

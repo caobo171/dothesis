@@ -12,9 +12,12 @@ import json
 import re
 from typing import Any, Callable
 
-# Each extracted claim needs retrieval and a judge call; short chunks keep
-# stop/resume responsive without silently dropping claims from dense prose.
-MAX_CHUNK_CHARS = 1_000
+# Decision: 1,000-character chunks turned an ordinary thesis into 166 sequential
+# extraction checkpoints. A 2,200-character window stays comfortably bounded
+# for structured claim extraction, improves search concurrency within a chunk,
+# and brings a document of that size to roughly 75 review batches. Paragraph or
+# sentence boundary trimming below still preserves exact canonical offsets.
+MAX_CHUNK_CHARS = 2_200
 
 
 class ClaimConfidenceLLMError(ValueError):
@@ -72,7 +75,13 @@ def _chunk(chapter: str, text: str, start: int, fingerprint: str) -> dict:
 def _call(fn: Callable | None, prompt: str) -> Any:
     if fn is None:
         return None
-    value = fn(prompt)
+    try:
+        value = fn(prompt)
+    except json.JSONDecodeError:
+        # Some adapters parse before returning. Treat only that evaluator
+        # shape failure as invalid output; timeouts, billing, and transport
+        # errors must still stop the resumable chunk.
+        return None
     if hasattr(value, "content"):
         value = value.content
     if isinstance(value, str):
@@ -160,13 +169,18 @@ MAX_JUDGMENTS_PER_CALL = 6
 
 
 def _batch_judgments(records: list[dict], llm_fn: Callable | None,
-                     progress_fn: Callable[[dict], None] | None) -> dict[str, tuple[dict, dict] | None]:
-    """Judge up to six claims at once, validating every returned association.
+                     progress_fn: Callable[[dict], None] | None) -> tuple[dict[str, tuple[dict, dict] | None], dict[str, str]]:
+    """Judge up to six claims at once without turning invalid output into a verdict.
 
-    A batch is an all-or-retry contract.  Accepting a partial response would
-    make an expensive model omission look like an honest unsupported finding.
+    A returned row is useful only when its ID, candidate, and literal quote all
+    validate.  The model can nevertheless spend a paid call and omit or corrupt
+    one row.  Preserve valid rows from that batch and return a transparent
+    failure for each unsafe association; callers must never call the model again
+    per claim to paper over it.  Transport and billing exceptions deliberately
+    escape this function so a resumable chunk keeps its checkpoint.
     """
     assessed: dict[str, tuple[dict, dict] | None] = {}
+    failed: dict[str, str] = {}
     for offset in range(0, len(records), MAX_JUDGMENTS_PER_CALL):
         group = records[offset:offset + MAX_JUDGMENTS_PER_CALL]
         _emit_progress(progress_fn, "evaluating", count=len(group))
@@ -181,11 +195,22 @@ def _batch_judgments(records: list[dict], llm_fn: Callable | None,
                     continue
                 candidate_id = str(source.get("id") or index)
                 if candidate_id in candidate_map:
-                    raise ClaimConfidenceLLMError("Nguồn trùng ID trong một nhận định; không thể đối chiếu an toàn.")
+                    # Decision: a duplicate provider ID makes this claim's
+                    # candidate association ambiguous. Do not spend a model
+                    # call on it, but let unrelated claims in the batch finish.
+                    failed[record["claim_id"]] = "Nguồn đối chiếu có ID trùng lặp nên chưa thể đánh giá an toàn."
+                    candidate_map = {}
+                    rows = []
+                    break
                 candidate_map[candidate_id] = (source, passage)
                 rows.append({"candidate_id": candidate_id, "passage": passage})
+            if record["claim_id"] in failed:
+                continue
             candidate_maps[record["claim_id"]] = candidate_map
             prompt_records.append({"claim_id": record["claim_id"], "claim": record["claim"]["text"], "candidates": rows})
+
+        if not prompt_records:
+            continue
 
         value = _call(llm_fn, "Assess every listed claim against only its own candidates. Return JSON "
                       "{judgments:[{claim_id,candidate_id,status:supported|weakly_supported|unverifiable,"
@@ -196,36 +221,51 @@ def _batch_judgments(records: list[dict], llm_fn: Callable | None,
                       "mere topical similarity is insufficient. Explain the support and its limitations "
                       "in Vietnamese in rationale_vi.\nCLAIMS: " + json.dumps(prompt_records, ensure_ascii=False))
         rows = value.get("judgments") if isinstance(value, dict) else None
-        expected = {record["claim_id"] for record in group}
-        if not isinstance(rows, list) or len(rows) != len(group):
-            raise ClaimConfidenceLLMError("Mô hình không trả về đủ đánh giá bằng chứng theo lô.")
+        expected = {record["claim_id"] for record in prompt_records}
+        if not isinstance(rows, list):
+            for claim_id in expected:
+                failed[claim_id] = "Phản hồi đánh giá bằng chứng không đúng định dạng JSON."
+            continue
         seen: set[str] = set()
         for row in rows:
             if not isinstance(row, dict):
-                raise ClaimConfidenceLLMError("Mô hình trả về một đánh giá bằng chứng không hợp lệ.")
-            claim_id = str(row.get("claim_id") or "")
-            if claim_id not in expected or claim_id in seen:
-                raise ClaimConfidenceLLMError("Mô hình trả về ID nhận định bị thiếu, lạ hoặc trùng lặp.")
+                # The row cannot be safely connected to one supplied claim.
+                # Missing IDs below will mark the affected records.
+                continue
+            # JSON models may echo the string ID "0" as numeric 0. It still
+            # names exactly the same supplied claim; falsy coercion lost it.
+            claim_id = str(row["claim_id"]) if row.get("claim_id") is not None else ""
+            if claim_id not in expected:
+                # An extra row has no project anchor. Keep other unique,
+                # complete associations rather than guessing where it belongs.
+                continue
+            if claim_id in seen:
+                assessed.pop(claim_id, None)
+                failed[claim_id] = "Mô hình trả về ID nhận định trùng lặp nên chưa thể đánh giá an toàn."
+                continue
             seen.add(claim_id)
             status = str(row.get("status") or "")
             if status not in {"supported", "weakly_supported", "unverifiable"}:
-                raise ClaimConfidenceLLMError("Mô hình trả về trạng thái bằng chứng không hợp lệ.")
+                failed[claim_id] = "Mô hình trả về trạng thái đánh giá không hợp lệ."
+                continue
             if status == "unverifiable":
                 assessed[claim_id] = None
                 continue
-            candidate_id = str(row.get("candidate_id") or "")
+            candidate_id = str(row["candidate_id"]) if row.get("candidate_id") is not None else ""
             quote = str(row.get("supporting_quote") or "").strip()
             candidate = candidate_maps[claim_id].get(candidate_id)
             if not candidate or not quote or quote not in candidate[1]:
-                raise ClaimConfidenceLLMError("Trích dẫn bằng chứng không khớp nguyên văn nguồn đã truy xuất.")
+                failed[claim_id] = "Trích dẫn bằng chứng không khớp nguyên văn nguồn đã truy xuất."
+                continue
             source, _ = candidate
             assessed[claim_id] = (source, {
                 "status": status, "quote": quote,
                 "rationale_vi": str(row.get("rationale_vi") or ""),
             })
         if seen != expected:
-            raise ClaimConfidenceLLMError("Mô hình bỏ sót một nhận định trong đánh giá theo lô.")
-    return assessed
+            for claim_id in expected - seen:
+                failed[claim_id] = "Mô hình bỏ sót nhận định này trong đánh giá theo lô."
+    return assessed, failed
 
 
 def _emit_progress(progress_fn: Callable[[dict], None] | None, stage: str, **details: Any) -> None:
@@ -238,9 +278,17 @@ def _emit_progress(progress_fn: Callable[[dict], None] | None, stage: str, **det
         pass
 
 
-def _suggestion_for(record: dict, result: tuple[dict, dict] | None) -> dict:
+def _suggestion_for(record: dict, result: tuple[dict, dict] | None, failure_reason: str | None = None) -> dict:
     """Build one explicit proposal after batch validation has completed."""
     claim, candidates, start = record["claim"], record["candidates"], record["start"]
+    if failure_reason:
+        return {"id": hashlib.sha256((record["chunk"]["anchor"] + claim["text"]).encode()).hexdigest()[:16],
+                "chapter": record["chunk"]["chapter"],
+                "anchor": {"from_offset": record["chunk"]["start"] + max(start, 0), "to_offset": record["chunk"]["start"] + max(start, 0) + len(claim["text"]), "old_text": claim["text"], "document_fingerprint": record["chunk"].get("document_fingerprint")},
+                "classification": "assessment_failed",
+                "rationale_vi": f"Chưa đánh giá được nhận định này: {failure_reason} Hệ thống không tạo đề xuất trích dẫn.",
+                "proposed_text": None, "source": None, "evidence": None, "status": "pending", "actionable": False,
+                "query": claim["query"]}
     if result is None:
         classification = "needs_source" if not candidates else "unverifiable"
         return {"id": hashlib.sha256((record["chunk"]["anchor"] + claim["text"]).encode()).hexdigest()[:16],
@@ -288,7 +336,7 @@ def review_chunk(chunk: dict, library: list[dict], search_fn: Callable[[str], An
     a billing checkpoint still controls every model invocation.
     """
     suggestions, warnings = [], []
-    metrics = {"claims_total": 0, "claims_assessed": 0, "claims_unresolved": 0,
+    metrics = {"claims_total": 0, "claims_assessed": 0, "claims_unresolved": 0, "claims_failed": 0,
                "queries": 0, "candidates": 0, "supported": 0}
     _emit_progress(progress_fn, "analyzing")
     claims, claim_warnings = _claims(chunk, llm_fn)
@@ -375,20 +423,25 @@ def review_chunk(chunk: dict, library: list[dict], search_fn: Callable[[str], An
             candidates.append(source)
         candidates = candidates[:4]
         metrics["candidates"] += len(candidates)
-        metrics["claims_assessed"] += 1
         records.append({"claim_id": item["claim_id"], "claim": claim, "candidates": candidates,
                         "start": item["start"], "chunk": chunk})
 
     judgeable = [record for record in records if any(_passage(source) for source in record["candidates"])]
-    judged = _batch_judgments(judgeable, llm_fn, progress_fn) if judgeable else {}
+    judged, failed = _batch_judgments(judgeable, llm_fn, progress_fn) if judgeable else ({}, {})
     for record in records:
+        failure_reason = failed.get(record["claim_id"])
         result = judged.get(record["claim_id"])
-        if result is None:
+        if failure_reason:
+            metrics["claims_failed"] += 1
             metrics["claims_unresolved"] += 1
         else:
+            metrics["claims_assessed"] += 1
+            if result is None:
+                metrics["claims_unresolved"] += 1
+        if result is not None:
             metrics["supported"] += result[1]["status"] == "supported"
-        suggestion = _suggestion_for(record, result)
-        if result is not None and not suggestion["actionable"] and suggestion["classification"] != "supported":
+        suggestion = _suggestion_for(record, result, failure_reason)
+        if not failure_reason and result is not None and not suggestion["actionable"] and suggestion["classification"] != "supported":
             metrics["claims_unresolved"] += 1
         suggestions.append(suggestion)
     return {"suggestions": suggestions, "metrics": metrics, "warnings": warnings}

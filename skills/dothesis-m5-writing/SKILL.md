@@ -191,11 +191,21 @@ rewrite prose or commit state automatically:
   identity verification, or evidence evaluation) and completed counts. This
   status is read-only progress, never a claim that a cache/provider/model step
   succeeded before it has returned.
+  Chunking should target roughly 2,200 canonical characters and prefer paragraph
+  or sentence boundaries. This keeps a normal thesis near 70–80 review batches
+  instead of hundreds of tiny sequential calls, while retaining exact byte
+  offsets for editor annotations. Do not reduce the chunk size merely to make
+  stop/resume more granular; claim extraction and evidence evaluation already
+  have their own bounded batches.
   Evidence choices are judged in small bounded batches after all claims in the
   chunk have their retrieved candidates. Every returned judgment must identify
-  its claim and candidate and quote a literal retrieved passage; malformed,
-  missing, or duplicate judgment IDs are retryable failures, never silently
-  omitted claims or a per-claim paid fallback.
+  its claim and candidate and quote a literal retrieved passage. Invalid,
+  missing, duplicate, or nonliteral evidence judgments are recorded as an
+  explicit non-actionable “chưa đánh giá được” result for the affected claim
+  (or that bounded batch when no safe association is possible); the scan then
+  continues without a paid fallback or an invented unsupported verdict.
+  Extraction failures remain retryable chunk-level failures because claim
+  coverage is unknown.
   Independent, uniquely anchorable search queries may be retrieved and
   identity-checked concurrently in a small bounded worker pool. Keep query
   ordering deterministic for the later evidence prompt, deduplicate a paper's
@@ -215,6 +225,18 @@ rewrite prose or commit state automatically:
   validation; never estimate or invent usage. The review stops before another
   paid call when its configured credit checkpoint is exhausted, preserving the
   completed chunks for a later resume.
+  A retryable provider timeout or invalid extraction response preserves the
+  current chunk and its settled usage. The editor may retry that exact chunk
+  once after a short delay. Each pending receipt records the PostgreSQL
+  process advisory lock that owns its model worker. The server may clear it only
+  when that recorded lock is absent, never merely because a request or server
+  restart occurred; an old receipt without an owner lock uses the bounded legacy
+  TTL fallback. If the server reports an earlier charged model call is still
+  settling, the editor may read its progress every three seconds for at most two
+  minutes and resume only after `pending_calls` is zero; this is never a new
+  paid request. It must never skip claims, relax literal-quote checks,
+  retry a budget/auth/general-conflict response automatically, or loop
+  indefinitely.
 - **Peer review** — run the complete committee-readiness rubric across structure,
   methodology, results, citations, statistics, coherence, similarity, advisor
   feedback, and institutional requirements.

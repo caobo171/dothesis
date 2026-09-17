@@ -19,6 +19,27 @@ afterEach(() => {
 
 
 describe("ChapterEditor — mount + save", () => {
+  it("anchors a claim-review suggestion in the prose without changing saved markdown", async () => {
+    const onProseChange = vi.fn();
+    const onClaimDecision = vi.fn().mockResolvedValue(undefined);
+    const { container } = render(
+      <LocaleProvider initialLocale="vi" hasCookie>
+        <ChapterEditor projectId="p1" chapterName="intro" initialProse="Trust affects travel." pendingEdits={[]}
+          claimSuggestions={[{
+            id: "claim-1", chapter: "intro", anchor: { from_offset: 0, to_offset: 21, old_text: "Trust affects travel." },
+            classification: "citation_opportunity", rationale_vi: "Nguồn hỗ trợ trực tiếp.",
+            proposed_text: "Trust affects travel (Lee, 2024).", source: { id: "s1", title: "Travel trust", authors: ["Lee"], year: 2024 },
+            evidence: { kind: "abstract", text: "Evidence", relation: "supports" }, status: "pending", actionable: true,
+          }]}
+          onClaimDecision={onClaimDecision} onPendingMutate={() => {}} onProseChange={onProseChange}
+          fontFamily="serif" fontSize={16} lineHeight={1.75} paraGap={14} />
+      </LocaleProvider>,
+    );
+    await waitFor(() => expect(container.querySelector(".claim-review-mark")).toHaveAttribute("data-claim-suggestion-id", "claim-1"));
+    expect(container.querySelector(".claim-review-mark")).toHaveTextContent("Trust affects travel.");
+    expect(onProseChange).not.toHaveBeenCalled();
+  });
+
   it("renders the chapter prose", async () => {
     render(
       <LocaleProvider initialLocale="en" hasCookie>

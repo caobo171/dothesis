@@ -38,6 +38,19 @@ async def lifespan(app: FastAPI):
     from . import job_runner
     job_runner.set_app_loop(_asyncio.get_running_loop())
 
+    # Claim-review model workers can outlive a request. Their durable receipts
+    # carry a process advisory-lock owner, so a restart clears only receipts
+    # whose owner session is truly gone; legacy rows retain their TTL fallback.
+    try:
+        from .claim_review_billing import reconcile_claim_review_orphans
+        reconciled = reconcile_claim_review_orphans()
+        if reconciled:
+            log.info("reconciled %s orphaned claim-review receipt(s)", reconciled)
+    except Exception:
+        # Startup must not hide the API if PostgreSQL is temporarily unavailable.
+        # The billing preflight repeats this fail-closed owner check before spend.
+        log.exception("claim-review orphan reconciliation failed at startup")
+
     # Orchestrator startup priming. Chat turns run on the v3 deep agent, which
     # reuses the api process's shared async Postgres pool (chat_v3's
     # checkpointer, now defined in app/db.py rather than orchestrator/graph.py

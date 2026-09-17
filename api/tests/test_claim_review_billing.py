@@ -6,8 +6,10 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.claim_review_billing import (
-    ClaimReviewBudgetExceeded, ClaimReviewBilling, get_review_billing,
+    ClaimReviewBudgetExceeded, ClaimReviewBilling, ClaimReviewPending,
+    get_review_billing, reconcile_claim_review_orphans,
 )
+import app.claim_review_billing as billing_module
 from app.db import get_engine
 from app.models import CreditTransaction, Project, TokenLedger, ToolRun, User
 from tests.conftest import make_user
@@ -120,3 +122,133 @@ def test_timed_out_request_settles_late_and_blocks_duplicate_dispatch():
         summary = get_review_billing(project_id, user_id, billing.review_id)
     assert summary["settled_calls"] == 1 and summary["credits_charged"] > 0
     assert summary["credits_limit"] == 20 and summary["credit_balance"] is not None
+
+
+def test_expired_receipt_does_not_permanently_lock_review_or_invent_usage():
+    from datetime import datetime, timedelta, timezone
+    from app.claim_review_billing import PENDING_LEASE_SECONDS
+    billing, pid, uid = _scope()
+    receipt = billing._begin(stage='evaluate', prompt_key='orphan')
+    with Session(get_engine()) as db:
+        row = db.get(ToolRun, receipt)
+        # This fixture models a receipt written before owner-lock metadata was
+        # introduced. New owner-marked receipts must never expire by age.
+        row.metrics = {key: value for key, value in row.metrics.items() if key != 'owner_lock_id'}
+        row.created_at = datetime.now(timezone.utc) - timedelta(seconds=PENDING_LEASE_SECONDS + 1)
+        db.commit()
+    billing.preflight()
+    with Session(get_engine()) as db:
+        row = db.get(ToolRun, receipt)
+        assert row.metrics['status'] == 'interrupted'
+        assert row.metrics['usage_unknown'] is True
+        assert not row.metrics.get('usage')
+    assert billing.summary()['pending_calls'] == 0
+    # A real late receipt remains chargeable exactly once.
+    billing._settle(receipt, Response(), 100)
+    billing._settle(receipt, Response(), 100)
+    assert billing.summary()['settled_calls'] == 1
+
+
+def test_recent_receipt_with_absent_owner_lock_is_reconciled_without_ttl(monkeypatch):
+    """A restarted API can release a fresh receipt whose owner process died."""
+    owner_lock_id = 7_654_321
+    monkeypatch.setattr(billing_module, "_ensure_process_owner_lock", lambda: owner_lock_id)
+    monkeypatch.setattr(billing_module, "_active_owner_lock_ids", lambda _session, _ids: set())
+    billing, pid, uid = _scope()
+    receipt = billing._begin(stage="evaluate", prompt_key="fresh-owner")
+    with Session(get_engine()) as db:
+        row = db.get(ToolRun, receipt)
+        assert row.metrics["owner_lock_id"] == owner_lock_id
+        assert not row.metrics.get("usage_unknown")
+
+    assert billing.summary()["pending_calls"] == 0
+    with Session(get_engine()) as db:
+        row = db.get(ToolRun, receipt)
+        assert row.metrics["status"] == "interrupted"
+        assert row.metrics["orphaned_owner"] is True
+        assert row.metrics["usage_unknown"] is True
+    # A new invocation may proceed; no old receipt is treated as a live worker.
+    billing.preflight()
+
+
+def test_foreign_live_owner_lock_keeps_fresh_receipt_pending_across_startup(monkeypatch):
+    """One API process must never orphan another process's active model call."""
+    owner_lock_id = 8_765_432
+    monkeypatch.setattr(billing_module, "_ensure_process_owner_lock", lambda: owner_lock_id)
+    monkeypatch.setattr(billing_module, "_active_owner_lock_ids", lambda _session, _ids: {owner_lock_id})
+    billing, _pid, _uid = _scope()
+    receipt = billing._begin(stage="evaluate", prompt_key="foreign-live")
+
+    assert reconcile_claim_review_orphans() == 0
+    assert billing.summary()["pending_calls"] == 1
+    with pytest.raises(ClaimReviewPending):
+        billing.preflight()
+    with Session(get_engine()) as db:
+        assert db.get(ToolRun, receipt).metrics["status"] == "started"
+
+
+def test_recent_legacy_receipt_without_owner_keeps_ttl_fallback(monkeypatch):
+    """Unknown pre-rollout ownership cannot be guessed dead at API startup."""
+    monkeypatch.setattr(billing_module, "_ensure_process_owner_lock", lambda: None)
+    billing, _pid, _uid = _scope()
+    receipt = billing._begin(stage="evaluate", prompt_key="legacy-recent")
+
+    assert reconcile_claim_review_orphans() == 0
+    assert billing.summary()["pending_calls"] == 1
+    with pytest.raises(ClaimReviewPending):
+        billing.preflight()
+    with Session(get_engine()) as db:
+        row = db.get(ToolRun, receipt)
+        assert "owner_lock_id" not in row.metrics
+        assert row.metrics["status"] == "started"
+
+
+def test_late_response_is_retained_before_pending_is_cleared():
+    billing, pid, uid = _scope()
+    entered, release, retained = threading.Event(), threading.Event(), threading.Event()
+    class Slow(LLM):
+        def invoke(self, prompt):
+            entered.set()
+            assert release.wait(2)
+            return Response()
+    def retain(response):
+        assert billing.summary()['pending_calls'] == 1
+        retained.set()
+    with pytest.raises(TimeoutError):
+        billing.invoke(Slow(), 'late-cached', max_seconds=.01, on_response=retain)
+    assert entered.wait(1)
+    release.set()
+    assert retained.wait(2)
+    deadline = time.monotonic() + 2
+    while billing.summary()['pending_calls'] and time.monotonic() < deadline:
+        time.sleep(.01)
+    assert billing.summary()['pending_calls'] == 0
+    assert billing.summary()['settled_calls'] == 1
+
+
+def test_real_postgres_session_close_releases_fresh_receipt_immediately(monkeypatch):
+    owner = get_engine().raw_connection()
+    owner.detach()
+    lock_id = (uuid.uuid4().int & ((1 << 63) - 1)) or 1
+    try:
+        cursor = owner.cursor()
+        cursor.execute('SELECT pg_advisory_lock(%s)', (lock_id,))
+        owner.commit()
+        cursor.close()
+        monkeypatch.setattr(billing_module, '_ensure_process_owner_lock', lambda: lock_id)
+        billing, _, _ = _scope()
+        receipt = billing._begin(stage='evaluate', prompt_key='real-session')
+        assert reconcile_claim_review_orphans() == 0
+        assert billing.summary()['pending_calls'] == 1
+        with pytest.raises(ClaimReviewPending):
+            billing.preflight()
+    finally:
+        # A process exit closes this physical session; no mocked pg_locks lookup.
+        owner.close()
+    assert reconcile_claim_review_orphans() == 1
+    assert billing.summary()['pending_calls'] == 0
+    billing.preflight()
+    with Session(get_engine()) as db:
+        row = db.get(ToolRun, receipt)
+        assert row.metrics['orphaned_owner'] is True
+        assert row.credits_charged == 0

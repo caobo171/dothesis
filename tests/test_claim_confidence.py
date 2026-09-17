@@ -1,6 +1,20 @@
 from quality.claim_confidence import MAX_CHUNK_CHARS, build_chunks, review_chunk
 
 
+def test_numeric_zero_batch_ids_still_match_the_supplied_string_ids():
+    source = {'title': 'Study', 'doi': '10.1234/test', 'abstract': 'Evidence.'}
+    chunk = {'chapter': 'intro', 'text': 'A claim.', 'start': 0, 'anchor': 'zero'}
+
+    def llm(prompt):
+        if 'Identify every' in prompt:
+            return [{'text': 'A claim.', 'query': 'claim evidence'}]
+        return {'judgments': [{'claim_id': 0, 'candidate_id': 0, 'status': 'supported',
+                               'supporting_quote': 'Evidence.'}]}
+
+    result = review_chunk(chunk, [], lambda _: [source], llm)
+    assert result['suggestions'][0]['evidence']['text'] == 'Evidence.'
+
+
 def test_live_progress_precedes_expensive_operations_and_reports_actual_counts():
     events = []
     source = {"id": "s1", "title": "Study", "abstract": "Trust predicts adoption."}
@@ -40,6 +54,14 @@ def test_build_chunks_covers_all_canonical_chapters(monkeypatch):
     assert sum(len(c["text"]) for c in chunks if c["chapter"] == "intro") == 6_100
     assert all(len(c["text"]) <= MAX_CHUNK_CHARS for c in chunks)
     assert len({c["anchor"] for c in chunks}) == len(chunks)
+
+
+def test_review_batch_size_avoids_hundreds_of_tiny_sequential_calls(monkeypatch):
+    monkeypatch.setattr("quality.claim_confidence._canonical_chapters",
+                        lambda _: {"intro": "a" * 166_000})
+    chunks = build_chunks({})
+    assert 70 <= len(chunks) <= 80
+    assert "".join(chunk["text"] for chunk in chunks) == "a" * 166_000
 
 
 def test_review_suggests_only_exactly_quoted_retrieved_evidence():
@@ -153,10 +175,9 @@ def test_library_does_not_starve_new_papers_and_quote_requires_candidate_id():
     def no_id(prompt):
         if 'Identify every' in prompt:return [{'text':'Trust affects travel.','query':'travel trust'}]
         return {'judgments':[{'claim_id':'0','status':'supported','supporting_quote':fresh['abstract'],'rationale_vi':'Thiếu ID.'}]}
-    import pytest
-    from quality.claim_confidence import ClaimConfidenceLLMError
-    with pytest.raises(ClaimConfidenceLLMError):
-        review_chunk(chunk,[],lambda q:[fresh],no_id)
+    failed = review_chunk(chunk, [], lambda q: [fresh], no_id)
+    assert failed['suggestions'][0]['classification'] == 'assessment_failed'
+    assert failed['metrics']['claims_failed'] == 1
 
 
 def test_all_extracted_claims_are_judged_in_bounded_batches_without_sampling():
@@ -181,17 +202,20 @@ def test_all_extracted_claims_are_judged_in_bounded_batches_without_sampling():
     assert len(judge_calls)==2  # six + three, never one model call per claim
 
 
-def test_missing_or_duplicate_batch_claim_ids_are_retryable():
-    import pytest
-    from quality.claim_confidence import ClaimConfidenceLLMError
+def test_invalid_batch_rows_are_isolated_without_losing_valid_evidence():
     chunk=build_chunks({'m5_writing':{'chapters':{'intro':{'prose':'A claim. B claim.'}}}})[0]
-    source={'id':'s1','title':'Study','abstract':'Evidence.'}
+    source={'id':'s1','title':'Study','authors':['Nguyen'],'year':2024,'verified':True,'abstract':'Evidence.'}
     def missing(prompt):
         if 'Identify every' in prompt:
             return [{'text':'A claim.','query':'claim evidence'},{'text':'B claim.','query':'claim evidence'}]
         return {'judgments':[{'claim_id':'0','candidate_id':'s1','status':'supported','supporting_quote':'Evidence.','rationale_vi':'Có hỗ trợ.'}]}
-    with pytest.raises(ClaimConfidenceLLMError):
-        review_chunk(chunk,[],lambda _: [source],missing)
+    missing_result = review_chunk(chunk, [], lambda _: [source], missing)
+    assert missing_result['metrics'] == {
+        'claims_total': 2, 'claims_assessed': 1, 'claims_unresolved': 1,
+        'claims_failed': 1, 'queries': 1, 'candidates': 2, 'supported': 1,
+    }
+    assert [item['classification'] for item in missing_result['suggestions']] == ['citation_opportunity', 'assessment_failed']
+    assert missing_result['suggestions'][0]['evidence']['text'] == 'Evidence.'
     def duplicate(prompt):
         if 'Identify every' in prompt:
             return [{'text':'A claim.','query':'claim evidence'},{'text':'B claim.','query':'claim evidence'}]
@@ -199,8 +223,10 @@ def test_missing_or_duplicate_batch_claim_ids_are_retryable():
             {'claim_id':'0','candidate_id':'s1','status':'supported','supporting_quote':'Evidence.','rationale_vi':'Có hỗ trợ.'},
             {'claim_id':'0','candidate_id':'s1','status':'supported','supporting_quote':'Evidence.','rationale_vi':'Có hỗ trợ.'},
         ]}
-    with pytest.raises(ClaimConfidenceLLMError):
-        review_chunk(chunk,[],lambda _: [source],duplicate)
+    duplicate_result = review_chunk(chunk, [], lambda _: [source], duplicate)
+    assert duplicate_result['metrics']['claims_assessed'] == 0
+    assert duplicate_result['metrics']['claims_failed'] == 2
+    assert [item['classification'] for item in duplicate_result['suggestions']] == ['assessment_failed', 'assessment_failed']
 
 
 def test_malformed_extraction_is_retryable_not_empty_success():
@@ -228,9 +254,7 @@ def test_missing_editor_chapter_uses_legacy_fallback_without_stripping_raw(monke
     assert {c['chapter']:c['text'] for c in chunks}=={'intro':'  Raw introduction.\n','conclusion':'Legacy conclusion.'}
 
 
-def test_batch_invented_quote_is_retryable_not_an_unverifiable_result():
-    import pytest
-    from quality.claim_confidence import ClaimConfidenceLLMError
+def test_batch_invented_quote_is_an_explicit_nonactionable_failure():
     chunk=build_chunks({'m5_writing':{'chapters':{'intro':{'prose':'A claim.'}}}})[0]
     source={'id':'s1','title':'Study','abstract':'Retrieved evidence only.'}
     def llm(prompt):
@@ -238,5 +262,43 @@ def test_batch_invented_quote_is_retryable_not_an_unverifiable_result():
             return [{'text':'A claim.','query':'claim evidence'}]
         return {'judgments':[{'claim_id':'0','candidate_id':'s1','status':'supported',
                               'supporting_quote':'invented text','rationale_vi':'Sai.'}]}
-    with pytest.raises(ClaimConfidenceLLMError):
-        review_chunk(chunk,[],lambda _: [source],llm)
+    result = review_chunk(chunk, [], lambda _: [source], llm)
+    assert result['metrics']['claims_assessed'] == 0
+    assert result['metrics']['claims_failed'] == 1
+    assert result['metrics']['claims_unresolved'] == 1
+    assert result['suggestions'][0]['classification'] == 'assessment_failed'
+    assert not result['suggestions'][0]['actionable']
+
+
+def test_malformed_evidence_batch_marks_only_its_claims_unassessed_without_retrying():
+    import json
+    chunk = build_chunks({'m5_writing': {'chapters': {'intro': {'prose': 'A claim. B claim.'}}}})[0]
+    source = {'id': 's1', 'title': 'Study', 'abstract': 'Evidence.'}
+    calls = 0
+
+    def llm(prompt):
+        nonlocal calls
+        if 'Identify every' in prompt:
+            return [{'text': 'A claim.', 'query': 'claim evidence'}, {'text': 'B claim.', 'query': 'claim evidence'}]
+        calls += 1
+        raise json.JSONDecodeError('bad JSON', '}', 0)
+
+    result = review_chunk(chunk, [], lambda _: [source], llm)
+    assert calls == 1
+    assert result['metrics']['claims_assessed'] == 0
+    assert result['metrics']['claims_failed'] == result['metrics']['claims_unresolved'] == 2
+    assert all(item['classification'] == 'assessment_failed' and not item['actionable'] for item in result['suggestions'])
+
+
+def test_timeout_during_evidence_judgment_keeps_the_chunk_retryable():
+    import pytest
+    chunk = build_chunks({'m5_writing': {'chapters': {'intro': {'prose': 'A claim.'}}}})[0]
+    source = {'id': 's1', 'title': 'Study', 'abstract': 'Evidence.'}
+
+    def llm(prompt):
+        if 'Identify every' in prompt:
+            return [{'text': 'A claim.', 'query': 'claim evidence'}]
+        raise TimeoutError('provider timeout')
+
+    with pytest.raises(TimeoutError):
+        review_chunk(chunk, [], lambda _: [source], llm)
