@@ -5,6 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { BookOpen, Check, ExternalLink, ShieldCheck, X } from "lucide-react";
 
 import { AiPending } from "./extensions/AiPending";
@@ -92,6 +93,33 @@ export async function syncChapterForInlineAction({ projectId, chapterName, prose
   }
 }
 
+type PendingEditApi = {
+  id: string;
+  source: PendingEdit["source"];
+  old_text: string;
+  new_text: string;
+  from_offset: number;
+  to_offset: number;
+  metadata?: PendingEdit["metadata"] & { explanation?: string; processing_ms?: number };
+};
+
+// The action endpoint already returns the complete proposal. Normalising it at
+// the editor boundary lets review open immediately instead of waiting for the
+// chapter query to revalidate and then making the student find it below prose.
+export function pendingEditFromApi(edit: PendingEditApi): PendingEdit {
+  return {
+    id: edit.id,
+    source: edit.source,
+    oldText: edit.old_text,
+    newText: edit.new_text,
+    from_offset: edit.from_offset,
+    to_offset: edit.to_offset,
+    explanation: edit.metadata?.explanation,
+    processingMs: edit.metadata?.processing_ms,
+    metadata: edit.metadata,
+  };
+}
+
 
 // Mounts one TipTap instance per chapter. Owns:
 //   - reporting edits upward (the document's single Save lives in the parent)
@@ -134,6 +162,7 @@ export function ChapterEditor({
   const [showTranslate, setShowTranslate] = useState(false);
   const [selectionAnchor, setSelectionAnchor] = useState<{ left: number; top: number } | null>(null);
   const [staleIds, setStaleIds] = useState<Set<string>>(new Set());
+  const [activePendingEdit, setActivePendingEdit] = useState<PendingEdit | null>(null);
   const [inlineAction, setInlineAction] = useState<
     { state: "loading" | "success" | "error"; message: string; action?: "reload_chapter" } | null
   >(null);
@@ -445,11 +474,11 @@ export function ChapterEditor({
         ? patched.document_fingerprint : fingerprintRef.current;
       onServerProse?.(canonicalMarkdown, fingerprintRef.current);
       if (fingerprintRef.current) payload.expected_document_fingerprint = fingerprintRef.current;
-      await apiFetch(path, { method: "POST", body: payload });
-      setInlineAction({
-        state: "success",
-        message: "AI đã xử lý xong. Kiểm tra đề xuất trước khi chấp nhận.",
-      });
+      const created = pendingEditFromApi(
+        await apiFetch(path, { method: "POST", body: payload }) as PendingEditApi,
+      );
+      setActivePendingEdit(created);
+      setInlineAction(null);
       onPendingMutate();
     } catch (e) {
       // Keep the selection intact so the student can retry, but never turn a
@@ -503,6 +532,7 @@ export function ChapterEditor({
       } else if (nextProse !== null) {
         setInlineAction({ state: "error", message: "Đề xuất đã được chấp nhận trên máy chủ, nhưng chương này có nội dung mới cục bộ. Nội dung cục bộ được giữ nguyên; hãy tải lại hoặc đối chiếu trước khi lưu." });
       }
+      if (activePendingEdit?.id === editId) setActivePendingEdit(null);
       onPendingMutate();
     } catch (e) {
       // 409 = stale conflict: keep the ribbon but mark it, so the user discards
@@ -515,7 +545,7 @@ export function ChapterEditor({
     } finally {
       setBusyEditIds(prev => { const next = new Set(prev); next.delete(editId); return next; });
     }
-  }, [projectId, chapterName, editor, busyEditIds, onPendingMutate, onServerProse]);
+  }, [projectId, chapterName, editor, busyEditIds, onPendingMutate, onServerProse, activePendingEdit]);
 
   // Reject: POST to server, then clear any stale flag for this edit.
   const handleReject = useCallback(async (editId: string) => {
@@ -531,6 +561,7 @@ export function ChapterEditor({
         next.delete(editId);
         return next;
       });
+      if (activePendingEdit?.id === editId) setActivePendingEdit(null);
       onPendingMutate();
     } catch (e) {
       // Keep the ribbon so the student can retry, and make the failure visible.
@@ -538,7 +569,7 @@ export function ChapterEditor({
     } finally {
       setBusyEditIds(prev => { const next = new Set(prev); next.delete(editId); return next; });
     }
-  }, [projectId, chapterName, busyEditIds, onPendingMutate]);
+  }, [projectId, chapterName, busyEditIds, onPendingMutate, activePendingEdit]);
 
   const handleRetry = useCallback(async (edit: PendingEdit) => {
     if (edit.source === "chat_rewrite" || actionInFlight.current) return;
@@ -557,9 +588,13 @@ export function ChapterEditor({
     try {
       // Create the replacement first. If generation fails, the existing
       // proposal remains reviewable instead of disappearing.
-      await apiFetch(`/projects/${projectId}/m5/chapters/${chapterName}/${edit.source}`, { method: "POST", body });
+      const replacement = pendingEditFromApi(await apiFetch(
+        `/projects/${projectId}/m5/chapters/${chapterName}/${edit.source}`,
+        { method: "POST", body },
+      ) as PendingEditApi);
       await apiFetch(`/projects/${projectId}/m5/chapters/${chapterName}/pending/${edit.id}/reject`, { method: "POST" });
-      setInlineAction({ state: "success", message: "Đã tạo đề xuất mới. Kiểm tra diff trước khi chấp nhận." });
+      setActivePendingEdit(replacement);
+      setInlineAction(null);
       onPendingMutate();
     } catch (e) {
       setInlineAction({ state: "error", message: e instanceof Error ? e.message : "Không thể tạo lại đề xuất." });
@@ -772,13 +807,47 @@ export function ChapterEditor({
         </div>
       )}
 
+      {activePendingEdit && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-ink-950/20 px-4 py-6 backdrop-blur-[1px]"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setActivePendingEdit(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="So sánh đề xuất AI"
+            className="relative max-h-full w-[min(760px,100%)] overflow-y-auto overscroll-contain rounded-2xl"
+          >
+            <button
+              type="button"
+              aria-label="Đóng bảng so sánh"
+              onClick={() => setActivePendingEdit(null)}
+              className="absolute right-3 top-3 z-10 rounded-lg bg-white/90 p-2 text-ink-500 shadow-sm transition hover:bg-ink-50 hover:text-ink-900"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <PendingEditRibbon
+              edit={activePendingEdit}
+              onAccept={handleAccept}
+              onReject={handleReject}
+              onRetry={activePendingEdit.source === "chat_rewrite" ? undefined : handleRetry}
+              stale={staleIds.has(activePendingEdit.id)}
+              busy={busyEditIds.has(activePendingEdit.id)}
+            />
+          </section>
+        </div>,
+        document.body,
+      )}
+
       {pendingEdits.length > 0 && (
         <section className="mt-8 space-y-4 border-t border-ink-100 pt-6" aria-label="AI edit proposals">
           <div className="flex items-center justify-between">
             <div><p className="text-sm font-semibold text-ink-900">AI edit proposals</p><p className="mt-0.5 text-xs text-ink-400">Review each change before it becomes part of the chapter.</p></div>
             <span className="rounded-md bg-primary-50 px-2 py-1 text-xs font-semibold tabular-nums text-primary-700">{pendingEdits.length}</span>
           </div>
-          {pendingEdits.map(edit => (
+          {pendingEdits.filter(edit => edit.id !== activePendingEdit?.id).map(edit => (
             <div key={edit.id}>
               <PendingEditRibbon
                 edit={edit}

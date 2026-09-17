@@ -271,6 +271,9 @@ accepts the proposal.
 - The proposal UI must let the student toggle an inline word diff, inspect the
   rationale, replace the selection, insert the proposal below it, retry the
   same action, or discard it.
+- Open the completed proposal immediately in a comparison panel in the editing
+  flow. Do not make the student hunt for it at the end of the chapter; show the
+  proposed text, old/new diff, rationale, and review actions before prose changes.
 - Red/struck text means removal and green text means insertion. Diff markup is
   display-only and must never enter stored markdown or exported files.
 - Accepting still uses the stale-offset guard. If chapter prose changed since

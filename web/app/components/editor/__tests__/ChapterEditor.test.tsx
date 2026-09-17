@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { LocaleProvider } from "@/app/lib/i18n/LocaleProvider";
-import { ChapterEditor, syncChapterForInlineAction } from "../ChapterEditor";
+import { ChapterEditor, pendingEditFromApi, syncChapterForInlineAction } from "../ChapterEditor";
 
 
 beforeEach(() => {
@@ -19,6 +19,25 @@ afterEach(() => {
 
 
 describe("ChapterEditor — mount + save", () => {
+  it("normalises an inline action response for immediate comparison review", () => {
+    expect(pendingEditFromApi({
+      id: "edit-1",
+      source: "expand",
+      old_text: "Short claim.",
+      new_text: "A longer, clearer claim.",
+      from_offset: 2,
+      to_offset: 14,
+      metadata: { explanation: "Added context.", processing_ms: 4200, document_fingerprint: "rev-1" },
+    })).toEqual(expect.objectContaining({
+      id: "edit-1",
+      source: "expand",
+      oldText: "Short claim.",
+      newText: "A longer, clearer claim.",
+      explanation: "Added context.",
+      processingMs: 4200,
+    }));
+  });
+
   it("anchors a claim-review suggestion in the prose without changing saved markdown", async () => {
     const onProseChange = vi.fn();
     const onClaimDecision = vi.fn().mockResolvedValue(undefined);
