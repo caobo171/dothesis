@@ -4,9 +4,7 @@ import { SelectionToolbar } from "../SelectionToolbar";
 
 const noop = () => {};
 const handlers = () => ({
-  onParaphrase: noop, onTranslate: noop, onCite: noop,
-  onProofread: noop, onImprove: noop, onHumanize: noop,
-  onExpand: noop, onShorten: noop,
+  onRewrite: noop, onTranslate: noop, onCite: noop,
 });
 
 
@@ -42,19 +40,17 @@ describe("SelectionToolbar", () => {
     rect.mockRestore();
   });
 
-  it.each([
-    ["onParaphrase", /paraphrase/i],
-    ["onImprove", /improve/i],
-    ["onProofread", /proofread/i],
-    ["onHumanize", /humanize/i],
-    ["onExpand", /expand/i],
-    ["onShorten", /shorten/i],
-  ] as const)("fires %s from the dropdown", (prop, name) => {
-    const fn = vi.fn();
-    render(<SelectionToolbar {...handlers()} {...{ [prop]: fn }} />);
+  it("uses rewrite actions as editable prompt presets and submits the edited instruction", () => {
+    const onRewrite = vi.fn();
+    render(<SelectionToolbar {...handlers()} onRewrite={onRewrite} />);
     fireEvent.click(screen.getByRole("button", { name: /ask ai/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name }));
-    expect(fn).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("menuitem", { name: /expand/i }));
+    expect(onRewrite).not.toHaveBeenCalled();
+    const prompt = screen.getByLabelText(/chỉnh đoạn này/i);
+    expect((prompt as HTMLTextAreaElement).value).toMatch(/mở rộng/i);
+    fireEvent.change(prompt, { target: { value: "Mở rộng và thêm một ví dụ thực tế." } });
+    fireEvent.click(screen.getByRole("button", { name: /tạo đề xuất/i }));
+    expect(onRewrite).toHaveBeenCalledWith("expand", "Mở rộng và thêm một ví dụ thực tế.");
   });
 
   it.each([

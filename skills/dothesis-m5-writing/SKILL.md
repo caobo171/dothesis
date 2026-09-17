@@ -274,6 +274,10 @@ accepts the proposal.
 - Open the completed proposal immediately in a comparison panel in the editing
   flow. Do not make the student hunt for it at the end of the chapter; show the
   proposed text, old/new diff, rationale, and review actions before prose changes.
+- Inline AI actions are editable prompt presets, not commands that run on
+  selection. Choosing Paraphrase, Improve, Proofread, Humanize, Expand, or
+  Shorten fills a composer; the student may change the instruction before
+  submitting, or write a free-form editing instruction from scratch.
 - Red/struck text means removal and green text means insertion. Diff markup is
   display-only and must never enter stored markdown or exported files.
 - Accepting still uses the stale-offset guard. If chapter prose changed since

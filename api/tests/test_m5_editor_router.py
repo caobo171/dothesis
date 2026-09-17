@@ -820,13 +820,15 @@ def test_inline_rewrite_actions_create_pending_edit(mock_llm, client, kind):
 
     r = client.post(
         f"/api/v1/projects/{pid}/m5/chapters/intro/{kind}",
-        json={"from_offset": from_o, "to_offset": to_o},
+        json={"from_offset": from_o, "to_offset": to_o, "prompt": "Emphasise the causal link."},
     )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["source"] == kind
     assert body["new_text"] == "the rewritten selection"
     assert body["old_text"] == target
+    assert "Emphasise the causal link." in mock_llm.call_args.args[0]
+    assert body["metadata"]["prompt"] == "Emphasise the causal link."
 
     with sf() as db:
         cs = db.get(ContextStore, uuid.UUID(pid))

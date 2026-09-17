@@ -13,7 +13,7 @@ export type PendingEdit = {
   to_offset: number;
   explanation?: string;
   processingMs?: number;
-  metadata?: { target_lang?: string; reference_id?: string; style?: string; document_fingerprint?: string };
+  metadata?: { target_lang?: string; reference_id?: string; style?: string; prompt?: string; document_fingerprint?: string };
 };
 
 type Props = {

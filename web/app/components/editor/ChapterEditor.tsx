@@ -17,7 +17,7 @@ import { CitationHighlight } from "./extensions/CitationHighlight";
 import { FigureBlock } from "./extensions/FigureBlock";
 import { RenderedArtifactBlock } from "./extensions/RenderedArtifactBlock";
 import { ClaimReviewMark } from "./extensions/ClaimReviewMark";
-import { SelectionToolbar } from "./SelectionToolbar";
+import { SelectionToolbar, type RewriteKind } from "./SelectionToolbar";
 import { CitePopover } from "./CitePopover";
 import { TranslateMenu } from "./TranslateMenu";
 import { PendingEditRibbon, type PendingEdit } from "./PendingEditRibbon";
@@ -577,7 +577,13 @@ export function ChapterEditor({
       ? { at_offset: edit.from_offset, reference_id: edit.metadata?.reference_id }
       : edit.source === "translate"
         ? { from_offset: edit.from_offset, to_offset: edit.to_offset, target_lang: edit.metadata?.target_lang || defaultTargetLang || "vi" }
-        : { from_offset: edit.from_offset, to_offset: edit.to_offset, ...(edit.source === "paraphrase" ? { style: edit.metadata?.style || "" } : {}) };
+        : {
+            from_offset: edit.from_offset,
+            to_offset: edit.to_offset,
+            ...(edit.source === "paraphrase"
+              ? { prompt: edit.metadata?.style || "" }
+              : { prompt: edit.metadata?.prompt || "" }),
+          };
     // Retries reuse offsets captured with the proposal. They must carry that
     // same snapshot revision (or the latest known revision for legacy edits),
     // so a moved chapter fails closed instead of regenerating at the wrong span.
@@ -706,14 +712,9 @@ export function ChapterEditor({
           style={{ left: selectionAnchor.left, top: selectionAnchor.top }}
         >
           <SelectionToolbar
-            onParaphrase={() => _withSelection("paraphrase", {})}
+            onRewrite={(kind: RewriteKind, prompt: string) => _withSelection(kind, { prompt })}
             onTranslate={() => setShowTranslate(true)}
             onCite={() => setShowCite(true)}
-            onProofread={() => _withSelection("proofread", {})}
-            onImprove={() => _withSelection("improve", {})}
-            onHumanize={() => _withSelection("humanize", {})}
-            onExpand={() => _withSelection("expand", {})}
-            onShorten={() => _withSelection("shorten", {})}
           />
         </div>
       )}

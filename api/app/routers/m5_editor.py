@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -846,6 +846,7 @@ class ParaphraseBody(BaseModel):
     from_offset: int
     to_offset: int
     style: str = ""
+    prompt: str = Field(default="", max_length=2000)
     expected_document_fingerprint: str | None = None
 
 
@@ -857,6 +858,7 @@ class ParaphraseBody(BaseModel):
 class RewriteBody(BaseModel):
     from_offset: int
     to_offset: int
+    prompt: str = Field(default="", max_length=2000)
     expected_document_fingerprint: str | None = None
 
 
@@ -1008,7 +1010,7 @@ def paraphrase_chapter_selection(
         "context_before": before,
         "selection": selection,
         "context_after": after,
-        "style": body.style,
+        "style": body.prompt.strip() or body.style,
     })
     pe = PendingEdit(
         id=uuid4().hex,
@@ -1020,7 +1022,7 @@ def paraphrase_chapter_selection(
         source="paraphrase",
         pending_at=datetime.now(timezone.utc),
         metadata=_proposal_metadata("paraphrase", started, {
-            **({"style": body.style} if body.style else {}),
+            **({"style": body.prompt.strip() or body.style} if body.prompt.strip() or body.style else {}),
             "document_fingerprint": _chapter_fingerprint(prose),
         }),
     )
@@ -1054,7 +1056,13 @@ def _rewrite_selection_edit(
         "context_before": before,
         "selection": selection,
         "context_after": after,
-        "instruction": _INLINE_INSTRUCTIONS[kind],
+        # Decision: presets remain safety-bearing base instructions; the
+        # student's editable prompt refines them instead of replacing guards
+        # that preserve numbers, citations, and non-fabrication behavior.
+        "instruction": "\n\n".join(filter(None, [
+            _INLINE_INSTRUCTIONS[kind],
+            f"Student's additional editing instruction: {body.prompt.strip()}" if body.prompt.strip() else "",
+        ])),
     })
     pe = PendingEdit(
         id=uuid4().hex,
@@ -1067,6 +1075,7 @@ def _rewrite_selection_edit(
         pending_at=datetime.now(timezone.utc),
         metadata=_proposal_metadata(kind, started, {
             "document_fingerprint": _chapter_fingerprint(prose),
+            **({"prompt": body.prompt.strip()} if body.prompt.strip() else {}),
         }),
     )
     edit_dict = _append_pending_edit(cs, chapter_name, pe)
