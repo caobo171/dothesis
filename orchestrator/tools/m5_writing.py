@@ -3092,7 +3092,9 @@ def compose_module_chapters(context_store: dict, module: str) -> dict:
     reshapes the result to merge straight into context_store.m5_writing.chapters.
 
     Returns {} for a module that owns no chapters, or on any failure — fail-open
-    so composing a chapter can never block a module from completing.
+    so composing a chapter can never block a module from completing. The one
+    exception is CompositionGroundingError: it propagates so the caller can tell
+    the student WHY the chapter was not written, instead of a silent {}.
     """
     names = chapters_for_module(module)
     if not names:
@@ -3101,6 +3103,8 @@ def compose_module_chapters(context_store: dict, module: str) -> dict:
         # Explicit chapter subset → compose_all_sections composes exactly these
         # (it still appends a References section, which we filter out below).
         sections = compose_all_sections(context_store, chapters=names)
+    except CompositionGroundingError:
+        raise
     except Exception:
         logger.exception("compose_module_chapters: compose failed for %s", module)
         return {}

@@ -219,3 +219,34 @@ def test_auto_compose_module_merges_only_its_chapters(monkeypatch):
     assert chapters["intro"]["prose"] == "Intro.", "M1's chapter must be preserved"
     assert chapters["methodology"]["prose"] == "Method prose.", "M3's chapter must be written"
     assert committed.get("done")
+
+
+def test_auto_compose_grounding_failure_is_recorded_not_raised(monkeypatch):
+    import orchestrator.tools.m5_writing as M
+
+    def ungrounded(nested, module):
+        raise M.CompositionGroundingError(
+            [{"check": "coherence.unsupported_diagnostic_claim", "message": "HTMT claim"}])
+    monkeypatch.setattr(M, "compose_module_chapters", ungrounded)
+
+    class _CS:
+        m1_topic = m2_literature = m3_design = m4_analysis = m5_writing = {}
+
+    class _Sess:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def get(self, model, pid): return _CS()
+        def commit(self): raise AssertionError("nothing must be committed")
+
+    monkeypatch.setattr("sqlalchemy.orm.Session", _Sess)
+
+    store = Store.__new__(Store)
+    store.engine = object()
+    store.project_id = "p1"
+    store._auto_compose_module("M4")
+
+    [failure] = store.compose_failures
+    assert failure["module"] == "M4"
+    assert failure["chapters"] == ["results"]
+    assert failure["findings"][0]["check"] == "coherence.unsupported_diagnostic_claim"

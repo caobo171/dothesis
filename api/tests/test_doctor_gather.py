@@ -15,9 +15,9 @@ from app.doctor_adapter import gather
 from app.models import Message, PaperUpload, Thread
 
 
-def _upload(db, project_id, filename) -> PaperUpload:
+def _upload(db, project_id, filename, size_bytes=1) -> PaperUpload:
     row = PaperUpload(project_id=project_id, filename=filename, s3_uri="",
-                      size_bytes=1, mime_type="application/octet-stream")
+                      size_bytes=size_bytes, mime_type="application/octet-stream")
     db.add(row)
     db.commit()
     return row
@@ -57,6 +57,30 @@ def test_an_upload_a_message_carried_is_marked_attached(project_id, tmp_path):
         inp = gather(db, project_id, _store(project_id, tmp_path), tmp_path)
 
     assert inp.uploads[0].ever_attached is True
+
+
+def test_a_reupload_of_an_attached_file_counts_as_read(project_id, tmp_path):
+    # Same name + same size: the student uploaded it twice and attached the
+    # second copy. The first copy must not be reported "never read".
+    with Session(get_engine()) as db:
+        first = _upload(db, project_id, "_Result.docx", size_bytes=306682)
+        second = _upload(db, project_id, "_Result.docx", size_bytes=306682)
+        _thread_with_attachment(db, project_id, second.id)
+        inp = gather(db, project_id, _store(project_id, tmp_path), tmp_path)
+
+    by_id = {u.upload_id: u for u in inp.uploads}
+    assert by_id[str(first.id)].ever_attached is True
+
+
+def test_same_name_different_size_is_a_different_file(project_id, tmp_path):
+    with Session(get_engine()) as db:
+        old = _upload(db, project_id, "_Result.docx", size_bytes=100)
+        new = _upload(db, project_id, "_Result.docx", size_bytes=200)
+        _thread_with_attachment(db, project_id, new.id)
+        inp = gather(db, project_id, _store(project_id, tmp_path), tmp_path)
+
+    by_id = {u.upload_id: u for u in inp.uploads}
+    assert by_id[str(old.id)].ever_attached is False
 
 
 def test_a_missing_sidecar_is_not_an_error(project_id, tmp_path):

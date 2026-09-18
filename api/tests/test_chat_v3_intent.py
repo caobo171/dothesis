@@ -50,14 +50,27 @@ def test_explicit_chapter_overrides_questionnaire_history():
     assert '"key":"final_sections"' in directive
 
 
-def test_false_saved_claim_is_replaced_when_no_commit():
+def test_false_saved_claim_is_flagged_when_no_commit():
     reply = _honest_assistant_reply(
         "## Đã lưu bộ câu hỏi vào bài luận",
         [],
         "lưu nó vào bộ nhớ của bài luận",
     )
     assert "Chưa lưu được" in reply
-    assert "Đã lưu" not in reply
+
+
+def test_flagged_reply_keeps_the_explanation():
+    # The student asked "why?"; the answer mentioned a save and used to be
+    # replaced wholesale by the one-liner, three turns running.
+    body = "Lý do: phần kết quả đã lưu ở Chương 4, nhưng bước viết chương bị lỗi grounding."
+    reply = _honest_assistant_reply(body, [], "giải thích kĩ hơn lý do được không ?")
+    assert reply.startswith(body)
+    assert "Chưa lưu được" in reply
+
+
+def test_doctor_repair_this_turn_counts_as_a_save():
+    reply = "Đã lưu 101 dòng kết quả vào Chương 4."
+    assert _honest_assistant_reply(reply, [], "đây chương 4", saved_this_turn=True) == reply
 
 
 def test_saved_claim_kept_when_commit_succeeded():

@@ -562,6 +562,17 @@ class DbProjectStateStore(ProjectStateStore):
         except Exception:
             return []
 
+    def record_compose_failure(self, module: str, chapters, findings) -> None:
+        """Remember a chapter that could not be written, for the caller to report."""
+        failures = self.__dict__.setdefault("compose_failures", [])
+        failures.append({
+            "module": module,
+            "chapters": list(chapters or []),
+            "reason": "composition_grounding_failed",
+            "findings": [{k: f.get(k) for k in ("check", "message") if f.get(k)}
+                         for f in (findings or [])[:5] if isinstance(f, dict)],
+        })
+
     def _auto_compose_module(self, module: str) -> None:
         """Compose the chapter(s) a just-completed module owns into the slice.
 
@@ -579,7 +590,7 @@ class DbProjectStateStore(ProjectStateStore):
         log = logging.getLogger(__name__)
         try:
             from orchestrator.tools.m5_writing import (  # noqa: PLC0415
-                chapters_for_module, compose_module_chapters,
+                CompositionGroundingError, chapters_for_module, compose_module_chapters,
             )
             from .models import ContextStore as DbContextStore
             from sqlalchemy.orm import Session
@@ -599,7 +610,17 @@ class DbProjectStateStore(ProjectStateStore):
                     "m4_analysis": cs.m4_analysis or {},
                     "m5_writing": cs.m5_writing or {},
                 }
-                composed = compose_module_chapters(nested, module)
+                try:
+                    composed = compose_module_chapters(nested, module)
+                except CompositionGroundingError as exc:
+                    # Still fail-open for the commit, but no longer silent: the
+                    # tool that triggered this commit reads `compose_failures`
+                    # and reports the unwritten chapter instead of "ok".
+                    self.record_compose_failure(module, chapters_for_module(module),
+                                                exc.findings)
+                    log.warning("Auto-compose %s: grounding failed — chapter not written.",
+                                module)
+                    return
                 if not composed:
                     log.info("Auto-compose %s: nothing composed — skipped.", module)
                     return

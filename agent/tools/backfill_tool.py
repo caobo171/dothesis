@@ -188,6 +188,9 @@ def make_backfill_tool(store):
         items: list[dict] = []
         saved: list[dict] = []
         slices: dict = {}
+        # Chapters whose auto-compose failed during THIS call (the store keeps
+        # a running list; only what was appended from here on is ours).
+        failures_before = len(getattr(store, "compose_failures", None) or [])
 
         def _save_now(entry: dict) -> None:
             module = entry.get("module")
@@ -261,7 +264,17 @@ def make_backfill_tool(store):
         saved.sort(key=lambda s: MODULES.index(s["module"]) if s.get("module") in MODULES else 99)
 
         split = _move_final_chapter_to_m5(store, slices)
-        return json.dumps({"ok": True, "reconstructed": items, "saved": saved,
-                           "final_chapter_moved": split}, ensure_ascii=False)
+        not_written = (getattr(store, "compose_failures", None) or [])[failures_before:]
+        out = {"ok": True, "reconstructed": items, "saved": saved,
+               "final_chapter_moved": split}
+        if not_written:
+            # The module state landed, but its chapter prose did not. Say so —
+            # a student who asked for the full thesis must hear which chapter
+            # is missing and why, not a bare "ok".
+            out["chapters_not_written"] = not_written
+            out["note"] = ("Module state was saved, but these chapters were NOT written: the "
+                           "draft made claims the saved results do not support. Tell the "
+                           "student which chapter is missing and why, in plain words.")
+        return json.dumps(out, ensure_ascii=False)
 
     return backfill_upstream_modules

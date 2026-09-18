@@ -19,6 +19,7 @@ class DoctorResult:
     """What the turn should do with this pass."""
     repaired: list[str] = field(default_factory=list)   # student-facing lines
     directive: str | None = None                        # injected into the turn
+    committed: bool = False                             # a repair wrote to state
 
 
 def apply_findings(store, findings: list[Finding], *,
@@ -81,6 +82,9 @@ def apply_findings(store, findings: list[Finding], *,
             logger.exception("doctor: repair %s failed", f.code)
             continue
         res.repaired.append(f.detail)
+        # UNREAD_UPLOAD's "repair" writes nothing; every other one commits.
+        if f.code != "UNREAD_UPLOAD":
+            res.committed = True
         before = list(f.payload.get("gaps") or [])
         after = list((gaps_after or {}).get(f.payload.get("module") or "", before)) \
             if gaps_after is not None else []
@@ -328,11 +332,18 @@ def gather(db, project_id, store, workspace) -> DoctorInput:
             if chip.get("upload_id"):
                 attached.add(str(chip["upload_id"]))
 
+    rows = db.execute(
+        select(PaperUpload).where(PaperUpload.project_id == project_id)
+    ).scalars().all()
+    # A re-upload of the same file (same name, same size) is the same document:
+    # the sidecar is keyed by filename, so attaching either copy read it. Without
+    # this, the unattached twin was reported "never read" on every turn and the
+    # agent took that as proof the file was unreadable.
+    attached_files = {(r.filename, r.size_bytes) for r in rows if str(r.id) in attached}
+
     ws = Path(workspace)
     uploads: list[UploadRecord] = []
-    for row in db.execute(
-        select(PaperUpload).where(PaperUpload.project_id == project_id)
-    ).scalars().all():
+    for row in rows:
         # The upload route caches extracted text in a sidecar next to the
         # bytes. That extraction is already paid for — re-running vision over
         # a screenshot docx would charge the student twice to learn the same
@@ -346,7 +357,9 @@ def gather(db, project_id, store, workspace) -> DoctorInput:
             logger.warning("doctor: unreadable sidecar %s", sidecar)
         uploads.append(UploadRecord(
             upload_id=str(row.id), filename=row.filename,
-            sidecar_text=text, ever_attached=str(row.id) in attached))
+            sidecar_text=text,
+            ever_attached=(str(row.id) in attached
+                           or (row.filename, row.size_bytes) in attached_files)))
 
     try:
         cs = store.load_full_context_store() or {}

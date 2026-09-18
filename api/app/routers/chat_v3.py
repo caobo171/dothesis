@@ -299,23 +299,33 @@ def _commit_slice_succeeded(tool_results: list[tuple[str, str]]) -> bool:
     return False
 
 
-def _honest_assistant_reply(full: str, tool_results: list[tuple[str, str]], user_text: str) -> str:
-    """Distinguish persisted drafts from exported files without inventing retries."""
-    if not full or not _SAVED_CLAIM_RE.search(full) or _commit_slice_succeeded(tool_results):
+def _honest_assistant_reply(full: str, tool_results: list[tuple[str, str]], user_text: str,
+                            *, saved_this_turn: bool = False) -> str:
+    """Flag an unconfirmed save claim without throwing the reply away.
+
+    The note is appended, never substituted: replacing the whole reply also
+    erased every explanation that merely mentioned a save, so a student asking
+    "why?" got the same one-liner three turns running. `saved_this_turn` covers
+    writes made outside the agent's tools (the per-turn doctor repairs).
+    """
+    if (not full or not _SAVED_CLAIM_RE.search(full) or saved_this_turn
+            or _commit_slice_succeeded(tool_results)):
         return full
     vi = bool(_VIETNAMESE_RE.search(user_text or full))
     exported = any(name == "export_docx" and _tool_succeeded(preview)
                    for name, preview in tool_results)
     # Decision: a valid artifact must not become a fictitious M3 save failure.
     if exported:
-        return ("Đã tạo file từ nội dung hiện có. Bạn có thể tải tài liệu từ thẻ tải xuống. "
+        note = ("File được tạo từ nội dung hiện có. Bạn có thể tải tài liệu từ thẻ tải xuống. "
                 "Chưa xác nhận có nội dung mới được lưu vào bản thảo."
-                if vi else "Created files from the existing content; use the download card. "
+                if vi else "The files were created from the existing content; use the download card. "
                 "No newly saved draft content was confirmed.")
-    return ("Chưa lưu được thay đổi vào dự án. Lượt này chưa có xác nhận lưu thành công; "
-            "không thể coi nội dung vừa đề xuất là bản đã lưu."
-            if vi else "The changes were not confirmed as saved to the project. "
-            "The proposed content must not be treated as a saved draft.")
+    else:
+        note = ("Chưa lưu được thay đổi vào dự án trong lượt này: hệ thống chưa ghi nhận "
+                "lần lưu thành công nào, nên nội dung đề xuất ở trên chưa phải bản đã lưu."
+                if vi else "No change was confirmed as saved to the project this turn, "
+                "so the content proposed above is not a saved draft.")
+    return f"{full.rstrip()}\n\n> ⚠️ {note}"
 
 
 # "đã viết lại", "được viết lại", "đã bổ sung trích dẫn", "rewrote", "recomposed".
@@ -597,6 +607,8 @@ async def send_message_v3(
         # onto the Message row so MessageBubble can render them all on reload.
         widget_hints: list[dict] = []
         tool_results: list[tuple[str, str]] = []
+        # Set when this turn's doctor pass committed a repair to project state.
+        doctor_saved: list[bool] = []
 
         # Engine progress beats (research_scout's 30–90s search) reach the
         # SSE stream through the same registry the graph path used.
@@ -669,6 +681,8 @@ async def send_message_v3(
                     _doc = run_doctor(_ddb, project_id, turn_store,
                                       _workspace_dir(project_id),
                                       new_evidence=bool(attachments))
+                if _doc.committed:
+                    doctor_saved.append(True)
                 for _line in _doc.repaired:
                     # A silent repair is still a change to the student's thesis.
                     await events_q.put(("agent", {"type": "token", "text": _line + "\n\n"}))
@@ -747,7 +761,8 @@ async def send_message_v3(
             # are skipped: the error event already told the user what happened.
             if not full and _counts.get("error", 0) == 0:
                 full = _tool_only_reply(text, tool_results)
-            full = _honest_assistant_reply(full, tool_results, text)
+            full = _honest_assistant_reply(full, tool_results, text,
+                                          saved_this_turn=bool(doctor_saved))
             # A "saved" claim is checked against commit_slice; a "rewrote your
             # chapters" claim has to be checked against the chapters, because
             # the compose path reports success while handing back the old text.

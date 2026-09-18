@@ -345,3 +345,15 @@ def test_compose_module_chapters_fail_open(monkeypatch):
     monkeypatch.setattr(M, "compose_all_sections", boom)
     assert M.compose_module_chapters({}, "M2") == {}
     assert M.compose_module_chapters({}, "unknown_module") == {}
+
+
+def test_compose_module_chapters_surfaces_grounding_failure(monkeypatch):
+    # Grounding failures are actionable — the caller must be able to report
+    # the unwritten chapter, so they are not swallowed like transient errors.
+    import pytest
+
+    def ungrounded(cs, chapters=None):
+        raise M.CompositionGroundingError([{"check": "coherence.unsupported_diagnostic_claim"}])
+    monkeypatch.setattr(M, "compose_all_sections", ungrounded)
+    with pytest.raises(M.CompositionGroundingError):
+        M.compose_module_chapters({}, "M4")
