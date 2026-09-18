@@ -158,6 +158,10 @@ def _parse_row(line: str) -> dict | None:
     return {"label": label, "values": values}
 
 
+# A markdown code fence, with or without a language tag: ```, ```markdown.
+_FENCE_RE = re.compile(r"^```[\w-]*$")
+
+
 def parse_results_tables(sidecar_text: str) -> dict[str, list[dict]]:
     """Extracted sidecar text -> ONE dict keyed by table. `{}` when unsure.
 
@@ -204,6 +208,11 @@ def parse_results_tables(sidecar_text: str) -> dict[str, list[dict]]:
 
     for line in sidecar_text.splitlines():
         stripped = line.strip()
+        if _FENCE_RE.match(stripped):
+            # The image transcriber wraps some tables in ```markdown fences.
+            # A fence is neither a heading nor prose: treated as one, it keyed
+            # a real project's loadings table as "```markdown".
+            continue
         if stripped.startswith("|"):
             if not in_table:
                 heading = _pick_heading(pending, previous=heading)
@@ -269,7 +278,7 @@ def parse_source_figures(sidecar_text: str) -> dict[str, str]:
     in_table = False
     for line in sidecar_text.splitlines():
         stripped = line.strip()
-        if not stripped:
+        if not stripped or _FENCE_RE.match(stripped):
             continue
         if stripped.startswith("|"):
             if not in_table:
@@ -407,7 +416,7 @@ def _figures_not_linked(inp: DoctorInput) -> list[Finding]:
                    f"vào chương kết quả.",
             repair="deterministic",
             payload={"module": "M4", "results": {**ar, "source_figures": figures},
-                     "filename": u.filename},
+                     "figures": figures, "filename": u.filename},
         )]
     return []
 

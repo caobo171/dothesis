@@ -50,10 +50,21 @@ def apply_findings(store, findings: list[Finding], *,
     asks: list[str] = []
     directives: list[str] = []
 
+    def give_up(f: Finding) -> None:
+        # A results file that was READ but not converted into tables is not
+        # something the student can fix by sending more. Filing it under
+        # "tell the student what to send" made the agent invent a reason —
+        # "your file is images, send Excel" — for a file whose every number
+        # had been transcribed, and then repeat it for the rest of the thread.
+        if f.code == "RESULTS_NOT_RENDERABLE":
+            directives.append(_results_readable_directive(f.payload.get("filename") or ""))
+        else:
+            asks.append(f.detail)
+
     for f in findings:
         entry = log.get(f.code) or {}
         if entry.get("exhausted"):
-            asks.append(f.detail)
+            give_up(f)
             continue
         # The same repair, asked for again with the same inputs, already ran and
         # did not fix it. Without this the expensive repairs bill every turn
@@ -62,7 +73,7 @@ def apply_findings(store, findings: list[Finding], *,
         # Cheap deterministic repairs are exempt — re-moving data that is
         # already where it belongs costs nothing and is idempotent.
         if f.repair in ("reparse", "recompose") and entry.get("signature") == _signature(f):
-            asks.append(f.detail)
+            give_up(f)
             log[f.code] = {**entry, "exhausted": True}
             continue
         if f.repair == "directive":
@@ -76,12 +87,16 @@ def apply_findings(store, findings: list[Finding], *,
                 _reparse(store, f)
             elif f.repair == "recompose":
                 _recompose(store, f)
-            else:
-                _commit(store, f)
+            elif _commit(store, f) is False:
+                continue  # nothing left to do: state already has it
         except Exception:  # noqa: BLE001 — one failed repair must not stop the rest
             logger.exception("doctor: repair %s failed", f.code)
             continue
-        res.repaired.append(f.detail)
+        # The finding describes the problem; after a successful re-extract the
+        # student must hear the outcome, not "không dựng được bảng" again.
+        res.repaired.append(
+            f"Đã đọc lại kết quả từ {f.payload.get('filename')} và dựng lại bảng cho Chương 4."
+            if f.code == "RESULTS_NOT_RENDERABLE" else f.detail)
         # UNREAD_UPLOAD's "repair" writes nothing; every other one commits.
         if f.code != "UNREAD_UPLOAD":
             res.committed = True
@@ -103,6 +118,17 @@ def apply_findings(store, findings: list[Finding], *,
             "cần gửi gì, đừng viết lời từ chối vào trong chương: " + " ".join(asks))
     res.directive = "\n".join(directives) or None
     return res
+
+
+def _results_readable_directive(filename: str) -> str:
+    return (
+        f"[RESULTS FILE WAS READ] {filename} was fully read when it was uploaded: its "
+        f"text, including every table transcribed from its images, is in "
+        f"`uploads/{filename}.txt` (read_file) and the numbers there are correct. Only "
+        f"the automatic conversion into Chapter 4 tables failed. Use those numbers "
+        f"directly. Never tell the student the file or its images cannot be read, never "
+        f"claim to have run OCR, and never ask them to resend, export or retype the results."
+    )
 
 
 def _signature(f: Finding) -> str:
@@ -149,12 +175,26 @@ def _with_resolved_figures(store, results: dict) -> dict:
     return {**results, "source_figures": resolved}
 
 
-def _commit(store, f: Finding) -> None:
+def _commit(store, f: Finding) -> bool | None:
     """Apply one deterministic repair. Only moves evidence the student already
     supplied into the state that is supposed to describe it — never writes
     prose, never invents a number."""
     module = f.payload.get("module")
-    if f.code in ("RESULTS_NOT_IN_STATE", "FIGURES_NOT_LINKED"):
+    if f.code == "FIGURES_NOT_LINKED":
+        # Merge onto the results stored NOW, not the snapshot diagnose() took.
+        # A re-extract earlier in the same pass may already have replaced that
+        # block; writing the snapshot back put the unrenderable block over the
+        # repaired one three seconds after the repair landed.
+        m4 = (store.load_full_context_store() or {}).get("m4_analysis") or {}
+        current = m4.get("results")
+        if not isinstance(current, dict) or current.get("source_figures"):
+            return False
+        store.commit_slice(module or "M4",
+                           {"results": _with_resolved_figures(
+                               store, {**current, "source_figures": f.payload["figures"]})},
+                           reason=f"doctor: gắn ảnh kết quả gốc từ {f.payload['filename']}")
+        return True
+    if f.code == "RESULTS_NOT_IN_STATE":
         store.commit_slice(module or "M4",
                            {"results": _with_resolved_figures(store, f.payload["results"])},
                            reason=f"doctor: kết quả đọc từ {f.payload['filename']}")

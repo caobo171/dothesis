@@ -153,3 +153,13 @@ def test_a_document_with_no_images_maps_nothing():
     from orchestrator.doctor import parse_source_figures
     assert parse_source_figures("OUTER LOADINGS\n| ATT_1 | 0.854 |\n") == {}
     assert parse_source_figures("") == {}
+
+
+def test_code_fences_around_a_table_are_not_its_heading():
+    from orchestrator.doctor import parse_results_tables
+    text = ("OUTER LOADINGS\n```markdown\n| | ATT |\n|---|---|\n| ATT_1 | 0.854 |\n```\n"
+            "PATH COEFFICIENTS\n```\n| | O |\n|---|---|\n| INT -> DEC | 0.606 |\n```\n")
+    tables = parse_results_tables(text)
+    assert not any(k.startswith("```") for k in tables)
+    assert tables["outer_loadings"][0]["values"] == [0.854]
+    assert tables["path_coefficients"][0]["values"] == [0.606]

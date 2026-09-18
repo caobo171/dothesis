@@ -164,7 +164,7 @@ def test_a_renderable_re_extraction_is_committed(monkeypatch):
     module, writes, _reason, _kw = store.commits[0]
     assert module == "M4"
     assert writes["results"]["measurement_model"][0]["construct"] == "ATT"
-    assert res.repaired == ["đọc lại kết quả"]
+    assert res.repaired and "dựng lại bảng" in res.repaired[0]
 
 
 def test_an_extraction_that_still_will_not_render_is_not_committed(monkeypatch):
@@ -295,3 +295,59 @@ def test_a_recompose_of_DIFFERENT_chapters_still_runs(monkeypatch):
                              "uncited": [], "tableless": []})
     apply_findings(store, [other])
     assert len(store.commits) == 2, "a different set of chapters must still be fixed"
+
+
+class _M4Store(_Store):
+    """A store whose M4 results can change during the doctor pass."""
+
+    def __init__(self, results, **kw):
+        super().__init__(**kw)
+        self.results = results
+
+    def load_full_context_store(self):
+        return {"m4_analysis": {"results": self.results}}
+
+    def commit_slice(self, module, writes, reason, **kw):
+        if "results" in writes:
+            self.results = writes["results"]
+        return super().commit_slice(module, writes, reason, **kw)
+
+
+def _figures_finding(stale):
+    return Finding(
+        code="FIGURES_NOT_LINKED", detail="Đã gắn 4 ảnh.", repair="deterministic",
+        payload={"module": "M4", "filename": "_Result.docx",
+                 "results": {**stale, "source_figures": {"structural_paths": "a.png"}},
+                 "figures": {"structural_paths": "a.png"}})
+
+
+def test_linking_figures_does_not_restore_the_pre_repair_snapshot(monkeypatch):
+    import app.doctor_adapter as D
+    monkeypatch.setattr(D, "_with_resolved_figures", lambda store, results: results)
+    # diagnose() saw the unrenderable block; a re-extract replaced it before
+    # this repair ran. The figures must land on the repaired block.
+    store = _M4Store({"measurement_model": [{"construct": "ATT"}]})
+    apply_findings(store, [_figures_finding({"```markdown": [{"label": "x"}]})])
+
+    assert "```markdown" not in store.results
+    assert store.results["measurement_model"] == [{"construct": "ATT"}]
+    assert store.results["source_figures"] == {"structural_paths": "a.png"}
+
+
+def test_figures_already_linked_by_the_reparse_are_a_no_op():
+    store = _M4Store({"measurement_model": [], "source_figures": {"x": "b.png"}})
+    res = apply_findings(store, [_figures_finding({})])
+    assert not store.commits
+    assert res.repaired == []
+
+
+def test_unrenderable_results_never_ask_the_student_for_another_file():
+    finding = Finding(code="RESULTS_NOT_RENDERABLE", detail="Kết quả đã lưu nhưng…",
+                      repair="reparse",
+                      payload={"module": "M4", "filename": "_Result.docx", "text": "t"})
+    store = _Store(log={"RESULTS_NOT_RENDERABLE": {"exhausted": True}})
+    res = apply_findings(store, [finding])
+
+    assert "nói thẳng với sinh viên cần gửi gì" not in (res.directive or "")
+    assert "uploads/_Result.docx.txt" in res.directive
+    assert "never ask them to resend" in res.directive
