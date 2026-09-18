@@ -171,6 +171,59 @@ export async function apiFetchText(path) {
   return res.text();
 }
 
+/** Authenticated POST + SSE. The JWT remains in the JSON body, matching the
+ * normal API contract, while callers receive each real model event immediately. */
+export async function apiPostStream(path, body, onEvent, opts = {}) {
+  const token = tokenStore.get();
+  const res = await fetch(BASE + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    body: JSON.stringify({ ...(body || {}), access_token: token }),
+    signal: opts.signal,
+  });
+  if (!res.ok) {
+    let parsed = null;
+    try { parsed = await res.json(); } catch { /* proxy responses may be empty */ }
+    if (res.status === 401) {
+      tokenStore.clear();
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?next=${next}`;
+      }
+    }
+    throw new ApiError(res.status, parsed);
+  }
+  if (!res.body) throw new Error("Máy chủ không trả về luồng dữ liệu.");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let terminal = null;
+  const consume = (frame) => {
+    const line = frame.split(/\r?\n/).find(value => value.startsWith("data: "));
+    if (!line) return;
+    const event = JSON.parse(line.slice(6));
+    onEvent?.(event);
+    if (event.type === "error") throw new Error(event.message || "Không thể hoàn tất đề xuất AI.");
+    if (event.type === "done") terminal = event;
+  };
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    buffer = buffer.replace(/\r\n/g, "\n");
+    let boundary;
+    while ((boundary = buffer.indexOf("\n\n")) >= 0) {
+      const frame = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      consume(frame);
+    }
+    if (done) break;
+  }
+  if (buffer.trim()) consume(buffer);
+  if (!terminal) throw new Error("Luồng AI kết thúc trước khi tạo được đề xuất.");
+  return terminal;
+}
+
 
 /** SWR fetcher. Reads are POST now (POST-only API): the token rides in the body
  * and any `?query` baked into the SWR key is folded into the body by apiFetch. */

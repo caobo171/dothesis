@@ -177,6 +177,12 @@ on S3 by the time you write that sentence.
 
 ### Editor review actions
 
+Selection-scoped AI rewrites stream their real model output over the existing
+POST transport. Keep the selected prose highlighted and show the accumulating
+draft while tokens arrive; create and persist exactly one `PendingEdit` only
+after the stream completes. A disconnect or model failure must leave no partial
+proposal behind, and streaming must not add a second model call or credit.
+
 The editor may run focused, read-only reviews over the current canonical
 `chapters` draft. These actions report findings and suggested fixes; they never
 rewrite prose or commit state automatically:

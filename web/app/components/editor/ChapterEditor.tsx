@@ -23,7 +23,7 @@ import { CitePopover } from "./CitePopover";
 import { TranslateMenu } from "./TranslateMenu";
 import { PendingEditRibbon, type PendingEdit } from "./PendingEditRibbon";
 import { buildOffsetMap, offsetToPos, posToOffset, previewOffsetToStored } from "./markdownOffset";
-import { apiFetch, ApiError } from "@/app/lib/api";
+import { apiFetch, apiPostStream, ApiError } from "@/app/lib/api";
 import type { ClaimSuggestion } from "./ClaimConfidencePanel";
 
 
@@ -168,6 +168,7 @@ export function ChapterEditor({
   const [inlineAction, setInlineAction] = useState<
     { state: "loading" | "success" | "error"; message: string; action?: "reload_chapter" } | null
   >(null);
+  const [streamingDraft, setStreamingDraft] = useState("");
   const [activeClaim, setActiveClaim] = useState<{ id: string; left: number; top: number } | null>(null);
   const [busyClaim, setBusyClaim] = useState<string | null>(null);
   const selectionRef = useRef<{ from: number; to: number; text: string } | null>(null);
@@ -476,6 +477,7 @@ export function ChapterEditor({
       editor.view.dispatch(editor.state.tr.addMark(sel.from, sel.to, processingMark.create()));
     }
     actionInFlight.current = true;
+    setStreamingDraft("");
     setInlineAction({ state: "loading", message: "Đang xử lý đoạn đã chọn bằng AI…" });
     try {
       // The editor serializer normalises markdown and the student may also have
@@ -503,9 +505,19 @@ export function ChapterEditor({
         ? patched.document_fingerprint : fingerprintRef.current;
       onServerProse?.(canonicalMarkdown, fingerprintRef.current);
       if (fingerprintRef.current) payload.expected_document_fingerprint = fingerprintRef.current;
-      const created = pendingEditFromApi(
-        await apiFetch(path, { method: "POST", body: payload }) as PendingEditApi,
-      );
+      const streamingKinds = new Set(["proofread", "improve", "humanize", "expand", "shorten"]);
+      let createdApi: PendingEditApi;
+      if (streamingKinds.has(kind)) {
+        const terminal: any = await apiPostStream(`${path}/stream`, payload, (event: any) => {
+          if (event.type === "token" && typeof event.text === "string") {
+            setStreamingDraft(current => current + event.text);
+          }
+        });
+        createdApi = terminal.edit as PendingEditApi;
+      } else {
+        createdApi = await apiFetch(path, { method: "POST", body: payload }) as PendingEditApi;
+      }
+      const created = pendingEditFromApi(createdApi);
       const pendingMark = editor.schema.marks.aiPending;
       if (sel && pendingMark) {
         editor.view.dispatch(editor.state.tr.addMark(sel.from, sel.to, pendingMark.create({
@@ -517,6 +529,7 @@ export function ChapterEditor({
       }
       setActivePendingEdit(created);
       setActiveReviewExpanded(false);
+      setStreamingDraft("");
       setInlineAction(null);
       onPendingMutate();
     } catch (e) {
@@ -528,6 +541,7 @@ export function ChapterEditor({
         message,
         ...(message.startsWith("Bản trên máy chủ đã có nội dung khác") ? { action: "reload_chapter" as const } : {}),
       });
+      setStreamingDraft("");
     } finally {
       const mark = editor.schema.marks.aiProcessing;
       if (mark) editor.view.dispatch(editor.state.tr.removeMark(0, editor.state.doc.content.size, mark));
@@ -810,7 +824,7 @@ export function ChapterEditor({
           role={inlineAction.state === "error" ? "alert" : "status"}
           aria-live="polite"
           className={
-            "fixed bottom-6 left-1/2 z-[70] flex min-w-[360px] max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-sm shadow-[0_18px_50px_rgba(24,31,50,0.20)] " +
+            "fixed bottom-6 left-1/2 z-[70] flex min-w-[360px] max-w-[min(720px,calc(100vw-2rem))] -translate-x-1/2 items-start gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-sm shadow-[0_18px_50px_rgba(24,31,50,0.20)] " +
             (inlineAction.state === "error"
               ? "border-red-200 bg-red-50 text-red-700"
               : inlineAction.state === "success"
@@ -824,9 +838,16 @@ export function ChapterEditor({
               <span className="relative h-2 w-2 rounded-full bg-primary-600" />
             </span>
           )}
-          <span className={inlineAction.state === "loading" ? "animate-pulse motion-reduce:animate-none" : ""}>
-            {inlineAction.message}
-          </span>
+          <div className="min-w-0 flex-1">
+            <div className={inlineAction.state === "loading" && !streamingDraft ? "animate-pulse motion-reduce:animate-none" : ""}>
+              {streamingDraft ? "AI đang viết bản đề xuất…" : inlineAction.message}
+            </div>
+            {inlineAction.state === "loading" && streamingDraft && (
+              <div data-testid="streaming-rewrite-draft" className="mt-2 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-xl bg-primary-50/70 px-3 py-2 text-sm leading-6 text-ink-800">
+                {streamingDraft}<span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary-600 align-middle motion-reduce:animate-none" aria-hidden />
+              </div>
+            )}
+          </div>
           {inlineAction.action === "reload_chapter" && (
             <button
               type="button"

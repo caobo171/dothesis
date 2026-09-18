@@ -836,6 +836,55 @@ def test_inline_rewrite_actions_create_pending_edit(mock_llm, client, kind):
         assert len(pending) == 1 and pending[0]["source"] == kind
 
 
+@patch("app.routers.m5_editor.stream_rewrite_selection")
+def test_inline_rewrite_streams_tokens_then_persists_once(mock_stream, client):
+    """SSE exposes real chunks and creates one proposal only on completion."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    mock_stream.return_value = iter(["A stronger ", "academic passage."])
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    prose = "Weak prose remains here."
+    with get_session_factory()() as db:
+        cs = db.get(ContextStore, uuid.UUID(pid))
+        cs.m5_writing["chapters"]["intro"]["prose"] = prose
+        flag_modified(cs, "m5_writing")
+        db.commit()
+
+    response = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/improve/stream",
+        json={"from_offset": 0, "to_offset": 10},
+    )
+    assert response.status_code == 200
+    assert '"type": "token", "text": "A stronger "' in response.text
+    assert '"type": "done"' in response.text
+    with get_session_factory()() as db:
+        pending = db.get(ContextStore, uuid.UUID(pid)).m5_writing["chapters"]["intro"]["pending_edits"]
+        assert len(pending) == 1
+        assert pending[0]["new_text"] == "A stronger academic passage."
+
+
+@patch("app.routers.m5_editor.stream_rewrite_selection")
+def test_inline_rewrite_stream_failure_leaves_no_partial_proposal(mock_stream, client):
+    """A model failure may emit an error event but never stores partial text."""
+    def broken(**_kwargs):
+        yield "Partial"
+        raise RuntimeError("provider failed")
+
+    mock_stream.side_effect = broken
+    _create_user_and_set_cookie(client)
+    pid = _make_project_with_chapters(client)
+    response = client.post(
+        f"/api/v1/projects/{pid}/m5/chapters/intro/improve/stream",
+        json={"from_offset": 0, "to_offset": 5},
+    )
+    assert response.status_code == 200
+    assert '"type": "error"' in response.text
+    with get_session_factory()() as db:
+        pending = db.get(ContextStore, uuid.UUID(pid)).m5_writing["chapters"]["intro"]["pending_edits"]
+        assert pending == []
+
+
 def test_paraphrase_404_unknown_chapter(client):
     """POSTing to a chapter name that was never seeded returns 404.
 

@@ -34,6 +34,48 @@ def _call_llm(prompt: str) -> str:
     return llm.invoke(prompt).content
 
 
+def _chunk_text(content: object) -> str:
+    """Normalize LangChain text and multimodal content blocks while streaming."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            str(block.get("text") or "") if isinstance(block, dict) else str(block)
+            for block in content
+        )
+    return str(content or "")
+
+
+def build_rewrite_prompt(
+    chapter_name: str,
+    language: str,
+    context_before: str,
+    selection: str,
+    context_after: str,
+    instruction: str,
+) -> str:
+    """Build the shared rewrite prompt for blocking and streaming transports."""
+    return _REWRITE_PROMPT.format(
+        chapter_name=chapter_name,
+        language=language,
+        context_before=context_before,
+        selection=selection,
+        context_after=context_after,
+        instruction=instruction,
+    )
+
+
+def stream_rewrite_selection(**kwargs):
+    """Yield real model chunks; callers persist only after full exhaustion."""
+    from orchestrator.tools.m5_writing import _get_llm
+
+    prompt = build_rewrite_prompt(**kwargs)
+    for chunk in _get_llm().stream(prompt):
+        text = _chunk_text(getattr(chunk, "content", chunk))
+        if text:
+            yield text
+
+
 def _strip(text: str) -> str:
     """Trim whitespace + paired surrounding quotes that LLMs sometimes emit."""
     t = text.strip()
@@ -76,13 +118,10 @@ def rewrite_selection(
     improve tone, humanize, expand, shorten…). Returns the rewritten selection
     only. One generic tool drives every inline action so a new action is a new
     instruction, not a new LLM wrapper."""
-    prompt = _REWRITE_PROMPT.format(
-        chapter_name=chapter_name,
-        language=language,
-        context_before=context_before,
-        selection=selection,
-        context_after=context_after,
-        instruction=instruction,
+    prompt = build_rewrite_prompt(
+        chapter_name=chapter_name, language=language,
+        context_before=context_before, selection=selection,
+        context_after=context_after, instruction=instruction,
     )
     return _strip(_call_llm(prompt))
 

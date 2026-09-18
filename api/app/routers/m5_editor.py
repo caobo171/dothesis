@@ -14,13 +14,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from orchestrator.tools.research_cache import cached_call
 
-from ..db import db_session
+from ..db import db_session, get_session_factory
 from ..deps import current_user
 from ..agent_state import nested_slices
 from ..models import ContextStore, Export, Project, User
@@ -839,7 +840,8 @@ from datetime import datetime, timezone  # noqa: E402 — stdlib, safe to re-imp
 from uuid import uuid4  # noqa: E402
 
 from orchestrator.schemas.m5_editor import PendingEdit  # noqa: E402
-from orchestrator.tools.m5_inline import paraphrase_selection, translate_selection, rewrite_selection, build_citation_text  # noqa: E402 — translate_selection + build_citation_text reused by Tasks 12+13
+from orchestrator.tools.m5_inline import paraphrase_selection, translate_selection, rewrite_selection, stream_rewrite_selection, build_citation_text  # noqa: E402 — translate_selection + build_citation_text reused by Tasks 12+13
+from ..sse import sse_pack  # noqa: E402
 
 
 class ParaphraseBody(BaseModel):
@@ -1089,6 +1091,89 @@ def _rewrite_selection_edit(
     edit_dict = _append_pending_edit(cs, chapter_name, pe)
     db.commit()
     return edit_dict
+
+
+@router.post("/projects/{project_id}/m5/chapters/{chapter_name}/{kind}/stream")
+def stream_chapter_selection_rewrite(
+    project_id: uuid.UUID, chapter_name: str, kind: str, body: RewriteBody,
+    user: User = Depends(current_user), db: Session = Depends(db_session),
+):
+    """Stream a rewrite draft, then persist one reviewable PendingEdit.
+
+    Decision: validation happens before the response starts. Persistence happens
+    only after the model iterator completes, so disconnects and model failures
+    cannot leave a truncated proposal in the chapter.
+    """
+    if kind not in _INLINE_INSTRUCTIONS:
+        raise HTTPException(404, detail={"error": {"code": "unknown_rewrite_action"}})
+    _owned_project(db, user, project_id)
+    cs = db.get(ContextStore, project_id)
+    ch = _load_chapter_or_404(cs, chapter_name)
+    prose = ch.get("prose", "")
+    _validate_document_precondition(prose, body.expected_document_fingerprint)
+    _validate_range(prose, body.from_offset, body.to_offset)
+    _validate_nonempty_selection(body.from_offset, body.to_offset)
+    before, after = _surrounding_context(prose, body.from_offset, body.to_offset)
+    selection = prose[body.from_offset: body.to_offset]
+    language = ((cs.m1_topic or {}).get("language", "en")) if cs else "en"
+    prompt = body.prompt.strip()
+    instruction = "\n\n".join(filter(None, [
+        _INLINE_INSTRUCTIONS[kind],
+        f"Student's additional editing instruction: {prompt}" if prompt else "",
+    ]))
+    started = time.perf_counter()
+
+    def events():
+        parts: list[str] = []
+        try:
+            for token in stream_rewrite_selection(
+                chapter_name=chapter_name, language=language,
+                context_before=before, selection=selection,
+                context_after=after, instruction=instruction,
+            ):
+                parts.append(token)
+                yield sse_pack({"type": "token", "text": token})
+            new_text = "".join(parts).strip()
+            if len(new_text) >= 2 and new_text[0] == new_text[-1] and new_text[0] in ('\"', "'"):
+                new_text = new_text[1:-1].strip()
+            if not new_text:
+                raise ValueError("empty rewrite response")
+            pe = PendingEdit(
+                id=uuid4().hex, chapter_name=chapter_name,
+                from_offset=body.from_offset, to_offset=body.to_offset,
+                old_text=selection, new_text=new_text, source=kind,
+                pending_at=datetime.now(timezone.utc),
+                metadata=_proposal_metadata(kind, started, {
+                    "document_fingerprint": _chapter_fingerprint(prose),
+                    **({"prompt": prompt} if prompt else {}),
+                }),
+            )
+            # FastAPI releases request dependencies before a streaming body is
+            # exhausted. Persist with a fresh transaction, and recheck the
+            # chapter revision so tokens generated against an older document
+            # never become an apparently safe proposal.
+            with get_session_factory()() as write_db:
+                latest_cs = write_db.get(ContextStore, project_id)
+                latest_chapter = _load_chapter_or_404(latest_cs, chapter_name)
+                if _chapter_fingerprint(latest_chapter.get("prose", "")) != _chapter_fingerprint(prose):
+                    yield sse_pack({
+                        "type": "error", "code": "stale_document",
+                        "message": "Tài liệu đã thay đổi trong lúc AI xử lý. Hãy chọn lại đoạn văn.",
+                    })
+                    return
+                edit_dict = _append_pending_edit(latest_cs, chapter_name, pe)
+                write_db.commit()
+            yield sse_pack({"type": "done", "edit": edit_dict})
+        except GeneratorExit:
+            raise
+        except Exception:
+            logger.exception("Streaming inline rewrite failed")
+            yield sse_pack({"type": "error", "message": "Không thể hoàn tất đề xuất AI. Nội dung chưa được thay đổi."})
+
+    return StreamingResponse(
+        events(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/projects/{project_id}/m5/chapters/{chapter_name}/proofread")
