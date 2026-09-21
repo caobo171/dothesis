@@ -349,6 +349,8 @@ WorkingDirectory=${REPO_DIR}/web
 EnvironmentFile=${REPO_DIR}/.env
 Environment=NODE_ENV=production
 Environment=PATH=${NODE_BIN_DIR}:/usr/local/bin:/usr/bin:/bin
+# Capped heap: uncapped, V8 grows toward a quarter of RAM before collecting.
+Environment=NODE_OPTIONS=--max-old-space-size=384
 ExecStart=${REPO_DIR}/web/node_modules/.bin/next start -p ${WEB_PORT}
 Restart=on-failure
 RestartSec=3
