@@ -43,8 +43,12 @@ MODEL_PRICES: dict[str, dict] = {
     # prices, 5x apart — which is exactly why MODEL_PRICES is keyed by the id
     # actually sent rather than by model family.
     "gpt-5.6-luna": {"in": 0.20, "out": 1.20, "provider": "openai",
-                     "note": "configured default (route=openai); 1.05M ctx, vision, tools",
+                     "note": "previous default; kept so historical ledger rows still price",
                      "updated": "2026-08-02"},
+    # GPT-6 Luna, OpenAI list price (verified 2026-09-23): $0.10 in / $0.50 out.
+    "gpt-6-luna": {"in": 0.10, "out": 0.50, "provider": "openai",
+                   "note": "configured default (route=openai); 1.05M ctx, vision, tools",
+                   "updated": "2026-09-23"},
     "gpt-5.4-mini": {"in": 0.40, "out": 1.75, "provider": "openai",
                      "note": "safe western drop-in", "updated": "2026-07-08"},
     # in=0.33 (not 0.325): the plan's table snippet and its cost test disagreed
@@ -86,8 +90,13 @@ MODEL_PRICES: dict[str, dict] = {
     # Blends to ~8.6x baseline, so it would have billed at the 4.0x fallback —
     # under-charging by ~2.1x on every turn.
     "openai/gpt-5.6-luna": {"in": 1.00, "out": 6.00, "provider": "ofox",
-                            "note": "configured default; 1.05M ctx, vision, tools, reasoning",
+                            "note": "previous default; kept so historical ledger rows still price",
                             "updated": "2026-08-02"},
+    # Read live from the Ofox /v1/models catalogue on 2026-09-23 (prompt 1e-7,
+    # completion 5e-7 per token) — same as OpenAI direct, no resale markup.
+    "openai/gpt-6-luna": {"in": 0.10, "out": 0.50, "provider": "ofox",
+                          "note": "configured default; 1.05M ctx, vision, tools, reasoning",
+                          "updated": "2026-09-23"},
     "bailian/qwen-flash": {"in": 0.022, "out": 0.22, "provider": "ofox",
                            "note": "cheapest Qwen; 1M ctx", "updated": "2026-07-10"},
     "bailian/qwen-max": {"in": 0.35, "out": 1.38, "provider": "ofox",

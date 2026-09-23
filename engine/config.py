@@ -49,7 +49,7 @@ def default_draft_model() -> str:
     """Route-aware default for the draft agents.
 
     2026-09-07: the writing agents moved from gemini-3.1-pro-preview ($2/$12 per
-    1M tokens, plus thinking billed as output) to gpt-5.6-luna ($0.20/$1.20) —
+    1M tokens, plus thinking billed as output) to Luna (then gpt-5.6-luna at $0.20/$1.20; gpt-6-luna since 2026-09-23 at $0.10/$0.50) —
     the same model the chat brain and orchestrator already run on. A day of
     e2e drafts on Pro cost ≈5.3M VND; Luna is ~10x cheaper per token.
     """
@@ -60,8 +60,8 @@ def default_draft_model() -> str:
     if route == 'native':
         return os.getenv('GEMINI_MODEL', 'gemini-3.1-pro-preview')
     if route == 'ofox':
-        return 'openai/gpt-5.6-luna'
-    return 'gpt-5.6-luna'
+        return 'openai/gpt-6-luna'
+    return 'gpt-6-luna'
 
 
 @dataclass
@@ -70,7 +70,7 @@ class ModelConfig:
     Model configuration with sensible defaults.
 
     Gemini names are validated against the whitelist below; any other id
-    (gpt-5.6-luna, openai/…) is handed to utils.openai_adapter and validated by
+    (gpt-6-luna, openai/…) is handed to utils.openai_adapter and validated by
     the endpoint. This config does NOT select the product's chat model.
 
     The live model surfaces are agent/model_factory.spec_from_env (chat brain)
@@ -106,6 +106,8 @@ class ModelConfig:
             'gemini-3-pro-preview',
             'gemini-3.5-flash',
             'gemini-3-flash-preview',  # Primary flash model (supports JSON output)
+            'gemini-3.5-flash-lite',
+            'gemini-3.1-flash-lite',
             'gemini-2.5-pro',          # Legacy support
             'gemini-2.5-flash',        # Legacy support
             'gemini-2.0-flash-exp',    # Legacy support

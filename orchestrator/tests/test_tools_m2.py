@@ -294,7 +294,7 @@ def test_planner_selects_client_from_the_model_id(monkeypatch):
     from orchestrator.tools import m2_literature as m2
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    monkeypatch.setenv("CITATION_PLANNER_MODEL", "gpt-5.6-luna")
+    monkeypatch.setenv("CITATION_PLANNER_MODEL", "gpt-6-luna")
     assert type(m2._engine_model()._inner).__name__ == "_OpenAIPlannerClient"
 
     # A Gemini id must still build the Gemini client — reverting is env-only.
@@ -319,7 +319,7 @@ def test_openai_planner_adapter_maps_the_gemini_generation_config(monkeypatch):
     from orchestrator.tools import m2_literature as m2
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    client = m2._OpenAIPlannerClient("gpt-5.6-luna", "sk-test")
+    client = m2._OpenAIPlannerClient("gpt-6-luna", "sk-test")
 
     sent = {}
 
@@ -363,7 +363,7 @@ def test_openai_planner_accepts_list_prompts():
     from orchestrator.tools import m2_literature as m2
 
     client = m2._OpenAIPlannerClient.__new__(m2._OpenAIPlannerClient)
-    client.model_name = "gpt-5.6-luna"
+    client.model_name = "gpt-6-luna"
     sent = {}
 
     class _Msg:  message = type("M", (), {"content": "ok"})(); finish_reason = "stop"

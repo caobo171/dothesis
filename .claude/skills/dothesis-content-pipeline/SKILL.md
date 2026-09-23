@@ -374,7 +374,7 @@ that is exactly why the cadence has to be enforced somewhere else.
 
 ## Cost
 
-`gpt-5.6-luna` at $0.20 in and $1.20 out per million tokens. A 2,000-word
+`gpt-6-luna` at $0.10 in and $0.50 out per million tokens. A 2,000-word
 Vietnamese post is roughly 3,500 output tokens against a 3,000-token prompt, so
 about $0.005 a post, plus a repair call on a fifth of them. **$12 to $20 for 1,000
 posts.** DataForSEO adds a few dollars when the gate measures, which is now

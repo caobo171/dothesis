@@ -323,9 +323,9 @@ def test_force_retranslates_and_keeps_the_slug_it_already_owns(tmp_path):
 
 
 def test_the_run_stops_when_the_budget_is_crossed(tmp_path):
-    # One call costs 8000 in + 4000 out = $0.0064. A $0.01 budget buys two.
+    # One call costs 8000 in + 4000 out = $0.0028. A $0.005 budget buys two.
     summary, _model, out, _src = _run(tmp_path, [_payload() for _ in range(3)],
-                                        budget_usd=0.01)
+                                        budget_usd=0.005)
     assert summary["stopped_on_budget"] is True
     assert summary["written"] == 2
     assert len(list(out.glob("*.json"))) == 2

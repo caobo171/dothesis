@@ -390,9 +390,9 @@ def test_the_run_stops_when_the_budget_is_crossed(tmp_path):
             for i in range(1, 6)]
     model = StubModel([model_payload() for _ in rows])
     out = tmp_path / "posts"
-    # One call costs 8000 in + 4000 out = $0.0064. A $0.01 budget buys two.
+    # One call costs 8000 in + 4000 out = $0.0028. A $0.005 budget buys two.
     summary = writer.run(backlog_path=_backlog(tmp_path, rows), out_dir=str(out),
-                         client=model, workers=1, budget_usd=0.01)
+                         client=model, workers=1, budget_usd=0.005)
     assert summary["stopped_on_budget"] is True
     assert summary["written"] == 2
     assert len(list(out.glob("*.json"))) == 2
@@ -432,8 +432,8 @@ def test_workers_greater_than_one_still_writes_every_row(tmp_path):
 
 
 def test_cost_is_the_documented_luna_price():
-    assert llm.usd_for(1_000_000, 0) == pytest.approx(0.20)
-    assert llm.usd_for(0, 1_000_000) == pytest.approx(1.20)
+    assert llm.usd_for(1_000_000, 0) == pytest.approx(0.10)
+    assert llm.usd_for(0, 1_000_000) == pytest.approx(0.50)
 
 
 def test_a_429_is_retried_after_the_header_says_so():
@@ -504,8 +504,8 @@ def test_request_shape_matches_what_gpt_5_6_accepts():
             seen.update(kwargs)
             return _fake_completion()
 
-    llm.LunaClient(client=Recorder(), model="gpt-5.6-luna").complete_json("say json")
-    assert seen["model"] == "gpt-5.6-luna"
+    llm.LunaClient(client=Recorder(), model="gpt-6-luna").complete_json("say json")
+    assert seen["model"] == "gpt-6-luna"
     assert seen["response_format"] == {"type": "json_object"}
     assert seen["max_completion_tokens"] == llm.MAX_OUTPUT_TOKENS
     assert "temperature" not in seen, "gpt-5.6-* rejects a non-default temperature"

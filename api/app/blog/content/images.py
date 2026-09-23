@@ -68,7 +68,7 @@ def public_dir() -> Path:
 # Generation
 # --------------------------------------------------------------------------
 
-GEMINI_MODEL = "gemini-2.5-flash-image"
+GEMINI_MODEL = "gemini-3.1-flash-lite-image"
 GEMINI_ENDPOINT = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent")
 OPENAI_MODEL = "gpt-image-2"

@@ -174,13 +174,13 @@ def test_explicit_model_arg_wins_over_route_default(monkeypatch):
 
 
 def test_native_route_default_model_unchanged(monkeypatch):
-    # route=native must STILL resolve gemini-2.5-flash. Native stopped being the
-    # fallback on 2026-08-03, but it did not change what it resolves to — that
-    # separation is the point of this test.
+    # route=native resolves the current Gemini 3 flash model. Native stopped being
+    # the fallback on 2026-08-03; gemini-2.5-flash is no longer offered to new
+    # keys, so the native default moved to gemini-3-flash-preview.
     from orchestrator.llm import resolve_orchestrator_model
     monkeypatch.setenv("ORCHESTRATOR_LLM_ROUTE", "native")  # explicit: openai is the default now
     monkeypatch.delenv("ORCHESTRATOR_LLM_MODEL", raising=False)
-    assert resolve_orchestrator_model() == "gemini-2.5-flash"
+    assert resolve_orchestrator_model() == "gemini-3-flash-preview"
 
 
 def test_resolve_is_route_aware_on_ofox(monkeypatch):
@@ -210,7 +210,7 @@ def test_token_meter_ledger_label_is_route_aware(monkeypatch):
 
 
 def test_no_env_defaults_to_openai_luna(monkeypatch):
-    """The bare default is openai/gpt-5.6-luna (2026-08-03).
+    """The bare default is openai/gpt-6-luna (2026-08-03).
 
     It used to be native/gemini-2.5-flash. Every deployment has set
     ORCHESTRATOR_LLM_ROUTE=openai since the cutover, so the code default was a
@@ -221,7 +221,7 @@ def test_no_env_defaults_to_openai_luna(monkeypatch):
     from orchestrator.llm import resolve_orchestrator_model
     monkeypatch.delenv("ORCHESTRATOR_LLM_ROUTE", raising=False)
     monkeypatch.delenv("ORCHESTRATOR_LLM_MODEL", raising=False)
-    assert resolve_orchestrator_model() == "gpt-5.6-luna"
+    assert resolve_orchestrator_model() == "gpt-6-luna"
 
 
 def test_reasoning_is_disabled_only_for_tool_binding_callers(monkeypatch):

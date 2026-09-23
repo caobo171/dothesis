@@ -28,7 +28,7 @@ def test_native_anthropic_when_key_present(monkeypatch):
 
 
 def test_spec_from_env_defaults(monkeypatch):
-    # The no-env default is openai/gpt-5.6-luna (2026-08-03). It was
+    # The no-env default is openai/gpt-6-luna (2026-08-03). It was
     # native/gemini-3.5-flash, which no deployment had run since the OpenAI
     # cutover — a default nobody exercised while looking like the blessed path.
     # temp 0.4 / max_tokens 8000 / no fallbacks are unchanged.
@@ -40,7 +40,7 @@ def test_spec_from_env_defaults(monkeypatch):
     monkeypatch.delenv("DOTHESIS_MODEL_MAX_TOKENS", raising=False)
     spec = spec_from_env()
     assert spec.route == "openai"
-    assert spec.model == "gpt-5.6-luna"
+    assert spec.model == "gpt-6-luna"
     assert spec.fallbacks == []
     assert spec.temperature == 0.4
     assert spec.max_tokens == 8000
@@ -280,7 +280,7 @@ def test_openai_route_disables_reasoning_so_function_tools_work(monkeypatch):
     tools on /v1/chat/completions:
 
         400 "Function tools with reasoning_effort are not supported for
-             gpt-5.6-luna in /v1/chat/completions. To use function tools, use
+             gpt-6-luna in /v1/chat/completions. To use function tools, use
              /v1/responses or set reasoning_effort to 'none'."
 
     We never send reasoning_effort — langchain omits it when None — so the value
@@ -290,7 +290,7 @@ def test_openai_route_disables_reasoning_so_function_tools_work(monkeypatch):
     """
     monkeypatch.setenv("OPENAI_API_KEY", "test")
     captured = _install_fake_chatopenai(monkeypatch)
-    make_model(ModelSpec(route="openai", model="gpt-5.6-luna"))
+    make_model(ModelSpec(route="openai", model="gpt-6-luna"))
     assert captured["reasoning_effort"] == "none"
     # Guard the other two route incompatibilities at the same time — all three
     # are "params the Ofox gateway was silently normalising away".

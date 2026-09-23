@@ -253,7 +253,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true",
                    help="regenerate keys that already have an image (once per run, not once per post)")
     p.add_argument("--gemini", action="store_true",
-                   help="generate with gemini-2.5-flash-image instead of gpt-image-2")
+                   help="generate with gemini-3.1-flash-lite-image instead of gpt-image-2")
     p.add_argument("--quality", default=None, choices=("low", "medium", "high"),
                    help="gpt-image-2 quality tier (default: medium)")
     p.add_argument("--dry-run", action="store_true",

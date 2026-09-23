@@ -47,7 +47,7 @@ archetype for as long as the bank exists. So quality decides, and the default
 is **gpt-image-2 at `medium`**, 1536x1024. `high` is four times the price for a
 difference the blog measure cannot show; `low` looks it. Set
 `BLOG_IMAGE_QUALITY` to override, and pass `--gemini` for
-gemini-2.5-flash-image when a run has no OpenAI key.
+gemini-3.1-flash-lite-image when a run has no OpenAI key.
 
 `docs/blog-image-library.json` is the library: `{"<key>": {"prompt": "...",
 "url": "..."}}`, with the `url` absent until the key has been generated. A key
@@ -129,7 +129,7 @@ cd api
 already has an image (once per run, not once per post), `--quality` (or
 `BLOG_IMAGE_QUALITY`, two spellings of one setting) picks the gpt-image-2 tier
 between `low`, `medium` and `high`, and `--gemini` swaps in
-gemini-2.5-flash-image. `OPENAI_API_KEY` and `GEMINI_API_KEY` live in the repo
+gemini-3.1-flash-lite-image. `OPENAI_API_KEY` and `GEMINI_API_KEY` live in the repo
 `.env`. Never print them.
 
 **Commit the `.webp` files.** A generated file that is not in version control is

@@ -69,9 +69,9 @@ TOKENS_PER_CREDIT = TOKENS_PER_AUTO_THESIS // CREDITS_PER_AUTO_THESIS  # 16,666
 # rate) where DoThesis was asking ~$25. If the margin has to come back, raise the
 # pack DOLLARS; raising the credit counts would just re-break parity with Survify.
 #
-# Production bills well UNDER the anchor. The configured default is gpt-5.6-luna
-# ($0.20/$1.20 after the 2026-07-30 cut) = 0.53x baseline, so a real 10M-token run
-# debits ~318 credits, not 600. The anchor stays at Survify's 600 so the credit
+# Production bills well UNDER the anchor. The configured default is gpt-6-luna
+# ($0.10/$0.50, 2026-09-23) = 0.24x baseline, so a real 10M-token run
+# debits ~141 credits, not 600. The anchor stays at Survify's 600 so the credit
 # page under-promises: a student is never told "this pack is one thesis" and then
 # blocked mid-run. Re-tune from token_ledger once it reports real tokens/run.
 

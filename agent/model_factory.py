@@ -65,14 +65,14 @@ class ModelSpec:
 # Substring lookup on the model id — the same technique opencode uses for
 # prompt selection. A KNOWN MAINTENANCE POINT: new vision-capable families
 # must be added here, and fail-closed keeps that drift cheap (spec Risk 4).
-# "gpt-5.6" covers luna/sol/terra — all three report text+image->text in both the
+# "gpt-5.6" / "gpt-6" cover luna/sol/terra — all three report text+image->text in both the
 # OpenAI and Ofox catalogues (checked 2026-08-02). Naming the FAMILY, not each id,
 # keeps the dated -2026-07-09 snapshots and the provider/-prefixed gateway ids
 # matching too. Deliberately not a blanket "gpt": gpt-4.1-nano and the -codex-mini
 # tiers are text-only, and fail-closed means a wrong True is the expensive
 # direction (Gemini blocks into an OpenAI endpoint hard-fails; a needless
 # transcription costs fractions of a cent).
-_VISION_MODEL_HINTS = ("gemini", "claude", "gpt-5.6")
+_VISION_MODEL_HINTS = ("gemini", "claude", "gpt-5.6", "gpt-6")
 
 
 def model_supports_vision(model: str) -> bool:
@@ -132,10 +132,9 @@ def spec_from_env() -> ModelSpec:
         default_model = "bailian/qwen-plus"
     elif route == "openai":
         # Bare ids here (no provider/ prefix) — this talks to OpenAI, not a
-        # gateway. luna is the cheapest 5.6 tier at $0.20/$1.20 post-cut, which
-        # blends to ~1.71x baseline: pricier than qwen-plus (0.62x) but 5x
-        # cheaper than the same model through Ofox's stale launch pricing.
-        default_model = "gpt-5.6-luna"
+        # gateway. luna is the cheapest GPT-6 tier at $0.10/$0.50 (2026-09-23), the
+        # same price as through Ofox.
+        default_model = "gpt-6-luna"
     model = os.getenv("DOTHESIS_AGENT_MODEL", default_model)
     return ModelSpec(
         route=route,
@@ -265,11 +264,11 @@ def _ofox(spec: ModelSpec):
 def _openai(spec: ModelSpec):
     """OpenAI's own API, no gateway in front.
 
-    Exists because the gateway stopped being free. Ofox still bills gpt-5.6-luna
-    at its LAUNCH price ($1.00/$6.00 per 1M) while OpenAI cut it 80% on
-    2026-07-30 to $0.20/$1.20 — a live 5x on every token, for a hop that adds
+    Exists because the gateway stopped being free: Ofox kept billing
+    gpt-5.6-luna at its LAUNCH price ($1.00/$6.00 per 1M) after OpenAI cut it
+    80% on 2026-07-30 to $0.20/$1.20 — a 5x on every token, for a hop that adds
     nothing but parameter normalisation (below). Verified against both
-    catalogues on 2026-08-02.
+    catalogues on 2026-08-02. (gpt-6-luna is $0.10/$0.50 on both, 2026-09-23.)
 
     Two hard incompatibilities this route must handle, both confirmed by probing
     the real endpoint — they are the reason `_ofox` cannot simply be pointed at
@@ -294,7 +293,7 @@ def _openai(spec: ModelSpec):
     from langchain_openai import ChatOpenAI  # noqa: PLC0415 — route-only, lazy
 
     return ChatOpenAI(
-        model=spec.model,  # bare id, e.g. "gpt-5.6-luna" — no provider/ prefix
+        model=spec.model,  # bare id, e.g. "gpt-6-luna" — no provider/ prefix
         api_key=key,
         # NOT max_tokens, and NO temperature — see docstring.
         max_completion_tokens=spec.max_tokens,
@@ -302,7 +301,7 @@ def _openai(spec: ModelSpec):
         # model reasons by default, and OpenAI rejects reasoning + function
         # tools on /v1/chat/completions outright —
         #   400 "Function tools with reasoning_effort are not supported for
-        #        gpt-5.6-luna in /v1/chat/completions. To use function tools,
+        #        gpt-6-luna in /v1/chat/completions. To use function tools,
         #        use /v1/responses or set reasoning_effort to 'none'."
         # Note we never SENT reasoning_effort; langchain omits it when None. The
         # rejected value is the model's own server-side default, which is why

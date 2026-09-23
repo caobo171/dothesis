@@ -50,10 +50,10 @@ def test_each_model_gets_its_own_event():
     meter.observe({"type": "usage", "input_tokens": 10, "output_tokens": 5,
                    "model": "gemini-2.5-flash"})
     meter.observe({"type": "usage", "input_tokens": 20, "output_tokens": 7,
-                   "model": "gpt-5.6-luna"})
+                   "model": "gpt-6-luna"})
     assert meter.flush() == 2
     assert {e["model"] for e in appender.events} == {"gemini-2.5-flash",
-                                                     "gpt-5.6-luna"}
+                                                     "gpt-6-luna"}
 
 
 def test_flush_is_empty_when_no_usage_was_seen():
@@ -74,7 +74,7 @@ def test_flush_clears_the_buffer_so_turns_are_not_double_billed():
 
 def _openai_route(monkeypatch):
     """Pin the CONFIGURED model so the fallback is a known id: route=openai with
-    no override resolves to gpt-5.6-luna (agent/model_factory.spec_from_env)."""
+    no override resolves to gpt-6-luna (agent/model_factory.spec_from_env)."""
     monkeypatch.setenv("DOTHESIS_MODEL_ROUTE", "openai")
     monkeypatch.delenv("DOTHESIS_AGENT_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
@@ -90,14 +90,14 @@ def test_an_unpriced_served_model_never_becomes_the_ledger_label(monkeypatch):
     appender = _Appender()
     meter = _UsageMeter(uuid.uuid4(), appender)
     meter.observe({"type": "usage", "input_tokens": 900, "output_tokens": 100,
-                   "model": "gpt-5.6-luna-2026-05-13"})  # a real-shaped snapshot id
+                   "model": "gpt-6-luna-2026-05-13"})  # a real-shaped snapshot id
     assert meter.flush() == 1
 
     (ev,) = appender.events
     from app.pricing import is_priced
     assert is_priced(ev["model"]), \
         f"{ev['model']!r} would bill at the unknown-model fallback"
-    assert ev["model"] == "gpt-5.6-luna"
+    assert ev["model"] == "gpt-6-luna"
     # Tokens are not lost in the relabel — only the label changes.
     assert ev["prompt_tokens"] == 900 and ev["completion_tokens"] == 100
 
@@ -112,7 +112,7 @@ def test_a_missing_served_model_falls_back_to_the_configured_one(monkeypatch):
     meter.flush()
 
     from app.pricing import is_priced
-    assert appender.events[0]["model"] == "gpt-5.6-luna"
+    assert appender.events[0]["model"] == "gpt-6-luna"
     assert is_priced(appender.events[0]["model"])
 
 

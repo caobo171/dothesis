@@ -82,7 +82,7 @@ def setup_model(model_override: Optional[str] = None) -> Any:
     model_name = model_override or config.model.model_name
 
     if not model_name.startswith('gemini'):
-        # gpt-5.6-luna and friends: same generate_content() surface, OpenAI behind it.
+        # gpt-6-luna and friends: same generate_content() surface, OpenAI behind it.
         from utils.openai_adapter import OpenAIChatModel
         from config import draft_llm_route
         route = draft_llm_route()

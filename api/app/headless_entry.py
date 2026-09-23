@@ -385,10 +385,10 @@ class _UsageMeter:
 
         An id the table does NOT price must never reach the ledger under its own
         name. credit_multiplier bills an unpriced id at UNKNOWN_MODEL_MULTIPLIER
-        (4.0x), so a dated snapshot id (`gpt-5.6-luna-2026-05-13`) or a missing
+        (4.0x), so a dated snapshot id (`gpt-6-luna-2026-05-13`) or a missing
         `model_name` on response_metadata would bill a WHOLE THESIS at 4.0x
-        instead of the configured model's true rate — 7.6x on the openai route
-        (luna blends to 0.53x) and ~21x on ofox/qwen-plus. The OTHER charge site,
+        instead of the configured model's true rate — ~17x on the openai route
+        (luna blends to 0.24x) and ~21x on ofox/qwen-plus. The OTHER charge site,
         `_finalize` in the v3 chat router (grep `_credit_multiplier(spec_from_env`),
         rejected per-served-model billing outright for this exact reason, and
         pricing.py:225-228 requires the two not to drift. (Named, not imported:

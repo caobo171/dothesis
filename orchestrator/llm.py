@@ -58,7 +58,7 @@ def resolve_orchestrator_model(model: str | None = None) -> str:
         # Bare id — OpenAI direct, no provider/ prefix. Matches the brain's
         # openai default (agent.model_factory.spec_from_env) so engine and brain
         # stay on one model, which is the whole point of this function.
-        default_model = "gpt-5.6-luna"
+        default_model = "gpt-6-luna"
     return os.getenv("ORCHESTRATOR_LLM_MODEL", default_model)
 
 
@@ -177,7 +177,7 @@ def get_orchestrator_llm(
         from langchain_openai import ChatOpenAI  # noqa: PLC0415 — route-only, lazy
 
         kwargs = {
-            "model": model,  # bare id, e.g. "gpt-5.6-luna"
+            "model": model,  # bare id, e.g. "gpt-6-luna"
             "api_key": key,
             # stream_usage, not a raw stream_options in model_kwargs: OpenAI 400s
             # on stream_options for non-streaming requests, and the orchestrator

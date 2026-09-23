@@ -1,12 +1,12 @@
 """
 ABOUTME: OpenAI-compatible chat model behind the engine's Gemini-shaped generate_content() interface.
-ABOUTME: Lets the draft agents run on gpt-5.6-luna (OpenAI direct) or an Ofox-prefixed id without touching callers.
+ABOUTME: Lets the draft agents run on gpt-6-luna (OpenAI direct) or an Ofox-prefixed id without touching callers.
 
 Every draft agent goes through run_agent(model, ...) and reads the response
 like the google-genai SDK returns it: .text, .candidates[0].content.parts,
 .candidates[0].finish_reason and .usage_metadata. This adapter produces that
 shape from /v1/chat/completions, so switching the pipeline from Gemini 3.1 Pro
-($2 / $12 per 1M tokens) to Luna ($0.20 / $1.20) is a model-id change, not a
+($2 / $12 per 1M tokens) to Luna (gpt-6-luna, $0.10 / $0.50) is a model-id change, not a
 code change.
 
 Known gpt-5.6-* constraints, mirrored from agent/model_factory._openai:
@@ -107,7 +107,7 @@ class OpenAIChatModel:
             key = os.getenv("OFOX_API_KEY", "")
             if not key:
                 raise ValueError("DRAFT_LLM_ROUTE=ofox needs OFOX_API_KEY")
-            # Ofox wants provider-prefixed ids (openai/gpt-5.6-luna)
+            # Ofox wants provider-prefixed ids (openai/gpt-6-luna)
             self.model_name = model_name if "/" in model_name else f"openai/{model_name}"
             self.client = OpenAI(api_key=key, base_url=OFOX_BASE_URL, timeout=timeout_s, max_retries=3)
         else:

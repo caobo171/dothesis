@@ -55,11 +55,11 @@ def _engine_model():
     # Gemini is an env change with no code edit.
     #
     # Default moved 2026-08-02: gemini-2.5-flash -> gemini-3-flash-preview ->
-    # gpt-5.6-luna. luna is ~2.5x cheaper than the Gemini flash tier (0.529x vs
+    # gpt-6-luna. luna is ~2.5x cheaper than the Gemini flash tier (0.529x vs
     # 1.324x), has 1.05M context vs 400k/1M, is already priced in
     # quality/model_prices.py, and is the same model the brain and orchestrator
     # run — so "what model is DoThesis on?" now has ONE answer.
-    model_name = os.getenv("CITATION_PLANNER_MODEL", "gpt-5.6-luna")
+    model_name = os.getenv("CITATION_PLANNER_MODEL", "gpt-6-luna")
 
     if model_name.startswith("gpt-"):
         key = os.getenv("OPENAI_API_KEY", "")
@@ -122,7 +122,7 @@ class _OpenAIPlannerClient:
     non-Gemini model in engine/utils/groq_adapter.py ("Mimics Gemini's
     generate_content interface"), so this follows an established pattern.
 
-    Moving the planner onto gpt-5.6-luna makes it ~2.5x cheaper than
+    Moving the planner onto gpt-6-luna makes it ~2.5x cheaper than
     gemini-3-flash-preview (0.529x vs 1.324x), on a model with 1.05M context
     instead of Google's flash tier, and unifies the stack: brain, orchestrator
     and planner all run one model with one price row.

@@ -1,4 +1,4 @@
-"""One JSON-mode call to gpt-5.6-luna, with cost and 429 backoff.
+"""One JSON-mode call to gpt-6-luna, with cost and 429 backoff.
 
 Forty lines of `openai` rather than a dependency on `engine.utils.openai_adapter`:
 the API layer imports neither `engine` nor `agent` today and the spec keeps it
@@ -20,7 +20,7 @@ import random
 import time
 from dataclasses import dataclass
 
-DEFAULT_MODEL = "gpt-5.6-luna"
+DEFAULT_MODEL = "gpt-6-luna"
 # Reasoning tokens count against this ceiling on gpt-5.6-*, so it bounds the
 # model's thinking and its visible answer together. Measured 2026-09-09: at
 # 16,000 the ten longest Vietnamese posts (2,560 to 3,802 words) came back as
@@ -48,11 +48,11 @@ MAX_RETRY_AFTER_S = 120  # honour Retry-After, but never park a worker for an ho
 
 
 def price_in() -> float:
-    return float(os.getenv("BLOG_LLM_PRICE_IN", "0.20"))  # USD per 1M input tokens
+    return float(os.getenv("BLOG_LLM_PRICE_IN", "0.10"))  # USD per 1M input tokens
 
 
 def price_out() -> float:
-    return float(os.getenv("BLOG_LLM_PRICE_OUT", "1.20"))  # USD per 1M output tokens
+    return float(os.getenv("BLOG_LLM_PRICE_OUT", "0.50"))  # USD per 1M output tokens
 
 
 def usd_for(prompt_tokens: int, output_tokens: int) -> float:

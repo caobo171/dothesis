@@ -132,7 +132,7 @@ def test_headless_meter_event_bills_the_run_at_the_priced_rate(monkeypatch):
     from app.pricing import credit_multiplier, is_priced
 
     # Pin the CONFIGURED model: route=openai with no override resolves to
-    # gpt-5.6-luna (agent/model_factory.spec_from_env).
+    # gpt-6-luna (agent/model_factory.spec_from_env).
     monkeypatch.setenv("DOTHESIS_MODEL_ROUTE", "openai")
     monkeypatch.delenv("DOTHESIS_AGENT_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
@@ -155,7 +155,7 @@ def test_headless_meter_event_bills_the_run_at_the_priced_rate(monkeypatch):
     meter.observe({"type": "usage", "input_tokens": 120_000,
                    "output_tokens": 40_000, "model": "gemini-2.5-flash"})
     meter.observe({"type": "usage", "input_tokens": 30_000,
-                   "output_tokens": 10_000, "model": "gpt-5.6-luna-2026-05-13"})
+                   "output_tokens": 10_000, "model": "gpt-6-luna-2026-05-13"})
     assert meter.flush() == 2
 
     for ev in emitted:
@@ -176,10 +176,10 @@ def test_headless_meter_event_bills_the_run_at_the_priced_rate(monkeypatch):
 
     # Derived from the table, not hardcoded, so a repricing moves the assertion
     # with the product: 160k tokens at the baseline + 40k at the configured
-    # model's rate (the snapshot id billed as gpt-5.6-luna, not as unknown).
+    # model's rate (the snapshot id billed as gpt-6-luna, not as unknown).
     from app.pricing import TOKENS_PER_CREDIT
     expected = round(160_000 / TOKENS_PER_CREDIT * credit_multiplier("gemini-2.5-flash")
-                     + 40_000 / TOKENS_PER_CREDIT * credit_multiplier("gpt-5.6-luna"))
+                     + 40_000 / TOKENS_PER_CREDIT * credit_multiplier("gpt-6-luna"))
     assert charged == expected
     assert charged > 0, "a headless run that spent tokens must not be free"
     # The 4.0x-fallback bill for the same tokens, which C1 was producing.
