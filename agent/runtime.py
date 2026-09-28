@@ -294,6 +294,11 @@ from agent.tools.state_tools import make_state_tools
 from agent.tools.stats import check_thresholds, make_stats_tools
 from agent.tools.writing import make_writing_tools
 from agent.artifact_routing import ArtifactRoutingMiddleware
+from agent.run_guards import (  # Morgan-style turn budget + tool hardening
+    ToolCallGuardMiddleware,
+    TurnBudget,
+    TurnBudgetMiddleware,
+)
 from agent.context_usage import (
     agent_compact_at_tokens,
     compact_at_tokens,
@@ -694,6 +699,7 @@ def build_agent(
     checkpointer: Any | None = None,
     store: ProjectStateStore | None = None,
     strict_gates: bool = False,
+    turn_budget: TurnBudget | None = None,
 ):
     """Create the deep agent bound to one project.
 
@@ -704,6 +710,9 @@ def build_agent(
     `strict_gates` (boundary hardening, gap 2): headless/B2B runs pass True so an
     unrunnable stats/coherence gate REFUSES the commit rather than committing
     "unverified"; interactive chat leaves it False (fail-open).
+
+    `turn_budget` caps model calls and wall-clock per user turn; None reads
+    DOTHESIS_TURN_MAX_MODEL_CALLS / DOTHESIS_TURN_MAX_SECONDS (see run_guards).
     """
     project_dir = Path(project_dir)
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -789,7 +798,14 @@ def build_agent(
         model=model,
         tools=tools,
         system_prompt=SYSTEM_PROMPT,
-        middleware=[ArtifactRoutingMiddleware()],
+        # Order matters: the tool guard is outermost so the artifact router
+        # validates repaired arguments, and a crash anywhere inside it becomes
+        # one error ToolMessage rather than a dead turn.
+        middleware=[
+            ToolCallGuardMiddleware(),
+            ArtifactRoutingMiddleware(),
+            TurnBudgetMiddleware(turn_budget or TurnBudget.from_env()),
+        ],
         skills=["/skills/"],
         backend=backend,
         checkpointer=checkpointer,
