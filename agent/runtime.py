@@ -295,6 +295,7 @@ from agent.tools.stats import check_thresholds, make_stats_tools
 from agent.tools.writing import make_writing_tools
 from agent.artifact_routing import ArtifactRoutingMiddleware
 from agent.run_guards import (  # Morgan-style turn budget + tool hardening
+    InvalidToolCallMiddleware,
     ToolCallGuardMiddleware,
     TurnBudget,
     TurnBudgetMiddleware,
@@ -800,8 +801,11 @@ def build_agent(
         system_prompt=SYSTEM_PROMPT,
         # Order matters: the tool guard is outermost so the artifact router
         # validates repaired arguments, and a crash anywhere inside it becomes
-        # one error ToolMessage rather than a dead turn.
+        # one error ToolMessage rather than a dead turn. The invalid-call guard
+        # goes first: after_model hooks run in reverse, so the turn budget has
+        # already counted the call before this one jumps back to the model.
         middleware=[
+            InvalidToolCallMiddleware(),
             ToolCallGuardMiddleware(),
             ArtifactRoutingMiddleware(),
             TurnBudgetMiddleware(turn_budget or TurnBudget.from_env()),

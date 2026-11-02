@@ -291,3 +291,122 @@ class ToolCallGuardMiddleware(AgentMiddleware):
             raise
         except Exception as exc:
             return self._failure(request, exc)
+
+
+# ---------------------------------------------------------------------------
+# Unparseable tool calls
+# ---------------------------------------------------------------------------
+
+# Name on the error reply, so it is recognisable in the history and logs.
+INVALID_TOOL_CALL_MESSAGE_NAME = "dothesis_invalid_tool_call"
+MAX_RETRIES_PER_TURN = 2
+_RAW_ARGS_LIMIT = 4000
+
+
+def _is_json(raw: Any) -> bool:
+    if not isinstance(raw, str):
+        return False
+    try:
+        json.loads(raw)
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
+def repair_invalid_tool_call_args(messages: list) -> list:
+    """Return ``messages`` with every unparseable tool-call argument string made JSON.
+
+    A model can write arguments LangChain cannot parse (prod 2026-11-02: qwen
+    closed the object one brace early). The call is kept as an
+    ``invalid_tool_call`` and the OpenAI adapter replays its raw string as
+    ``function.arguments`` on every later model call. DashScope refuses that
+    with a 400, so one bad call made the thread unusable for good. The raw
+    text is wrapped, not dropped, so the model can see what it sent and fix it.
+    The checkpointed messages are never mutated; untouched ones are reused.
+    """
+    repaired: list = []
+    for message in messages:
+        calls = getattr(message, "invalid_tool_calls", None) or []
+        if not isinstance(message, AIMessage) or all(_is_json(c.get("args")) for c in calls):
+            repaired.append(message)
+            continue
+        fixed = [
+            c if _is_json(c.get("args")) else {
+                **c,
+                "args": json.dumps(
+                    {"unparseable_arguments": str(c.get("args") or "")[:_RAW_ARGS_LIMIT]},
+                    ensure_ascii=False),
+            }
+            for c in calls
+        ]
+        repaired.append(message.model_copy(update={"invalid_tool_calls": fixed}))
+    return repaired
+
+
+def _invalid_call_reply(call: dict) -> ToolMessage:
+    name = str(call.get("name") or "unknown")
+    return ToolMessage(
+        content=json.dumps({
+            "error": f"invalid_tool_call: the arguments for {name} were not valid JSON, "
+                     "so the tool did not run.",
+            "hint": "Call it again now with one complete JSON object as the arguments.",
+        }, ensure_ascii=False),
+        tool_call_id=str(call.get("id") or ""),
+        name=INVALID_TOOL_CALL_MESSAGE_NAME,
+        status="error",
+    )
+
+
+class InvalidToolCallMiddleware(AgentMiddleware):
+    """Keep an unparseable tool call from ending the turn or breaking the thread.
+
+    Before: such a call ran nothing, the router saw no tool calls and ended the
+    turn mid-sentence ("Let me save…"), and the raw arguments were replayed on
+    every later turn. Now each one gets an error reply straight away and, when
+    it was the only thing the model asked for, the model is called again in the
+    same turn. Retries are capped per turn; TurnBudgetMiddleware bounds the rest.
+    """
+
+    @staticmethod
+    def _replay_safe(request):
+        messages = repair_invalid_tool_call_args(request.messages)
+        if all(a is b for a, b in zip(messages, request.messages)):
+            return request
+        return request.override(messages=messages)
+
+    def wrap_model_call(self, request, handler):
+        return handler(self._replay_safe(request))
+
+    async def awrap_model_call(self, request, handler):
+        return await handler(self._replay_safe(request))
+
+    @hook_config(can_jump_to=["model"])
+    def after_model(self, state, runtime) -> dict[str, Any] | None:
+        messages = state.get("messages", [])
+        last = messages[-1] if messages else None
+        if not isinstance(last, AIMessage) or not last.invalid_tool_calls:
+            return None
+        replies = [_invalid_call_reply(c) for c in last.invalid_tool_calls if c.get("id")]
+        if not replies:
+            return None
+        # Earlier unparseable rounds in THIS turn (since the student's message).
+        retries = 0
+        for message in reversed(messages[:-1]):
+            if getattr(message, "type", None) == "human":
+                break
+            if isinstance(message, AIMessage) and message.invalid_tool_calls:
+                retries += 1
+        names = ",".join(str(c.get("name")) for c in last.invalid_tool_calls)
+        print(f"[agent.tool] unparseable tool call(s) {names}; retries_this_turn={retries}",
+              file=sys.stderr, flush=True)
+        update: dict[str, Any] = {"messages": replies}
+        # With valid calls alongside, the tool node runs them and the model is
+        # called again anyway. Past the cap the replies still go in, so the
+        # history stays well-formed, and the turn ends.
+        if not last.tool_calls and retries < MAX_RETRIES_PER_TURN:
+            update["jump_to"] = "model"
+        return update
+
+    @hook_config(can_jump_to=["model"])
+    async def aafter_model(self, state, runtime) -> dict[str, Any] | None:
+        return self.after_model(state, runtime)
