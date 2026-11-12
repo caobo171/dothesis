@@ -4,18 +4,17 @@
     this file's 970 lines, and the auth screens render it too. */
 "use client";
 
+import Image from "next/image";
+
 import { Button } from "./ds";
 import { ProductMock } from "./ProductMock";
 import { CTA_HREF, CTA_PRIMARY, IconArrow } from "./shared";
 
+// Illustrative faces, not real customers: generated portraits of fictional
+// students (public/img/avatars). Decorative, so the row is aria-hidden.
+const AVATARS = ["a1", "a2", "a3", "a4", "a5"];
+
 function TrustRow() {
-  const people: Array<[string, string]> = [
-    ["MN", "#1c2eff"],
-    ["TP", "#4a6b4f"],
-    ["HL", "#8e6b2a"],
-    ["QD", "#27272a"],
-    ["AV", "#5b3aa8"],
-  ];
   return (
     <div
       style={{
@@ -27,26 +26,23 @@ function TrustRow() {
       }}
     >
       <div style={{ display: "flex" }} aria-hidden="true">
-        {people.map(([initials, color], i) => (
-          <span
-            key={initials}
+        {AVATARS.map((name, i) => (
+          <Image
+            key={name}
+            src={`/img/avatars/${name}.jpg`}
+            alt=""
+            width={34}
+            height={34}
             style={{
               width: 34,
               height: 34,
               borderRadius: 999,
-              background: color,
-              color: "#fff",
-              fontSize: 12,
-              fontWeight: 700,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              objectFit: "cover",
+              background: "var(--ink-100)",
               border: "2px solid #fff",
               marginLeft: i ? -10 : 0,
             }}
-          >
-            {initials}
-          </span>
+          />
         ))}
       </div>
       <p style={{ fontSize: 14, color: "var(--ink-500)", lineHeight: 1.4 }}>
