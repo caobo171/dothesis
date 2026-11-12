@@ -60,8 +60,24 @@ MODEL_PRICES: dict[str, dict] = {
                           "note": "cheapest; reliability/VN unproven", "updated": "2026-07-08"},
     "glm-5.2": {"in": 1.40, "out": 4.40, "provider": "openrouter",
                 "note": "over-thinks; output tokens balloon", "updated": "2026-07-08"},
+    # Default of route=anthropic (brain, orchestrator, drafts, planner). The
+    # cheapest Claude — there is none at luna's $0.10/$0.50, so a Claude-routed
+    # run bills ~4.5x luna's credits per token. Anthropic list price, 2026-10-07.
     "claude-haiku-4-5": {"in": 1.00, "out": 5.00, "provider": "anthropic",
-                         "note": "strong agentic, mid-price", "updated": "2026-07-08"},
+                         "note": "route=anthropic default; cheapest Claude, 200K ctx, vision, tools",
+                         "updated": "2026-10-07"},
+    # The id the API ECHOES back for the alias above. Ledger rows can be labelled
+    # with the served model (headless_entry._UsageMeter), so without this row a
+    # correctly-priced run would bill at UNKNOWN_MODEL_MULTIPLIER on every step.
+    "claude-haiku-4-5-20251001": {"in": 1.00, "out": 5.00, "provider": "anthropic",
+                                  "note": "served id of claude-haiku-4-5", "updated": "2026-10-07"},
+    # The documented step-ups for route=anthropic (DOTHESIS_AGENT_MODEL /
+    # ORCHESTRATOR_LLM_MODEL). Priced so choosing one is a cost decision, not a
+    # silent 4.0x fallback. Anthropic list prices, 2026-10-07.
+    "claude-sonnet-5-5": {"in": 2.00, "out": 10.00, "provider": "anthropic",
+                          "note": "stronger Claude step-up; 1M ctx", "updated": "2026-10-07"},
+    "claude-opus-5-5": {"in": 4.00, "out": 20.00, "provider": "anthropic",
+                        "note": "top Claude tier; 1M ctx", "updated": "2026-10-07"},
     # Priced because agent/runtime.py::_default_model and model_factory.spec_from_env
     # switch to this AUTOMATICALLY the moment ANTHROPIC_API_KEY lands — no deploy, no
     # code change. Absent from the table it billed at the unknown-model fallback while

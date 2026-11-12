@@ -59,9 +59,22 @@ def _engine_model():
     # 1.324x), has 1.05M context vs 400k/1M, is already priced in
     # quality/model_prices.py, and is the same model the brain and orchestrator
     # run — so "what model is DoThesis on?" now has ONE answer.
-    model_name = os.getenv("CITATION_PLANNER_MODEL", "gpt-6-luna")
+    # Route-aware default: a Claude-only deployment (ORCHESTRATOR_LLM_ROUTE=
+    # anthropic, no OPENAI_API_KEY) must not default the planner to luna and raise.
+    default_planner = ("claude-haiku-4-5"
+                       if os.getenv("ORCHESTRATOR_LLM_ROUTE", "").lower() == "anthropic"
+                       else "gpt-6-luna")
+    model_name = os.getenv("CITATION_PLANNER_MODEL", default_planner)
 
-    if model_name.startswith("gpt-"):
+    if model_name.startswith("claude"):
+        key = os.getenv("ANTHROPIC_API_KEY", "")
+        if not key:
+            raise RuntimeError(
+                "CITATION_PLANNER_MODEL is a Claude id but ANTHROPIC_API_KEY is unset "
+                "(set it, or pin CITATION_PLANNER_MODEL to a gpt-*/Gemini id)"
+            )
+        client: Any = _AnthropicPlannerClient(model_name, key)
+    elif model_name.startswith("gpt-"):
         key = os.getenv("OPENAI_API_KEY", "")
         if not key:
             raise RuntimeError(
@@ -185,6 +198,62 @@ class _OpenAIPlannerClient:
         )
         return _PlannerResponse(choice.message.content or "",
                                 choice.finish_reason or "stop", usage)
+
+
+class _AnthropicPlannerClient:
+    """Gemini's generate_content() over the Anthropic Messages API.
+
+    Same contract as _OpenAIPlannerClient above, so the engine and the meter see
+    nothing new. Differences from the OpenAI path, both API facts:
+      - Claude has no json_object mode, so a JSON request gets a system
+        instruction and any ```json fence is stripped before the engine parses.
+      - stop_reason "refusal" is the blocked condition; it maps to
+        "content_filter" so _PlannerResponse returns EMPTY candidates and the
+        engine's existing block handling fires.
+    temperature is dropped, as on the OpenAI path, so the planner behaves the
+    same whichever Claude tier CITATION_PLANNER_MODEL names.
+    """
+
+    _DEFAULT_MAX_TOKENS = 8192  # planner output is a query plan, not prose
+
+    def __init__(self, model_name: str, api_key: str) -> None:
+        self.model_name = model_name
+        import anthropic  # noqa: PLC0415 — planner-only, lazy
+        self._client = anthropic.Anthropic(api_key=api_key)
+
+    def generate_content(self, prompt: Any, generation_config: Any = None,
+                         safety_settings: Any = None) -> _PlannerResponse:
+        _ = safety_settings
+        contents = "\n".join(str(p) for p in prompt) if isinstance(prompt, list) else str(prompt)
+        max_out = _OpenAIPlannerClient._cfg_get(generation_config, "max_output_tokens")
+        want_json = _OpenAIPlannerClient._cfg_get(
+            generation_config, "response_mime_type") == "application/json"
+        kwargs: dict[str, Any] = {
+            "model": self.model_name,
+            "max_tokens": int(max_out) if max_out else self._DEFAULT_MAX_TOKENS,
+            "messages": [{"role": "user", "content": contents}],
+        }
+        if want_json:
+            kwargs["system"] = ("Respond with a single valid JSON value only — no prose "
+                                "and no markdown code fences.")
+
+        # Streamed even though nobody reads the deltas: the SDK refuses a
+        # non-streaming call once max_tokens implies >10 min, and the engine is
+        # free to pass a large max_output_tokens. get_final_message() == create().
+        with self._client.messages.stream(**kwargs) as stream:
+            resp = stream.get_final_message()
+        text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text").strip()
+        if want_json and text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else ""
+            text = text.rstrip().removesuffix("```").strip()
+        u = resp.usage
+        # Anthropic's input_tokens excludes cache reads/writes; sum them so the
+        # ledger's prompt count means the same thing it does on the OpenAI path.
+        prompt_tok = (int(u.input_tokens or 0)
+                      + int(getattr(u, "cache_read_input_tokens", 0) or 0)
+                      + int(getattr(u, "cache_creation_input_tokens", 0) or 0))
+        finish = "content_filter" if resp.stop_reason == "refusal" else (resp.stop_reason or "stop")
+        return _PlannerResponse(text, finish, _PlannerUsage(prompt_tok, int(u.output_tokens or 0)))
 
 
 class _MeteredGeminiClient:

@@ -325,7 +325,7 @@ def run(backlog_path: str | None = None, out_dir: str | None = None,
 
         summary = {"planned": len(todo), "skipped": skipped, "written": 0, "repaired": 0,
                    "rejected": 0, "errors": 0, "failed": 0, "usd": 0.0, "unlinked": 0,
-                   "estimated_usd": usd_for(est_in, est_out), "stopped_on_budget": False}
+                   "estimated_usd": usd_for(est_in, est_out, model), "stopped_on_budget": False}
         print(f"write --dry-run: {len(todo)} rows to write, {skipped} already on disk")
         print(f"      prompt is {len(prompts[0]) if prompts else 0:,} chars for the first row")
         print(f"      estimated ${summary['estimated_usd']:.2f} at "

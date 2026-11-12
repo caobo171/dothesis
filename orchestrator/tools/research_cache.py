@@ -93,6 +93,9 @@ def model_cache_key(prompt: str, *, model: str | None = None, route: str | None 
         "openai": ("OPENAI_BASE_URL", "OPENAI_API_BASE", "OPENAI_API_ENDPOINT"),
         "ofox": ("OFOX_BASE_URL",),
         "native": ("GOOGLE_GENAI_BASE_URL", "GOOGLE_API_BASE", "GEMINI_API_BASE"),
+        # The anthropic SDK reads ANTHROPIC_BASE_URL; a proxy there must not share
+        # cache entries with api.anthropic.com any more than an OpenAI proxy does.
+        "anthropic": ("ANTHROPIC_BASE_URL",),
     }
     endpoint = next((os.getenv(name) for name in endpoint_names.get(selected_route, ()) if os.getenv(name)), "")
     return {

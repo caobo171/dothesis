@@ -81,6 +81,13 @@ def setup_model(model_override: Optional[str] = None) -> Any:
     config = get_config()
     model_name = model_override or config.model.model_name
 
+    if model_name.startswith('claude'):
+        # Claude via ANTHROPIC_API_KEY — same generate_content() surface. Keyed on
+        # the id, not the route, so DRAFT_MODEL=claude-* works from any route
+        # (an Ofox-style "anthropic/…" id still goes to the OpenAI adapter below).
+        from utils.anthropic_adapter import AnthropicChatModel
+        return AnthropicChatModel(model_name, max_output_tokens=config.model.max_output_tokens)
+
     if not model_name.startswith('gemini'):
         # gpt-6-luna and friends: same generate_content() surface, OpenAI behind it.
         from utils.openai_adapter import OpenAIChatModel

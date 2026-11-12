@@ -34,7 +34,7 @@ except ImportError:
 
 
 def draft_llm_route() -> str:
-    """Which provider the draft agents talk to: openai (default) | ofox | native (Gemini).
+    """Which provider the draft agents talk to: openai (default) | ofox | native (Gemini) | anthropic (Claude).
 
     Same shape as orchestrator.llm.resolve_orchestrator_model: the route picks
     a coherent default model, DRAFT_MODEL overrides the id. DRAFT_LLM_ROUTE falls
@@ -42,7 +42,7 @@ def draft_llm_route() -> str:
     draft engine together.
     """
     route = (os.getenv('DRAFT_LLM_ROUTE') or os.getenv('ORCHESTRATOR_LLM_ROUTE') or 'openai').strip().lower()
-    return route if route in ('openai', 'ofox', 'native') else 'openai'
+    return route if route in ('openai', 'ofox', 'native', 'anthropic') else 'openai'
 
 
 def default_draft_model() -> str:
@@ -61,6 +61,9 @@ def default_draft_model() -> str:
         return os.getenv('GEMINI_MODEL', 'gemini-3.1-pro-preview')
     if route == 'ofox':
         return 'openai/gpt-6-luna'
+    if route == 'anthropic':
+        # Cheapest Claude, same default as the brain/orchestrator anthropic route.
+        return 'claude-haiku-4-5'
     return 'gpt-6-luna'
 
 
@@ -210,8 +213,11 @@ class AppConfig:
 
     @property
     def draft_provider(self) -> str:
-        """'gemini' or 'openai' — decided by the model id, so a Gemini name always goes to Gemini."""
-        return 'gemini' if self.model.model_name.startswith('gemini') else 'openai'
+        """'gemini', 'anthropic' or 'openai' — decided by the model id, mirroring setup_model's dispatch."""
+        name = self.model.model_name
+        if name.startswith('gemini'):
+            return 'gemini'
+        return 'anthropic' if name.startswith('claude') else 'openai'
 
 
 # Global configuration instance - lazy loaded

@@ -47,7 +47,7 @@ def _http_timeout_kwargs() -> dict:
 
 @dataclass
 class ModelSpec:
-    route: str = "native"  # "native" | "openrouter" | "ofox"
+    route: str = "native"  # "native" | "openrouter" | "ofox" | "openai" | "anthropic"
     model: str = "gemini-3.5-flash"
     fallbacks: list[str] = field(default_factory=list)
     temperature: float = 0.4
@@ -78,6 +78,24 @@ _VISION_MODEL_HINTS = ("gemini", "claude", "gpt-5.6", "gpt-6")
 def model_supports_vision(model: str) -> bool:
     m = (model or "").lower()
     return any(h in m for h in _VISION_MODEL_HINTS)
+
+
+# The `anthropic` route's default everywhere (brain, orchestrator, draft engine,
+# citation planner, blog writer). One constant so the surfaces can't drift onto
+# different Claude tiers the way the OpenAI defaults had to be kept in step by hand.
+DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5"
+
+# Claude models that still accept temperature/top_p. Opus 4.7+, Sonnet 5+, Opus 5+
+# and Fable 400 on ANY non-default sampling value, so the factories must drop it
+# for them — same shape as the gpt-5.6 temperature rule on the openai route.
+# Allow-list (not deny-list) so an unknown future Claude id fails SAFE: dropping
+# temperature costs a little determinism, sending it costs a 400 on every call.
+_CLAUDE_SAMPLING_OK = ("claude-haiku-4-5", "-4-6", "-4-5", "-4-1", "-4-0", "claude-3")
+
+
+def claude_accepts_temperature(model: str) -> bool:
+    m = (model or "").lower()
+    return any(h in m for h in _CLAUDE_SAMPLING_OK)
 
 
 def spec_from_env() -> ModelSpec:
@@ -135,6 +153,15 @@ def spec_from_env() -> ModelSpec:
         # gateway. luna is the cheapest GPT-6 tier at $0.10/$0.50 (2026-09-23), the
         # same price as through Ofox.
         default_model = "gpt-6-luna"
+    elif route == "anthropic":
+        # Claude direct with an ANTHROPIC_API_KEY. Haiku 4.5 is the cheapest
+        # Claude ($1.00/$5.00 per 1M) — there is NO Claude at luna's $0.10/$0.50,
+        # so this route bills ~10x luna per token (see quality/model_prices.py).
+        # It is the luna-tier counterpart (small, fast, vision + tools), and
+        # deepagents' AnthropicPromptCachingMiddleware caches the big system
+        # prompt on this route, which claws back part of the gap on chat turns.
+        # Override with DOTHESIS_AGENT_MODEL=claude-sonnet-5-5 for a stronger brain.
+        default_model = DEFAULT_CLAUDE_MODEL
     model = os.getenv("DOTHESIS_AGENT_MODEL", default_model)
     return ModelSpec(
         route=route,
@@ -161,6 +188,8 @@ def make_model(spec: ModelSpec | None = None):
         return _ofox(spec)
     if spec.route == "openai":
         return _openai(spec)
+    if spec.route == "anthropic":
+        return _anthropic(spec)
     raise ValueError(f"unknown model route: {spec.route!r}")
 
 
@@ -333,6 +362,42 @@ def _openai(spec: ModelSpec):
     )
 
 
+def _anthropic(spec: ModelSpec):
+    """Anthropic's own API with an ANTHROPIC_API_KEY.
+
+    A separate route rather than more branches in `_native`: native picks Claude
+    vs Gemini by sniffing the model id AND the key, so a typo'd id silently lands
+    on Gemini. Here the route says Claude, and a missing key fails loudly at
+    construction, never mid-turn — the same contract as `_openai`.
+
+    Prompt caching needs nothing from us: deepagents appends
+    AnthropicPromptCachingMiddleware unconditionally and it activates only for a
+    ChatAnthropic model, i.e. on this route.
+
+    Timeout: the same read-gap timeout as the OpenAI-compatible routes, passed
+    explicitly — leaving it unset makes langchain hand the SDK timeout=None (no
+    timeout at all), which is the "agent treo" hang `_http_timeout_kwargs` exists
+    to prevent.
+    """
+    key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not key:
+        raise RuntimeError("anthropic route needs ANTHROPIC_API_KEY (set it or use route=openai)")
+    from langchain_anthropic import ChatAnthropic  # noqa: PLC0415 — route-only, lazy
+
+    kwargs: dict = {
+        "model": spec.model,
+        "api_key": key,
+        "max_tokens": spec.max_tokens,
+        "default_request_timeout": float(os.getenv("DOTHESIS_LLM_READ_TIMEOUT_S", "90")),
+        "max_retries": int(os.getenv("DOTHESIS_LLM_MAX_RETRIES", "2")),
+    }
+    # Haiku 4.5 honours temperature (unlike gpt-6-luna); newer Claude tiers 400
+    # on it, so only send it where it is accepted (see claude_accepts_temperature).
+    if claude_accepts_temperature(spec.model):
+        kwargs["temperature"] = spec.temperature
+    return ChatAnthropic(**kwargs)
+
+
 def make_vision_model(spec: ModelSpec | None = None, temperature: float | None = None):
     """Vision-capable model for image / screenshot / scanned-PDF turns.
 
@@ -346,9 +411,23 @@ def make_vision_model(spec: ModelSpec | None = None, temperature: float | None =
     working) with the Ofox key; else native Google. temperature defaults 0.2 —
     transcription wants determinism, not creativity.
     """
+    spec = spec or spec_from_env()
+    if spec.route == "anthropic":
+        # A Claude-only deployment has no Google key, so the Gemini sidecar would
+        # fail at invoke on every scanned PDF / results screenshot. Claude reads
+        # images and PDFs natively, so the "sidecar" here is just a Claude client;
+        # agent.multimodal._transcribe_via_vision builds Anthropic blocks to match.
+        # vision_model wins only when it names a Claude — a leftover Gemini id in
+        # DOTHESIS_VISION_MODEL must not reach the Anthropic API.
+        vm = spec.vision_model if "claude" in (spec.vision_model or "") else (
+            spec.model if "claude" in (spec.model or "") else DEFAULT_CLAUDE_MODEL)
+        vspec = ModelSpec(route="anthropic", model=vm, max_tokens=spec.max_tokens,
+                          temperature=0.2 if temperature is None else temperature,
+                          supports_vision=True)
+        return _anthropic(vspec)
+
     from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: PLC0415 — lazy, heavy dep
 
-    spec = spec or spec_from_env()
     # This is the SIDECAR factory: it exists only for brains that CANNOT see, so
     # it is always Gemini. `vision_model` therefore overrides WHICH Gemini, never
     # the family — "" just means "the default sidecar". Resolving "" to

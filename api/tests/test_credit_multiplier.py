@@ -108,7 +108,10 @@ def test_every_model_a_resolver_can_pick_by_default_is_priced():
     # ever fell out of the table it would bill at the 4.0x fallback — a ~6.5x
     # OVERcharge on the model chosen precisely because it bills ~0.62x.
     for model in ("gemini-3.5-flash", "claude-sonnet-4-6", "google/gemini-2.5-flash",
-                  "gemini-2.5-flash", "bailian/qwen-plus"):
+                  "gemini-2.5-flash", "bailian/qwen-plus",
+                  # route=anthropic default, plus the dated id the API echoes back
+                  # for it (ledger rows can carry the served id).
+                  "claude-haiku-4-5", "claude-haiku-4-5-20251001"):
         assert model in MODEL_PRICES, f"{model} is a resolver default but has no price"
 
 

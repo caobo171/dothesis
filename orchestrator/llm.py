@@ -59,6 +59,12 @@ def resolve_orchestrator_model(model: str | None = None) -> str:
         # openai default (agent.model_factory.spec_from_env) so engine and brain
         # stay on one model, which is the whole point of this function.
         default_model = "gpt-6-luna"
+    if route == "anthropic":
+        # Same id the brain's anthropic route defaults to (Haiku 4.5, the cheapest
+        # Claude). Literal rather than imported: a module-level import of
+        # agent.model_factory is the orchestrator -> agent cycle the header warns
+        # about; test_anthropic_route pins the two to each other instead.
+        default_model = "claude-haiku-4-5"
     return os.getenv("ORCHESTRATOR_LLM_MODEL", default_model)
 
 
@@ -201,6 +207,42 @@ def get_orchestrator_llm(
         if binds_tools:
             kwargs["reasoning_effort"] = "none"
         return ChatOpenAI(**kwargs)
+
+    if route == "anthropic":
+        # Claude direct with an ANTHROPIC_API_KEY. Key check before the lazy
+        # import, same fail-fast contract as the other routes.
+        key = os.getenv("ANTHROPIC_API_KEY", "")
+        if not key:
+            raise RuntimeError(
+                "anthropic route needs ANTHROPIC_API_KEY (set it or use ORCHESTRATOR_LLM_ROUTE=openai)"
+            )
+        from langchain_anthropic import ChatAnthropic  # noqa: PLC0415 — route-only, lazy
+        from agent.model_factory import claude_accepts_temperature  # noqa: PLC0415 — cycle-avoiding lazy import
+
+        kwargs = {
+            "model": model,
+            "api_key": key,
+            # max_tokens left to langchain's per-model profile (64K on Haiku 4.5):
+            # luna ran here with no cap either, and M5 chapter passes are long.
+            #
+            # A timeout is ALWAYS passed, unlike the other routes. Two reasons:
+            # langchain hands the SDK timeout=None when unset (no timeout at all,
+            # so a stalled call wedges the run), and the anthropic SDK refuses a
+            # NON-streaming call with a large max_tokens unless a timeout was
+            # given explicitly ("Streaming is required for operations that may
+            # take longer than 10 minutes"). The orchestrator mostly invoke()s,
+            # so without this every long-output pass would raise before sending.
+            "default_request_timeout": float(timeout) if timeout is not None else float(
+                os.getenv("ORCHESTRATOR_ANTHROPIC_TIMEOUT_S", "600")),
+            "callbacks": _cb,
+        }
+        # Unlike gpt-5.6-*, Haiku honours temperature, so m4_analysis's 0.2 is
+        # real again on this route. Newer Claude tiers reject it — drop there.
+        if claude_accepts_temperature(model):
+            kwargs["temperature"] = temperature
+        # binds_tools needs nothing here: Claude has no reasoning+tools conflict,
+        # and thinking is off unless asked for, matching luna's tool-bound mode.
+        return ChatAnthropic(**kwargs)
 
     raise ValueError(f"unknown orchestrator LLM route: {route!r}")
 

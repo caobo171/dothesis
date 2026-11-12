@@ -242,16 +242,21 @@ def _transcribe_via_vision(att: Attachment, prompt: str | None = None) -> str:
     image is (docx_extract passes a results-table prompt). Optional, so every
     existing call site — and every test that stubs this — is unchanged.
     """
-    from agent.model_factory import make_vision_model  # noqa: PLC0415 — lazy, heavy dep
+    from agent.model_factory import make_vision_model, spec_from_env  # noqa: PLC0415 — lazy, heavy dep
 
     prompt = prompt or (
         "Transcribe the full content of this file faithfully as plain "
         "text/Markdown. Render tables as Markdown tables. Do NOT invent or "
         "guess values; mark anything unreadable as [unreadable]."
     )
-    # The vision model is always Gemini (see make_vision_model), so the
-    # message uses the Gemini block shape regardless of the text brain.
-    msg = _build_gemini_message(prompt, [att])
+    # The vision model is Gemini on every route except `anthropic`, where
+    # make_vision_model returns Claude (a Claude-only deploy has no Google key).
+    # The block shape must follow the client, or Claude gets Gemini {type:"media"}
+    # blocks and 400s — the same mismatch detect_provider was written to stop.
+    if spec_from_env().route == "anthropic":
+        msg = _build_anthropic_message(prompt, [att])
+    else:
+        msg = _build_gemini_message(prompt, [att])
     out = make_vision_model().invoke([msg])
     return _flatten_content(getattr(out, "content", ""))
 
@@ -395,6 +400,10 @@ def detect_provider(spec: ModelSpec | None = None) -> Provider:
         # native branch below and gets Gemini-native {type:"media"} blocks, the
         # exact malformed-request defect this function was written to fix.
         return "openai"
+    if spec.route == "anthropic":
+        # Claude direct: the route alone decides, no key/model sniffing — the
+        # factory already refuses to build this route without ANTHROPIC_API_KEY.
+        return "anthropic"
     # native route mirrors model_factory._native's branch condition exactly.
     if os.getenv("ANTHROPIC_API_KEY") and "claude" in spec.model:
         return "anthropic"

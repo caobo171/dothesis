@@ -337,7 +337,7 @@ def run(src_dir: str | None = None, out_dir: str | None = None,
 
         summary = {"planned": len(todo), "skipped": skipped, "written": 0,
                    "repaired": 0, "rejected": 0, "errors": 0, "failed": 0,
-                   "usd": 0.0, "estimated_usd": usd_for(est_in, est_out),
+                   "usd": 0.0, "estimated_usd": usd_for(est_in, est_out, model),
                    "stopped_on_budget": False}
         print(f"translate --dry-run: {len(todo)} post(s) to translate, "
               f"{skipped} already in {out_dir}")
