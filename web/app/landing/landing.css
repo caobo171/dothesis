@@ -34,36 +34,26 @@ html:has(.lp-root) {
 }
 
 .lp-root {
-  /* ---- Brand indigo as literal hex ----------------------------------------
-     globals.css exposes the brand only as --blue-* and as shadcn HSL channels
-     (--primary: 235 100% 55%). The design system's components read
-     var(--primary-600) directly, so the named scale has to exist here. */
-  --primary-50: #eef2ff;
-  --primary-100: #e0e7ff;
-  --primary-500: #4f57ff;
-  --primary-600: #1c2eff;
-  --primary-700: #0a1ee0;
+  /* ---- Palette: the Radix tokens from globals.css under the names the
+     landing components read. globals.css exposes the brand as --blue-*, so
+     the --primary-* scale the design's components use is aliased here. */
+  --primary-50: var(--iris-3);
+  --primary-100: var(--iris-4);
+  --primary-500: var(--iris-8);
+  --primary-600: var(--iris-9);
+  --primary-700: var(--iris-10);
 
-  /* Muted scholarly status palette — used on module dots and verified-citation
-     ticks, where a bright emerald/amber would shout next to serif titles. */
-  --moss-fg: #4a6b4f;
-  --moss-bg: #eef4ee;
-  --moss-text: #3a5740;
-  --ochre-fg: #8e6b2a;
-  --ochre-bg: #f5efe2;
-  --ochre-text: #6e5121;
-  --ochre-border: #e4d5b7;
+  /* Muted status palette — module dots and verified-citation ticks. */
+  --moss-fg: var(--grass-11);
+  --moss-bg: var(--grass-3);
+  --moss-text: var(--grass-12);
+  --ochre-fg: var(--amber-11);
+  --ochre-bg: var(--amber-3);
+  --ochre-text: var(--amber-12);
+  --ochre-border: var(--amber-6);
 
-  /* The ink ramp jumps 500 → 700, but the design reaches for --ink-600 twice
-     (the reference list, the competitor column header). Undefined there, it
-     silently fell back to whatever it inherited — ink-800 in one place, ink-900
-     in the other, i.e. darker than the text it was meant to sit quieter than.
-     #52525b is zinc-600, the step the ramp is missing, and the same grey the
-     design already hardcodes for .lp-navlink. */
-  --ink-600: #52525b;
-
-  --destructive-600: #dc2626;
-  --destructive-700: #b91c1c;
+  --destructive-600: var(--red-9);
+  --destructive-700: var(--red-10);
 
   /* ---- Type ramp — the literal product values, half-pixels included ------ */
   --text-section: 22px;

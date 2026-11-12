@@ -9,7 +9,7 @@ export type ModuleStatus = "done" | "active" | "locked" | "needs_attention";
 // attention amber).
 const BADGE_BY_STATUS: Record<ModuleStatus, string> = {
   done:            "bg-[var(--ok-fg)] text-white ring-4 ring-[#14854a]/15",
-  active:          "bg-primary-600 text-white ring-4 ring-[#1c2eff]/15",
+  active:          "bg-primary-600 text-white ring-4 ring-primary-600/15",
   locked:          "bg-ink-200 text-ink-500 ring-0",
   needs_attention: "bg-[var(--pause-bg)] text-[var(--pause-fg)] ring-4 ring-[#b7860b]/15",
 };

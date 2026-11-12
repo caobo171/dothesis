@@ -4,23 +4,34 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/app/lib/utils";
 
+// Chatwoot's button (components-next/button/Button.vue), as crosssocial ports
+// it, drawn with the Radix tokens: 8px radius, a 1px outline rather than a
+// border so solid and outlined buttons are the same size, fixed heights, and a
+// 2% press scale. The shadcn variant names stay so call sites do not change:
+//   default     → primary solid   (one per view, the main action)
+//   outline     → slate solid     (white, outlined: secondary actions)
+//   secondary   → slate faded
+//   ghost       → toolbar / icon buttons
+//   destructive → red solid       (destructive actions only)
+//   link        → primary link
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-btn outline outline-1 text-button transition-all duration-100 ease-out focus-visible:shadow-[var(--ring-focus)] active:enabled:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        default: "bg-primary-600 text-white outline-transparent hover:bg-primary-700",
+        destructive: "bg-destructive-600 text-white outline-transparent hover:bg-destructive-700",
+        outline: "bg-white text-ink-900 outline-ink-200 hover:bg-ink-100",
+        secondary: "bg-ink-100 text-ink-900 outline-transparent hover:bg-ink-200",
+        ghost: "text-ink-900 outline-transparent hover:bg-ink-100",
+        link: "h-auto px-0 text-primary-700 outline-transparent underline-offset-2 hover:underline",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-lg px-3",
-        lg: "h-11 rounded-lg px-8",
-        icon: "h-10 w-10",
+        default: "h-10 px-4",
+        xs: "h-6 px-2 text-button-small",
+        sm: "h-8 px-3",
+        lg: "h-12 px-5 text-base",
+        icon: "h-10 w-10 px-0",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

@@ -1,15 +1,23 @@
-/* shadcn font stack: Inter (sans) + JetBrains Mono (mono) are now loaded via
-   next/font/google in app/layout.tsx — they show up as the --font-sans and
-   --font-mono CSS variables on <html>. Source Serif 4 stays on Google Fonts
-   because it's only used for the academic prose surface (thesis-prose). */
-/* Weights 400–800. The 800 is NOT optional: the landing hero (.lp-display) and
-   every in-app serif heading use font-weight 800 / Tailwind font-extrabold. It
-   was previously absent from this request (max was 700), so the browser
-   SYNTHESIZED the 800 — faux-bold, which thickens and distorts the glyphs and
-   is what made the display serif read as "off". Loading the real 800 fixes the
-   headings on the landing page and in the app in one place, keeping them
-   identical. Source Serif 4 ships 200–900, so 800 is a genuine master. */
+/* Source Serif 4 stays on Google Fonts: it is the scholarly voice of the
+   thesis surfaces (.thesis-prose, .editor-prose, .thesis-title) and nothing
+   else. Inter and JetBrains Mono come from next/font in app/layout.tsx.
+   Weights 400–800 are real masters, not synthesized: the landing hero and the
+   serif headings use 800, and a faux-bold 800 distorts the glyphs. */
 @import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700;8..60,800&display=swap");
+
+/* Radix Colors — the palette every token below is drawn from (the same system
+   crosssocial uses). Each file defines a 12-step scale (--slate-1 … --slate-12)
+   whose steps have fixed jobs: 1–2 app background, 3–5 component background,
+   6–8 borders, 9–10 solid fills, 11–12 text. Only light scales are loaded; a
+   dark theme is the matching *-dark.css files plus a class, not new tokens.
+   tailwind.config.ts reads the same package, so utilities and CSS agree. */
+@import "@radix-ui/colors/slate.css";
+@import "@radix-ui/colors/slate-alpha.css";
+@import "@radix-ui/colors/iris.css";
+@import "@radix-ui/colors/iris-alpha.css";
+@import "@radix-ui/colors/grass.css";
+@import "@radix-ui/colors/amber.css";
+@import "@radix-ui/colors/red.css";
 
 @tailwind base;
 @tailwind components;
@@ -26,140 +34,81 @@
   }
 }
 
-/* DoThesis — design tokens grounded in Survify */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/* ===========================================================================
+ * Foundation tokens. The names (ink, blue/primary, status) are DoThesis's;
+ * since November 2026 their values come from Radix scales and the
+ * typography is Chatwoot's — the same system as crosssocial. Components keep
+ * using these names; change a mapping here, never a hex in a component.
+ * ======================================================================== */
 :root {
-  /* Survify palette */
-  --blue-700: #0a1ee0;
-  --blue-600: #1c2eff;   /* primary electric */
-  --blue-500: #3a4dff;
-  --blue-100: #e7eaff;
-  --blue-50:  #f1f3ff;
+  /* Brand: Radix iris. --blue-600 is the single permitted accent hue. */
+  --blue-700: var(--iris-10);
+  --blue-600: var(--iris-9);
+  --blue-500: var(--iris-8);
+  --blue-100: var(--iris-4);
+  --blue-50:  var(--iris-3);
 
-  /* Neutral scale retuned to a shadcn-style zinc palette (was navy). Both the
-     Tailwind ink-* utilities and the .thesis-prose CSS read these. */
-  --ink-900: #18181b;    /* near-black headings */
-  --ink-800: #27272a;
-  --ink-700: #3f3f46;
-  --ink-500: #71717a;    /* secondary text */
-  --ink-400: #a1a1aa;    /* muted */
-  --ink-300: #d4d4d8;    /* dividers */
-  --ink-200: #e4e4e7;
-  --ink-100: #f4f4f5;
-  --ink-50:  #fafafa;    /* page bg */
+  /* Neutral "ink" ramp: Radix slate. Radix has two text steps, so text
+     collapses to three levels: 900/800/700 strong (12), 600/500 muted (11),
+     400 faint (10). New code picks one of the three on purpose. */
+  --ink-900: var(--slate-12);
+  --ink-800: var(--slate-12);
+  --ink-700: var(--slate-12);
+  --ink-600: var(--slate-11);
+  --ink-500: var(--slate-11);
+  --ink-400: var(--slate-10);
+  --ink-300: var(--slate-7);
+  --ink-200: var(--slate-6);
+  --ink-100: var(--slate-3);
+  --ink-50:  var(--slate-2);
   --paper:   #ffffff;
 
-  /* shadcn design tokens (HSL channels) — consumed by tailwind.config.ts
-     semantic colors + the base layer. Neutral zinc theme + brand indigo. */
+  /* shadcn tokens stay as HSL channels because Tailwind v3 needs channels for
+     opacity modifiers (bg-primary/90). Each is the Radix step named beside
+     it, converted; change both together. */
   --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
+  --foreground: 210 12.5% 12.5%;          /* slate-12 */
   --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
+  --card-foreground: 210 12.5% 12.5%;     /* slate-12 */
   --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
-  --primary: 235 100% 55%;            /* brand indigo ≈ #1c2eff */
+  --popover-foreground: 210 12.5% 12.5%;  /* slate-12 */
+  --primary: 240 60% 59.8%;               /* iris-9 */
   --primary-foreground: 0 0% 100%;
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 235 100% 55%;
-  /* 8px. Inputs and buttons read as over-rounded above this — the pill look
-     fights the dense, document-heavy UI. `rounded-lg` resolves to exactly this,
-     which is what the shared Input/Button/Textarea use. */
+  --secondary: 240 11.1% 94.7%;           /* slate-3 */
+  --secondary-foreground: 210 12.5% 12.5%;
+  --muted: 240 11.1% 94.7%;               /* slate-3 */
+  --muted-foreground: 220 5.9% 40%;       /* slate-11 */
+  --accent: 240 11.1% 94.7%;              /* slate-3 */
+  --accent-foreground: 210 12.5% 12.5%;
+  --destructive: 358.1 75.1% 59%;         /* red-9 */
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 10.1% 86.5%;              /* slate-6 */
+  --input: 240 10.1% 86.5%;               /* slate-6 */
+  --ring: 240 60% 59.8%;                  /* iris-9 */
   --radius: 0.5rem;
 
-  /* Status (matches Survify badges) */
-  --run-bg: #dbe6ff;   --run-fg: #1c2eff;
-  --pause-bg: #fff3cf; --pause-fg: #b7860b;
-  --ok-bg: #d6f3df;    --ok-fg: #14854a;
-  --stop-bg: #ffd9d9;  --stop-fg: #d22a2a;
+  /* Status badges: Radix step 3 background, step 11 text. */
+  --run-bg: var(--iris-3);    --run-fg: var(--iris-11);
+  --pause-bg: var(--amber-3); --pause-fg: var(--amber-11);
+  --ok-bg: var(--grass-3);    --ok-fg: var(--grass-11);
+  --stop-bg: var(--red-3);    --stop-fg: var(--red-11);
 
   /* Accent for academic moments */
   --accent-burgundy: #6e1d2c;
-  --accent-amber: #d99016;
+  --accent-amber: var(--amber-9);
   --accent-violet: #5b3aa8;
 
+  /* Chatwoot's 8px on every control. Pills are retired: --radius-chip is kept
+     as a name so chips follow; rounded-full is for avatars and dots only. */
   --radius-card: 18px;
   --radius-btn: 8px;
-  --radius-chip: 999px;
+  --radius-chip: 8px;
 
   --shadow-card: 0 1px 0 rgba(15, 18, 60, 0.04), 0 6px 18px -10px rgba(15, 18, 60, 0.08);
   --shadow-pop:  0 12px 40px -16px rgba(15, 18, 60, 0.22), 0 2px 0 rgba(15, 18, 60, 0.04);
+  --ring-focus: 0 0 0 3px var(--iris-a4);
+  /* Chatwoot fills inputs with a 3% black wash; slate-a2 is Radix's match. */
+  --surface-input: var(--slate-a2);
 
   /* --font-sans and --font-mono are seeded by next/font on <html> (see
      app/layout.tsx) — these :root fallbacks only kick in if next/font fails
@@ -171,19 +120,43 @@
                "Liberation Mono", "Courier New", monospace;
 }
 
+/* Chatwoot's named text styles, values from its _typography.scss. Prefer
+   these over a size + weight pair in new code.
+   text-body-main   body text, spans       text-label        form labels
+   text-body-para   paragraphs             text-label-small  footnotes, tags, badges
+   text-heading-1   page and panel titles  text-button       standard button text
+   text-heading-2   section, card titles   text-button-small compact button text
+   text-heading-3   card headings, crumbs                                     */
+@layer utilities {
+  .text-body-main    { font-size: 0.875rem; font-weight: 420; letter-spacing: -0.28px; line-height: 21px; }
+  .text-body-para    { font-size: 0.875rem; font-weight: 420; letter-spacing: -0.21px; line-height: 21px; }
+  .text-heading-1    { font-size: 1.125rem; font-weight: 520; letter-spacing: -0.27px; line-height: 24px; }
+  .text-heading-2    { font-size: 1rem;     font-weight: 500; letter-spacing: -0.27px; line-height: 24px; }
+  .text-heading-3    { font-size: 0.875rem; font-weight: 500; letter-spacing: -0.27px; line-height: 21px; }
+  .text-label        { font-size: 0.875rem; font-weight: 500; line-height: 21px; }
+  .text-label-small  { font-size: 0.75rem;  font-weight: 440; letter-spacing: -0.24px; line-height: 16px; }
+  .text-button       { font-size: 0.875rem; font-weight: 460; letter-spacing: -0.28px; line-height: 21px; }
+  .text-button-small { font-size: 0.75rem;  font-weight: 440; letter-spacing: -0.24px; line-height: 18px; }
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+/* Chatwoot's body text: weight 420 and -0.02em tracking (-0.28px at 14px).
+   Inter's optical-size axis is on automatically, so large headings render in
+   its Display cut without a second family. */
 body {
   font-family: var(--font-sans);
+  font-weight: 420;
+  letter-spacing: -0.02em;
   background: var(--ink-50);
   color: var(--ink-900);
-  /* Inter renders best without forced negative tracking — shadcn ships with
-     default tracking and lets Tailwind tracking-* utilities override per
-     surface. The old Manrope build had -0.005em hard-coded which makes Inter
-     look pinched. */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+/* The serif reading surfaces keep the type's own tracking: Chatwoot's
+   negative tracking is tuned for Inter UI text, and it pinches long prose. */
+.thesis-title, .thesis-prose, .editor-prose, .document-toc { letter-spacing: normal; }
+:focus-visible { outline: none; box-shadow: var(--ring-focus); }
 button { font: inherit; cursor: pointer; }
 ::selection { background: var(--blue-100); color: var(--ink-900); }
 
@@ -296,7 +269,7 @@ button { font: inherit; cursor: pointer; }
   font-size: 10px;
   font-weight: 700;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
 }
 
 .helpcard {
@@ -502,12 +475,12 @@ button { font: inherit; cursor: pointer; }
   padding: 12px 18px;
   border-radius: var(--radius-btn);
   border: 1px solid transparent;
-  font-weight: 700;
+  font-weight: 460;
   font-size: 14px;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.28px;
   transition: transform 0.04s ease, background 0.12s ease, border-color 0.12s ease;
 }
-.btn:active { transform: translateY(1px); }
+.btn:active { transform: scale(0.98); }
 .btn-primary { background: var(--blue-600); color: white; }
 .btn-primary:hover { background: var(--blue-700); }
 .btn-secondary { background: var(--paper); color: var(--blue-600); border-color: var(--blue-600); }
@@ -526,9 +499,9 @@ button { font: inherit; cursor: pointer; }
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 520;
   letter-spacing: -0.005em;
 }
 .badge .pulse {

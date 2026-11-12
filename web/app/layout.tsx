@@ -20,8 +20,14 @@ import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale } from "./lib/i18n/locale";
 // replaces, and it still ships the `vietnamese` subset that is non-negotiable
 // for this product. The --font-sans variable name is unchanged so Tailwind +
 // every existing utility just pick it up.
+//
+// Loaded as the variable font, as Chatwoot (and crosssocial) do: the type
+// scale uses in-between weights (420, 440, 460, 520, 620) static cuts lack.
+// The opsz axis is Inter Display — browsers pick it from the font size, so
+// headings get the Display cut and body text the Text cut from one file.
 const fontSans = Inter({
   subsets: ["latin", "latin-ext", "vietnamese"],
+  axes: ["opsz"],
   variable: "--font-sans",
   display: "swap",
 });
