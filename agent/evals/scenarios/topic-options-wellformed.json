@@ -1,0 +1,47 @@
+{
+  "title": "Topic brainstorming offers choices as a parseable [OPTIONS] card and saves nothing",
+  "incident": "912ab9f era: Gemini 3 list-of-parts content dropped [OPTIONS]/[PAPERS] markers",
+  "tags": [
+    "incident",
+    "markers",
+    "m1"
+  ],
+  "seed": {
+    "state": {
+      "focus": "M1",
+      "status": {
+        "M1": "in_progress"
+      }
+    }
+  },
+  "turns": [
+    "Mình học ngành Quản trị kinh doanh, muốn làm luận văn định lượng về thương mại điện tử nhưng chưa có đề tài. Gợi ý cho mình vài hướng để chọn nhé."
+  ],
+  "checks": [
+    {
+      "id": "no-error",
+      "kind": "no_error"
+    },
+    {
+      "id": "options-parse",
+      "kind": "options_wellformed"
+    },
+    {
+      "id": "offers-options",
+      "kind": "options_wellformed",
+      "required": true,
+      "critical": false
+    },
+    {
+      "id": "does-not-pick-for-student",
+      "kind": "state_unchanged",
+      "path": "contextStore.research_title"
+    },
+    {
+      "id": "answers-in-vietnamese",
+      "kind": "language",
+      "value": "vi",
+      "critical": false
+    }
+  ]
+}

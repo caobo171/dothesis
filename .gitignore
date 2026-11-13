@@ -127,3 +127,6 @@ research/
 # a leftover of the in-progress yarn migration. Committing it would put a second
 # package manager's cache in the repo while npm remains the one that ships.
 web/.yarn/
+
+# Agent eval run reports (python -m agent.evals)
+agent/evals/results/
