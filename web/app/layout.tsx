@@ -49,10 +49,11 @@ export const metadata = {
   title: "DoThesis — AI Thesis Agent",
   description: DESCRIPTION,
   icons: { icon: "/favicon.png" },
-  // og:image itself is not listed here: app/opengraph-image.tsx is a Next file
-  // convention, so Next generates the tag (and the size/type tags with it) for
-  // this segment and every segment below that does not define its own. Blog
-  // posts define their own; everything else inherits this card.
+  // og:image itself is not listed here: app/opengraph-image.jpg (and
+  // twitter-image.jpg) are Next file conventions, so Next generates the tags
+  // (and the size/type/alt tags with them) for this segment and every segment
+  // below that does not define its own. Blog posts define their own;
+  // everything else inherits this card.
   openGraph: {
     type: "website",
     siteName: "DoThesis",

@@ -3,21 +3,15 @@
 import {
   Dialog,
   DialogPanel,
-  Menu,
-  MenuButton,
-  MenuItem,
-  MenuItems,
   Transition,
   TransitionChild,
 } from "@headlessui/react";
 import {
   Bars3Icon,
   BellIcon,
-  ArrowRightStartOnRectangleIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   ChevronRightIcon,
-  ChevronUpIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
@@ -25,24 +19,14 @@ import Link from "next/link";
 import { Fragment, type PropsWithChildren, useEffect, useState } from "react";
 
 import { LocaleSwitcher } from "@/app/components/LocaleSwitcher";
-import { apiFetch } from "@/app/lib/api";
 import { useT } from "@/app/lib/i18n/LocaleProvider";
-import { tokenStore } from "@/app/lib/tokenStore";
 import { useMe } from "@/app/lib/use-me";
 
+import { AccountMenu } from "./AccountMenu";
 import { Brand } from "./Brand";
 import type { SidebarSection } from "./sections";
 
 const COLLAPSED_KEY = "dothesis_sidebar_collapsed";
-
-async function logout() {
-  // tokenStore.clear wipes both localStorage AND the marker cookie that
-  // proxy.js gates routes on. Without that, the next request would still
-  // see the marker cookie and stay on the protected page.
-  try { await apiFetch("/auth/logout", { method: "POST", auth: false }); } catch { /* network error is fine */ }
-  tokenStore.clear();
-  window.location.href = "/login";
-}
 
 // fullBleed: when true, the main slot renders edge-to-edge without the
 // gradient backdrop, vertical padding, or max-width wrapper. The chat
@@ -229,56 +213,6 @@ export function SidebarLayout({
     );
   }
 
-  const userInitial = (me.data?.username || me.data?.email || "?").charAt(0).toUpperCase();
-  const userName = me.data?.username || me.data?.email?.split("@")[0] || "—";
-
-  function renderAccountMenu(collapsed = false) {
-    return (
-      <Menu as="div" className="relative">
-        <MenuButton
-          className={clsx(
-            "flex w-full items-center rounded-xl py-2 text-left transition-colors hover:bg-ink-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500",
-            collapsed ? "justify-center px-2" : "gap-2.5 px-2",
-          )}
-          aria-label={t("shell.userMenu")}
-          title={collapsed ? userName : undefined}
-        >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-ink-900 text-[11px] font-bold text-white">
-            {userInitial}
-          </span>
-          {!collapsed && (
-            <>
-              <span className="min-w-0 flex-1 leading-tight">
-                <span className="block truncate text-[12px] font-semibold text-ink-800">{userName}</span>
-                {me.data?.email && <span className="block truncate pt-0.5 text-[10.5px] text-ink-500">{me.data.email}</span>}
-              </span>
-              <ChevronUpIcon className="h-3.5 w-3.5 shrink-0 text-ink-400" aria-hidden="true" />
-            </>
-          )}
-        </MenuButton>
-        <MenuItems
-          anchor="top start"
-          className="z-50 mb-2 w-64 origin-bottom-left rounded-xl border border-ink-200 bg-white p-1.5 shadow-lg shadow-ink-900/10 focus:outline-none"
-        >
-          <div className="border-b border-ink-100 px-2.5 py-2">
-            <p className="m-0 truncate text-[12px] font-semibold text-ink-900">{userName}</p>
-            {me.data?.email && <p className="m-0 truncate pt-0.5 text-[11px] text-ink-500">{me.data.email}</p>}
-          </div>
-          <MenuItem>
-            <button
-              type="button"
-              onClick={logout}
-              className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-ink-700 data-[focus]:bg-ink-50 data-[focus]:text-ink-900"
-            >
-              <ArrowRightStartOnRectangleIcon className="h-4 w-4" aria-hidden="true" />
-              {t("shell.signOut")}
-            </button>
-          </MenuItem>
-        </MenuItems>
-      </Menu>
-    );
-  }
-
   return (
     <div>
       {/* Mobile sidebar */}
@@ -326,7 +260,7 @@ export function SidebarLayout({
                   <Brand />
                   <nav className="flex flex-1 flex-col">
                     {renderSections(false)}
-                    <div className="mt-auto border-t border-ink-200 pt-2.5">{renderAccountMenu(false)}</div>
+                    <div className="mt-auto border-t border-ink-200 pt-2.5"><AccountMenu /></div>
                   </nav>
                 </div>
               </DialogPanel>
@@ -362,7 +296,7 @@ export function SidebarLayout({
 
             <div className="mt-auto pt-4">
               <div className="mb-2 border-t border-ink-200 pt-2.5">
-                {renderAccountMenu(sidebarCollapsed)}
+                <AccountMenu collapsed={sidebarCollapsed} />
               </div>
               <button
                 type="button"

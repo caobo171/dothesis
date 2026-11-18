@@ -62,9 +62,6 @@ describe("marketing host", () => {
       "/compare/thesisai",
       "/sitemap.xml",
       "/robots.txt",
-      // The og:image the apex's own pages point at. Redirect it to the app
-      // host and every share of dothesis.com loses its card.
-      "/opengraph-image",
     ]) {
       expect(routeForHost("dothesis.com", path)).toEqual({ action: "next" });
     }
